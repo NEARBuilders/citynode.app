@@ -41,24 +41,27 @@ suppressPgQueryQueueDeprecation();
 const HOSTNAME_REGEX =
   /^(?=.{1,253}$)(?=.{1,64}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.?$/;
 
-function validateAccountId(accountId: string): void {
-  if (!ACCOUNT_ID_REGEX.test(accountId)) {
-    throw new ORPCError("BAD_REQUEST", {
-      message: "Invalid accountId format",
-      data: { hint: "Must be a valid NEAR account ID" },
-    });
-  }
-}
+const validateAccountId = (accountId: string): NodeEffect<void> =>
+  ACCOUNT_ID_REGEX.test(accountId)
+    ? Effect.void
+    : Effect.fail(
+        new ORPCError("BAD_REQUEST", {
+          message: "Invalid accountId format",
+          data: { hint: "Must be a valid NEAR account ID" },
+        }),
+      );
 
-function validateHostname(hostname: string): void {
+const validateHostname = (hostname: string): NodeEffect<void> => {
   const normalized = hostname.toLowerCase();
-  if (!HOSTNAME_REGEX.test(normalized)) {
-    throw new ORPCError("BAD_REQUEST", {
-      message: "Invalid hostname format",
-      data: { hint: "Must be a valid DNS hostname" },
-    });
-  }
-}
+  return HOSTNAME_REGEX.test(normalized)
+    ? Effect.void
+    : Effect.fail(
+        new ORPCError("BAD_REQUEST", {
+          message: "Invalid hostname format",
+          data: { hint: "Must be a valid DNS hostname" },
+        }),
+      );
+};
 
 function publishStatusFor(ownerAccountId: string): "pending_funding" | "ready" {
   return ownerAccountId.startsWith("0s") ? "pending_funding" : "ready";
@@ -68,9 +71,6 @@ interface NodeAccessContext {
   user?: { role?: string | null };
   organization?: { activeOrganizationId: string | null };
 }
-
-const asOrpcEffect = <T>(run: () => Promise<T>): Effect.Effect<T, ORPCError<string, unknown>> =>
-  Effect.tryPromise({ try: run, catch: toOrpcError });
 
 const resolveNodeForAccess = (
   services: { nodes: NodesService },
@@ -106,7 +106,7 @@ const authorizeNodeAccess = (
       }
       return;
     }
-    const tenant = yield* asOrpcEffect(() => services.tenants.resolveTenantById(node.tenantId!));
+    const tenant = yield* services.tenants.resolveTenantById(node.tenantId!);
     if (!tenant) {
       return yield* Effect.fail(
         new ORPCError("NOT_FOUND", {
@@ -136,7 +136,7 @@ const requireTenantOwnedByOrg = (
   context: NodeAccessContext,
 ): NodeEffect<TenantRecord> =>
   Effect.gen(function* () {
-    const tenant = yield* asOrpcEffect(() => services.tenants.resolveTenantById(tenantId));
+    const tenant = yield* services.tenants.resolveTenantById(tenantId);
     if (!tenant) {
       return yield* Effect.fail(
         new ORPCError("NOT_FOUND", {
@@ -154,6 +154,73 @@ const requireTenantOwnedByOrg = (
       );
     }
     return tenant;
+  });
+
+const authorizedTenant = (
+  services: { tenants: TenantsService },
+  input: { tenantId: string },
+  context: {
+    user?: { id?: string; role?: string | null };
+    organization?: { activeOrganizationId: string | null };
+    near?: { primaryAccountId: string | null };
+  },
+): NodeEffect<TenantRecord> =>
+  Effect.gen(function* () {
+    const tenant = yield* services.tenants.resolveTenantById(input.tenantId);
+    if (!tenant) {
+      return yield* Effect.fail(
+        new ORPCError("NOT_FOUND", {
+          message: "Tenant not found",
+          data: { resource: "tenant", resourceId: input.tenantId },
+        }),
+      );
+    }
+    if (context.user?.role === "admin") return tenant;
+    if (tenant.ownerKind === "user") {
+      if (!context.user?.id || tenant.ownerUserId !== context.user.id) {
+        return yield* Effect.fail(
+          new ORPCError("FORBIDDEN", {
+            message: "You do not own this tenant",
+          }),
+        );
+      }
+      return tenant;
+    }
+    if (tenant.orgId === null) {
+      const isOwner =
+        !!context.near?.primaryAccountId && context.near.primaryAccountId === tenant.accountId;
+      if (!isOwner) {
+        return yield* Effect.fail(
+          new ORPCError("FORBIDDEN", {
+            message: "You do not own this personal tenant",
+          }),
+        );
+      }
+      return tenant;
+    }
+    const activeOrgId = context.organization?.activeOrganizationId;
+    if (!activeOrgId || tenant.orgId !== activeOrgId) {
+      return yield* Effect.fail(
+        new ORPCError("FORBIDDEN", {
+          message: "You are not a member of this tenant's organization",
+        }),
+      );
+    }
+    return tenant;
+  });
+
+const authorizedNodeForValidators = (
+  services: { nodes: NodesService; tenants: TenantsService },
+  nodeId: string,
+  context: NodeAccessContext,
+): NodeEffect<NodeRecord> =>
+  Effect.gen(function* () {
+    const node = yield* resolveNodeForAccess(services, nodeId);
+    yield* authorizeNodeAccess(services, node, context, {
+      adminBypassOrg: true,
+      resource: "validators",
+    });
+    return node;
   });
 
 export default createPlugin.withPlugins<PluginsClient>()({
@@ -209,126 +276,75 @@ export default createPlugin.withPlugins<PluginsClient>()({
       createAuthMiddleware(builder);
     const requireNodeOperations = createRequireTeamArea(builder)("node-operations");
 
-    const authorizedTenant = async (
-      input: { tenantId: string },
-      context: {
-        user?: { id?: string; role?: string | null };
-        organization?: { activeOrganizationId: string | null };
-        near?: { primaryAccountId: string | null };
-      },
-    ) => {
-      const services = Context.get((context as any)["effect/context"], ApiServices);
-      const tenant = await services.tenants.resolveTenantById(input.tenantId);
-      if (!tenant) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "Tenant not found",
-          data: { resource: "tenant", resourceId: input.tenantId },
-        });
-      }
-      if (context.user?.role === "admin") return tenant;
-      if (tenant.ownerKind === "user") {
-        if (!context.user?.id || tenant.ownerUserId !== context.user.id) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "You do not own this tenant",
-          });
-        }
-        return tenant;
-      }
-      if (tenant.orgId === null) {
-        const isOwner =
-          !!context.near?.primaryAccountId && context.near.primaryAccountId === tenant.accountId;
-        if (!isOwner) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "You do not own this personal tenant",
-          });
-        }
-        return tenant;
-      }
-      const activeOrgId = context.organization?.activeOrganizationId;
-      if (!activeOrgId || tenant.orgId !== activeOrgId) {
-        throw new ORPCError("FORBIDDEN", {
-          message: "You are not a member of this tenant's organization",
-        });
-      }
-      return tenant;
-    };
-
-    const authorizedNodeForValidators = async (
-      nodeId: string,
-      context: {
-        user?: { role?: string | null };
-        organization?: { activeOrganizationId: string | null };
-      },
-    ) => {
-      const services = Context.get((context as any)["effect/context"], ApiServices);
-      return await Effect.runPromise(
-        Effect.gen(function* () {
-          const node = yield* resolveNodeForAccess(services, nodeId);
-          yield* authorizeNodeAccess(services, node, context, {
-            adminBypassOrg: true,
-            resource: "validators",
-          });
-          return node;
-        }),
-      );
-    };
-
     const router = {
-      trackDiscovery: builder.trackDiscovery.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.track(input, context),
-      ),
-      getDiscoveryMetrics: builder.getDiscoveryMetrics.handler(async ({ context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.metrics(context),
-      ),
-      getDiscoveryStudio: builder.getDiscoveryStudio.handler(async ({ context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.studio(context),
-      ),
-      setDiscoveryCurator: builder.setDiscoveryCurator.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.setCurator(input, context),
-      ),
-      featureDiscoveryNode: builder.featureDiscoveryNode.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.feature(input, context),
-      ),
-      reportDiscoveryContent: builder.reportDiscoveryContent.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.report(input),
-      ),
-      moderateDiscoveryReport: builder.moderateDiscoveryReport.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.moderate(input, context),
-      ),
-      getDiscoveryHistory: builder.getDiscoveryHistory.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.history(
-          input.nodeId,
-          context,
-        ),
-      ),
-      listDiscoveryLumaCalendars: builder.listDiscoveryLumaCalendars.handler(
-        async ({ input, context }) =>
-          Context.get(context["effect/context"], ApiServices).discovery.lumaCalendars(
-            input.nodeId,
-            context,
-          ),
-      ),
-      disconnectDiscoveryLuma: builder.disconnectDiscoveryLuma.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.disconnectLuma(
-          input.nodeId,
-          context,
-        ),
-      ),
-      importDiscoveryLuma: builder.importDiscoveryLuma.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.importLuma(input, context),
-      ),
-      saveDiscoveryActivity: builder.saveDiscoveryActivity.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.saveActivity(input, context),
-      ),
-      listDiscoveryActivities: builder.listDiscoveryActivities.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.activities(
-          input.nodeId,
-          context,
-        ),
-      ),
-      getDiscoveryActivity: builder.getDiscoveryActivity.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.activity(input.id),
-      ),
+      trackDiscovery: builder.trackDiscovery.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.track(input, context);
+      }),
+      getDiscoveryMetrics: builder.getDiscoveryMetrics.effect(function* ({ context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.metrics(context);
+      }),
+      getDiscoveryStudio: builder.getDiscoveryStudio.effect(function* ({ context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.studio(context);
+      }),
+      setDiscoveryCurator: builder.setDiscoveryCurator.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.setCurator(input, context);
+      }),
+      featureDiscoveryNode: builder.featureDiscoveryNode.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.feature(input, context);
+      }),
+      reportDiscoveryContent: builder.reportDiscoveryContent.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.report(input);
+      }),
+      moderateDiscoveryReport: builder.moderateDiscoveryReport.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.moderate(input, context);
+      }),
+      getDiscoveryHistory: builder.getDiscoveryHistory.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.history(input.nodeId, context);
+      }),
+      listDiscoveryLumaCalendars: builder.listDiscoveryLumaCalendars.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.lumaCalendars(input.nodeId, context);
+      }),
+      disconnectDiscoveryLuma: builder.disconnectDiscoveryLuma.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.disconnectLuma(input.nodeId, context);
+      }),
+      importDiscoveryLuma: builder.importDiscoveryLuma.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.importLuma(input, context);
+      }),
+      saveDiscoveryActivity: builder.saveDiscoveryActivity.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.saveActivity(input, context);
+      }),
+      listDiscoveryActivities: builder.listDiscoveryActivities.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.activities(input.nodeId, context);
+      }),
+      getDiscoveryActivity: builder.getDiscoveryActivity.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.activity(input.id);
+      }),
       createEventOnboardingCode: builder.createEventOnboardingCode.effect(function* ({
         input,
         context,
@@ -342,12 +358,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
-        const { discovery } = yield* ApiServices;
-        const record = yield* Effect.tryPromise({
-          try: () => discovery.eventOrganization(input.eventId),
-          catch: () =>
-            new ORPCError("INTERNAL_SERVER_ERROR", { message: "Could not load the event" }),
-        });
+        const services = yield* ApiServices;
+        const record = yield* services.discovery.eventOrganization(input.eventId);
         if (!record) {
           return yield* Effect.fail(errors.NOT_FOUND({ message: "Event not found", data: {} }));
         }
@@ -407,49 +419,54 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 }),
         });
       }),
-      listDiscovery: builder.listDiscovery.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.list(input),
-      ),
-      getDiscoveryNode: builder.getDiscoveryNode.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.get(input.nodeId),
-      ),
-      getDiscoveryProfile: builder.getDiscoveryProfile.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.profile(
-          input.nodeId,
-          context,
-        ),
-      ),
-      saveDiscoveryProfile: builder.saveDiscoveryProfile.handler(async ({ input, context }) =>
-        Context.get(context["effect/context"], ApiServices).discovery.saveProfile(input, context),
-      ),
+      listDiscovery: builder.listDiscovery.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.list(input);
+      }),
+      getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.get(input.nodeId);
+      }),
+      getDiscoveryProfile: builder.getDiscoveryProfile.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.profile(input.nodeId, context);
+      }),
+      saveDiscoveryProfile: builder.saveDiscoveryProfile.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.saveProfile(input, context);
+      }),
       ping: builder.ping.handler(async () => ({
         status: "ok",
         timestamp: new Date().toISOString(),
       })),
 
-      listTenants: builder.listTenants.use(requireAuth).handler(async ({ context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        if (context.user.role === "admin") return services.tenants.listAllTenants();
-        const ownerTenants = await services.tenants.listTenantsByOwnerUserId(context.user.id);
+      listTenants: builder.listTenants.use(requireAuth).effect(function* ({ context }) {
+        const services = yield* ApiServices;
+        if (context.user?.role === "admin") {
+          return yield* services.tenants.listAllTenants();
+        }
+        const ownerTenants = yield* services.tenants.listTenantsByOwnerUserId(context.user.id);
         const orgId = context.organization?.activeOrganizationId;
         if (!orgId) {
           return ownerTenants;
         }
-        const orgTenants = await services.tenants.listTenantsByOrgIds([orgId]);
+        const orgTenants = yield* services.tenants.listTenantsByOrgIds([orgId]);
         return [...ownerTenants, ...orgTenants.filter((t) => t.ownerUserId === null)];
       }),
 
-      spawnTenant: builder.spawnTenant.use(requireAuth).handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
+      spawnTenant: builder.spawnTenant.use(requireAuth).effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
         const ownerAccountId = context.near?.primaryAccountId;
         if (!ownerAccountId) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "Link a NEAR account to your session before spawning a tenant",
-          });
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
+              message: "Link a NEAR account to your session before spawning a tenant",
+            }),
+          );
         }
-        validateAccountId(ownerAccountId);
-        validateHostname(input.hostname);
-        const { tenant, binding } = await services.tenants.spawnTenant({
+        yield* validateAccountId(ownerAccountId);
+        yield* validateHostname(input.hostname);
+        const { tenant, binding } = yield* services.tenants.spawnTenant({
           name: input.name,
           hostname: input.hostname.toLowerCase(),
           ownerAccountId,
@@ -458,44 +475,51 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return { tenant, binding, ownerAccountId, publishStatus: publishStatusFor(ownerAccountId) };
       }),
 
-      getSpawnStatus: builder.getSpawnStatus
-        .use(requireAuth)
-        .handler(async ({ input, context }) => {
-          const tenant = await authorizedTenant(input, context);
-          const services = Context.get(context["effect/context"], ApiServices);
-          const bindings = await services.tenants.listBindingsForTenant(tenant.id);
-          return {
-            tenant,
-            bindings,
-            ownerAccountId: tenant.accountId,
-            publishStatus: publishStatusFor(tenant.accountId),
-          };
-        }),
+      getSpawnStatus: builder.getSpawnStatus.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const tenant = yield* authorizedTenant(services, input, context);
+        const bindings = yield* services.tenants.listBindingsForTenant(tenant.id);
+        return {
+          tenant,
+          bindings,
+          ownerAccountId: tenant.accountId,
+          publishStatus: publishStatusFor(tenant.accountId),
+        };
+      }),
 
       createTenant: builder.createTenant
         .use(requireAuth)
         .use(requireAdmin)
         .use(requireOrganization)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          validateAccountId(input.accountId);
-          const result = await verifyDaoMembership({
-            daoAccountId: input.accountId,
-            memberAccountId: context.near?.primaryAccountId ?? null,
+        .effect(function* ({ input, context }) {
+          const services = yield* ApiServices;
+          yield* validateAccountId(input.accountId);
+          const result = yield* Effect.tryPromise({
+            try: () =>
+              verifyDaoMembership({
+                daoAccountId: input.accountId,
+                memberAccountId: context.near?.primaryAccountId ?? null,
+              }),
+            catch: toOrpcError,
           });
           if (!result.isMember) {
-            throw new ORPCError("FORBIDDEN", {
-              message: "Your connected NEAR account is not a member of this DAO",
-              data: {
-                daoAccountId: input.accountId,
-                primaryAccountId: context.near?.primaryAccountId ?? null,
-              },
-            });
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: "Your connected NEAR account is not a member of this DAO",
+                data: {
+                  daoAccountId: input.accountId,
+                  primaryAccountId: context.near?.primaryAccountId ?? null,
+                },
+              }),
+            );
           }
-          return await services.tenants.createTenant({
+          return yield* services.tenants.createTenant({
             name: input.name,
             accountId: input.accountId,
-            orgId: context.organization.activeOrganizationId,
+            orgId: context.organization?.activeOrganizationId ?? null,
             status: input.status,
             ownerKind: "dao",
             allowUiOverrides: input.allowUiOverrides,
@@ -507,11 +531,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
       updateTenant: builder.updateTenant
         .use(requireAuth)
         .use(requireOrgRole("owner"))
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const tenant = await authorizedTenant(input, context);
-          if (input.accountId !== undefined) validateAccountId(input.accountId);
-          return await services.tenants.updateTenant(tenant.id, {
+        .effect(function* ({ input, context }) {
+          const services = yield* ApiServices;
+          const tenant = yield* authorizedTenant(services, input, context);
+          if (input.accountId !== undefined) yield* validateAccountId(input.accountId);
+          return yield* services.tenants.updateTenant(tenant.id, {
             name: input.name,
             accountId: input.accountId,
             status: input.status,
@@ -524,15 +548,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
       deleteTenant: builder.deleteTenant
         .use(requireAuth)
         .use(requireOrgRole("owner"))
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          await authorizedTenant(input, context);
-          const result = await services.tenants.softDeleteTenant(input.tenantId);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          yield* authorizedTenant(services, input, context);
+          const result = yield* services.tenants.softDeleteTenant(input.tenantId);
           if (!result) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Tenant not found",
-              data: { resource: "tenant", resourceId: input.tenantId },
-            });
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Tenant not found",
+                data: { resource: "tenant", resourceId: input.tenantId },
+              }),
+            );
           }
           return result;
         }),
@@ -540,15 +566,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
       suspendTenant: builder.suspendTenant
         .use(requireAuth)
         .use(requireOrgRole("admin"))
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          await authorizedTenant(input, context);
-          const result = await services.tenants.suspendTenant(input.tenantId);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          yield* authorizedTenant(services, input, context);
+          const result = yield* services.tenants.suspendTenant(input.tenantId);
           if (!result) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Tenant not found",
-              data: { resource: "tenant", resourceId: input.tenantId },
-            });
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Tenant not found",
+                data: { resource: "tenant", resourceId: input.tenantId },
+              }),
+            );
           }
           return result;
         }),
@@ -556,147 +584,150 @@ export default createPlugin.withPlugins<PluginsClient>()({
       reactivateTenant: builder.reactivateTenant
         .use(requireAuth)
         .use(requireOrgRole("admin"))
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          await authorizedTenant(input, context);
-          const result = await services.tenants.reactivateTenant(input.tenantId);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          yield* authorizedTenant(services, input, context);
+          const result = yield* services.tenants.reactivateTenant(input.tenantId);
           if (!result) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Tenant not found",
-              data: { resource: "tenant", resourceId: input.tenantId },
-            });
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Tenant not found",
+                data: { resource: "tenant", resourceId: input.tenantId },
+              }),
+            );
           }
           return result;
         }),
 
-      resolveTenant: builder.resolveTenant.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        const tenant = await services.tenants.resolveTenantByAccountId(input.accountId);
+      resolveTenant: builder.resolveTenant.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const tenant = yield* services.tenants.resolveTenantByAccountId(input.accountId);
         return tenant ?? null;
       }),
 
-      resolveTenantByOrgId: builder.resolveTenantByOrgId.handler(
-        async ({ input, errors, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const tenant = await services.tenants.resolveTenantByOrgId(input.orgId);
-          if (!tenant) {
-            throw errors.NOT_FOUND({
+      resolveTenantByOrgId: builder.resolveTenantByOrgId.effect(function* ({ input, errors }) {
+        const services = yield* ApiServices;
+        const tenant = yield* services.tenants.resolveTenantByOrgId(input.orgId);
+        if (!tenant) {
+          return yield* Effect.fail(
+            errors.NOT_FOUND({
               message: "Tenant not found",
               data: { resource: "tenant", resourceId: input.orgId },
-            });
-          }
-          return tenant;
-        },
-      ),
-
-      listTenantBindings: builder.listTenantBindings.handler(async ({ context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        return services.tenants.listBindings();
+            }),
+          );
+        }
+        return tenant;
       }),
 
-      listTenantApps: builder.listTenantApps.handler(async ({ context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        return services.tenants.listTenantApps();
+      listTenantBindings: builder.listTenantBindings.effect(function* () {
+        const services = yield* ApiServices;
+        return yield* services.tenants.listBindings();
+      }),
+
+      listTenantApps: builder.listTenantApps.effect(function* () {
+        const services = yield* ApiServices;
+        return yield* services.tenants.listTenantApps();
       }),
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
         .use(requireAuth)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          return services.tenants.listBindingsForTenant(input.tenantId);
+        .effect(function* ({ input }) {
+          const services = yield* ApiServices;
+          return yield* services.tenants.listBindingsForTenant(input.tenantId);
         }),
 
-      createBinding: builder.createBinding.use(requireAuth).handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        await authorizedTenant(input, context);
-        validateHostname(input.hostname);
-        return await services.tenants.createBinding({
+      createBinding: builder.createBinding.use(requireAuth).effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        yield* authorizedTenant(services, input, context);
+        yield* validateHostname(input.hostname);
+        return yield* services.tenants.createBinding({
           tenantId: input.tenantId,
           hostname: input.hostname.toLowerCase(),
           isPrimary: input.isPrimary,
         });
       }),
 
-      verifyCustomDomain: builder.verifyCustomDomain
-        .use(requireAuth)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          await authorizedTenant(input, context);
-          return await services.tenants.verifyCustomDomain(input.tenantId, input.bindingId);
-        }),
+      verifyCustomDomain: builder.verifyCustomDomain.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        yield* authorizedTenant(services, input, context);
+        return yield* services.tenants.verifyCustomDomain(input.tenantId, input.bindingId);
+      }),
 
-      deleteBinding: builder.deleteBinding.use(requireAuth).handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        await authorizedTenant(input, context);
-        await services.tenants.deleteBinding(input.tenantId, input.bindingId);
+      deleteBinding: builder.deleteBinding.use(requireAuth).effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        yield* authorizedTenant(services, input, context);
+        yield* services.tenants.deleteBinding(input.tenantId, input.bindingId);
         return { success: true as const };
       }),
 
       setPrimaryBinding: builder.setPrimaryBinding
         .use(requireAuth)
         .use(requireOrgRole("admin"))
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          await authorizedTenant(input, context);
-          return await services.tenants.setPrimaryBinding(input.tenantId, input.bindingId);
+        .effect(function* ({ input, context }) {
+          const services = yield* ApiServices;
+          yield* authorizedTenant(services, input, context);
+          return yield* services.tenants.setPrimaryBinding(input.tenantId, input.bindingId);
         }),
 
-      resolveBindingByHostname: builder.resolveBindingByHostname.handler(
-        async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const binding = await services.tenants.resolveBindingByHostname(input.hostname);
-          return binding ?? null;
-        },
-      ),
+      resolveBindingByHostname: builder.resolveBindingByHostname.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const binding = yield* services.tenants.resolveBindingByHostname(input.hostname);
+        return binding ?? null;
+      }),
 
-      bindingPreflight: builder.bindingPreflight
-        .use(requireAuth)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const format = HOSTNAME_REGEX.test(input.hostname.toLowerCase())
-            ? ("valid" as const)
-            : ("invalid" as const);
-          const existing =
-            format === "valid"
-              ? await services.tenants.resolveBindingByHostname(input.hostname.toLowerCase())
-              : null;
-          return {
-            hostname: { available: format === "valid" && !existing, format },
-          };
-        }),
+      bindingPreflight: builder.bindingPreflight.use(requireAuth).effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const format = HOSTNAME_REGEX.test(input.hostname.toLowerCase())
+          ? ("valid" as const)
+          : ("invalid" as const);
+        const existing =
+          format === "valid"
+            ? yield* services.tenants.resolveBindingByHostname(input.hostname.toLowerCase())
+            : null;
+        return {
+          hostname: { available: format === "valid" && !existing, format },
+        };
+      }),
 
-      applyNodeProposal: builder.applyNodeProposal
-        .use(requireAdmin)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          validateAccountId(input.accountId);
-          validateAccountId(input.submitterAccountId);
-          if (input.poolAccountId) validateAccountId(input.poolAccountId);
-          validateHostname(input.hostname);
-          const result = await verifyDaoMembership({
-            daoAccountId: input.accountId,
-            memberAccountId: input.submitterAccountId,
-          });
-          if (!result.isMember) {
-            throw new ORPCError("FORBIDDEN", {
+      applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        yield* validateAccountId(input.accountId);
+        yield* validateAccountId(input.submitterAccountId);
+        if (input.poolAccountId) yield* validateAccountId(input.poolAccountId);
+        yield* validateHostname(input.hostname);
+        const result = yield* Effect.tryPromise({
+          try: () =>
+            verifyDaoMembership({
+              daoAccountId: input.accountId,
+              memberAccountId: input.submitterAccountId,
+            }),
+          catch: toOrpcError,
+        });
+        if (!result.isMember) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
               message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
               data: {
                 daoAccountId: input.accountId,
                 submitterAccountId: input.submitterAccountId,
               },
-            });
-          }
-          return services.tenants.applyNodeProposal({
-            kind: input.kind,
-            name: input.name,
-            slug: input.slug,
-            parentId: input.parentId,
-            orgId: input.orgId,
-            accountId: input.accountId,
-            hostname: input.hostname.toLowerCase(),
-            ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
-          });
-        }),
+            }),
+          );
+        }
+        return yield* services.tenants.applyNodeProposal({
+          kind: input.kind,
+          name: input.name,
+          slug: input.slug,
+          parentId: input.parentId,
+          orgId: input.orgId,
+          accountId: input.accountId,
+          hostname: input.hostname.toLowerCase(),
+          ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
+        });
+      }),
 
       listNodes: builder.listNodes.effect(function* ({ input }) {
         const services = yield* ApiServices;
@@ -783,7 +814,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       updateNode: builder.updateNode
         .use(requireAuth)
         .use(requireNodeOperations)
-        .effect(function* ({ input, context, errors }) {
+        .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
           const node = yield* resolveNodeForAccess(services, input.nodeId);
           yield* authorizeNodeAccess(services, node, context, {
@@ -846,15 +877,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return subtree;
       }),
 
-      getNodeSummary: builder.getNodeSummary.effect(function* ({ input, errors }) {
+      getNodeSummary: builder.getNodeSummary.effect(function* ({ input }) {
         const services = yield* ApiServices;
         const node = yield* resolveNodeForAccess(services, input.nodeId);
 
         const [children, subtree, validators, stakingValidators] = yield* Effect.all([
           services.nodes.listChildren(input.nodeId),
           services.nodes.subtreeWithValidators(input.nodeId),
-          asOrpcEffect(() => services.validators.listByNode(input.nodeId)),
-          asOrpcEffect(() => services.validators.resolveForStaking(input.nodeId)),
+          services.validators.listByNode(input.nodeId),
+          services.validators.resolveForStaking(input.nodeId),
         ]);
         const subtreeValidators = subtree.flatMap((entry) => entry.validators);
         const subtreeValidatorCountsByRole = { official: 0, community: 0 };
@@ -891,47 +922,45 @@ export default createPlugin.withPlugins<PluginsClient>()({
         );
       }),
 
-      listValidators: builder.listValidators.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        return services.validators.list({
+      listValidators: builder.listValidators.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.validators.list({
           ...(input.nodeId !== undefined && { nodeId: input.nodeId }),
           ...(input.role !== undefined && { role: input.role }),
         });
       }),
 
-      listValidatorsByNode: builder.listValidatorsByNode.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        return services.validators.listByNode(input.nodeId);
+      listValidatorsByNode: builder.listValidatorsByNode.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.validators.listByNode(input.nodeId);
       }),
 
-      getValidator: builder.getValidator.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        const validator = await services.validators.getById(input.validatorId);
+      getValidator: builder.getValidator.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const validator = yield* services.validators.getById(input.validatorId);
         return validator ?? null;
       }),
 
-      resolveValidatorByAccountId: builder.resolveValidatorByAccountId.handler(
-        async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const validator = await services.validators.resolveByAccountId(input.accountId);
-          return validator ?? null;
-        },
-      ),
+      resolveValidatorByAccountId: builder.resolveValidatorByAccountId.effect(function* ({
+        input,
+      }) {
+        const services = yield* ApiServices;
+        const validator = yield* services.validators.resolveByAccountId(input.accountId);
+        return validator ?? null;
+      }),
 
-      resolveStakingValidators: builder.resolveStakingValidators.handler(
-        async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          return services.validators.resolveForStaking(input.nodeId);
-        },
-      ),
+      resolveStakingValidators: builder.resolveStakingValidators.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.validators.resolveForStaking(input.nodeId);
+      }),
 
       createValidator: builder.createValidator
         .use(requireAuth)
         .use(requireNodeOperations)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          await authorizedNodeForValidators(input.nodeId, context);
-          return services.validators.create({
+        .effect(function* ({ input, context }) {
+          const services = yield* ApiServices;
+          yield* authorizedNodeForValidators(services, input.nodeId, context);
+          return yield* services.validators.create({
             nodeId: input.nodeId,
             accountId: input.accountId,
             network: input.network,
@@ -945,17 +974,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
       updateValidator: builder.updateValidator
         .use(requireAuth)
         .use(requireNodeOperations)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const validator = await services.validators.getById(input.validatorId);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          const validator = yield* services.validators.getById(input.validatorId);
           if (!validator) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Validator not found",
-              data: { resource: "validator", resourceId: input.validatorId },
-            });
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Validator not found",
+                data: { resource: "validator", resourceId: input.validatorId },
+              }),
+            );
           }
-          await authorizedNodeForValidators(validator.nodeId, context);
-          return services.validators.update(input.validatorId, {
+          yield* authorizedNodeForValidators(services, validator.nodeId, context);
+          return yield* services.validators.update(input.validatorId, {
             ...(input.accountId !== undefined && {
               accountId: input.accountId,
             }),
@@ -972,34 +1003,38 @@ export default createPlugin.withPlugins<PluginsClient>()({
       deleteValidator: builder.deleteValidator
         .use(requireAuth)
         .use(requireNodeOperations)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const validator = await services.validators.getById(input.validatorId);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          const validator = yield* services.validators.getById(input.validatorId);
           if (!validator) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Validator not found",
-              data: { resource: "validator", resourceId: input.validatorId },
-            });
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Validator not found",
+                data: { resource: "validator", resourceId: input.validatorId },
+              }),
+            );
           }
-          await authorizedNodeForValidators(validator.nodeId, context);
-          const ok = await services.validators.delete(input.validatorId);
+          yield* authorizedNodeForValidators(services, validator.nodeId, context);
+          const ok = yield* services.validators.delete(input.validatorId);
           return { success: ok as true };
         }),
 
       setDefaultValidator: builder.setDefaultValidator
         .use(requireAuth)
         .use(requireNodeOperations)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const target = await services.validators.getById(input.validatorId);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          const target = yield* services.validators.getById(input.validatorId);
           if (!target) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Validator not found",
-              data: { resource: "validator", resourceId: input.validatorId },
-            });
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Validator not found",
+                data: { resource: "validator", resourceId: input.validatorId },
+              }),
+            );
           }
-          await authorizedNodeForValidators(target.nodeId, context);
-          return await services.validators.setDefault(target.nodeId, input.validatorId);
+          yield* authorizedNodeForValidators(services, target.nodeId, context);
+          return yield* services.validators.setDefault(target.nodeId, input.validatorId);
         }),
 
       testError: builder.testError.handler(async ({ input }) => {

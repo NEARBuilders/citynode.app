@@ -51,44 +51,44 @@ const { run: runService, squashError: squashServiceError } = createServiceHarnes
 );
 
 describe("ValidatorsService", () => {
-  async function setupTenantAndNode(svc: TestServices): Promise<string> {
-    const tenant = await svc.tenants.createTenant({
-      name: "Test Tenant",
-      accountId: "test.example.near",
-      orgId: "org-1",
-    });
-    const node = await Effect.runPromise(
-      svc.nodes.spawn({
+  function setupTenantAndNode(svc: TestServices) {
+    return Effect.gen(function* () {
+      const tenant = yield* svc.tenants.createTenant({
+        name: "Test Tenant",
+        accountId: "test.example.near",
+        orgId: "org-1",
+      });
+      const node = yield* svc.nodes.spawn({
         kind: "city",
         slug: "test-city",
         name: "Test City",
         parentId: null,
         tenantId: tenant.id,
-      }),
-    );
-    return node.id;
+      });
+      return node.id;
+    });
   }
 
   it("retains the default validator when a replacement cannot be persisted", async () => {
-    await runService(freshLayer(), async (svc) => {
-      const nodeId = await setupTenantAndNode(svc);
-      const original = await svc.validators.create({
-        nodeId,
-        accountId: "original.pool",
-        isDefault: true,
-      });
-      const replacement = await svc.validators.create({ nodeId, accountId: "replacement.pool" });
-      const metadata = { cannotSerialize: 1n };
-      await expect(
-        svc.validators.create({ nodeId, accountId: "failed.pool", isDefault: true, metadata }),
-      ).rejects.toThrow();
-      expect((await svc.validators.getById(original.id))?.isDefault).toBe(true);
-      await expect(
-        svc.validators.update(replacement.id, { isDefault: true, metadata }),
-      ).rejects.toThrow();
-      expect((await svc.validators.getById(original.id))?.isDefault).toBe(true);
-      expect((await svc.validators.getById(replacement.id))?.isDefault).toBe(false);
-    });
+    await runService(freshLayer(), (svc) =>
+      Effect.gen(function* () {
+        const nodeId = yield* setupTenantAndNode(svc);
+        const original = yield* svc.validators.create({
+          nodeId,
+          accountId: "original.pool",
+          isDefault: true,
+        });
+        const replacement = yield* svc.validators.create({ nodeId, accountId: "replacement.pool" });
+        const metadata = { cannotSerialize: 1n };
+        yield* Effect.flip(
+          svc.validators.create({ nodeId, accountId: "failed.pool", isDefault: true, metadata }),
+        );
+        expect((yield* svc.validators.getById(original.id))?.isDefault).toBe(true);
+        yield* Effect.flip(svc.validators.update(replacement.id, { isDefault: true, metadata }));
+        expect((yield* svc.validators.getById(original.id))?.isDefault).toBe(true);
+        expect((yield* svc.validators.getById(replacement.id))?.isDefault).toBe(false);
+      }),
+    );
   });
 
   it("creates a validator with defaults", async () => {
