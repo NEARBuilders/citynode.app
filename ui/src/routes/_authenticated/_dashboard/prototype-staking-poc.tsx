@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
-import { buildTenantUrl } from "everything-dev/ui/tenant";
 import {
   AlertTriangle,
   ArrowDown,
@@ -23,7 +22,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
+import { buildTenantUrl, getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import {
   Badge,
   Button,

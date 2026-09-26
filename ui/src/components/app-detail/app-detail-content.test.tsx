@@ -38,6 +38,7 @@ const atoms = vi.hoisted(() => {
 });
 
 vi.mock("@/app", () => ({
+  buildTenantUrl: (label: string, gatewayId: string) => `https://${label}.${gatewayId}`,
   useApiClient: () => ({ apps: { prepareRegistryMetadataWrite: wallet.prepare } }),
   useAuthClient: () => ({
     near: {

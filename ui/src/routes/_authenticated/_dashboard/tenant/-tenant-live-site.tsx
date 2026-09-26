@@ -1,5 +1,5 @@
-import { buildTenantUrl } from "everything-dev/ui/tenant";
 import { ExternalLink } from "lucide-react";
+import { buildTenantUrl } from "@/app";
 import { Button, Card, SectionHeader } from "@/components";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { useNearAccount } from "@/lib/use-near-account";

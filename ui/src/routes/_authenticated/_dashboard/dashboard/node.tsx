@@ -1,7 +1,6 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { buildTenantUrl } from "everything-dev/ui/tenant";
 import { CalendarDays, ExternalLink, FileCheck2, Network, PanelTop } from "lucide-react";
-import { getActiveRuntime } from "@/app";
+import { buildTenantUrl, getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { cn } from "@/lib/utils";
 import { hasNodeProposalReviewPermission } from "./node/-node-access";

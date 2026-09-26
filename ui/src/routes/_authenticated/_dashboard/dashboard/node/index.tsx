@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { buildTenantUrl } from "everything-dev/ui/tenant";
 import { ExternalLink } from "lucide-react";
-import { getActiveRuntime, useApiClient } from "@/app";
+import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import {
   Badge,
   Button,

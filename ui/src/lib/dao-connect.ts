@@ -29,7 +29,6 @@ import {
   parsePolicyGroupMembers,
   type TenantPublishConfig,
   type TenantPublishConfigInput,
-  type TenantUiOverride,
 } from "./dao-policy";
 
 export type {
@@ -39,7 +38,6 @@ export type {
   NearPolicyRoleGroup,
   TenantPublishConfig,
   TenantPublishConfigInput,
-  TenantUiOverride,
 };
 export { buildTenantPublishConfig, isExplicitDaoMember, parsePolicyGroupMembers };
 

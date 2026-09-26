@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
+import { ExternalLink, FlaskConical, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   buildDraftFromResolvedConfig,
   buildTenantUrl,
@@ -13,13 +16,11 @@ import {
   normalizeBundleBaseUrl,
   type TenantConfigDraft,
   tenantConfigDraftSchema,
+  useApiClient,
+  useAuthClient,
   verifySsrIntegrity,
   verifyUiIntegrity,
-} from "everything-dev/ui/tenant";
-import { ExternalLink, FlaskConical, ShieldCheck } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { useApiClient, useAuthClient } from "@/app";
+} from "@/app";
 import {
   Badge,
   Button,

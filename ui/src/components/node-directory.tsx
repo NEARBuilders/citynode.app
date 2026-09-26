@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { buildTenantUrl } from "everything-dev/ui/tenant";
+import { buildTenantUrl } from "@/app";
 import { NodeDirectorySkeleton } from "./node-directory-skeleton";
 import { Badge } from "./ui/badge";
 
