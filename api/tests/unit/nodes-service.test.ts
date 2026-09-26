@@ -2,12 +2,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ORPCError } from "@orpc/server";
-import { Cause, Effect, Exit, Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive } from "@/db/layer";
-import { type NodeEffect, NodesLive, type NodesService, NodesTag } from "@/services/nodes";
+import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
+import { createServiceHarness } from "./test-harness";
 
 let activeDir: string | null = null;
 
@@ -39,43 +40,14 @@ interface TestServices {
   tenants: TenantsService;
 }
 
-async function runService<A>(
-  layer: Layer.Layer<NodesTag | TenantsTag, unknown, never>,
-  fn: (svc: TestServices) => Promise<A> | NodeEffect<A>,
-): Promise<A> {
-  const effect = Effect.gen(function* () {
-    const nodes = yield* NodesTag;
-    const tenants = yield* TenantsTag;
-    return yield* Effect.suspend(() => {
-      const result = fn({ nodes, tenants });
-      return Effect.isEffect(result)
-        ? result
-        : Effect.tryPromise({ try: () => result, catch: (error) => error });
-    });
-  });
-  return Effect.runPromise(Effect.provide(effect, layer));
-}
-
-async function squashServiceError<A>(
-  layer: Layer.Layer<NodesTag | TenantsTag, unknown, never>,
-  fn: (svc: TestServices) => Promise<A> | NodeEffect<A>,
-): Promise<unknown> {
-  const effect = Effect.gen(function* () {
-    const nodes = yield* NodesTag;
-    const tenants = yield* TenantsTag;
-    return yield* Effect.suspend(() => {
-      const result = fn({ nodes, tenants });
-      return Effect.isEffect(result)
-        ? result
-        : Effect.tryPromise({ try: () => result, catch: (error) => error });
-    });
-  });
-  const exit = await Effect.runPromiseExit(Effect.provide(effect, layer));
-  if (Exit.isSuccess(exit)) {
-    throw new Error("Expected effect to fail");
-  }
-  return Cause.squash(exit.cause);
-}
+const { run: runService, squashError: squashServiceError } = createServiceHarness<
+  TestServices,
+  NodesTag | TenantsTag
+>(
+  Effect.gen(function* () {
+    return { nodes: yield* NodesTag, tenants: yield* TenantsTag };
+  }),
+);
 
 async function seedTenant(tenants: TenantsService): Promise<string> {
   const tenant = await tenants.createTenant({

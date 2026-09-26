@@ -1,3 +1,5 @@
+export const geoNodeKinds = ["country", "state", "city"] as const;
+
 const GEO_KIND_LABELS: Record<string, string> = {
   country: "Country",
   state: "State",

@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { nodeKindLabel } from "@/lib/node-kind";
+import { geoNodeKinds, nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import {
   type AdminNodeListKind,
@@ -37,19 +37,12 @@ type AdminNodeSearch = {
   kind?: AdminNodeListKind;
 };
 
-const NODE_KIND_VALUES = [
-  "all",
-  "country",
-  "state",
-  "city",
-] as const satisfies readonly AdminNodeListKind[];
+const NODE_KIND_VALUES = ["all", ...geoNodeKinds] as const satisfies readonly AdminNodeListKind[];
 
-const NODE_KIND_LABELS: Record<AdminNodeListKind, string> = {
+const NODE_KIND_LABELS = {
   all: "All kinds",
-  country: "Country",
-  state: "State",
-  city: "City",
-};
+  ...Object.fromEntries(geoNodeKinds.map((kind) => [kind, nodeKindLabel(kind)])),
+} as Record<AdminNodeListKind, string>;
 
 function parseScope(value: unknown): AdminNodeListScope | undefined {
   return value === "roots" || value === "all" ? value : undefined;

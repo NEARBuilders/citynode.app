@@ -2,15 +2,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ORPCError } from "@orpc/server";
-import { Cause, Data, Effect, Exit, Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive } from "@/db/layer";
 import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
 import { ValidatorsLive, type ValidatorsService, ValidatorsTag } from "@/services/validators";
-
-class TestRunError extends Data.TaggedError("TestRunError")<{ cause: unknown }> {}
+import { createServiceHarness } from "./test-harness";
 
 let activeDir: string | null = null;
 
@@ -38,52 +37,18 @@ interface TestServices {
   validators: ValidatorsService;
 }
 
-async function runService<A, E>(
-  layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, E, never>,
-  fn: (svc: TestServices) => Promise<A> | Effect.Effect<A, unknown, never>,
-): Promise<A> {
-  const effect = Effect.gen(function* () {
-    const nodes = yield* NodesTag;
-    const tenants = yield* TenantsTag;
-    const validators = yield* ValidatorsTag;
-    return yield* Effect.suspend(() => {
-      const result = fn({ nodes, tenants, validators });
-      return Effect.isEffect(result)
-        ? result
-        : Effect.tryPromise({
-            try: () => result,
-            catch: (error) => new TestRunError({ cause: error }),
-          });
-    });
-  });
-  return Effect.runPromise(Effect.provide(effect, layer));
-}
-
-async function squashServiceError<A, E>(
-  layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, E, never>,
-  fn: (svc: TestServices) => Promise<A> | Effect.Effect<A, unknown, never>,
-): Promise<unknown> {
-  const effect = Effect.gen(function* () {
-    const nodes = yield* NodesTag;
-    const tenants = yield* TenantsTag;
-    const validators = yield* ValidatorsTag;
-    return yield* Effect.suspend(() => {
-      const result = fn({ nodes, tenants, validators });
-      return Effect.isEffect(result)
-        ? result
-        : Effect.tryPromise({
-            try: () => result,
-            catch: (error) => new TestRunError({ cause: error }),
-          });
-    });
-  });
-  const exit = await Effect.runPromiseExit(Effect.provide(effect, layer));
-  if (Exit.isSuccess(exit)) {
-    throw new Error("Expected effect to fail");
-  }
-  const squashed = Cause.squash(exit.cause);
-  return squashed instanceof TestRunError ? squashed.cause : squashed;
-}
+const { run: runService, squashError: squashServiceError } = createServiceHarness<
+  TestServices,
+  NodesTag | TenantsTag | ValidatorsTag
+>(
+  Effect.gen(function* () {
+    return {
+      nodes: yield* NodesTag,
+      tenants: yield* TenantsTag,
+      validators: yield* ValidatorsTag,
+    };
+  }),
+);
 
 describe("ValidatorsService", () => {
   async function setupTenantAndNode(svc: TestServices): Promise<string> {

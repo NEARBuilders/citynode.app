@@ -15,7 +15,7 @@ import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
-import type { TenantsService } from "./services/tenants";
+import type { TenantRecord, TenantsService } from "./services/tenants";
 import { TenantsConfigLive, TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
@@ -128,6 +128,32 @@ const authorizeNodeAccess = (
         }),
       );
     }
+  });
+
+const requireTenantOwnedByOrg = (
+  services: { tenants: TenantsService },
+  tenantId: string,
+  context: NodeAccessContext,
+): NodeEffect<TenantRecord> =>
+  Effect.gen(function* () {
+    const tenant = yield* asOrpcEffect(() => services.tenants.resolveTenantById(tenantId));
+    if (!tenant) {
+      return yield* Effect.fail(
+        new ORPCError("NOT_FOUND", {
+          message: "Tenant not found",
+          data: { resource: "tenant", resourceId: tenantId },
+        }),
+      );
+    }
+    if (tenant.orgId !== context.organization?.activeOrganizationId) {
+      return yield* Effect.fail(
+        new ORPCError("FORBIDDEN", {
+          message: "This tenant does not belong to your organization",
+          data: {},
+        }),
+      );
+    }
+    return tenant;
   });
 
 export default createPlugin.withPlugins<PluginsClient>()({
@@ -698,32 +724,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrganization)
         .use(requireNodeOperations)
-        .effect(function* ({ input, context, errors }) {
+        .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
-          const tenantId = input.tenantId;
-          const tenant = yield* asOrpcEffect(() => services.tenants.resolveTenantById(tenantId));
-          if (!tenant) {
-            return yield* Effect.fail(
-              errors.NOT_FOUND({
-                message: "Tenant not found",
-                data: { resource: "tenant", resourceId: tenantId },
-              }),
-            );
-          }
-          if (tenant.orgId !== context.organization.activeOrganizationId) {
-            return yield* Effect.fail(
-              errors.FORBIDDEN({
-                message: "This tenant does not belong to your organization",
-                data: {},
-              }),
-            );
-          }
+          yield* requireTenantOwnedByOrg(services, input.tenantId, context);
           return yield* services.nodes.spawn({
             kind: input.kind,
             slug: input.slug,
             name: input.name,
             parentId: input.parentId ?? null,
-            tenantId,
+            tenantId: input.tenantId,
             ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
         }),
@@ -743,24 +752,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             );
           }
           if (input.tenantId) {
-            const tenantId = input.tenantId;
-            const tenant = yield* asOrpcEffect(() => services.tenants.resolveTenantById(tenantId));
-            if (!tenant) {
-              return yield* Effect.fail(
-                errors.NOT_FOUND({
-                  message: "Tenant not found",
-                  data: { resource: "tenant", resourceId: tenantId },
-                }),
-              );
-            }
-            if (tenant.orgId !== context.organization.activeOrganizationId) {
-              return yield* Effect.fail(
-                errors.FORBIDDEN({
-                  message: "This tenant does not belong to your organization",
-                  data: {},
-                }),
-              );
-            }
+            yield* requireTenantOwnedByOrg(services, input.tenantId, context);
           }
           if (input.parentId) {
             const parentId = input.parentId;
