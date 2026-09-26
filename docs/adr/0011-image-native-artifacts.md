@@ -1,7 +1,7 @@
 # ADR 0011: Image-native artifacts — the runtime image is the deployment, the namespace is the topology
 
 Date: 2026-09-24
-Status: Accepted
+Status: Accepted (amended 2026-09-26 — outbound local-first)
 
 ## Context
 
@@ -55,3 +55,45 @@ thin child extending the published base.
   The former upload path's use cases are absorbed by the image model.
 - Image size grows by the staged dists (~50 MB) — accepted; content-addressed
   staging keeps rebuilds incremental.
+
+## Amendment (2026-09-26): the image consumes what it stages
+
+Production citynode.app 502'd in a permanent crash loop: the boot fetched its
+own plugin manifests from `https://<domain>/bundles/…` — through the public
+gateway, back into the container that had not started listening yet. The
+namespace principle (decision 2) was implemented inbound-only (the `/bundles/*`
+FS route); every outbound fetch still used the absolute config URLs. A central
+CDN was considered and rejected: it reintroduces the upload-credential
+bootstrap loop this ADR deleted (plan 029) plus a shared failure point for
+every tenant, while a disk read of already-staged bytes has strictly better
+uptime than any network hop.
+
+Decision (extends 1–2, does not change the tiers):
+
+1. **Outbound local-first for the own namespace.** A self-contained runtime
+   (`BOS_BUNDLE_DIR` set) resolves any own-namespace
+   `<scheme>://<host>/bundles/<account>/<gateway>/<rest>` URL from its staged
+   directory before touching the network (`BundleResolver`,
+   `packages/everything-dev/src/bundle-fs-resolve.ts`, installed as a global
+   fetch adapter at CLI boot — the one seam every boot-time consumer shares:
+   config manifest discovery, contract-type fetches, orchestrator host
+   loading, MF remoteEntry probes).
+2. **The guard is namespace-scoped.** Only URLs matching the runtime's own
+   `account`/`gateway` resolve locally; a foreign namespace falls through to
+   the network fetch. The registry tier (children, `BOS_BUNDLE_DIR` unset) is
+   behaviorally unchanged — fetching remotes from published URLs remains the
+   platform default for every app sharing the base image. Containment is
+   enforced against the namespace directory (not the bundle root), so
+   traversal can never read a sibling namespace.
+3. **Missing bytes are deterministic 404s.** The staged namespace is owned
+   entirely (mirroring the FS route): a file absent on disk does not fall
+   through to the network, where it would race a stale or foreign origin.
+4. **Committed `bos.config.json` carries the deterministic post-publish
+   bundle URLs.** `bos publish` already rewrites them on the deploy runner;
+   the committed state matching the published state keeps local image builds
+   self-consistent and makes the local-first path exercisable everywhere.
+
+Consequences: a cold boot performs zero network round-trips through its own
+origin — gateway, DNS, and ingress hiccups can no longer wedge a boot.
+Foreign-namespace resilience for the child tier (proxy + stale-if-error
+cache) is a separate amendment (Phase C direction).
