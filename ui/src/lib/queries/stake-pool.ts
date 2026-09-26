@@ -1,6 +1,6 @@
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
-import type { AuthClient } from "@/app";
 import { z } from "zod";
+import type { AuthClient } from "@/app";
 
 type Network = "mainnet" | "testnet";
 

@@ -46,7 +46,11 @@ describe("stake pool queries", () => {
     const view = vi.spyOn(Near.prototype, "view").mockResolvedValue(accounts);
     const client = new QueryClient();
     const holders = await client.fetchQuery(
-      stakePoolTopHoldersQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient(), limit: 80 }),
+      stakePoolTopHoldersQueryOptions({
+        accountId: "pool.near",
+        authClient: fakeAuthClient(),
+        limit: 80,
+      }),
     );
     expect(holders).toHaveLength(50);
     expect(holders[0]).toEqual({
@@ -59,7 +63,11 @@ describe("stake pool queries", () => {
   });
 
   it("isolates network and page-limit caches and disables unsupported pools", () => {
-    const options = { accountId: "pool.near", authClient: fakeAuthClient(), network: "mainnet" as const };
+    const options = {
+      accountId: "pool.near",
+      authClient: fakeAuthClient(),
+      network: "mainnet" as const,
+    };
     expect(stakePoolStatsQueryOptions(options).queryKey).toEqual([
       "stake-pool",
       "pool.near",
@@ -111,14 +119,20 @@ describe("stake pool queries", () => {
     const view = vi.spyOn(Near.prototype, "view").mockRejectedValue(new Error("Unavailable"));
     const client = new QueryClient();
     await expect(
-      client.fetchQuery(stakePoolStatsQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() })),
+      client.fetchQuery(
+        stakePoolStatsQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() }),
+      ),
     ).rejects.toThrow();
     await expect(
-      client.fetchQuery(stakePoolTopHoldersQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() })),
+      client.fetchQuery(
+        stakePoolTopHoldersQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() }),
+      ),
     ).rejects.toThrow();
     view.mockResolvedValue([]);
     expect(
-      await client.fetchQuery(stakePoolTopHoldersQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() })),
+      await client.fetchQuery(
+        stakePoolTopHoldersQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() }),
+      ),
     ).toEqual([]);
     client.clear();
   });
@@ -136,7 +150,11 @@ describe("stake pool queries", () => {
       );
     const client = new QueryClient();
     const stats = await client.fetchQuery(
-      stakePoolStatsQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient(), network: "mainnet" }),
+      stakePoolStatsQueryOptions({
+        accountId: "pool.near",
+        authClient: fakeAuthClient(),
+        network: "mainnet",
+      }),
     );
     expect(stats).toEqual({
       totalStaked: 12345678900000000000000000000n,
@@ -275,6 +293,8 @@ describe("team stake pool account query", () => {
     expect(stakePoolAccountQueryOptions({ ...options, protocol: "ethereum" }).enabled).toBe(false);
     expect(stakePoolAccountQueryOptions({ ...options, poolAccountId: "" }).enabled).toBe(false);
     expect(stakePoolAccountQueryOptions({ ...options, stakerAccountId: "" }).enabled).toBe(false);
-    expect(stakePoolAccountQueryOptions({ ...options, network: "localnet" as never }).enabled).toBe(false);
+    expect(stakePoolAccountQueryOptions({ ...options, network: "localnet" as never }).enabled).toBe(
+      false,
+    );
   });
 });
