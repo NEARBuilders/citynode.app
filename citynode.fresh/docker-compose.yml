@@ -1,0 +1,82 @@
+name: fresh.v1.citynode.near
+
+x-pg-common: &pg-common
+  image: postgres:17-alpine
+  environment: &pg-env
+    POSTGRES_USER: everythingdev
+    POSTGRES_PASSWORD: everythingdev
+
+services:
+  postgres-api:
+    <<: *pg-common
+    container_name: fresh.v1.citynode.near-postgres-api
+    environment:
+      <<: *pg-env
+      POSTGRES_DB: api_db
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U everythingdev -d api_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - fresh_v1_citynode_near_postgres_api_data:/var/lib/postgresql/data
+
+  postgres-auth:
+    <<: *pg-common
+    container_name: fresh.v1.citynode.near-postgres-auth
+    environment:
+      <<: *pg-env
+      POSTGRES_DB: auth_db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U everythingdev -d auth_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - fresh_v1_citynode_near_postgres_auth_data:/var/lib/postgresql/data
+
+  postgres-api-test:
+    <<: *pg-common
+    container_name: fresh.v1.citynode.near-postgres-api-test
+    environment:
+      <<: *pg-env
+      POSTGRES_DB: api_test_db
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U everythingdev -d api_test_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - fresh_v1_citynode_near_postgres_api_test_data:/var/lib/postgresql/data
+
+  postgres-auth-test:
+    <<: *pg-common
+    container_name: fresh.v1.citynode.near-postgres-auth-test
+    environment:
+      <<: *pg-env
+      POSTGRES_DB: auth_test_db
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U everythingdev -d auth_test_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - fresh_v1_citynode_near_postgres_auth_test_data:/var/lib/postgresql/data
+
+volumes:
+  fresh_v1_citynode_near_postgres_api_data:
+    name: fresh_v1_citynode_near_postgres_api_data
+  fresh_v1_citynode_near_postgres_auth_data:
+    name: fresh_v1_citynode_near_postgres_auth_data
+  fresh_v1_citynode_near_postgres_api_test_data:
+    name: fresh_v1_citynode_near_postgres_api_test_data
+  fresh_v1_citynode_near_postgres_auth_test_data:
+    name: fresh_v1_citynode_near_postgres_auth_test_data
