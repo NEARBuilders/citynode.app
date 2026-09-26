@@ -19,10 +19,12 @@ import { NextStepsList } from "./-next-steps-list";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
-  validateSearch: (search: Record<string, unknown>): { restricted?: FeatureArea } =>
-    typeof search.restricted === "string" && isFeatureArea(search.restricted)
-      ? { restricted: search.restricted }
-      : {},
+  validateSearch: (search: Record<string, unknown>): { restricted?: FeatureArea | "admin" } =>
+    search.restricted === "admin"
+      ? { restricted: "admin" }
+      : typeof search.restricted === "string" && isFeatureArea(search.restricted)
+        ? { restricted: search.restricted }
+        : {},
   head: ({ match }) => ({
     meta: [
       { title: pageTitle("Home", match.context.runtimeConfig) },
