@@ -13,7 +13,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { execa } from "execa";
 import { glob } from "glob";
-import tar from "tar";
+import { extract as tarExtract } from "tar";
 import {
   buildAuthContractStub,
   buildAuthExportStub,
@@ -383,7 +383,7 @@ export async function downloadTarball(
 
   const extractDir = mkTmpDir("bos-init-extract-");
   try {
-    await tar.extract({ cwd: extractDir, file: tarballPath, strip: 1 });
+    await tarExtract({ cwd: extractDir, file: tarballPath, strip: 1 });
   } catch {
     await execCommand("tar", ["-xzf", tarballPath, "--strip-components=1", "-C", extractDir]);
   }
