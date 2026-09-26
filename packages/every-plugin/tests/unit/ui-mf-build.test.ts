@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { CORE_UI_DEPLOY_FIELDS, createUiSharedDeps } from "../../src/ui/mf-build";
+import { CORE_UI_DEPLOY_FIELDS, createUiSharedDeps } from "../../src/build/ui";
 
 const pkg = {
   dependencies: {

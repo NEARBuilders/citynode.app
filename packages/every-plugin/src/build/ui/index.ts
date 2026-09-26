@@ -23,11 +23,18 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { RsbuildPlugin } from "@rsbuild/core";
-import { PLUGIN_UI_SHARED_EXPOSES } from "../manifest/contract";
+import { PLUGIN_UI_SHARED_EXPOSES } from "../../ui/manifest/contract";
 import { type UiManifestGenPluginOptions, uiManifestGenPlugin } from "./manifest-plugin";
 
 const require = createRequire(import.meta.url);
 
+export { type CoreUiRsbuildConfigInput, createCoreUiRsbuildConfig } from "./factory";
+export {
+  ensureGeneratedCoreUiRsbuildConfig,
+  ensureGeneratedUiRsbuildConfig,
+  hasCoreUiWorkspace,
+  hasFolderFormUi,
+} from "./generated-config";
 export {
   createUiRsbuildConfig,
   sanitizeContainerName,
@@ -85,7 +92,7 @@ export {
   ROUTE_CONFIG_FILENAME,
   UI_REMOTE_ENTRY_FILENAME,
   UI_REMOTE_SERVER_ENTRY_FILENAME,
-} from "../manifest/contract";
+} from "../../ui/manifest/contract";
 
 const SHARE_MODULE_NAMES = [
   "react",

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { findBosConfigPath } from "../build/rspack/compose";
-import { getPluginInfo } from "../build/rspack/utils";
+import { findBosConfigPath } from "../rspack/compose";
+import { getPluginInfo } from "../rspack/utils";
 
 const UI_DIR = "ui";
 const GENERATED_CONFIG_DIR = ".every-plugin";
@@ -23,7 +23,7 @@ export function hasFolderFormUi(cwd: string): boolean {
 
 function generatedUiConfig(pluginId: string): string {
   return `import path from "node:path";
-import { createUiRsbuildConfig } from "every-plugin/ui/mf-build";
+import { createUiRsbuildConfig } from "every-plugin/build/ui";
 import pkg from "../package.json";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "..", "ui");
@@ -68,4 +68,52 @@ export function ensureGeneratedUiRsbuildConfig(cwd: string): string | null {
     fs.writeFileSync(outPath, next);
   }
   return outPath;
+}
+
+const CORE_UI_MARKERS = {
+  routes: "src/routes",
+  entry: "src/entry.ts",
+  contract: "src/contract.ts",
+};
+
+/**
+ * Workspace-form core ui: the workspace IS the ui (own package.json, route
+ * tree, web entry) and is not plugin-shaped — the /api counterpart of the
+ * plugin workspace form.
+ */
+export function hasCoreUiWorkspace(cwd: string = process.cwd()): boolean {
+  return (
+    fs.existsSync(path.join(cwd, CORE_UI_MARKERS.routes)) &&
+    fs.existsSync(path.join(cwd, CORE_UI_MARKERS.entry)) &&
+    !fs.existsSync(path.join(cwd, CORE_UI_MARKERS.contract)) &&
+    !fs.existsSync(path.join(cwd, "plugin.dev.ts"))
+  );
+}
+
+function generatedCoreUiConfig(): string {
+  return `import { defineConfig } from "@rsbuild/core";
+import { readAuthoredConfigInput } from "everything-dev/config";
+import { createCoreUiRsbuildConfig } from "every-plugin/build/ui";
+
+export default defineConfig(async () =>
+  createCoreUiRsbuildConfig(await readAuthoredConfigInput()),
+);
+`;
+}
+
+/**
+ * Synthesize the rsbuild config for a workspace-form core ui with no local
+ * `rsbuild.config.ts` — the /api generated-config model. A local file is an
+ * override and wins untouched. Returns the workspace-relative config path,
+ * or null when the workspace is not a core ui (or has a local config).
+ */
+export function ensureGeneratedCoreUiRsbuildConfig(cwd: string = process.cwd()): string | null {
+  if (!hasCoreUiWorkspace(cwd)) return null;
+  if (fs.existsSync(path.join(cwd, "rsbuild.config.ts"))) return null;
+  const outDir = path.join(cwd, GENERATED_CONFIG_DIR);
+  fs.mkdirSync(outDir, { recursive: true });
+  const outPath = path.join(outDir, GENERATED_UI_CONFIG);
+  fs.writeFileSync(outPath, generatedCoreUiConfig());
+  console.log("[every-plugin] rsbuild.config.ts not found — using the core ui build factory.");
+  return path.join(GENERATED_CONFIG_DIR, GENERATED_UI_CONFIG);
 }

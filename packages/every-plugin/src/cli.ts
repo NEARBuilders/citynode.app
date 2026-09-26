@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
 import { generateContractTypes } from "./build/contract-types";
 import { ensureGeneratedRspackConfig } from "./build/rspack/generated-config";
-import { ensureGeneratedUiRsbuildConfig } from "./ui/generated-config";
+import {
+  ensureGeneratedCoreUiRsbuildConfig,
+  ensureGeneratedUiRsbuildConfig,
+  hasCoreUiWorkspace,
+} from "./build/ui/generated-config";
 
 function run(
   cmd: string,
@@ -32,6 +36,18 @@ export async function emitContractTypes(): Promise<void> {
   }
 }
 
+/**
+ * Workspace-form core ui build surface — the /api model applied to the ui:
+ * the generated config (or a local rsbuild.config.ts override) drives
+ * rsbuild; extra args pass through (`--environment web|node`).
+ */
+async function runCoreUi(args: string[]): Promise<void> {
+  const generatedConfig = ensureGeneratedCoreUiRsbuildConfig();
+  const [command = "build", ...rest] = args;
+  const configArgs = generatedConfig ? ["--config", generatedConfig] : [];
+  await run("rsbuild", [command, ...configArgs, ...rest], {});
+}
+
 async function runRspack(): Promise<void> {
   const generatedConfig = ensureGeneratedRspackConfig();
 
@@ -45,8 +61,24 @@ async function runRspack(): Promise<void> {
   }
 }
 
-export function runCliCommand(raw: string): Promise<void> {
+export function runCliCommand(raw: string, args: string[] = []): Promise<void> {
   const command = raw.replace(/=.*/, "");
+  // The core ui workspace form routes build/dev/preview through rsbuild;
+  // plugin workspaces keep the rspack/dev-server surface.
+  if (hasCoreUiWorkspace()) {
+    switch (command) {
+      case "build":
+        return runCoreUi(["build", ...args]);
+      case "preview":
+        return runCoreUi(["preview", ...args]);
+      case "dev":
+        return runCoreUi(["dev", ...args]);
+      default:
+        return Promise.reject(
+          new Error(`Unknown every-plugin command for a core ui workspace: ${raw}`),
+        );
+    }
+  }
   switch (command) {
     case "types":
       return emitContractTypes();

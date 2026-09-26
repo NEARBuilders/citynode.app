@@ -1,9 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Effect, Schema } from "effect";
 import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
+import { resolveApp, toConfigInput } from "./descriptor/resolve";
+import { AppDescriptorSchema } from "./descriptor/schema";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import { fetchJsonOrNull } from "./http-client";
 import {
@@ -78,6 +81,17 @@ function emitConfigWarning(message: string): void {
 
 const configPathCache = new Map<string, string | null>();
 
+/**
+ * Reads the local authored config without resolving the extends chain or
+ * touching the network — the build-surface factories (generated rsbuild
+ * configs) consume it for their APP_NAME/APP_ACCOUNT defines.
+ */
+export async function readAuthoredConfigInput(cwd?: string): Promise<BosConfigInput | null> {
+  const configPath = findConfigPath(cwd);
+  if (!configPath || configPath.startsWith("bos://")) return null;
+  return loadConfigFile(configPath, dirname(configPath));
+}
+
 export function findConfigPath(cwd?: string): string | null {
   const cacheKey = resolve(cwd ?? process.cwd());
   const cached = configPathCache.get(cacheKey);
@@ -85,10 +99,15 @@ export function findConfigPath(cwd?: string): string | null {
 
   let dir = cacheKey;
   while (true) {
-    const configPath = join(dir, "bos.config.json");
-    if (existsSync(configPath)) {
-      configPathCache.set(cacheKey, configPath);
-      return configPath;
+    const jsonPath = join(dir, "bos.config.json");
+    if (existsSync(jsonPath)) {
+      configPathCache.set(cacheKey, jsonPath);
+      return jsonPath;
+    }
+    const appPath = join(dir, "bos.app.ts");
+    if (existsSync(appPath)) {
+      configPathCache.set(cacheKey, appPath);
+      return appPath;
     }
     const parent = dirname(dir);
     if (parent === dir) break;
@@ -96,6 +115,47 @@ export function findConfigPath(cwd?: string): string | null {
   }
   configPathCache.set(cacheKey, null);
   return null;
+}
+
+export function isAppDescriptorPath(configPath: string): boolean {
+  return configPath.endsWith(".app.ts") || configPath.endsWith(".app.js");
+}
+
+/**
+ * Materialize an authored bos.app.ts descriptor into the authoring-shape
+ * `BosConfigInput` the config pipeline consumes. Import-extends is honored
+ * two ways: the parent descriptor value can be imported directly (an
+ * inlined parent, resolved through `resolveApp`), or `extends` can name a
+ * published config (`bos://…`) / a local file, which flows into the JSON
+ * extends chain unchanged.
+ */
+export async function loadAppDescriptorConfig(resolvedPath: string): Promise<BosConfigInput> {
+  const mod = (await import(pathToFileURL(resolvedPath).href)) as Record<string, unknown>;
+  if (!mod.default) {
+    throw new Error(`${resolvedPath} must default-export an App() descriptor`);
+  }
+  const descriptor = AppDescriptorSchema.parse(mod.default);
+
+  // Registry candidates: named exports that parse as App descriptors.
+  const registry: Record<string, unknown> = {};
+  for (const value of Object.values(mod)) {
+    const parsed = AppDescriptorSchema.safeParse(value);
+    if (parsed.success) registry[parsed.data.name] = parsed.data;
+  }
+
+  const extendsRef = descriptor.extends;
+  const inRegistry = typeof extendsRef === "string" && registry[extendsRef] !== undefined;
+  const importedParent = extendsRef !== undefined && typeof extendsRef !== "string";
+
+  if (inRegistry || importedParent) {
+    return resolveApp(descriptor.name, registry as never);
+  }
+
+  const input = toConfigInput(descriptor);
+  if (extendsRef !== undefined) {
+    input.extends = extendsRef as BosConfigInput["extends"];
+  }
+  return input;
 }
 
 export function getConfig(): BosConfig | null {
@@ -297,7 +357,9 @@ export async function loadBosConfig(options?: {
 }): Promise<RuntimeConfig> {
   const result = await loadResolvedConfig(options);
   if (!result) {
-    throw new ConfigNotfoundError({ message: "No bos.config.json found" });
+    throw new ConfigNotfoundError({
+      message: "No bos.config.json or bos.app.ts found",
+    });
   }
 
   return result.runtime;
@@ -1016,6 +1078,9 @@ async function loadConfigFile(configPath: string, baseDir: string): Promise<BosC
   }
 
   const resolvedPath = isAbsolute(configPath) ? configPath : resolve(baseDir, configPath);
+  if (isAppDescriptorPath(resolvedPath)) {
+    return loadAppDescriptorConfig(resolvedPath);
+  }
   return JSON.parse(readFileSync(resolvedPath, "utf-8")) as BosConfigInput;
 }
 

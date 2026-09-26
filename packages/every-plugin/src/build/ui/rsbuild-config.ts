@@ -4,7 +4,7 @@ import { defineConfig, type EnvironmentConfig, type RsbuildConfig, rspack } from
 import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
 import { FixMfDataUriPlugin } from "../../build/rspack";
-import { sanitizeContainerName } from "../manifest/contract";
+import { sanitizeContainerName } from "../../ui/manifest/contract";
 import {
   createUiSharedDeps,
   MANIFEST_FILENAME,

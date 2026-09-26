@@ -1,5 +1,5 @@
 import type { RsbuildPlugin } from "@rsbuild/core";
-import { generateUiManifest } from "../manifest/generator";
+import { generateUiManifest } from "../../ui/manifest/generator";
 
 /**
  * Rsbuild plugin that keeps a ui source's generated artifacts fresh during
