@@ -79,6 +79,7 @@ describe("OnboardingStation", () => {
     );
     expect(screen.getByTestId("station.recent-joiners").textContent).toContain("Second Member");
     expect(screen.getByTestId("station.recent-joiners").textContent).toContain("New member");
+    expect(screen.getByTestId("station.capacity").textContent).toContain("118 spots left");
   });
 
   it("explains when the code can no longer be shown", async () => {

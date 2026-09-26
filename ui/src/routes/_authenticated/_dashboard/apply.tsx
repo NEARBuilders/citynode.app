@@ -6,16 +6,20 @@ import { toast } from "sonner";
 import { getActiveRuntime, type Organization, useApiClient, useAuthClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
+import { FieldGroup } from "@/components/ui/field";
 import { useDaoConnection } from "@/lib/dao-connect";
+import { pageTitle } from "@/lib/page-title";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
 import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
 import { ApplyApplicantFields } from "./-apply-applicant-fields";
+import { type ApplyStepId, resolveApplySteps } from "./-apply-flow";
 import { useApplicationForm } from "./-apply-form";
 import { loadNodeApplicationParents } from "./-apply-loader";
 import { ApplyNodeFields } from "./-apply-node-fields";
-import { ApplyPrerequisites } from "./-apply-prerequisites";
+import { ApplyDaoStep, ApplyNearStep, ApplyOrganizationStep } from "./-apply-prerequisites";
+import { ApplyStep } from "./-apply-step";
 import { ApplySubmit } from "./-apply-submit";
 import { ApplySubmitted } from "./-apply-submitted";
 import {
@@ -32,8 +36,11 @@ export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
       apiClient: context.apiClient,
       queryClient: context.queryClient,
     }),
-  head: () => ({
-    meta: [{ title: "Apply | app" }, { name: "description", content: "Apply to run a City Node." }],
+  head: ({ match }) => ({
+    meta: [
+      { title: pageTitle("Start a community", match.context.runtimeConfig) },
+      { name: "description", content: "Apply to start a CityNode community." },
+    ],
   }),
   component: ApplyPage,
 });
@@ -53,6 +60,7 @@ function ApplyPage() {
   const [rootParentId, setRootParentId] = useState(initialRootNodes[0]?.id ?? "");
   const [submittedProposalId, setSubmittedProposalId] = useState<string | null>(null);
   const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
+  const [reopenedStep, setReopenedStep] = useState<ApplyStepId | null>(null);
   const handleDaoVerified = useCallback(
     ({ daoAccountId }: { daoAccountId: string }) => setVerifiedDaoAccountId(daoAccountId),
     [],
@@ -63,7 +71,7 @@ function ApplyPage() {
       if (!activeOrgId) throw new Error("Select an active organization first");
       if (!nearAccountId) throw new Error("Connect a NEAR account first");
       if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
-        throw new Error("Connect and verify the tenant DAO first");
+        throw new Error("Connect and verify your DAO first");
       }
       return proposeNodeApplication(apiClient, values, {
         orgId: activeOrgId,
@@ -73,8 +81,8 @@ function ApplyPage() {
     },
     onSuccess: async ({ data: proposal }) => {
       setSubmittedProposalId(proposal.id);
-      toast.success("Node application submitted", {
-        description: "A platform administrator can now review it.",
+      toast.success("Application submitted", {
+        description: "An admin will review it.",
       });
       try {
         await invalidateProposalQueries(queryClient);
@@ -135,56 +143,95 @@ function ApplyPage() {
     submitting: submitMutation.isPending,
   });
 
-  if (submittedProposalId) return <ApplySubmitted proposalId={submittedProposalId} />;
+  const orgDone = !!displayedOrgId && !!activeOrgId;
+  const daoVerified =
+    !!daoConnection.daoAccountId && verifiedDaoAccountId === daoConnection.daoAccountId;
+  const steps = resolveApplySteps(
+    { organization: orgDone, near: !!nearAccountId, dao: daoVerified },
+    reopenedStep,
+  );
+
+  if (submittedProposalId) {
+    return <ApplySubmitted proposalId={submittedProposalId} name={formValues.name.trim()} />;
+  }
 
   return (
-    <PageContainer variant="wide">
-      <div className="space-y-8">
-        <PageHeader
-          title="Apply to run a City Node"
-          description="Propose a country, state, or city node for platform administrator review."
-        />
-        <ApplyPrerequisites
-          displayedOrgId={displayedOrgId}
-          nearAccountId={nearAccountId}
-          onDaoVerified={handleDaoVerified}
-        />
-        <form
-          className="space-y-6"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void form.handleSubmit();
-          }}
+    <PageContainer variant="narrow">
+      <PageHeader
+        headerTestId="apply.heading"
+        title="Start a community"
+        description={`Step ${steps.position} of 4 · An admin reviews every application.`}
+      />
+      <ol className="flex flex-col" data-testid="apply.steps">
+        <ApplyStep
+          id="organization"
+          number={1}
+          title="Organization"
+          status={steps.status("organization")}
+          summary={activeOrganizationLabel}
+          onChange={() => setReopenedStep("organization")}
         >
-          <ApplyNodeFields
-            form={form}
-            formValues={formValues}
-            gatewayId={gatewayId}
-            hostname={hostname}
-            preflight={preflight}
-            preflightLoading={preflightLoading}
-            rootNodes={rootNodes}
-            rootParentId={rootParentId}
-            setRootParentId={setRootParentId}
-            slugManuallyEdited={slugManuallyEdited}
-            stateNodes={stateNodes}
-            statesLoading={statesLoading}
+          <ApplyOrganizationStep
+            organizations={organizations}
+            displayedOrgId={displayedOrgId}
+            activating={!activeOrgId && !!defaultOrgId && !switchOrganization.isError}
+            switching={switchOrganization.isPending}
+            onSwitch={(organizationId) => switchOrganization.mutate(organizationId)}
+            onContinue={() => setReopenedStep(null)}
           />
-          <ApplyApplicantFields
-            activeOrganizationLabel={activeOrganizationLabel}
-            activatingOrganization={!activeOrgId && !!defaultOrgId}
-            daoAccountId={daoConnection.daoAccountId}
-            form={form}
-            nearAccountId={nearAccountId}
+        </ApplyStep>
+        <ApplyStep
+          id="near"
+          number={2}
+          title="NEAR account"
+          status={steps.status("near")}
+          summary={nearAccountId}
+        >
+          <ApplyNearStep />
+        </ApplyStep>
+        <ApplyStep
+          id="dao"
+          number={3}
+          title="DAO"
+          status={steps.status("dao")}
+          summary={daoConnection.daoAccountId}
+          onChange={() => setReopenedStep("dao")}
+        >
+          <ApplyDaoStep
+            verified={daoVerified}
+            onDaoVerified={handleDaoVerified}
+            onContinue={() => setReopenedStep(null)}
           />
-          <ApplySubmit
-            canSubmit={canSubmit}
-            hostname={hostname}
-            hostnameAvailable={preflight?.hostname.available}
-            isSubmitting={submitMutation.isPending}
-          />
-        </form>
-      </div>
+        </ApplyStep>
+        <ApplyStep id="details" number={4} title="Details" status={steps.status("details")} last>
+          <form
+            className="flex flex-col gap-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void form.handleSubmit();
+            }}
+          >
+            <FieldGroup>
+              <ApplyNodeFields
+                form={form}
+                formValues={formValues}
+                gatewayId={gatewayId}
+                hostname={hostname}
+                preflight={preflight}
+                preflightLoading={preflightLoading}
+                rootNodes={rootNodes}
+                rootParentId={rootParentId}
+                setRootParentId={setRootParentId}
+                slugManuallyEdited={slugManuallyEdited}
+                stateNodes={stateNodes}
+                statesLoading={statesLoading}
+              />
+              <ApplyApplicantFields form={form} />
+            </FieldGroup>
+            <ApplySubmit canSubmit={canSubmit} isSubmitting={submitMutation.isPending} />
+          </form>
+        </ApplyStep>
+      </ol>
     </PageContainer>
   );
 }

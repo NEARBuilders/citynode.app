@@ -1,5 +1,7 @@
 import type { useApiClient } from "@/app";
-import { Badge, Card } from "@/components";
+import { Badge, LocalDate } from "@/components";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { humanize, RawJsonDisclosure } from "../-admin-ui";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type ReviewHistoryResult = Awaited<ReturnType<ApiClient["proposals"]["getReviewHistory"]>>;
@@ -7,26 +9,26 @@ export type ReviewHistoryEntry = ReviewHistoryResult["data"][number];
 
 export function ReviewHistoryCard({ entry }: { entry: ReviewHistoryEntry }) {
   return (
-    <Card className="space-y-3 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-foreground">{entry.actorLabel || entry.actor}</p>
-          <p className="font-mono text-xs text-muted-foreground">{entry.entityId}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={entry.action === "rejected" ? "destructive" : "default"}>
-            {entry.action}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {new Date(entry.createdAt).toLocaleString()}
-          </span>
-        </div>
-      </div>
+    <Item variant="outline" size="sm">
+      <ItemContent className="min-w-0">
+        <ItemTitle className="max-w-full">
+          <span className="min-w-0 truncate">{entry.actorLabel || entry.actor}</span>
+        </ItemTitle>
+        <ItemDescription>
+          <span className="font-mono break-all">{entry.entityId}</span> ·{" "}
+          <LocalDate value={entry.createdAt} format="relative" />
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Badge variant={entry.action === "rejected" ? "destructive" : "success"}>
+          {humanize(entry.action)}
+        </Badge>
+      </ItemActions>
       {entry.details !== null && (
-        <pre className="overflow-auto rounded-[8px] border border-border bg-muted/40 p-3 font-mono text-xs text-foreground">
-          {JSON.stringify(entry.details, null, 2)}
-        </pre>
+        <div className="basis-full">
+          <RawJsonDisclosure value={entry.details} label="details" />
+        </div>
       )}
-    </Card>
+    </Item>
   );
 }

@@ -109,18 +109,18 @@ describe("Thing details interactions", () => {
 
   it("requires confirmation and refreshes a deleted Thing before navigating", async () => {
     harness.role = "admin";
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const client = showPage();
     client.setQueryData(thingQueryKeys.list, [thing]);
     const button = await screen.findByRole("button", { name: "Delete thing" });
     fireEvent.click(button);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
     expect(harness.deleteThing).not.toHaveBeenCalled();
 
     const refresh = Promise.withResolvers<typeof thing>();
     harness.getThing.mockReturnValue(refresh.promise);
     harness.deleteThing.mockResolvedValue({ success: true });
-    confirm.mockReturnValue(true);
     fireEvent.click(button);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await waitFor(() => expect(harness.deleteThing).toHaveBeenCalledWith({ thingId: "thing-1" }));
     await waitFor(() => expect(harness.getThing).toHaveBeenCalledTimes(2));
     expect(harness.navigate).not.toHaveBeenCalled();

@@ -56,18 +56,19 @@ describe("passkey settings", () => {
     renderPasskeys();
     expect(await screen.findByText("Phone")).toBeTruthy();
 
-    fireEvent.change(screen.getByPlaceholderText("Passkey name, e.g. Work laptop"), {
+    fireEvent.click(screen.getByRole("button", { name: "Add passkey" }));
+    fireEvent.change(await screen.findByPlaceholderText("e.g. Work laptop"), {
       target: { value: "Work laptop" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "add passkey" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create passkey" }));
 
     await waitFor(() => expect(harness.addPasskey).toHaveBeenCalledWith({ name: "Work laptop" }));
     expect(await screen.findByText("Work laptop")).toBeTruthy();
     expect(harness.listPasskeys.mock.calls.length).toBeGreaterThan(1);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "remove" })[0]);
-    const removeButtons = await screen.findAllByRole("button", { name: "remove" });
-    fireEvent.click(removeButtons[removeButtons.length - 1]!);
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Phone" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove passkey" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
 
     await waitFor(() => expect(harness.deletePasskey).toHaveBeenCalledWith({ id: "passkey-1" }));
     await waitFor(() => expect(screen.queryByText("Phone")).toBeNull());

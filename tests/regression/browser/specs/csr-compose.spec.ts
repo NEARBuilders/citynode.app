@@ -23,7 +23,7 @@ test.describe("CSR compose", () => {
 
     const signInHeading = page.getByTestId("login.heading");
     await expect(signInHeading).toBeVisible({ timeout: 15000 });
-    await expect(signInHeading).toHaveText("Sign in");
+    await expect(signInHeading).toHaveText("Sign in to CityNode");
 
     // The payload must be present client-side with the auth remote registered.
     const compose = await page.evaluate(() => {

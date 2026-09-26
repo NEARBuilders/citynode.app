@@ -1,6 +1,8 @@
+import { ArrowLeftIcon, ArrowsInIcon, ArrowsOutIcon } from "@phosphor-icons/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
+import { useEffect, useState } from "react";
 import { getActiveRuntime, useApiClient } from "@/app";
+import { Button } from "@/components";
 import { useClientValue } from "@/hooks";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { returnPath } from "@/lib/return-path";
@@ -28,18 +30,49 @@ function OnboardingStationPage() {
     null,
   );
 
+  const [fullscreen, setFullscreen] = useState(false);
+  const canFullscreen = useClientValue(() => document.fullscreenEnabled === true, false);
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement !== null);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen().catch(() => {});
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex items-center px-6 py-4">
-        <button
+      <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => void navigate({ href: from ?? "/dashboard" })}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           data-testid="station.exit"
         >
-          <ArrowLeft className="size-4" />
+          <ArrowLeftIcon data-icon="inline-start" />
           Exit station
-        </button>
+        </Button>
+        {canFullscreen && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={toggleFullscreen}
+            data-testid="station.fullscreen"
+          >
+            {fullscreen ? (
+              <ArrowsInIcon data-icon="inline-start" />
+            ) : (
+              <ArrowsOutIcon data-icon="inline-start" />
+            )}
+            {fullscreen ? "Exit full screen" : "Full screen"}
+          </Button>
+        )}
       </header>
       {gatewayOrigin && (
         <OnboardingStation

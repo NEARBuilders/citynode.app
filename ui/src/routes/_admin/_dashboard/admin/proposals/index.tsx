@@ -2,7 +2,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
-import { Badge, SectionHeader } from "@/components";
+import { PageHeader } from "@/components";
+import { pageTitle } from "@/lib/page-title";
 import { createProposalColumns } from "./-proposal-columns";
 import { normalizeProposalReviewFilter, ProposalReviewFilters } from "./-proposal-filters";
 import { ProposalListState } from "./-proposal-list-state";
@@ -26,8 +27,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/proposals/")({
     context.queryClient.ensureInfiniteQueryData(
       adminProposalListQueryOptions(context.apiClient, deps.status),
     ),
-  head: () => ({
-    meta: [{ title: "Proposal review | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Proposals · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminProposals,
 });
@@ -45,33 +46,41 @@ function AdminProposals() {
   const total = proposalsQuery.data?.pages[0]?.meta.total ?? 0;
 
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Proposal review"
-        action={
-          <Badge variant="secondary">
-            {total} {activeFilter === "all" ? "total" : activeFilter}
-          </Badge>
-        }
+    <>
+      <PageHeader
+        title="Proposals"
+        description="Community applications and submissions."
+        headerTestId="admin-proposals.heading"
       />
 
-      <ProposalReviewFilters
-        value={activeFilter}
-        onChange={(value) => navigate({ search: { status: normalizeProposalReviewFilter(value) } })}
-      />
+      <section className="flex flex-col gap-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <ProposalReviewFilters
+            value={activeFilter}
+            onChange={(value) =>
+              navigate({ search: { status: normalizeProposalReviewFilter(value) } })
+            }
+          />
+          {!proposalsQuery.isLoading && (
+            <span className="text-sm text-muted-foreground" data-testid="admin-proposals-count">
+              {total} {total === 1 ? "proposal" : "proposals"}
+            </span>
+          )}
+        </div>
 
-      <ProposalListState
-        activeFilter={activeFilter}
-        columns={columns}
-        proposals={proposals}
-        isLoading={proposalsQuery.isLoading}
-        isError={proposalsQuery.isError}
-        errorMessage={proposalsQuery.error?.message}
-        onRetry={() => void proposalsQuery.refetch()}
-        hasNextPage={proposalsQuery.hasNextPage}
-        isFetchingNextPage={proposalsQuery.isFetchingNextPage}
-        onLoadMore={() => void proposalsQuery.fetchNextPage()}
-      />
-    </div>
+        <ProposalListState
+          activeFilter={activeFilter}
+          columns={columns}
+          proposals={proposals}
+          isLoading={proposalsQuery.isLoading}
+          isError={proposalsQuery.isError}
+          errorMessage={proposalsQuery.error?.message}
+          onRetry={() => void proposalsQuery.refetch()}
+          hasNextPage={proposalsQuery.hasNextPage}
+          isFetchingNextPage={proposalsQuery.isFetchingNextPage}
+          onLoadMore={() => void proposalsQuery.fetchNextPage()}
+        />
+      </section>
+    </>
   );
 }

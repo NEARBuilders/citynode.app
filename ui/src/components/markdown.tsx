@@ -1,10 +1,18 @@
+import { cn } from "cn";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
-import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface MarkdownProps {
   content: string;
@@ -63,7 +71,7 @@ export function Markdown({ content, className }: MarkdownProps) {
       className={cn(
         "max-w-none",
         /* headings */
-        "[&_h1]:mt-10 [&_h1]:mb-4 [&_h1]:text-[1.875rem] [&_h1]:font-semibold [&_h1]:tracking-tight [&_h1]:text-foreground first:[&>h1]:mt-0",
+        "[&_h1]:mt-10 [&_h1]:mb-4 [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:tracking-tight [&_h1]:text-foreground first:[&>h1]:mt-0",
         "[&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2]:text-foreground [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-border",
         "[&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-foreground",
         "[&_h4]:mt-5 [&_h4]:mb-2 [&_h4]:text-base [&_h4]:font-semibold [&_h4]:text-foreground",
@@ -114,7 +122,7 @@ const markdownComponents: Components = {
     if (!isBlock) {
       return (
         <code
-          className="bg-secondary border border-border rounded px-1.5 py-0.5 text-foreground font-mono text-[0.85em]"
+          className="bg-secondary border border-border rounded px-1.5 py-0.5 text-foreground font-mono text-sm"
           {...props}
         >
           {children}
@@ -123,18 +131,14 @@ const markdownComponents: Components = {
     }
 
     return (
-      <code
-        className={cn(className, "block min-w-full")}
-        style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 13 }}
-        {...props}
-      >
+      <code className={cn(className, "block min-w-full font-mono text-sm")} {...props}>
         {children}
       </code>
     );
   },
 
   pre: ({ children }) => (
-    <pre className="bg-muted border border-border rounded-[10px] p-5 overflow-x-auto mb-5 leading-relaxed">
+    <pre className="bg-muted border border-border rounded-xl p-5 overflow-x-auto mb-5 leading-relaxed">
       {children}
     </pre>
   ),
@@ -146,36 +150,24 @@ const markdownComponents: Components = {
   ),
 
   img: ({ src, alt }) => (
-    <img
-      src={src}
-      alt={alt ?? ""}
-      style={{ maxWidth: "100%", borderRadius: 10, margin: "16px 0", display: "block" }}
-    />
+    <img src={src} alt={alt ?? ""} className="my-4 block max-w-full rounded-xl" />
   ),
 
   table: ({ children }) => (
-    <div style={{ overflowX: "auto", marginBottom: 20 }}>
-      <table className="min-w-full border-collapse text-sm text-left">{children}</table>
+    <div className="mb-5">
+      <Table>{children}</Table>
     </div>
   ),
 
-  thead: ({ children }) => <thead className="bg-muted border-b-2 border-border">{children}</thead>,
+  thead: ({ children }) => <TableHeader>{children}</TableHeader>,
 
-  th: ({ children }) => (
-    <th className="px-4 py-2.5 font-bold text-[13px] text-foreground border-b border-border whitespace-nowrap">
-      {children}
-    </th>
-  ),
+  tbody: ({ children }) => <TableBody>{children}</TableBody>,
 
-  td: ({ children }) => (
-    <td className="px-4 py-2.5 border-b border-border text-foreground text-sm align-top">
-      {children}
-    </td>
-  ),
+  th: ({ children }) => <TableHead>{children}</TableHead>,
 
-  tr: ({ children }) => (
-    <tr className="transition-colors duration-100 hover:bg-muted">{children}</tr>
-  ),
+  td: ({ children }) => <TableCell className="align-top whitespace-normal">{children}</TableCell>,
+
+  tr: ({ children }) => <TableRow>{children}</TableRow>,
 
   blockquote: ({ children }) => (
     <blockquote className="border-l-4 border-brand-accent pl-4 pt-1 pb-1 mb-4 bg-muted rounded-r-lg text-muted-foreground">
