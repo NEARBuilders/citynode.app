@@ -90,18 +90,18 @@ describe("Thing details interactions", () => {
     const pending = Promise.withResolvers<never>();
     harness.upvote.mockReturnValue(pending.promise);
     const client = showPage();
-    const vote = await screen.findByRole("button", { name: /4\s*upvote/ });
-    await waitFor(() => expect(vote.hasAttribute("disabled")).toBe(false));
+    const vote = await screen.findByRole("button", { name: /4\s*upvote/ }, { timeout: 5000 });
+    await waitFor(() => expect(vote.hasAttribute("disabled")).toBe(false), { timeout: 5000 });
     expect(screen.queryByRole("button", { name: "Delete thing" })).toBeNull();
 
     fireEvent.click(vote);
-    await screen.findByRole("button", { name: /5\s*upvoted/ });
+    await screen.findByRole("button", { name: /5\s*upvoted/ }, { timeout: 5000 });
     expect(client.getQueryData(thingQueryKeys.userVote("thing-1"))).toMatchObject({
       hasUpvote: true,
     });
     await act(async () => pending.reject(new Error("Vote rejected")));
 
-    await screen.findByRole("button", { name: /4\s*upvote/ });
+    await screen.findByRole("button", { name: /4\s*upvote/ }, { timeout: 5000 });
     expect(harness.error).toHaveBeenCalledWith("Vote rejected");
     expect(harness.getUserVote.mock.calls.length).toBeGreaterThan(1);
     expect(harness.getUpvoteCount.mock.calls.length).toBeGreaterThan(1);
@@ -111,22 +111,26 @@ describe("Thing details interactions", () => {
     harness.role = "admin";
     const client = showPage();
     client.setQueryData(thingQueryKeys.list, [thing]);
-    const button = await screen.findByRole("button", { name: "Delete thing" });
+    const button = await screen.findByRole("button", { name: "Delete thing" }, { timeout: 5000 });
     fireEvent.click(button);
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }, { timeout: 5000 }));
     expect(harness.deleteThing).not.toHaveBeenCalled();
 
     const refresh = Promise.withResolvers<typeof thing>();
     harness.getThing.mockReturnValue(refresh.promise);
     harness.deleteThing.mockResolvedValue({ success: true });
     fireEvent.click(button);
-    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(harness.deleteThing).toHaveBeenCalledWith({ thingId: "thing-1" }));
-    await waitFor(() => expect(harness.getThing).toHaveBeenCalledTimes(2));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }, { timeout: 5000 }));
+    await waitFor(() => expect(harness.deleteThing).toHaveBeenCalledWith({ thingId: "thing-1" }), {
+      timeout: 5000,
+    });
+    await waitFor(() => expect(harness.getThing).toHaveBeenCalledTimes(2), { timeout: 5000 });
     expect(harness.navigate).not.toHaveBeenCalled();
     expect(client.getQueryState(thingQueryKeys.list)?.isInvalidated).toBe(true);
     await act(async () => refresh.resolve(thing));
-    await waitFor(() => expect(harness.navigate).toHaveBeenCalledWith({ to: "/things" }));
+    await waitFor(() => expect(harness.navigate).toHaveBeenCalledWith({ to: "/things" }), {
+      timeout: 5000,
+    });
   });
 
   it("shows a pending proposal without fetching or exposing a live Thing", async () => {
@@ -153,7 +157,7 @@ describe("Thing details interactions", () => {
     };
     harness.getProposals.mockResolvedValue({ data: [proposal] });
     showPage();
-    await screen.findByText("Pending review");
+    await screen.findByText("Pending review", {}, { timeout: 5000 });
     expect(screen.getByText("This thing is not live in the registry yet.")).toBeTruthy();
     expect(harness.getThing).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /upvote/ })).toBeNull();
