@@ -6,7 +6,8 @@ import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, sessionQueryKey, useApiClient, useAuthClient } from "@/app";
 import { useStepper } from "@/components";
-import { useDaoConnection } from "@/lib/dao-connect";
+import { disconnectDaoAccount, useDaoConnection } from "@/lib/dao-connect";
+import { pageTitle } from "@/lib/page-title";
 import {
   childNodesQueryOptions,
   invalidateNodeQueries,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/queries/nodes";
 import { bindingPreflightQueryOptions, invalidateTenantQueries } from "@/lib/queries/tenants";
 import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
+import { humanize } from "../-admin-ui";
 import { createTenantResources } from "./-tenant-creation";
 import { TenantCreationStage } from "./-tenant-creation-stage";
 import { TenantDeployPhase } from "./-tenant-deploy-phase";
@@ -42,8 +44,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/new")({
       apiClient: context.apiClient,
       queryClient: context.queryClient,
     }),
-  head: () => ({
-    title: "New Tenant | app",
+  head: ({ match }) => ({
+    title: pageTitle("New site · Admin", match.context.runtimeConfig),
     meta: [{ name: "description", content: "Create a new tenant, node, and domain binding." }],
   }),
   component: NewTenantPage,
@@ -74,9 +76,10 @@ function NewTenantPage() {
   );
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
+  const [detailsConfirmed, setDetailsConfirmed] = useState(false);
 
   const stepper = useStepper([
-    { id: "create", label: "Create tenant + node + binding", blocking: true },
+    { id: "create", label: "Create site, community and domain", blocking: true },
     { id: "publish", label: "Publish config as DAO", blocking: false },
   ]);
 
@@ -196,13 +199,19 @@ function NewTenantPage() {
   }
 
   const formValuesValid = tenantWizardSchema.safeParse(formValues).success;
+  const daoReady = daoConnection.status === "connected" && !!daoConnection.daoAccountId;
+  const hostnameAvailable = preflight?.hostname.available !== false;
+  const canContinueDetails = formValuesValid && hostnameAvailable;
   const canSubmitDuringForm =
-    hasOrg &&
-    formValuesValid &&
-    preflight?.hostname.available !== false &&
-    daoConnection.status === "connected" &&
-    !!daoConnection.daoAccountId &&
-    activeNetwork === "mainnet";
+    hasOrg && formValuesValid && hostnameAvailable && daoReady && activeNetwork === "mainnet";
+  const blockedReason =
+    activeNetwork !== "mainnet"
+      ? "Switch to mainnet to create this tenant."
+      : !hostnameAvailable
+        ? `${hostname} is already taken.`
+        : null;
+  const parentNode = [...rootNodes, ...stateNodes].find((node) => node.id === formValues.parentId);
+  const parentName = kind === "country" ? null : (parentNode?.name ?? null);
 
   if (phase === "deploy") {
     return (
@@ -241,7 +250,15 @@ function NewTenantPage() {
           onSubmit: () => orgMutation.mutate(),
         },
       }}
-      creation={{
+      dao={{
+        ready: daoReady,
+        accountId: daoConnection.daoAccountId,
+        onChange: () => void disconnectDaoAccount(),
+      }}
+      details={{
+        confirmed: detailsConfirmed && canContinueDetails,
+        summary: [name, humanize(kind), hostname].filter(Boolean).join(" · "),
+        onEdit: () => setDetailsConfirmed(false),
         form,
         kind,
         rootNodes,
@@ -250,12 +267,24 @@ function NewTenantPage() {
         setRootParentId,
         slugManuallyEdited,
         tenantNameManuallyEdited,
-        baseAccount,
         hostname,
         preflight,
-        daoAccountId: daoConnection.daoAccountId,
+        canContinue: canContinueDetails,
+        onContinue: () => setDetailsConfirmed(true),
+      }}
+      review={{
+        summary: {
+          name,
+          kind,
+          parentName,
+          tenantName: tenantName || name,
+          hostname,
+          daoAccountId: daoConnection.daoAccountId,
+        },
+        baseAccount,
         submitPending: submitMutation.isPending,
-        canSubmitDuringForm,
+        canSubmit: canSubmitDuringForm,
+        blockedReason,
         onSubmit: (event) => {
           event.preventDefault();
           void form.handleSubmit();

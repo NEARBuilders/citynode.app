@@ -1,14 +1,8 @@
+import { ArrowSquareOutIcon, HammerIcon } from "@phosphor-icons/react";
+import { cn } from "cn";
 import type { ClientRuntimeConfig } from "everything-dev/types";
-import { domAnimation, LazyMotion, m } from "framer-motion";
-import { ExternalLink } from "lucide-react";
 import { getRepository } from "@/app";
-import underConstructionImage from "@/assets/under-construction.gif";
-import {
-  ClassicTooltipContent,
-  Tooltip,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface UnderConstructionProps {
   label?: string;
@@ -53,70 +47,32 @@ export function UnderConstruction({
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={className} style={{ perspective: 800 }}>
-            <button
-              type="button"
-              className="bg-transparent border-0 transition-transform p-4 -m-4"
-              style={{ cursor: "pointer" }}
-              onClick={handleClick}
-              aria-label={
-                skipNavigation || !hasOutlink
-                  ? label
-                    ? `${label} under construction`
-                    : "under construction"
-                  : label
-                    ? `${label} under construction - view source`
-                    : "under construction - view source"
-              }
-            >
-              <LazyMotion features={domAnimation}>
-                <m.div
-                  animate={
-                    pressed
-                      ? { scale: 0.95, rotateY: 0, z: -15 }
-                      : {
-                          rotateY: [0, 12, 0, -12, 0],
-                          y: [0, -4, 0],
-                        }
-                  }
-                  transition={
-                    pressed
-                      ? { duration: 0.15 }
-                      : {
-                          rotateY: {
-                            duration: 4,
-                            ease: "easeInOut",
-                            repeat: Infinity,
-                          },
-                          y: {
-                            duration: 3,
-                            ease: "easeInOut",
-                            repeat: Infinity,
-                          },
-                        }
-                  }
-                  whileTap={{ scale: 0.95, rotateY: 0, z: -15 }}
-                  className="relative"
-                  style={{ transformStyle: "preserve-3d" }}
-                >
-                  <img
-                    src={underConstructionImage}
-                    alt={label ? `${label} under construction` : "under construction"}
-                    className="w-full h-auto rounded-xl border border-border object-cover shadow-lg"
-                  />
-                </m.div>
-              </LazyMotion>
-            </button>
-          </div>
+        <TooltipTrigger
+          className={cn("block cursor-pointer", className)}
+          onClick={handleClick}
+          data-pressed={pressed || undefined}
+          aria-label={
+            skipNavigation || !hasOutlink
+              ? label
+                ? `${label} under construction`
+                : "under construction"
+              : label
+                ? `${label} under construction - view source`
+                : "under construction - view source"
+          }
+        >
+          <span className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-muted px-3 py-4 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+            <HammerIcon className="size-5" aria-hidden="true" />
+            <span>In progress</span>
+          </span>
         </TooltipTrigger>
         {!skipNavigation && hasOutlink && (
-          <ClassicTooltipContent side="top">
+          <TooltipContent side="top" sideOffset={6}>
             <span className="flex items-center gap-1.5">
-              {tooltip ?? "see code and contribute"}
-              <ExternalLink className="w-3 h-3" />
+              {tooltip ?? "See the code and contribute"}
+              <ArrowSquareOutIcon className="size-3" />
             </span>
-          </ClassicTooltipContent>
+          </TooltipContent>
         )}
       </Tooltip>
     </TooltipProvider>

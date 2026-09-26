@@ -1,90 +1,87 @@
-import { ArrowUp, Trash2 } from "lucide-react";
+import { TrashIcon } from "@phosphor-icons/react";
+import { useState } from "react";
 import type { useApiClient } from "@/app";
-import { Badge, Button } from "@/components";
-import { ThingMetaRow } from "./-thing-meta-row";
+import { Button, ConfirmDialog, InfoRow, LocalDate, SectionHeader } from "@/components";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Thing = NonNullable<Awaited<ReturnType<ApiClient["template"]["getThing"]>>>;
-type UpvoteCount = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCount"]>>;
-type UserVote = Awaited<ReturnType<ApiClient["votes"]["getUserVote"]>>;
 
 export function ThingContent({
   thing,
   isAdmin,
   isDeletePending,
-  isVoteLoading,
-  isVotePending,
-  userVote,
-  upvoteCount,
   onDelete,
-  onVote,
 }: {
   thing: Thing;
   isAdmin: boolean;
   isDeletePending: boolean;
-  isVoteLoading: boolean;
-  isVotePending: boolean;
-  userVote: UserVote | undefined;
-  upvoteCount: UpvoteCount | undefined;
   onDelete: () => void;
-  onVote: (nextHasUpvote: boolean) => void;
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   return (
     <>
-      <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <Badge variant="outline" className="text-xs font-mono">
-            {thing.type}
-          </Badge>
-          <Button
-            type="button"
-            variant={userVote?.hasUpvote ? "default" : "outline"}
-            size="sm"
-            className="gap-1.5"
-            aria-pressed={userVote?.hasUpvote ?? false}
-            onClick={() => onVote(!(userVote?.hasUpvote ?? false))}
-            disabled={isVoteLoading || isVotePending}
-          >
-            <ArrowUp className="h-3.5 w-3.5" />
-            {upvoteCount?.totalCount ?? 0}
-            <span>{userVote?.hasUpvote ? "upvoted" : "upvote"}</span>
-          </Button>
-        </div>
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="Payload" />
+        <pre
+          className="overflow-x-auto rounded-2xl bg-muted p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap break-all text-foreground"
+          data-testid="thing-payload"
+        >
+          {JSON.stringify(thing.payload, null, 2)}
+        </pre>
+      </section>
 
-        <div className="space-y-1.5 text-sm">
-          <ThingMetaRow label="thingId" mono>
-            {thing.thingId}
-          </ThingMetaRow>
-          <ThingMetaRow label="type" mono>
-            {thing.type}
-          </ThingMetaRow>
-          <ThingMetaRow label="created">{new Date(thing.createdAt).toLocaleString()}</ThingMetaRow>
-          <ThingMetaRow label="updated">{new Date(thing.updatedAt).toLocaleString()}</ThingMetaRow>
+      <section className="flex flex-col gap-2">
+        <SectionHeader title="Details" />
+        <div>
+          <InfoRow
+            label="Created"
+            value={<LocalDate value={thing.createdAt} format="datetime" />}
+          />
+          <InfoRow
+            label="Updated"
+            value={<LocalDate value={thing.updatedAt} format="datetime" />}
+          />
         </div>
-
-        <div className="rounded-[8px] border border-border bg-muted/10 p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-            Payload
-          </div>
-          <pre className="font-mono text-xs text-foreground whitespace-pre-wrap break-all leading-relaxed">
-            {JSON.stringify(thing.payload, null, 2)}
-          </pre>
-        </div>
-      </div>
+      </section>
 
       {isAdmin && (
-        <div className="rounded-[12px] border border-destructive/30 bg-destructive/5 p-6 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-destructive">
-              Admin
-            </span>
+        <section className="flex flex-col gap-6" data-testid="thing-danger-zone">
+          <SectionHeader title="Danger zone" />
+          <div className="flex flex-col gap-4 rounded-2xl border border-destructive/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-foreground">Delete this thing</span>
+              <span className="text-sm text-muted-foreground">
+                Removes it from the registry for everyone.
+              </span>
+            </div>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={() => setConfirmOpen(true)}
+              disabled={isDeletePending}
+            >
+              <TrashIcon />
+              {isDeletePending ? "Deleting…" : "Delete thing"}
+            </Button>
           </div>
-          <Button variant="destructive" size="sm" className="gap-1.5" onClick={onDelete}>
-            <Trash2 size={12} />
-            {isDeletePending ? "Deleting..." : "Delete thing"}
-          </Button>
-        </div>
+        </section>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete this thing?"
+        description={`${thing.thingId} will be removed permanently.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isPending={isDeletePending}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          onDelete();
+        }}
+      />
     </>
   );
 }

@@ -1,41 +1,56 @@
 import { Link } from "@tanstack/react-router";
 import type { useApiClient } from "@/app";
-import { Badge, Button } from "@/components";
+import { Badge, Button, LocalDate } from "@/components";
 import type { DataTableColumnDef } from "@/components/data-table";
-import { proposalReviewStatusVariant } from "./-proposal-review";
+import { humanize } from "../-admin-ui";
+import { proposalReviewStatusVariant, proposalTitle, proposalTypeLabel } from "./-proposal-review";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
 export type Proposal = ProposalResult["data"][number];
 
+export function ProposalLink({ proposal, className }: { proposal: Proposal; className?: string }) {
+  return (
+    <Link
+      to="/admin/proposals/$proposalId"
+      params={{ proposalId: proposal.id }}
+      search={{ pluginId: proposal.pluginId, entityId: proposal.entityId }}
+      className={className}
+    >
+      {proposalTitle(proposal)}
+    </Link>
+  );
+}
+
 export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
   return [
     {
-      accessorKey: "id",
-      header: "ID",
+      id: "title",
+      accessorFn: (row) => proposalTitle(row),
+      header: "Proposal",
       cell: ({ row }) => (
-        <span className="block max-w-36 truncate font-mono text-xs text-muted-foreground">
-          {row.original.id}
-        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <ProposalLink proposal={row.original} className="font-medium hover:underline" />
+          <span className="block max-w-56 truncate font-mono text-xs text-muted-foreground">
+            {row.original.entityId}
+          </span>
+        </div>
       ),
     },
     {
       accessorKey: "pluginId",
-      header: "Plugin",
-      cell: ({ row }) => <Badge variant="outline">{row.original.pluginId}</Badge>,
-    },
-    {
-      accessorKey: "entityId",
-      header: "Entity",
+      header: "Type",
+      meta: { className: "hidden lg:table-cell" },
+
       cell: ({ row }) => (
-        <span className="block max-w-52 truncate font-mono text-xs text-muted-foreground">
-          {row.original.entityId}
-        </span>
+        <span className="text-muted-foreground">{proposalTypeLabel(row.original.pluginId)}</span>
       ),
     },
     {
       accessorKey: "createdBy",
-      header: "Created by",
+      header: "Submitted by",
+      meta: { className: "hidden lg:table-cell" },
+
       cell: ({ row }) => (
         <span className="block max-w-44 truncate font-mono text-xs text-muted-foreground">
           {row.original.createdBy}
@@ -43,38 +58,40 @@ export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
       ),
     },
     {
-      accessorKey: "submissionCount",
-      header: "Submissions",
-      cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">{row.original.submissionCount}</span>
-      ),
-    },
-    {
       accessorKey: "reviewStatus",
       header: "Status",
       cell: ({ row }) => (
         <Badge variant={proposalReviewStatusVariant(row.original.reviewStatus)}>
-          {row.original.reviewStatus}
+          {humanize(row.original.reviewStatus)}
         </Badge>
       ),
     },
     {
       accessorKey: "createdAt",
-      header: "Created",
-      cell: ({ row }) => new Date(row.original.createdAt).toLocaleString(),
+      header: "Submitted",
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">
+          <LocalDate value={row.original.createdAt} format="relative" />
+        </span>
+      ),
     },
     {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button asChild variant="outline" size="sm">
-          <Link
-            to="/admin/proposals/$proposalId"
-            params={{ proposalId: row.original.id }}
-            search={{ pluginId: row.original.pluginId, entityId: row.original.entityId }}
-          >
-            {row.original.reviewStatus === "pending" ? "review" : "view"}
-          </Link>
+        <Button
+          variant={row.original.reviewStatus === "pending" ? "outline" : "ghost"}
+          size="sm"
+          nativeButton={false}
+          render={
+            <Link
+              to="/admin/proposals/$proposalId"
+              params={{ proposalId: row.original.id }}
+              search={{ pluginId: row.original.pluginId, entityId: row.original.entityId }}
+            />
+          }
+        >
+          {row.original.reviewStatus === "pending" ? "Review" : "View"}
         </Button>
       ),
     },
