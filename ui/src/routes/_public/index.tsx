@@ -8,7 +8,7 @@ import {
   UsersThreeIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
@@ -36,11 +36,6 @@ const STEPS = [
 ];
 
 export const Route = createFileRoute("/_public/")({
-  beforeLoad: ({ context }) => {
-    if (context.session?.user && !context.session.user.banned) {
-      throw redirect({ to: "/dashboard" });
-    }
-  },
   loader: async ({ context }) => {
     await context.queryClient.prefetchQuery(tenantAppsQueryOptions(context.apiClient));
     return { runtimeConfig: context.runtimeConfig };
