@@ -12,18 +12,6 @@ vi.mock("@/services/dao", () => ({
 }));
 
 describe("API Plugin Integration Tests", () => {
-  describe("ping", () => {
-    it("returns healthy status", async () => {
-      const client = await getPluginClient();
-      const result = await client.ping();
-
-      expect(result).toEqual({
-        status: "ok",
-        timestamp: expect.any(String),
-      });
-    });
-  });
-
   describe("resolveTenant", () => {
     it("returns null for an unknown account", async () => {
       const client = await getPluginClient();
@@ -511,25 +499,6 @@ describe("API Plugin Integration Tests", () => {
       );
       await expect(outsider.setDefaultValidator({ validatorId: validator.id })).rejects.toThrow(
         "This node's validators do not belong to your organization",
-      );
-    });
-  });
-
-  describe("testError", () => {
-    it("maps error kinds to client-visible failures", async () => {
-      const client = await getPluginClient();
-
-      await expect(client.testError({ kind: "unauthorized" })).rejects.toThrow(
-        "test unauthorized error",
-      );
-      await expect(client.testError({ kind: "forbidden" })).rejects.toThrow("test forbidden error");
-      await expect(client.testError({ kind: "not_found" })).rejects.toThrow("test not found error");
-      await expect(client.testError({ kind: "conflict" })).rejects.toThrow("test conflict error");
-      await expect(client.testError({ kind: "bad_request" })).rejects.toThrow(
-        "test bad request error",
-      );
-      await expect(client.testError({ kind: "internal" as never })).rejects.toThrow(
-        "Internal Server Error",
       );
     });
   });

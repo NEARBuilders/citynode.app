@@ -36,7 +36,13 @@ export function RelayerTopUp({
       {!nearAccountId ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <p className="text-sm text-muted-foreground">Connect a NEAR wallet to send funds.</p>
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={onConnect}>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={onConnect}
+            data-testid="admin-relayer-connect"
+          >
             <WalletIcon />
             Connect wallet
           </Button>
@@ -84,6 +90,7 @@ export function RelayerTopUp({
             className="w-full sm:w-auto sm:self-start"
             onClick={onFund}
             disabled={sending || parsedAmount === null}
+            data-testid="admin-relayer-fund"
           >
             {sending ? "Sending…" : "Fund relayer"}
           </Button>

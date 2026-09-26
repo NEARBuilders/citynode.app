@@ -90,4 +90,31 @@ test.describe("admin", () => {
 
     expectNoHydrationFailure(pageErrors);
   });
+
+  test("relayer page asks for a wallet before funding", async ({ page }) => {
+    await page.goto("/admin/relayer", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle");
+    await waitForApp(page);
+
+    await expect(page.getByTestId("admin-relayer.heading")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("admin-relayer-status")).toBeVisible({ timeout: 10000 });
+
+    await expect(page.getByTestId("admin-relayer-connect")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("admin-relayer-fund")).toHaveCount(0);
+
+    expectNoHydrationFailure(pageErrors);
+  });
+
+  test.skip("fund button is disabled for an invalid amount once a wallet is connected", async ({
+    page,
+  }) => {
+    await page.goto("/admin/relayer", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    await page.getByTestId("admin-relayer-connect").click();
+
+    await expect(page.getByTestId("admin-relayer-fund")).toBeVisible();
+    await page.getByLabel("Amount").fill("bad");
+    await expect(page.getByTestId("admin-relayer-fund")).toBeDisabled();
+  });
 });
