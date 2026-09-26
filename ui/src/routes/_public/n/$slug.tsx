@@ -1,18 +1,39 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { Sparkles } from "lucide-react";
+import {
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  CalendarBlankIcon,
+  CompassIcon,
+  MapPinIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
-import { getActiveRuntime, useApiClient } from "@/app";
-import { Badge, NodeDirectory } from "@/components";
+import { buildTenantUrl, type ApiClient, getActiveRuntime, useApiClient } from "@/app";
+import { Badge, Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
+import { EventList } from "@/components/discovery/event-list";
 import { PageContainer } from "@/components/layout/page-container";
 import { NodeDirectorySkeleton } from "@/components/node-directory-skeleton";
 import { NodeStakeSection } from "@/components/node-stake-section";
 import { Skeleton } from "@/components/ui/skeleton";
+import { pageTitle } from "@/lib/page-title";
 import {
   childNodesQueryOptions,
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
+
+const KIND_LABELS: Record<string, string> = { country: "Country", state: "State", city: "City" };
+
+function discoveryProfileQueryOptions(apiClient: ApiClient, nodeId: string) {
+  return queryOptions({
+    queryKey: ["discovery-node", nodeId],
+    queryFn: () => apiClient.getDiscoveryNode({ nodeId }),
+    enabled: !!nodeId,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
 
 export const Route = createFileRoute("/_public/n/$slug")({
   validateSearch: z.object({ parentId: z.uuid().optional() }),
@@ -29,6 +50,7 @@ export const Route = createFileRoute("/_public/n/$slug")({
       await Promise.all([
         queryClient.prefetchQuery(childNodesQueryOptions(apiClient, node.id)),
         queryClient.prefetchQuery(stakingValidatorsQueryOptions(apiClient, node.id)),
+        queryClient.prefetchQuery(discoveryProfileQueryOptions(apiClient, node.id)),
       ]);
     }
 
@@ -36,12 +58,14 @@ export const Route = createFileRoute("/_public/n/$slug")({
   },
   head: ({ loaderData }) => ({
     meta: [
-      { title: loaderData?.nodeName ? `${loaderData.nodeName} | app` : "Node | app" },
+      {
+        title: pageTitle(loaderData?.nodeName ?? "Community", loaderData?.runtimeConfig),
+      },
       {
         name: "description",
         content: loaderData?.nodeName
-          ? `${loaderData.nodeName} — geographic node, validators, and child nodes.`
-          : "Geographic node directory.",
+          ? `${loaderData.nodeName} on CityNode — events, local communities and staking pools.`
+          : "A local community on CityNode.",
       },
     ],
   }),
@@ -69,6 +93,8 @@ function NodePage() {
     enabled: !!nodeId,
   });
 
+  const { data: profile } = useQuery(discoveryProfileQueryOptions(apiClient, nodeId ?? ""));
+
   if (nodeLoading) {
     return (
       <PageContainer variant="default">
@@ -80,85 +106,191 @@ function NodePage() {
   if (!node) {
     return (
       <PageContainer variant="default">
-        <p className="py-16 text-sm text-muted-foreground">Node not found.</p>
+        <EmptyState
+          icon={CompassIcon}
+          title="Community not found"
+          description={`There's no community at /n/${slug}. It may have moved or not exist yet.`}
+          action={
+            <Button
+              nativeButton={false}
+              render={<Link to="/explore" data-testid="node-page.back-to-explore" />}
+            >
+              Back to Explore
+            </Button>
+          }
+        />
       </PageContainer>
     );
   }
 
   const validators = staking?.validators ?? [];
   const validatorNodeIds = new Set(validators.map((v) => v.nodeId));
+  const events = profile?.events ?? [];
+  const hostname = `${node.slug}.${gateway}`;
+  const siteUrl = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
+  const kindLabel = KIND_LABELS[node.kind] ?? node.kind;
 
   return (
     <PageContainer variant="default">
-      <div className="space-y-12">
-        <header className="space-y-3 pt-4 sm:pt-8">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Sparkles className="h-3 w-3" />
-            {gateway}
-          </div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground capitalize">
+      <header className="flex flex-col gap-6" data-testid="node-page.header">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <Badge variant="secondary">{kindLabel}</Badge>
+          {profile?.location && (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <MapPinIcon className="size-4 shrink-0" />
+              {profile.location}
+            </span>
+          )}
+          {profile?.featured && (
+            <Badge>
+              <SparkleIcon />
+              {profile.featured}
+            </Badge>
+          )}
+          {profile?.active && <Badge variant="success">Recently active</Badge>}
+        </div>
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-3">
+            <h1 className="text-3xl font-semibold wrap-anywhere text-foreground sm:text-4xl">
               {node.name}
             </h1>
-            <Badge variant="secondary" className="capitalize">
-              {node.kind}
-            </Badge>
-          </div>
-          <p className="text-sm font-mono text-muted-foreground">
-            {node.slug}.{gateway}
-          </p>
-        </header>
-
-        <section className="space-y-6">
-          <div className="flex items-end justify-between gap-3">
-            <div className="space-y-1">
-              <h2 className="text-xl font-semibold text-foreground">Child nodes</h2>
-              <p className="text-sm text-muted-foreground">
-                Navigate to states and cities under {node.name}.
+            {profile?.summary ? (
+              <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
+                {profile.summary}
               </p>
-            </div>
-            <span className="text-xs font-mono text-muted-foreground">
-              {children.length} {children.length === 1 ? "node" : "nodes"}
-            </span>
+            ) : (
+              <p className="text-sm break-all text-muted-foreground">{hostname}</p>
+            )}
           </div>
+          <div className="flex flex-col gap-3 sm:shrink-0 sm:flex-row">
+            {validators.length > 0 && (
+              <Button
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/stake"
+                    search={{ nodeId: node.id }}
+                    data-testid="node-page.stake-button"
+                  />
+                }
+              >
+                Stake NEAR
+                <ArrowRightIcon />
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={(props) => (
+                <a
+                  {...props}
+                  href={siteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="node-page.visit-site"
+                />
+              )}
+            >
+              Visit site
+              <ArrowUpRightIcon />
+            </Button>
+          </div>
+        </div>
+        {profile && profile.channels.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {profile.channels.map((channel) => (
+              <Button
+                key={channel.url}
+                variant="ghost"
+                size="sm"
+                nativeButton={false}
+                render={(props) => (
+                  <a {...props} href={channel.url} target="_blank" rel="noopener noreferrer" />
+                )}
+              >
+                {channel.label}
+                <ArrowUpRightIcon />
+              </Button>
+            ))}
+          </div>
+        )}
+      </header>
+
+      <dl
+        data-testid="node-page.stats"
+        className="grid grid-cols-3 gap-4 border-y border-border py-6 sm:gap-6"
+      >
+        <Stat label="Upcoming events" value={events.length} />
+        <Stat
+          label={children.length === 1 ? "Local community" : "Local communities"}
+          value={children.length}
+        />
+        <Stat
+          label={validators.length === 1 ? "Staking pool" : "Staking pools"}
+          value={validators.length}
+        />
+      </dl>
+
+      <section className="flex flex-col gap-6" data-testid="node-page.events">
+        <SectionHeader title="Upcoming events" />
+        {events.length > 0 ? (
+          <EventList events={events} nodeId={node.id} />
+        ) : (
+          <div className="flex items-center gap-4 rounded-2xl bg-muted p-6">
+            <CalendarBlankIcon className="size-6 shrink-0 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
+          </div>
+        )}
+      </section>
+
+      {(childrenLoading || children.length > 0) && (
+        <section className="flex flex-col gap-6" data-testid="node-page.children">
+          <SectionHeader
+            title="Local communities"
+            description={`States and cities under ${node.name}.`}
+          />
           <NodeDirectory
             nodes={children}
             gateway={gateway}
             validatorNodeIds={validatorNodeIds}
             isLoading={childrenLoading}
-            emptyMessage="No child nodes yet."
+            layout="grid"
             linkTo="/n/$slug"
           />
         </section>
+      )}
 
-        <NodeStakeSection
-          node={node}
-          children={children}
-          gateway={gateway}
-          validators={validators}
-          sourceNodeId={staking?.sourceNodeId ?? node.id}
-          apiClient={apiClient}
-        />
-      </div>
+      <NodeStakeSection
+        node={node}
+        children={children}
+        gateway={gateway}
+        validators={validators}
+        sourceNodeId={staking?.sourceNodeId ?? node.id}
+        apiClient={apiClient}
+      />
     </PageContainer>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex min-w-0 flex-col-reverse justify-end gap-1">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-3xl font-semibold tabular-nums text-foreground">{value}</dd>
+    </div>
   );
 }
 
 function NodeSkeleton() {
   return (
-    <div className="space-y-12">
-      <header className="space-y-3 pt-4 sm:pt-8">
-        <Skeleton className="h-3 w-24" />
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-9 w-48" />
-          <Skeleton className="h-5 w-20 rounded-[6px]" />
-        </div>
-        <Skeleton className="h-3 w-40" />
+    <div className="flex flex-col gap-12">
+      <header className="flex flex-col gap-4">
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-10 w-64 max-w-full" />
+        <Skeleton className="h-4 w-80 max-w-full" />
       </header>
-      <section className="space-y-6">
-        <Skeleton className="h-5 w-32" />
-        <NodeDirectorySkeleton />
-      </section>
+      <Skeleton className="h-20 w-full" />
+      <NodeDirectorySkeleton layout="grid" />
     </div>
   );
 }

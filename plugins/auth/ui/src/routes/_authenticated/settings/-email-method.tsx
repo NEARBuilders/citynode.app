@@ -1,23 +1,31 @@
-import { Mail } from "lucide-react";
-import { Card, Chip } from "@/components";
+import { EnvelopeIcon } from "@phosphor-icons/react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { MethodHeader } from "./-method-header";
 
-export function EmailMethod({ user }: { user: { email?: string } }) {
+export function EmailMethod({ email }: { email: string }) {
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-start gap-4">
-        <div className="w-10 h-10 rounded-[10px] border-2 border-outset border-border-strong bg-muted flex items-center justify-center shrink-0">
-          <Mail className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-semibold text-foreground">Email</span>
-            <Chip muted={!user.email}>{user.email ? "linked" : "not linked"}</Chip>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {user.email ?? "Email login has not been linked for this account yet."}
-          </p>
-        </div>
-      </div>
-    </Card>
+    <section className="flex flex-col gap-4" data-testid="settings.email">
+      <MethodHeader title="Email" />
+      <Item variant="outline">
+        <ItemMedia variant="icon">
+          <EnvelopeIcon />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>Email address</ItemTitle>
+          <ItemDescription className="break-all">{email}</ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <Badge variant="secondary">Linked</Badge>
+        </ItemActions>
+      </Item>
+    </section>
   );
 }

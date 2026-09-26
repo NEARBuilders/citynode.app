@@ -29,7 +29,6 @@ import {
   parsePolicyGroupMembers,
   type TenantPublishConfig,
   type TenantPublishConfigInput,
-  type TenantUiOverride,
 } from "./dao-policy";
 
 export type {
@@ -39,7 +38,6 @@ export type {
   NearPolicyRoleGroup,
   TenantPublishConfig,
   TenantPublishConfigInput,
-  TenantUiOverride,
 };
 export { buildTenantPublishConfig, isExplicitDaoMember, parsePolicyGroupMembers };
 
@@ -138,8 +136,7 @@ export async function connectDaoAccount(options: ConnectDaoOptions = {}): Promis
     store.set({ status: "connected", daoAccountId: first, error: null });
     return first;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    store.set({ status: "error", error: message, daoAccountId: null });
+    store.set({ status: "error", error: describeDaoError(err, "your DAO"), daoAccountId: null });
     throw err;
   }
 }

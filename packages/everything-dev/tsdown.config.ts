@@ -4,28 +4,6 @@ import { defineConfig } from "tsdown";
 
 const SHEBANG = "#!/usr/bin/env node\n";
 
-// tsdown/rolldown quirk: the shared runtime chunk can retain a dead
-// `import { createRequire } from "node:module"` (injected for CLI-side
-// interop, unused after treeshake). Client builds of the ui subpaths
-// resolve the dist and cannot import node builtins, so strip the dead
-// import when it is genuinely unused in the chunk.
-async function stripDeadCreateRequireImport(): Promise<void> {
-  const runtimePath = join("dist", "_virtual", "_rolldown", "runtime.mjs");
-  let content: string;
-  try {
-    content = await readFile(runtimePath, "utf8");
-  } catch {
-    return;
-  }
-  const uses = content.split("createRequire").length - 1;
-  if (uses === 1) {
-    const cleaned = content.replace(/^import \{ createRequire \} from "node:module";\n?/m, "");
-    if (cleaned !== content) {
-      await writeFile(runtimePath, cleaned);
-    }
-  }
-}
-
 export default defineConfig({
   entry: [
     "src/index.ts",
@@ -99,7 +77,6 @@ export default defineConfig({
     ],
   },
   async onSuccess() {
-    await stripDeadCreateRequireImport();
     for (const file of ["cli.mjs", "cli.cjs"]) {
       const filepath = join("dist", file);
       try {

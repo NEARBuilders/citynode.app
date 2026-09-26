@@ -1,20 +1,19 @@
+import { CaretRightIcon, MagnifyingGlassIcon, TreeStructureIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Network } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useApiClient } from "@/app";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  SectionHeader,
-  Skeleton,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components";
+import { Badge, Button, EmptyState, PageHeader, Tabs, TabsList, TabsTrigger } from "@/components";
 import { DataTable, type DataTableColumnDef } from "@/components/data-table";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
 import {
   Select,
   SelectContent,
@@ -22,12 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { pageTitle } from "@/lib/page-title";
 import {
   type AdminNodeListKind,
   type AdminNodeListRow,
   type AdminNodeListScope,
   adminNodeListQueryOptions,
 } from "@/lib/queries/nodes";
+import { humanize, ListSkeleton, tenantStatusTone } from "../-admin-ui";
+import { filterNodeRows } from "./-node-management";
 
 type AdminNodeSearch = {
   scope?: AdminNodeListScope;
@@ -71,8 +73,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/")({
     context.queryClient.ensureQueryData(
       adminNodeListQueryOptions(context.apiClient, deps.scope, deps.kind),
     ),
-  head: () => ({
-    meta: [{ title: "Nodes | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Communities · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminNodes,
 });
@@ -84,6 +86,7 @@ function AdminNodes() {
   const scope = search.scope ?? "roots";
   const kind = search.kind ?? "all";
   const nodesQuery = useQuery(adminNodeListQueryOptions(apiClient, scope, kind));
+  const [query, setQuery] = useState("");
 
   const columns = useMemo<DataTableColumnDef<AdminNodeListRow>[]>(
     () => [
@@ -92,33 +95,34 @@ function AdminNodes() {
         accessorFn: (row) => row.node.name,
         header: "Name",
         cell: ({ row }) => (
-          <Link
-            to="/admin/nodes/$nodeId"
-            params={{ nodeId: row.original.node.id }}
-            className="font-medium text-foreground hover:underline"
-          >
-            {row.original.node.name}
-          </Link>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <Link
+              to="/admin/nodes/$nodeId"
+              params={{ nodeId: row.original.node.id }}
+              className="font-medium text-foreground hover:underline"
+            >
+              {row.original.node.name}
+            </Link>
+            <span className="font-mono text-xs text-muted-foreground">
+              {row.original.node.slug}
+            </span>
+          </div>
         ),
       },
       {
         id: "kind",
         accessorFn: (row) => row.node.kind,
         header: "Kind",
-        cell: ({ row }) => <Badge variant="outline">{row.original.node.kind}</Badge>,
-      },
-      {
-        id: "slug",
-        accessorFn: (row) => row.node.slug,
-        header: "Slug",
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">{row.original.node.slug}</span>
+          <span className="text-muted-foreground">{humanize(row.original.node.kind)}</span>
         ),
       },
       {
         id: "parent",
-        accessorFn: (row) => row.parent?.name ?? "Root node",
+        accessorFn: (row) => row.parent?.name ?? "",
         header: "Parent",
+        meta: { className: "hidden lg:table-cell" },
+
         cell: ({ row }) =>
           row.original.parent ? (
             <Link
@@ -129,116 +133,163 @@ function AdminNodes() {
               {row.original.parent.name}
             </Link>
           ) : (
-            <span className="text-muted-foreground">Root node</span>
+            <span className="text-muted-foreground">—</span>
           ),
       },
       {
         accessorKey: "status",
-        header: "Tenant status",
+        header: "Tenant",
         cell: ({ row }) => (
-          <Badge variant={row.original.status === "active" ? "default" : "secondary"}>
-            {row.original.status.replaceAll("_", " ")}
+          <Badge variant={tenantStatusTone(row.original.status)}>
+            {humanize(row.original.status)}
           </Badge>
         ),
       },
       {
         accessorKey: "validatorCount",
         header: "Validators",
+        cell: ({ row }) => <span className="tabular-nums">{row.original.validatorCount}</span>,
       },
       {
         accessorKey: "childrenCount",
         header: "Children",
-      },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/admin/nodes/$nodeId" params={{ nodeId: row.original.node.id }}>
-              open
-            </Link>
-          </Button>
-        ),
+        meta: { className: "hidden lg:table-cell" },
+
+        cell: ({ row }) => <span className="tabular-nums">{row.original.childrenCount}</span>,
       },
     ],
     [],
   );
 
-  const visibleNodes = nodesQuery.data ?? [];
+  const visibleNodes = useMemo(
+    () => filterNodeRows(nodesQuery.data ?? [], query),
+    [nodesQuery.data, query],
+  );
 
   return (
-    <div className="space-y-6">
-      <SectionHeader title="Node structure" />
+    <>
+      <PageHeader
+        title="Communities"
+        description="Countries, states and cities in the community tree."
+        headerTestId="admin-nodes.heading"
+      />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Tabs
-          value={scope}
-          onValueChange={(value) =>
-            navigate({
-              search: (previous) => ({
-                ...previous,
-                scope: value === "all" ? "all" : undefined,
-              }),
-            })
-          }
-        >
-          <TabsList>
-            <TabsTrigger value="roots">Root nodes</TabsTrigger>
-            <TabsTrigger value="all">All nodes</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <Select
-          value={kind}
-          onValueChange={(value) => {
-            const nextKind = parseKind(value);
-            if (!nextKind) return;
-            navigate({
-              search: (previous) => ({
-                ...previous,
-                kind: nextKind === "all" ? undefined : nextKind,
-              }),
-            });
-          }}
-        >
-          <SelectTrigger aria-label="Filter nodes by kind">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {NODE_KIND_VALUES.map((value) => (
-              <SelectItem key={value} value={value}>
-                {NODE_KIND_LABELS[value]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <section className="flex flex-col gap-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <Tabs
+            value={scope}
+            onValueChange={(value) =>
+              navigate({
+                search: (previous) => ({
+                  ...previous,
+                  scope: value === "all" ? "all" : undefined,
+                }),
+              })
+            }
+          >
+            <TabsList>
+              <TabsTrigger value="roots" data-testid="admin-nodes-scope-roots">
+                Top level
+              </TabsTrigger>
+              <TabsTrigger value="all" data-testid="admin-nodes-scope-all">
+                All nodes
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Select
+            value={kind}
+            items={NODE_KIND_VALUES.map((value) => ({ label: NODE_KIND_LABELS[value], value }))}
+            onValueChange={(value) => {
+              const nextKind = parseKind(value);
+              if (!nextKind) return;
+              navigate({
+                search: (previous) => ({
+                  ...previous,
+                  kind: nextKind === "all" ? undefined : nextKind,
+                }),
+              });
+            }}
+          >
+            <SelectTrigger
+              aria-label="Filter communities by kind"
+              className="w-full sm:w-auto"
+              data-testid="admin-nodes-kind"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {NODE_KIND_VALUES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {NODE_KIND_LABELS[value]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <InputGroup className="sm:ml-auto sm:max-w-xs">
+            <InputGroupAddon>
+              <MagnifyingGlassIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by name or slug"
+              aria-label="Search communities"
+              data-testid="admin-nodes-search"
+            />
+          </InputGroup>
+        </div>
 
-      {nodesQuery.isLoading ? (
-        <Card className="space-y-3 p-6">
-          {[1, 2, 3].map((row) => (
-            <Skeleton key={row} className="h-10 w-full" />
-          ))}
-        </Card>
-      ) : nodesQuery.isError ? (
-        <EmptyState
-          icon={Network}
-          title="Failed to load nodes"
-          description={nodesQuery.error.message || "Something went wrong while loading nodes."}
-          action={
-            <Button variant="outline" onClick={() => nodesQuery.refetch()}>
-              retry
-            </Button>
-          }
-        />
-      ) : !visibleNodes.length ? (
-        <EmptyState
-          icon={Network}
-          title="No matching nodes"
-          description="No nodes match this view. Try all nodes or a different kind."
-        />
-      ) : (
-        <DataTable columns={columns} data={visibleNodes} />
-      )}
-    </div>
+        {nodesQuery.isLoading ? (
+          <ListSkeleton />
+        ) : nodesQuery.isError ? (
+          <EmptyState
+            icon={TreeStructureIcon}
+            title="Couldn't load communities"
+            description={nodesQuery.error.message || "Something went wrong while loading nodes."}
+            action={
+              <Button variant="outline" onClick={() => nodesQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          />
+        ) : !visibleNodes.length ? (
+          <EmptyState
+            icon={TreeStructureIcon}
+            title="No matching communities"
+            description="Try all communities, another kind or a different search."
+          />
+        ) : (
+          <>
+            <div className="hidden md:block" data-testid="admin-nodes-table">
+              <DataTable columns={columns} data={visibleNodes} />
+            </div>
+            <ItemGroup className="md:hidden" data-testid="admin-nodes-rows">
+              {visibleNodes.map((row) => (
+                <Item
+                  key={row.node.id}
+                  variant="outline"
+                  render={<Link to="/admin/nodes/$nodeId" params={{ nodeId: row.node.id }} />}
+                >
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="max-w-full">
+                      <span className="min-w-0 truncate">{row.node.name}</span>
+                    </ItemTitle>
+                    <ItemDescription>
+                      {humanize(row.node.kind)}
+                      {row.parent ? ` in ${row.parent.name}` : ""} · {row.validatorCount}{" "}
+                      {row.validatorCount === 1 ? "validator" : "validators"}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Badge variant={tenantStatusTone(row.status)}>{humanize(row.status)}</Badge>
+                    <CaretRightIcon className="size-4 text-muted-foreground" />
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          </>
+        )}
+      </section>
+    </>
   );
 }

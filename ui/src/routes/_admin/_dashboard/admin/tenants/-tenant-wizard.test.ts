@@ -3,10 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import {
   classifyTenantKey,
   deriveTenantWizardNameFields,
+  filterTenants,
   generateSlug,
   type NearNetworkId,
   resolveOrgSlug,
   resolvePrimaryHostname,
+  resolveTenantDeploySteps,
+  resolveTenantWizardSteps,
   type TenantWizardValues,
   tenantWizardSchema,
 } from "./-tenant-wizard";
@@ -182,5 +185,92 @@ describe("NearNetworkId", () => {
   it("is a mainnet/testnet union usable at runtime", () => {
     const networks: NearNetworkId[] = ["mainnet", "testnet"];
     expect(networks).toHaveLength(2);
+  });
+});
+
+describe("resolveTenantWizardSteps", () => {
+  it("opens the first unfinished step and collapses finished ones", () => {
+    const steps = resolveTenantWizardSteps({ organization: true, dao: false, details: false });
+    expect(steps.current).toBe("dao");
+    expect(steps.position).toBe(2);
+    expect(steps.status("organization")).toBe("complete");
+    expect(steps.status("dao")).toBe("current");
+    expect(steps.status("details")).toBe("upcoming");
+    expect(steps.status("review")).toBe("upcoming");
+  });
+
+  it("reopens the DAO step when the DAO disconnects after details are done", () => {
+    const steps = resolveTenantWizardSteps({ organization: true, dao: false, details: true });
+    expect(steps.current).toBe("dao");
+    expect(steps.status("details")).toBe("complete");
+  });
+
+  it("lands on review once every prerequisite is done", () => {
+    const steps = resolveTenantWizardSteps({ organization: true, dao: true, details: true });
+    expect(steps.current).toBe("review");
+    expect(steps.position).toBe(4);
+  });
+
+  it("always starts with the organization when none is active", () => {
+    expect(
+      resolveTenantWizardSteps({ organization: false, dao: true, details: true }).current,
+    ).toBe("organization");
+  });
+});
+
+describe("resolveTenantDeploySteps", () => {
+  it("asks to publish once records exist", () => {
+    expect(
+      resolveTenantDeploySteps({ create: "success", publish: "pending", verified: false }),
+    ).toEqual({ create: "complete", publish: "current", live: "upcoming" });
+  });
+
+  it("surfaces a failed publish", () => {
+    expect(
+      resolveTenantDeploySteps({ create: "success", publish: "failed", verified: false }),
+    ).toEqual({ create: "complete", publish: "failed", live: "upcoming" });
+  });
+
+  it("waits for DAO approval after submitting and completes when verified", () => {
+    expect(
+      resolveTenantDeploySteps({ create: "success", publish: "success", verified: false }).live,
+    ).toBe("current");
+    expect(
+      resolveTenantDeploySteps({ create: "success", publish: "success", verified: true }),
+    ).toEqual({ create: "complete", publish: "complete", live: "complete" });
+  });
+
+  it("holds later steps while records are being created or failed", () => {
+    expect(
+      resolveTenantDeploySteps({ create: "failed", publish: "pending", verified: false }),
+    ).toEqual({ create: "failed", publish: "upcoming", live: "upcoming" });
+  });
+});
+
+describe("filterTenants", () => {
+  const tenants = [
+    { id: "t1", name: "Chicago", accountId: "chicago.sputnik-dao.near", status: "active" },
+    { id: "t2", name: "Lahore", accountId: "lhr.sputnik-dao.near", status: "pending_deletion" },
+    { id: "t3", name: "Berlin", accountId: "berlin.near", status: "suspended" },
+  ];
+
+  it("filters by status, folding pending deletion into pending", () => {
+    expect(filterTenants(tenants, { status: "pending", query: "" }).map((t) => t.id)).toEqual([
+      "t2",
+    ]);
+    expect(filterTenants(tenants, { status: "all", query: "" })).toHaveLength(3);
+  });
+
+  it("searches name, DAO account and node slug", () => {
+    const slugs = new Map([["t3", "ber"]]);
+    expect(filterTenants(tenants, { status: "all", query: "sputnik" }).map((t) => t.id)).toEqual([
+      "t1",
+      "t2",
+    ]);
+    expect(
+      filterTenants(tenants, { status: "all", query: "BER", slugByTenantId: slugs }).map(
+        (t) => t.id,
+      ),
+    ).toEqual(["t3"]);
   });
 });

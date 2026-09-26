@@ -1,25 +1,34 @@
+import { GavelIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, FileCheck2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient } from "@/app";
-import { Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
+import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from "@/components";
 import { useDaoConnection } from "@/lib/dao-connect";
+import { pageTitle } from "@/lib/page-title";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
 import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
+import { BackLink } from "../-admin-ui";
 import { approveAndApplyProposal } from "./-proposal-application";
 import type { Proposal } from "./-proposal-columns";
 import {
   adminProposalDetailQueryOptions,
   proposalReviewHistoryQueryOptions,
   proposalReviewQueryKeys,
+  proposalTitle,
+  proposalTypeLabel,
 } from "./-proposal-review";
 import { ProposalReviewActions } from "./-proposal-review-actions";
 import { ProposalReviewHistory } from "./-proposal-review-history";
-import { ProposalSummary } from "./-proposal-summary";
+import {
+  ProposalDetails,
+  ProposalOutcome,
+  ProposalStatusBadges,
+  ProposalSubject,
+} from "./-proposal-summary";
 
 type ProposalDetailSearch = { pluginId?: string; entityId?: string };
 
@@ -28,8 +37,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/proposals/$propos
     pluginId: typeof search.pluginId === "string" ? search.pluginId : undefined,
     entityId: typeof search.entityId === "string" ? search.entityId : undefined,
   }),
-  head: ({ params }) => ({
-    meta: [{ title: `${params.proposalId} | Proposal review | app` }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Proposal · Admin", match.context.runtimeConfig) }],
   }),
   component: ProposalDetailPage,
 });
@@ -135,12 +144,12 @@ function ProposalDetailPage() {
   if (!pluginId || !entityId) {
     return (
       <EmptyState
-        icon={FileCheck2}
-        title="Proposal location is missing"
-        description="Open this proposal from the review queue so its plugin and entity can be resolved."
+        icon={GavelIcon}
+        title="Open this proposal from the list"
+        description="The link is missing the details needed to find it."
         action={
-          <Button asChild variant="outline">
-            <Link to="/admin/proposals">back to proposals</Link>
+          <Button variant="outline" nativeButton={false} render={<Link to="/admin/proposals" />}>
+            Back to proposals
           </Button>
         }
       />
@@ -149,23 +158,23 @@ function ProposalDetailPage() {
 
   if (proposalQuery.isLoading) {
     return (
-      <Card className="space-y-3 p-6">
-        <Skeleton className="h-8 w-56" />
-        <Skeleton className="h-24 w-full" />
+      <div className="flex flex-col gap-6" aria-busy="true">
+        <Skeleton className="h-10 w-72" />
+        <Skeleton className="h-40 w-full" />
         <Skeleton className="h-32 w-full" />
-      </Card>
+      </div>
     );
   }
 
   if (proposalQuery.isError || !proposalQuery.data) {
     return (
       <EmptyState
-        icon={FileCheck2}
+        icon={GavelIcon}
         title="Proposal not found"
         description={proposalQuery.error?.message || "This proposal is no longer available."}
         action={
-          <Button asChild variant="outline">
-            <Link to="/admin/proposals">back to proposals</Link>
+          <Button variant="outline" nativeButton={false} render={<Link to="/admin/proposals" />}>
+            Back to proposals
           </Button>
         }
       />
@@ -184,41 +193,51 @@ function ProposalDetailPage() {
       verifiedDaoAccountId === proposalDaoAccountId);
 
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Review proposal"
-        action={
-          <Button asChild variant="outline" size="sm">
-            <Link to="/admin/proposals">
-              <ArrowLeft />
-              back to proposals
-            </Link>
-          </Button>
-        }
+    <>
+      <PageHeader
+        label={<BackLink to="/admin/proposals">Proposals</BackLink>}
+        title={proposalTitle(proposal)}
+        description={`${proposalTypeLabel(proposal.pluginId)} · ${proposal.entityId}`}
+        actions={<ProposalStatusBadges proposal={proposal} />}
+        headerTestId="admin-proposal.heading"
       />
 
-      <ProposalSummary proposal={proposal} />
-
-      <ProposalReviewActions
-        isPending={isPending}
-        isNodeProposal={proposal.pluginId === "node"}
-        proposalDaoAccountId={proposalDaoAccountId}
-        daoIsVerified={daoIsVerified}
-        rejectionReason={rejectionReason}
-        isReviewing={reviewMutation.isPending}
-        onDaoVerified={handleDaoVerified}
-        onRejectionReasonChange={(event) => setRejectionReason(event.target.value)}
-        onApprove={() => reviewMutation.mutate({ proposal, action: "approve" })}
-        onReject={() =>
-          reviewMutation.mutate({
-            proposal,
-            action: "reject",
-            reason: rejectionReason.trim(),
-          })
-        }
-      />
+      <div className="grid gap-12 lg:grid-cols-3 lg:gap-10">
+        <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
+          <ProposalSubject proposal={proposal} />
+          <ProposalDetails proposal={proposal} />
+        </div>
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <Card>
+            <CardContent className="p-5 sm:p-6">
+              {isPending ? (
+                <ProposalReviewActions
+                  isPending={isPending}
+                  isNodeProposal={proposal.pluginId === "node"}
+                  proposalDaoAccountId={proposalDaoAccountId}
+                  daoIsVerified={daoIsVerified}
+                  rejectionReason={rejectionReason}
+                  isReviewing={reviewMutation.isPending}
+                  onDaoVerified={handleDaoVerified}
+                  onRejectionReasonChange={(event) => setRejectionReason(event.target.value)}
+                  onApprove={() => reviewMutation.mutate({ proposal, action: "approve" })}
+                  onReject={() =>
+                    reviewMutation.mutate({
+                      proposal,
+                      action: "reject",
+                      reason: rejectionReason.trim(),
+                    })
+                  }
+                />
+              ) : (
+                <ProposalOutcome proposal={proposal} />
+              )}
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
 
       <ProposalReviewHistory pluginId={pluginId} query={reviewHistoryQuery} />
-    </div>
+    </>
   );
 }

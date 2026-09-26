@@ -13,3 +13,30 @@ export function parseNodeMetadata(raw: string, description: string): Record<stri
   else delete result.description;
   return result;
 }
+
+interface SearchableNodeRow {
+  node: { name: string; slug: string };
+  parent?: { name: string } | undefined;
+}
+
+export function filterNodeRows<T extends SearchableNodeRow>(
+  rows: readonly T[],
+  query: string,
+): T[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [...rows];
+  return rows.filter(
+    ({ node, parent }) =>
+      node.name.toLowerCase().includes(needle) ||
+      node.slug.toLowerCase().includes(needle) ||
+      !!parent?.name.toLowerCase().includes(needle),
+  );
+}
+
+export const NODE_DETAIL_TABS = ["overview", "validators", "domains", "profile"] as const;
+
+export type NodeDetailTab = (typeof NODE_DETAIL_TABS)[number];
+
+export function parseNodeDetailTab(value: unknown): NodeDetailTab | undefined {
+  return NODE_DETAIL_TABS.find((tab) => tab === value);
+}

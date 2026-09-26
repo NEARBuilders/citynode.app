@@ -1,19 +1,24 @@
-import { ShieldAlert } from "lucide-react";
+import { LockSimpleIcon } from "@phosphor-icons/react";
 import { FEATURE_AREA_LABELS, type FeatureArea } from "@/lib/feature-areas";
 
-export function RestrictedAreaNotice({ area }: { area: FeatureArea }) {
+export function RestrictedAreaNotice({ area }: { area: FeatureArea | "admin" }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-3 rounded-2xl border-2 border-border-strong bg-card p-4 text-sm"
+      className="flex items-center gap-3 rounded-2xl bg-warning-muted px-4 py-3 text-sm text-warning-muted-foreground"
       data-testid="workspace-restricted-notice"
     >
-      <ShieldAlert className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <p>
-        <span className="font-medium">{FEATURE_AREA_LABELS[area]}</span> isn't available in your
-        current team workspace. Switch teams from the sidebar, or ask an organization owner to grant
-        your team this area.
-      </p>
+      <LockSimpleIcon className="size-4 shrink-0" />
+      {area === "admin" ? (
+        <p>
+          <span className="font-medium">Admin</span> is only for platform admins.
+        </p>
+      ) : (
+        <p>
+          <span className="font-medium">{FEATURE_AREA_LABELS[area]}</span> isn't open to your team.
+          Switch teams in the sidebar or ask an owner.
+        </p>
+      )}
     </div>
   );
 }

@@ -8,9 +8,11 @@ describe("router error fallback", () => {
       <RouterError error={new Error('<script>alert("failure")</script>')} />,
     );
 
-    expect(markup).toContain("Oops!");
+    expect(markup).toContain("This page didn’t load");
     expect(markup).toContain("<summary");
-    expect(markup).toContain("Error Details");
+    expect(markup).toContain("Error details");
+    expect(markup).toContain('href="/"');
+    expect(markup).toContain("Back home");
     expect(markup).toContain("&lt;script&gt;");
     expect(markup).not.toContain("<script>");
   });

@@ -45,8 +45,6 @@ export function isExplicitDaoMember(policy: unknown, accountId: string): boolean
 
 import type { TenantUiOverride } from "everything-dev/ui/tenant";
 
-export type { TenantUiOverride };
-
 export interface TenantPublishConfigInput {
   daoAccountId: string;
   gatewayId: string;

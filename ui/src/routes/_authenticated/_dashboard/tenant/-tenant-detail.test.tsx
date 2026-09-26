@@ -84,6 +84,7 @@ type Harness = {
 const harness = vi.hoisted(() => ({ current: null as Harness | null }));
 
 vi.mock("@/app", () => ({
+  buildTenantUrl: (label: string, gatewayId: string) => `https://${label}.${gatewayId}`,
   getAccount: (config: { account?: string } | undefined) => config?.account ?? "every.near",
   getActiveRuntime: (config: { runtime?: unknown } | undefined) => config?.runtime,
   useApiClient: () => harness.current?.apiClient,
@@ -117,6 +118,10 @@ vi.mock("sonner", () => ({
     error: (...args: unknown[]) => harness.current?.toast.error(...args),
     warning: (...args: unknown[]) => harness.current?.toast.warning(...args),
   },
+}));
+
+vi.mock("../dashboard/node/-community-header", () => ({
+  CommunityHeader: () => <div data-testid="community-header" />,
 }));
 
 vi.mock("./-node-validators", () => ({
@@ -326,9 +331,15 @@ function renderTenant(current: Harness) {
 }
 
 async function confirmDelete() {
-  fireEvent.click(await screen.findByRole("button", { name: "delete tenant" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Delete community" }));
   const dialog = await screen.findByRole("dialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "delete tenant" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete community" }));
+}
+
+async function confirmSuspend() {
+  fireEvent.click(await screen.findByRole("button", { name: "Suspend" }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Suspend" }));
 }
 
 afterEach(() => {
@@ -342,29 +353,45 @@ describe("tenant detail mutations", () => {
     const current = createHarness();
     const { queryClient } = renderTenant(current);
 
-    expect(await screen.findByRole("heading", { name: "Original tenant" })).toBeTruthy();
-    expect(screen.getByText("original-node")).toBeTruthy();
+    expect(await screen.findByText("Original tenant")).toBeTruthy();
+    await waitFor(() =>
+      expect(queryClient.getQueryData(nodeQueryKeys.tenant(TENANT_ID))).toEqual([
+        expect.objectContaining({ slug: "original-node" }),
+      ]),
+    );
 
-    fireEvent.click(await screen.findByRole("button", { name: "edit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Rename" }));
     const nameInput = screen.getByDisplayValue("Original tenant");
     fireEvent.change(nameInput, { target: { value: "Updated tenant" } });
-    fireEvent.click(screen.getByRole("button", { name: "save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(current.apiClient.updateTenant).toHaveBeenCalledOnce());
-    expect(await screen.findByRole("heading", { name: "Updated tenant" })).toBeTruthy();
-    expect(screen.getByText("updated-node")).toBeTruthy();
+    expect(await screen.findByText("Updated tenant")).toBeTruthy();
+    await waitFor(() =>
+      expect(queryClient.getQueryData(nodeQueryKeys.tenant(TENANT_ID))).toEqual([
+        expect.objectContaining({ slug: "updated-node" }),
+      ]),
+    );
     expect(current.publish).not.toHaveBeenCalled();
 
-    fireEvent.click(await screen.findByRole("button", { name: "suspend" }));
+    await confirmSuspend();
     await waitFor(() => expect(current.apiClient.suspendTenant).toHaveBeenCalledOnce());
-    expect(await screen.findByRole("button", { name: "reactivate" })).toBeTruthy();
-    expect(screen.getByText("suspended-node")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Reactivate" })).toBeTruthy();
+    await waitFor(() =>
+      expect(queryClient.getQueryData(nodeQueryKeys.tenant(TENANT_ID))).toEqual([
+        expect.objectContaining({ slug: "suspended-node" }),
+      ]),
+    );
     expect(current.publish).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "reactivate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reactivate" }));
     await waitFor(() => expect(current.apiClient.reactivateTenant).toHaveBeenCalledOnce());
-    expect(await screen.findByRole("button", { name: "suspend" })).toBeTruthy();
-    expect(screen.getByText("reactivated-node")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Suspend" })).toBeTruthy();
+    await waitFor(() =>
+      expect(queryClient.getQueryData(nodeQueryKeys.tenant(TENANT_ID))).toEqual([
+        expect.objectContaining({ slug: "reactivated-node" }),
+      ]),
+    );
     expect(current.publish).toHaveBeenCalledTimes(2);
     expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
       name: "Updated tenant",
@@ -379,13 +406,13 @@ describe("tenant detail mutations", () => {
     const current = createHarness({ publishError: new Error("publisher unavailable") });
     const { queryClient } = renderTenant(current);
 
-    await screen.findByRole("heading", { name: "Original tenant" });
-    fireEvent.click(await screen.findByRole("button", { name: "suspend" }));
+    await screen.findByText("Original tenant");
+    await confirmSuspend();
 
     await waitFor(() => expect(current.apiClient.suspendTenant).toHaveBeenCalledOnce());
-    expect(await screen.findByRole("button", { name: "reactivate" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Reactivate" })).toBeTruthy();
     expect(current.toast.error).toHaveBeenCalledWith(
-      "Tenant suspended, but config publication failed: publisher unavailable",
+      "Community suspended, but config publication failed: publisher unavailable",
     );
     expect(current.navigate).not.toHaveBeenCalled();
     expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
@@ -397,7 +424,7 @@ describe("tenant detail mutations", () => {
     const current = createHarness();
     const { queryClient } = renderTenant(current);
 
-    await screen.findByRole("heading", { name: "Original tenant" });
+    await screen.findByText("Original tenant");
     await confirmDelete();
 
     await waitFor(() => expect(current.navigate).toHaveBeenCalledWith({ to: "/" }));
@@ -407,19 +434,19 @@ describe("tenant detail mutations", () => {
     expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
       status: "pending_deletion",
     });
-    expect(current.toast.success).toHaveBeenCalledWith("Tenant queued for deletion");
+    expect(current.toast.success).toHaveBeenCalledWith("Community queued for deletion");
   });
 
   it("keeps a persisted soft delete visible when publication fails", async () => {
     const current = createHarness({ publishError: new Error("registry write failed") });
     const { queryClient } = renderTenant(current);
 
-    await screen.findByRole("heading", { name: "Original tenant" });
+    await screen.findByText("Original tenant");
     await confirmDelete();
 
     await waitFor(() => expect(current.apiClient.deleteTenant).toHaveBeenCalledOnce());
     expect(current.toast.error).toHaveBeenCalledWith(
-      "Tenant deletion saved, but config publication failed: registry write failed",
+      "Community deletion saved, but config publication failed: registry write failed",
     );
     expect(current.navigate).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeTruthy();
@@ -428,16 +455,29 @@ describe("tenant detail mutations", () => {
     });
   });
 
+  it("asks for confirmation before suspending", async () => {
+    const current = createHarness();
+    renderTenant(current);
+
+    await screen.findByText("Original tenant");
+    fireEvent.click(await screen.findByRole("button", { name: "Suspend" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(current.apiClient.suspendTenant).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(current.apiClient.suspendTenant).not.toHaveBeenCalled();
+  });
+
   it("does not publish when the database update fails", async () => {
     const current = createHarness({ updateError: new Error("database unavailable") });
     renderTenant(current);
 
-    await screen.findByRole("heading", { name: "Original tenant" });
-    fireEvent.click(await screen.findByRole("button", { name: "edit" }));
+    await screen.findByText("Original tenant");
+    fireEvent.click(await screen.findByRole("button", { name: "Rename" }));
     fireEvent.change(screen.getByDisplayValue("Original tenant"), {
       target: { value: "Unavailable update" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(current.toast.error).toHaveBeenCalledWith("database unavailable"));
     expect(current.publish).not.toHaveBeenCalled();
@@ -448,11 +488,11 @@ describe("tenant detail mutations", () => {
     const current = createHarness({ role: "member" });
     renderTenant(current);
 
-    await screen.findByRole("heading", { name: "Original tenant" });
+    await screen.findByText("Original tenant");
     await waitFor(() => expect(current.auth.organization.listMembers).toHaveBeenCalledOnce());
-    expect(screen.queryByRole("button", { name: "edit" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "delete" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "delete tenant" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "suspend" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
+    expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
   });
 });
