@@ -1,14 +1,28 @@
-import { Trash2 } from "lucide-react";
+import { CopyIcon, KeyIcon, TrashIcon } from "@phosphor-icons/react";
+import { useState } from "react";
 import {
   ApiKeyForm,
   type ApiKeyFormValues,
   ApiKeyReveal,
   type ApiKeyRevealProps,
-  Button,
-  Card,
+  ConfirmDialog,
+  EmptyState,
+  LocalDate,
+  SectionHeader,
   TabsContent,
 } from "@/components";
-import { OrganizationEmptyState } from "./-empty-state";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemSeparator,
+  ItemTitle,
+} from "@/components/ui/item";
+import { RowMenu } from "./-row-menu";
 
 export type OrganizationApiKey = {
   id: string;
@@ -43,50 +57,83 @@ export function ApiKeysTab({
   onDelete: (id: string) => void;
   onDismiss: () => void;
 }) {
-  return (
-    <TabsContent value="apikeys" className="space-y-6 pt-4">
-      {canManageMembers && (
-        <Card className="p-6 hover:shadow-md">
-          <ApiKeyForm onCreate={onCreate} isPending={isCreating} />
-        </Card>
-      )}
+  const [deleting, setDeleting] = useState<OrganizationApiKey | null>(null);
 
+  return (
+    <TabsContent value="apikeys" className="flex flex-col gap-6 pt-6">
+      <SectionHeader
+        title="API keys"
+        description="Let scripts and agents act for this organization."
+      />
+      {canManageMembers && <ApiKeyForm onCreate={onCreate} isPending={isCreating} />}
       {createdApiKey && <ApiKeyReveal apiKey={createdApiKey} onDismiss={onDismiss} />}
 
       {apiKeys.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {apiKeys.map((key) => (
-            <Card key={key.id} className="p-5 space-y-3 hover:shadow-md">
-              <div className="space-y-1 min-w-0">
-                <div className="font-medium text-foreground break-all">{key.name ?? "unnamed"}</div>
-                <div className="text-xs text-muted-foreground font-mono">
-                  {key.prefix ?? "api_"}...{key.start ?? ""}
-                </div>
-              </div>
-              <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                <div>created {new Date(key.createdAt).toLocaleString()}</div>
-                {key.expiresAt && <div>expires {new Date(key.expiresAt).toLocaleString()}</div>}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => onCopy(key.start || "", "Key prefix copied")}
-                  variant="outline"
-                >
-                  copy id
-                </Button>
-                {canManageMembers && (
-                  <Button onClick={() => onDelete(key.id)} disabled={isDeleting} variant="outline">
-                    <Trash2 className="h-3.5 w-3.5" />
-                    delete
-                  </Button>
-                )}
-              </div>
-            </Card>
+        <ItemGroup>
+          {apiKeys.map((key, index) => (
+            <div key={key.id} className="flex flex-col">
+              {index > 0 && <ItemSeparator />}
+              <Item size="sm" data-testid={`org-api-key-${key.id}`}>
+                <ItemMedia variant="icon">
+                  <KeyIcon />
+                </ItemMedia>
+                <ItemContent className="min-w-0">
+                  <ItemTitle className="break-all">{key.name ?? "Unnamed key"}</ItemTitle>
+                  <ItemDescription>
+                    <span className="font-mono break-all">
+                      {key.prefix ?? "api_"}…{key.start ?? ""}
+                    </span>{" "}
+                    · created <LocalDate value={key.createdAt} />
+                    {key.expiresAt ? (
+                      <>
+                        {" "}
+                        · expires <LocalDate value={key.expiresAt} format="relative" />
+                      </>
+                    ) : null}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <RowMenu label={`Actions for ${key.name ?? "key"}`}>
+                    <DropdownMenuItem onClick={() => onCopy(key.start || "", "Key prefix copied")}>
+                      <CopyIcon />
+                      Copy prefix
+                    </DropdownMenuItem>
+                    {canManageMembers && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setDeleting(key)}
+                          disabled={isDeleting}
+                        >
+                          <TrashIcon />
+                          Delete key
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </RowMenu>
+                </ItemActions>
+              </Item>
+            </div>
           ))}
-        </div>
+        </ItemGroup>
       ) : (
-        <OrganizationEmptyState label="No API keys" />
+        <EmptyState icon={KeyIcon} title="No API keys" className="py-10" />
       )}
+
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title={`Delete ${deleting?.name ?? "this key"}?`}
+        description="Anything using it stops working immediately."
+        confirmLabel="Delete key"
+        variant="destructive"
+        isPending={isDeleting}
+        onConfirm={() => {
+          if (deleting) onDelete(deleting.id);
+          setDeleting(null);
+        }}
+      />
     </TabsContent>
   );
 }

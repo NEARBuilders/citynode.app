@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseNodeMetadata } from "./-node-management";
+import { filterNodeRows, parseNodeDetailTab, parseNodeMetadata } from "./-node-management";
 
 describe("node metadata editing", () => {
   it("preserves arbitrary JSON data while saving the description field", () => {
@@ -34,5 +34,36 @@ describe("node metadata editing", () => {
     expect(parseNodeMetadata('{"description":"old","population":1}', " ")).toEqual({
       population: 1,
     });
+  });
+});
+
+describe("node list search", () => {
+  const rows = [
+    { node: { name: "Chicago", slug: "chicago" }, parent: { name: "United States" } },
+    { node: { name: "Lahore", slug: "lhr" }, parent: { name: "Pakistan" } },
+    { node: { name: "Pakistan", slug: "pakistan" }, parent: undefined },
+  ];
+
+  it("returns every row for an empty query", () => {
+    expect(filterNodeRows(rows, "  ")).toHaveLength(3);
+  });
+
+  it("matches name, slug and parent without case sensitivity", () => {
+    expect(filterNodeRows(rows, "CHI").map((row) => row.node.name)).toEqual(["Chicago"]);
+    expect(filterNodeRows(rows, "lhr").map((row) => row.node.name)).toEqual(["Lahore"]);
+    expect(filterNodeRows(rows, "pakistan").map((row) => row.node.name)).toEqual([
+      "Lahore",
+      "Pakistan",
+    ]);
+  });
+});
+
+describe("node detail tabs", () => {
+  it.each(["overview", "validators", "domains", "profile"])("accepts %s", (tab) => {
+    expect(parseNodeDetailTab(tab)).toBe(tab);
+  });
+
+  it.each([undefined, "", "bindings", 3])("ignores %s", (tab) => {
+    expect(parseNodeDetailTab(tab)).toBeUndefined();
   });
 });

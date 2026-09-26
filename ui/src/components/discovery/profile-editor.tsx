@@ -1,44 +1,99 @@
+import { LockSimpleIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
-import { Button, Input, Textarea } from "@/components";
+import { EmptyState } from "@/components/empty-state";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { ActivityEditor } from "./activity-editor";
 
 type Profile = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryProfile"]>>>;
+export type ProfileEditorTab = "profile" | "events";
+
 export function ProfileEditor({
   nodeId,
   defaultTab = "profile",
+  tab,
+  onTabChange,
 }: {
   nodeId: string;
-  defaultTab?: "profile" | "events";
+  defaultTab?: ProfileEditorTab;
+  tab?: ProfileEditorTab;
+  onTabChange?: (tab: ProfileEditorTab) => void;
 }) {
   const api = useApiClient();
+  const [localTab, setLocalTab] = useState<ProfileEditorTab>(defaultTab);
+  const current = tab ?? localTab;
+  const select = (next: ProfileEditorTab) => {
+    setLocalTab(next);
+    onTabChange?.(next);
+  };
   const query = useQuery({
     queryKey: ["discovery-profile", nodeId],
     queryFn: () => api.getDiscoveryProfile({ nodeId }),
     retry: false,
   });
   if (query.isPending)
-    return <p className="text-sm text-muted-foreground">Loading your community…</p>;
+    return (
+      <div className="flex flex-col gap-8">
+        <Skeleton className="h-11 w-48" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
   if (query.isError)
     return (
-      <p className="text-sm text-muted-foreground">
-        Only this community’s owners and admins can change its profile or publish events. Ask an
-        owner to give you access.
-      </p>
+      <EmptyState
+        icon={LockSimpleIcon}
+        title="You can't edit this community"
+        description="Only its owners and admins can change the profile or publish events."
+      />
     );
   return (
-    <Tabs defaultValue={defaultTab} className="gap-6">
-      <TabsList className="justify-start">
+    <Tabs
+      value={current}
+      onValueChange={(value) => select(value === "profile" ? "profile" : "events")}
+    >
+      <TabsList>
         <TabsTrigger value="events" data-testid="content-tab-events">
-          Events & updates
+          Events
         </TabsTrigger>
         <TabsTrigger value="profile" data-testid="content-tab-profile">
-          Community profile
+          Profile
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="profile" className="flex flex-col gap-6">
+      <TabsContent value="events" className="flex flex-col gap-8 pt-8">
+        {!query.data?.published && (
+          <div
+            className="flex flex-wrap items-center gap-3 text-sm"
+            data-testid="content-not-published"
+          >
+            <Badge variant="warning">Hidden from Explore</Badge>
+            <span className="text-muted-foreground">
+              Published events show up once your profile is public.
+            </span>
+            <Button variant="link" size="xs" onClick={() => select("profile")}>
+              Open profile
+            </Button>
+          </div>
+        )}
+        <ActivityEditor nodeId={nodeId} />
+      </TabsContent>
+      <TabsContent value="profile" className="pt-8">
         <ProfileForm
           key={nodeId}
           initial={
@@ -55,182 +110,198 @@ export function ProfileEditor({
           }
         />
       </TabsContent>
-      <TabsContent value="events" className="flex flex-col gap-4">
-        {!query.data?.published && (
-          <p className="rounded-xl bg-secondary px-4 py-3 text-sm">
-            Your community isn’t on Explore yet. You can prepare events now; turn on “Show this
-            community on Explore” in Community profile when you’re ready for people to see them.
-          </p>
-        )}
-        <ActivityEditor nodeId={nodeId} />
-      </TabsContent>
     </Tabs>
   );
 }
+
 function ProfileForm({ initial }: { initial: Profile }) {
   const [profile, setProfile] = useState(initial);
   const api = useApiClient();
   const client = useQueryClient();
   const save = useMutation({
     mutationFn: () => api.saveDiscoveryProfile(profile),
-    onSuccess: () =>
-      client.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("discovery") }),
+    onSuccess: () => {
+      toast.success(profile.published ? "Profile saved and live on Explore" : "Profile saved");
+      return client.invalidateQueries({
+        predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
+      });
+    },
+    onError: (error: Error) => toast.error(error.message || "Couldn't save the profile."),
   });
+  const setChannel = (index: number, patch: Partial<Profile["channels"][number]>) =>
+    setProfile({
+      ...profile,
+      channels: profile.channels.map((c, i) => (i === index ? { ...c, ...patch } : c)),
+    });
   return (
     <form
-      className="flex flex-col gap-6 rounded-2xl border-2 border-border-strong bg-card p-5 sm:p-7 [&_label]:text-sm [&_label]:font-medium [&_input]:mt-1.5 [&_textarea]:mt-1.5"
+      className="flex max-w-2xl flex-col gap-10"
       onSubmit={(e) => {
         e.preventDefault();
         save.mutate();
       }}
     >
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">Community profile</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Tell people who you are, where you meet, and how to join. Use a public place for your map
-          pin—not someone’s home. If you meet only online, you can skip the map pin.
-        </p>
-      </div>
-      <label className="block" htmlFor="profile-summary">
-        About this community
-        <Textarea
-          id="profile-summary"
-          value={profile.summary}
-          placeholder="Who is this community for? What do you do together?"
-          maxLength={1000}
-          onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
-        />
-      </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label htmlFor="profile-location">
-          Location
-          <Input
-            id="profile-location"
-            value={profile.location}
-            maxLength={120}
-            onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-          />
-        </label>
-        <label htmlFor="profile-region">
-          Region
-          <Input
-            id="profile-region"
-            value={profile.region}
-            maxLength={120}
-            onChange={(e) => setProfile({ ...profile, region: e.target.value })}
-          />
-        </label>
-        <label htmlFor="profile-latitude">
-          Latitude
-          <Input
-            id="profile-latitude"
-            type="number"
-            step="any"
-            min={-85}
-            max={85}
-            value={profile.latitude ?? ""}
-            onChange={(e) =>
-              setProfile({
-                ...profile,
-                latitude: e.target.value === "" ? null : Number(e.target.value),
-              })
-            }
-          />
-        </label>
-        <label htmlFor="profile-longitude">
-          Longitude
-          <Input
-            id="profile-longitude"
-            type="number"
-            step="any"
-            min={-180}
-            max={180}
-            value={profile.longitude ?? ""}
-            onChange={(e) =>
-              setProfile({
-                ...profile,
-                longitude: e.target.value === "" ? null : Number(e.target.value),
-              })
-            }
-          />
-        </label>
-      </div>
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-semibold">Where people can join you</legend>
-        <p className="text-sm text-muted-foreground">
-          Add your website, group chat, or social page.
-        </p>
-        {profile.channels.map((channel, index) => (
-          <div key={index} className="flex flex-wrap items-end gap-3 rounded-xl bg-muted/40 p-3">
-            <label htmlFor={`channel-label-${index}`}>
-              Link name
-              <Input
-                id={`channel-label-${index}`}
-                required
-                value={channel.label}
-                onChange={(e) =>
-                  setProfile({
-                    ...profile,
-                    channels: profile.channels.map((c, i) =>
-                      i === index ? { ...c, label: e.target.value } : c,
-                    ),
-                  })
-                }
-              />
-            </label>
-            <label htmlFor={`channel-url-${index}`} className="min-w-48 flex-1">
-              Website or group
-              <Input
-                id={`channel-url-${index}`}
-                required
-                type="url"
-                value={channel.url}
-                onChange={(e) =>
-                  setProfile({
-                    ...profile,
-                    channels: profile.channels.map((c, i) =>
-                      i === index ? { ...c, url: e.target.value } : c,
-                    ),
-                  })
-                }
-              />
-            </label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setProfile({ ...profile, channels: profile.channels.filter((_, i) => i !== index) })
-              }
-            >
-              Remove
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={profile.channels.length >= 10}
-          onClick={() =>
-            setProfile({ ...profile, channels: [...profile.channels, { label: "", url: "" }] })
-          }
-        >
-          Add a link
-        </Button>
-      </fieldset>
-      <label className="flex items-center gap-3 rounded-xl bg-secondary/60 px-4 py-3">
-        <input
-          type="checkbox"
+      <Field orientation="horizontal">
+        <FieldContent>
+          <FieldLabel htmlFor="profile-published">Show on Explore</FieldLabel>
+          <FieldDescription>People can find this community and its events.</FieldDescription>
+        </FieldContent>
+        <Switch
+          id="profile-published"
           checked={profile.published}
-          onChange={(e) => setProfile({ ...profile, published: e.target.checked })}
+          onCheckedChange={(checked) => setProfile({ ...profile, published: checked })}
         />
-        Show this community on Explore
-      </label>
-      <Button data-testid="discovery-profile-save" disabled={save.isPending}>
-        Save profile
-      </Button>
-      {save.isError && <p role="alert">{save.error.message}</p>}
-      {save.isSuccess && <p role="status">Profile saved.</p>}
+      </Field>
+
+      <FieldSet>
+        <FieldLegend>About</FieldLegend>
+        <Field>
+          <FieldLabel htmlFor="profile-summary">Description</FieldLabel>
+          <Textarea
+            id="profile-summary"
+            value={profile.summary}
+            placeholder="Who is this community for? What do you do together?"
+            maxLength={1000}
+            onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
+          />
+        </Field>
+      </FieldSet>
+
+      <FieldSet>
+        <FieldLegend>Where you meet</FieldLegend>
+        <FieldGroup>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="profile-location">City or venue</FieldLabel>
+              <Input
+                id="profile-location"
+                value={profile.location}
+                maxLength={120}
+                onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="profile-region">Region</FieldLabel>
+              <Input
+                id="profile-region"
+                value={profile.region}
+                maxLength={120}
+                onChange={(e) => setProfile({ ...profile, region: e.target.value })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="profile-latitude">Latitude</FieldLabel>
+              <Input
+                id="profile-latitude"
+                type="number"
+                step="any"
+                min={-85}
+                max={85}
+                value={profile.latitude ?? ""}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    latitude: e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="profile-longitude">Longitude</FieldLabel>
+              <Input
+                id="profile-longitude"
+                type="number"
+                step="any"
+                min={-180}
+                max={180}
+                value={profile.longitude ?? ""}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    longitude: e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              />
+            </Field>
+          </div>
+          <FieldDescription>
+            The map pin should be a public place. Leave it empty if you only meet online.
+          </FieldDescription>
+        </FieldGroup>
+      </FieldSet>
+
+      <FieldSet>
+        <FieldLegend>Where people can join</FieldLegend>
+        <FieldGroup>
+          {profile.channels.map((channel, index) => (
+            <div key={index} className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
+              <Field className="w-full sm:w-36 sm:shrink-0">
+                <FieldLabel htmlFor={`channel-label-${index}`}>Name</FieldLabel>
+                <Input
+                  id={`channel-label-${index}`}
+                  required
+                  placeholder="Telegram"
+                  value={channel.label}
+                  onChange={(e) => setChannel(index, { label: e.target.value })}
+                />
+              </Field>
+              <Field className="min-w-0 flex-1">
+                <FieldLabel htmlFor={`channel-url-${index}`}>Link</FieldLabel>
+                <Input
+                  id={`channel-url-${index}`}
+                  required
+                  type="url"
+                  placeholder="https://"
+                  value={channel.url}
+                  onChange={(e) => setChannel(index, { url: e.target.value })}
+                />
+              </Field>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${channel.label || "link"}`}
+                onClick={() =>
+                  setProfile({
+                    ...profile,
+                    channels: profile.channels.filter((_, i) => i !== index),
+                  })
+                }
+              >
+                <XIcon />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="self-start"
+            disabled={profile.channels.length >= 10}
+            onClick={() =>
+              setProfile({ ...profile, channels: [...profile.channels, { label: "", url: "" }] })
+            }
+          >
+            <PlusIcon />
+            Add link
+          </Button>
+        </FieldGroup>
+      </FieldSet>
+
+      <div className="flex flex-col gap-2">
+        <Button
+          data-testid="discovery-profile-save"
+          className="self-start"
+          disabled={save.isPending}
+        >
+          {save.isPending ? "Saving…" : "Save profile"}
+        </Button>
+        {save.isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {save.error.message}
+          </p>
+        )}
+      </div>
     </form>
   );
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthClient, Organization } from "@/app";
 import { Tabs } from "@/components";
@@ -77,7 +77,6 @@ function renderOverview({
 }) {
   return render(
     <OrganizationOverview
-      apiKeysCount={1}
       canDelete={canDelete}
       isDeleting={false}
       isActive={isActive}
@@ -85,7 +84,7 @@ function renderOverview({
       isLeaving={false}
       isSwitching={false}
       memberCount={2}
-      pendingInvitationsCount={1}
+      myRole={canDelete ? "owner" : "member"}
       onDelete={vi.fn()}
       onEdit={vi.fn()}
       onLeave={vi.fn()}
@@ -146,6 +145,11 @@ function OrganizationApiKeyHarness({ auth }: { auth: AuthClient }) {
   );
 }
 
+async function openMenu(label: string) {
+  fireEvent.click(screen.getByRole("button", { name: label }));
+  await screen.findByRole("menu");
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((resolvePromise) => {
@@ -160,11 +164,12 @@ afterEach(() => {
 });
 
 describe("organization management controls", () => {
-  it("shows owner edit/delete controls and keeps member self-removal forbidden", () => {
+  it("shows owner edit/delete controls and keeps member self-removal forbidden", async () => {
     renderOverview({ canDelete: true });
-    expect(screen.getByRole("button", { name: "edit" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "delete org" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "leave" })).toBeNull();
+    await openMenu("Organization actions");
+    expect(screen.getByRole("menuitem", { name: "Edit details" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Delete organization" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Leave organization" })).toBeNull();
 
     cleanup();
     render(
@@ -178,8 +183,8 @@ describe("organization management controls", () => {
         />
       </Tabs>,
     );
-    expect(screen.getAllByRole("button", { name: "remove" })).toHaveLength(1);
-    expect(screen.getByText("Member")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Actions for / })).toHaveLength(1);
+    expect(screen.getAllByText("Member")).toHaveLength(2);
 
     cleanup();
     render(
@@ -193,35 +198,62 @@ describe("organization management controls", () => {
         />
       </Tabs>,
     );
-    expect(screen.queryByRole("button", { name: "remove" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Actions for / })).toBeNull();
   });
 
-  it("gives non-owner members leave access without owner edit/delete controls", () => {
+  it("gives non-owner members leave access without owner edit/delete controls", async () => {
     renderOverview({ canDelete: false });
-    expect(screen.getByRole("button", { name: "leave" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "edit" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "delete org" })).toBeNull();
+    await openMenu("Organization actions");
+    expect(screen.getByRole("menuitem", { name: "Leave organization" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Edit details" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Delete organization" })).toBeNull();
+  });
+
+  it("confirms before deleting the organization", async () => {
+    const onDelete = vi.fn();
+    render(
+      <OrganizationOverview
+        canDelete
+        isDeleting={false}
+        isActive
+        isPersonal={false}
+        isLeaving={false}
+        isSwitching={false}
+        memberCount={2}
+        onDelete={onDelete}
+        onEdit={vi.fn()}
+        onLeave={vi.fn()}
+        onSwitch={vi.fn()}
+        org={organization}
+      />,
+    );
+    await openMenu("Organization actions");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete organization" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete organization" }));
+    expect(onDelete).toHaveBeenCalledOnce();
   });
 
   it("does not offer invitations from a personal organization", () => {
     renderInvitations({ canManageMembers: true, isPersonal: true });
     expect(screen.queryByPlaceholderText("email@example.com")).toBeNull();
-    expect(screen.queryByRole("button", { name: "send invitation" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
   });
 
-  it("gates pending invitation actions to owners and admins", () => {
+  it("gates pending invitation actions to owners and admins", async () => {
     const admin = renderInvitations({ canManageMembers: true, isPersonal: false });
     expect(screen.getByPlaceholderText("email@example.com or alice.near")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "send invitation" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "resend" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "cancel" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Invite" })).toBeTruthy();
+    await openMenu("Actions for invitee@example.com");
+    expect(screen.getByRole("menuitem", { name: "Resend" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Cancel invitation" })).toBeTruthy();
     admin.unmount();
 
     renderInvitations({ canManageMembers: false, isPersonal: false });
     expect(screen.queryByPlaceholderText("email@example.com or alice.near")).toBeNull();
-    expect(screen.queryByRole("button", { name: "send invitation" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "resend" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "cancel" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Actions for / })).toBeNull();
   });
 
   it("rolls back an optimistic API-key deletion when the auth boundary rejects", async () => {
@@ -242,7 +274,10 @@ describe("organization management controls", () => {
     );
 
     expect(await screen.findByText("Deploy key")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "delete" }));
+    await openMenu("Actions for Deploy key");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete key" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete key" }));
     await waitFor(() => expect(screen.queryByText("Deploy key")).toBeNull());
     expect(queryClient.getQueryData(orgApiKeysQueryKey(ORG_ID))).toEqual([]);
     expect(deleteApiKey).toHaveBeenCalledWith({ keyId: "key-1", configId: "org-keys" });
