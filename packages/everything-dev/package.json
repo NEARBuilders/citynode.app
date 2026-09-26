@@ -216,6 +216,60 @@
       "import": "./dist/ui/tenant.mjs",
       "require": "./dist/ui/tenant.cjs"
     },
+    "./ui/entry": {
+      "development": {
+        "types": "./src/ui/entry.ts",
+        "import": "./src/ui/entry.ts"
+      },
+      "types": "./dist/ui/entry.d.mts",
+      "import": "./dist/ui/entry.mjs",
+      "require": "./dist/ui/entry.cjs"
+    },
+    "./ui/hydrate": {
+      "development": {
+        "types": "./src/ui/hydrate.tsx",
+        "import": "./src/ui/hydrate.tsx"
+      },
+      "types": "./dist/ui/hydrate.d.mts",
+      "import": "./dist/ui/hydrate.mjs",
+      "require": "./dist/ui/hydrate.cjs"
+    },
+    "./ui/router-client": {
+      "development": {
+        "types": "./src/ui/router-client.tsx",
+        "import": "./src/ui/router-client.tsx"
+      },
+      "types": "./dist/ui/router-client.d.mts",
+      "import": "./dist/ui/router-client.mjs",
+      "require": "./dist/ui/router-client.cjs"
+    },
+    "./ui/router-server": {
+      "development": {
+        "types": "./src/ui/router-server.tsx",
+        "import": "./src/ui/router-server.tsx"
+      },
+      "types": "./dist/ui/router-server.d.mts",
+      "import": "./dist/ui/router-server.mjs",
+      "require": "./dist/ui/router-server.cjs"
+    },
+    "./ui/router-error": {
+      "development": {
+        "types": "./src/ui/router-error.tsx",
+        "import": "./src/ui/router-error.tsx"
+      },
+      "types": "./dist/ui/router-error.d.mts",
+      "import": "./dist/ui/router-error.mjs",
+      "require": "./dist/ui/router-error.cjs"
+    },
+    "./ui/router-defaults": {
+      "development": {
+        "types": "./src/ui/router-defaults.tsx",
+        "import": "./src/ui/router-defaults.tsx"
+      },
+      "types": "./dist/ui/router-defaults.d.mts",
+      "import": "./dist/ui/router-defaults.mjs",
+      "require": "./dist/ui/router-defaults.cjs"
+    },
     "./ui/manifest": {
       "development": {
         "types": "./src/ui/manifest/index.ts",
@@ -354,6 +408,7 @@
     "@types/tar": "^7.0.0",
     "better-auth": "catalog:",
     "better-near-auth": "catalog:",
+    "jsdom": "^30.0.1",
     "tsdown": "^0.22.0",
     "typescript": "^7.0.2",
     "vite-tsconfig-paths": "^5.1.4",
