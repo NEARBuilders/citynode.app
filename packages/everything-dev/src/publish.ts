@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { hasFolderFormUi } from "every-plugin/build/ui";
@@ -359,7 +359,8 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
         });
         uiIntegrity = uiResult.integrity["remoteEntry.js"];
         uiSsrIntegrity =
-          uiResult.integrity["ssr/remoteEntry.server.js"] ?? uiResult.integrity["remoteEntry.server.js"];
+          uiResult.integrity["ssr/remoteEntry.server.js"] ??
+          uiResult.integrity["remoteEntry.server.js"];
         uiFileCount = uiResult.stored;
       }
 

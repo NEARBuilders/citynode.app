@@ -29,8 +29,8 @@ import {
   UI_REMOTE_ENTRY_FILENAME,
 } from "everything-dev/ui/manifest";
 import type { RouterModule } from "../types";
-import type { RuntimeConfig } from "./config";
 import { logger } from "../utils/logger";
+import type { RuntimeConfig } from "./config";
 import {
   type ComposeModule,
   loadCoreUiRouteConfig,

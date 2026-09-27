@@ -130,8 +130,10 @@ describe("pluginUiUrlDeployEntries (folder-form plugin ui)", () => {
       }),
     );
 
-    const authUi = (merged.app as Record<string, Record<string, unknown>>).auth
-      .ui as Record<string, unknown>;
+    const authUi = (merged.app as Record<string, Record<string, unknown>>).auth.ui as Record<
+      string,
+      unknown
+    >;
     expect(authUi.name).toBe("auth-ui");
     expect(authUi.development).toBe("local:plugins/auth/ui");
     expect(authUi.production).toBe(`${BASE}/auth-ui/`);
