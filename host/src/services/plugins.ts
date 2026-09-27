@@ -127,7 +127,7 @@ export function secretsFromEnv(
   return Effect.gen(function* () {
     const out: Record<string, Redacted.Redacted<string>> = {};
     for (const key of keys) {
-      const value = yield* Config.redacted(key).pipe(Config.option);
+      const value = yield* Config.Redacted(key).pipe(Config.option);
       if (Option.isSome(value) && Redacted.value(value.value).length > 0) {
         out[key] = value.value;
       }
@@ -139,7 +139,7 @@ export function secretsFromEnv(
 export function readDbSecret(
   key: string,
 ): Effect.Effect<Redacted.Redacted<string>, Config.ConfigError> {
-  return Config.redacted(key).pipe(Config.withDefault(Redacted.make("unset")));
+  return Config.Redacted(key).pipe(Config.withDefault(Redacted.make("unset")));
 }
 
 function formatError(error: unknown): string {
@@ -346,7 +346,7 @@ export function buildAuthBaseVariables(
     // parseTrustedOrigins owns the localhost:3000 fallback. A BASE_URL value
     // that is not a usable origin is ignored (vitest sets "/" as its Vite
     // base; an operator typo must not take the auth origin down).
-    const envRaw = yield* Config.string("BASE_URL").pipe(
+    const envRaw = yield* Config.String("BASE_URL").pipe(
       Config.withDefault(""),
       Config.map((value) => value.trim() || undefined),
       // a broken config provider must not block auth boot — treat as unset

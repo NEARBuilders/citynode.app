@@ -138,24 +138,24 @@ const stage = () => {
     readFileSync(path.join(root, "plugins", "auth", "package.json"), "utf8"),
   ).name as string;
 
-  // Browser-facing public urls: the SAME staged slots, addressed same-origin
-  // relative — /bundles/<account>/<gateway>/<slot>/ — so the host serves the
-  // exact bytes the static servers hold, on every origin the container is
-  // reachable at (regression localhost mapping or the public gateway).
+  // Bundle slots are addressed at the namespace path shape, served by the
+  // harness's own static servers (the host's /bundles/* route is gone —
+  // ADR 0020). The production URL carries the base path; publicUrl is not
+  // needed because the browser base is the same absolute URL.
   const nsBase = nsAccount && nsGateway ? `/bundles/${nsAccount}/${nsGateway}` : undefined;
+  const slotUrl = (port: number, slot: string) =>
+    nsBase ? `http://localhost:${port}${nsBase}/${slot}` : `http://localhost:${port}`;
 
   const plan = {
     host: `http://localhost:${ports.hostDist}`,
     ui: {
-      production: `http://localhost:${ports.ui}`,
-      ...(nsBase ? { publicUrl: `${nsBase}/ui` } : {}),
+      production: slotUrl(ports.ui, "ui"),
     },
     api: `http://localhost:${ports.api}`,
     auth: `http://localhost:${ports.auth}`,
     authUi: {
-      production: `http://localhost:${ports.authUi}`,
+      production: slotUrl(ports.authUi, "auth-ui"),
       name: sanitizeContainerName(authPkgName),
-      ...(nsBase ? { publicUrl: `${nsBase}/auth-ui` } : {}),
     },
     plugins: Object.fromEntries(
       localPlugins.map(([key]) => {
@@ -164,8 +164,7 @@ const stage = () => {
         return [
           key,
           {
-            production: `http://localhost:${port}`,
-            ...(nsBase ? { uiPublicUrl: `${nsBase}/${key}` } : {}),
+            production: slotUrl(port, key),
           },
         ];
       }),
@@ -175,10 +174,13 @@ const stage = () => {
   for (const variant of ["ssr", "csr"] as const) {
     const resolved = prepareLocalProductionConfig(bosConfig, {
       ...plan,
-      ui: { ...plan.ui, ...(variant === "ssr" ? { ssr: `http://localhost:${ports.ui}/ssr` } : {}) },
+      ui: {
+        ...plan.ui,
+        ...(variant === "ssr" ? { ssr: `${plan.ui.production}/ssr` } : {}),
+      },
       authUi: {
         ...plan.authUi,
-        ...(variant === "ssr" ? { ssr: `http://localhost:${ports.authUi}/ssr` } : {}),
+        ...(variant === "ssr" ? { ssr: `${plan.authUi.production}/ssr` } : {}),
       },
     });
     // The auth plugin's reachable origin is environment truth, not fixture
@@ -191,20 +193,29 @@ const stage = () => {
     );
   }
 
-  const servers: Array<{ dir: string; port: number }> = [
+  const servers: Array<{ dir: string; port: number; basePath?: string }> = [
     { dir: "dist/host", port: ports.hostDist },
-    { dir: "dist/ui", port: ports.ui },
+    { dir: "dist/ui", port: ports.ui, ...(nsBase ? { basePath: `${nsBase}/ui` } : {}) },
     { dir: "dist/api", port: ports.api },
-    { dir: "dist/auth-ui", port: ports.authUi },
+    {
+      dir: "dist/auth-ui",
+      port: ports.authUi,
+      ...(nsBase ? { basePath: `${nsBase}/auth-ui` } : {}),
+    },
   ];
   if (authWorkspace) {
-    servers.push({ dir: "dist/plugins/auth", port: ports.auth });
+    servers.push({
+      dir: "dist/plugins/auth",
+      port: ports.auth,
+      ...(nsBase ? { basePath: `${nsBase}/auth` } : {}),
+    });
   }
   for (const [key] of localPlugins) {
+    if (key === "auth") continue;
     servers.push({
       dir: `dist/plugins/${key}`,
-      port:
-        key === "auth" ? ports.auth : basePort + 10 + localPlugins.findIndex(([k]) => k === key),
+      port: basePort + 10 + localPlugins.findIndex(([k]) => k === key),
+      ...(nsBase ? { basePath: `${nsBase}/${key}` } : {}),
     });
   }
   writeFileSync(

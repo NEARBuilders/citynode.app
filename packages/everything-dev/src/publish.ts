@@ -3,6 +3,7 @@ import { join } from "node:path";
 import process from "node:process";
 import { readSessionHandle } from "./auth-session";
 import { buildWorkspaceTargets, resolveWorkspaceTarget, selectWorkspaceTargets } from "./build";
+import { resolveCdnDeployInputs } from "./cdn-deploy";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
@@ -266,22 +267,36 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
   let publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
 
-  // Image-native deploy (plan 043): artifacts ship inside the runtime image
-  // and each host serves its own namespace from its own filesystem — the
-  // publish writes the deterministic bundle URLs, nothing is uploaded.
-  // CDN deploy (ADR 0020): when BOS_BUNDLE_CDN_ORIGIN + BOS_STORAGE_ORIGIN
-  // are set, dists upload to the storage API instead and every bundle URL
-  // (the root's own included) points at the CDN origin — the image keeps
-  // only the boot role. Unset envs keep the gateway-origin behavior.
-  const cdnOrigin = process.env.BOS_BUNDLE_CDN_ORIGIN?.replace(/\/$/, "");
-  const storageOrigin = process.env.BOS_STORAGE_ORIGIN?.replace(/\/$/, "");
-  const storageApiKey = process.env.BOS_STORAGE_API_KEY;
+  // CDN deploy (ADR 0020): the resolution chain (env → bos login session →
+  // derived from the base's inherited bundle URLs) lives in cdn-deploy.ts.
+  // The image keeps only the boot role.
+  const session = readSessionHandle(configDir);
+  const cdnDeploy = resolveCdnDeployInputs({
+    env: process.env as Record<string, string | undefined>,
+    runtimeConfig: runtimeConfig ?? null,
+    session: session?.credential ?? null,
+    account,
+    gateway,
+  });
+  if (cdnDeploy.error) {
+    return {
+      status: "error",
+      registryUrl,
+      built,
+      skipped,
+      deployResults,
+      error: cdnDeploy.error,
+    };
+  }
+  const cdnOrigin = cdnDeploy.cdnOrigin;
+  const storageOrigin = cdnDeploy.storageOrigin;
+  const storageApiKey = cdnDeploy.apiKey;
   const urlOrigin = cdnOrigin ?? `https://${gateway}`;
   const deployTargets = (built ?? []).filter((key) => targets.includes(key));
   const platformEntries: DeployResultEntry[] = [];
 
   console.log();
-  if (cdnOrigin && storageOrigin) {
+  if (cdnOrigin) {
     console.log(`  CDN deploy — uploading workspace dists to ${storageOrigin}...`);
   } else {
     console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
@@ -293,7 +308,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     let integrity: string | undefined;
     let ssrIntegrity: string | undefined;
     let fileCount: number | undefined;
-    if (cdnOrigin && storageOrigin) {
+    if (cdnOrigin) {
       const result = await uploadWorkspaceDist({
         origin: storageOrigin,
         apiKey: storageApiKey,

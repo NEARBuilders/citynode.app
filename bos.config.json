@@ -16,7 +16,7 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://citynode.app/bundles/v1.citynode.near/citynode.app/host/",
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/host/",
       "secrets": [
         "CORS_ORIGIN",
         "CSP_STRICT"
@@ -24,12 +24,12 @@
     },
     "ui": {
       "development": "local:ui",
-      "production": "https://citynode.app/bundles/v1.citynode.near/citynode.app/ui/",
-      "ssr": "https://citynode.app/bundles/v1.citynode.near/citynode.app/ui/ssr/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/",
+      "ssr": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/ssr/"
     },
     "api": {
       "development": "local:api",
-      "production": "https://citynode.app/bundles/v1.citynode.near/citynode.app/api/",
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/api/",
       "variables": {
         "platformAccount": "v1.citynode.near",
         "gatewayDomains": "citynode.app,testnet.citynode.app"
@@ -46,7 +46,7 @@
         "name": "auth-ui",
         "development": "local:plugins/auth/ui"
       },
-      "production": "https://citynode.app/bundles/v1.citynode.near/citynode.app/auth/",
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/auth/",
       "secrets": [
         "AUTH_DATABASE_URL",
         "BETTER_AUTH_SECRET",
@@ -129,11 +129,11 @@
       "secrets": [
         "TEMPLATE_DATABASE_URL"
       ],
-      "production": "https://citynode.app/bundles/v1.citynode.near/citynode.app/template/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/template/"
     },
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://citynode.app/bundles/v1.citynode.near/citynode.app/apps/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/apps/"
     },
     "proposals": {
       "development": "local:plugins/proposals",
@@ -143,7 +143,7 @@
       "secrets": [
         "PROPOSALS_DATABASE_URL"
       ],
-      "production": "https://citynode.app/bundles/v1.citynode.near/citynode.app/proposals/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/proposals/"
     },
     "votes": {
       "development": "local:plugins/votes",
@@ -151,7 +151,7 @@
       "secrets": [
         "VOTES_DATABASE_URL"
       ],
-      "production": "https://citynode.app/bundles/v1.citynode.near/citynode.app/votes/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/votes/"
     }
   }
 }

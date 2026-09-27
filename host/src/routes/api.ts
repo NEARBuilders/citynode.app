@@ -19,8 +19,6 @@ import type { RuntimeConfig } from "../services/config";
 import { mountMcpRoute } from "../services/mcp";
 import type { PluginResult } from "../services/plugins";
 import { logger } from "../utils/logger";
-import { createBundleFsHandler } from "./bundles";
-import { createBundleProxyCacheHandler, deriveNamespaceOrigins } from "./bundles-proxy";
 import {
   getHealthStatus,
   getMemorySnapshot,
@@ -109,26 +107,6 @@ export async function setupApiRoutes(
     throw new Error("API config is required to start the host");
   }
 
-  // FS-backed bundle serving (plan 043) — first handler on /bundles/*: the
-  // image stages its own artifacts and serves them same-origin. Unset
-  // BOS_BUNDLE_DIR (registry tier / child runtimes) falls through to the
-  // foreign-namespace proxy cache, then the proxy/oRPC routes. The inbound
-  // namespace guard (ADR 0021) scopes disk serving to the runtime's own
-  // identity — foreign namespaces fall through, never stale baked bytes.
-  const bundleNamespace = (() => {
-    const account = process.env.BOS_ACCOUNT ?? config.account;
-    const gateway = process.env.BOS_GATEWAY ?? config.domain;
-    return account && gateway ? { account, gateway } : undefined;
-  })();
-  app.all("/bundles/*", createBundleFsHandler(process.env.BOS_BUNDLE_DIR, bundleNamespace));
-  app.all(
-    "/bundles/*",
-    createBundleProxyCacheHandler({
-      namespaceOrigins: deriveNamespaceOrigins(config),
-      cacheDir: process.env.BOS_BUNDLE_CACHE_DIR,
-    }),
-  );
-
   const isProxyMode = process.argv.includes("--proxy");
 
   const publicRpcRouters = new Map<string, { handler: RPCHandler<any>; effectContext: unknown }>();
@@ -168,8 +146,6 @@ export async function setupApiRoutes(
   if (isProxyMode) {
     const proxyTarget = apiConfig.proxy!;
     logger.info(`[API] Proxy mode enabled → ${proxyTarget}`);
-
-    app.all("/bundles/*", (c: Context<HonoEnv>) => proxyRequest(c.req.raw, proxyTarget, true));
 
     app.all("/api/*", async (c: Context<HonoEnv>) => {
       if (c.req.path === HEALTH_PATH) {
@@ -313,9 +289,6 @@ export async function setupApiRoutes(
     return handleOrpc(c, rpcHandler, "/api/rpc", mergedEffectContext);
   });
   app.all("/api", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api", mergedEffectContext));
-  app.all("/bundles/*", (c: Context<HonoEnv>) =>
-    handleOrpc(c, apiHandler, "/", mergedEffectContext),
-  );
   app.all("/api/*", (c: Context<HonoEnv>) =>
     handleOrpc(c, apiHandler, "/api", mergedEffectContext),
   );

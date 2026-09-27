@@ -16,7 +16,7 @@ export class ConfigService extends Context.Service<ConfigService, RuntimeConfig>
 ) {}
 
 export function readCorsOrigins(): Effect.Effect<string[], Config.ConfigError> {
-  return Config.string("CORS_ORIGIN").pipe(
+  return Config.String("CORS_ORIGIN").pipe(
     Config.withDefault(""),
     Config.map((value) =>
       value

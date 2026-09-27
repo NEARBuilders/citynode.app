@@ -78,7 +78,7 @@ function buildStaticAssetProxyHeaders(req: Request) {
 
 export async function proxyStaticAssetRequest(req: Request, targetBase: string): Promise<Response> {
   const url = new URL(req.url);
-  const targetUrl = `${targetBase}${url.pathname}${url.search}`;
+  const targetUrl = `${targetBase.replace(/\/$/, "")}${url.pathname}${url.search}`;
 
   const response = await proxy(targetUrl, {
     raw: req,

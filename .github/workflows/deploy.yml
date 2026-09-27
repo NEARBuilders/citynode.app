@@ -59,6 +59,16 @@ jobs:
 
       - name: Publish with deploy
         timeout-minutes: 20
+        # ADR 0020 CDN deploy: dists upload to the storage API and every
+        # bundle URL points at cdn.everything.dev. The API key is
+        # account-pinned server-side — mint it from the platform account's
+        # session (Settings → API Keys) so the root's own namespace passes
+        # pinning. Unset secret → the publish fails fast with the
+        # credential error instead of silently shipping gateway URLs.
+        env:
+          BOS_BUNDLE_CDN_ORIGIN: https://cdn.everything.dev
+          BOS_STORAGE_ORIGIN: https://citynode.app
+          BOS_STORAGE_API_KEY: ${{ secrets.BOS_STORAGE_API_KEY }}
         run: bun run bos publish --deploy --packages local${{ inputs.verbose == true && ' --verbose' || '' }}
 
       - name: Log in to GHCR

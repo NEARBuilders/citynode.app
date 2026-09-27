@@ -38,11 +38,18 @@ const MIME_TYPES = {
 
 const servers = [];
 
-const serve = (dir, port) => {
+const serve = (dir, port, basePath = "") => {
   const rootDir = path.join(imageDir, dir);
+  const prefix = basePath.replace(/\/$/, "");
   const server = createServer((req, res) => {
     const relative = (req.url ?? "/").split("?")[0] || "/";
-    const filePath = path.resolve(rootDir, `.${relative}`);
+    if (prefix && !(relative === prefix || relative.startsWith(`${prefix}/`))) {
+      res.statusCode = 404;
+      res.setHeader("content-type", "text/plain");
+      res.end("Not Found");
+      return;
+    }
+    const filePath = path.resolve(rootDir, `.${prefix ? relative.slice(prefix.length) : relative}`);
     if (!filePath.startsWith(rootDir)) {
       res.statusCode = 403;
       res.end("forbidden");
@@ -66,7 +73,7 @@ const serve = (dir, port) => {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, "0.0.0.0", () => {
-      console.log(`[runtime] serving ${dir} → http://localhost:${port}`);
+      console.log(`[runtime] serving ${dir} → http://localhost:${port}${prefix}`);
       servers.push(server);
       resolve();
     });
@@ -76,8 +83,8 @@ const serve = (dir, port) => {
 const hostPort = layout.basePort;
 
 const main = async () => {
-  for (const { dir, port } of layout.servers) {
-    await serve(dir, port);
+  for (const { dir, port, basePath } of layout.servers) {
+    await serve(dir, port, basePath);
   }
 
   console.log(`[runtime] variant ${variant} — config ${path.basename(configPath)}`);
