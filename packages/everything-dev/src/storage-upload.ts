@@ -35,6 +35,27 @@ export async function collectDistFiles(distDir: string): Promise<DistFile[]> {
   return walkDist(distDir, distDir);
 }
 
+const UPLOAD_ATTEMPTS = 3;
+const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+class BundleUploadError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(detail);
+    this.name = "BundleUploadError";
+  }
+}
+
+function describeUploadFailure(status: number, detail: string): string {
+  if (/request timeout/i.test(detail)) {
+    return `${detail.slice(0, 200)} — the serving host timed out the upload; raise BOS_STORAGE_UPLOAD_TIMEOUT_MS there or upload smaller batches (BOS_MAX_BUNDLE_UPLOAD_BYTES)`;
+  }
+  return detail.slice(0, 200);
+}
+
 export async function uploadBundle(input: {
   origin: string;
   apiKey?: string;
@@ -46,28 +67,48 @@ export async function uploadBundle(input: {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (input.apiKey) headers["x-api-key"] = input.apiKey;
 
-  const response = await fetch(`${input.origin.replace(/\/$/, "")}/api/storage/bundles`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      account: input.account,
-      gateway: input.gateway,
-      workspace: input.workspace,
-      files: input.files.map((file) => ({
-        path: file.path,
-        contentBase64: Buffer.from(file.bytes).toString("base64"),
-      })),
-    }),
+  const body = JSON.stringify({
+    account: input.account,
+    gateway: input.gateway,
+    workspace: input.workspace,
+    files: input.files.map((file) => ({
+      path: file.path,
+      contentBase64: Buffer.from(file.bytes).toString("base64"),
+    })),
   });
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `[publish] bundle upload for ${input.workspace} failed: ${response.status} ${detail.slice(0, 200)}`,
-    );
+  let lastError: BundleUploadError | Error | undefined;
+  for (let attempt = 1; attempt <= UPLOAD_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(`${input.origin.replace(/\/$/, "")}/api/storage/bundles`, {
+        method: "POST",
+        headers,
+        body,
+      });
+
+      if (response.ok) {
+        return (await response.json()) as BundleUploadResult;
+      }
+
+      const detail = await response.text().catch(() => "");
+      lastError = new BundleUploadError(
+        response.status,
+        `[publish] bundle upload for ${input.workspace} failed: ${response.status} ${describeUploadFailure(response.status, detail)}`,
+      );
+      // Retries are safe: the storage route stores by account/gateway/
+      // workspace/path, so re-posting a batch overwrites idempotently.
+      if (!RETRYABLE_STATUSES.has(response.status)) break;
+    } catch (error) {
+      lastError = new BundleUploadError(
+        0,
+        `[publish] bundle upload for ${input.workspace} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    if (attempt < UPLOAD_ATTEMPTS) await sleep(1000 * attempt);
   }
 
-  return (await response.json()) as BundleUploadResult;
+  throw lastError ?? new Error(`[publish] bundle upload for ${input.workspace} failed`);
 }
 
 export async function uploadWorkspaceDist(input: {

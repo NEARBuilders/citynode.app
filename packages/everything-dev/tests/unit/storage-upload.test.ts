@@ -71,7 +71,11 @@ describe("uploadBundle", () => {
   });
 
   it("throws with the response status when the upload fails", async () => {
-    globalThis.fetch = (async () => new Response("nope", { status: 403 })) as typeof fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response("nope", { status: 403 });
+    }) as typeof fetch;
     await expect(
       uploadBundle({
         origin: "https://everything.dev",
@@ -81,6 +85,63 @@ describe("uploadBundle", () => {
         files: [{ path: "remoteEntry.js", bytes: new Uint8Array(1) }],
       }),
     ).rejects.toThrow("403");
+    expect(calls).toBe(1);
+  });
+
+  it("retries a retryable status (500) and succeeds on a later attempt", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls < 3) return new Response("boom", { status: 500 });
+      return new Response(JSON.stringify({ stored: 1, totalBytes: 0, integrity: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    const result = await uploadBundle({
+      origin: "https://everything.dev",
+      account: "v1.citynode.near",
+      gateway: "citynode.app",
+      workspace: "ui",
+      files: [{ path: "remoteEntry.js", bytes: new Uint8Array(1) }],
+    });
+    expect(calls).toBe(3);
+    expect(result.stored).toBe(1);
+  });
+
+  it("exhausts retries on persistent 503s and reports the workspace", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response("down", { status: 503 });
+    }) as typeof fetch;
+
+    await expect(
+      uploadBundle({
+        origin: "https://everything.dev",
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        workspace: "ui",
+        files: [{ path: "remoteEntry.js", bytes: new Uint8Array(1) }],
+      }),
+    ).rejects.toThrow(/bundle upload for ui failed: 503/);
+    expect(calls).toBe(3);
+  });
+
+  it("hints at the host timeout env when the server reports a request timeout", async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: "Request timeout" }), { status: 408 })) as typeof fetch;
+
+    await expect(
+      uploadBundle({
+        origin: "https://everything.dev",
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        workspace: "ui",
+        files: [{ path: "remoteEntry.js", bytes: new Uint8Array(1) }],
+      }),
+    ).rejects.toThrow(/BOS_STORAGE_UPLOAD_TIMEOUT_MS/);
   });
 });
 

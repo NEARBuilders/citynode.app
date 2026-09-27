@@ -21,6 +21,13 @@ export function bundleUploadBodyLimitBytes(): number {
   return Math.ceil(decoded * 1.5);
 }
 
+const DEFAULT_STORAGE_UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+
+export function storageUploadTimeoutMs(): number {
+  const raw = Number(process.env.BOS_STORAGE_UPLOAD_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_STORAGE_UPLOAD_TIMEOUT_MS;
+}
+
 export const STATIC_ASSET_PATTERN =
   /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|md|webmanifest|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
 
