@@ -143,6 +143,51 @@ describe("uploadBundle", () => {
       }),
     ).rejects.toThrow(/BOS_STORAGE_UPLOAD_TIMEOUT_MS/);
   });
+
+  it("hints at the host logs when the server hides the cause behind a bare internal error", async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          defined: false,
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Internal Server Error",
+        }),
+        { status: 500 },
+      )) as typeof fetch;
+
+    await expect(
+      uploadBundle({
+        origin: "https://everything.dev",
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        workspace: "ui",
+        files: [{ path: "remoteEntry.js", bytes: new Uint8Array(1) }],
+      }),
+    ).rejects.toThrow(/check the host logs/);
+  });
+
+  it("surfaces a descriptive oRPC error message from the response body", async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          defined: true,
+          code: "CONNECTION_ERROR",
+          message: "Bundle storage failed for static/app.js: [storage] PUT failed: 403",
+          data: { errorCode: "STORAGE_PUT_FAILED" },
+        }),
+        { status: 502 },
+      )) as typeof fetch;
+
+    await expect(
+      uploadBundle({
+        origin: "https://everything.dev",
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        workspace: "ui",
+        files: [{ path: "remoteEntry.js", bytes: new Uint8Array(1) }],
+      }),
+    ).rejects.toThrow(/Bundle storage failed for static\/app\.js.*403/s);
+  });
 });
 
 describe("uploadWorkspaceDist", () => {

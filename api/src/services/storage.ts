@@ -135,6 +135,11 @@ export class MemoryStorageClient implements StorageClient {
   }
 }
 
+function summarizeStorageErrorBody(detail: string): string {
+  const collapsed = detail.replace(/\s+/g, " ").trim();
+  return collapsed.slice(0, 300) || "(no response body)";
+}
+
 export class S3StorageClient implements StorageClient {
   private client: AwsClient;
 
@@ -164,7 +169,10 @@ export class S3StorageClient implements StorageClient {
       },
     });
     if (!response.ok) {
-      throw new Error(`[storage] PUT ${input.key} failed: ${response.status}`);
+      const detail = await response.text().catch(() => "");
+      throw new Error(
+        `[storage] PUT ${input.key} failed: ${response.status} ${summarizeStorageErrorBody(detail)}`,
+      );
     }
   }
 
@@ -172,7 +180,10 @@ export class S3StorageClient implements StorageClient {
     const response = await this.client.fetch(this.objectUrl(key));
     if (response.status === 404) return null;
     if (!response.ok) {
-      throw new Error(`[storage] GET ${key} failed: ${response.status}`);
+      const detail = await response.text().catch(() => "");
+      throw new Error(
+        `[storage] GET ${key} failed: ${response.status} ${summarizeStorageErrorBody(detail)}`,
+      );
     }
     return {
       bytes: new Uint8Array(await response.arrayBuffer()),

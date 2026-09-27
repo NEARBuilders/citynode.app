@@ -50,10 +50,19 @@ class BundleUploadError extends Error {
 }
 
 function describeUploadFailure(status: number, detail: string): string {
-  if (/request timeout/i.test(detail)) {
-    return `${detail.slice(0, 200)} — the serving host timed out the upload; raise BOS_STORAGE_UPLOAD_TIMEOUT_MS there or upload smaller batches (BOS_MAX_BUNDLE_UPLOAD_BYTES)`;
+  const trimmed = detail.slice(0, 300);
+  if (/request timeout/i.test(trimmed)) {
+    return `${trimmed} — the serving host timed out the upload; raise BOS_STORAGE_UPLOAD_TIMEOUT_MS there or upload smaller batches (BOS_MAX_BUNDLE_UPLOAD_BYTES)`;
   }
-  return detail.slice(0, 200);
+  try {
+    const parsed = JSON.parse(detail) as { code?: unknown; message?: unknown };
+    if (parsed?.code === "INTERNAL_SERVER_ERROR" && parsed?.message === "Internal Server Error") {
+      return `${trimmed} — the host hid the underlying error; check the host logs for the cause`;
+    }
+  } catch {
+    // not a JSON error body
+  }
+  return trimmed;
 }
 
 export async function uploadBundle(input: {

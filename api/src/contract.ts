@@ -1,6 +1,12 @@
 import "@orpc/openapi/extensions/route";
 import { oc } from "@orpc/contract";
-import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
+import {
+  BAD_REQUEST,
+  CONNECTION_ERROR,
+  FORBIDDEN,
+  NOT_FOUND,
+  UNAUTHORIZED,
+} from "every-plugin/errors";
 import { z } from "zod";
 import { discoveryContract } from "./discovery-contract";
 
@@ -754,7 +760,7 @@ export const contract = oc.router({
       }),
     )
     .output(StorageUploadResultSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, CONNECTION_ERROR }),
 });
 
 export type ContractType = typeof contract;
