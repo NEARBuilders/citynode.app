@@ -70,9 +70,14 @@ function connectionOptions(namespace: string | undefined): string {
 
 // host.docker.internal is docker-local development networking — the test
 // databases a container reaches through the host gateway, which do not
-// terminate TLS.
+// terminate TLS. `*.railway.internal` is Railway private-network traffic
+// (VPC-scoped, no public egress) whose Postgres presents a self-signed
+// certificate chain no client CA bundle can verify.
 const isLocalDbUrl = (url: string): boolean =>
-  url.includes("localhost") || url.includes("127.0.0.1") || url.includes("host.docker.internal");
+  url.includes("localhost") ||
+  url.includes("127.0.0.1") ||
+  url.includes("host.docker.internal") ||
+  url.includes(".railway.internal");
 
 /**
  * TLS behavior for a non-local Postgres URL, following libpq `sslmode`

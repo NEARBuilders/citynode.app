@@ -19,6 +19,8 @@ describe("resolvePoolSsl", () => {
       "postgres://localhost:5432/db",
       "postgres://user:pw@127.0.0.1:5433/auth_db",
       "postgres://u@host.docker.internal:5432/db?sslmode=require",
+      "postgresql://postgres:pw@auth-db.railway.internal:5432/railway",
+      "postgresql://postgres:pw@api-db.railway.internal:5432/railway?sslmode=require",
     ]) {
       expect(resolvePoolSsl(url)).toBe(false);
     }
