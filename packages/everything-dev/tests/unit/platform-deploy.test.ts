@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { applyDeployResults } from "../../src/integrity";
 import {
-  applyDeployResults,
   applyPluginPublishUrl,
   platformUrlDeployEntries,
   pluginUiUrlDeployEntries,
