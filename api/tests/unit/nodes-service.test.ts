@@ -49,13 +49,15 @@ const { run: runService, squashError: squashServiceError } = createServiceHarnes
   }),
 );
 
-async function seedTenant(tenants: TenantsService): Promise<string> {
-  const tenant = await tenants.createTenant({
-    name: "Test Tenant",
-    accountId: "test.example.near",
-    orgId: "org-1",
+function seedTenant(tenants: TenantsService) {
+  return Effect.gen(function* () {
+    const tenant = yield* tenants.createTenant({
+      name: "Test Tenant",
+      accountId: "test.example.near",
+      orgId: "org-1",
+    });
+    return tenant.id;
   });
-  return tenant.id;
 }
 
 describe("NodesService", () => {
@@ -137,9 +139,7 @@ describe("NodesService", () => {
 
   it("creates and resolves a node by id", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const node = await runService(layer, ({ nodes }) =>
       nodes.spawn({
@@ -168,9 +168,7 @@ describe("NodesService", () => {
 
   it("persists metadata JSONB", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const node = await runService(layer, ({ nodes }) =>
       nodes.spawn({
@@ -192,9 +190,7 @@ describe("NodesService", () => {
 
   it("treats an explicit kind argument as authoritative over metadata.kind", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const node = await runService(layer, ({ nodes }) =>
       nodes.spawn({
@@ -221,9 +217,7 @@ describe("NodesService", () => {
 
   it("rejects an invalid slug", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const error = await squashServiceError(layer, ({ nodes }) =>
       nodes.spawn({
@@ -256,9 +250,7 @@ describe("NodesService", () => {
 
   it("fails with NOT_FOUND when parentId is set but the parent doesn't exist", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const error = await squashServiceError(layer, ({ nodes }) =>
       nodes.spawn({
@@ -275,9 +267,7 @@ describe("NodesService", () => {
 
   it("rejects self-parent on update", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
     const node = await runService(layer, ({ nodes }) =>
       nodes.spawn({
         kind: "country",
@@ -297,9 +287,7 @@ describe("NodesService", () => {
 
   it("lists root nodes (parent_id IS NULL)", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const usa = await runService(layer, ({ nodes }) =>
       nodes.spawn({
@@ -326,9 +314,7 @@ describe("NodesService", () => {
 
   it("lists node summaries with batched direct-child counts", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
     const usa = await runService(layer, ({ nodes }) =>
       nodes.spawn({
         kind: "country",
@@ -363,9 +349,7 @@ describe("NodesService", () => {
 
   it("listChildren returns direct children only", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const usa = await runService(layer, ({ nodes }) =>
       nodes.spawn({
@@ -408,9 +392,7 @@ describe("NodesService", () => {
 
   it("resolveBySlug finds root and child nodes", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const usa = await runService(layer, ({ nodes }) =>
       nodes.spawn({
@@ -444,9 +426,7 @@ describe("NodesService", () => {
 
   it("deletes a node", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
     const node = await runService(layer, ({ nodes }) =>
       nodes.spawn({
         kind: "city",
@@ -538,9 +518,7 @@ describe("NodesService", () => {
 
   it("list filters by kind and parentId", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, async ({ tenants }) => {
-      return await seedTenant(tenants);
-    });
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
 
     const usa = await runService(layer, ({ nodes }) =>
       nodes.spawn({

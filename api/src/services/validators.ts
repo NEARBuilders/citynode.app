@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, not, sql } from "drizzle-orm";
+import { and, eq, inArray, not, type SQL, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -10,6 +10,8 @@ import {
 import { toOrpcError } from "../lib/errors";
 
 export type ValidatorRole = (typeof validatorRole)["enumValues"][number];
+
+export type ValidatorEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
 export interface ValidatorRecord {
   id: string;
@@ -49,17 +51,17 @@ export interface ValidatorListFilter {
 }
 
 export interface ValidatorsService {
-  create(input: ValidatorInput): Promise<ValidatorRecord>;
-  list(filter?: ValidatorListFilter): Promise<ValidatorRecord[]>;
-  listByNode(nodeId: string): Promise<ValidatorRecord[]>;
-  getById(id: string): Promise<ValidatorRecord | null>;
-  update(id: string, input: ValidatorUpdateInput): Promise<ValidatorRecord>;
-  delete(id: string): Promise<boolean>;
-  setDefault(nodeId: string, validatorId: string): Promise<ValidatorRecord>;
+  create(input: ValidatorInput): ValidatorEffect<ValidatorRecord>;
+  list(filter?: ValidatorListFilter): ValidatorEffect<ValidatorRecord[]>;
+  listByNode(nodeId: string): ValidatorEffect<ValidatorRecord[]>;
+  getById(id: string): ValidatorEffect<ValidatorRecord | null>;
+  update(id: string, input: ValidatorUpdateInput): ValidatorEffect<ValidatorRecord>;
+  delete(id: string): ValidatorEffect<boolean>;
+  setDefault(nodeId: string, validatorId: string): ValidatorEffect<ValidatorRecord>;
   resolveForStaking(
     nodeId: string,
-  ): Promise<{ validators: ValidatorRecord[]; sourceNodeId: string }>;
-  resolveByAccountId(accountId: string): Promise<ValidatorRecord | null>;
+  ): ValidatorEffect<{ validators: ValidatorRecord[]; sourceNodeId: string }>;
+  resolveByAccountId(accountId: string): ValidatorEffect<ValidatorRecord | null>;
 }
 
 export class ValidatorsTag extends Context.Service<ValidatorsTag, ValidatorsService>()(
@@ -129,10 +131,13 @@ export const ValidatorsLive = Layer.effect(
   Effect.gen(function* () {
     const db = yield* DatabaseTag;
 
+    const query = <T>(run: () => Promise<T>): ValidatorEffect<T> =>
+      Effect.tryPromise({ try: run, catch: toOrpcError });
+
     const service: ValidatorsService = {
-      create: async (input) => {
-        try {
-          return await db.transaction(async (tx) => {
+      create: (input) =>
+        query(() =>
+          db.transaction(async (tx) => {
             const node = await tx
               .select({ id: nodesTable.id })
               .from(nodesTable)
@@ -171,62 +176,48 @@ export const ValidatorsLive = Layer.effect(
               });
             }
             return toRecord(row);
-          });
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+          }),
+        ),
 
-      list: async (filter) => {
-        try {
-          const conditions = [];
+      list: (filter) =>
+        Effect.gen(function* () {
+          const conditions: SQL[] = [];
           if (filter?.nodeId !== undefined) {
             conditions.push(eq(validatorsTable.nodeId, filter.nodeId));
           }
           if (filter?.role !== undefined) {
             conditions.push(eq(validatorsTable.role, filter.role));
           }
-          const rows =
+          const rows = yield* query(() =>
             conditions.length === 0
-              ? await db.select().from(validatorsTable)
-              : await db
+              ? db.select().from(validatorsTable)
+              : db
                   .select()
                   .from(validatorsTable)
-                  .where(and(...conditions));
+                  .where(and(...conditions)),
+          );
           return rows.map(toRecord);
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      listByNode: async (nodeId) => {
-        try {
-          const rows = await db
-            .select()
-            .from(validatorsTable)
-            .where(eq(validatorsTable.nodeId, nodeId));
+      listByNode: (nodeId) =>
+        Effect.gen(function* () {
+          const rows = yield* query(() =>
+            db.select().from(validatorsTable).where(eq(validatorsTable.nodeId, nodeId)),
+          );
           return rows.map(toRecord);
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      getById: async (id) => {
-        try {
-          const [row] = await db
-            .select()
-            .from(validatorsTable)
-            .where(eq(validatorsTable.id, id))
-            .limit(1);
+      getById: (id) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db.select().from(validatorsTable).where(eq(validatorsTable.id, id)).limit(1),
+          );
           return row ? toRecord(row) : null;
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      update: async (id, input) => {
-        try {
-          return await db.transaction(async (tx) => {
+      update: (id, input) =>
+        query(() =>
+          db.transaction(async (tx) => {
             const [existing] = await tx
               .select({ nodeId: validatorsTable.nodeId })
               .from(validatorsTable)
@@ -269,27 +260,23 @@ export const ValidatorsLive = Layer.effect(
               });
             }
             return toRecord(row);
-          });
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+          }),
+        ),
 
-      delete: async (id) => {
-        try {
-          const rows = await db
-            .delete(validatorsTable)
-            .where(eq(validatorsTable.id, id))
-            .returning({ deletedId: validatorsTable.id });
+      delete: (id) =>
+        Effect.gen(function* () {
+          const rows = yield* query(() =>
+            db
+              .delete(validatorsTable)
+              .where(eq(validatorsTable.id, id))
+              .returning({ deletedId: validatorsTable.id }),
+          );
           return rows.length > 0;
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      setDefault: async (nodeId, validatorId) => {
-        try {
-          return await db.transaction(async (tx) => {
+      setDefault: (nodeId, validatorId) =>
+        query(() =>
+          db.transaction(async (tx) => {
             const [target] = await tx
               .select()
               .from(validatorsTable)
@@ -321,34 +308,33 @@ export const ValidatorsLive = Layer.effect(
               });
             }
             return toRecord(updated);
-          });
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+          }),
+        ),
 
-      resolveForStaking: async (nodeId) => {
-        try {
-          const node = await db
-            .select({ id: nodesTable.id })
-            .from(nodesTable)
-            .where(eq(nodesTable.id, nodeId))
-            .limit(1);
+      resolveForStaking: (nodeId) =>
+        Effect.gen(function* () {
+          const node = yield* query(() =>
+            db
+              .select({ id: nodesTable.id })
+              .from(nodesTable)
+              .where(eq(nodesTable.id, nodeId))
+              .limit(1),
+          );
           if (node.length === 0) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Node not found",
-              data: { resource: "node", resourceId: nodeId },
-            });
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", {
+                message: "Node not found",
+                data: { resource: "node", resourceId: nodeId },
+              }),
+            );
           }
 
-          const descendantIds = await readIds(db, descendantIdsQuery(nodeId));
-          const ownValidators = await db
-            .select()
-            .from(validatorsTable)
-            .where(inArray(validatorsTable.nodeId, descendantIds));
+          const descendantIds = yield* query(() => readIds(db, descendantIdsQuery(nodeId)));
+          const ownValidators = yield* query(() =>
+            db.select().from(validatorsTable).where(inArray(validatorsTable.nodeId, descendantIds)),
+          );
 
           if (ownValidators.length > 0) {
-            const present = new Set(descendantIds);
             const ordered = [...ownValidators].sort((a, b) => {
               if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
               const depthA = descendantIds.indexOf(a.nodeId);
@@ -357,20 +343,18 @@ export const ValidatorsLive = Layer.effect(
             });
             const sourceNodeId =
               ordered.find((v) => v.nodeId === nodeId)?.nodeId ?? ordered[0]?.nodeId ?? nodeId;
-            void present;
             return { validators: ordered.map(toRecord), sourceNodeId };
           }
 
-          const ancestorIds = await readIds(db, ancestorIdsQuery(nodeId));
+          const ancestorIds = yield* query(() => readIds(db, ancestorIdsQuery(nodeId)));
           const ancestorDepthById = new Map<string, number>();
           for (const [idx, id] of ancestorIds.entries()) {
             ancestorDepthById.set(id, idx);
           }
 
-          const ancestorValidators = await db
-            .select()
-            .from(validatorsTable)
-            .where(inArray(validatorsTable.nodeId, ancestorIds));
+          const ancestorValidators = yield* query(() =>
+            db.select().from(validatorsTable).where(inArray(validatorsTable.nodeId, ancestorIds)),
+          );
 
           if (ancestorValidators.length === 0) {
             return { validators: [], sourceNodeId: nodeId };
@@ -383,23 +367,19 @@ export const ValidatorsLive = Layer.effect(
           });
           const sourceNodeId = orderedAncestors[0]?.nodeId ?? nodeId;
           return { validators: orderedAncestors.map(toRecord), sourceNodeId };
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      resolveByAccountId: async (accountId) => {
-        try {
-          const [row] = await db
-            .select()
-            .from(validatorsTable)
-            .where(eq(validatorsTable.accountId, accountId))
-            .limit(1);
+      resolveByAccountId: (accountId) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db
+              .select()
+              .from(validatorsTable)
+              .where(eq(validatorsTable.accountId, accountId))
+              .limit(1),
+          );
           return row ? toRecord(row) : null;
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
     };
 
     return service;

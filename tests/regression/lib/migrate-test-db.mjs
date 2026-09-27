@@ -64,71 +64,85 @@ export async function migrateTestDatabase({ migrationsDir, databaseUrl, schemaNa
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
   try {
-    await client.query(`CREATE SCHEMA IF NOT EXISTS "${JOURNAL_SCHEMA}"`);
-    await client.query(`CREATE TABLE IF NOT EXISTS "${JOURNAL_SCHEMA}"."${JOURNAL_TABLE}" (
-      id SERIAL PRIMARY KEY,
-      hash text NOT NULL,
-      created_at bigint
-    )`);
-    if (schemaName) {
-      await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-    }
-
-    const appliedRows = await client.query(
-      `SELECT hash FROM "${JOURNAL_SCHEMA}"."${JOURNAL_TABLE}"`,
-    );
-    const appliedHashes = new Set(appliedRows.rows.map((row) => row.hash));
-
-    const searchPath = schemaName
-      ? `SET search_path TO "${schemaName}", public`
-      : "SET search_path TO public";
-    await client.query(searchPath);
-
-    let applied = 0;
-    for (const migration of migrations) {
-      if (appliedHashes.has(migration.hash) || appliedHashes.has(migration.hash.slice(0, 12))) {
-        continue;
+    // One transaction under the same journal-scoped advisory lock the plugin
+    // runner takes — this pre-migration pass and a booting stack's own
+    // migration run serialize instead of colliding in pg_catalog.
+    await client.query("BEGIN");
+    try {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        `${JOURNAL_SCHEMA}.${JOURNAL_TABLE}`,
+      ]);
+      await client.query(`CREATE SCHEMA IF NOT EXISTS "${JOURNAL_SCHEMA}"`);
+      await client.query(`CREATE TABLE IF NOT EXISTS "${JOURNAL_SCHEMA}"."${JOURNAL_TABLE}" (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at bigint
+      )`);
+      if (schemaName) {
+        await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
       }
 
-      const expectedTables = expectedTablesOf(migration);
-      if (expectedTables.length > 0) {
-        const existing = await client.query(
-          `SELECT table_name FROM information_schema.tables
-           WHERE table_schema = ANY($1::text[]) AND table_name = ANY($2::text[])`,
-          [schemaName ? [schemaName, "public"] : ["public"], expectedTables],
-        );
-        const existingNames = new Set(existing.rows.map((row) => row.table_name));
-        const missing = expectedTables.filter((table) => !existingNames.has(table));
-        if (missing.length === 0) {
+      const appliedRows = await client.query(
+        `SELECT hash FROM "${JOURNAL_SCHEMA}"."${JOURNAL_TABLE}"`,
+      );
+      const appliedHashes = new Set(appliedRows.rows.map((row) => row.hash));
+
+      const searchPath = schemaName
+        ? `SET search_path TO "${schemaName}", public`
+        : "SET search_path TO public";
+      await client.query(searchPath);
+
+      let applied = 0;
+      for (const migration of migrations) {
+        if (appliedHashes.has(migration.hash) || appliedHashes.has(migration.hash.slice(0, 12))) {
+          continue;
+        }
+
+        const expectedTables = expectedTablesOf(migration);
+        if (expectedTables.length > 0) {
+          const existing = await client.query(
+            `SELECT table_name FROM information_schema.tables
+             WHERE table_schema = ANY($1::text[]) AND table_name = ANY($2::text[])`,
+            [schemaName ? [schemaName, "public"] : ["public"], expectedTables],
+          );
+          const existingNames = new Set(existing.rows.map((row) => row.table_name));
+          const missing = expectedTables.filter((table) => !existingNames.has(table));
+          if (missing.length === 0) {
+            await client.query(
+              `INSERT INTO "${JOURNAL_SCHEMA}"."${JOURNAL_TABLE}" (hash, created_at) VALUES ($1, $2)`,
+              [migration.hash, migration.when],
+            );
+            appliedHashes.add(migration.hash);
+            applied++;
+            continue;
+          }
+        }
+
+        await client.query(`SAVEPOINT migration_${migration.idx}`);
+        try {
+          for (const statement of migration.sql) {
+            await client.query(statement);
+          }
           await client.query(
             `INSERT INTO "${JOURNAL_SCHEMA}"."${JOURNAL_TABLE}" (hash, created_at) VALUES ($1, $2)`,
             [migration.hash, migration.when],
           );
-          appliedHashes.add(migration.hash);
-          applied++;
-          continue;
+          await client.query(`RELEASE SAVEPOINT migration_${migration.idx}`);
+        } catch (error) {
+          await client.query(`ROLLBACK TO SAVEPOINT migration_${migration.idx}`);
+          await client.query("ROLLBACK");
+          throw new Error(`[migrate-test-db] migration ${migration.tag} failed: ${error.message}`);
         }
+        appliedHashes.add(migration.hash);
+        applied++;
       }
 
-      await client.query("BEGIN");
-      try {
-        for (const statement of migration.sql) {
-          await client.query(statement);
-        }
-        await client.query(
-          `INSERT INTO "${JOURNAL_SCHEMA}"."${JOURNAL_TABLE}" (hash, created_at) VALUES ($1, $2)`,
-          [migration.hash, migration.when],
-        );
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw new Error(`[migrate-test-db] migration ${migration.tag} failed: ${error.message}`);
-      }
-      appliedHashes.add(migration.hash);
-      applied++;
+      await client.query("COMMIT");
+      return applied;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
     }
-
-    return applied;
   } finally {
     await client.end();
   }

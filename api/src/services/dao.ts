@@ -1,4 +1,5 @@
 import { ORPCError } from "@orpc/server";
+import { Effect, Result } from "effect";
 import { Near } from "near-kit";
 
 export type NearNetworkId = "mainnet" | "testnet";
@@ -59,42 +60,51 @@ export interface VerifyDaoMembershipResult {
   policy: DaoPolicy | null;
 }
 
-export async function verifyDaoMembership({
+export const verifyDaoMembership = ({
   daoAccountId,
   memberAccountId,
   network = "mainnet",
-}: VerifyDaoMembershipInput): Promise<VerifyDaoMembershipResult> {
-  if (!memberAccountId) {
-    return { isSputnikContract: false, isMember: false, policy: null };
-  }
-
-  const rpcUrl = network === "testnet" ? TESTNET_RPC_URL : MAINNET_RPC_URL;
-  const near = new Near({ network: { rpcUrl, networkId: network } });
-
-  let policy: DaoPolicy | null = null;
-  let lastError: unknown = null;
-
-  for (let attempt = 0; attempt <= GET_POLICY_MAX_RETRIES; attempt += 1) {
-    try {
-      const result = await near.view<DaoPolicy>(daoAccountId, "get_policy", {});
-      policy = result ?? null;
-      lastError = null;
-      break;
-    } catch (err) {
-      lastError = err;
+}: VerifyDaoMembershipInput): Effect.Effect<
+  VerifyDaoMembershipResult,
+  ORPCError<string, unknown>
+> =>
+  Effect.gen(function* () {
+    if (!memberAccountId) {
+      return { isSputnikContract: false, isMember: false, policy: null };
     }
-  }
 
-  if (!policy) {
-    throw new ORPCError("BAD_REQUEST", {
-      message: "Target account is not a sputnik-dao contract (get_policy failed)",
-      data: { daoAccountId, cause: errorMessage(lastError), network },
-    });
-  }
+    const rpcUrl = network === "testnet" ? TESTNET_RPC_URL : MAINNET_RPC_URL;
+    const near = new Near({ network: { rpcUrl, networkId: network } });
 
-  const isMember = isExplicitDaoMember(policy, memberAccountId);
-  return { isSputnikContract: true, isMember, policy };
-}
+    let policy: DaoPolicy | null = null;
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt <= GET_POLICY_MAX_RETRIES; attempt += 1) {
+      const outcome = yield* Effect.result(
+        Effect.tryPromise({
+          try: () => near.view<DaoPolicy>(daoAccountId, "get_policy", {}),
+          catch: (error) => error,
+        }),
+      );
+      if (Result.isSuccess(outcome)) {
+        policy = outcome.success ?? null;
+        lastError = null;
+        break;
+      }
+      lastError = outcome.failure;
+    }
+
+    if (!policy) {
+      return yield* Effect.fail(
+        new ORPCError("BAD_REQUEST", {
+          message: "Target account is not a sputnik-dao contract (get_policy failed)",
+          data: { daoAccountId, cause: errorMessage(lastError), network },
+        }),
+      );
+    }
+
+    const isMember = isExplicitDaoMember(policy, memberAccountId);
+    return { isSputnikContract: true, isMember, policy };
+  });
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
