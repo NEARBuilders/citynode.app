@@ -1,7 +1,7 @@
 # ADR 0015: Platform bundle storage — file transport is an oRPC contract concern, not a host route
 
 Date: 2026-09-19
-Status: Superseded by [ADR 0011](0011-image-native-artifacts.md) (image-native artifacts; the DB-backed bundle storage shipped in #133 but was never released and was deleted pre-release by plan 043 Phase B)
+Status: Partially superseded by [ADR 0011](0011-image-native-artifacts.md) (the DB-backed bundle storage shipped in #133 but was never released and was deleted pre-release by plan 043 Phase B); the child-storage half is **un-superseded and reinstated** by [ADR 0020](0020-child-bundle-storage-r2.md) — the oRPC route design (auth trust family, path allowlist, traversal rejection, size ceiling, server-side SRI) is adopted, with an R2 object-store backend and no host-side serving mount
 Supersedes: the storage half of PR #58 (Cloudflare-R2-via-alchemy provider, closed as superseded)
 
 ## Context

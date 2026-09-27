@@ -16,14 +16,16 @@ Format: context → decision → consequences, one file per decision.
 | [0008](./0008-manifest-composition.md) | Manifest composition — host owns the route graph, mounts are gates | Accepted |
 | [0009](./0009-regression-prod-mode-fixture.md) | Regression stacks run production mode | Accepted (amended) |
 | [0010](./0010-composition-contracts-kit-and-precedence.md) | Composition contracts kit and precedence | Accepted |
-| [0011](./0011-image-native-artifacts.md) | Image-native artifacts — the image is the deployment | Accepted (amended ×2) |
+| [0011](./0011-image-native-artifacts.md) | Image-native artifacts — the image is the deployment | Accepted (amended ×3; boot-role narrowed by [0020](./0020-child-bundle-storage-r2.md)) |
 | [0012](./0012-ports-as-scoped-resources.md) | Ports as scoped resources — one Effect Scope per dev session | Accepted (amended) |
 | [0013](./0013-passkeys-bound-to-gateway-origin.md) | Passkey ceremonies bound to the gateway origin | Accepted |
 | [0014](./0014-single-ceremony-passkey-sign-up.md) | Single-ceremony passkey sign-up | Accepted |
-| [0015](./0015-platform-bundle-storage-orpc-file-transport.md) | Platform bundle storage — file transport as oRPC contract concern | Superseded by [0011](./0011-image-native-artifacts.md) |
+| [0015](./0015-platform-bundle-storage-orpc-file-transport.md) | Platform bundle storage — file transport as oRPC contract concern | Partially superseded; child half reinstated by [0020](./0020-child-bundle-storage-r2.md) |
 | [0016](./0016-unified-log-pipeline.md) | Unified log pipeline — stream broadcast with levels | Accepted |
 | [0017](./0017-session-gas-keys.md) | Session gas keys primary, relayer fallback | Accepted |
 | [0018](./0018-session-single-owner.md) | One owner for the session read path (`everything-dev/ui/auth` singleton) | Accepted |
+| [0020](./0020-child-bundle-storage-r2.md) | Child bundle storage — R2-backed CDN distribution for all namespaces | Accepted |
+| [0021](./0021-universal-runtime-image.md) | Universal runtime image — one image, identity-selected tiers | Accepted |
 
 Skipped numbers: 0006 exists; there are no gaps otherwise. 0015–0018 were
 renumbered from duplicate 0007/0011/0012/0013 numbers on 2026-09-26 — the
@@ -33,7 +35,7 @@ low-reference file in each pair moved (see git history).
 ## Number assignment discipline
 
 - Take the next free number (`ls docs/adr/ | sort -n | tail -1`, then +1 —
-  next free is **0019**). Never reuse a number, even for a rejected ADR.
+  next free is **0022**). Never reuse a number, even for a rejected ADR.
 - When citing an ADR in code, plans, changesets, or AGENTS.md, cite the
   number **with the filename** if the context could be ambiguous.
 - Superseded ADRs stay in place with a `Superseded by` status link to the

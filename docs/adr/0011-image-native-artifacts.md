@@ -1,7 +1,7 @@
 # ADR 0011: Image-native artifacts — the runtime image is the deployment, the namespace is the topology
 
 Date: 2026-09-24
-Status: Accepted (amended 2026-09-26 — outbound local-first; amended 2026-09-26 — foreign-namespace proxy + stale-if-error cache)
+Status: Accepted (amended 2026-09-26 — outbound local-first; amended 2026-09-26 — foreign-namespace proxy + stale-if-error cache; amended 2026-09-26 — [ADR 0020](0020-child-bundle-storage-r2.md) narrows image-native to the root's *boot* role and moves all bundle *distribution* to R2; [ADR 0021](0021-universal-runtime-image.md) makes the image universal across runtimes)
 
 ## Context
 
