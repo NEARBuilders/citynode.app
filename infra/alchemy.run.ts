@@ -4,7 +4,10 @@ import * as Output from "alchemy/Output";
 import * as RemovalPolicy from "alchemy/RemovalPolicy";
 import * as Effect from "effect/Effect";
 
-export const BUNDLE_CDN_DOMAIN = "cdn.everything.dev";
+// The CDN domain belongs to the base runtime — cdn.everything.dev for the
+// everything.dev base; a sovereign base overrides it via env.
+export const BUNDLE_CDN_DOMAIN =
+  process.env.BOS_BUNDLE_CDN_DOMAIN ?? "cdn.everything.dev";
 
 export default Alchemy.Stack(
   "CityNodeInfra",
