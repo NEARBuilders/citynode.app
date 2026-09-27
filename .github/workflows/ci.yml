@@ -75,7 +75,7 @@ jobs:
           else
             echo "regression-unit=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$DIFF" | grep -qE '^packages/everything-dev/|^packages/every-plugin/|^packages/better-near-auth/|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci.yml$'; then
+          if echo "$DIFF" | grep -qE '^packages/everything-dev/|^packages/every-plugin/|^packages/better-near-auth/|^api/|^plugins/|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci.yml$'; then
             echo "everything-dev=true" >> "$GITHUB_OUTPUT"
           else
             echo "everything-dev=false" >> "$GITHUB_OUTPUT"
