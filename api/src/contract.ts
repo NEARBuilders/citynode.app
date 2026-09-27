@@ -465,6 +465,18 @@ export const contract = oc.router({
     )
     .errors({ UNAUTHORIZED, BAD_REQUEST }),
 
+  edgeTlsAsk: oc
+    .route({
+      method: "GET",
+      path: "/edge/tls-ask",
+      summary: "Caddy on-demand TLS ask endpoint",
+      description:
+        "Public — status-code-only permission check for the edge's on_demand_tls: 2xx allows certificate issuance for the requested domain, any non-2xx denies. The body is ignored by Caddy; the verdict is the status code alone.",
+    })
+    .input(z.object({ domain: z.string() }))
+    .output(z.object({ allowed: z.literal(true) }))
+    .errors({ NOT_FOUND }),
+
   applyNodeProposal: oc
     .route({ method: "POST", path: "/nodes/proposals/apply" })
     .input(

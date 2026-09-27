@@ -1,0 +1,20 @@
+app = "citynode-edge"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 80
+  [[services.ports]]
+    port = 80
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 443
+  [[services.ports]]
+    port = 443
+
+[env]
+  ZONE_ROOT = "citynode.app"

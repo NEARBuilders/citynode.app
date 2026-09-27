@@ -1,0 +1,22 @@
+{
+	on_demand_tls {
+		ask {$ASK_ENDPOINT}
+	}
+	email {$ACME_EMAIL}
+	acme_ca {$ACME_CA_URL:https://acme-v02.api.letsencrypt.org/directory}
+}
+
+{$ZONE_ROOT}, *.{$ZONE_ROOT} {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1
+	}
+	reverse_proxy {$UPSTREAM}
+}
+
+https:// {
+	tls {
+		on_demand
+	}
+	reverse_proxy {$UPSTREAM}
+}

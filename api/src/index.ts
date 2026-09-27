@@ -704,6 +704,22 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
+      edgeTlsAsk: builder.edgeTlsAsk.effect(function* ({ input, errors }) {
+        const services = yield* ApiServices;
+        const binding = yield* services.tenants.resolveBindingByHostname(
+          input.domain.toLowerCase(),
+        );
+        if (!binding?.isVerified) {
+          return yield* Effect.fail(
+            errors.NOT_FOUND({
+              message: "No verified binding for this hostname",
+              data: { resource: "binding", resourceId: input.domain },
+            }),
+          );
+        }
+        return { allowed: true as const };
+      }),
+
       applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).effect(function* ({ input }) {
         const services = yield* ApiServices;
         yield* validateAccountId(input.accountId);

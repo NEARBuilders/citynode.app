@@ -80,6 +80,8 @@
     "deploy": "bun packages/everything-dev/src/cli.ts build --deploy",
     "infra:deploy": "cd infra && bun run alchemy deploy",
     "infra:plan": "cd infra && bun run alchemy plan",
+    "infra:edge:deploy": "cd infra && bun run alchemy deploy edge.stack.ts",
+    "infra:edge:plan": "cd infra && bun run alchemy plan edge.stack.ts",
     "publish": "bun packages/everything-dev/src/cli.ts publish",
     "bos": "bun --conditions=development packages/everything-dev/src/cli.ts",
     "typecheck": "BOS_NO_BANNER=1 bun run bos typecheck",
