@@ -1337,6 +1337,10 @@ function buildRuntimeUiConfig(
         : resolveRuntimeTarget(uiProduction, providerBaseDir, "remote")
       : undefined;
   if (!uiRuntime) return undefined;
+  // A remote ui target with no URL is not a deployable surface (e.g. a
+  // plugin ui entry with only a development key) — dropping it here keeps
+  // the phantom source out of runtime resolution and client payloads.
+  if (uiRuntime.source === "remote" && !uiRuntime.url) return undefined;
 
   return {
     name: resolveUiRuntimeName(uiConfig, uiRuntime.localPath, apiName),

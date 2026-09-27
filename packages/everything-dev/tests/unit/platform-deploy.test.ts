@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyPluginPublishUrl, platformUrlDeployEntries } from "../../src/platform-deploy";
+import {
+  applyDeployResults,
+  applyPluginPublishUrl,
+  platformUrlDeployEntries,
+  pluginUiUrlDeployEntries,
+} from "../../src/platform-deploy";
 
 describe("platformUrlDeployEntries (image-native)", () => {
   const ORIGIN = "https://citynode.app";
@@ -52,6 +57,87 @@ describe("platformUrlDeployEntries (image-native)", () => {
       urlField: "plugins.votes.production",
       integrityField: "plugins.votes.integrity",
     });
+  });
+});
+
+describe("pluginUiUrlDeployEntries (folder-form plugin ui)", () => {
+  const ORIGIN = "https://citynode.app";
+  const BASE = `${ORIGIN}/bundles/v1.citynode.near/citynode.app`;
+
+  it("pins app.<key>.ui.* fields for an app-slot plugin", () => {
+    const entries = pluginUiUrlDeployEntries({
+      origin: ORIGIN,
+      account: "v1.citynode.near",
+      gateway: "citynode.app",
+      key: "auth",
+      kind: "app",
+      integrity: "sha384-web",
+      ssrIntegrity: "sha384-ssr",
+    });
+    expect(entries).toEqual([
+      {
+        url: `${BASE}/auth-ui/`,
+        integrity: "sha384-web",
+        urlField: "app.auth.ui.production",
+        integrityField: "app.auth.ui.integrity",
+      },
+      {
+        url: `${BASE}/auth-ui/ssr/`,
+        integrity: "sha384-ssr",
+        urlField: "app.auth.ui.ssr",
+        integrityField: "app.auth.ui.ssrIntegrity",
+      },
+    ]);
+  });
+
+  it("pins plugins.<id>.ui.* fields for a plugins-slot entry", () => {
+    const entries = pluginUiUrlDeployEntries({
+      origin: ORIGIN,
+      account: "v1.citynode.near",
+      gateway: "citynode.app",
+      key: "votes",
+      kind: "plugin",
+    });
+    expect(entries[0]).toMatchObject({
+      url: `${BASE}/votes-ui/`,
+      urlField: "plugins.votes.ui.production",
+      integrityField: "plugins.votes.ui.integrity",
+    });
+  });
+
+  it("merges into an existing ui entry without clobbering name/development", () => {
+    const config = {
+      account: "v1.citynode.near",
+      domain: "citynode.app",
+      app: {
+        auth: {
+          development: "local:plugins/auth",
+          ui: { name: "auth-ui", development: "local:plugins/auth/ui" },
+        },
+      },
+    };
+
+    const merged = applyDeployResults(
+      config,
+      pluginUiUrlDeployEntries({
+        origin: ORIGIN,
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        key: "auth",
+        kind: "app",
+        integrity: "sha384-web",
+        ssrIntegrity: "sha384-ssr",
+      }),
+    );
+
+    const authUi = (merged.app as Record<string, Record<string, unknown>>).auth
+      .ui as Record<string, unknown>;
+    expect(authUi.name).toBe("auth-ui");
+    expect(authUi.development).toBe("local:plugins/auth/ui");
+    expect(authUi.production).toBe(`${BASE}/auth-ui/`);
+    expect(authUi.integrity).toBe("sha384-web");
+    expect(authUi.ssr).toBe(`${BASE}/auth-ui/ssr/`);
+    expect(authUi.ssrIntegrity).toBe("sha384-ssr");
   });
 });
 

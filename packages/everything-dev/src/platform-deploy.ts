@@ -42,6 +42,41 @@ export function platformUrlDeployEntries(input: {
 }
 
 /**
+ * Folder-form plugin ui deploy entries: the plugin's ui surface builds to
+ * `<plugin>/ui/dist` (web remoteEntry + ssr container) and uploads as its own
+ * bundle key (`<key>-ui`), pinning `<slot>.<key>.ui.*` in bos.config.json.
+ * Without these entries a deployed plugin ui resolves with no production URL
+ * and the host cannot compose (or even address) its routes.
+ */
+export function pluginUiUrlDeployEntries(input: {
+  origin: string;
+  account: string;
+  gateway: string;
+  key: string;
+  kind: "app" | "plugin";
+  integrity?: string;
+  ssrIntegrity?: string;
+}): DeployResultEntry[] {
+  const { origin, account, gateway, key, kind, integrity, ssrIntegrity } = input;
+  const slot = kind === "app" ? "app" : "plugins";
+  const base = `${origin.replace(/\/$/, "")}/bundles/${account}/${gateway}/${key}-ui/`;
+  return [
+    {
+      url: base,
+      integrity,
+      urlField: `${slot}.${key}.ui.production`,
+      integrityField: `${slot}.${key}.ui.integrity`,
+    },
+    {
+      url: `${base}ssr/`,
+      integrity: ssrIntegrity,
+      urlField: `${slot}.${key}.ui.ssr`,
+      integrityField: `${slot}.${key}.ui.ssrIntegrity`,
+    },
+  ];
+}
+
+/**
  * Single-plugin publish (image-native): build the plugin, then pin its
  * production URL to the runtime origin's namespace and drop any stale
  * integrity hash from the zephyr era.

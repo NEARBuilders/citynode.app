@@ -30,6 +30,7 @@ import {
 } from "everything-dev/ui/manifest";
 import type { RouterModule } from "../types";
 import type { RuntimeConfig } from "./config";
+import { logger } from "../utils/logger";
 import {
   type ComposeModule,
   loadCoreUiRouteConfig,
@@ -112,6 +113,12 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
   for (const [id, plugin] of Object.entries(config.plugins ?? {})) {
     const ui = plugin?.ui;
     if (!ui) continue;
+    if (ui.source !== "local" && !ui.url) {
+      logger.warn(
+        `[Compose] Plugin ui "${id}" has no production URL — skipping its routes. Deploy it with \`bos publish --deploy\`.`,
+      );
+      continue;
+    }
     sources.push({
       key: id,
       mfName: ui.name,
