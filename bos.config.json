@@ -21,7 +21,7 @@
         "CORS_ORIGIN",
         "CSP_STRICT"
       ],
-      "integrity": "sha384-pAKoH87sSjEGnnDCIxFA0N92nb3amxnfX8nRsLuqZfZ6rKAnIWxebMFgCfNxpNl6"
+      "integrity": "sha384-wYkRZAiZa/OvazmLzLMkjbE+m7kfoO0+nkOlNAkthjkhzHAMwfkFB4jbpsXTBDrr"
     },
     "ui": {
       "development": "local:ui",
@@ -48,7 +48,11 @@
       "development": "local:plugins/auth",
       "ui": {
         "name": "auth-ui",
-        "development": "local:plugins/auth/ui"
+        "development": "local:plugins/auth/ui",
+        "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/auth-ui/",
+        "integrity": "sha384-1b0Cgp7GUwogVIeZq1bImmhMvtotn6VX/GkTsLDXniNayKrM5n0pw5uszTLD3I0v",
+        "ssr": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/auth-ui/ssr/",
+        "ssrIntegrity": "sha384-g7YMg+cy5nmWvkI0xgT/pWXsYliIhRnmb1UYPFmwMYOhFPw6o13jE+60MHxnVruH"
       },
       "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/auth/",
       "secrets": [
