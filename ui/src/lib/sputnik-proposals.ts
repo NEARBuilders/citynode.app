@@ -198,6 +198,19 @@ export type DaoPlan =
 /** `receiverId` on a plan; `ANY_RECEIVER` matches on method name alone. */
 export const ANY_RECEIVER = "*";
 
+/**
+ * The registry config write: any `__fastdata_kv` call publishes or updates a
+ * runtime config (title, repository, custom UI bundle). Used to match a
+ * pending DAO proposal back to a config change made in the node-config editor.
+ */
+export const CONFIG_WRITE_PLAN: DaoPlan = {
+  kind: "call",
+  receiverId: ANY_RECEIVER,
+  methodName: "__fastdata_kv",
+  args: {},
+  gas: "300 Tgas",
+};
+
 /** True when a pending DAO proposal carries out the given plan. */
 export function proposalMatchesPlan(proposal: SputnikProposal, plan: DaoPlan): boolean {
   const kind = proposal.kind as {

@@ -51,9 +51,8 @@ import {
   tenantByOrgQueryOptions,
 } from "@/lib/queries/tenants";
 import {
-  ANY_RECEIVER,
   approvalThreshold,
-  type DaoPlan,
+  CONFIG_WRITE_PLAN,
   fetchDaoProposals,
   fetchSputnikPolicy,
   findPendingProposalForPlan,
@@ -64,14 +63,6 @@ import { resolvePrimaryHostname } from "../../../_admin/_dashboard/admin/tenants
 import { waitFor } from "../-poc-chain";
 
 const REFETCH_MS = 15_000;
-
-const CONFIG_WRITE_PLAN: DaoPlan = {
-  kind: "call",
-  receiverId: ANY_RECEIVER,
-  methodName: "__fastdata_kv",
-  args: {},
-  gas: "300 Tgas",
-};
 
 export interface NodeConfigTabProps {
   orgId: string;
@@ -168,6 +159,48 @@ export function NodeConfigTab({
   const [computing, setComputing] = useState(false);
   const [unverified, setUnverified] = useState<string | null>(null);
   const [showBundle, setShowBundle] = useState(false);
+  const [sourceAccount, setSourceAccount] = useState("");
+  const [fetchingSource, setFetchingSource] = useState(false);
+
+  const onFillFromDeployedApp = async () => {
+    const account = sourceAccount.trim();
+    if (!account) {
+      toast.error("Enter the NEAR account your app deployed under");
+      return;
+    }
+    setFetchingSource(true);
+    try {
+      const result = await apiClient.apps.getRegistryApp({ accountId: account, gatewayId });
+      const resolved = result.data?.resolvedConfig ?? null;
+      const ui =
+        (resolved?.app as { ui?: { production?: unknown; integrity?: unknown } } | null)?.ui ?? {};
+      const production = typeof ui.production === "string" ? ui.production : "";
+      const integrity = typeof ui.integrity === "string" ? ui.integrity : "";
+      if (!production || !integrity) {
+        toast.error(
+          `${account} publishes no custom UI bundle yet — run \`bos publish --deploy\` in the app repo with a local UI first.`,
+        );
+        return;
+      }
+      const ssr =
+        (resolved?.app as { ui?: { ssr?: unknown; ssrIntegrity?: unknown } } | null)?.ui ?? {};
+      const ssrUrl = typeof ssr.ssr === "string" ? ssr.ssr : "";
+      const ssrIntegrity = typeof ssr.ssrIntegrity === "string" ? ssr.ssrIntegrity : "";
+      setDraft((prev) => ({
+        ...prev,
+        uiProduction: production,
+        uiIntegrity: integrity,
+        ...(tenant?.allowSsr && ssrUrl && ssrIntegrity ? { ssrUrl, ssrIntegrity } : {}),
+      }));
+      toast.success(`Bundle and integrity filled from ${account}`);
+    } catch {
+      toast.error(
+        `No published config for ${account} on this gateway — run \`bos publish --deploy\` in the app repo first.`,
+      );
+    } finally {
+      setFetchingSource(false);
+    }
+  };
 
   const fetchPublishedNow = () =>
     apiClient.apps
@@ -532,6 +565,37 @@ export function NodeConfigTab({
             </div>
             {bundleOpen && (
               <FieldGroup>
+                <div className="flex flex-col gap-1">
+                  <FieldLabel htmlFor="orgs-node-config-source-account">
+                    Fill from a deployed app
+                  </FieldLabel>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="orgs-node-config-source-account"
+                      type="text"
+                      value={sourceAccount}
+                      placeholder="<your-app>.near — the account that ran bos publish --deploy"
+                      onChange={(event) => setSourceAccount(event.target.value)}
+                      disabled={!editable}
+                      className="font-mono"
+                      data-testid="orgs-node-config-source-account"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void onFillFromDeployedApp()}
+                      disabled={!editable || fetchingSource}
+                      data-testid="orgs-node-config-autofill"
+                    >
+                      {fetchingSource ? <Spinner /> : null}
+                      Fetch bundle
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Reads the published config of your deployed app and fills the bundle URL and
+                    integrity below.
+                  </p>
+                </div>
                 <div className="flex flex-col gap-1">
                   <ConfigField
                     id="orgs-node-config-ui-url"

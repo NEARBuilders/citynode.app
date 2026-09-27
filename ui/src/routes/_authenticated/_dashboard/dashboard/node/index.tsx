@@ -1,13 +1,20 @@
 import {
   ArrowSquareOutIcon,
   CalendarDotsIcon,
+  HourglassMediumIcon,
   QrCodeIcon,
   TreeStructureIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
+import {
+  buildTenantUrl,
+  getActiveRuntime,
+  type Organization,
+  useApiClient,
+  useAuthClient,
+} from "@/app";
 import {
   Badge,
   Button,
@@ -27,6 +34,11 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
+import {
+  CONFIG_WRITE_PLAN,
+  fetchDaoProposals,
+  findPendingProposalForPlan,
+} from "@/lib/sputnik-proposals";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,
@@ -42,9 +54,10 @@ function Stat({ label, value, testId }: { label: string; value: string; testId: 
 }
 
 function NodeOverview() {
-  const { runtimeConfig, selectedNode, summary, stakingSourceNode, tenant, auth } =
+  const { runtimeConfig, selectedNode, summary, stakingSourceNode, tenant, auth, canManage } =
     Route.useRouteContext();
   const apiClient = useApiClient();
+  const authClient = useAuthClient();
   const [now] = useState(() => Date.now());
   const orgId = tenant?.orgId ?? auth.activeOrganizationId;
   const nodeId = selectedNode?.id ?? "";
@@ -64,7 +77,29 @@ function NodeOverview() {
     enabled: !!nodeId,
     retry: false,
   });
+  const daoOwned = !!tenant && tenant.ownerKind === "dao";
+  const pendingConfigQuery = useQuery({
+    queryKey: ["dashboard-node", "pending-config-proposal", tenant?.accountId],
+    queryFn: async () => {
+      const proposals = await fetchDaoProposals(tenant?.accountId ?? "");
+      return findPendingProposalForPlan(proposals, CONFIG_WRITE_PLAN);
+    },
+    enabled: daoOwned && canManage && !!tenant?.accountId,
+    refetchInterval: 15_000,
+  });
+  const orgsQuery = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      const { data } = await authClient.organization.list();
+      return (data || []) as Organization[];
+    },
+    enabled: daoOwned && canManage && !!orgId,
+    staleTime: 30_000,
+  });
   if (!selectedNode || !summary) return null;
+
+  const pendingConfig = pendingConfigQuery.data ?? null;
+  const orgSlug = orgsQuery.data?.find((org) => org.id === orgId)?.slug ?? null;
 
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
   const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
@@ -109,6 +144,33 @@ function NodeOverview() {
           testId="dashboard-node.stat-staking"
         />
       </dl>
+
+      {daoOwned && canManage && pendingConfig && orgSlug && (
+        <Item variant="outline" data-testid="dashboard-node.pending-config-proposal">
+          <ItemMedia variant="icon">
+            <HourglassMediumIcon />
+          </ItemMedia>
+          <ItemContent className="min-w-0">
+            <ItemTitle>Awaiting votes · #{pendingConfig.id}</ItemTitle>
+            <ItemDescription>
+              A community config change (e.g. a custom UI bundle) is waiting for DAO approval.
+            </ItemDescription>
+          </ItemContent>
+          <ItemActions>
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={
+                <Link to="/orgs/$slug" params={{ slug: orgSlug }} search={{ tab: "node-config" }} />
+              }
+              data-testid="dashboard-node.pending-config-open"
+            >
+              Review
+            </Button>
+          </ItemActions>
+        </Item>
+      )}
 
       <section className="flex flex-col gap-6">
         <SectionHeader
