@@ -363,3 +363,4 @@ packages/every-plugin/src/**/*.d.ts.map
 .claude/
 
 Dockerfile.railway
+infra/.alchemy/
