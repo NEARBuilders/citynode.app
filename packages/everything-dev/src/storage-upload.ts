@@ -51,7 +51,7 @@ class BundleUploadError extends Error {
 
 function describeUploadFailure(status: number, detail: string): string {
   const trimmed = detail.slice(0, 300);
-  if (/request timeout/i.test(trimmed)) {
+  if (status === 408 || /request timeout|bundle upload timed out/i.test(trimmed)) {
     return `${trimmed} — the serving host timed out the upload; raise BOS_STORAGE_UPLOAD_TIMEOUT_MS there or upload smaller batches (BOS_MAX_BUNDLE_UPLOAD_BYTES)`;
   }
   try {

@@ -144,6 +144,25 @@ describe("uploadBundle", () => {
     ).rejects.toThrow(/BOS_STORAGE_UPLOAD_TIMEOUT_MS/);
   });
 
+  it("hints at the host timeout env for the storage route's own 408 body", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response("Bundle upload timed out", { status: 408 });
+    }) as typeof fetch;
+
+    await expect(
+      uploadBundle({
+        origin: "https://everything.dev",
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        workspace: "ui",
+        files: [{ path: "remoteEntry.js", bytes: new Uint8Array(1) }],
+      }),
+    ).rejects.toThrow(/BOS_STORAGE_UPLOAD_TIMEOUT_MS/);
+    expect(calls).toBe(3);
+  });
+
   it("hints at the host logs when the server hides the cause behind a bare internal error", async () => {
     globalThis.fetch = (async () =>
       new Response(

@@ -140,6 +140,64 @@ function summarizeStorageErrorBody(detail: string): string {
   return collapsed.slice(0, 300) || "(no response body)";
 }
 
+/**
+ * A storage-backend failure worth retrying: the request never got a response
+ * (undici wraps these as "fetch failed" — resets, timeouts, socket errors)
+ * or the remote answered with a transient status.
+ */
+export class TransientStorageError extends Error {
+  constructor(
+    readonly operation: string,
+    readonly detail: string,
+  ) {
+    super(`[storage] ${operation} failed: ${detail}`);
+    this.name = "TransientStorageError";
+  }
+}
+
+/** A definitive backend rejection (auth, bad request) — retrying cannot help. */
+export class StorageHttpError extends Error {
+  constructor(
+    readonly operation: string,
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(`[storage] ${operation} failed: ${status} ${detail}`);
+    this.name = "StorageHttpError";
+  }
+}
+
+function describeFetchCause(error: unknown): string {
+  const cause = (error as { cause?: unknown } | null)?.cause;
+  if (cause instanceof Error) {
+    const code = (cause as { code?: string }).code;
+    return `fetch failed (${code ?? cause.message})`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+const STORAGE_OP_ATTEMPTS = 3;
+const TRANSIENT_STATUS_PATTERN = /^(429|5\d\d)/;
+
+/** Retry a single object operation on transient failures. aws4fetch signs and
+ * sends but never retries — one keep-alive reset over a home uplink would
+ * otherwise kill a whole multi-hundred-file bundle batch. */
+export async function withStorageRetries<T>(op: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= STORAGE_OP_ATTEMPTS; attempt++) {
+    try {
+      return await op();
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof TransientStorageError)) break;
+    }
+    if (attempt < STORAGE_OP_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** (attempt - 1)));
+    }
+  }
+  throw lastError;
+}
+
 export class S3StorageClient implements StorageClient {
   private client: AwsClient;
 
@@ -159,8 +217,35 @@ export class S3StorageClient implements StorageClient {
     return `${this.options.endpoint.replace(/\/$/, "")}/${this.options.bucket}/${key}`;
   }
 
+  private async request(
+    operation: "PUT" | "GET",
+    key: string,
+    init?: RequestInit,
+  ): Promise<Response> {
+    const opLabel = `${operation} ${key}`;
+    return withStorageRetries(async () => {
+      let response: Response;
+      try {
+        response = await this.client.fetch(this.objectUrl(key), init);
+      } catch (error) {
+        throw new TransientStorageError(opLabel, describeFetchCause(error));
+      }
+      if (response.ok || (operation === "GET" && response.status === 404)) {
+        return response;
+      }
+      const detail = await response.text().catch(() => "");
+      if (TRANSIENT_STATUS_PATTERN.test(String(response.status))) {
+        throw new TransientStorageError(
+          opLabel,
+          `${response.status} ${summarizeStorageErrorBody(detail)}`,
+        );
+      }
+      throw new StorageHttpError(opLabel, response.status, summarizeStorageErrorBody(detail));
+    });
+  }
+
   async put(input: StoragePutInput): Promise<void> {
-    const response = await this.client.fetch(this.objectUrl(input.key), {
+    await this.request("PUT", input.key, {
       method: "PUT",
       body: input.bytes,
       headers: {
@@ -168,23 +253,11 @@ export class S3StorageClient implements StorageClient {
         "cache-control": input.cacheControl,
       },
     });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      throw new Error(
-        `[storage] PUT ${input.key} failed: ${response.status} ${summarizeStorageErrorBody(detail)}`,
-      );
-    }
   }
 
   async get(key: string): Promise<StorageObject | null> {
-    const response = await this.client.fetch(this.objectUrl(key));
+    const response = await this.request("GET", key);
     if (response.status === 404) return null;
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      throw new Error(
-        `[storage] GET ${key} failed: ${response.status} ${summarizeStorageErrorBody(detail)}`,
-      );
-    }
     return {
       bytes: new Uint8Array(await response.arrayBuffer()),
       contentType: response.headers.get("content-type") ?? "application/octet-stream",

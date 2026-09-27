@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   BUNDLE_MIME_TYPES,
   buildBundleKey,
@@ -6,9 +6,13 @@ import {
   bundleContentType,
   computeObjectIntegrity,
   MemoryStorageClient,
+  S3StorageClient,
+  StorageHttpError,
+  TransientStorageError,
   validateNamespacePart,
   validateObjectPath,
   validateUploadSize,
+  withStorageRetries,
 } from "../../src/services/storage";
 
 describe("bundle name → response policy", () => {
@@ -104,5 +108,102 @@ describe("memory storage client", () => {
     expect(got!.contentType).toBe("text/javascript");
     expect(got!.cacheControl).toContain("must-revalidate");
     expect(await client.get("bundles/a.near/app.dev/ui/missing.js")).toBeNull();
+  });
+});
+
+describe("withStorageRetries", () => {
+  it("retries transient failures and succeeds on a later attempt", async () => {
+    let calls = 0;
+    const result = await withStorageRetries(async () => {
+      calls += 1;
+      if (calls < 3) throw new TransientStorageError("PUT key", "fetch failed (ECONNRESET)");
+      return "ok";
+    });
+    expect(result).toBe("ok");
+    expect(calls).toBe(3);
+  });
+
+  it("exhausts attempts on persistent transient failures and rethrows the last error", async () => {
+    let calls = 0;
+    await expect(
+      withStorageRetries(async () => {
+        calls += 1;
+        throw new TransientStorageError("PUT key", "fetch failed (ECONNRESET)");
+      }),
+    ).rejects.toThrow(TransientStorageError);
+    expect(calls).toBe(3);
+  });
+
+  it("fails fast on non-transient errors without retrying", async () => {
+    let calls = 0;
+    await expect(
+      withStorageRetries(async () => {
+        calls += 1;
+        throw new StorageHttpError("PUT key", 403, "AccessDenied");
+      }),
+    ).rejects.toThrow(StorageHttpError);
+    expect(calls).toBe(1);
+  });
+});
+
+describe("S3StorageClient", () => {
+  const originalFetch = globalThis.fetch;
+
+  const client = new S3StorageClient(
+    { accessKeyId: "test", secretAccessKey: "test", region: "auto" },
+    { endpoint: "https://r2.test", bucket: "bundles" },
+  );
+
+  afterAll(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("retries a transient 500 and succeeds, surfacing the R2 error body on final failure", async () => {
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response('<?xml version="1.0"?><Error><Code>InternalError</Code></Error>', {
+          status: 500,
+        });
+      }
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await client.put({
+      key: "bundles/a.near/app.dev/ui/remoteEntry.js",
+      bytes: new Uint8Array(4),
+      contentType: "text/javascript",
+      cacheControl: "public",
+    });
+    expect(calls).toBe(2);
+
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response('<?xml version="1.0"?><Error><Code>AccessDenied</Code></Error>', {
+          status: 403,
+        }),
+    ) as unknown as typeof fetch;
+
+    await expect(
+      client.put({
+        key: "bundles/a.near/app.dev/ui/denied.js",
+        bytes: new Uint8Array(4),
+        contentType: "text/javascript",
+        cacheControl: "public",
+      }),
+    ).rejects.toThrow(/denied\.js failed: 403.*AccessDenied/s);
+  });
+
+  it("wraps network-level failures with the undici cause code", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new TypeError("fetch failed", {
+        cause: Object.assign(new Error("reset"), { code: "ECONNRESET" }),
+      });
+    }) as unknown as typeof fetch;
+
+    await expect(client.get("bundles/a.near/app.dev/ui/remoteEntry.js")).rejects.toThrow(
+      /fetch failed \(ECONNRESET\)/,
+    );
   });
 });
