@@ -39,8 +39,8 @@ Defined in `api/src/contract.ts`:
 
 ```ts
 import { BAD_REQUEST, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
-import { eventIterator, oc } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { eventIterator, oc } from "@orpc/contract";
+import { z } from "zod";
 
 export const contract = oc.router({
   ping: oc.route({ method: "GET", path: "/ping" }).output(
@@ -118,7 +118,7 @@ See `references/middleware.md` for the full middleware table, org metadata valid
 Use `ORPCError` from `every-plugin/errors`:
 
 ```ts
-import { ORPCError } from "every-plugin/orpc";
+import { ORPCError } from "@orpc/server";
 import { BAD_REQUEST, UNAUTHORIZED } from "every-plugin/errors";
 
 throw new ORPCError("UNAUTHORIZED", {
