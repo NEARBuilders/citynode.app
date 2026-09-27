@@ -23,7 +23,7 @@ Test the service class directly without the plugin runtime:
 
 ```typescript
 import { describe, expect, it } from "vitest";
-import { Effect } from "every-plugin/effect";
+import { Effect } from "effect";
 import { MyService } from "../service";
 
 describe("MyService", () => {
@@ -131,7 +131,7 @@ When a plugin uses `buildScoped(...)` inside `initialize`, verify that scoped re
 ```typescript
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPlugin, createPluginRuntime } from "every-plugin";
-import { Context, Effect, Layer } from "every-plugin/effect";
+import { Context, Effect, Layer } from "effect";
 
 let released = false;
 
@@ -222,6 +222,6 @@ export default defineConfig({
 
 - Not calling `runtime.shutdown()` in `afterAll` — leaves plugin scopes/resources running
 - Using `vi.fn()` without `.mockResolvedValue()` — unhandled promise rejections
-- Forgetting `vite-tsconfig-paths` plugin — path aliases like `every-plugin/orpc` won't resolve
+- Forgetting `vite-tsconfig-paths` plugin — package subpath imports like `every-plugin/errors` won't resolve
 - Omitting the `registry` object when calling `createPluginRuntime(...)` — the runtime requires explicit plugin entries
 - Testing only happy paths — always test error channels (Effect failures, ORPCError throws)
