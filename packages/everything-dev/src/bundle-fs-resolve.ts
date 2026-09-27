@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
@@ -244,8 +244,12 @@ export function installGlobalBundleFetch(options: BundleFetchOptions): BundleFet
  * Boot-time installer for the CLI: derives the own namespace from
  * `BOS_BUNDLE_DIR` plus the runtime identity (`BOS_ACCOUNT`/`BOS_GATEWAY`
  * registry env taking precedence over the bos.config.json fields), and the
- * foreign-namespace cache from `BOS_BUNDLE_CACHE_DIR`. Never throws — a
- * missing or malformed identity leaves the default network fetch in place.
+ * foreign-namespace cache from `BOS_BUNDLE_CACHE_DIR`. Tier auto-detection
+ * (ADR 0021): an identity whose namespace is not actually staged under the
+ * bundle dir drops to the registry tier — plain network fetch — instead of
+ * deterministically 404ing own-namespace URLs against a foreign image's
+ * staged bytes. Never throws — a missing or malformed identity leaves the
+ * default network fetch in place.
  */
 export function installBundleFetchFromEnv(input: {
   configPath?: string | null;
@@ -274,7 +278,16 @@ export function installBundleFetchFromEnv(input: {
   const gateway = process.env.BOS_GATEWAY ?? configGateway;
   if (bundleDir && (!account || !gateway)) return null;
 
-  const namespace = bundleDir && account && gateway ? { bundleDir, account, gateway } : undefined;
+  let namespace: BundleNamespace | undefined;
+  if (bundleDir && account && gateway) {
+    if (existsSync(path.join(bundleDir, account, gateway))) {
+      namespace = { bundleDir, account, gateway };
+    } else {
+      console.warn(
+        `[bundles] staged namespace ${account}/${gateway} not found under ${bundleDir} — registry tier (network fetch)`,
+      );
+    }
+  }
   return installGlobalBundleFetch({
     namespace,
     cacheDir: cacheDir ?? (namespace ? bundleCacheRoot() : undefined),

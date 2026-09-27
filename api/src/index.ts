@@ -15,6 +15,19 @@ import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
+import {
+  buildBundleKey,
+  bundleCacheControl,
+  bundleContentType,
+  computeObjectIntegrity,
+  maxBundleUploadBytes,
+  StorageLive,
+  type StorageService,
+  StorageTag,
+  validateNamespacePart,
+  validateObjectPath,
+  validateUploadSize,
+} from "./services/storage";
 import type { TenantRecord, TenantsService } from "./services/tenants";
 import { TenantsConfigLive, TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
@@ -28,6 +41,7 @@ class ApiServices extends Context.Service<
     nodes: NodesService;
     validators: ValidatorsService;
     discovery: DiscoveryService;
+    storage: StorageService;
   }
 >()("api/ApiServices") {}
 
@@ -256,6 +270,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           NodesLive,
           ValidatorsLive,
           DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS),
+          StorageLive,
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
@@ -267,6 +282,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           nodes: Context.get(services, NodesTag),
           validators: Context.get(services, ValidatorsTag),
           discovery: Context.get(services, DiscoveryTag),
+          storage: Context.get(services, StorageTag),
         }),
       );
     }),
@@ -1052,6 +1068,107 @@ export default createPlugin.withPlugins<PluginsClient>()({
           default:
             throw new Error("test internal server error");
         }
+      }),
+
+      uploadStorageBundle: builder.uploadStorageBundle.effect(function* ({
+        input,
+        context,
+        errors,
+      }) {
+        const services = yield* ApiServices;
+
+        if (!context.user && !context.userId && !context.apiKey) {
+          return yield* Effect.fail(
+            errors.UNAUTHORIZED({
+              message: "Authentication required — sign in or provide an API key",
+              data: { apiKeyProvided: Boolean(context.apiKey) },
+            }),
+          );
+        }
+
+        const invalidFields = [
+          !validateNamespacePart(input.account, "account") ? "account" : null,
+          !validateNamespacePart(input.gateway, "gateway") ? "gateway" : null,
+          !validateNamespacePart(input.workspace, "workspace") ? "workspace" : null,
+        ].filter((field): field is string => field !== null);
+        if (invalidFields.length > 0) {
+          return yield* Effect.fail(
+            errors.BAD_REQUEST({
+              message: "Invalid bundle namespace",
+              data: { invalidFields },
+            }),
+          );
+        }
+
+        const principal = context.near?.primaryAccountId ?? null;
+        const isSession = Boolean(context.user || context.userId);
+        if (isSession && !principal) {
+          return yield* Effect.fail(
+            errors.FORBIDDEN({
+              message: "Link a NEAR account to your session to publish bundles",
+              data: { action: "storage.bundles.write" },
+            }),
+          );
+        }
+        if (principal && principal !== input.account) {
+          return yield* Effect.fail(
+            errors.FORBIDDEN({
+              message: `Bundle uploads are pinned to the authenticated account (${principal})`,
+              data: { action: "storage.bundles.write" },
+            }),
+          );
+        }
+
+        const maxBytes = maxBundleUploadBytes();
+        const decoded: Array<{ objectPath: string; name: string; bytes: Uint8Array }> = [];
+        for (const file of input.files) {
+          const objectPath = validateObjectPath(file.path);
+          if (!objectPath) {
+            return yield* Effect.fail(
+              errors.BAD_REQUEST({
+                message: `Invalid bundle object path: ${file.path}`,
+                data: { invalidFields: ["files"] },
+              }),
+            );
+          }
+          const buffer = Buffer.from(file.contentBase64, "base64");
+          if (buffer.length === 0) {
+            return yield* Effect.fail(
+              errors.BAD_REQUEST({
+                message: `Empty bundle file: ${file.path}`,
+                data: { invalidFields: ["files"] },
+              }),
+            );
+          }
+          decoded.push({
+            objectPath,
+            name: objectPath.split("/").pop() ?? objectPath,
+            bytes: new Uint8Array(buffer),
+          });
+        }
+
+        const totalBytes = decoded.reduce((sum, file) => sum + file.bytes.byteLength, 0);
+        if (!validateUploadSize(decoded, maxBytes)) {
+          return yield* Effect.fail(
+            errors.BAD_REQUEST({
+              message: `Bundle upload exceeds the ${maxBytes} byte ceiling (${totalBytes})`,
+              data: { invalidFields: ["files"] },
+            }),
+          );
+        }
+
+        const integrity: Record<string, string> = {};
+        for (const file of decoded) {
+          yield* services.storage.put({
+            key: buildBundleKey(input.account, input.gateway, input.workspace, file.objectPath),
+            bytes: file.bytes,
+            contentType: bundleContentType(file.name),
+            cacheControl: bundleCacheControl(file.name),
+          });
+          integrity[file.objectPath] = computeObjectIntegrity(file.bytes);
+        }
+
+        return { stored: decoded.length, totalBytes, integrity };
       }),
     };
 

@@ -61,11 +61,30 @@ export function bundleCacheControl(name: string): string {
  * serves them same-origin — no bundle database, no upload credentials, no
  * CDN dependency. `BOS_BUNDLE_DIR` points at the staged root; unset (e.g.
  * a dev stack) falls through to whatever handles `/bundles/*` next.
+ *
+ * When a runtime identity is provided (ADR 0021's inbound namespace guard),
+ * only the own namespace is served from disk — foreign namespaces fall
+ * through to the proxy + cache handler, never to stale baked bytes.
  */
-export function createBundleFsHandler(bundleDir: string | undefined) {
+export interface BundleRouteNamespace {
+  account: string;
+  gateway: string;
+}
+
+export function createBundleFsHandler(
+  bundleDir: string | undefined,
+  namespace?: BundleRouteNamespace,
+) {
   return async (c: Context<HonoEnv>, next: () => Promise<void>) => {
     if (!bundleDir) {
       return next();
+    }
+
+    if (namespace) {
+      const prefix = `/bundles/${encodeURIComponent(namespace.account)}/${encodeURIComponent(namespace.gateway)}/`;
+      if (!c.req.path.startsWith(prefix)) {
+        return next();
+      }
     }
 
     const relative = c.req.path.replace(/^\/bundles\//, "");

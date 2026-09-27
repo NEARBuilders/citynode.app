@@ -373,6 +373,17 @@ You don't need to wait for a PR to merge and run through CI/CD to see your chang
 bun run dev    # hot reload, all services local
 ```
 
+**Runtime tiers (ADR 0020/0021):**
+
+| Tier | Instance | Bundle bytes |
+|------|----------|--------------|
+| Root runtime (`everything.dev`) | the universal image (`ghcr.io/nearbuilders/everything-dev`), self-contained tier | image stages the boot namespace (`BOS_BUNDLE_DIR`); distribution serves from the CDN (`cdn.everything.dev`) |
+| `*.<root>` — shared-host tenants | no instance — the root host resolves them per-request via `BindingResolver` | base workspaces from the root; own UI overrides from the CDN |
+| `.<child-domain>` — own instance | the universal image with `BOS_ACCOUNT`/`BOS_GATEWAY` set (registry tier, auto-detected) | host/api/auth logic fetched from the base; own workspaces uploaded to the base storage at publish |
+| Sandbox (`*.*.<child>`) | plan 032 — platform image on provisioned machines, dists staged into the instance | staged at runtime from the same store |
+
+One image, published by the root to GHCR; children never ship images. `BOS_BUNDLE_DIR` identity mismatches auto-degrade to registry tier (network fetch + stale-if-error cache via `BOS_BUNDLE_CACHE_DIR`) — never 404.
+
 **Self-deployed production (step-by-step):**
 
 1. **Install near-cli-rs** (needed for account management and `bos key generate`; `bos publish` signs via near-kit, falling back to the near-cli-rs OS keychain for local interactive use):
@@ -407,18 +418,21 @@ bun run dev    # hot reload, all services local
 5. **Publish your config on-chain:**
    ```bash
    bos publish --deploy
-   # builds workspaces → writes deterministic bundle URLs (https://<domain>/bundles/<account>/<gateway>/<workspace>/) → publishes bos.config.json to FastKV at bos://<your-account>/citynode.app
+   # builds workspaces → uploads your own workspaces to the base storage
+   # (POST /api/storage/bundles, account-pinned) → writes bundle URLs at the
+   # CDN origin (cdn.everything.dev) → publishes bos.config.json to FastKV at
+   # bos://<your-account>/citynode.app
    ```
-   No CLI session, no uploads, no CDN provider — the runtime image stages its own workspace dists and serves them same-origin from `/bundles/*` (`BOS_BUNDLE_DIR`). See ADR 0011 for the image-native artifacts design.
+   No image build, no Dockerfile, no CDN provider account — the base runtime stores and serves your bytes; you inherit host/api/auth logic from the base's own bundles. Set `BOS_STORAGE_API_KEY` (Settings → API Keys) for the upload; session auth via `bos login` also works. See ADR 0020 for the storage design. (Until the base's storage is provisioned, `bos publish` keeps the image-native gateway URLs — the flip is the `BOS_BUNDLE_CDN_ORIGIN`/`BOS_STORAGE_ORIGIN` env pair.)
 
-6. **Deploy to Railway** — use the one-click template (button in `README.md`) or `railway up` with the committed `railway.toml`. The image is built from the committed root `Dockerfile`, so the same container works unchanged on Railway today and on any other provider (Fly Machines, Hetzner, …) later — the provider surface is declared in code as Infrastructure-as-Effects via [alchemy](https://github.com/alchemy-run/alchemy), which makes providers swappable and self-hostable for sovereign tenants. Set these environment variables on your Railway service:
+6. **Run the universal image** — pull `ghcr.io/nearbuilders/everything-dev` (Railway: one-click template or `railway up`; the deploy train deploys the pushed SHA tag). No image build of your own — ever. Set these environment variables on your instance:
    | Variable | Value |
    |----------|-------|
    | `BOS_ACCOUNT` | `<your-account>.near` |
    | `BOS_GATEWAY` | `citynode.app` |
    | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
 
-7. **Your Railway host boots** `bos start`, fetches your published config from FastKV at `bos://<your-account>/citynode.app`, and serves your version live at the Railway-assigned URL. Changes take minutes, not hours.
+7. **Your instance boots** `bos start`, fetches your published config from FastKV at `bos://<your-account>/citynode.app`, loads host/api/auth logic from the base's bundles (stale-if-error cached under `BOS_BUNDLE_CACHE_DIR`), and serves your version live at the Railway-assigned URL. Changes take minutes, not hours.
 
 **Same gateway, own account:**
 
@@ -533,7 +547,7 @@ This repo is the parent platform, not a generated child project.
 **Release flow:**
 - CI is the validation workflow. On successful push to `main`, the Deploy workflow triggers automatically via `workflow_run` and checks out the exact SHA CI validated.
 - `release.yml` is manual (`workflow_dispatch`): it consumes changesets, creates the `chore: version packages` PR when pending, and publishes to npm when no changesets remain.
-- `deploy.yml` runs `bos publish --deploy` (writes deterministic bundle URLs + publishes `bos.config.json` to FastKV) and ships the Railway image with `railway up`. Nothing is committed back — the runtime fetches the published config from FastKV.
+- `deploy.yml` runs `bos publish --deploy` (uploads workspace dists + writes deterministic bundle URLs + publishes `bos.config.json` to FastKV), builds the `runtime` image stage and pushes it to GHCR by SHA tag, and deploys the pushed image to Railway (pull-only, `RAILWAY_DOCKERFILE_PATH` thin `FROM` — ADR 0021). Nothing is committed back — the runtime fetches the published config from FastKV.
 - Generated child repos use a simpler flow: both Release and Deploy trigger directly from CI success via `workflow_run` (no npm publish, no Docker).
 
 **Create changeset:**

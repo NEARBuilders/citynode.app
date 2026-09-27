@@ -14,13 +14,16 @@ export function platformUrlDeployEntries(input: {
   gateway: string;
   key: string;
   kind: "app" | "plugin";
+  integrity?: string;
+  ssrIntegrity?: string;
 }): DeployResultEntry[] {
-  const { origin, account, gateway, key, kind } = input;
+  const { origin, account, gateway, key, kind, integrity, ssrIntegrity } = input;
   const slot = kind === "app" ? "app" : "plugins";
   const base = `${origin.replace(/\/$/, "")}/bundles/${account}/${gateway}/${key}/`;
   const entries: DeployResultEntry[] = [
     {
       url: base,
+      integrity,
       urlField: `${slot}.${key}.production`,
       integrityField: `${slot}.${key}.integrity`,
     },
@@ -29,6 +32,7 @@ export function platformUrlDeployEntries(input: {
   if (kind === "app" && key === "ui") {
     entries.push({
       url: `${base}ssr/`,
+      integrity: ssrIntegrity,
       urlField: CORE_UI_DEPLOY_FIELDS.ssrUrlField ?? "",
       integrityField: CORE_UI_DEPLOY_FIELDS.ssrIntegrityField ?? "",
     });

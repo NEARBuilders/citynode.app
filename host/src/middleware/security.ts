@@ -13,6 +13,14 @@ export const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX) || 300;
 export const BODY_LIMIT_MAX = Number(process.env.BODY_LIMIT_MAX) || 10 * 1024 * 1024;
 export const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS) || 30_000;
 
+const DEFAULT_MAX_BUNDLE_UPLOAD_BYTES = 64 * 1024 * 1024;
+
+export function bundleUploadBodyLimitBytes(): number {
+  const raw = Number(process.env.BOS_MAX_BUNDLE_UPLOAD_BYTES);
+  const decoded = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_BUNDLE_UPLOAD_BYTES;
+  return Math.ceil(decoded * 1.5);
+}
+
 export const STATIC_ASSET_PATTERN =
   /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|md|webmanifest|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
 

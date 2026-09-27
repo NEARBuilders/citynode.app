@@ -217,6 +217,17 @@ export const NodeListSummarySchema = z.object({
   validatorCount: z.number().int().nonnegative(),
 });
 
+export const BundleFileSchema = z.object({
+  path: z.string().min(1).max(512),
+  contentBase64: z.string().min(1),
+});
+
+export const StorageUploadResultSchema = z.object({
+  stored: z.number().int(),
+  totalBytes: z.number().int(),
+  integrity: z.record(z.string(), z.string()),
+});
+
 export const contract = oc.router({
   ...discoveryContract,
 
@@ -731,6 +742,19 @@ export const contract = oc.router({
     )
     .output(EventOnboardingCodeSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  uploadStorageBundle: oc
+    .route({ method: "POST", path: "/storage/bundles" })
+    .input(
+      z.object({
+        account: z.string().min(1),
+        gateway: z.string().min(1),
+        workspace: z.string().min(1),
+        files: z.array(BundleFileSchema).min(1).max(10_000),
+      }),
+    )
+    .output(StorageUploadResultSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
 });
 
 export type ContractType = typeof contract;

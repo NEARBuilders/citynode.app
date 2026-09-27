@@ -18,6 +18,10 @@ concurrency:
 
 permissions:
   contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/nearbuilders/everything-dev
 
 jobs:
   deploy:
@@ -57,16 +61,35 @@ jobs:
         timeout-minutes: 20
         run: bun run bos publish --deploy --packages local${{ inputs.verbose == true && ' --verbose' || '' }}
 
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push the universal runtime image
+        timeout-minutes: 45
+        # ADR 0021: the image IS the deployment artifact — the `runtime`
+        # stage (default target) stages the boot namespace and boots
+        # `bos start`. Pushed by SHA tag so deploys pin the validated bytes.
+        run: |
+          IMAGE_TAG=sha-$(echo "${{ github.event.workflow_run.head_sha || github.sha }}" | cut -c1-7)
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
+          docker build --target runtime -t "${IMAGE}:${IMAGE_TAG}" -t "${IMAGE}:latest" .
+          docker push "${IMAGE}:${IMAGE_TAG}" | tee /tmp/push.log
+          docker push "${IMAGE}:latest"
+          # Pin the deploy to the pushed digest, not the mutable tag.
+          DIGEST=$(grep -o 'sha256:[a-f0-9]*' /tmp/push.log | tail -1)
+          echo "IMAGE_DIGEST=${DIGEST}" >> "$GITHUB_ENV"
+
       - name: Install Railway CLI
         run: npm i -g @railway/cli@5.47.1
 
-      - name: Build and deploy Railway image
-        timeout-minutes: 45
-        # railway up builds the committed Dockerfile (multi-stage: all
-        # workspace dists stage into the image) and deploys — the image IS
-        # the deployment artifact (plan 043). railway redeploy would re-run
-        # the previous build and never ship the new artifacts.
-        run: railway up --service app --ci --verbose
+      - name: Deploy the pushed image to Railway
+        timeout-minutes: 30
+        # Pull-only deploy: a thin FROM referencing the pushed digest —
+        # Railway builds (pulls) it instead of rebuilding the workspace
+        # dists. The digest is exactly what this pipeline just validated.
+        run: |
+          echo "FROM ${IMAGE}@${IMAGE_DIGEST}" > Dockerfile.railway
+          RAILWAY_DOCKERFILE_PATH=Dockerfile.railway railway up --service app --ci --verbose
 
       - name: Verify release-train identity (mf check)
         timeout-minutes: 5

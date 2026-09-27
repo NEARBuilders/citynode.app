@@ -87,4 +87,34 @@ describe("bundle FS handler", () => {
     await app.request("/bundles/v1.citynode.near/citynode.app/ui/remoteEntry.js");
     expect(fellThrough).toBe(true);
   });
+
+  it("serves only the runtime's own namespace when an identity is provided", async () => {
+    const app = new Hono<HonoEnv>();
+    app.all(
+      "/bundles/*",
+      createBundleFsHandler(bundleDir, { account: "v1.citynode.near", gateway: "citynode.app" }),
+    );
+    app.all("/bundles/*", () => new Response("fallback"));
+
+    const own = await app.request("/bundles/v1.citynode.near/citynode.app/ui/remoteEntry.js");
+    expect(own.status).toBe(200);
+    expect(await own.text()).toBe("console.log('entry')");
+
+    const foreign = await app.request("/bundles/other.account.near/other.dev/ui/remoteEntry.js");
+    expect(await foreign.text()).toBe("fallback");
+  });
+
+  it("rejects a prefix collision namespace when the guard is active", async () => {
+    const app = new Hono<HonoEnv>();
+    app.all(
+      "/bundles/*",
+      createBundleFsHandler(bundleDir, { account: "v1.citynode.near", gateway: "citynode.app" }),
+    );
+    app.all("/bundles/*", () => new Response("fallback"));
+
+    const collision = await app.request(
+      "/bundles/v1.citynode.near.evil/citynode.app/ui/remoteEntry.js",
+    );
+    expect(await collision.text()).toBe("fallback");
+  });
 });

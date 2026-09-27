@@ -33,51 +33,11 @@ RUN rm -rf host api ui plugins
 RUN find node_modules -maxdepth 1 -type l ! -exec test -e {} \; -print -delete 2>/dev/null || true
 RUN node -e "const p=require('./package.json');p.workspaces.packages=p.workspaces.packages.filter(e=>!['api','ui','host'].includes(e)&&e!=='plugins/*');require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
-# ── Runtime ──
-FROM oven/bun:1.3.14-alpine
-WORKDIR /app
-
-RUN apk add --no-cache curl
-
-RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001
-
-COPY --from=prod-builder --chown=appuser:appgroup /app/node_modules ./node_modules
-COPY --from=prod-builder --chown=appuser:appgroup /app/package.json .
-COPY --from=prod-builder --chown=appuser:appgroup /app/bun.lock .
-COPY --from=prod-builder --chown=appuser:appgroup /app/bunfig.toml .
-COPY --from=prod-builder --chown=appuser:appgroup /app/bos.config.json ./
-COPY --from=prod-builder --chown=appuser:appgroup /app/packages/everything-dev ./packages/everything-dev
-COPY --from=prod-builder --chown=appuser:appgroup /app/packages/every-plugin ./packages/every-plugin
-
-# Image-native artifacts (plan 043): the namespace-staged bundle layout built
-# by the dist-builder stage — the host serves /bundles/* from this directory.
-# BOS_BUNDLE_DIR unset in other consumers falls through to remote loading.
-COPY --from=dist-builder --chown=appuser:appgroup /app/.bos/bundles ./.bos/bundles
-ENV BOS_BUNDLE_DIR=/app/.bos/bundles
-
-RUN mkdir -p .bos/generated .bos/logs && \
-    chown -R appuser:appgroup .bos && \
-    chown appuser:appgroup /app
-
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOST=0.0.0.0
-# BOS_ENV: set to "staging" to enable staging mode (uses staging domain for BOS_GATEWAY)
-# Defaults to "production" if unset.
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=120s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
-
-USER appuser
-CMD ["sh", "-c", "bun run start --port ${PORT:-3000}"]
-
-# ── Deployment runtime (ADR 0009 amendment): the last stage — what Railway
-# builds and deploys. Serves the staged dists and boots the production host
-# over them. One container = the whole start stack; only the host port is
-# mapped. Databases and secrets arrive via env at `docker run`. The
-# regression harness builds this same target for its browser suites.
-FROM oven/bun:1.3.14-alpine AS runtime
+# ── Regression fixture (ADR 0009): the browser-suite harness image ──
+# Serves the staged dists on container-local static servers and boots the
+# production host over a baked local config (--config-path). Built explicitly
+# with `docker build --target regression` — not the deployment artifact.
+FROM oven/bun:1.3.14-alpine AS regression
 WORKDIR /app
 
 RUN apk add --no-cache curl
@@ -111,3 +71,55 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=180s --retries=5 \
 
 USER appuser
 ENTRYPOINT ["bun", "run", "scripts/regression/container-entrypoint.mjs"]
+
+# ── Deployment runtime (ADR 0021): the last stage — the universal image ──
+# `bun run start` boots `bos start`: identity-driven (BOS_ACCOUNT/BOS_GATEWAY
+# env → FastKV; unset → the baked bos.config.json), with tier auto-detection
+# over BOS_BUNDLE_DIR. This is the default build target; GHCR publishes it
+# (ADR 0020: all bundle distribution lives on the CDN — the image keeps the
+# boot role). One container = the whole start stack; only the host port is
+# mapped. Databases and secrets arrive via env at `docker run`.
+FROM oven/bun:1.3.14-alpine AS runtime
+WORKDIR /app
+
+RUN apk add --no-cache curl
+
+RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001
+
+COPY --from=prod-builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=prod-builder --chown=appuser:appgroup /app/package.json .
+COPY --from=prod-builder --chown=appuser:appgroup /app/bun.lock .
+COPY --from=prod-builder --chown=appuser:appgroup /app/bunfig.toml .
+COPY --from=prod-builder --chown=appuser:appgroup /app/bos.config.json ./
+COPY --from=prod-builder --chown=appuser:appgroup /app/packages/everything-dev ./packages/everything-dev
+COPY --from=prod-builder --chown=appuser:appgroup /app/packages/every-plugin ./packages/every-plugin
+
+# Image-native boot artifacts (plan 043, boot role per ADR 0020): the
+# namespace-staged bundle layout built by the dist-builder stage — the
+# outbound fetch interceptor resolves own-namespace URLs from this directory
+# so cold boots need zero network. Distribution serves the same bytes from
+# the CDN.
+COPY --from=dist-builder --chown=appuser:appgroup /app/.bos/bundles ./.bos/bundles
+ENV BOS_BUNDLE_DIR=/app/.bos/bundles
+
+# Foreign-namespace stale-if-error cache (ADR 0021): registry-tier instances
+# (children) cache boot-time and inbound bytes and serve last-known-good on
+# upstream outages.
+ENV BOS_BUNDLE_CACHE_DIR=/app/.bos/bundle-cache
+
+RUN mkdir -p .bos/generated .bos/logs .bos/bundle-cache && \
+    chown -R appuser:appgroup .bos && \
+    chown appuser:appgroup /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOST=0.0.0.0
+# BOS_ENV: set to "staging" to enable staging mode (uses staging domain for BOS_GATEWAY)
+# Defaults to "production" if unset.
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=120s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
+
+USER appuser
+CMD ["sh", "-c", "bun run start --port ${PORT:-3000}"]

@@ -22,6 +22,7 @@ import {
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
 import { platformUrlDeployEntries } from "./platform-deploy";
+import { collectDistFiles, uploadWorkspaceDist } from "./storage-upload";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
 import { colors, icons } from "./utils/theme";
@@ -268,21 +269,59 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   // Image-native deploy (plan 043): artifacts ship inside the runtime image
   // and each host serves its own namespace from its own filesystem — the
   // publish writes the deterministic bundle URLs, nothing is uploaded.
-  const origin = `https://${gateway}`;
+  // CDN deploy (ADR 0020): when BOS_BUNDLE_CDN_ORIGIN + BOS_STORAGE_ORIGIN
+  // are set, dists upload to the storage API instead and every bundle URL
+  // (the root's own included) points at the CDN origin — the image keeps
+  // only the boot role. Unset envs keep the gateway-origin behavior.
+  const cdnOrigin = process.env.BOS_BUNDLE_CDN_ORIGIN?.replace(/\/$/, "");
+  const storageOrigin = process.env.BOS_STORAGE_ORIGIN?.replace(/\/$/, "");
+  const storageApiKey = process.env.BOS_STORAGE_API_KEY;
+  const urlOrigin = cdnOrigin ?? `https://${gateway}`;
   const deployTargets = (built ?? []).filter((key) => targets.includes(key));
   const platformEntries: DeployResultEntry[] = [];
 
   console.log();
-  console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
+  if (cdnOrigin && storageOrigin) {
+    console.log(`  CDN deploy — uploading workspace dists to ${storageOrigin}...`);
+  } else {
+    console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
+  }
   for (const key of deployTargets) {
     const ws = resolveWorkspaceTarget(key, bosConfig, runtimeConfig, configDir);
     if (!ws) continue;
 
-    platformEntries.push(
-      ...platformUrlDeployEntries({ origin, account, gateway, key, kind: ws.kind }),
-    );
+    let integrity: string | undefined;
+    let ssrIntegrity: string | undefined;
+    let fileCount: number | undefined;
+    if (cdnOrigin && storageOrigin) {
+      const result = await uploadWorkspaceDist({
+        origin: storageOrigin,
+        apiKey: storageApiKey,
+        account,
+        gateway,
+        workspace: key,
+        files: await collectDistFiles(join(ws.path, "dist")),
+      });
+      integrity = result.integrity["remoteEntry.js"];
+      ssrIntegrity =
+        result.integrity["ssr/remoteEntry.server.js"] ?? result.integrity["remoteEntry.server.js"];
+      fileCount = result.stored;
+    }
+
     console.log(
-      `    ${colors.green(icons.ok)} ${padRight(key, 28)} → https://${gateway}/bundles/${account}/${gateway}/${key}/`,
+      `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/${fileCount !== undefined ? ` (${fileCount} files)` : ""}`,
+    );
+
+    platformEntries.push(
+      ...platformUrlDeployEntries({
+        origin: urlOrigin,
+        account,
+        gateway,
+        key,
+        kind: ws.kind,
+        integrity,
+        ssrIntegrity,
+      }),
     );
   }
 

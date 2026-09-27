@@ -12,7 +12,7 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { timeout } from "hono/timeout";
 import type { AuthVariables } from "../lib/auth";
-import { API_TIMEOUT_MS, BODY_LIMIT_MAX } from "../middleware/security";
+import { API_TIMEOUT_MS, BODY_LIMIT_MAX, bundleUploadBodyLimitBytes } from "../middleware/security";
 import { proxyRequest } from "../middleware/static-proxy";
 import { buildPluginContext, type createSessionMiddleware } from "../services/auth";
 import type { RuntimeConfig } from "../services/config";
@@ -112,8 +112,15 @@ export async function setupApiRoutes(
   // FS-backed bundle serving (plan 043) — first handler on /bundles/*: the
   // image stages its own artifacts and serves them same-origin. Unset
   // BOS_BUNDLE_DIR (registry tier / child runtimes) falls through to the
-  // foreign-namespace proxy cache, then the proxy/oRPC routes.
-  app.all("/bundles/*", createBundleFsHandler(process.env.BOS_BUNDLE_DIR));
+  // foreign-namespace proxy cache, then the proxy/oRPC routes. The inbound
+  // namespace guard (ADR 0021) scopes disk serving to the runtime's own
+  // identity — foreign namespaces fall through, never stale baked bytes.
+  const bundleNamespace = (() => {
+    const account = process.env.BOS_ACCOUNT ?? config.account;
+    const gateway = process.env.BOS_GATEWAY ?? config.domain;
+    return account && gateway ? { account, gateway } : undefined;
+  })();
+  app.all("/bundles/*", createBundleFsHandler(process.env.BOS_BUNDLE_DIR, bundleNamespace));
   app.all(
     "/bundles/*",
     createBundleProxyCacheHandler({
@@ -193,7 +200,19 @@ export async function setupApiRoutes(
     onError: (c) => c.json({ error: "Request body too large" }, 413),
   });
 
-  app.use("/api/*", apiBodyLimit);
+  // Route-scoped limit for bundle uploads (ADR 0015/0020): the global
+  // /api/* limit skips the path — Hono runs every matching middleware, so
+  // two limits would compose to the smaller ceiling.
+  const STORAGE_BUNDLE_PATH = "/api/storage/bundles";
+  const storageBodyLimit = bodyLimit({
+    maxSize: Math.ceil(bundleUploadBodyLimitBytes()),
+    onError: (c) => c.json({ error: "Bundle upload too large" }, 413),
+  });
+  app.use(STORAGE_BUNDLE_PATH, storageBodyLimit);
+  app.use("/api/*", (c, next) => {
+    if (c.req.path === STORAGE_BUNDLE_PATH) return next();
+    return apiBodyLimit(c, next);
+  });
 
   app.use(
     "/api/*",

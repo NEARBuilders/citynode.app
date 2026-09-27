@@ -213,6 +213,38 @@ describe("installBundleFetchFromEnv", () => {
     expect(installBundleFetchFromEnv({ configPath: null })).toBeNull();
   });
 
+  it("enables the foreign-namespace cache with an explicit cache dir and no staged bundle dir", async () => {
+    delete process.env.BOS_BUNDLE_DIR;
+    const cacheDir = mkdtempSync(join(tmpdir(), "bundle-cache-"));
+    process.env.BOS_BUNDLE_CACHE_DIR = cacheDir;
+    const originalFetch = globalThis.fetch;
+    let failOrigin = false;
+    globalThis.fetch = async () => {
+      if (failOrigin) throw new Error("origin down");
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    try {
+      const handle = installBundleFetchFromEnv({ configPath: null });
+      expect(handle).not.toBeNull();
+      const foreign =
+        "https://base.everything.near/bundles/base.near/everything.dev/auth/plugin.manifest.json";
+      const fresh = await fetch(foreign);
+      expect(await fresh.json()).toEqual({ ok: true });
+      failOrigin = true;
+      const stale = await fetch(foreign);
+      expect(stale.status).toBe(200);
+      expect(stale.headers.get("x-bundle-cache")).toBe("stale");
+      await handle!.uninstall();
+      rmSync(cacheDir, { recursive: true, force: true });
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BOS_BUNDLE_CACHE_DIR;
+    }
+  });
+
   it("derives the namespace from registry env, else config fields", () => {
     delete process.env.BOS_ACCOUNT;
     delete process.env.BOS_GATEWAY;
@@ -243,6 +275,67 @@ describe("installBundleFetchFromEnv", () => {
     writeFileSync(configFile, "{}");
     expect(installBundleFetchFromEnv({ configPath: configFile })).toBeNull();
     rmSync(configPath, { recursive: true, force: true });
+  });
+
+  it("falls back to the registry tier when the identity namespace is not staged", async () => {
+    stageFixture();
+    delete process.env.BOS_ACCOUNT;
+    delete process.env.BOS_GATEWAY;
+    process.env.BOS_BUNDLE_DIR = NAMESPACE.bundleDir;
+    process.env.BOS_ACCOUNT = "other.account.near";
+    process.env.BOS_GATEWAY = "other.dev";
+
+    const fallthrough = new Response("from-network", { status: 200 });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => fallthrough;
+
+    let notice = "";
+    const originalWarn = console.warn;
+    console.warn = (message: unknown) => {
+      notice = String(message);
+    };
+
+    try {
+      const handle = installBundleFetchFromEnv({ configPath: null });
+      expect(handle).not.toBeNull();
+      expect(notice).toContain("other.account.near/other.dev");
+      const res = await fetch(
+        "https://other.dev/bundles/other.account.near/other.dev/apps/plugin.manifest.json",
+      );
+      expect(res).toBe(fallthrough);
+      await handle!.uninstall();
+    } finally {
+      console.warn = originalWarn;
+      globalThis.fetch = originalFetch;
+      delete process.env.BOS_ACCOUNT;
+      delete process.env.BOS_GATEWAY;
+    }
+  });
+
+  it("keeps the self-contained tier when the identity namespace is staged", async () => {
+    stageFixture();
+    process.env.BOS_BUNDLE_DIR = NAMESPACE.bundleDir;
+    process.env.BOS_ACCOUNT = NAMESPACE.account;
+    process.env.BOS_GATEWAY = NAMESPACE.gateway;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response("from-network", { status: 200 });
+    try {
+      const handle = installBundleFetchFromEnv({ configPath: null });
+      try {
+        const res = await fetch(
+          "https://citynode.app/bundles/v1.citynode.near/citynode.app/apps/plugin.manifest.json",
+        );
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual(JSON.parse(manifestBody));
+      } finally {
+        await handle!.uninstall();
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BOS_ACCOUNT;
+      delete process.env.BOS_GATEWAY;
+    }
   });
 });
 

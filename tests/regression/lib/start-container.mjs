@@ -113,8 +113,8 @@ const main = async () => {
     /* nothing to clean */
   }
 
-  log(`building the deployment image (docker build --target runtime)…`);
-  await run("docker", ["build", "--target", "runtime", "-t", image, "."]);
+  log(`building the deployment image (docker build --target regression)…`);
+  await run("docker", ["build", "--target", "regression", "-t", image, "."]);
 
   const child = dockerRun();
   const teardown = () => {
