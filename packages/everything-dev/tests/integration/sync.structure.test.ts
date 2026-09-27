@@ -16,10 +16,19 @@ describe("bos sync — framework-owned files", () => {
     expect(isFrameworkOwnedSyncFile("plugins/_template/src/lib/context.ts")).toBe(true);
   });
 
+  it("marks agent workflow skills and docs as framework-owned", () => {
+    expect(isFrameworkOwnedSyncFile(".agents/skills/implement/SKILL.md")).toBe(true);
+    expect(isFrameworkOwnedSyncFile(".agents/skills/everything-dev-app/SKILL.md")).toBe(true);
+    expect(isFrameworkOwnedSyncFile(".agents/skills/tdd/agents/openai.yaml")).toBe(true);
+    expect(isFrameworkOwnedSyncFile("docs/agents/issue-tracker.md")).toBe(true);
+    expect(isFrameworkOwnedSyncFile("skills-lock.json")).toBe(true);
+  });
+
   it("does not mark app-owned files as framework-owned", () => {
     expect(isFrameworkOwnedSyncFile("Dockerfile")).toBe(false);
     expect(isFrameworkOwnedSyncFile(".github/renovate.json")).toBe(false);
     expect(isFrameworkOwnedSyncFile(".opencode/skills/everything-dev/SKILL.md")).toBe(false);
+    expect(isFrameworkOwnedSyncFile("docs/custom-note.md")).toBe(false);
     expect(isFrameworkOwnedSyncFile("ui/src/routes/_layout/_public/index.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("ui/src/components/user-nav.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("api/src/index.ts")).toBe(false);

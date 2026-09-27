@@ -800,5 +800,6 @@ This repo includes ~35 Matt Pocock workflow skills in `.agents/skills/`. These a
 - `/tdd` — test-driven development, red-green-refactor
 - `/diagnosing-bugs` — diagnosis loop for hard bugs and performance regressions
 - `/wayfinder` — chart a shared map of decision tickets for huge, foggy efforts
+- `/everything-dev-app` — orientation glue for child repos; `bos init` scaffolds the whole set (verbatim skills + this glue) into generated projects
 
 See `.agents/skills/ask-matt/SKILL.md` for the full flow map.

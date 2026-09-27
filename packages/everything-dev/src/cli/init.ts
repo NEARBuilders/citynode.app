@@ -46,6 +46,9 @@ export const INIT_ROOT_PATTERNS = [
   "railway.json",
   "railway.toml",
   "AGENTS.md",
+  ".agents/skills/**",
+  "skills-lock.json",
+  "docs/agents/**",
   ".changeset/config.json",
   ".changeset/README.md",
   "README.md",
@@ -475,17 +478,19 @@ function stripProductionFields(entry: Record<string, unknown>): void {
  * Scaffold the authored config as the TS form: the personalized
  * bos.config.json materializes into an authored `bos.app.ts` descriptor and
  * the JSON copy is removed — publish/sync still canonicalize to JSON for
- * FastKV from the resolved config.
+ * FastKV from the resolved config. Returns the config that was converted, so
+ * callers that need it (before the child has node_modules to import the
+ * descriptor) can pass it onward.
  */
-export async function convertChildConfigToAppForm(destination: string): Promise<void> {
+export async function convertChildConfigToAppForm(
+  destination: string,
+): Promise<BosConfigInput | null> {
   const configPath = join(destination, "bos.config.json");
-  if (!existsSync(configPath)) return;
+  if (!existsSync(configPath)) return null;
   const config = JSON.parse(readFileSync(configPath, "utf-8")) as BosConfigInput;
-  writeFileSync(
-    join(destination, "bos.app.ts"),
-    serializeAppDescriptorSource(config as BosConfigInput),
-  );
+  writeFileSync(join(destination, "bos.app.ts"), serializeAppDescriptorSource(config));
   rmSync(configPath);
+  return config;
 }
 
 function buildRootTypecheckScript(sections: {
@@ -1027,6 +1032,12 @@ export async function personalizeConfig(
       const title = opts.title ?? opts.account ?? "app";
       const repository = opts.repository ?? "";
       writeFileSync(skillMdPath, buildChildSkillMd(title, repository));
+    }
+
+    for (const agentFilePath of [llmsTxtPath, skillMdPath]) {
+      const content = readFileSync(agentFilePath, "utf-8");
+      if (content.includes(WORKFLOW_SKILLS_MARKER)) continue;
+      writeFileSync(agentFilePath, `${content.replace(/\n*$/, "\n")}${WORKFLOW_SKILLS_NOTE}`);
     }
   }
 
@@ -1660,6 +1671,18 @@ function MyComponent() {
 \`\`\``);
   }
 
+  parts.push(`## Workflow Skills
+
+This repo ships agent workflow skills in \`.agents/skills/\` — the ordered development flow (grill → spec → tickets → implement/tdd → code-review). Start \`/everything-dev-app\` to orient and pick the right next step; \`/ask-matt\` is the router if unsure.
+
+- \`/grill-with-docs\` — sharpen an idea by interview, leaving a paper trail in \`CONTEXT.md\` and ADRs
+- \`/to-spec\` / \`/to-tickets\` — turn a plan into a spec, then tracer-bullet tickets under \`.scratch/<feature>/issues/\`
+- \`/implement\` + \`/tdd\` — build a ticket test-first at pre-agreed seams
+- \`/code-review\` — two-axis review (Standards + Spec) of the diff since a fixed point
+- \`/diagnosing-bugs\` — diagnosis loop for hard bugs and performance regressions
+
+Run \`/setup-matt-pocock-skills\` once before first use. Tracker and triage conventions live in \`docs/agents/\`.`);
+
   parts.push(`## Agent Communication Surface
 
 The host exposes several surfaces for programmatic agent access:
@@ -1751,6 +1774,14 @@ docker-compose.yml
 `;
 }
 
+const WORKFLOW_SKILLS_MARKER = "everything-dev-app";
+const WORKFLOW_SKILLS_NOTE = `
+
+## Workflow skills
+
+This repo ships agent workflow skills in \`.agents/skills/\` — the ordered development flow (grill → spec → tickets → implement/tdd → code-review). Start with \`/everything-dev-app\` to orient and pick the right next step. See \`AGENTS.md\` → Workflow Skills.
+`;
+
 export function buildChildLlmsTxt(title: string): string {
   return `# ${title}
 
@@ -1759,6 +1790,7 @@ export function buildChildLlmsTxt(title: string): string {
 ## Skills
 
 - [Skill](/skill.md): Agent-ready prompt for talking to, running, editing, and publishing this runtime.
+- Workflow skills (in the repo): \`.agents/skills/\` — start with \`everything-dev-app\` for the ordered development flow.
 
 ## API
 
@@ -1839,6 +1871,10 @@ Use an **API key**:
 ### Read AGENTS.md first
 
 After cloning, read **\`AGENTS.md\`** at the repo root. It contains operational guidance, TanStack Intent skills, and workflow instructions.
+
+### Workflow skills
+
+The repo ships agent workflow skills in \`.agents/skills/\` — start with \`everything-dev-app\` for the ordered development flow (grill → spec → tickets → implement/tdd → code-review).
 
 ### Architecture note
 

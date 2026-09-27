@@ -1,6 +1,6 @@
 # Issue tracker: GitHub + Local Markdown
 
-Issues and specs for this repo live on GitHub (`NEARBuilders/citynode.app`). Sprint-level issue files are also written locally under `.scratch/<feature>/issues/` for agent workflow.
+Issues and specs for this repo live on GitHub (repo read fresh from `bos.config.json` `repository`). Sprint-level issue files are also written locally under `.scratch/<feature>/issues/` for agent workflow.
 
 ## GitHub conventions
 

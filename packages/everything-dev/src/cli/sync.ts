@@ -67,8 +67,16 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
 
 type PackageJson = Record<string, unknown>;
 
+const AGENT_SYNC_GLOBS = [".agents/skills/**", "docs/agents/**", "skills-lock.json"];
+
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (FRAMEWORK_OWNED_SYNC_FILES.has(filePath)) return true;
+  if (
+    filePath.startsWith(".agents/skills/") ||
+    filePath.startsWith("docs/agents/") ||
+    filePath === "skills-lock.json"
+  )
+    return true;
   // lib/auth.ts is NOT sync-owned since #207: the middleware factory lives in
   // everything-dev/api (framework home); projects import it, they don't own a copy.
   if (/^plugins\/[^/]+\/src\/lib\/context\.ts$/.test(filePath)) return true;
@@ -482,6 +490,16 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       const sourcePath = toSourcePath(sourceDir, destPath);
       if (!sourcePath) continue;
       destToSource.set(destPath, sourcePath);
+    }
+
+    for (const destPath of await glob(AGENT_SYNC_GLOBS, {
+      cwd: sourceDir,
+      nodir: true,
+      dot: true,
+      absolute: false,
+      ignore: ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/.bos/**"],
+    })) {
+      destToSource.set(destPath, destPath);
     }
 
     // Sync api/src/lib/{auth,context}.ts into each plugin's src/lib/

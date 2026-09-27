@@ -1360,6 +1360,7 @@ export default createPlugin({
 
         try {
           let filesCopied: number;
+          let childBosConfig: BosConfigInput | null = null;
 
           if (isMinimalScaffold) {
             filesCopied = await timePhase(timings, "scaffold project", () =>
@@ -1393,7 +1394,7 @@ export default createPlugin({
               }),
             );
 
-            await timePhase(timings, "authored config form", () =>
+            childBosConfig = await timePhase(timings, "authored config form", () =>
               convertChildConfigToAppForm(targetDir),
             );
           } else {
@@ -1427,7 +1428,7 @@ export default createPlugin({
               }),
             );
 
-            await timePhase(timings, "authored config form", () =>
+            childBosConfig = await timePhase(timings, "authored config form", () =>
               convertChildConfigToAppForm(targetDir),
             );
 
@@ -1454,6 +1455,9 @@ export default createPlugin({
             syncResolvedSharedDeps({
               configDir: targetDir,
               hostMode: "local",
+              bosConfig: childBosConfig
+                ? (childBosConfig as unknown as Record<string, unknown>)
+                : undefined,
             }),
           );
 
@@ -1463,7 +1467,13 @@ export default createPlugin({
           removeInitLockfile(lockfilePath);
 
           const initConfig = await timePhase(timings, "resolve config", () =>
-            loadResolvedConfig({ cwd: targetDir }),
+            loadResolvedConfig({ cwd: targetDir }).catch((error) => {
+              console.warn(
+                "[init] Skipping config resolution — the child has no node_modules yet; `bos dev` resolves after `bun install`.",
+                error instanceof Error ? error.message : error,
+              );
+              return null;
+            }),
           );
           if (initConfig?.runtime) {
             await timePhase(timings, "generate env/docker", async () => {
