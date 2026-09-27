@@ -20,12 +20,15 @@
       "secrets": [
         "CORS_ORIGIN",
         "CSP_STRICT"
-      ]
+      ],
+      "integrity": "sha384-pAKoH87sSjEGnnDCIxFA0N92nb3amxnfX8nRsLuqZfZ6rKAnIWxebMFgCfNxpNl6"
     },
     "ui": {
       "development": "local:ui",
       "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/",
-      "ssr": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/ssr/"
+      "ssr": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/ssr/",
+      "integrity": "sha384-ytJtmfXQke7d4QJ7Drkj7SRk6Atv7IRw+b/Cm6WLML0XacHH1eLahe5+rgStlTnp",
+      "ssrIntegrity": "sha384-wJoIvToiUH4dDH2wwO5dmQVAA8iT4ElWSd3GGsgUqsft0mjNGrE/WK2RxA1XJgnr"
     },
     "api": {
       "development": "local:api",
@@ -37,7 +40,8 @@
       "secrets": [
         "API_DATABASE_URL",
         "LUMA_CALENDAR_API_KEYS"
-      ]
+      ],
+      "integrity": "sha384-OKji1LnFu2CyIdTgYb3VNg4gb1dObRrFTPk2si+Y3I7vxzbLMX7YN36IAU0Al10/"
     },
     "auth": {
       "name": "@everything-dev/auth-plugin",
@@ -119,7 +123,8 @@
             }
           }
         }
-      }
+      },
+      "integrity": "sha384-RvjbukXVXlMN1Ra1Nx9wCBveIUxZCOtxmjGy3MEtKTe7dWZ23Op9DyI+s6kSbonI"
     }
   },
   "plugins": {
@@ -129,11 +134,13 @@
       "secrets": [
         "TEMPLATE_DATABASE_URL"
       ],
-      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/template/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/template/",
+      "integrity": "sha384-JXL5QTB3ywysV3dVkS1oPYl/P16HAT09MOyBT6gnvMBPbNIn+o9Xqyj68Fu5TEo/"
     },
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/apps/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/apps/",
+      "integrity": "sha384-n3N7mNalqLdaYaopJKSE5Ir9xr65BkqmHRN2IrYVW1Y85YjnPwiXko5DHIf/7YRT"
     },
     "proposals": {
       "development": "local:plugins/proposals",
@@ -143,7 +150,8 @@
       "secrets": [
         "PROPOSALS_DATABASE_URL"
       ],
-      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/proposals/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/proposals/",
+      "integrity": "sha384-zQq34ANaZF7alrDm7zZ7GLi7bIcfum1pVpI3kQo6+qG4MEP7ahLGIeybsw4cp4zV"
     },
     "votes": {
       "development": "local:plugins/votes",
@@ -151,7 +159,8 @@
       "secrets": [
         "VOTES_DATABASE_URL"
       ],
-      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/votes/"
+      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/votes/",
+      "integrity": "sha384-Uv58fEFwTHyt2CfnsUkgKhIHrrUbq+kDeI8jzJN1lzzGdtXUQ34FFMQFO/OtY1wz"
     }
   }
 }
