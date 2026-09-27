@@ -152,7 +152,7 @@ const stage = () => {
       production: slotUrl(ports.ui, "ui"),
     },
     api: `http://localhost:${ports.api}`,
-    auth: `http://localhost:${ports.auth}`,
+    auth: slotUrl(ports.auth, "auth"),
     authUi: {
       production: slotUrl(ports.authUi, "auth-ui"),
       name: sanitizeContainerName(authPkgName),
