@@ -5,11 +5,6 @@
     "customConditions": ["development"],
     "paths": {
       "every-plugin": ["../every-plugin/src/index.ts"],
-      "every-plugin/effect": ["../every-plugin/src/effect.ts"],
-      "every-plugin/orpc": ["../every-plugin/src/orpc.ts"],
-      "every-plugin/orpc/openapi": ["../every-plugin/src/orpc-openapi.ts"],
-      "every-plugin/zod": ["../every-plugin/src/zod.ts"],
-      "every-plugin/zod/v4/core": ["../every-plugin/src/zod-core.ts"],
       "every-plugin/runtime": ["../every-plugin/src/runtime/index.ts"],
       "every-plugin/normalize": ["../every-plugin/src/runtime/services/normalize.ts"],
       "every-plugin/testing": ["../every-plugin/src/testing/index.ts"],

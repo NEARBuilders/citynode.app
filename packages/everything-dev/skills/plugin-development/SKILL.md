@@ -45,8 +45,8 @@ Or use the CLI (no automated command yet — copy template manually).
 Use `oc.router()` to define typed routes. Each route has a method, path, optional input/output schemas, and optional error declarations:
 
 ```ts
-import { eventIterator, oc } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { eventIterator, oc } from "@orpc/contract";
+import { z } from "zod";
 
 // Define errors this plugin throws
 const Errors = {
@@ -86,7 +86,7 @@ export type ContractType = typeof contract;
 ```
 
 Key rules:
-- Import from `every-plugin/zod`, `every-plugin/orpc`, `every-plugin/errors` — never directly from `zod` or `@orpc/*`
+- Import `z` from `zod`, `oc`/`eventIterator` from `@orpc/contract`, and `Effect`/`Layer` from `effect` directly — the `every-plugin/zod`, `every-plugin/orpc`, and `every-plugin/effect` facade barrels were deleted. Use `every-plugin/errors` for the shared error shapes
 - Path params (`{id}`) automatically bind to Zod input keys
 - `.output(eventIterator(Schema))` enables SSE streaming routes
 - `.errors(Errors)` enables typed error handling in generated clients
@@ -96,7 +96,7 @@ Key rules:
 Services are plain classes or functions, optionally using Effect:
 
 ```ts
-import { Effect } from "every-plugin/effect";
+import { Effect } from "effect";
 
 export class TemplateService {
   constructor(
@@ -127,10 +127,10 @@ Use `Effect.runPromise(service.method())` to bridge Effect and async handlers in
 ## Step 4: Wire with `createPlugin` (`src/index.ts`)
 
 ```ts
+import { ORPCError } from "@orpc/server";
+import { Effect } from "effect";
 import { createPlugin } from "every-plugin";
-import { Effect } from "every-plugin/effect";
-import { MemoryPublisher, ORPCError } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { z } from "zod";
 import { contract } from "./contract";
 import type { PluginsClient } from "./plugins-client.gen";
 import { TemplateService } from "./service";
