@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getActiveRuntime, type Organization, useApiClient, useAuthClient } from "@/app";
+import { getGatewayId, type Organization, useApiClient, useAuthClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { FieldGroup } from "@/components/ui/field";
@@ -51,7 +51,7 @@ function ApplyPage() {
   const queryClient = useQueryClient();
   const initialRootNodes = Route.useLoaderData();
   const { auth, runtimeConfig } = Route.useRouteContext();
-  const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const gatewayId = getGatewayId(runtimeConfig);
   const activeOrgId = auth.activeOrganizationId;
   const nearAccountId = useNearAccount();
   const daoConnection = useDaoConnection();
@@ -68,6 +68,11 @@ function ApplyPage() {
 
   const submitMutation = useMutation({
     mutationFn: async (values: NodeApplicationValues) => {
+      if (!gatewayId) {
+        throw new Error(
+          "Runtime configuration is missing the gateway id — this deployment is misconfigured",
+        );
+      }
       if (!activeOrgId) throw new Error("Select an active organization first");
       if (!nearAccountId) throw new Error("Connect a NEAR account first");
       if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
@@ -94,7 +99,7 @@ function ApplyPage() {
   });
   const form = useApplicationForm((values) => submitMutation.mutateAsync(values));
   const formValues = useSelector(form.store, (state) => state.values);
-  const hostname = formValues.slug ? `${formValues.slug}.${gatewayId}` : "";
+  const hostname = formValues.slug && gatewayId ? `${formValues.slug}.${gatewayId}` : "";
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
   const rootNodes = queriedRootNodes ?? initialRootNodes;

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { getAccount, getActiveRuntime, useApiClient } from "@/app";
+import { getAccount, getGatewayId, useApiClient } from "@/app";
 import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from "@/components";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
@@ -50,7 +50,7 @@ function ProposalDetailPage() {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const { runtimeConfig } = Route.useRouteContext();
-  const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const gatewayId = getGatewayId(runtimeConfig);
   const baseAccount = getAccount(runtimeConfig);
   const daoConnection = useDaoConnection();
   const [rejectionReason, setRejectionReason] = useState("");
@@ -81,6 +81,11 @@ function ProposalDetailPage() {
       action: "approve" | "reject";
       reason?: string;
     }) => {
+      if (!gatewayId) {
+        throw new Error(
+          "Runtime configuration is missing the gateway id — this deployment is misconfigured",
+        );
+      }
       if (action === "reject") {
         const rejected = await apiClient.proposals.reject({
           pluginId: proposal.pluginId,

@@ -1,6 +1,6 @@
 import { call, os } from "@orpc/server";
 import { describe, expect, it } from "vitest";
-import type { AuthContext } from "../../src/lib/auth";
+import type { AuthPluginContext as AuthContext } from "../../src/lib/auth-types.gen";
 import { createRequireTeamArea, resolveTeamAccess } from "../../src/team-access-policy";
 
 describe("team access policy", () => {

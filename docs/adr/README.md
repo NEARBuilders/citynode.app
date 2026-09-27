@@ -24,8 +24,10 @@ Format: context → decision → consequences, one file per decision.
 | [0016](./0016-unified-log-pipeline.md) | Unified log pipeline — stream broadcast with levels | Accepted |
 | [0017](./0017-session-gas-keys.md) | Session gas keys primary, relayer fallback | Accepted |
 | [0018](./0018-session-single-owner.md) | One owner for the session read path (`everything-dev/ui/auth` singleton) | Accepted |
+| [0019](./0019-migration-serialization-advisory-lock.md) | Migrations serialize on a journal-scoped Postgres advisory transaction lock | Accepted |
 | [0020](./0020-child-bundle-storage-r2.md) | Child bundle storage — R2-backed CDN distribution for all namespaces | Accepted |
 | [0021](./0021-universal-runtime-image.md) | Universal runtime image — one image, identity-selected tiers | Accepted |
+
 
 Skipped numbers: 0006 exists; there are no gaps otherwise. 0015–0018 were
 renumbered from duplicate 0007/0011/0012/0013 numbers on 2026-09-26 — the

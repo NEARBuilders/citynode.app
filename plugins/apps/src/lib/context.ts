@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import type { AuthContext } from "./auth";
+import type { AuthPluginContext as AuthContext } from "./auth-types.gen";
 
 export const ContextSchema = z.custom<AuthContext>();
 

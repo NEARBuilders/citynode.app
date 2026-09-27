@@ -30,6 +30,7 @@ export default defineConfig({
     "src/ui/router.ts",
     "src/ui/api.ts",
     "src/ui/auth.ts",
+    "src/api/auth-middleware.ts",
     "src/ui/tenant.ts",
     "src/ui/entry.ts",
     "src/ui/hydrate.tsx",

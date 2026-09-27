@@ -45,7 +45,7 @@ export function ApplyNodeFields({
 }: {
   form: ApplicationForm;
   formValues: NodeApplicationValues;
-  gatewayId: string;
+  gatewayId: string | null;
   hostname: string;
   preflight: { hostname: { available: boolean } } | undefined;
   preflightLoading: boolean;
@@ -212,7 +212,7 @@ export function ApplyNodeFields({
                 />
                 <InputGroupAddon align="inline-end">
                   <InputGroupText>
-                    <code className="font-mono">.{gatewayId}</code>
+                    <code className="font-mono">{gatewayId ? `.${gatewayId}` : ""}</code>
                   </InputGroupText>
                 </InputGroupAddon>
               </InputGroup>

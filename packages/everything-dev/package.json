@@ -207,6 +207,15 @@
       "import": "./dist/ui/auth.mjs",
       "require": "./dist/ui/auth.cjs"
     },
+    "./api": {
+      "development": {
+        "types": "./src/api/auth-middleware.ts",
+        "import": "./src/api/auth-middleware.ts"
+      },
+      "types": "./dist/api/auth-middleware.d.mts",
+      "import": "./dist/api/auth-middleware.mjs",
+      "require": "./dist/api/auth-middleware.cjs"
+    },
     "./ui/tenant": {
       "development": {
         "types": "./src/ui/tenant.ts",

@@ -358,15 +358,18 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
 
     const generatedEnv = yield* DevGeneratedEnv;
     const shellTier = yield* ShellEnv;
+    // The descriptor's env joins the generated tier — folding it in before
+    // composeSpawnEnv keeps the documented precedence (shell > generated >
+    // .env-file); assigning after would let it outrank the shell tier (and
+    // the generated-owned keys) silently.
     const envVars = composeSpawnEnv(
       process.env as Record<string, string>,
-      generatedEnv,
+      { ...generatedEnv, ...descriptor.env },
       port,
       shellTier,
     );
 
     envVars.BOS_RUNTIME_CONFIG = JSON.stringify(runtimeConfig);
-    Object.assign(envVars, descriptor.env);
 
     const cmd = spawn(command, args, {
       cwd: fullCwd,

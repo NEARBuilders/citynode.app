@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { PluginLoadFailureInfo } from "every-plugin/errors";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
 import { seedMemberFixtures } from "../../lib/member-seed.ts";
 import { migrateTestDatabase } from "../../lib/migrate-test-db.mjs";
@@ -11,10 +12,36 @@ const ADMIN_SEED_PATH = ".bos/regression/admin-seed.json";
 const ADMIN_NAME = "admin.near";
 const LOGOUT_NAME = "logout.near";
 
+/**
+ * The stack serves /health 200 even when a plugin failed to load (degraded
+ * status). Specs that need the failed plugin would then fail with confusing
+ * downstream timeouts, so abort here where the structured failure info is.
+ */
+async function failOnPluginLoadFailures(baseUrl: string) {
+  const response = await fetch(`${baseUrl}/health`);
+  if (!response.ok) {
+    throw new Error(`[global-setup] /health returned ${response.status}`);
+  }
+  const health = (await response.json()) as { failures?: PluginLoadFailureInfo[] };
+  if (health.failures?.length) {
+    const rendered = health.failures
+      .map(
+        (f) =>
+          `- ${f.pluginKey} (${f.operation ?? "load"}): [${f.kind}${f.retryable ? ", retryable" : ", permanent"}] ${f.message}${f.suggestion ? ` — ${f.suggestion}` : ""}`,
+      )
+      .join("\n");
+    throw new Error(
+      `[global-setup] the regression stack booted with failed plugin(s) — suite would fail with downstream timeouts:\n${rendered}`,
+    );
+  }
+}
+
 export default async function globalSetup() {
   const regressionEnv = computeRegressionEnv();
   const authDatabaseUrl = regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "";
   const secret = regressionEnv.authSecret;
+
+  await failOnPluginLoadFailures(regressionEnv.baseUrl);
 
   const { test } = await createAuthTestInstance({ authDatabaseUrl, secret });
 

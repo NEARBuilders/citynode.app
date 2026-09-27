@@ -48,8 +48,9 @@ export interface DevSessionData {
   orchestrator: AppOrchestrator;
   services: Map<string, ServiceDescriptor>;
   runtimeConfig: RuntimeConfig;
-  envGenerated?: Record<string, string>;
-  shellEnv?: Record<string, string>;
+  /** The generated infra env tier — required so a start session can never silently run with an empty tier. */
+  envGenerated: Record<string, string>;
+  shellEnv: Record<string, string>;
 }
 
 export interface StartSummary {
@@ -263,23 +264,29 @@ export const devBootstrap = (
     }
     const bosConfig: BosConfig = deps.bosConfig;
 
-    yield* Effect.sync(() => suppressWarnings());
-    const developmentRuntime = yield* Effect.tryPromise({
-      try: () =>
-        buildRuntimeConfig(bosConfig, {
-          uiSource,
-          apiSource,
-          authSource,
-          hostSource,
-          env: "development",
-          plugins: deps.runtimeConfig?.plugins,
+    // Failure-safe warning suppression: the release runs even when the build
+    // fails, so warnings can never stay suppressed process-wide.
+    const developmentRuntime = yield* Effect.acquireUseRelease(
+      Effect.sync(() => suppressWarnings()),
+      () =>
+        Effect.tryPromise({
+          try: () =>
+            buildRuntimeConfig(bosConfig, {
+              uiSource,
+              apiSource,
+              authSource,
+              hostSource,
+              env: "development",
+              plugins: deps.runtimeConfig?.plugins,
+            }),
+          catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
         }),
-      catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
-    });
-    yield* Effect.sync(() => {
-      drainConfigWarnings();
-      resumeWarnings();
-    });
+      () =>
+        Effect.sync(() => {
+          drainConfigWarnings();
+          resumeWarnings();
+        }),
+    );
 
     const plan: InfraPlan = yield* timedEffect(
       timings,
@@ -433,23 +440,29 @@ export const startBootstrap = (
       try: () => buildRuntimePluginsForConfig(baseConfig, deps.configDir, "production"),
       catch: (cause) => new DevStepError({ phase: "resolve runtime plugins", cause }),
     });
-    yield* Effect.sync(() => suppressWarnings());
-    const runtimeConfig = yield* Effect.tryPromise({
-      try: () =>
-        buildRuntimeConfig(baseConfig, {
-          uiSource: "remote",
-          apiSource: "remote",
-          authSource: "remote",
-          hostSource: "remote",
-          env: "production",
-          plugins: runtimePlugins,
+    // Failure-safe warning suppression (same finalizer discipline as the
+    // development path above).
+    const runtimeConfig = yield* Effect.acquireUseRelease(
+      Effect.sync(() => suppressWarnings()),
+      () =>
+        Effect.tryPromise({
+          try: () =>
+            buildRuntimeConfig(baseConfig, {
+              uiSource: "remote",
+              apiSource: "remote",
+              authSource: "remote",
+              hostSource: "remote",
+              env: "production",
+              plugins: runtimePlugins,
+            }),
+          catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
         }),
-      catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
-    });
-    yield* Effect.sync(() => {
-      drainConfigWarnings();
-      resumeWarnings();
-    });
+      () =>
+        Effect.sync(() => {
+          drainConfigWarnings();
+          resumeWarnings();
+        }),
+    );
 
     if (isStaging && baseConfig.staging?.domain) {
       runtimeConfig.domain = baseConfig.staging.domain;
@@ -602,6 +615,7 @@ export const startBootstrap = (
         orchestrator,
         services,
         runtimeConfig: plan.runtimeConfig,
+        envGenerated: plan.envGenerated,
         shellEnv: shell,
       } satisfies DevSessionData,
       summary,

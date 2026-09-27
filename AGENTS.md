@@ -557,6 +557,12 @@ bun run --cwd host test    # NODE_ENV=production BOS_CONFIG_PATH=../bos.config.j
 ```
 Always use `bun run test` / `bun run --cwd host test` — never `bun test`, which invokes Bun's built-in runner and produces different (and misleading) results.
 
+### Test value rules
+
+- **Never write tautology tests.** Don't assert a mock returns what it was configured to return, don't spy on trivial wrappers/loaders to assert call arguments, and don't render mocked data to assert it appears.
+- **Prefer E2E for user-observable behavior.** Add browser regression specs under `tests/regression/browser/` (data-testid selectors per the conventions above; end specs with a verifiable, repeatable artifact — a Playwright trace).
+- **Unit tests are reserved for what E2E can't reach:** crypto/protocol verification, pure state machines and calculation logic, fault injection, DB/migration behavior, CLI contracts. Before writing one, write down the failure modes first, then test exactly those.
+
 ## Effect DevTools
 
 The repo standardizes on the Effect v4 dev toolchain ([docs](https://effect.website/docs/v4/getting-started/devtools)):

@@ -1,87 +1,63 @@
 /**
- * Auth context types and Better-Auth plugin client factory for the API.
+ * Server-side auth middleware factory — framework home for the factory that
+ * used to live as five near-identical copies (`api/src/lib/auth.ts` and each
+ * plugin's `src/lib/auth.ts`). See citynode.app#207.
  *
- * BE CAREFUL MODIFYING THIS FILE — changes will be overwritten by `bos sync` / `bos upgrade`.
- * Prefer upstream changes at https://github.com/nearbuilders/everything-dev
+ * Generic over the workspace's auth context (the generated `AuthPluginContext`
+ * satisfies `AuthContextShape`), so each workspace imports the same factory and
+ * passes its own context type for precise middleware narrowing:
+ *
+ *   const { requireAuth, requireAdmin, ... } = createAuthMiddleware<AuthContext>(builder);
  */
-
 import type { DecoratedMiddleware } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
 import type { z } from "zod";
-import type {
-  AuthOrganizationContext,
-  AuthOrganizationSummary,
-  AuthPluginContext,
-} from "./auth-types.gen";
 
-export type * from "./auth-types.gen";
-
-export type AuthContext = AuthPluginContext;
-export type RequestAuthUser = NonNullable<AuthContext["user"]>;
-export type ApiKeyContext = NonNullable<AuthContext["apiKey"]>;
-
-export interface AuthenticatedContext extends AuthContext {
-  userId: string;
-  user: RequestAuthUser;
+/** Structural minimum the middlewares read — the generated `AuthPluginContext` satisfies it. */
+export interface AuthContextShape {
+  user?: { role?: string | null } | null;
+  userId?: string | null;
+  apiKey?: { permissions?: Record<string, string[]> | null } | null;
+  organization?: {
+    activeOrganizationId?: string | null;
+    member?: { id?: string | null; role?: string | null } | null;
+    organization?: { metadata?: Record<string, unknown> | null } | null;
+  } | null;
 }
 
 type OrgMetaType<TSchema extends z.ZodType | undefined> = TSchema extends z.ZodType
   ? z.infer<TSchema>
   : Record<string, unknown>;
 
-export type OrgAuthenticatedContext<
-  TMeta extends Record<string, unknown> = Record<string, unknown>,
-> = AuthenticatedContext & {
-  organization: NonNullable<AuthOrganizationContext> & {
-    activeOrganizationId: string;
-    organization: (AuthOrganizationSummary & { metadata: TMeta | null }) | null;
-  };
-};
-
-export type OrgMemberAuthenticatedContext<
-  TMeta extends Record<string, unknown> = Record<string, unknown>,
-> = AuthenticatedContext & {
-  organization: NonNullable<AuthOrganizationContext> & {
-    activeOrganizationId: string;
-    member: NonNullable<AuthOrganizationContext["member"]>;
-    organization: (AuthOrganizationSummary & { metadata: TMeta | null }) | null;
-  };
-};
-
-function parseOrgMetadata<TSchema extends z.ZodType | undefined>(
-  raw: Record<string, unknown> | null | undefined,
-  schema: TSchema | undefined,
-): OrgMetaType<TSchema> | null {
-  if (!raw) return null;
-  if (!schema) return raw as OrgMetaType<TSchema>;
-  const result = schema.safeParse(raw);
-  if (result.success) return result.data as OrgMetaType<TSchema>;
-  throw new ORPCError("INTERNAL_SERVER_ERROR", {
-    message: "Invalid organization metadata",
-    data: { errors: result.error.issues },
-  });
-}
-
-export function createAuthMiddleware<TOrgMetaSchema extends z.ZodType | undefined = undefined>(
-  builder: any,
-  options?: { orgMetaSchema?: TOrgMetaSchema },
-) {
+export function createAuthMiddleware<
+  TContext extends AuthContextShape = AuthContextShape,
+  TOrgMetaSchema extends z.ZodType | undefined = undefined,
+>(builder: any, options?: { orgMetaSchema?: TOrgMetaSchema }) {
+  // TContext is used as-is (no intersection) so the narrowed middleware
+  // outputs stay exactly the workspace's own types when it passes its
+  // AuthPluginContext — the constraint only guarantees the guards can read
+  // the structural props.
+  type Ctx = TContext;
   type TOrgMeta = OrgMetaType<TOrgMetaSchema>;
   type UserMiddleware = DecoratedMiddleware<
-    AuthContext,
-    { userId: string; user: RequestAuthUser },
+    Ctx,
+    { userId: string; user: NonNullable<Ctx["user"]> },
     any,
     any,
     any
   >;
   type OrgMiddleware = DecoratedMiddleware<
-    AuthContext,
+    Ctx,
     {
       userId: string;
-      user: RequestAuthUser;
-      organization: NonNullable<AuthOrganizationContext> & {
+      user: NonNullable<Ctx["user"]>;
+      organization: NonNullable<Ctx["organization"]> & {
         activeOrganizationId: string;
-        organization: (AuthOrganizationSummary & { metadata: TOrgMeta | null }) | null;
+        organization:
+          | (NonNullable<NonNullable<Ctx["organization"]>["organization"]> & {
+              metadata: TOrgMeta | null;
+            })
+          | null;
       };
     },
     any,
@@ -89,14 +65,18 @@ export function createAuthMiddleware<TOrgMetaSchema extends z.ZodType | undefine
     any
   >;
   type MemberMiddleware = DecoratedMiddleware<
-    AuthContext,
+    Ctx,
     {
       userId: string;
-      user: RequestAuthUser;
-      organization: NonNullable<AuthOrganizationContext> & {
+      user: NonNullable<Ctx["user"]>;
+      organization: NonNullable<Ctx["organization"]> & {
         activeOrganizationId: string;
-        member: NonNullable<AuthOrganizationContext["member"]>;
-        organization: (AuthOrganizationSummary & { metadata: TOrgMeta | null }) | null;
+        member: NonNullable<NonNullable<Ctx["organization"]>["member"]>;
+        organization:
+          | (NonNullable<NonNullable<Ctx["organization"]>["organization"]> & {
+              metadata: TOrgMeta | null;
+            })
+          | null;
       };
     },
     any,
@@ -104,27 +84,25 @@ export function createAuthMiddleware<TOrgMetaSchema extends z.ZodType | undefine
     any
   >;
   type ApiKeyMiddleware = DecoratedMiddleware<
-    AuthContext,
-    { apiKey: ApiKeyContext },
+    Ctx,
+    { apiKey: NonNullable<Ctx["apiKey"]> },
     any,
     any,
     any
   >;
 
-  const requireAuth = builder.middleware(
-    async ({ context, next }: { context: AuthContext; next: any }) => {
-      if (!context.user || !context.userId) {
-        throw new ORPCError("UNAUTHORIZED", {
-          message: "Authentication required",
-          data: { hint: "Sign in to continue" },
-        });
-      }
-      return next({ context: { userId: context.userId, user: context.user } });
-    },
-  ) as UserMiddleware;
+  const requireAuth = builder.middleware(async ({ context, next }: { context: Ctx; next: any }) => {
+    if (!context.user || !context.userId) {
+      throw new ORPCError("UNAUTHORIZED", {
+        message: "Authentication required",
+        data: { hint: "Sign in to continue" },
+      });
+    }
+    return next({ context: { userId: context.userId, user: context.user } });
+  }) as UserMiddleware;
 
   const requireAuthOrApiKey = builder.middleware(
-    async ({ context, next }: { context: AuthContext; next: any }) => {
+    async ({ context, next }: { context: Ctx; next: any }) => {
       if (!context.user && !context.userId && !context.apiKey) {
         throw new ORPCError("UNAUTHORIZED", {
           message: "Authentication required",
@@ -133,10 +111,10 @@ export function createAuthMiddleware<TOrgMetaSchema extends z.ZodType | undefine
       }
       return next({ context });
     },
-  ) as DecoratedMiddleware<AuthContext, Record<string, never>, any, any, any>;
+  ) as DecoratedMiddleware<Ctx, Record<string, never>, any, any, any>;
 
   const requireRole = <TRoles extends readonly string[]>(...roles: TRoles) =>
-    builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
+    builder.middleware(async ({ context, next }: { context: Ctx; next: any }) => {
       if (!context.user || !context.userId) {
         throw new ORPCError("UNAUTHORIZED", {
           message: "Authentication required",
@@ -156,7 +134,7 @@ export function createAuthMiddleware<TOrgMetaSchema extends z.ZodType | undefine
   const requireAdmin = requireRole("admin");
 
   const requireOrganization = builder.middleware(
-    async ({ context, next }: { context: AuthContext; next: any }) => {
+    async ({ context, next }: { context: Ctx; next: any }) => {
       if (!context.user || !context.userId) {
         throw new ORPCError("UNAUTHORIZED", {
           message: "Authentication required",
@@ -190,7 +168,7 @@ export function createAuthMiddleware<TOrgMetaSchema extends z.ZodType | undefine
   ) as OrgMiddleware;
 
   const requireOrgRole = <TRoles extends readonly string[]>(...roles: TRoles) =>
-    builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
+    builder.middleware(async ({ context, next }: { context: Ctx; next: any }) => {
       if (!context.user || !context.userId) {
         throw new ORPCError("UNAUTHORIZED", {
           message: "Authentication required",
@@ -231,7 +209,7 @@ export function createAuthMiddleware<TOrgMetaSchema extends z.ZodType | undefine
     }) as MemberMiddleware;
 
   const requireApiKey = (requiredPermissions?: Record<string, string[]>) =>
-    builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
+    builder.middleware(async ({ context, next }: { context: Ctx; next: any }) => {
       if (!context.apiKey) {
         throw new ORPCError("UNAUTHORIZED", {
           message: "API key required",
@@ -263,4 +241,18 @@ export function createAuthMiddleware<TOrgMetaSchema extends z.ZodType | undefine
     requireOrgRole,
     requireApiKey,
   };
+}
+
+function parseOrgMetadata<TSchema extends z.ZodType | undefined>(
+  raw: Record<string, unknown> | null | undefined,
+  schema: TSchema | undefined,
+): OrgMetaType<TSchema> | null {
+  if (!raw) return null;
+  if (!schema) return raw as OrgMetaType<TSchema>;
+  const result = schema.safeParse(raw);
+  if (result.success) return result.data as OrgMetaType<TSchema>;
+  throw new ORPCError("INTERNAL_SERVER_ERROR", {
+    message: "Invalid organization metadata",
+    data: { errors: result.error.issues },
+  });
 }

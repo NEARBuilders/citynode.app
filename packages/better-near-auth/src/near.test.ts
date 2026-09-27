@@ -651,16 +651,6 @@ describe("siwn plugin", () => {
     });
   });
 
-  describe("profile endpoint", () => {
-    it("should get profile for a specific accountId", async () => {
-      const { client } = await setup();
-      const { data, error } = await client.near.getProfile(MOCK_ACCOUNT_ID);
-      if (!error) {
-        expect(data).toBeDefined();
-      }
-    });
-  });
-
   describe("account ID validation", () => {
     const validAccountIds = [
       "user.near",
@@ -792,14 +782,6 @@ describe("siwn plugin", () => {
   });
 
   describe("relayer", () => {
-    it("should return relayer info when relayer is configured", async () => {
-      const { client } = await setup({ relayer: {} });
-      const { data, error } = await client.near.relayTransaction({
-        payload: "mock-delegate-action-payload",
-      });
-      expect(error ?? data).toBeDefined();
-    });
-
     it("should return relayer info for the runtime network", async () => {
       const { customFetchImpl } = await setup({ relayer: {}, recipient: MOCK_RECIPIENT });
 

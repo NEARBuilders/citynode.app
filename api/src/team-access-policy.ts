@@ -1,7 +1,10 @@
 import type { DecoratedMiddleware } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
 import { type FeatureArea, isFeatureArea } from "./feature-areas";
-import type { AuthContext, AuthOrganizationContext } from "./lib/auth";
+import type {
+  AuthPluginContext as AuthContext,
+  AuthOrganizationContext,
+} from "./lib/auth-types.gen";
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
 

@@ -3,7 +3,7 @@ import { Context, Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
 import { z } from "zod";
 import { contract } from "./contract";
-import type { AuthContext } from "./lib/auth";
+import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import { ContextSchema } from "./lib/context";
 import { RegistryConfigService } from "./services/fastkv";
 import { RegistryService } from "./services/registry";

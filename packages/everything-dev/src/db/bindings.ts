@@ -114,7 +114,8 @@ function resolvePluginBinding(
 export interface DatabaseBindingsOptions {
   readonly projectDir: string;
   readonly loadRuntimeConfig: () => Promise<RuntimeConfig | null>;
-  readonly loadEnv?: () => void;
+  /** May return a promise — a rejection propagates into the binding error instead of silently proceeding with an unloaded .env. */
+  readonly loadEnv?: () => void | Promise<void>;
   readonly env?: Record<string, string | undefined>;
 }
 
@@ -125,7 +126,7 @@ export const makeDatabaseBindings = (
     forPluginKey: (pluginKey) =>
       Effect.tryPromise({
         try: async () => {
-          options.loadEnv?.();
+          await options.loadEnv?.();
           const runtimeConfig = await options.loadRuntimeConfig();
           return resolvePluginBinding(
             pluginKey,

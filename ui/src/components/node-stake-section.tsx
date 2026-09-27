@@ -21,7 +21,7 @@ export function NodeStakeSection({
 }: {
   node: Node;
   children: Node[];
-  gateway: string;
+  gateway: string | null;
   validators: Validator[];
   sourceNodeId: string;
   apiClient: Pick<ApiClient, "getNode" | "getSubtree">;

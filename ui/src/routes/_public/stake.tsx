@@ -4,7 +4,7 @@ import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { z } from "zod";
-import { getActiveRuntime, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
+import { getGatewayId, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { PageContainer, PageHeader, SectionHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import { parseNearAmount } from "@/lib/near-amount";
@@ -97,7 +97,7 @@ function StakePage() {
   const { runtimeConfig, session: contextSession } = Route.useRouteContext();
   const { data: session = contextSession } = useQuery(sessionQueryOptions(auth));
   const href = useRouterState({ select: (state) => state.location.href });
-  const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const gateway = getGatewayId(runtimeConfig);
   const { data: tenantApps = [], isLoading: directoryLoading } = useQuery({
     ...tenantAppsQueryOptions(apiClient),
     enabled: !hasNodeSelection,

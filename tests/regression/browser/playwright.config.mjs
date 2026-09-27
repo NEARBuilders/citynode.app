@@ -36,6 +36,7 @@ export default defineConfig({
     browserName: "chromium",
     headless: true,
     baseURL: regressionEnv.baseUrl,
+    trace: "retain-on-failure",
   },
   webServer: {
     command,

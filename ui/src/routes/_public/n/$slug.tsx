@@ -9,7 +9,7 @@ import {
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
-import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
+import { type ApiClient, buildTenantUrl, getGatewayId, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { EventList } from "@/components/discovery/event-list";
 import { PageContainer } from "@/components/layout/page-container";
@@ -74,7 +74,7 @@ export const Route = createFileRoute("/_public/n/$slug")({
 function NodePage() {
   const { slug, parentId, runtimeConfig } = Route.useLoaderData();
   const apiClient = useApiClient();
-  const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const gateway = getGatewayId(runtimeConfig);
 
   const { data: node, isLoading: nodeLoading } = useQuery(
     nodeBySlugQueryOptions(apiClient, slug, parentId),
@@ -125,8 +125,11 @@ function NodePage() {
   const validators = staking?.validators ?? [];
   const validatorNodeIds = new Set(validators.map((v) => v.nodeId));
   const events = profile?.events ?? [];
-  const hostname = `${node.slug}.${gateway}`;
-  const siteUrl = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
+  const hostname = gateway ? `${node.slug}.${gateway}` : null;
+  const siteUrl =
+    hostname && gateway
+      ? (buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`)
+      : null;
   const kindLabel = nodeKindLabel(node.kind);
 
   return (
@@ -177,22 +180,24 @@ function NodePage() {
                 <ArrowRightIcon />
               </Button>
             )}
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={(props) => (
-                <a
-                  {...props}
-                  href={siteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="node-page.visit-site"
-                />
-              )}
-            >
-              Visit site
-              <ArrowUpRightIcon />
-            </Button>
+            {siteUrl && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={(props) => (
+                  <a
+                    {...props}
+                    href={siteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="node-page.visit-site"
+                  />
+                )}
+              >
+                Visit site
+                <ArrowUpRightIcon />
+              </Button>
+            )}
           </div>
         </div>
         {profile && profile.channels.length > 0 && (

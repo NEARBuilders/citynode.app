@@ -377,7 +377,17 @@ export function buildAuthBaseVariables(
       base.trustedOrigins = corsOrigins;
     }
 
-    const effectiveOrigin = new URL(baseUrl || hostUrl || "http://localhost:3000").origin;
+    // Origin truth: an empty baseUrl in production is a misconfiguration —
+    // fail loud rather than masquerading as localhost. In development the
+    // empty case is deliberate: the auth plugin's parseTrustedOrigins owns
+    // the localhost:3000 fallback (pinned by auth-base-variables.test.ts).
+    const originSource = baseUrl || hostUrl;
+    if (!originSource && config.env !== "development") {
+      throw new Error(
+        "[Auth] No reachable origin — BASE_URL, the authored baseUrl, and the host url are all unset. Set BASE_URL or the config domain; Better Auth cannot derive its own origin in production.",
+      );
+    }
+    const effectiveOrigin = originSource ? new URL(originSource).origin : "http://localhost:3000";
     yield* Effect.logInfo(
       `[Auth] Better Auth origin: ${effectiveOrigin}${baseUrl === envBaseUrl && envBaseUrl ? " (BASE_URL)" : ""}${corsOrigins.length > 0 ? ` · trustedOrigins: ${corsOrigins.join(", ")}` : " · trustedOrigins: (none — only baseURL trusted)"}`,
     );
@@ -559,8 +569,10 @@ export const initializePlugins = Effect.gen(function* () {
           );
         }
       }).pipe(
-        Effect.catch(() =>
-          Effect.sync(() => logger.warn("[Attestation] On-chain config check failed")),
+        Effect.catch((error) =>
+          Effect.sync(() =>
+            logger.warn("[Attestation] On-chain config check failed", { cause: error }),
+          ),
         ),
       ),
     );

@@ -379,8 +379,8 @@ const runApp = (
   orchestrator: AppOrchestrator,
   services: Map<string, ServiceDescriptor>,
   runtimeConfig: RuntimeConfig,
-  envGenerated: Record<string, string> = {},
-  shellEnv: Record<string, string> = {},
+  envGenerated: Record<string, string>,
+  shellEnv: Record<string, string>,
 ) => {
   let controls: DevSessionControls | null = null;
   let signalCount = 0;

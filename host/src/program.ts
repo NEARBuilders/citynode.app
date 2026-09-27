@@ -26,6 +26,8 @@ interface CompositionHealth {
   status: "disabled" | "composing" | "ready" | "failed";
   digest?: string;
   error?: string;
+  /** Outcome of the post-listen self-probe — pending until it completes. */
+  selfProbe?: { status: "pending" | "passed" | "failed"; error?: string };
 }
 
 export const createStartServer = (onReady?: () => void) =>
@@ -84,14 +86,17 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.get("/health", (c: Context<HonoEnv>) => {
       const apiReady = apiProxyMode || Boolean(plugins.api?.router && plugins.status.available);
-      const composeOk =
-        !ssrEnabled ||
-        compositionHealth.status === "ready" ||
-        compositionHealth.status === "composing";
+      // composeUi is awaited before /health registers, so "composing" never
+      // reaches a response — and if it somehow could, the honest answer is
+      // degraded, not ready.
+      const composeOk = !ssrEnabled || compositionHealth.status === "ready";
+      const probeFailed = compositionHealth.selfProbe?.status === "failed";
       return c.json(
         {
           status:
-            apiReady && composeOk && compositionHealth.status !== "failed" ? "ready" : "degraded",
+            apiReady && composeOk && !probeFailed && compositionHealth.status !== "failed"
+              ? "ready"
+              : "degraded",
           api: apiProxyMode || plugins.api ? "ready" : "unavailable",
           auth: plugins.auth ? "ready" : "unavailable",
           ssr: compositionHealth,
@@ -178,6 +183,7 @@ export const createStartServer = (onReady?: () => void) =>
         );
         onReady?.();
         void (async () => {
+          compositionHealth.selfProbe = { status: "pending" };
           try {
             const origin = `http://${hostname === "0.0.0.0" ? "127.0.0.1" : hostname}:${port}`;
             const [health, root] = await Promise.all([
@@ -193,8 +199,11 @@ export const createStartServer = (onReady?: () => void) =>
                 "self-probe / rendered without the client bootstrap (window.__RUNTIME_CONFIG__)",
               );
             }
+            compositionHealth.selfProbe = { status: "passed" };
             logger.info("[Server] Live self-probe passed");
           } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            compositionHealth.selfProbe = { status: "failed", error: message };
             logger.error(
               "[Server] Live self-probe FAILED — the server accepted the connection but a root render failed:",
               error,

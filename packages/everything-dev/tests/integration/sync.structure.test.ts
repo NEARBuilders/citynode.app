@@ -12,9 +12,7 @@ describe("bos sync — framework-owned files", () => {
   });
 
   it("marks per-plugin lib files as framework-owned", () => {
-    expect(isFrameworkOwnedSyncFile("plugins/apps/src/lib/auth.ts")).toBe(true);
     expect(isFrameworkOwnedSyncFile("plugins/apps/src/lib/context.ts")).toBe(true);
-    expect(isFrameworkOwnedSyncFile("plugins/_template/src/lib/auth.ts")).toBe(true);
     expect(isFrameworkOwnedSyncFile("plugins/_template/src/lib/context.ts")).toBe(true);
   });
 
@@ -25,7 +23,9 @@ describe("bos sync — framework-owned files", () => {
     expect(isFrameworkOwnedSyncFile("ui/src/routes/_layout/_public/index.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("ui/src/components/user-nav.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("api/src/index.ts")).toBe(false);
+    expect(isFrameworkOwnedSyncFile("api/src/lib/auth.ts")).toBe(false);
     expect(isFrameworkOwnedSyncFile("plugins/apps/src/index.ts")).toBe(false);
+    expect(isFrameworkOwnedSyncFile("plugins/apps/src/lib/auth.ts")).toBe(false);
     expect(isFrameworkOwnedSyncFile("plugins/apps/src/lib/auth-types.gen.ts")).toBe(false);
     expect(isFrameworkOwnedSyncFile("plugins/apps/src/service.ts")).toBe(false);
     expect(isFrameworkOwnedSyncFile("plugins/apps/src/lib/other.ts")).toBe(false);

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { buildTenantUrl, getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
+import { buildTenantUrl, getAccount, getGatewayId, useApiClient, useAuthClient } from "@/app";
 import {
   describeDaoError,
   isExplicitDaoMember,
@@ -88,7 +88,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
   const connection = useDaoConnection();
   const queryClient = useQueryClient();
 
-  const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const gatewayId = getGatewayId(runtimeConfig);
   const baseAccount = getAccount(runtimeConfig);
   const activeOrgId = routeAuth.activeOrganizationId;
   const isAdmin = routeAuth.isAdmin;
@@ -275,13 +275,14 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
     poc(
       ["binding", slug],
       () => apiClient.resolveBindingByHostname({ hostname: `${slug}.${gatewayId}` }),
-      !!slug,
+      !!slug && !!gatewayId,
     ),
   );
   const { data: registryApp } = useQuery(
     poc(
       ["registry-app", team, gatewayId],
       async () => {
+        if (!team || !gatewayId) return null;
         try {
           const result = await apiClient.apps.getRegistryApp({
             accountId: team,
@@ -461,15 +462,16 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
   const runnable = runnableRun(stations);
   const upcoming = nextStation(stations);
   const stagedCount = pendingProposalCount(stations);
-  const tenantHostname = tenantBinding?.hostname ?? (slug ? `${slug}.${gatewayId}` : "");
-  const tenantUrl = tenantHostname ? buildTenantUrl(tenantHostname, gatewayId) : null;
+  const tenantHostname =
+    tenantBinding?.hostname ?? (slug && gatewayId ? `${slug}.${gatewayId}` : "");
+  const tenantUrl = tenantHostname && gatewayId ? buildTenantUrl(tenantHostname, gatewayId) : null;
   const tenantDisplayHost = tenantUrl ? new URL(tenantUrl).host : tenantHostname || "—";
   const tenantRecord = orgTenant ?? tenantByDao ?? null;
   const publishPendingProposal =
     stations
       .find((station) => station.def.id === "publish")
       ?.steps.find((step) => step.id === "publish")?.pendingProposal ?? null;
-  const fastKvUrl = team ? buildRegistryConfigUrl(team, gatewayId) : null;
+  const fastKvUrl = team && gatewayId ? buildRegistryConfigUrl(team, gatewayId) : null;
 
   /* ------------------------------------------------------------------ actions */
 
@@ -494,10 +496,12 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
 
   /** Fresh read of the published tenant config — the truth for publish/mark-applied. */
   const fetchPublishedNow = () =>
-    apiClient.apps
-      .getRegistryApp({ accountId: team, gatewayId })
-      .then((result) => result.data ?? null)
-      .catch(() => null);
+    team && gatewayId
+      ? apiClient.apps
+          .getRegistryApp({ accountId: team, gatewayId })
+          .then((result) => result.data ?? null)
+          .catch(() => null)
+      : Promise.resolve(null);
 
   /** Fresh read of the team's account in the pool — the truth for the team stake stations. */
   const fetchTeamPoolAccount = () =>
@@ -553,32 +557,38 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
     fetchTeamPoolAccount,
   });
 
-  const runStep = createStepRunner({
-    apiClient,
-    auth,
-    activeOrgId,
-    sessionAccount,
-    isAdmin,
-    values,
-    slug,
-    team,
-    endowment,
-    pool,
-    gatewayId,
-    baseAccount,
-    tenantBinding,
-    orgTenant,
-    treasuryFunded,
-    fundYocto,
-    tenantUrl,
-    govProposal,
-    voteStorageFee,
-    accountFor,
-    log,
-    fetchPublishedNow,
-    precheckPlan,
-    viaSessionProposal,
-  });
+  const runStep = gatewayId
+    ? createStepRunner({
+        apiClient,
+        auth,
+        activeOrgId,
+        sessionAccount,
+        isAdmin,
+        values,
+        slug,
+        team,
+        endowment,
+        pool,
+        gatewayId,
+        baseAccount,
+        tenantBinding,
+        orgTenant,
+        treasuryFunded,
+        fundYocto,
+        tenantUrl,
+        govProposal,
+        voteStorageFee,
+        accountFor,
+        log,
+        fetchPublishedNow,
+        precheckPlan,
+        viaSessionProposal,
+      })
+    : async () => {
+        throw new Error(
+          "Runtime configuration is missing the gateway id — this deployment is misconfigured",
+        );
+      };
 
   const runChainMutation = useMutation({
     mutationFn: async () => {

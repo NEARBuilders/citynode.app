@@ -287,6 +287,7 @@ export function TenantDetailsFields({
 export function TenantReview({
   summary,
   baseAccount,
+  gatewayId,
   submitPending,
   canSubmit,
   blockedReason,
@@ -301,6 +302,7 @@ export function TenantReview({
     daoAccountId: string | null;
   };
   baseAccount: string;
+  gatewayId: string | null;
   submitPending: boolean;
   canSubmit: boolean;
   blockedReason: string | null;
@@ -316,7 +318,11 @@ export function TenantReview({
         <InfoRow label="Site" value={summary.tenantName} />
         <InfoRow label="Address" value={summary.hostname} mono />
         <InfoRow label="Owning DAO" value={summary.daoAccountId ?? "—"} mono />
-        <InfoRow label="Extends" value={`bos://${baseAccount}/citynode.app`} mono />
+        <InfoRow
+          label="Extends"
+          value={gatewayId ? `bos://${baseAccount}/${gatewayId}` : "—"}
+          mono
+        />
       </div>
       <p className="text-sm text-muted-foreground">
         Creates the tenant, its node and domain; you'll publish its settings through the DAO next.
