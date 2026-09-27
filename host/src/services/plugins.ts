@@ -387,7 +387,7 @@ export function buildAuthBaseVariables(
         "[Auth] No reachable origin — BASE_URL, the authored baseUrl, and the host url are all unset. Set BASE_URL or the config domain; Better Auth cannot derive its own origin in production.",
       );
     }
-    const effectiveOrigin = new URL(originSource ?? "http://localhost:3000").origin;
+    const effectiveOrigin = originSource ? new URL(originSource).origin : "http://localhost:3000";
     yield* Effect.logInfo(
       `[Auth] Better Auth origin: ${effectiveOrigin}${baseUrl === envBaseUrl && envBaseUrl ? " (BASE_URL)" : ""}${corsOrigins.length > 0 ? ` · trustedOrigins: ${corsOrigins.join(", ")}` : " · trustedOrigins: (none — only baseURL trusted)"}`,
     );

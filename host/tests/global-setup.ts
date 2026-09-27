@@ -33,14 +33,18 @@ function ensureUiBuild(repoRoot: string) {
 
   if (hasClient && hasSsr && !stale) return;
 
-  // Through the build train (quiet, staleness-checked prerequisites +
-  // the ui target). BOS_SSR=1 forces the ui's SSR node environment even
-  // under the train's development-mode NODE_ENV — host tests exercise the
-  // SSR container path, so both dists must exist.
-  const result = spawnSync("bun", ["run", "build", "ui"], {
-    cwd: repoRoot,
+  // Build the ui directly, NOT through the build train: `bos build` forces
+  // NODE_ENV=development (only --deploy flips it), which bakes the dev-server
+  // assetPrefix (http://localhost:3003/) into the SSR container — host tests
+  // then fetch shared deps from a dev port nothing listens on. The host test
+  // script runs NODE_ENV=production (production-mode host code paths), and the
+  // inherited env gives the SSR dist the asset-less public path it needs.
+  // Framework sources resolve from src in tests (vite-tsconfig-paths), so no
+  // train prerequisites are required here.
+  const result = spawnSync("bun", ["run", "build"], {
+    cwd: uiDir,
     stdio: "inherit",
-    env: { ...process.env, BOS_SSR: "1" },
+    env: { ...process.env },
   });
   if (result.status !== 0) {
     throw new Error(`UI build failed (exit ${result.status ?? "unknown"})`);
