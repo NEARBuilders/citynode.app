@@ -8,7 +8,6 @@ import {
   extractExpectedTables,
   getMigrationStorage,
   isConcurrentDdlUniqueViolation,
-  isRetryableMigrationError,
   isRetryableMigrationExecutionError,
   type MigrationStorage,
   toSqlArray,
@@ -70,6 +69,8 @@ function normalizeRows<T>(result: unknown): T[] {
   return [];
 }
 
+type QueryExecutor = { execute(query: unknown): Promise<unknown> };
+
 function isDuplicateObjectError(error: unknown, codes: readonly string[]): boolean {
   return visitCauses(error, 6, (link) => {
     const code = (link as { code?: unknown }).code;
@@ -92,49 +93,28 @@ function isTolerableDuplicateDdl(error: unknown, codes: readonly string[]): bool
  * Check which of the given expected tables already exist in the target schema.
  * The schema name is bound as a query parameter.
  */
-function getExistingTables(
-  db: MigrationDatabase,
+async function existingTablesIn(
+  executor: QueryExecutor,
   tables: string[],
   schemaName?: string,
-): Effect.Effect<Set<string>, DatabaseError> {
-  if (tables.length === 0) return Effect.succeed(new Set<string>());
+): Promise<Set<string>> {
+  if (tables.length === 0) return new Set<string>();
   const schema = schemaName ?? "public";
-  return Effect.tryPromise({
-    try: () =>
-      db.execute(sql`
-        SELECT table_name FROM information_schema.tables
-        WHERE table_schema = ${schema}
-          AND table_name = ANY(${sql.raw(toSqlArray(tables))})
-      `),
-    catch: (cause) =>
-      new DatabaseError({ stage: "migration", migrationTag: "preflight-table-check", cause }),
-  }).pipe(
-    Effect.map((result: unknown) => {
-      const existing = new Set(
-        normalizeRows<{ table_name: string }>(result).map((r) => r.table_name),
-      );
-      return existing;
-    }),
-    Effect.catch(() => Effect.succeed(new Set<string>())),
-  );
+  const result = await executor.execute(sql`
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema = ${schema}
+      AND table_name = ANY(${sql.raw(toSqlArray(tables))})
+  `);
+  return new Set(normalizeRows<{ table_name: string }>(result).map((r) => r.table_name));
 }
 
-/** Read applied hashes from the migration journal, returning an empty set on failure. */
-function readAppliedHashes(
-  db: MigrationDatabase,
+/** Read applied hashes from the migration journal. */
+async function readAppliedHashesIn(
+  executor: QueryExecutor,
   ref: ReturnType<typeof sql.raw>,
-): Effect.Effect<Set<string>, DatabaseError> {
-  return Effect.tryPromise({
-    try: () => db.execute(sql`SELECT hash FROM ${ref}`),
-    catch: (cause) =>
-      new DatabaseError({ stage: "migration", migrationTag: "read-applied", cause }),
-  }).pipe(
-    Effect.map((result: unknown) => {
-      const hashes = normalizeRows<{ hash: string }>(result).map((r) => r.hash);
-      return new Set(hashes);
-    }),
-    Effect.catch(() => Effect.succeed(new Set<string>())),
-  );
+): Promise<Set<string>> {
+  const result = await executor.execute(sql`SELECT hash FROM ${ref}`);
+  return new Set(normalizeRows<{ hash: string }>(result).map((r) => r.hash));
 }
 
 export interface LoadMigrationsOptions {
@@ -222,17 +202,158 @@ function journalRef(s: MigrationStorage): ReturnType<typeof sql> {
 }
 
 /**
+ * Apply one statement under a savepoint, tolerating duplicate DDL: either an
+ * explicit duplicate-object class or the concurrent-DDL catalog collision a
+ * non-participant migrator (drizzle-kit) can still produce.
+ */
+async function applyWithSavepoint(
+  tx: QueryExecutor,
+  query: ReturnType<typeof sql>,
+  migrationTag: string,
+  savepoint: string,
+  duplicateSqlStates: readonly string[],
+): Promise<void> {
+  await tx.execute(sql.raw(`SAVEPOINT ${savepoint}`));
+  try {
+    await tx.execute(query);
+  } catch (cause) {
+    if (isTolerableDuplicateDdl(cause, duplicateSqlStates)) {
+      await tx.execute(sql.raw(`ROLLBACK TO SAVEPOINT ${savepoint}`));
+      return;
+    }
+    throw new DatabaseError({ stage: "migration", migrationTag, cause });
+  }
+  await tx.execute(sql.raw(`RELEASE SAVEPOINT ${savepoint}`));
+}
+
+interface LockedRunArgs {
+  sorted: Migration[];
+  journal: MigrationStorage;
+  ref: ReturnType<typeof sql.raw>;
+  schemaName: string | undefined;
+  duplicateSqlStates: readonly string[];
+}
+
+/**
+ * The whole migration run inside ONE transaction that opens with a
+ * journal-scoped `pg_advisory_xact_lock`. Drizzle's `db.transaction` pins a
+ * single pooled client for the callback, so the lock, the journal read, the
+ * DDL, and the journal inserts all share one session; the lock releases at
+ * COMMIT/ROLLBACK or on connection death — a crashed migrator can never
+ * orphan it. A concurrent migrator blocks (bounded by the driver's
+ * `lock_timeout`), then reads the winner's committed journal rows and applies
+ * nothing.
+ */
+async function runLockedTransaction(
+  db: MigrationDatabase,
+  args: LockedRunArgs,
+): Promise<{ appliedTags: string[]; logs: string[] }> {
+  const { sorted, journal, ref, schemaName, duplicateSqlStates } = args;
+  const appliedTags: string[] = [];
+  const logs: string[] = [];
+
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${journal.schema}.${journal.table}`}, 0))`,
+    );
+
+    await applyWithSavepoint(
+      tx,
+      sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(`"${journal.schema}"`)}`,
+      "init-schema",
+      "sp_init_schema",
+      duplicateSqlStates,
+    );
+    await applyWithSavepoint(
+      tx,
+      sql`
+        CREATE TABLE IF NOT EXISTS ${ref} (
+          id SERIAL PRIMARY KEY,
+          hash text NOT NULL,
+          created_at bigint
+        )
+      `,
+      "init-table",
+      "sp_init_table",
+      duplicateSqlStates,
+    );
+    if (schemaName) {
+      await applyWithSavepoint(
+        tx,
+        sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(`"${schemaName}"`)}`,
+        "init-data-schema",
+        "sp_init_data_schema",
+        duplicateSqlStates,
+      );
+    }
+
+    const appliedHashes = await readAppliedHashesIn(tx, ref);
+
+    for (const migration of sorted) {
+      const isApplied =
+        appliedHashes.has(migration.hash) || appliedHashes.has(migration.hash.slice(0, 12));
+      if (isApplied) continue;
+
+      // Preflight: if this migration's expected tables already exist, record it
+      // as applied rather than crashing on a duplicate DDL error.
+      const expectedTables = extractExpectedTables([migration]);
+      if (expectedTables.length > 0) {
+        const existing = await existingTablesIn(tx, expectedTables, schemaName);
+        const missingTables = expectedTables.filter((t) => !existing.has(t));
+        if (missingTables.length === 0) {
+          logs.push(
+            `[Database] All tables for migration ${migration.tag} already exist — ` +
+              `recording as applied without replaying DDL`,
+          );
+          await tx.execute(
+            sql`INSERT INTO ${ref} (hash, created_at) VALUES (${migration.hash}, ${migration.when})`,
+          );
+          appliedHashes.add(migration.hash);
+          appliedTags.push(migration.tag);
+          continue;
+        }
+        if (missingTables.length < expectedTables.length) {
+          logs.push(
+            `[Database] Partial table overlap for migration ${migration.tag}: ` +
+              `${expectedTables.length - missingTables.length} table(s) exist but not all. ` +
+              `Applying migration — existing tables: ${expectedTables.filter((t) => existing.has(t)).join(", ")}`,
+          );
+        }
+      }
+
+      logs.push(`[Database] Applying migration: ${migration.tag}`);
+
+      for (const [i, statement] of migration.sql.entries()) {
+        const stmt = schemaName ? statement.replace(/"public"\./g, "") : statement;
+        await applyWithSavepoint(tx, sql.raw(stmt), migration.tag, `stmt_${i}`, duplicateSqlStates);
+      }
+      await tx.execute(
+        sql`INSERT INTO ${ref} (hash, created_at) VALUES (${migration.hash}, ${migration.when})`,
+      );
+      appliedTags.push(migration.tag);
+    }
+  });
+
+  return { appliedTags, logs };
+}
+
+/**
  * Apply pending migrations to the target database.
  *
  * Namespace model: `opts.schemaName` (`plugin_<slug>`) scopes data tables; the
  * journal lives in `opts.journal` (default the shared `drizzle.__drizzle_migrations`).
  * Undefined `schemaName` means public-schema (api) or dedicated-DB (auth) topology.
  *
- * Reliability floor: per-migration transaction with the journal insert,
- * SAVEPOINT-based duplicate-DDL tolerance (including the concurrent-DDL catalog
- * collisions two booting processes can produce), retryable-SQLSTATE backoff on
- * journal init and on each migration transaction, hash-tracked idempotence with
- * a preflight that records fully-overlapped migrations as applied.
+ * Concurrency: the run serializes on a journal-scoped Postgres advisory
+ * transaction lock, so the dev double-boot (plugin dev-server + the host's
+ * in-process load), parallel test files, and overlapping production replicas
+ * converge instead of colliding in pg_catalog. SAVEPOINT-based duplicate-DDL
+ * tolerance stays as defense-in-depth for non-participants (drizzle-kit).
+ *
+ * Reliability floor: hash-tracked idempotence with a preflight that records
+ * fully-overlapped migrations as applied, everything in one locked
+ * transaction, retried on deadlock/serialization/lock-timeout/connection
+ * states — a failed attempt rolls back cleanly and re-runs.
  */
 export function runMigrations(
   db: MigrationDatabase,
@@ -245,150 +366,37 @@ export function runMigrations(
     const schemaName = opts.schemaName;
     const duplicateSqlStates = opts.duplicateSqlStates ?? DEFAULT_DUPLICATE_SQLSTATES;
 
-    yield* ensureMigrationTable(db, journal);
-
-    if (schemaName) {
-      yield* Effect.tryPromise({
-        try: () => db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(`"${schemaName}"`)}`),
+    const { appliedTags, logs } = yield* Effect.retry(
+      Effect.tryPromise({
+        try: () =>
+          runLockedTransaction(db, {
+            sorted,
+            journal,
+            ref: journalRef(journal),
+            schemaName,
+            duplicateSqlStates,
+          }),
         catch: (cause) =>
-          new DatabaseError({ stage: "migration", migrationTag: "init-data-schema", cause }),
-      });
-    }
+          cause instanceof DatabaseError
+            ? cause
+            : new DatabaseError({ stage: "migration", migrationTag: "run", cause }),
+      }),
+      {
+        schedule: Schedule.spaced("500 millis"),
+        times: 3,
+        while: isRetryableMigrationExecutionError,
+      },
+    );
 
-    const ref = journalRef(journal);
-    const appliedHashes = yield* readAppliedHashes(db, ref);
-
-    let applied = 0;
-    for (const migration of sorted) {
-      const isApplied =
-        appliedHashes.has(migration.hash) || appliedHashes.has(migration.hash.slice(0, 12));
-      if (isApplied) continue;
-
-      // Preflight: if this migration's expected tables already exist, record it
-      // as applied rather than crashing on a duplicate DDL error.
-      const expectedTables = extractExpectedTables([migration]);
-      if (expectedTables.length > 0) {
-        const existing = yield* getExistingTables(db, expectedTables, schemaName);
-        const missingTables = expectedTables.filter((t) => !existing.has(t));
-        if (missingTables.length === 0) {
-          yield* Effect.logWarning(
-            `[Database] All tables for migration ${migration.tag} already exist — ` +
-              `recording as applied without replaying DDL`,
-          );
-          yield* Effect.tryPromise({
-            try: () =>
-              db.execute(
-                sql`INSERT INTO ${ref} (hash, created_at) VALUES (${migration.hash}, ${migration.when})`,
-              ),
-            catch: (cause) =>
-              new DatabaseError({
-                stage: "migration",
-                migrationTag: migration.tag,
-                cause,
-              }),
-          });
-          appliedHashes.add(migration.hash);
-          applied++;
-          continue;
-        }
-        if (missingTables.length < expectedTables.length) {
-          yield* Effect.logWarning(
-            `[Database] Partial table overlap for migration ${migration.tag}: ` +
-              `${expectedTables.length - missingTables.length} table(s) exist but not all. ` +
-              `Applying migration — existing tables: ${expectedTables.filter((t) => existing.has(t)).join(", ")}`,
-          );
-        }
-      }
-
-      yield* Effect.logInfo(`[Database] Applying migration: ${migration.tag}`);
-
-      yield* Effect.retry(
-        Effect.tryPromise({
-          try: () =>
-            db.transaction(async (tx) => {
-              for (const [i, statement] of migration.sql.entries()) {
-                const stmt = schemaName ? statement.replace(/"public"\./g, "") : statement;
-                const sp = `stmt_${i}`;
-                await tx.execute(sql.raw(`SAVEPOINT ${sp}`));
-                try {
-                  await tx.execute(sql.raw(stmt));
-                } catch (cause) {
-                  if (isTolerableDuplicateDdl(cause, duplicateSqlStates)) {
-                    await tx.execute(sql.raw(`ROLLBACK TO SAVEPOINT ${sp}`));
-                    continue;
-                  }
-                  throw new DatabaseError({
-                    stage: "migration",
-                    migrationTag: migration.tag,
-                    statementIndex: i,
-                    cause,
-                  });
-                }
-                await tx.execute(sql.raw(`RELEASE SAVEPOINT ${sp}`));
-              }
-              await tx.execute(
-                sql`INSERT INTO ${ref} (hash, created_at) VALUES (${migration.hash}, ${migration.when})`,
-              );
-            }),
-          catch: (cause) =>
-            cause instanceof DatabaseError
-              ? cause
-              : new DatabaseError({ stage: "migration", migrationTag: migration.tag, cause }),
-        }),
-        {
-          // Two booting processes can deadlock or lose a serialization race on
-          // the same fresh database — the transaction rolls back cleanly, so
-          // re-running it (by then the concurrent journal insert is visible)
-          // converges instead of failing the plugin load.
-          schedule: Schedule.spaced("500 millis"),
-          times: 3,
-          while: isRetryableMigrationExecutionError,
-        },
-      );
-      applied++;
-    }
+    for (const line of logs) yield* Effect.logInfo(line);
 
     return {
-      applied,
+      applied: appliedTags.length,
       total: sorted.length,
       storage: journal,
       schema: schemaName,
     };
   });
-}
-
-function ensureMigrationTable(
-  db: MigrationDatabase,
-  storage: MigrationStorage,
-): Effect.Effect<void, DatabaseError> {
-  const ref = journalRef(storage);
-  return Effect.retry(
-    Effect.gen(function* () {
-      yield* Effect.tryPromise({
-        try: () => db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(`"${storage.schema}"`)}`),
-        catch: (cause) =>
-          new DatabaseError({ stage: "migration", migrationTag: "init-schema", cause }),
-      });
-
-      yield* Effect.tryPromise({
-        try: () =>
-          db.execute(sql`
-            CREATE TABLE IF NOT EXISTS ${ref} (
-              id SERIAL PRIMARY KEY,
-              hash text NOT NULL,
-              created_at bigint
-            )
-          `),
-        catch: (cause) =>
-          new DatabaseError({ stage: "migration", migrationTag: "init-table", cause }),
-      });
-    }),
-    {
-      schedule: Schedule.spaced("500 millis"),
-      times: 3,
-      while: isRetryableMigrationError,
-    },
-  );
 }
 
 /**
@@ -409,7 +417,13 @@ export function detectDrift(
     const expectedTables = extractExpectedTables(migrations);
     const ref = journalRef(storage);
 
-    const appliedHashes = yield* readAppliedHashes(db, ref);
+    // Lenient by design: drift detection reports on whatever it can read —
+    // a failed journal read just means "nothing tracked yet".
+    const appliedHashes = yield* Effect.tryPromise({
+      try: () => readAppliedHashesIn(db, ref),
+      catch: (cause) =>
+        new DatabaseError({ stage: "migration", migrationTag: "read-applied", cause }),
+    }).pipe(Effect.catch(() => Effect.succeed(new Set<string>())));
     const appliedCount = appliedHashes.size;
 
     if (expectedTables.length === 0) {
@@ -423,7 +437,11 @@ export function detectDrift(
       };
     }
 
-    const existing = yield* getExistingTables(db, expectedTables, schemaName);
+    const existing = yield* Effect.tryPromise({
+      try: () => existingTablesIn(db, expectedTables, schemaName),
+      catch: (cause) =>
+        new DatabaseError({ stage: "migration", migrationTag: "preflight-table-check", cause }),
+    }).pipe(Effect.catch(() => Effect.succeed(new Set<string>())));
     const missingTables = expectedTables.filter((t) => !existing.has(t));
 
     if (appliedCount === 0 && missingTables.length === 0) {

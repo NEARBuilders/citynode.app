@@ -104,44 +104,86 @@ describe("db migration runners (008 characterization)", () => {
     expect(journal.rows.map((r) => r.hash)).toContain("hash-already");
   });
 
-  it("retry semantics: a retryable SQLSTATE (23505) on journal init is retried — 3 gen-runs, migration still applies", async () => {
-    const db = makeDb() as unknown as {
-      execute: (q: unknown) => Promise<unknown>;
-      transaction: (fn: (tx: never) => Promise<void>) => Promise<void>;
-    };
-    let calls = 0;
-    let failBudget = 2;
-    // Each ensureMigrationTable gen-run issues CREATE SCHEMA then CREATE TABLE.
-    // Fail the CREATE TABLE statement (every 2nd call) while budget remains:
-    // run 1 fails at call 2, run 2 fails at call 4, run 3 succeeds at call 6.
-    // The old `until:` code would stop after run 1 (2 calls) and give up.
-    const flaky = {
-      execute: async (query: unknown) => {
-        calls++;
-        if (calls > 6) return db.execute(query);
-        if (calls % 2 === 0 && failBudget > 0) {
-          failBudget--;
-          const err = new Error(
-            'duplicate key value violates unique constraint "pg_type_typname_nsp_index"',
-          );
-          (err as { code?: string }).code = "23505";
-          throw err;
-        }
-        return db.execute(query);
-      },
-      transaction: (fn: (tx: never) => Promise<void>) => db.transaction(fn),
-    };
+  it("lock timeout (55P03) while blocked on the advisory lock is retried and then applies", async () => {
+    const db = makeDb();
+    let timeouts = 1;
+    const loser = {
+      execute: (query) => db.execute(query as never),
+      transaction: (fn) =>
+        db.transaction(
+          (tx) =>
+            fn({
+              execute: async (query: unknown) => {
+                if (timeouts > 0 && queryText(query).includes("pg_advisory_xact_lock")) {
+                  timeouts--;
+                  const err = new Error("canceling statement due to lock timeout");
+                  (err as { code?: string }).code = "55P03";
+                  throw err;
+                }
+                return (tx as { execute: (q: unknown) => Promise<unknown> }).execute(query);
+              },
+            } as never) as never,
+        ),
+    } as never;
 
     const report = await Effect.runPromise(
-      runMigrations(
-        flaky as never,
-        [migration(0, "flaky", ['CREATE TABLE "t_flaky" (id int)'])],
-        JOURNAL,
-      ),
+      runMigrations(loser, [migration(0, "locked", ['CREATE TABLE "t_locked" (id int)'])], {
+        journal: JOURNAL,
+      }),
     );
     expect(report.applied).toBe(1);
-    expect(calls).toBeGreaterThanOrEqual(6);
+    expect(timeouts).toBe(0);
   });
+});
+
+const itPostgres = process.env.TEST_DATABASE === "postgres" ? it : it.skip;
+
+describe("advisory-lock serialization (postgres-only)", () => {
+  itPostgres(
+    "two concurrent runners converge: exactly one journal row per hash, the loser applies 0",
+    async () => {
+      const { Pool } = await import("pg");
+      const { drizzle } = await import("drizzle-orm/node-postgres");
+      const url =
+        process.env.MIGRATION_RACE_DATABASE_URL ??
+        "postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db";
+      const suffix = `${process.pid}_${Date.now()}`;
+      const journal = {
+        schema: "drizzle",
+        table: `__migrations_race_${suffix}`,
+        slug: "race",
+      } as const;
+      const schemaName = `plugin_race_${suffix}`;
+
+      const pool = new Pool({ connectionString: url, max: 4 });
+      const db = drizzle(pool) as never;
+      try {
+        const migrations = [
+          migration(0, "race_one", ['CREATE TABLE "race_t1" (id int)']),
+          migration(1, "race_two", ['CREATE TABLE "race_t2" (id int)']),
+        ];
+        const [a, b] = await Promise.all([
+          Effect.runPromise(runMigrations(db, migrations, { journal, schemaName })),
+          Effect.runPromise(runMigrations(db, migrations, { journal, schemaName })),
+        ]);
+
+        expect(a.applied + b.applied).toBe(2);
+
+        const rows = (await db.execute(
+          sql`SELECT hash FROM ${sql.raw(`"drizzle"."${journal.table}"`)}`,
+        )) as { rows: { hash: string }[] };
+        expect(new Set(rows.rows.map((r) => r.hash))).toEqual(
+          new Set(["hash-race_one", "hash-race_two"]),
+        );
+        expect(rows.rows).toHaveLength(2);
+      } finally {
+        await db.execute(sql.raw(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`));
+        await db.execute(sql.raw(`DROP TABLE IF EXISTS "drizzle"."${journal.table}"`));
+        await pool.end();
+      }
+    },
+    30_000,
+  );
 });
 
 function pgUniqueViolation(constraint: string): Error {
@@ -183,7 +225,7 @@ function racingLoser(
           fn({
             execute: async (query: unknown) => {
               const text = queryText(query);
-              if (armed && text.includes(`"${tableName}"`)) {
+              if (armed && text.includes(`CREATE TABLE "${tableName}"`)) {
                 armed = false;
                 throw throwOnce();
               }

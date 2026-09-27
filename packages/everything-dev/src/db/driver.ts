@@ -23,7 +23,7 @@ export function pluginSchemaName(pluginId: string): string {
 interface PoolLike {
   on(event: "error", listener: (err: Error) => void): unknown;
   connect(): Promise<{
-    query: (sql: string) => Promise<unknown>;
+    query: (sql: string, params?: unknown[]) => Promise<unknown>;
     release: () => void;
   }>;
   removeAllListeners(event?: string | symbol): unknown;
@@ -115,7 +115,21 @@ function buildPoolConfig(url: string, namespace: string | undefined) {
 async function ensureNamespaceExists(pool: PoolLike, namespace: string): Promise<void> {
   const client = await pool.connect();
   try {
-    await client.query(`CREATE SCHEMA IF NOT EXISTS "${namespace}"`);
+    await client.query("BEGIN");
+    try {
+      // Same journal-scoped advisory lock the migration runner holds, so this
+      // CREATE SCHEMA cannot race a concurrent migration run (the runner also
+      // creates the schema inside its locked transaction). Xact-scoped: the
+      // lock releases at COMMIT/ROLLBACK or on connection death.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        "drizzle.__drizzle_migrations",
+      ]);
+      await client.query(`CREATE SCHEMA IF NOT EXISTS "${namespace}"`);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
   } finally {
     client.release();
   }
