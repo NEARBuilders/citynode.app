@@ -18,6 +18,9 @@ plans
 .cursor
 CLAUDE.md
 
+# Host-only provisioning tooling (alchemy stack; never in any image)
+infra
+
 # BOS runtime state (regression stacks regenerate it inside the container)
 .bos
 
