@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { PluginLoadFailureInfo } from "every-plugin/errors";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
 import { seedMemberFixtures } from "../../lib/member-seed.ts";
 import { migrateTestDatabase } from "../../lib/migrate-test-db.mjs";
@@ -11,15 +12,6 @@ const ADMIN_SEED_PATH = ".bos/regression/admin-seed.json";
 const ADMIN_NAME = "admin.near";
 const LOGOUT_NAME = "logout.near";
 
-interface HealthFailure {
-  pluginKey: string;
-  kind: string;
-  retryable: boolean;
-  message: string;
-  operation?: string;
-  suggestion?: string;
-}
-
 /**
  * The stack serves /health 200 even when a plugin failed to load (degraded
  * status). Specs that need the failed plugin would then fail with confusing
@@ -30,7 +22,7 @@ async function failOnPluginLoadFailures(baseUrl: string) {
   if (!response.ok) {
     throw new Error(`[global-setup] /health returned ${response.status}`);
   }
-  const health = (await response.json()) as { failures?: HealthFailure[] };
+  const health = (await response.json()) as { failures?: PluginLoadFailureInfo[] };
   if (health.failures?.length) {
     const rendered = health.failures
       .map(

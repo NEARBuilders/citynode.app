@@ -12,6 +12,7 @@ import {
   isRetryableMigrationExecutionError,
   type MigrationStorage,
   toSqlArray,
+  visitCauses,
 } from "./core";
 import { DatabaseError } from "./errors";
 
@@ -69,19 +70,11 @@ function normalizeRows<T>(result: unknown): T[] {
   return [];
 }
 
-function isDuplicateObjectError(
-  error: unknown,
-  codes: readonly string[] = DEFAULT_DUPLICATE_SQLSTATES,
-): boolean {
-  let current: unknown = error;
-  for (let i = 0; i < 5 && current; i++) {
-    if (typeof current === "object" && current !== null && "code" in current) {
-      const code = (current as { code: unknown }).code;
-      if (typeof code === "string" && codes.includes(code)) return true;
-    }
-    current = (current as { cause?: unknown })?.cause;
-  }
-  return false;
+function isDuplicateObjectError(error: unknown, codes: readonly string[]): boolean {
+  return visitCauses(error, 6, (link) => {
+    const code = (link as { code?: unknown }).code;
+    return typeof code === "string" && codes.includes(code);
+  });
 }
 
 /**
@@ -91,10 +84,7 @@ function isDuplicateObjectError(
  * booting processes can produce when they run the same `CREATE TABLE` against
  * a fresh database at the same time.
  */
-function isTolerableDuplicateDdl(
-  error: unknown,
-  codes: readonly string[] = DEFAULT_DUPLICATE_SQLSTATES,
-): boolean {
+function isTolerableDuplicateDdl(error: unknown, codes: readonly string[]): boolean {
   return isDuplicateObjectError(error, codes) || isConcurrentDdlUniqueViolation(error);
 }
 

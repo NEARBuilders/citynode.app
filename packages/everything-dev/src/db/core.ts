@@ -92,6 +92,24 @@ export function getDatabaseUrlSecretName(slug: string): string {
 export const DUPLICATE_OBJECT_SQLSTATES: readonly string[] = ["42710", "42701", "42P07"];
 
 /**
+ * Walk `error` and its `cause` chain (bounded), invoking `visit` on each link.
+ * Postgres driver errors arrive wrapped by drizzle/Effect at varying depths,
+ * so every error-shape predicate below shares this traversal.
+ */
+export function visitCauses(
+  error: unknown,
+  depth: number,
+  visit: (link: object) => boolean,
+): boolean {
+  let current: unknown = error;
+  for (let i = 0; i < depth && current; i++) {
+    if (typeof current === "object" && current !== null && visit(current)) return true;
+    current = (current as { cause?: unknown })?.cause;
+  }
+  return false;
+}
+
+/**
  * pg_catalog unique indexes that can surface a concurrent-DDL race as SQLSTATE
  * 23505 instead of a duplicate-object class. When two connections run
  * `CREATE TABLE <name>` at the same time, the loser fails its insert into
@@ -100,11 +118,11 @@ export const DUPLICATE_OBJECT_SQLSTATES: readonly string[] = ["42710", "42701", 
  * table is not yet committed. The same shape exists for schemas and other
  * relations.
  */
-const CONCURRENT_DDL_CONSTRAINTS: readonly string[] = [
+const CONCURRENT_DDL_CONSTRAINTS: ReadonlySet<string> = new Set([
   "pg_type_typname_nsp_index",
   "pg_namespace_nspname_index",
   "pg_class_relname_nsp_index",
-];
+]);
 
 /**
  * Whether a SQLSTATE 23505 unique violation is the concurrent-DDL catalog
@@ -113,29 +131,20 @@ const CONCURRENT_DDL_CONSTRAINTS: readonly string[] = [
  * above are treated as duplicate-DDL tolerance candidates.
  */
 export function isConcurrentDdlUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let i = 0; i < 6 && current; i++) {
-    if (typeof current === "object" && current !== null) {
-      const { code, constraint, message } = current as {
-        code?: unknown;
-        constraint?: unknown;
-        message?: unknown;
-      };
-      if (code === "23505") {
-        if (typeof constraint === "string" && CONCURRENT_DDL_CONSTRAINTS.includes(constraint)) {
-          return true;
-        }
-        if (
-          typeof message === "string" &&
-          CONCURRENT_DDL_CONSTRAINTS.some((name) => message.includes(name))
-        ) {
-          return true;
-        }
-      }
+  return visitCauses(error, 6, (link) => {
+    const { code, constraint, message } = link as {
+      code?: unknown;
+      constraint?: unknown;
+      message?: unknown;
+    };
+    if (code !== "23505") return false;
+    if (typeof constraint === "string" && CONCURRENT_DDL_CONSTRAINTS.has(constraint)) return true;
+    if (typeof message !== "string") return false;
+    for (const name of CONCURRENT_DDL_CONSTRAINTS) {
+      if (message.includes(name)) return true;
     }
-    current = (current as { cause?: unknown })?.cause;
-  }
-  return false;
+    return false;
+  });
 }
 
 const RETRYABLE_SQLSTATES: ReadonlySet<string> = new Set([
@@ -146,6 +155,7 @@ const RETRYABLE_SQLSTATES: ReadonlySet<string> = new Set([
   "23505",
   "40001",
   "40P01",
+  "55P03",
 ]);
 
 const RETRYABLE_DRIVER_CODES: ReadonlySet<string> = new Set([
@@ -157,6 +167,14 @@ const RETRYABLE_DRIVER_CODES: ReadonlySet<string> = new Set([
   "EAI_AGAIN",
 ]);
 
+function matchesRetryableStates(error: unknown, states: ReadonlySet<string>): boolean {
+  return visitCauses(error, 6, (link) => {
+    const code = (link as { code?: unknown }).code;
+    if (typeof code !== "string") return false;
+    return states.has(code) || code.startsWith("08") || RETRYABLE_DRIVER_CODES.has(code);
+  });
+}
+
 /**
  * Decide whether a failed migration-init statement (schema/journal creation)
  * is worth retrying. Covers the concurrent `CREATE SCHEMA IF NOT EXISTS`
@@ -164,19 +182,7 @@ const RETRYABLE_DRIVER_CODES: ReadonlySet<string> = new Set([
  * serialization/deadlock errors, and transient connection failures.
  */
 export function isRetryableMigrationError(error: unknown): boolean {
-  let current: unknown = error;
-  for (let i = 0; i < 6 && current; i++) {
-    if (typeof current === "object" && current !== null) {
-      const code = (current as { code?: unknown }).code;
-      if (typeof code === "string") {
-        if (RETRYABLE_SQLSTATES.has(code)) return true;
-        if (code.startsWith("08")) return true;
-        if (RETRYABLE_DRIVER_CODES.has(code)) return true;
-      }
-    }
-    current = (current as { cause?: unknown })?.cause;
-  }
-  return false;
+  return matchesRetryableStates(error, RETRYABLE_SQLSTATES);
 }
 
 const RETRYABLE_STATEMENT_SQLSTATES: ReadonlySet<string> = new Set([
@@ -195,19 +201,7 @@ const RETRYABLE_STATEMENT_SQLSTATES: ReadonlySet<string> = new Set([
  * transaction.
  */
 export function isRetryableMigrationExecutionError(error: unknown): boolean {
-  let current: unknown = error;
-  for (let i = 0; i < 6 && current; i++) {
-    if (typeof current === "object" && current !== null) {
-      const code = (current as { code?: unknown }).code;
-      if (typeof code === "string") {
-        if (RETRYABLE_STATEMENT_SQLSTATES.has(code)) return true;
-        if (code.startsWith("08")) return true;
-        if (RETRYABLE_DRIVER_CODES.has(code)) return true;
-      }
-    }
-    current = (current as { cause?: unknown })?.cause;
-  }
-  return false;
+  return matchesRetryableStates(error, RETRYABLE_STATEMENT_SQLSTATES);
 }
 
 const PG_QUERY_QUEUE_DEPRECATION = "client.query() when the client is already executing a query";
