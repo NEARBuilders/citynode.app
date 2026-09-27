@@ -6,8 +6,7 @@ import * as Effect from "effect/Effect";
 
 // The CDN domain belongs to the base runtime — cdn.everything.dev for the
 // everything.dev base; a sovereign base overrides it via env.
-export const BUNDLE_CDN_DOMAIN =
-  process.env.BOS_BUNDLE_CDN_DOMAIN ?? "cdn.everything.dev";
+export const BUNDLE_CDN_DOMAIN = process.env.BOS_BUNDLE_CDN_DOMAIN ?? "cdn.everything.dev";
 
 export default Alchemy.Stack(
   "CityNodeInfra",

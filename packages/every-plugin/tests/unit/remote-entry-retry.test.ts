@@ -189,16 +189,19 @@ describe("loadRemoteWithRetry", () => {
   });
 
   it("keeps the default logger deduped for repeated identical failures", async () => {
-    const load = vi.fn(() => Promise.reject(new Error("request timeout")));
+    let calls = 0;
+    const load = vi.fn(() => {
+      calls += 1;
+      return calls < 3 ? Promise.reject(new Error("request timeout")) : Promise.resolve("ok");
+    });
     await Effect.runPromise(
       loadRemoteWithRetry({
         label: "test",
         remoteUrl: "https://remote.test/remoteEntry.js",
         load,
-        timeoutMs: 1100,
         ...READINESS_NEVER,
       }),
-    ).catch(() => {});
+    );
     const errorCalls = (console.error as ReturnType<typeof vi.spyOn>).mock.calls.filter(
       (args: unknown[]) => String(args[0]).includes("[Plugins][test]"),
     );
