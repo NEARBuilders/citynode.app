@@ -85,6 +85,7 @@ describe("createRequireTeamArea", () => {
         image: null,
         role: userRole ?? null,
         isAnonymous: false,
+        locale: null,
       },
       organization: {
         activeOrganizationId: "org-1",
