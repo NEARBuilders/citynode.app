@@ -1,6 +1,6 @@
 import type { Messages } from "@lingui/core";
 
-export const LOGIN_LOCALES = ["en", "es"] as const;
+export const LOGIN_LOCALES = ["en", "es", "fr", "zh"] as const;
 
 export type LoginLocale = (typeof LOGIN_LOCALES)[number];
 
@@ -10,6 +10,8 @@ export const LOGIN_LOCALE_COOKIE = "citynode_locale";
 export const LOGIN_LOCALE_LABELS: Record<LoginLocale, string> = {
   en: "English",
   es: "Español",
+  fr: "Français",
+  zh: "中文",
 };
 
 export const englishLoginMessages = {
@@ -128,9 +130,121 @@ const spanishLoginMessages = {
   "auth.login.pair.cancel": "Otras formas de iniciar sesión",
 } satisfies Record<LoginMessageId, string>;
 
+const frenchLoginMessages = {
+  "auth.login.title": "Se connecter à CityNode",
+  "auth.login.subtitle": "Ravi de vous revoir. Choisissez comment vous connecter.",
+  "auth.login.subtitle.stake": "Connectez-vous pour déléguer auprès d’une communauté CityNode.",
+  "auth.login.language": "Langue",
+  "auth.login.passkey.savedLabel": "Clé d’accès enregistrée",
+  "auth.login.passkey.savedPlaceholder": "Choisissez une clé d’accès enregistrée",
+  "auth.login.passkey.pending": "En attente de la clé d’accès…",
+  "auth.login.passkey.action": "Se connecter avec une clé d’accès",
+  "auth.login.passkey.missingDesktop":
+    "Aucune clé d’accès sur cet appareil ? Utilisez votre téléphone ou un portefeuille NEAR.",
+  "auth.login.passkey.missingMobile":
+    "Aucune clé d’accès sur cet appareil ? Utilisez un portefeuille NEAR.",
+  "auth.login.near.continueAs": "Continuer en tant que {account}",
+  "auth.login.near.useAnother": "Utiliser un autre portefeuille",
+  "auth.login.near.action": "Continuer avec NEAR",
+  "auth.login.phone.action": "Se connecter avec votre téléphone",
+  "auth.login.phone.title": "Se connecter avec votre téléphone",
+  "auth.login.phone.subtitle": "Scannez avec un téléphone déjà connecté à CityNode.",
+  "auth.login.create.title": "Créer votre compte",
+  "auth.login.create.subtitle.wallet":
+    "Une clé d’accès sur cet appareil. Nous créons un portefeuille NEAR pour vous, sans phrase de récupération.",
+  "auth.login.create.subtitle.default":
+    "Une clé d’accès sur cet appareil. Aucun mot de passe à retenir.",
+  "auth.login.create.action": "Créer un compte avec une clé d’accès",
+  "auth.login.create.unsupported":
+    "Cet appareil ne peut pas créer de clé d’accès compatible. Utilisez plutôt un portefeuille NEAR.",
+  "auth.login.create.existing": "Vous avez déjà un compte ?",
+  "auth.login.create.new": "Nouveau ici ?",
+  "auth.login.create.link": "Créer un compte",
+  "auth.login.signIn": "Se connecter",
+  "auth.login.suspended": "Ce compte a été suspendu.",
+  "auth.login.separator": "ou",
+  "auth.login.success.create": "Bienvenue sur CityNode",
+  "auth.login.success.near": "Connecté avec NEAR",
+  "auth.login.success.passkey": "Connecté avec une clé d’accès",
+  "auth.login.error.used": "Cette connexion a déjà été utilisée",
+  "auth.login.error.signature": "Signature non valide",
+  "auth.login.error.walletUnavailable": "Le portefeuille NEAR n’est pas disponible",
+  "auth.login.error.configuration": "Erreur de configuration de la connexion",
+  "auth.login.error.expired": "La session a expiré. Veuillez réessayer",
+  "auth.login.error.generic": "Échec de la connexion",
+  "auth.login.error.passkey": "Échec de la connexion avec la clé d’accès",
+  "auth.login.error.disconnect": "Impossible de déconnecter le portefeuille",
+  "auth.login.error.nearConnect": "Impossible de connecter votre portefeuille NEAR",
+  "auth.login.pair.startFailed": "Impossible de démarrer l’association de l’appareil",
+  "auth.login.pair.completeFailed": "Impossible de terminer la connexion",
+  "auth.login.pair.success": "Connecté",
+  "auth.login.pair.expired": "Ce code a expiré. Recommencez pour en obtenir un nouveau.",
+  "auth.login.pair.denied": "La connexion a été refusée sur votre téléphone.",
+  "auth.login.pair.imageAlt": "Scannez avec votre téléphone pour vous connecter",
+  "auth.login.pair.instructions": "Ou saisissez ce code sur votre téléphone",
+  "auth.login.pair.signingIn": "Connexion en cours…",
+  "auth.login.pair.waiting": "En attente de votre téléphone…",
+  "auth.login.pair.cancel": "Autres méthodes de connexion",
+} satisfies Record<LoginMessageId, string>;
+
+const chineseLoginMessages = {
+  "auth.login.title": "登录 CityNode",
+  "auth.login.subtitle": "欢迎回来。请选择登录方式。",
+  "auth.login.subtitle.stake": "登录后即可为 CityNode 社区质押。",
+  "auth.login.language": "语言",
+  "auth.login.passkey.savedLabel": "已保存的通行密钥",
+  "auth.login.passkey.savedPlaceholder": "选择已保存的通行密钥",
+  "auth.login.passkey.pending": "正在等待通行密钥…",
+  "auth.login.passkey.action": "使用通行密钥登录",
+  "auth.login.passkey.missingDesktop": "此设备上没有通行密钥？请使用手机或 NEAR 钱包。",
+  "auth.login.passkey.missingMobile": "此设备上没有通行密钥？请使用 NEAR 钱包。",
+  "auth.login.near.continueAs": "以 {account} 身份继续",
+  "auth.login.near.useAnother": "使用其他钱包",
+  "auth.login.near.action": "使用 NEAR 继续",
+  "auth.login.phone.action": "使用手机登录",
+  "auth.login.phone.title": "使用手机登录",
+  "auth.login.phone.subtitle": "使用已登录 CityNode 的手机扫描二维码。",
+  "auth.login.create.title": "创建账户",
+  "auth.login.create.subtitle.wallet":
+    "在此设备上创建一个通行密钥。我们会为你设置 NEAR 钱包，无需助记词。",
+  "auth.login.create.subtitle.default": "在此设备上创建一个通行密钥，无需记住密码。",
+  "auth.login.create.action": "使用通行密钥创建账户",
+  "auth.login.create.unsupported": "此设备无法创建受支持的通行密钥，请改用 NEAR 钱包。",
+  "auth.login.create.existing": "已有账户？",
+  "auth.login.create.new": "第一次使用？",
+  "auth.login.create.link": "创建账户",
+  "auth.login.signIn": "登录",
+  "auth.login.suspended": "此账户已被停用。",
+  "auth.login.separator": "或",
+  "auth.login.success.create": "欢迎使用 CityNode",
+  "auth.login.success.near": "已使用 NEAR 登录",
+  "auth.login.success.passkey": "已使用通行密钥登录",
+  "auth.login.error.used": "此登录请求已使用",
+  "auth.login.error.signature": "签名无效",
+  "auth.login.error.walletUnavailable": "NEAR 钱包不可用",
+  "auth.login.error.configuration": "登录配置错误",
+  "auth.login.error.expired": "会话已过期，请重试",
+  "auth.login.error.generic": "登录失败",
+  "auth.login.error.passkey": "使用通行密钥登录失败",
+  "auth.login.error.disconnect": "无法断开钱包连接",
+  "auth.login.error.nearConnect": "无法连接你的 NEAR 钱包",
+  "auth.login.pair.startFailed": "无法开始设备配对",
+  "auth.login.pair.completeFailed": "无法完成登录",
+  "auth.login.pair.success": "已登录",
+  "auth.login.pair.expired": "此代码已过期，请重新开始以获取新代码。",
+  "auth.login.pair.denied": "你的手机拒绝了登录请求。",
+  "auth.login.pair.imageAlt": "使用手机扫描以登录",
+  "auth.login.pair.instructions": "或在手机上输入此代码",
+  "auth.login.pair.signingIn": "正在登录…",
+  "auth.login.pair.waiting": "正在等待你的手机…",
+  "auth.login.pair.cancel": "其他登录方式",
+} satisfies Record<LoginMessageId, string>;
+
 const translatedLoginMessages: Record<LoginLocale, Partial<Record<LoginMessageId, string>>> = {
   en: {},
   es: spanishLoginMessages,
+  fr: frenchLoginMessages,
+  zh: chineseLoginMessages,
 };
 
 export function withEnglishLoginFallback(

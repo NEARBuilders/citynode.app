@@ -39,6 +39,8 @@ describe("login locale resolution", () => {
 
   it("matches supported regional browser locales", () => {
     expect(resolveLoginLocale("", ["es-MX", "en-US"])).toBe("es");
+    expect(resolveLoginLocale("", ["fr-CA"])).toBe("fr");
+    expect(resolveLoginLocale("", ["zh-CN"])).toBe("zh");
   });
 
   it("falls back to English for unsupported preferences", () => {
@@ -104,5 +106,23 @@ describe("login language selector", () => {
     );
 
     expect(screen.getByRole("heading").textContent).toBe("Inicia sesión en CityNode");
+  });
+
+  it("switches to French and Chinese catalogs", () => {
+    render(
+      <LoginI18nProvider initialLocale="en">
+        <TranslationProbe />
+      </LoginI18nProvider>,
+    );
+
+    fireEvent.change(screen.getByTestId("login.language-select"), {
+      target: { value: "fr" },
+    });
+    expect(screen.getByRole("heading").textContent).toBe("Se connecter à CityNode");
+
+    fireEvent.change(screen.getByTestId("login.language-select"), {
+      target: { value: "zh" },
+    });
+    expect(screen.getByRole("heading").textContent).toBe("登录 CityNode");
   });
 });
