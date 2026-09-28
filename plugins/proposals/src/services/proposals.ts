@@ -44,7 +44,7 @@ function parseJson(value: string | null | undefined): unknown {
 }
 
 function actorLabel(user?: { name?: string; email?: string }, source?: string): string | null {
-  return source ?? user?.name ?? user?.email ?? null;
+  return source ?? user?.name ?? null;
 }
 
 function staleProposal() {

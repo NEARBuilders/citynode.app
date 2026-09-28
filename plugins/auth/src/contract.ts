@@ -187,7 +187,7 @@ const memberWithUserSchema = memberSchema.extend({
 const invitationSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
-  email: z.string(),
+  email: z.string().nullable(),
   role: z.string().nullable(),
   status: z.string(),
   expiresAt: z.date(),
@@ -493,6 +493,23 @@ export const contract = oc.router({
     .output(z.object({ members: z.array(memberWithUserSchema), total: z.number() }))
     .errors(Errors),
 
+  exportMembers: oc
+    .route({
+      method: "GET",
+      path: "/v1/auth/members/export",
+      summary: "Export organization members as CSV",
+      description:
+        "Requires the org email:read permission (granted to owner/admin roles). " +
+        "Returns name,email,role rows including member email addresses.",
+    })
+    .input(
+      z.object({
+        organizationId: z.string().optional(),
+      }),
+    )
+    .output(z.object({ csv: z.string() }))
+    .errors(Errors),
+
   addMember: oc
     .route({ method: "POST", path: "/v1/auth/members" })
     .input(
@@ -554,7 +571,7 @@ export const contract = oc.router({
         .object({
           id: z.string(),
           organizationId: z.string(),
-          email: z.string(),
+          email: z.string().nullable(),
           role: z.string().nullable(),
           status: z.string(),
           expiresAt: z.date(),
@@ -564,7 +581,7 @@ export const contract = oc.router({
           nearNetwork: z.enum(["mainnet", "testnet"]).nullable(),
           organizationName: z.string(),
           organizationSlug: z.string(),
-          inviterEmail: z.string(),
+          inviterName: z.string().nullable(),
         })
         .nullable(),
     )

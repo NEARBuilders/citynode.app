@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { MemoryPublisher } from "@orpc/publisher/memory";
 import { and, count, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
@@ -14,6 +15,10 @@ type VoteEvents = {
 
 function generateId(): string {
   return `uv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+export function voteChannel(userId: string): string {
+  return createHash("sha256").update(userId).digest("hex").slice(0, 16);
 }
 
 function createVoteMethods(db: any, publisher: MemoryPublisher<VoteEvents>) {
@@ -44,7 +49,7 @@ function createVoteMethods(db: any, publisher: MemoryPublisher<VoteEvents>) {
       await publisher.publish("vote", {
         type: "upvote",
         entityId,
-        userId,
+        userId: voteChannel(userId),
         timestamp: new Date().toISOString(),
         totalCount,
       });
@@ -67,7 +72,7 @@ function createVoteMethods(db: any, publisher: MemoryPublisher<VoteEvents>) {
       await publisher.publish("vote", {
         type: "downvote",
         entityId,
-        userId,
+        userId: voteChannel(userId),
         timestamp: new Date().toISOString(),
         totalCount,
       });
@@ -162,7 +167,7 @@ function createVoteMethods(db: any, publisher: MemoryPublisher<VoteEvents>) {
       const data = records.slice(0, pageLimit).map((r: any) => ({
         id: r.id,
         entityId: r.entityId,
-        userId: r.userId,
+        channel: voteChannel(r.userId),
         createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
       }));
 

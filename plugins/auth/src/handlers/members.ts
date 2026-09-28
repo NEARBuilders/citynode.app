@@ -1,9 +1,42 @@
+import { ORPCError } from "@orpc/server";
 import { Context } from "effect";
 import { AuthServicesTag } from "../service-types";
-import { createHeaders, safeAuthApi } from "../utils";
+import { canReadMemberEmails, createHeaders, safeAuthApi, visibleEmail } from "../utils";
 
 export function createMemberHandlers(builder: any, requireAuth: any) {
   return {
+    exportMembers: builder.exportMembers
+      .use(requireAuth)
+      .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
+        const emailAllowed = await canReadMemberEmails(services, context, input?.organizationId);
+        if (!emailAllowed) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "You do not have permission to export member emails",
+          });
+        }
+        const result = await safeAuthApi(() =>
+          services.auth.api.listMembers({
+            headers: createHeaders(context.reqHeaders),
+            query: {
+              organizationId: input.organizationId,
+              limit: 1000,
+              offset: input.offset ?? 0,
+            },
+          }),
+        );
+        const rows = [
+          "name,email,role",
+          ...(result.members ?? []).map((m: any) => {
+            const name = (m.user?.name ?? "").replace(/[\r\n,]/g, " ").trim();
+            const email = m.user?.email ?? "";
+            const safe = String(email).replace(/[\r\n]/g, "");
+            return `${name},${safe},${m.role}`;
+          }),
+        ];
+        return { csv: rows.join("\n") };
+      }),
+
     getActiveMember: builder.getActiveMember
       .use(requireAuth)
       .handler(async ({ context, input }: { context: any; input: any }) => {
@@ -55,6 +88,7 @@ export function createMemberHandlers(builder: any, requireAuth: any) {
             },
           }),
         );
+        const emailAllowed = await canReadMemberEmails(services, context, input?.organizationId);
         return {
           members: (result.members ?? []).map((m: any) => ({
             id: m.id,
@@ -66,7 +100,10 @@ export function createMemberHandlers(builder: any, requireAuth: any) {
               ? {
                   id: m.user.id,
                   name: m.user.name,
-                  email: m.user.email,
+                  email: visibleEmail(m.user.email, {
+                    allowed: emailAllowed,
+                    isSelf: m.userId === (context.userId ?? context.user?.id),
+                  }),
                   image: m.user.image,
                 }
               : null,
@@ -119,6 +156,7 @@ export function createMemberHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
+        const emailAllowed = await canReadMemberEmails(services, context, input?.organizationId);
         const result = await safeAuthApi(() =>
           services.auth.api.updateMemberRole({
             headers: createHeaders(context.reqHeaders),
@@ -140,7 +178,10 @@ export function createMemberHandlers(builder: any, requireAuth: any) {
             ? {
                 id: result.user.id,
                 name: result.user.name,
-                email: result.user.email,
+                email: visibleEmail(result.user.email, {
+                  allowed: emailAllowed,
+                  isSelf: result.userId === (context.userId ?? context.user?.id),
+                }),
                 image: result.user.image,
               }
             : null,

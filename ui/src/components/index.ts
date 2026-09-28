@@ -5,6 +5,7 @@ export {
   ApiKeyReveal,
   type ApiKeyRevealProps,
 } from "./api-key-manager";
+export { Bulletin } from "./bulletin";
 export { ConfirmDialog } from "./confirm-dialog";
 export { DocumentFallback } from "./document-fallback";
 export { EmptyState } from "./empty-state";
@@ -32,6 +33,7 @@ export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
 export { formatLocalDate, LocalDate, useLocalDate } from "./local-date";
 export { Logo } from "./logo";
+export { Markdown, type MarkdownVariant } from "./markdown";
 export { NodeDirectory, type NodeDirectoryNode } from "./node-directory";
 export { NodeDirectorySkeleton } from "./node-directory-skeleton";
 export { NodeValidatorTable } from "./node-validator-table";

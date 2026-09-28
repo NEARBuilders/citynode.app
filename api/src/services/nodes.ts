@@ -81,6 +81,7 @@ export interface NodesService {
   listSummaries(filter?: NodeListFilter): NodeEffect<NodeListSummaryRecord[]>;
   getById(id: string): NodeEffect<NodeRecord | null>;
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
+  setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
   delete(id: string): NodeEffect<boolean>;
   listRootNodes(): NodeEffect<NodeRecord[]>;
   listChildren(parentId: string): NodeEffect<NodeRecord[]>;
@@ -369,6 +370,49 @@ export const NodesLive = Layer.effect(
               return toNodeRecord(row);
             }),
           );
+        }),
+
+      setBulletin: (id, bulletin) =>
+        Effect.gen(function* () {
+          const [current] = yield* query(() =>
+            db
+              .select({ metadata: nodesTable.metadata })
+              .from(nodesTable)
+              .where(eq(nodesTable.id, id))
+              .limit(1),
+          );
+          if (!current) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", {
+                message: "Node not found",
+                data: { resource: "node", resourceId: id },
+              }),
+            );
+          }
+          const existing = (current.metadata ?? {}) as NodeMetadata;
+          const metadata: NodeMetadata = { ...existing };
+          if (bulletin === null || bulletin.trim() === "") {
+            delete metadata.bulletin;
+          } else {
+            metadata.bulletin = bulletin;
+          }
+
+          const [row] = yield* query(() =>
+            db
+              .update(nodesTable)
+              .set({ metadata, updatedAt: new Date() })
+              .where(eq(nodesTable.id, id))
+              .returning(),
+          );
+          if (!row) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", {
+                message: "Node not found",
+                data: { resource: "node", resourceId: id },
+              }),
+            );
+          }
+          return toNodeRecord(row);
         }),
 
       delete: (id) =>

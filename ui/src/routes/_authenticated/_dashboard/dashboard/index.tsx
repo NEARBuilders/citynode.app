@@ -9,10 +9,18 @@ import {
   useApiClient,
   useAuthClient,
 } from "@/app";
-import { AddEmailDialog, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
+import {
+  AddEmailDialog,
+  Bulletin,
+  PageContainer,
+  PageHeader,
+  SectionHeader,
+  Skeleton,
+} from "@/components";
 import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
+import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -42,6 +50,7 @@ function Home() {
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const { restricted } = Route.useSearch();
+  const { runtimeConfig } = Route.useRouteContext();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const nearAccountId = useNearAccount();
   const activeOrgId = session?.session?.activeOrganizationId ?? "";
@@ -74,12 +83,18 @@ function Home() {
     staleTime: 30 * 1000,
   });
   const tenant = useQuery(tenantByOrgQueryOptions(apiClient, activeOrgId));
+  const nodes = useQuery({
+    ...tenantNodesQueryOptions(apiClient, tenant.data?.id ?? ""),
+    enabled: !!tenant.data?.id,
+  });
   const authContext = useQuery({
     queryKey: ["home-auth-context", activeOrgId],
     queryFn: () => apiClient.auth.getContext().catch(() => null),
     enabled: !!activeOrgId,
     staleTime: 30 * 1000,
   });
+
+  const bulletin = nodes.data?.[0]?.metadata?.bulletin;
 
   const user = session?.user;
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
@@ -130,6 +145,9 @@ function Home() {
       />
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
+          {typeof bulletin === "string" && bulletin.trim() && (
+            <Bulletin content={bulletin} runtimeConfig={runtimeConfig} />
+          )}
           {pending.length > 0 && (
             <section className="flex flex-col gap-6">
               <SectionHeader title="Invitations" />

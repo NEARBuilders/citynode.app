@@ -31,6 +31,7 @@ import {
 const orgStatements = {
   ...defaultStatements,
   apiKey: ["create", "read", "update", "delete"],
+  email: ["read"],
 } as const;
 
 const orgAc = createAccessControl(orgStatements);
@@ -39,10 +40,12 @@ const orgRoles = {
   owner: orgAc.newRole({
     ...ownerAc.statements,
     apiKey: ["create", "read", "update", "delete"],
+    email: ["read"],
   }),
   admin: orgAc.newRole({
     ...adminAc.statements,
     apiKey: ["create", "read", "update", "delete"],
+    email: ["read"],
   }),
   member: orgAc.newRole({
     ...memberAc.statements,

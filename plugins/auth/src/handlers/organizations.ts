@@ -3,7 +3,13 @@ import { eq } from "drizzle-orm";
 import { Context } from "effect";
 import * as schema from "../db/schema";
 import { AuthServicesTag } from "../service-types";
-import { createHeaders, parseTeamAreas, safeAuthApi, tryJsonParse } from "../utils";
+import {
+  canReadMemberEmails,
+  createHeaders,
+  parseTeamAreas,
+  safeAuthApi,
+  tryJsonParse,
+} from "../utils";
 
 function toOrganizationInfo(organization: {
   id: string;
@@ -46,6 +52,7 @@ export function createOrganizationHandlers(builder: any, requireAuth: any) {
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
         try {
+          const emailAllowed = await canReadMemberEmails(services, context, input?.organizationId);
           const result = await services.auth.api.getFullOrganization({
             headers: createHeaders(context.reqHeaders),
             query: {
@@ -69,7 +76,7 @@ export function createOrganizationHandlers(builder: any, requireAuth: any) {
             invitations: (result.invitations ?? []).map((inv: any) => ({
               id: inv.id,
               organizationId: inv.organizationId,
-              email: inv.email,
+              email: emailAllowed ? inv.email : null,
               role: inv.role,
               status: inv.status,
               expiresAt: inv.expiresAt instanceof Date ? inv.expiresAt : new Date(inv.expiresAt),

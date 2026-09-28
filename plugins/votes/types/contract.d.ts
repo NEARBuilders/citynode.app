@@ -125,7 +125,7 @@ export declare const contract: {
         data: z.ZodArray<z.ZodObject<{
             id: z.ZodString;
             entityId: z.ZodString;
-            userId: z.ZodString;
+            channel: z.ZodString;
             createdAt: z.ZodISODateTime;
         }, z.core.$strip>>;
         meta: z.ZodObject<{
@@ -133,7 +133,20 @@ export declare const contract: {
             hasMore: z.ZodBoolean;
             nextCursor: z.ZodNullable<z.ZodString>;
         }, z.core.$strip>;
-    }, z.core.$strip>, object>;
+    }, z.core.$strip>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+    }>;
     subscribe: import("@orpc/contract").ProcedureContract<import("@orpc/contract").InitialInputSchema, import("@orpc/contract").Schema<AsyncIteratorObject<{
         type: "downvote" | "upvote";
         entityId: string;

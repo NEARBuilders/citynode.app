@@ -614,7 +614,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
       resolveTenant: builder.resolveTenant.effect(function* ({ input }) {
         const services = yield* ApiServices;
         const tenant = yield* services.tenants.resolveTenantByAccountId(input.accountId);
-        return tenant ?? null;
+        if (!tenant) return null;
+        const { ownerUserId: _ownerUserId, ...publicTenant } = tenant;
+        return publicTenant;
       }),
 
       resolveTenantByOrgId: builder.resolveTenantByOrgId.effect(function* ({ input, errors }) {
@@ -628,7 +630,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
-        return tenant;
+        const { ownerUserId: _ownerUserId, ...publicTenant } = tenant;
+        return publicTenant;
       }),
 
       listTenantBindings: builder.listTenantBindings.effect(function* () {
@@ -643,9 +646,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
         .use(requireAuth)
-        .effect(function* ({ input }) {
+        .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
-          return yield* services.tenants.listBindingsForTenant(input.tenantId);
+          const tenant = yield* authorizedTenant(services, input, context);
+          return yield* services.tenants.listBindingsForTenant(tenant.id);
         }),
 
       createBinding: builder.createBinding.use(requireAuth).effect(function* ({ input, context }) {
@@ -687,7 +691,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
       resolveBindingByHostname: builder.resolveBindingByHostname.effect(function* ({ input }) {
         const services = yield* ApiServices;
         const binding = yield* services.tenants.resolveBindingByHostname(input.hostname);
-        return binding ?? null;
+        if (!binding) return null;
+        const { verificationToken: _verificationToken, ...publicBinding } = binding;
+        return publicBinding;
       }),
 
       bindingPreflight: builder.bindingPreflight.use(requireAuth).effect(function* ({ input }) {
@@ -836,6 +842,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
             ...(input.parentId !== undefined && { parentId: input.parentId }),
             ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
+        }),
+
+      setNodeBulletin: builder.setNodeBulletin
+        .use(requireAuth)
+        .use(requireNodeOperations)
+        .effect(function* ({ input, context }) {
+          const services = yield* ApiServices;
+          const node = yield* resolveNodeForAccess(services, input.nodeId);
+          yield* authorizeNodeAccess(services, node, context, {
+            adminBypassOrg: true,
+            resource: "node",
+          });
+          return yield* services.nodes.setBulletin(input.nodeId, input.bulletin);
         }),
 
       deleteNode: builder.deleteNode

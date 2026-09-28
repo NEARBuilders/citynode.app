@@ -27,8 +27,8 @@
       "development": "local:ui",
       "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/",
       "ssr": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/ssr/",
-      "integrity": "sha384-qyUSYkFWi2sq1uKrUkMoRGOSOhNv5OMls6Z0SdcI8mMCduwzSMQfXN4ldHo5VQV+",
-      "ssrIntegrity": "sha384-Ou5xDYII7ooc37MJq8jCWvj4N+NqCHe2YlbfYE74a7yx+usf7ZT92q6iKY313zsm"
+      "integrity": "sha384-WVVHZ1adr6fWeufZUTS+9ACiPjkMagMmYJyOCr0SBPgC0fjtgRKJjfbE3WUj+kpy",
+      "ssrIntegrity": "sha384-bqeUUcguJslrO5EY7fbP6meAHV4Z0J7204YGrLZ8ZMDwqMBqaxj9cCVnfadjLmMR"
     },
     "api": {
       "development": "local:api",

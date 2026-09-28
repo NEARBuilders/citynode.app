@@ -72,6 +72,8 @@ function NodeProposalDetail() {
 
   const badge = reviewStatusBadge(proposal.reviewStatus);
   const applied = applyStatusLabel(proposal.applyStatus);
+  const payload = (proposal.payload ?? {}) as Record<string, unknown>;
+  const motivation = typeof payload.motivation === "string" ? payload.motivation : null;
 
   return (
     <section className="flex flex-col gap-6" data-testid="dashboard-node.proposal-detail">
@@ -91,9 +93,12 @@ function NodeProposalDetail() {
           {applied && <Badge variant="outline">{applied}</Badge>}
         </div>
       </div>
-      <pre className="overflow-auto rounded-xl bg-muted p-4 font-mono text-xs">
-        {JSON.stringify(proposal.payload, null, 2)}
-      </pre>
+      {motivation && (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">Motivation</span>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{motivation}</p>
+        </div>
+      )}
     </section>
   );
 }

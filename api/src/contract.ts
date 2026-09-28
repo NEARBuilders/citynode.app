@@ -116,6 +116,10 @@ export const TenantSchema = z.object({
 
 export type Tenant = z.infer<typeof TenantSchema>;
 
+export const PublicTenantSchema = TenantSchema.omit({ ownerUserId: true });
+
+export type PublicTenant = z.infer<typeof PublicTenantSchema>;
+
 export const TenantBindingSchema = z.object({
   hostname: z
     .string()
@@ -161,6 +165,12 @@ export const TenantBindingRecordSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+export const TenantBindingPublicSchema = TenantBindingRecordSchema.omit({
+  verificationToken: true,
+});
+
+export type TenantBindingPublic = z.infer<typeof TenantBindingPublicSchema>;
 
 export const NodeSchema = z.object({
   id: z.string(),
@@ -360,12 +370,12 @@ export const contract = oc.router({
   resolveTenant: oc
     .route({ method: "GET", path: "/tenants/account/{accountId}" })
     .input(z.object({ accountId: z.string() }))
-    .output(TenantSchema.nullable()),
+    .output(PublicTenantSchema.nullable()),
 
   resolveTenantByOrgId: oc
     .route({ method: "GET", path: "/tenants/org/{orgId}" })
     .input(z.object({ orgId: z.string() }))
-    .output(TenantSchema)
+    .output(PublicTenantSchema)
     .errors({ NOT_FOUND }),
 
   listTenantBindings: oc
@@ -449,10 +459,11 @@ export const contract = oc.router({
       path: "/tenants/bindings/resolve",
       summary: "Resolve a binding by hostname",
       description:
-        "Public — returns the binding record for a hostname (used by the host resolver).",
+        "Public — returns the binding record for a hostname (used by the host resolver). " +
+        "The DNS verification token is never included.",
     })
     .input(z.object({ hostname: z.string() }))
-    .output(TenantBindingRecordSchema.nullable()),
+    .output(TenantBindingPublicSchema.nullable()),
 
   bindingPreflight: oc
     .route({
@@ -571,6 +582,23 @@ export const contract = oc.router({
     )
     .output(NodeSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  setNodeBulletin: oc
+    .route({
+      method: "PUT",
+      path: "/nodes/{nodeId}/bulletin",
+      summary: "Set or clear a community's dashboard bulletin",
+      description:
+        "Merges into node metadata rather than replacing it, unlike updateNode — safe against clobbering poolAccountId or other metadata keys.",
+    })
+    .input(
+      z.object({
+        nodeId: z.string(),
+        bulletin: z.string().max(2000).nullable(),
+      }),
+    )
+    .output(NodeSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   deleteNode: oc
     .route({ method: "POST", path: "/nodes/{nodeId}/delete" })

@@ -1,5 +1,5 @@
 import { BankIcon } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, stripSearchParams, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -191,6 +191,24 @@ function OrganizationDetail() {
     (apiKey) => setCreatedApiKey(apiKey),
   );
   const { removeMemberMutation } = useOrganizationMemberActions(auth, orgId);
+  const canExportEmails = canManageMembers || session?.user?.role === "admin";
+  const exportEmailsMutation = useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.auth.exportMembers({ organizationId: orgId });
+      return result.csv;
+    },
+    onSuccess: async (csv) => {
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${org?.slug ?? "organization"}-members.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Member emails exported");
+    },
+    onError: (error: Error) => toast.error(error.message || "Failed to export emails"),
+  });
   const activeTab = requestedTab === "onboard" && !canOrganize ? "members" : requestedTab;
   const setActiveTab = (value: unknown) => {
     if (!isOrganizationTab(value) || value === activeTab) return;
@@ -292,8 +310,11 @@ function OrganizationDetail() {
         </div>
         <MembersTab
           canManageMembers={canManageMembers}
+          canExportEmails={canExportEmails}
+          isExportingEmails={exportEmailsMutation.isPending}
           isRemoving={removeMemberMutation.isPending}
           members={members}
+          onExportEmails={() => exportEmailsMutation.mutate()}
           onInvite={isPersonal ? undefined : () => setActiveTab("invitations")}
           onRemove={(member) => removeMemberMutation.mutate(member)}
           sessionUserId={session?.user?.id}

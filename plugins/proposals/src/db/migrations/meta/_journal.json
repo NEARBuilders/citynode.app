@@ -15,6 +15,13 @@
       "when": 1788541800000,
       "tag": "0001_legacy_lifecycle_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788542000000,
+      "tag": "0002_scrub_actor_email_labels",
+      "breakpoints": true
     }
   ]
 }

@@ -64,8 +64,9 @@ export function MemberRow({
   onRemove?: () => void;
 }) {
   const name = memberDisplayName(member, member.userId);
-  const shownEmail = realEmail(member.user?.email);
-  const secondary = member.user?.name && shownEmail ? shownEmail : member.userId;
+  const secondary = member.user?.name
+    ? (realEmail(member.user?.email) ?? member.userId)
+    : member.userId;
 
   return (
     <Item size="sm" data-testid={`org-member-${member.userId}`}>

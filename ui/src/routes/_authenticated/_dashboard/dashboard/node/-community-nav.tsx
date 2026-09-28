@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export type CommunitySection = "overview" | "content" | "onboarding" | "proposals";
+export type CommunitySection = "overview" | "content" | "onboarding" | "bulletin" | "proposals";
 
 export type CommunityNavSection = CommunitySection | "settings";
 
@@ -56,6 +56,22 @@ export function CommunityNav({
       label: "Proposals",
       link: <Link to="/dashboard/node/proposals" search={{ nodeId }} />,
     },
+    ...(canManage
+      ? [
+          {
+            value: "bulletin" as const,
+            label: "Bulletin",
+            link: (
+              <Link
+                to="/nodes/$nodeId/content"
+                params={{ nodeId }}
+                search={{ tab: "bulletin" }}
+                replace={replace}
+              />
+            ),
+          },
+        ]
+      : []),
     ...(tenantId && canManage
       ? [
           {

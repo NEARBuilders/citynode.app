@@ -83,7 +83,11 @@ export const contract = oc.router({
     ),
 
   getUpvoteFeed: oc
-    .route({ method: "GET", path: "/v1/upvotes/feed" })
+    .route({
+      method: "GET",
+      path: "/v1/upvotes/feed",
+      summary: "Feed of recent upvotes (auth required)",
+    })
     .input(
       z.object({
         limit: z.number().int().min(1).max(100).optional(),
@@ -96,7 +100,7 @@ export const contract = oc.router({
           z.object({
             id: z.string(),
             entityId: z.string(),
-            userId: z.string(),
+            channel: z.string().describe("Hashed vote channel, not a user identifier"),
             createdAt: z.iso.datetime(),
           }),
         ),
@@ -106,7 +110,8 @@ export const contract = oc.router({
           nextCursor: z.string().nullable(),
         }),
       }),
-    ),
+    )
+    .errors({ UNAUTHORIZED }),
 
   subscribe: oc
     .route({ method: "GET", path: "/v1/upvotes/stream" })

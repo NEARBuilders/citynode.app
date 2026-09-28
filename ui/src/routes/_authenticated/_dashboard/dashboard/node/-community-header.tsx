@@ -91,11 +91,14 @@ export function CommunityHeader({
   const switchTo = (targetId: string) => {
     if (active === "proposals") {
       void navigate({ to: "/dashboard/node/proposals", search: { nodeId: targetId } });
-    } else if (active === "content" || active === "onboarding") {
+    } else if (active === "content" || active === "onboarding" || active === "bulletin") {
       void navigate({
         to: "/nodes/$nodeId/content",
         params: { nodeId: targetId },
-        search: { tab: active === "onboarding" ? "onboarding" : "events" },
+        search: {
+          tab:
+            active === "onboarding" ? "onboarding" : active === "bulletin" ? "bulletin" : "events",
+        },
       });
     } else {
       void navigate({ to: "/dashboard/node", search: { nodeId: targetId } });

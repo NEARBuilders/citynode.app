@@ -231,10 +231,21 @@ export default createPlugin({
       getProposals: builder.getProposals.effect(function* ({ input, context }) {
         const { privatePluginIds } = yield* ProposalPluginConfig;
         const proposal = yield* ProposalService;
-        return yield* proposal.getProposals({
+        const isAdmin = context.user?.role === "admin";
+        const result = yield* proposal.getProposals({
           ...input,
           ...proposalScope(privatePluginIds, context),
         });
+        if (isAdmin) return result;
+        return {
+          data: result.data.map(
+            (entry: { createdBy: string; payload: unknown; [key: string]: unknown }) => {
+              const { createdBy: _createdBy, payload: _payload, ...proposal } = entry;
+              return { ...proposal, payload: null, createdBy: "[hidden]" as const };
+            },
+          ),
+          meta: result.meta,
+        };
       }),
 
       getProposalCount: builder.getProposalCount.effect(function* ({ input, context }) {
@@ -245,7 +256,7 @@ export default createPlugin({
         return yield* proposal.getProposalCount(input);
       }),
 
-      getAuditLog: builder.getAuditLog.effect(function* ({ input, context }) {
+      getAuditLog: builder.getAuditLog.use(requireAdmin).effect(function* ({ input, context }) {
         if (!(yield* canReadProposal(context, input.pluginId, input.entityId))) {
           return {
             data: [],

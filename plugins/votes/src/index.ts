@@ -56,7 +56,7 @@ export default createPlugin({
         const voteService = Context.get(context["effect/context"], VoteService);
         return await voteService.getUpvoteCounts(input.entityIds);
       }),
-      getUpvoteFeed: builder.getUpvoteFeed.handler(async ({ input, context }) => {
+      getUpvoteFeed: builder.getUpvoteFeed.use(requireAuth).handler(async ({ input, context }) => {
         const voteService = Context.get(context["effect/context"], VoteService);
         return await voteService.getUpvoteFeed(input.limit, input.cursor);
       }),

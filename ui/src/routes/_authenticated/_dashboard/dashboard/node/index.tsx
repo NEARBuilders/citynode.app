@@ -17,6 +17,7 @@ import {
 } from "@/app";
 import {
   Badge,
+  Bulletin,
   Button,
   LocalDate,
   NodeValidatorTable,
@@ -114,8 +115,13 @@ function NodeOverview() {
     <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} search={{ tab }} />
   );
 
+  const bulletin = selectedNode.metadata?.bulletin;
+
   return (
     <div className="flex flex-col gap-12">
+      {typeof bulletin === "string" && bulletin.trim() && (
+        <Bulletin content={bulletin} runtimeConfig={runtimeConfig} />
+      )}
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         <Stat
           label="Upcoming events"
