@@ -1,5 +1,8 @@
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
+  createLocaleRuntime,
   matchLocale,
   readLocaleCookie,
   resolveLocale,
@@ -59,5 +62,35 @@ describe("shared locale persistence", () => {
       "citynode_locale=es; Path=/; Max-Age=31536000; SameSite=Lax",
     );
     expect(serializeLocaleCookie("citynode_locale", "es", true)).toContain("; Secure");
+  });
+});
+
+describe("shared locale provider", () => {
+  it("renders when the server runtime exposes navigator without language preferences", () => {
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: {} });
+
+    try {
+      const runtime = createLocaleRuntime({
+        locales,
+        defaultLocale: "en",
+        cookieName: "citynode_locale",
+      });
+      const html = renderToString(
+        createElement(
+          runtime.LocaleProvider,
+          { messages: () => ({ greeting: "Hello" }) },
+          createElement("span", null, "Ready"),
+        ),
+      );
+
+      expect(html).toContain("Ready");
+    } finally {
+      if (navigatorDescriptor) {
+        Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, "navigator");
+      }
+    }
   });
 });

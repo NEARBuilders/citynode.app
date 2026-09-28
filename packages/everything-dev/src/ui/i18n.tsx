@@ -106,11 +106,17 @@ export function createLocaleRuntime<const Locale extends string>({
 
   const LocaleContext = createContext<ContextValue | null>(null);
 
+  const getBrowserLocales = (): readonly string[] => {
+    if (typeof navigator === "undefined") return [];
+    if (Array.isArray(navigator.languages)) return navigator.languages;
+    return navigator.language ? [navigator.language] : [];
+  };
+
   const detectLocale = (preferredLocale?: string | null): Locale =>
     resolveLocale({
       preferredLocale,
       cookie: typeof document === "undefined" ? "" : document.cookie,
-      browserLocales: typeof navigator === "undefined" ? [] : navigator.languages,
+      browserLocales: getBrowserLocales(),
       locales,
       defaultLocale,
       cookieName,
