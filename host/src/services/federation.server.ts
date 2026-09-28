@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { createInstance } from "@module-federation/enhanced/runtime";
-import { Effect, Schedule, Semaphore } from "effect";
+import { Context, Effect, Layer, Schedule, Semaphore } from "effect";
 import { verifySriForUrl } from "everything-dev/integrity";
 import {
   type ConstructedTree,
@@ -11,7 +11,6 @@ import {
   UI_REMOTE_SERVER_ENTRY_FILENAME,
 } from "everything-dev/ui/manifest";
 import type { RouterModule } from "../types";
-import { logger } from "../utils/logger";
 import type { RuntimeConfig } from "./config";
 import { ExposeModuleMissing, FederationError } from "./errors";
 import { type LocalDistServer, startLocalDistServer } from "./local-dist-server";
@@ -103,8 +102,8 @@ function removeInstanceRemotes(instance: ModuleFederationInstance, remoteName?: 
         handler?.removeRemote?.(remote);
       }
     }
-  } catch (error) {
-    logger.debug(`[Federation] removeRemote(${remoteName ?? "*"}) failed:`, error);
+  } catch {
+    /* noop */
   }
 }
 
@@ -139,20 +138,37 @@ function initializeShareScope(mf: ModuleFederationInstance): Effect.Effect<void,
   );
 }
 
-export function resetFederationInstance() {
-  routerModuleCache.clear();
-  verifiedSsrEntryCache.clear();
-  uiExposeCache.clear();
-  for (const server of localDistServers.values()) {
-    void server.stop();
-  }
-  localDistServers.clear();
-  if (compositionInstance) {
-    removeInstanceRemotes(compositionInstance);
-  }
-  compositionInstance = null;
-  compositionRemoteEntries.clear();
-  loadedEntryByRemote.clear();
+function disposeFederationResources(): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    routerModuleCache.clear();
+    verifiedSsrEntryCache.clear();
+    uiExposeCache.clear();
+    yield* Effect.forEach(
+      [...localDistServers.values()],
+      (server) => Effect.tryPromise(() => server.stop()).pipe(Effect.catch(() => Effect.void)),
+      { discard: true },
+    );
+    localDistServers.clear();
+    if (compositionInstance) {
+      removeInstanceRemotes(compositionInstance);
+    }
+    compositionInstance = null;
+    compositionRemoteEntries.clear();
+    loadedEntryByRemote.clear();
+  });
+}
+
+/** Ties federation state and local dist servers to the host runtime scope. */
+export class FederationLifecycle extends Context.Service<FederationLifecycle, undefined>()(
+  "host/FederationLifecycle",
+) {
+  static readonly layer = Layer.effect(
+    FederationLifecycle,
+    Effect.gen(function* () {
+      yield* Effect.addFinalizer(() => disposeFederationResources());
+      return FederationLifecycle.of(undefined);
+    }),
+  );
 }
 
 const localDistServers = new Map<string, LocalDistServer>();
@@ -186,22 +202,42 @@ export async function localUiRemoteEntry(source: {
   };
 }
 
-export async function waitForLocalContainer(entry: UiRemoteEntry): Promise<void> {
+export const waitForLocalContainer = Effect.fn("waitForLocalContainer")(function* (
+  entry: UiRemoteEntry,
+): Effect.fn.Return<void, Error> {
   const containerUrl = ssrEntryUrlOf(entry);
-  const deadline = Date.now() + LOCAL_CONTAINER_READY_TIMEOUT_MS;
   let announced = false;
-  while (Date.now() < deadline) {
-    const res = await fetch(containerUrl).catch(() => null);
-    const body = await res?.text().catch(() => "");
-    if (res?.ok && !/not found|<(!doctype|html)/i.test((body ?? "").slice(0, 64))) return;
-    if (!announced) {
-      announced = true;
-      console.log(`⏳ waiting for ${entry.name} to compile (SSR container not ready)…`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, LOCAL_CONTAINER_READY_POLL_MS));
+  const check = Effect.tryPromise({
+    try: async (signal) => {
+      const res = await fetch(containerUrl, { signal });
+      const body = await res.text();
+      return res.ok && !/not found|<(!doctype|html)/i.test(body.slice(0, 64));
+    },
+    catch: () => false,
+  }).pipe(
+    Effect.catch(() => Effect.succeed(false)),
+    Effect.tap((ready) =>
+      !ready && !announced
+        ? Effect.sync(() => {
+            announced = true;
+            console.log(`⏳ waiting for ${entry.name} to compile (SSR container not ready)…`);
+          })
+        : Effect.void,
+    ),
+  );
+  const ready = yield* Effect.repeat(check, {
+    schedule: Schedule.spaced(`${LOCAL_CONTAINER_READY_POLL_MS} millis`),
+    until: (isReady) => isReady,
+  }).pipe(
+    Effect.timeout(`${LOCAL_CONTAINER_READY_TIMEOUT_MS} millis`),
+    Effect.catchTag("TimeoutError", () => Effect.succeed(false)),
+  );
+  if (!ready) {
+    return yield* Effect.fail(
+      new Error(`${entry.name} SSR container never became ready at ${containerUrl}`),
+    );
   }
-  throw new Error(`${entry.name} SSR container never became ready at ${containerUrl}`);
-}
+});
 
 export function resolveLocalRoot(localPath: string): string {
   return path.resolve(process.cwd(), localPath);
@@ -284,8 +320,8 @@ interface RemoteModuleLoad<T> {
 function bypassCompositionModuleCache(mf: ModuleFederationInstance, remoteName: string): void {
   try {
     (mf as unknown as { moduleCache?: Map<string, unknown> }).moduleCache?.delete(remoteName);
-  } catch (error) {
-    logger.debug(`[Federation] bypassCompositionModuleCache(${remoteName}) failed:`, error);
+  } catch {
+    /* noop */
   }
 }
 

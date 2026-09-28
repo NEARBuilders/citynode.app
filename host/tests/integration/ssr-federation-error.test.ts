@@ -1,5 +1,5 @@
-import { Cause, Effect, Exit } from "effect";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Cause, Effect, Exit, ManagedRuntime } from "effect";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeConfig } from "../../src/services/config";
 
 const loadRemoteMock = vi.fn();
@@ -16,7 +16,7 @@ vi.mock("everything-dev/integrity", () => ({
   verifySriForUrl: verifySriForUrlMock,
 }));
 
-const { loadRouterModule, resetFederationInstance } = await import(
+const { FederationLifecycle, loadRouterModule } = await import(
   "../../src/services/federation.server"
 );
 
@@ -51,11 +51,20 @@ function createRemoteConfig(options?: { ssrUrl?: string; ssrIntegrity?: string }
   } as RuntimeConfig;
 }
 
+let disposeLifecycle: (() => Promise<void>) | undefined;
+
 describe("loadRouterModule failure paths", () => {
-  beforeEach(() => {
-    resetFederationInstance();
+  beforeEach(async () => {
+    const runtime = ManagedRuntime.make(FederationLifecycle.layer);
+    await runtime.runPromise(FederationLifecycle);
+    disposeLifecycle = () => runtime.dispose();
     vi.clearAllMocks();
     verifySriForUrlMock.mockResolvedValue(undefined);
+  });
+
+  afterEach(async () => {
+    await disposeLifecycle?.();
+    disposeLifecycle = undefined;
   });
 
   describe("loadRemote returns null", () => {

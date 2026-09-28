@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
 import type { ComposePayload } from "everything-dev/ui/manifest";
 import { renderClientShell } from "../routes/html";
 import type { RouterModule } from "../types";
@@ -12,7 +12,14 @@ import {
 import { createPluginsClient, type PluginResult } from "./plugins";
 import { getTenantRuntimeErrorResponse, resolveRequestRuntime } from "./tenant-runtime";
 import { enforceCacheLimit, pruneExpiredEntries } from "./ttl-cache";
-import { type ComposedUi, composeClientPayload, composeUi, isSsrAvailable } from "./ui-compose";
+import {
+  type ComposedUi,
+  composeClientPayload,
+  composeUi,
+  createUiComposeCacheState,
+  isSsrAvailable,
+  type UiComposeCacheState,
+} from "./ui-compose";
 
 /**
  * One seam from request to stream: tenant resolution, manifest composition,
@@ -33,6 +40,8 @@ import { type ComposedUi, composeClientPayload, composeUi, isSsrAvailable } from
 export interface SsrRenderDeps {
   config: RuntimeConfig;
   plugins: PluginResult;
+  composeCache?: UiComposeCacheState;
+  clientConfigCache?: ClientConfigCacheState;
 }
 
 export interface SsrRenderRequestContext {
@@ -53,25 +62,47 @@ interface CachedClientConfig {
 const CLIENT_CONFIG_TTL_MS = 30_000;
 const MAX_CLIENT_CONFIG_CACHE_SIZE = 512;
 
-const clientConfigCache = new Map<string, CachedClientConfig>();
+export interface ClientConfigCacheState {
+  entries: Map<string, CachedClientConfig>;
+}
+
+export class ClientConfigCache extends Context.Service<ClientConfigCache, ClientConfigCacheState>()(
+  "host/ClientConfigCache",
+) {
+  static readonly layer = Layer.effect(
+    ClientConfigCache,
+    Effect.gen(function* () {
+      const state = createClientConfigCacheState();
+      yield* Effect.addFinalizer(() => Effect.sync(() => state.entries.clear()));
+      return ClientConfigCache.of(state);
+    }),
+  );
+}
+
+export function createClientConfigCacheState(): ClientConfigCacheState {
+  return { entries: new Map() };
+}
 
 /**
  * The client runtime payload only varies with tenant identity, request
  * origin, auth availability, and the composed digest — rebuild it once per
  * window instead of once per request.
  */
-function buildClientConfigCached(inputs: {
-  effectiveConfig: RuntimeConfig;
-  request: Request;
-  tenantAccountId: string | null;
-  authAvailable: boolean;
-  composePayload: ComposePayload;
-}): ClientRuntimeConfig {
+function buildClientConfigCached(
+  inputs: {
+    effectiveConfig: RuntimeConfig;
+    request: Request;
+    tenantAccountId: string | null;
+    authAvailable: boolean;
+    composePayload: ComposePayload;
+  },
+  cache: ClientConfigCacheState,
+): ClientRuntimeConfig {
   const now = Date.now();
-  pruneExpiredEntries(clientConfigCache, now);
+  pruneExpiredEntries(cache.entries, now);
   const origin = new URL(inputs.request.url).origin;
   const cacheKey = `${inputs.tenantAccountId ?? "base"}::${origin}::${inputs.authAvailable}::${inputs.composePayload.digest}`;
-  const cached = clientConfigCache.get(cacheKey);
+  const cached = cache.entries.get(cacheKey);
   if (cached && cached.expiresAt > now) {
     return cached.value;
   }
@@ -83,8 +114,8 @@ function buildClientConfigCached(inputs: {
     inputs.authAvailable,
     inputs.composePayload,
   );
-  clientConfigCache.set(cacheKey, { value, expiresAt: now + CLIENT_CONFIG_TTL_MS });
-  enforceCacheLimit(clientConfigCache, MAX_CLIENT_CONFIG_CACHE_SIZE);
+  cache.entries.set(cacheKey, { value, expiresAt: now + CLIENT_CONFIG_TTL_MS });
+  enforceCacheLimit(cache.entries, MAX_CLIENT_CONFIG_CACHE_SIZE);
   return value;
 }
 
@@ -99,6 +130,8 @@ function textResponse(message: string, status: number, requestId?: string) {
 }
 
 export function createSsrRender(deps: SsrRenderDeps) {
+  const composeCache = deps.composeCache ?? createUiComposeCacheState();
+  const clientConfigCache = deps.clientConfigCache ?? createClientConfigCacheState();
   return async (request: Request, ctx: SsrRenderRequestContext): Promise<Response> => {
     const pathname = new URL(request.url).pathname;
     const requestId = crypto.randomUUID().slice(0, 8);
@@ -120,8 +153,9 @@ export function createSsrRender(deps: SsrRenderDeps) {
       const activeRuntime = resolveActiveRuntime(effectiveConfig, request);
       let composePayload: ComposePayload | undefined;
       try {
-        composePayload = (await Effect.runPromise(composeClientPayload(effectiveConfig)))
-          ?.clientPayload;
+        composePayload = (
+          await Effect.runPromise(composeClientPayload(effectiveConfig, composeCache))
+        )?.clientPayload;
       } catch (error) {
         logger.warn(
           `[SSR] ${requestId} Client compose payload failed for ${pathname} — serving the core-only shell:`,
@@ -147,19 +181,22 @@ export function createSsrRender(deps: SsrRenderDeps) {
 
     let composed: ComposedUi;
     try {
-      composed = await Effect.runPromise(composeUi(effectiveConfig));
+      composed = await Effect.runPromise(composeUi(effectiveConfig, composeCache));
     } catch (error) {
       logger.error(`[SSR] ${requestId} Manifest composition failed for ${pathname}:`, error);
       return textResponse("SSR composition failed", 500, requestId);
     }
 
-    const runtimeConfig = buildClientConfigCached({
-      effectiveConfig,
-      request,
-      tenantAccountId: resolved.tenantAccountId,
-      authAvailable: deps.plugins.auth !== null,
-      composePayload: composed.clientPayload,
-    });
+    const runtimeConfig = buildClientConfigCached(
+      {
+        effectiveConfig,
+        request,
+        tenantAccountId: resolved.tenantAccountId,
+        authAvailable: deps.plugins.auth !== null,
+        composePayload: composed.clientPayload,
+      },
+      clientConfigCache,
+    );
 
     const ssrRouterModule: RouterModule = composed.routerModule;
 

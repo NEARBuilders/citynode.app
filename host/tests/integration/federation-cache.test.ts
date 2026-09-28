@@ -1,5 +1,5 @@
-import { Effect } from "effect";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Effect, ManagedRuntime } from "effect";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeConfig } from "../../src/services/config";
 
 const loadRemoteMock = vi.fn();
@@ -22,8 +22,21 @@ vi.mock("everything-dev/integrity", () => ({
   verifySriForUrl: verifySriForUrlMock,
 }));
 
-const { loadRouterModule, loadUiComposeModule, loadUiRouteConfig, resetFederationInstance } =
+const { FederationLifecycle, loadRouterModule, loadUiComposeModule, loadUiRouteConfig } =
   await import("../../src/services/federation.server");
+
+let disposeLifecycle: (() => Promise<void>) | undefined;
+
+async function startFederationLifecycle() {
+  const runtime = ManagedRuntime.make(FederationLifecycle.layer);
+  await runtime.runPromise(FederationLifecycle);
+  disposeLifecycle = () => runtime.dispose();
+}
+
+afterEach(async () => {
+  await disposeLifecycle?.();
+  disposeLifecycle = undefined;
+});
 
 function createRuntimeConfig(options?: {
   source?: "local" | "remote";
@@ -58,8 +71,8 @@ function createRuntimeConfig(options?: {
 }
 
 describe("loadRouterModule cache", () => {
-  beforeEach(() => {
-    resetFederationInstance();
+  beforeEach(async () => {
+    await startFederationLifecycle();
     vi.clearAllMocks();
     verifySriForUrlMock.mockResolvedValue(undefined);
   });
@@ -187,8 +200,8 @@ describe("loadRouterModule cache", () => {
 });
 
 describe("ui expose loads (routeConfig / compose)", () => {
-  beforeEach(() => {
-    resetFederationInstance();
+  beforeEach(async () => {
+    await startFederationLifecycle();
     vi.clearAllMocks();
     verifySriForUrlMock.mockResolvedValue(undefined);
   });

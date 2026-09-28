@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { Data, Effect } from "effect";
+import { Context, Data, Effect, Layer } from "effect";
 import {
   CORE_UI_PLUGIN_KEY as CORE_UI_KEY,
   type ComposePayload,
@@ -144,17 +144,63 @@ interface CachedManifest {
   fetchedAt: number;
 }
 
-/** Remote manifest fetches are cached + last-good: a flaky plugin host must
- * not 500 the site (or force per-request fetches) while a valid snapshot
- * exists. Local manifests re-read every time — dev must see edits. */
-const remoteManifestCache = new Map<string, CachedManifest>();
+interface CachedComposeVariant {
+  variant: ComposedUi;
+  staleAfter: number;
+}
+
+export interface UiComposeCacheState {
+  remoteManifests: Map<string, CachedManifest>;
+  variants: Map<string, CachedComposeVariant>;
+}
+
+export class UiComposeCache extends Context.Service<UiComposeCache, UiComposeCacheState>()(
+  "host/UiComposeCache",
+) {
+  static layerFrom(state: UiComposeCacheState) {
+    return Layer.effect(
+      UiComposeCache,
+      Effect.gen(function* () {
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            state.remoteManifests.clear();
+            state.variants.clear();
+          }),
+        );
+        return UiComposeCache.of(state);
+      }),
+    );
+  }
+
+  static readonly layer = Layer.effect(
+    UiComposeCache,
+    Effect.gen(function* () {
+      const state: UiComposeCacheState = {
+        remoteManifests: new Map(),
+        variants: new Map(),
+      };
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          state.remoteManifests.clear();
+          state.variants.clear();
+        }),
+      );
+      return UiComposeCache.of(state);
+    }),
+  );
+}
+
+export function createUiComposeCacheState(): UiComposeCacheState {
+  return { remoteManifests: new Map(), variants: new Map() };
+}
 
 const loadRemoteManifestCached = (
   source: UiSource,
   manifestUrl: string,
+  cache: UiComposeCacheState,
 ): Effect.Effect<PluginManifest, Error> =>
   Effect.gen(function* () {
-    const cached = remoteManifestCache.get(source.key);
+    const cached = cache.remoteManifests.get(source.key);
     const now = Date.now();
     if (cached && now - cached.fetchedAt < MANIFEST_TTL_MS) {
       return cached.manifest;
@@ -178,11 +224,14 @@ const loadRemoteManifestCached = (
         }),
       ),
     );
-    remoteManifestCache.set(source.key, { manifest: fresh, fetchedAt: now });
+    cache.remoteManifests.set(source.key, { manifest: fresh, fetchedAt: now });
     return fresh;
   });
 
-const loadManifest = (source: UiSource): Effect.Effect<PluginManifest, Error> => {
+const loadManifest = (
+  source: UiSource,
+  cache: UiComposeCacheState,
+): Effect.Effect<PluginManifest, Error> => {
   if (source.localRoot) {
     return Effect.try(() =>
       PluginManifestSchema.parse(
@@ -193,7 +242,7 @@ const loadManifest = (source: UiSource): Effect.Effect<PluginManifest, Error> =>
   if (!source.manifestUrl) {
     return Effect.fail(new Error(`Ui source "${source.key}" has no manifest location`));
   }
-  return loadRemoteManifestCached(source, source.manifestUrl);
+  return loadRemoteManifestCached(source, source.manifestUrl, cache);
 };
 
 interface ResolvedManifests {
@@ -204,9 +253,12 @@ interface ResolvedManifests {
 /** The shared front half of composition: manifests + digest. Both composeUi
  * (full SSR variant) and composeClientPayload (payload only) run this so the
  * two paths digest identically by construction. */
-const resolveManifestsAndDigest = (sources: UiSource[]): Effect.Effect<ResolvedManifests, Error> =>
+const resolveManifestsAndDigest = (
+  sources: UiSource[],
+  cache: UiComposeCacheState,
+): Effect.Effect<ResolvedManifests, Error> =>
   Effect.gen(function* () {
-    const manifests = yield* Effect.forEach(sources, (source) => loadManifest(source), {
+    const manifests = yield* Effect.forEach(sources, (source) => loadManifest(source, cache), {
       concurrency: "unbounded",
     });
     const digest = yield* Effect.tryPromise(() =>
@@ -230,21 +282,13 @@ const clientPayloadOf = (
   manifests,
 });
 
-const composeVariants = new Map<string, { variant: ComposedUi; staleAfter: number }>();
-
-export function resetUiComposeCache() {
-  composeVariants.clear();
-  remoteManifestCache.clear();
-}
-
-/** Ages out the remote manifest cache only — variant composition state is
- * preserved so callers can observe digest-driven recomposition. */
-export function resetRemoteManifestCache() {
-  remoteManifestCache.clear();
-}
-
-function rememberVariant(digest: string, variant: ComposedUi, staleAfter: number) {
-  composeVariants.set(digest, { variant, staleAfter });
+function rememberVariant(
+  cache: UiComposeCacheState,
+  digest: string,
+  variant: ComposedUi,
+  staleAfter: number,
+) {
+  cache.variants.set(digest, { variant, staleAfter });
 }
 
 /** Variant cache identity: the structural digest plus a deployment
@@ -267,18 +311,21 @@ function variantFingerprint(sources: UiSource[]): string {
     .join("|");
 }
 
-export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Error> =>
+export const composeUi = (
+  config: RuntimeConfig,
+  cache: UiComposeCacheState,
+): Effect.Effect<ComposedUi, Error> =>
   Effect.gen(function* () {
     const sources = uiSources(config);
     const core = sources.find((source) => source.key === CORE_UI_KEY)!;
 
-    const { manifests, digest } = yield* resolveManifestsAndDigest(sources);
+    const { manifests, digest } = yield* resolveManifestsAndDigest(sources, cache);
     const manifestByKey = new Map(sources.map((source, i) => [source.key, manifests[i]!]));
 
     const variantKey = `${digest}::${variantFingerprint(sources)}`;
     const isDev = sources.some((source) => source.localRoot);
     const now = Date.now();
-    const cached = composeVariants.get(variantKey);
+    const cached = cache.variants.get(variantKey);
     if (cached && (isDev ? cached.staleAfter > now : true)) {
       return cached.variant;
     }
@@ -292,7 +339,7 @@ export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Erro
         )
       : core.remote!;
     if (core.localRoot) {
-      yield* Effect.tryPromise(() => waitForLocalContainer(coreEntry));
+      yield* waitForLocalContainer(coreEntry);
     }
     const [composeModule, routeConfig, routerModule] = yield* Effect.all([
       loadUiComposeModule(coreEntry),
@@ -311,7 +358,7 @@ export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Erro
         const localEntry = yield* Effect.tryPromise(() =>
           localUiRemoteEntry({ name: source.mfName, localRoot: source.localRoot! }),
         );
-        yield* Effect.tryPromise(() => waitForLocalContainer(localEntry));
+        yield* waitForLocalContainer(localEntry);
         routeConfigBySource.set(source.key, yield* loadUiRouteConfig(localEntry));
       } else if (source.remote) {
         routeConfigBySource.set(source.key, yield* loadUiRouteConfig(source.remote));
@@ -349,14 +396,15 @@ export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Erro
       clientPayload: clientPayloadOf(sources, manifests, digest),
     };
     rememberVariant(
+      cache,
       variantKey,
       variant,
       isDev ? now + DEV_VARIANT_TTL_MS : Number.POSITIVE_INFINITY,
     );
-    while (composeVariants.size > MAX_COMPOSE_VARIANTS) {
-      const oldest = composeVariants.keys().next().value;
+    while (cache.variants.size > MAX_COMPOSE_VARIANTS) {
+      const oldest = cache.variants.keys().next().value;
       if (!oldest) break;
-      composeVariants.delete(oldest);
+      cache.variants.delete(oldest);
     }
     return variant;
   });
@@ -378,10 +426,11 @@ export interface ClientCompose {
  */
 export const composeClientPayload = (
   config: RuntimeConfig,
+  cache: UiComposeCacheState,
 ): Effect.Effect<ClientCompose | undefined, Error> =>
   Effect.gen(function* () {
     const sources = uiSources(config);
     if (sources.every((source) => source.key === CORE_UI_KEY)) return undefined;
-    const { manifests, digest } = yield* resolveManifestsAndDigest(sources);
+    const { manifests, digest } = yield* resolveManifestsAndDigest(sources, cache);
     return { digest, clientPayload: clientPayloadOf(sources, manifests, digest) };
   });

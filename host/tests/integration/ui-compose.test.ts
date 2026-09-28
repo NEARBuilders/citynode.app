@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Effect, Exit } from "effect";
+import { Effect, Exit, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRuntimeClientConfig,
@@ -27,13 +27,10 @@ vi.mock("../../src/services/federation.server", async (importOriginal) => {
   };
 });
 
-const {
-  composeUi,
-  composeClientPayload,
-  resetUiComposeCache,
-  resetRemoteManifestCache,
-  uiSources,
-} = await import("../../src/services/ui-compose");
+const { composeUi, composeClientPayload, createUiComposeCacheState, uiSources } = await import(
+  "../../src/services/ui-compose"
+);
+const { FederationLifecycle } = await import("../../src/services/federation.server");
 
 const CORE_MANIFEST = {
   name: "ui",
@@ -153,10 +150,20 @@ const cdnAwareFetch = async (url: unknown) => {
 };
 
 const fetchMock = vi.fn(cdnAwareFetch);
+let cache = createUiComposeCacheState();
+let disposeFederation: (() => Promise<void>) | undefined;
 
-beforeEach(() => {
+const compose = (config: RuntimeConfig) => Effect.runPromise(composeUi(config, cache));
+const composeExit = (config: RuntimeConfig) => Effect.runPromiseExit(composeUi(config, cache));
+const composeClient = (config: RuntimeConfig) =>
+  Effect.runPromise(composeClientPayload(config, cache));
+
+beforeEach(async () => {
   vi.clearAllMocks();
-  resetUiComposeCache();
+  cache = createUiComposeCacheState();
+  const lifecycle = ManagedRuntime.make(FederationLifecycle.layer);
+  await lifecycle.runPromise(FederationLifecycle);
+  disposeFederation = () => lifecycle.dispose();
   fetchMock.mockImplementation(cdnAwareFetch);
   vi.stubGlobal("fetch", fetchMock);
   federationMocks.loadUiComposeModule.mockImplementation(() =>
@@ -167,8 +174,10 @@ beforeEach(() => {
   federationMocks.loadRouterModule.mockImplementation(() => Effect.succeed(ROUTER_MODULE));
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals();
+  await disposeFederation?.();
+  disposeFederation = undefined;
 });
 
 describe("uiSources", () => {
@@ -187,13 +196,24 @@ describe("uiSources", () => {
   it("is empty of plugins when none declare ui", () => {
     expect(uiSources(createBaseRuntimeConfig()).map((source) => source.key)).toEqual(["ui"]);
   });
+
+  it("skips plugin ui sources with no production URL", () => {
+    const config = configWithPlugin();
+    config.plugins!.auth!.ui = {
+      name: "auth-ui",
+      url: "",
+      entry: "",
+      source: "remote",
+    };
+    expect(uiSources(config).map((source) => source.key)).toEqual(["ui"]);
+  });
 });
 
 describe("composeUi", () => {
   it("composes core + plugin manifests through the core engine, digest-cached", async () => {
     const config = configWithPlugin();
-    const first = await Effect.runPromise(composeUi(config));
-    const second = await Effect.runPromise(composeUi(config));
+    const first = await compose(config);
+    const second = await compose(config);
 
     expect(first.routeTree).toEqual({ id: "composed-tree" });
     expect(first.routerModule).toBe(ROUTER_MODULE);
@@ -222,7 +242,7 @@ describe("composeUi", () => {
 
   it("manifest content changes invalidate the cached variant", async () => {
     const config = configWithPlugin();
-    const first = await Effect.runPromise(composeUi(config));
+    const first = await compose(config);
 
     const changed = {
       ...AUTH_MANIFEST,
@@ -236,9 +256,9 @@ describe("composeUi", () => {
       return { ok: true, status: 200, json: async () => CORE_MANIFEST };
     });
 
-    resetRemoteManifestCache();
+    cache.remoteManifests.clear();
 
-    const second = await Effect.runPromise(composeUi(config));
+    const second = await compose(config);
     expect(second.digest).not.toBe(first.digest);
     expect(second).not.toBe(first);
     expect(construct).toHaveBeenCalledTimes(2);
@@ -246,11 +266,11 @@ describe("composeUi", () => {
 
   it("deployment-only changes (integrity bumps) keep the hydration digest but recompose the variant", async () => {
     const config = configWithPlugin();
-    const first = await Effect.runPromise(composeUi(config));
+    const first = await compose(config);
 
     const bumped = structuredClone(config);
     (bumped.plugins!.auth!.ui as { ssrIntegrity: string }).ssrIntegrity = "sha384-rebuilt";
-    const second = await Effect.runPromise(composeUi(bumped));
+    const second = await compose(bumped);
 
     expect(second.digest).toBe(first.digest);
     expect(second).not.toBe(first);
@@ -258,7 +278,7 @@ describe("composeUi", () => {
   });
 
   it("builds the client payload with plugin web entries and embedded manifests", async () => {
-    const variant = await Effect.runPromise(composeUi(configWithPlugin()));
+    const variant = await compose(configWithPlugin());
 
     expect(variant.clientPayload.digest).toBe(variant.digest);
     expect(variant.clientPayload.remotes).toEqual([
@@ -293,7 +313,7 @@ describe("composeUi", () => {
     } as RuntimeConfig;
     config.plugins!.auth!.ui!.localPath = authFixture;
 
-    const variant = await Effect.runPromise(composeUi(config));
+    const variant = await compose(config);
 
     expect(federationMocks.loadUiComposeModule).toHaveBeenCalledTimes(1);
     expect(federationMocks.loadCoreUiRouteConfig).toHaveBeenCalledTimes(1);
@@ -319,14 +339,14 @@ describe("composeUi", () => {
 
   it("fails loudly when a manifest cannot be fetched", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
-    const result = await Effect.runPromiseExit(composeUi(configWithPlugin()));
+    const result = await composeExit(configWithPlugin());
     expect(Exit.isFailure(result)).toBe(true);
     expect(construct).not.toHaveBeenCalled();
   });
 
   it("the client config embeds the compose payload verbatim", async () => {
     const config = configWithPlugin();
-    const variant = await Effect.runPromise(composeUi(config));
+    const variant = await compose(config);
     const request = new Request("https://linktree.com/");
     const clientConfig = buildRuntimeClientConfig(
       config,
@@ -342,8 +362,8 @@ describe("composeUi", () => {
 describe("composeClientPayload", () => {
   it("mirrors the SSR variant's client payload and digest exactly", async () => {
     const config = configWithPlugin();
-    const variant = await Effect.runPromise(composeUi(config));
-    const client = await Effect.runPromise(composeClientPayload(config));
+    const variant = await compose(config);
+    const client = await composeClient(config);
 
     expect(client).toEqual({ digest: variant.digest, clientPayload: variant.clientPayload });
     expect(client?.clientPayload.remotes).toEqual([
@@ -353,12 +373,12 @@ describe("composeClientPayload", () => {
   });
 
   it("returns undefined when no plugin declares a ui — the bundled core-only tree is already complete", async () => {
-    const client = await Effect.runPromise(composeClientPayload(createBaseRuntimeConfig()));
+    const client = await composeClient(createBaseRuntimeConfig());
     expect(client).toBeUndefined();
   });
 
   it("builds the payload without touching any MF loader or the construction engine", async () => {
-    await Effect.runPromise(composeClientPayload(configWithPlugin()));
+    await composeClient(configWithPlugin());
 
     expect(federationMocks.loadUiComposeModule).not.toHaveBeenCalled();
     expect(federationMocks.loadCoreUiRouteConfig).not.toHaveBeenCalled();
@@ -369,8 +389,8 @@ describe("composeClientPayload", () => {
 
   it("fails when a manifest cannot be fetched (no silent plugin loss)", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
-    resetRemoteManifestCache();
-    const result = await Effect.runPromiseExit(composeClientPayload(configWithPlugin()));
+    cache.remoteManifests.clear();
+    const result = await Effect.runPromiseExit(composeClientPayload(configWithPlugin(), cache));
     expect(Exit.isFailure(result)).toBe(true);
   });
 });

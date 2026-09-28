@@ -10,11 +10,17 @@ import type { HealthLoadingState } from "./routes/health";
 import { createSsrFallbackHandler } from "./routes/ssr";
 import { createSessionMiddleware, registerAuthHandler } from "./services/auth";
 import { ConfigService, type RuntimeConfig } from "./services/config";
-import { resetFederationInstance } from "./services/federation.server";
+import { FederationLifecycle } from "./services/federation.server";
 import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { closeMcpServer } from "./services/mcp";
 import { PluginsService } from "./services/plugins";
-import { composeUi, isSsrAvailable } from "./services/ui-compose";
+import { ClientConfigCache } from "./services/ssr-render";
+import {
+  composeUi,
+  isSsrAvailable,
+  UiComposeCache,
+  type UiComposeCacheState,
+} from "./services/ui-compose";
 import { extractErrorDetails } from "./utils/errors";
 import { logger } from "./utils/logger";
 
@@ -39,6 +45,9 @@ export const createStartServer = (onReady?: () => void) =>
     const config = yield* ConfigService;
     const plugins = yield* PluginsService;
     const security = yield* SecurityMiddleware;
+    const composeCache = yield* UiComposeCache;
+    const clientConfigCache = yield* ClientConfigCache;
+    yield* FederationLifecycle;
     const apiProxyMode = Boolean(config.api?.proxy);
 
     const ssrEnabled = isSsrAvailable(config);
@@ -67,7 +76,7 @@ export const createStartServer = (onReady?: () => void) =>
     app.use("*", security.csp);
 
     if (ssrEnabled) {
-      const boot = yield* Effect.exit(composeUi(config));
+      const boot = yield* Effect.exit(composeUi(config, composeCache));
       if (Exit.isFailure(boot)) {
         const cause = Cause.squash(boot.cause);
         compositionHealth.status = "failed";
@@ -153,7 +162,10 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.use("/*", sessionMiddleware);
 
-    app.get("*", createSsrFallbackHandler(config, plugins, CSP_STRICT));
+    app.get(
+      "*",
+      createSsrFallbackHandler(config, plugins, CSP_STRICT, composeCache, clientConfigCache),
+    );
 
     const startHttpServer = () => {
       const hostname = process.env.HOST || "0.0.0.0";
@@ -236,6 +248,8 @@ export interface ServerInput {
   config: RuntimeConfig;
   port?: number;
   env?: Record<string, string>;
+  /** Explicit server-scoped cache, primarily for integration fixtures. */
+  composeCache?: UiComposeCacheState;
 }
 
 export interface ServerHandle {
@@ -254,7 +268,12 @@ export const runServer = (input: ServerInput): ServerHandle => {
   }
   const ConfigLive = Layer.succeed(ConfigService, input.config);
   const AppLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
-  const ServerLive = Layer.provideMerge(SecurityMiddleware.Live, AppLive);
+  const ServerLive = Layer.mergeAll(
+    Layer.provideMerge(SecurityMiddleware.Live, AppLive),
+    input.composeCache ? UiComposeCache.layerFrom(input.composeCache) : UiComposeCache.layer,
+    ClientConfigCache.layer,
+    FederationLifecycle.layer,
+  );
 
   const stopMonitor = startIntegrityMonitor(input.config);
 
@@ -293,7 +312,6 @@ export const runServer = (input: ServerInput): ServerHandle => {
     }
 
     await runtime.dispose();
-    resetFederationInstance();
     logger.info("[Server] Shutdown complete");
   };
 
