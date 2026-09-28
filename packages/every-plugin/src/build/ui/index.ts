@@ -101,6 +101,8 @@ const SHARE_MODULE_NAMES = [
   "@orpc/contract",
   "@tanstack/react-query",
   "@tanstack/react-router",
+  "@lingui/core",
+  "@lingui/react",
 ] as const;
 
 /**
@@ -111,7 +113,7 @@ const SHARE_MODULE_NAMES = [
  * other stale) can no longer run two divergent copies whose guard decisions
  * disagree ("Too many redirects").
  */
-const AUTH_SESSION_SHARED_MODULE = "everything-dev/ui/auth";
+const UI_SHARED_MODULES = ["everything-dev/ui/auth", "everything-dev/ui/i18n"] as const;
 
 export interface UiSharedDepEntry {
   version: string;
@@ -233,22 +235,24 @@ export function createUiSharedDeps(
     };
   }
 
-  const [packageName, subpath] = splitSubpathRequest(AUTH_SESSION_SHARED_MODULE);
-  const fallback = fallbacks[packageName] ?? fallbacks[AUTH_SESSION_SHARED_MODULE];
-  const version =
-    getSubpathSharedModuleVersion(packageName, subpath, options?.workspaceRoot) ??
-    (fallback ? extractExactVersion(fallback) : "");
-  if (!version) return deps;
+  for (const request of UI_SHARED_MODULES) {
+    const [packageName, subpath] = splitSubpathRequest(request);
+    const fallback = fallbacks[packageName] ?? fallbacks[request];
+    const version =
+      getSubpathSharedModuleVersion(packageName, subpath, options?.workspaceRoot) ??
+      (fallback ? extractExactVersion(fallback) : "");
+    if (!version) continue;
 
-  deps[AUTH_SESSION_SHARED_MODULE] = {
-    version,
-    requiredVersion: options?.strictVersion === false ? false : version,
-    singleton: true,
-    strictVersion: options?.strictVersion !== false,
-    eager: false,
-    shareScope: "default",
-    ...(options?.role === "consumer" ? { import: false } : {}),
-  };
+    deps[request] = {
+      version,
+      requiredVersion: options?.strictVersion === false ? false : version,
+      singleton: true,
+      strictVersion: options?.strictVersion !== false,
+      eager: false,
+      shareScope: "default",
+      ...(options?.role === "consumer" ? { import: false } : {}),
+    };
+  }
   return deps;
 }
 

@@ -171,6 +171,15 @@
       "import": "./dist/ui/head.mjs",
       "require": "./dist/ui/head.cjs"
     },
+    "./ui/i18n": {
+      "development": {
+        "types": "./src/ui/i18n.tsx",
+        "import": "./src/ui/i18n.tsx"
+      },
+      "types": "./dist/ui/i18n.d.mts",
+      "import": "./dist/ui/i18n.mjs",
+      "require": "./dist/ui/i18n.cjs"
+    },
     "./ui/metadata": {
       "development": {
         "types": "./src/ui/metadata.ts",
@@ -353,6 +362,8 @@
     "zod": "catalog:"
   },
   "peerDependencies": {
+    "@lingui/core": "catalog:",
+    "@lingui/react": "catalog:",
     "@better-auth/api-key": "catalog:",
     "@better-auth/passkey": "catalog:",
     "@orpc/client": "catalog:",
@@ -367,6 +378,12 @@
     "zod": "catalog:"
   },
   "peerDependenciesMeta": {
+    "@lingui/core": {
+      "optional": true
+    },
+    "@lingui/react": {
+      "optional": true
+    },
     "@better-auth/api-key": {
       "optional": true
     },
@@ -399,6 +416,8 @@
     }
   },
   "devDependencies": {
+    "@lingui/core": "catalog:",
+    "@lingui/react": "catalog:",
     "@better-auth/api-key": "catalog:",
     "@better-auth/passkey": "catalog:",
     "@module-federation/rsbuild-plugin": "catalog:",

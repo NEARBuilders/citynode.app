@@ -10,16 +10,21 @@ const pkg = {
     "@orpc/contract": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "@lingui/core": "catalog:",
+    "@lingui/react": "catalog:",
     "everything-dev": "catalog:",
   },
 };
 
 const expectedSharedKeys = [
+  "@lingui/core",
+  "@lingui/react",
   "@orpc/client",
   "@orpc/contract",
   "@tanstack/react-query",
   "@tanstack/react-router",
   "everything-dev/ui/auth",
+  "everything-dev/ui/i18n",
   "react",
   "react-dom",
 ];
@@ -44,6 +49,12 @@ describe("createUiSharedDeps", () => {
       requiredVersion: expect.stringMatching(/^\d+\.\d+\.\d+/),
     });
     expect(consumer["everything-dev/ui/auth"]?.import).toBe(false);
+    expect(provider["everything-dev/ui/i18n"]).toMatchObject({
+      singleton: true,
+      strictVersion: true,
+      requiredVersion: expect.stringMatching(/^\d+\.\d+\.\d+/),
+    });
+    expect(consumer["everything-dev/ui/i18n"]?.import).toBe(false);
   });
 
   it("resolves the session module version from the building workspace root", () => {
