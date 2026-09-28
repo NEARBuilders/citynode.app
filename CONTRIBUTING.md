@@ -193,6 +193,10 @@ Added new endpoint for user profiles
 - Use semantic Tailwind classes (see LLM.txt for style guide)
 - No code comments in implementation (code should be self-documenting)
 
+### Translations
+
+See [docs/i18n.md](./docs/i18n.md) for the locale architecture, message conventions, formatting rules, and the steps for adding a language.
+
 ### Linting
 
 We use [Biome](https://biomejs.dev/) for linting and formatting:
