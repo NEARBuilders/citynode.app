@@ -7,6 +7,7 @@ import { getGatewayId, type Organization, useApiClient, useAuthClient } from "@/
 import { PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { FieldGroup } from "@/components/ui/field";
+import { useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
@@ -46,6 +47,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
 });
 
 function ApplyPage() {
+  const t = useAppTranslation();
   const apiClient = useApiClient();
   const authClient = useAuthClient();
   const queryClient = useQueryClient();
@@ -69,14 +71,12 @@ function ApplyPage() {
   const submitMutation = useMutation({
     mutationFn: async (values: NodeApplicationValues) => {
       if (!gatewayId) {
-        throw new Error(
-          "Runtime configuration is missing the gateway id — this deployment is misconfigured",
-        );
+        throw new Error(t("apply.error.gateway"));
       }
-      if (!activeOrgId) throw new Error("Select an active organization first");
-      if (!nearAccountId) throw new Error("Connect a NEAR account first");
+      if (!activeOrgId) throw new Error(t("apply.error.organization"));
+      if (!nearAccountId) throw new Error(t("apply.error.near"));
       if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
-        throw new Error("Connect and verify your DAO first");
+        throw new Error(t("apply.error.dao"));
       }
       return proposeNodeApplication(apiClient, values, {
         orgId: activeOrgId,
@@ -86,16 +86,16 @@ function ApplyPage() {
     },
     onSuccess: async ({ data: proposal }) => {
       setSubmittedProposalId(proposal.id);
-      toast.success("Application submitted", {
-        description: "An admin will review it.",
+      toast.success(t("apply.success.title"), {
+        description: t("apply.success.review"),
       });
       try {
         await invalidateProposalQueries(queryClient);
       } catch {
-        toast.warning("Application submitted, but the review list could not refresh.");
+        toast.warning(t("apply.success.refresh"));
       }
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to submit application"),
+    onError: (error: Error) => toast.error(error.message || t("apply.error.submit")),
   });
   const form = useApplicationForm((values) => submitMutation.mutateAsync(values));
   const formValues = useSelector(form.store, (state) => state.values);
@@ -164,14 +164,14 @@ function ApplyPage() {
     <PageContainer variant="narrow">
       <PageHeader
         headerTestId="apply.heading"
-        title="Start a community"
-        description={`Step ${steps.position} of 4 · An admin reviews every application.`}
+        title={t("apply.title")}
+        description={t("apply.progress", { step: steps.position })}
       />
       <ol className="flex flex-col" data-testid="apply.steps">
         <ApplyStep
           id="organization"
           number={1}
-          title="Organization"
+          title={t("apply.step.organization")}
           status={steps.status("organization")}
           summary={activeOrganizationLabel}
           onChange={() => setReopenedStep("organization")}
@@ -188,7 +188,7 @@ function ApplyPage() {
         <ApplyStep
           id="near"
           number={2}
-          title="NEAR account"
+          title={t("apply.step.near")}
           status={steps.status("near")}
           summary={nearAccountId}
         >
@@ -197,7 +197,7 @@ function ApplyPage() {
         <ApplyStep
           id="dao"
           number={3}
-          title="DAO"
+          title={t("apply.step.dao")}
           status={steps.status("dao")}
           summary={daoConnection.daoAccountId}
           onChange={() => setReopenedStep("dao")}
@@ -208,7 +208,13 @@ function ApplyPage() {
             onContinue={() => setReopenedStep(null)}
           />
         </ApplyStep>
-        <ApplyStep id="details" number={4} title="Details" status={steps.status("details")} last>
+        <ApplyStep
+          id="details"
+          number={4}
+          title={t("apply.step.details")}
+          status={steps.status("details")}
+          last
+        >
           <form
             className="flex flex-col gap-6"
             onSubmit={(event) => {

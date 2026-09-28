@@ -2,6 +2,7 @@ import { CheckIcon } from "@phosphor-icons/react";
 import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { ApplyStepId, ApplyStepStatus } from "./-apply-flow";
 
 export function ApplyStep({
@@ -23,6 +24,7 @@ export function ApplyStep({
   onChange?: () => void;
   children?: ReactNode;
 }) {
+  const t = useAppTranslation();
   return (
     <li className="flex gap-4" data-testid={`apply.step-${id}`} data-status={status}>
       <div className="flex flex-col items-center">
@@ -49,7 +51,10 @@ export function ApplyStep({
               )}
             >
               <span className="sr-only">
-                {`Step ${number}${status === "complete" ? ", done" : ""}: `}
+                {t("apply.step.label", {
+                  number,
+                  done: status === "complete" ? t("apply.step.done") : "",
+                })}
               </span>
               {title}
             </h2>
@@ -65,7 +70,7 @@ export function ApplyStep({
               data-testid={`apply.step-${id}-change`}
               onClick={onChange}
             >
-              Change
+              {t("apply.step.change")}
             </Button>
           )}
         </div>

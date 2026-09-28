@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export function ApplySubmit({
   canSubmit,
@@ -8,6 +9,7 @@ export function ApplySubmit({
   canSubmit: boolean;
   isSubmitting: boolean;
 }) {
+  const t = useAppTranslation();
   return (
     <Button
       type="submit"
@@ -16,7 +18,7 @@ export function ApplySubmit({
       data-testid="apply.submit"
     >
       {isSubmitting && <Spinner />}
-      {isSubmitting ? "Submitting…" : "Submit for review"}
+      {t(isSubmitting ? "apply.submit.pending" : "apply.submit.action")}
     </Button>
   );
 }

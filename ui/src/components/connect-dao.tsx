@@ -11,6 +11,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import { useAppTranslation } from "@/i18n/runtime";
 import {
   connectDaoAccount,
   disconnectDaoAccount,
@@ -62,6 +63,7 @@ async function handleDisconnect() {
 }
 
 export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDaoProps) {
+  const t = useAppTranslation();
   const primaryAccountId = useNearAccount();
   useDaoAutoRestore(primaryAccountId);
   const connection = useDaoConnection();
@@ -121,8 +123,12 @@ export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDao
             </>
           ) : (
             <>
-              <ItemTitle>Connect your DAO</ItemTitle>
-              <ItemDescription>{purposeCopy[purpose ?? "default"]}</ItemDescription>
+              <ItemTitle>{t("dao.connect.title")}</ItemTitle>
+              <ItemDescription>
+                {purpose === "apply"
+                  ? t("dao.apply.description")
+                  : purposeCopy[purpose ?? "default"]}
+              </ItemDescription>
             </>
           )}
         </ItemContent>
@@ -135,7 +141,7 @@ export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDao
               data-testid="dao-connect-disconnect"
               onClick={() => void handleDisconnect()}
             >
-              Disconnect
+              {t("dao.disconnect")}
             </Button>
           ) : (
             <Button
@@ -146,7 +152,7 @@ export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDao
               disabled={connecting}
             >
               {connecting && <Spinner />}
-              {connecting ? "Opening Trezu…" : "Connect with Trezu"}
+              {t(connecting ? "dao.opening" : "dao.connect.action")}
             </Button>
           )}
         </ItemActions>
@@ -167,6 +173,7 @@ function MembershipLine({
   state: MembershipState;
   primaryAccountId: string | null;
 }) {
+  const t = useAppTranslation();
   if (state.kind === "idle") return null;
   if (state.kind === "loading") {
     return (
@@ -175,14 +182,14 @@ function MembershipLine({
         data-testid="dao-connect-status"
       >
         <Spinner />
-        Checking membership…
+        {t("dao.membership.checking")}
       </div>
     );
   }
   if (state.kind === "ok") {
     return (
       <div className="flex flex-wrap items-center gap-2" data-testid="dao-connect-status">
-        <Badge variant="success">Member</Badge>
+        <Badge variant="success">{t("dao.membership.member")}</Badge>
         {primaryAccountId && (
           <span className="truncate text-sm text-muted-foreground">{primaryAccountId}</span>
         )}
@@ -191,14 +198,16 @@ function MembershipLine({
   }
   const message =
     state.kind === "not-member"
-      ? `${primaryAccountId ?? "Your NEAR account"} isn't a member of this DAO`
+      ? t("dao.membership.notMember", {
+          account: primaryAccountId ?? t("dao.membership.account"),
+        })
       : state.kind === "not-sputnik"
-        ? "This account isn't a Sputnik DAO"
-        : `Couldn't check membership: ${state.message}`;
+        ? t("dao.membership.notSputnik")
+        : t("dao.membership.error", { message: state.message });
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="dao-connect-status">
       <Badge variant="destructive">
-        {state.kind === "error" ? "Check failed" : "Not verified"}
+        {t(state.kind === "error" ? "dao.membership.failed" : "dao.membership.unverified")}
       </Badge>
       <span className="text-sm text-muted-foreground">{message}</span>
     </div>

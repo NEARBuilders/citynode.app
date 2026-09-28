@@ -2,8 +2,10 @@ import { CheckCircleIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import { PageContainer } from "@/components";
 import { Button } from "@/components/ui/button";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export function ApplySubmitted({ proposalId, name }: { proposalId: string; name?: string }) {
+  const t = useAppTranslation();
   return (
     <PageContainer variant="narrow">
       <div
@@ -14,9 +16,9 @@ export function ApplySubmitted({ proposalId, name }: { proposalId: string; name?
           <CheckCircleIcon className="size-7" weight="fill" />
         </span>
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold text-foreground">Application submitted</h1>
+          <h1 className="text-3xl font-semibold text-foreground">{t("apply.success.title")}</h1>
           <p className="text-base text-muted-foreground">
-            {name ? `${name} is` : "Your community is"} waiting for an admin to review it.
+            {name ? t("apply.submitted.named", { name }) : t("apply.submitted.yours")}
           </p>
           <p className="font-mono text-xs break-all text-muted-foreground">{proposalId}</p>
         </div>
@@ -26,10 +28,10 @@ export function ApplySubmitted({ proposalId, name }: { proposalId: string; name?
             render={<Link to="/dashboard/node/proposals" />}
             data-testid="apply.view-proposals"
           >
-            View proposals
+            {t("apply.submitted.proposals")}
           </Button>
           <Button variant="ghost" nativeButton={false} render={<Link to="/dashboard" />}>
-            Back to Home
+            {t("apply.submitted.home")}
           </Button>
         </div>
       </div>

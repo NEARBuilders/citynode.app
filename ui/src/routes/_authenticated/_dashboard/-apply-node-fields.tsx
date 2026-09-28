@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useAppTranslation } from "@/i18n/runtime";
 import { deriveSlug } from "@/lib/slug";
 import type { ApplicationForm } from "./-apply-form";
 import type { NodeApplicationValues } from "./-node-application";
@@ -21,11 +22,11 @@ import { nodeApplicationKinds } from "./-node-application";
 
 const DIRECT_COUNTRY_PARENT = "__direct-country__";
 
-const kindLabels: Record<(typeof nodeApplicationKinds)[number], string> = {
-  country: "Country",
-  state: "State",
-  city: "City",
-};
+const kindMessages = {
+  country: "apply.kind.country",
+  state: "apply.kind.state",
+  city: "apply.kind.city",
+} as const;
 
 type NodeOption = { id: string; name: string; kind: string | null };
 
@@ -56,13 +57,14 @@ export function ApplyNodeFields({
   stateNodes: NodeOption[];
   statesLoading: boolean;
 }) {
+  const t = useAppTranslation();
   const stateOptions = stateNodes.filter((node) => node.kind === "state");
   return (
     <>
       <form.Field name="kind">
         {(field) => (
           <Field>
-            <FieldLabel id="application-kind-label">Type</FieldLabel>
+            <FieldLabel id="application-kind-label">{t("apply.kind.label")}</FieldLabel>
             <ToggleGroup
               aria-labelledby="application-kind-label"
               variant="outline"
@@ -78,7 +80,7 @@ export function ApplyNodeFields({
             >
               {nodeApplicationKinds.map((kind) => (
                 <ToggleGroupItem key={kind} value={kind} data-testid={`apply.kind-${kind}`}>
-                  {kindLabels[kind]}
+                  {t(kindMessages[kind])}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
@@ -93,7 +95,7 @@ export function ApplyNodeFields({
             return (
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Field className="sm:flex-1" data-invalid={errors.length > 0 || undefined}>
-                  <FieldLabel htmlFor="application-country">Country</FieldLabel>
+                  <FieldLabel htmlFor="application-country">{t("apply.country.label")}</FieldLabel>
                   <Select
                     items={rootNodes.map((node) => ({ label: node.name, value: node.id }))}
                     value={rootParentId || null}
@@ -104,7 +106,7 @@ export function ApplyNodeFields({
                     }}
                   >
                     <SelectTrigger id="application-country" className="w-full">
-                      <SelectValue placeholder="Choose a country" />
+                      <SelectValue placeholder={t("apply.country.choose")} />
                     </SelectTrigger>
                     <SelectContent>
                       {rootNodes.map((node) => (
@@ -119,7 +121,7 @@ export function ApplyNodeFields({
 
                 {formValues.kind === "city" && rootParentId && (
                   <Field className="sm:flex-1">
-                    <FieldLabel htmlFor="application-state">State</FieldLabel>
+                    <FieldLabel htmlFor="application-state">{t("apply.state.label")}</FieldLabel>
                     <Select
                       value={
                         field.state.value === rootParentId
@@ -127,7 +129,7 @@ export function ApplyNodeFields({
                           : (field.state.value ?? DIRECT_COUNTRY_PARENT)
                       }
                       items={[
-                        { label: "No state", value: DIRECT_COUNTRY_PARENT },
+                        { label: t("apply.state.none"), value: DIRECT_COUNTRY_PARENT },
                         ...stateOptions.map((node) => ({ label: node.name, value: node.id })),
                       ]}
                       onValueChange={(value) => {
@@ -137,11 +139,15 @@ export function ApplyNodeFields({
                     >
                       <SelectTrigger id="application-state" className="w-full">
                         <SelectValue
-                          placeholder={statesLoading ? "Loading states…" : "Choose a state"}
+                          placeholder={t(
+                            statesLoading ? "apply.state.loading" : "apply.state.choose",
+                          )}
                         />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={DIRECT_COUNTRY_PARENT}>No state</SelectItem>
+                        <SelectItem value={DIRECT_COUNTRY_PARENT}>
+                          {t("apply.state.none")}
+                        </SelectItem>
                         {stateOptions.map((node) => (
                           <SelectItem key={node.id} value={node.id}>
                             {node.name}
@@ -162,7 +168,7 @@ export function ApplyNodeFields({
           const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
           return (
             <Field data-invalid={errors.length > 0 || undefined}>
-              <FieldLabel htmlFor="application-name">Name</FieldLabel>
+              <FieldLabel htmlFor="application-name">{t("apply.name.label")}</FieldLabel>
               <Input
                 id="application-name"
                 data-testid="apply.name"
@@ -177,7 +183,7 @@ export function ApplyNodeFields({
                     { dontUpdateMeta: true },
                   );
                 }}
-                placeholder="Chicago"
+                placeholder={t("apply.name.placeholder")}
                 aria-invalid={errors.length > 0 || undefined}
               />
               <FieldError errors={errors} />
@@ -192,7 +198,7 @@ export function ApplyNodeFields({
           const available = preflight?.hostname.available;
           return (
             <Field data-invalid={errors.length > 0 || available === false || undefined}>
-              <FieldLabel htmlFor="application-slug">Web address</FieldLabel>
+              <FieldLabel htmlFor="application-slug">{t("apply.slug.label")}</FieldLabel>
               <InputGroup>
                 <InputGroupInput
                   id="application-slug"
@@ -206,7 +212,7 @@ export function ApplyNodeFields({
                     field.setMeta((meta) => ({ ...meta, isTouched: true }));
                     field.handleChange(event.target.value.replace(/[^a-z0-9-]/g, ""));
                   }}
-                  placeholder="chicago"
+                  placeholder={t("apply.slug.placeholder")}
                   pattern="[a-z0-9-]+"
                   aria-invalid={errors.length > 0 || available === false || undefined}
                 />
@@ -218,13 +224,13 @@ export function ApplyNodeFields({
               </InputGroup>
               <FieldDescription data-testid="apply.slug-status">
                 {!hostname
-                  ? "Lowercase letters, numbers and hyphens."
+                  ? t("apply.slug.rules")
                   : preflightLoading
-                    ? "Checking availability…"
+                    ? t("apply.slug.checking")
                     : available === true
-                      ? `${hostname} is available`
+                      ? t("apply.slug.available", { hostname })
                       : available === false
-                        ? `${hostname} is taken`
+                        ? t("apply.slug.taken", { hostname })
                         : hostname}
               </FieldDescription>
               <FieldError errors={errors} />

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { useAppTranslation } from "@/i18n/runtime";
 
 type OrganizationOption = { id: string; name: string };
 
@@ -30,27 +31,26 @@ export function ApplyOrganizationStep({
   onSwitch: (organizationId: string) => void;
   onContinue: () => void;
 }) {
+  const t = useAppTranslation();
   if (activating) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Spinner />
-        Activating your organization…
+        {t("apply.organization.activating")}
       </p>
     );
   }
   if (organizations.length === 0) {
     return (
       <div className="flex flex-col items-start gap-4">
-        <p className="text-sm text-muted-foreground">
-          Communities belong to an organization. Create one first.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("apply.organization.required")}</p>
         <Button
           className="w-full sm:w-auto"
           nativeButton={false}
           render={<Link to="/orgs" />}
           data-testid="apply.create-org"
         >
-          Create organization
+          {t("apply.organization.create")}
           <ArrowRightIcon data-icon="inline-end" />
         </Button>
       </div>
@@ -59,7 +59,7 @@ export function ApplyOrganizationStep({
   return (
     <div className="flex flex-col gap-4">
       <Field className="sm:max-w-sm">
-        <FieldLabel htmlFor="apply-organization">Apply as</FieldLabel>
+        <FieldLabel htmlFor="apply-organization">{t("apply.organization.as")}</FieldLabel>
         <Select
           items={organizations.map((organization) => ({
             label: organization.name,
@@ -72,7 +72,7 @@ export function ApplyOrganizationStep({
           disabled={switching}
         >
           <SelectTrigger id="apply-organization" className="w-full" data-testid="apply.org-select">
-            <SelectValue placeholder="Choose an organization" />
+            <SelectValue placeholder={t("apply.organization.choose")} />
           </SelectTrigger>
           <SelectContent>
             {organizations.map((organization) => (
@@ -86,11 +86,11 @@ export function ApplyOrganizationStep({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         {displayedOrgId && (
           <Button type="button" onClick={onContinue} disabled={switching}>
-            Continue
+            {t("apply.organization.continue")}
           </Button>
         )}
         <Button variant="ghost" nativeButton={false} render={<Link to="/orgs" />}>
-          Manage organizations
+          {t("apply.organization.manage")}
         </Button>
       </div>
     </div>
@@ -98,18 +98,17 @@ export function ApplyOrganizationStep({
 }
 
 export function ApplyNearStep() {
+  const t = useAppTranslation();
   return (
     <div className="flex flex-col items-start gap-4">
-      <p className="text-sm text-muted-foreground">
-        Link the NEAR account you&apos;re applying with.
-      </p>
+      <p className="text-sm text-muted-foreground">{t("apply.near.description")}</p>
       <Button
         className="w-full sm:w-auto"
         nativeButton={false}
         render={<Link to={pluginPath("/settings/auth-methods")} />}
         data-testid="apply.link-near"
       >
-        Link NEAR account
+        {t("apply.near.link")}
         <ArrowRightIcon data-icon="inline-end" />
       </Button>
     </div>
@@ -125,6 +124,7 @@ export function ApplyDaoStep({
   onDaoVerified: (value: { daoAccountId: string }) => void;
   onContinue: () => void;
 }) {
+  const t = useAppTranslation();
   return (
     <div className="flex flex-col items-start gap-4">
       <div className="w-full">
@@ -137,7 +137,7 @@ export function ApplyDaoStep({
           onClick={onContinue}
           data-testid="apply.dao-continue"
         >
-          Continue
+          {t("apply.organization.continue")}
         </Button>
       )}
     </div>

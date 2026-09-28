@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Button } from "@/components/ui/button";
+import { AppI18nProvider } from "@/i18n/runtime";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
@@ -154,9 +155,11 @@ function renderApply(queryClient = createQueryClient()) {
   const Component = Route.options.component;
   if (!Component) throw new Error("Apply route has no component");
   render(
-    <QueryClientProvider client={queryClient}>
-      <Component />
-    </QueryClientProvider>,
+    <AppI18nProvider>
+      <QueryClientProvider client={queryClient}>
+        <Component />
+      </QueryClientProvider>
+    </AppI18nProvider>,
   );
   return queryClient;
 }
