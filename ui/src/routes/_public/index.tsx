@@ -13,6 +13,7 @@ import { getActiveRuntime, getGatewayId, useApiClient } from "@/app";
 import { Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
 
 const PREVIEW_COUNT = 6;
@@ -20,18 +21,18 @@ const PREVIEW_COUNT = 6;
 const STEPS = [
   {
     icon: MagnifyingGlassIcon,
-    title: "Find your place",
-    body: "Pick a country, state or city from the directory.",
+    title: "landing.steps.find.title" as const,
+    body: "landing.steps.find.body" as const,
   },
   {
     icon: UsersThreeIcon,
-    title: "Join the community",
-    body: "See who's organizing and show up to the next event.",
+    title: "landing.steps.join.title" as const,
+    body: "landing.steps.join.body" as const,
   },
   {
     icon: CoinsIcon,
-    title: "Stake NEAR",
-    body: "Your stake keeps the local validator online and earns rewards.",
+    title: "landing.steps.stake.title" as const,
+    body: "landing.steps.stake.body" as const,
   },
 ];
 
@@ -56,6 +57,8 @@ export const Route = createFileRoute("/_public/")({
 });
 
 function LandingPage() {
+  const t = useAppTranslation();
+  const { locale } = useAppLocale();
   const { runtimeConfig } = Route.useLoaderData();
   const apiClient = useApiClient();
   const gateway = getGatewayId(runtimeConfig);
@@ -86,22 +89,19 @@ function LandingPage() {
       <section className="flex max-w-3xl flex-col gap-6 pt-4 sm:pt-10">
         <p className="flex items-center gap-2 text-sm font-medium text-brand-strong">
           <MapPinAreaIcon className="size-4" />
-          Local communities on NEAR
+          {t("landing.eyebrow")}
         </p>
         <h1 className="text-5xl font-semibold text-balance text-foreground sm:text-6xl">
-          Your city, on the network.
+          {t("landing.title")}
         </h1>
-        <p className="max-w-xl text-lg text-muted-foreground">
-          Local communities that each run a NEAR validator. Find yours, meet the people, and stake
-          to keep it online.
-        </p>
+        <p className="max-w-xl text-lg text-muted-foreground">{t("landing.description")}</p>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button
             size="lg"
             nativeButton={false}
             render={<Link to="/explore" data-testid="landing-explore" />}
           >
-            Explore communities
+            {t("landing.explore")}
             <ArrowRightIcon />
           </Button>
           <Button
@@ -110,23 +110,38 @@ function LandingPage() {
             nativeButton={false}
             render={<Link to="/apply" data-testid="landing-start" />}
           >
-            Start a community
+            {t("landing.start")}
           </Button>
         </div>
         <dl
           data-testid="landing-stats"
           className="mt-4 grid grid-cols-3 gap-4 border-t border-border pt-6 sm:mt-6 sm:gap-6 sm:pt-8"
         >
-          <Stat label="Communities" value={counts.communities} loading={isLoading} />
-          <Stat label="Cities" value={counts.cities} loading={isLoading} />
-          <Stat label="States & countries" value={counts.regions} loading={isLoading} />
+          <Stat
+            label={t("landing.stats.communities")}
+            value={counts.communities}
+            loading={isLoading}
+            locale={locale}
+          />
+          <Stat
+            label={t("landing.stats.cities")}
+            value={counts.cities}
+            loading={isLoading}
+            locale={locale}
+          />
+          <Stat
+            label={t("landing.stats.regions")}
+            value={counts.regions}
+            loading={isLoading}
+            locale={locale}
+          />
         </dl>
       </section>
 
       <section className="flex flex-col gap-6" data-testid="landing-directory">
         <SectionHeader
-          title="Communities"
-          description="Events, local communities and staking pools."
+          title={t("landing.directory.title")}
+          description={t("landing.directory.description")}
           action={
             communities.length > 0 ? (
               <Button
@@ -134,7 +149,7 @@ function LandingPage() {
                 nativeButton={false}
                 render={<Link to="/explore" data-testid="landing-directory-all" />}
               >
-                See all
+                {t("landing.directory.all")}
                 <ArrowRightIcon />
               </Button>
             ) : undefined
@@ -149,13 +164,13 @@ function LandingPage() {
           empty={
             <EmptyState
               icon={MapPinAreaIcon}
-              title="No communities yet"
-              description="Be the first to put your city on the network."
+              title={t("landing.empty.title")}
+              description={t("landing.empty.description")}
               className="rounded-3xl border border-dashed border-border py-12"
               action={
                 <Button variant="outline" nativeButton={false} render={<Link to="/apply" />}>
                   <PlusIcon />
-                  Start a community
+                  {t("landing.start")}
                 </Button>
               }
             />
@@ -164,7 +179,7 @@ function LandingPage() {
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="How it works" />
+        <SectionHeader title={t("landing.steps.title")} />
         <ol className="grid gap-8 sm:grid-cols-3">
           {STEPS.map((step, index) => (
             <li key={step.title} className="flex flex-col gap-3">
@@ -173,9 +188,9 @@ function LandingPage() {
               </span>
               <h3 className="text-lg font-medium text-foreground">
                 <span className="text-muted-foreground">{index + 1}. </span>
-                {step.title}
+                {t(step.title)}
               </h3>
-              <p className="text-sm text-muted-foreground">{step.body}</p>
+              <p className="text-sm text-muted-foreground">{t(step.body)}</p>
             </li>
           ))}
         </ol>
@@ -183,14 +198,12 @@ function LandingPage() {
 
       <section className="flex flex-col gap-6 border-t border-border pt-12 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-xl font-semibold text-foreground">No node in your city yet?</h2>
-          <p className="text-sm text-muted-foreground">
-            Your organization proposes it and the network reviews it.
-          </p>
+          <h2 className="text-xl font-semibold text-foreground">{t("landing.cta.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("landing.cta.description")}</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button variant="outline" nativeButton={false} render={<Link to="/apply" />}>
-            Start a community
+            {t("landing.start")}
           </Button>
           <Button
             variant="ghost"
@@ -204,7 +217,7 @@ function LandingPage() {
               />
             )}
           >
-            About City Nodes
+            {t("landing.cta.about")}
             <ArrowUpRightIcon />
           </Button>
         </div>
@@ -213,12 +226,22 @@ function LandingPage() {
   );
 }
 
-function Stat({ label, value, loading }: { label: string; value: number; loading: boolean }) {
+function Stat({
+  label,
+  value,
+  loading,
+  locale,
+}: {
+  label: string;
+  value: number;
+  loading: boolean;
+  locale: string;
+}) {
   return (
     <div className="flex min-w-0 flex-col-reverse justify-end gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="text-3xl font-semibold tabular-nums text-foreground sm:text-4xl">
-        {loading ? <Skeleton className="h-9 w-12" /> : value}
+        {loading ? <Skeleton className="h-9 w-12" /> : new Intl.NumberFormat(locale).format(value)}
       </dd>
     </div>
   );

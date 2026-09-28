@@ -28,6 +28,7 @@ import { RootNotFound } from "@/components/root-not-found";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks";
+import { AppI18nProvider } from "@/i18n/runtime";
 import { resolveSessionFromCache, sessionQueryKey } from "@/lib/auth";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
@@ -141,7 +142,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-  const { cspNonce } = Route.useRouteContext();
+  const { cspNonce, session } = Route.useRouteContext();
   const isDesktop = useMediaQuery("(min-width: 640px)");
   const isSsr = typeof window === "undefined";
   return (
@@ -159,7 +160,11 @@ function RootComponent() {
         <MotionConfig reducedMotion="user">
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={cspNonce}>
             <div id="root">
-              <GlobalChrome />
+              <AppI18nProvider
+                preferredLocale={(session?.user as { locale?: string | null } | undefined)?.locale}
+              >
+                <GlobalChrome />
+              </AppI18nProvider>
             </div>
             <Toaster position={isDesktop ? "bottom-right" : "top-center"} closeButton />
           </ThemeProvider>
