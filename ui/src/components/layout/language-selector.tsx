@@ -18,17 +18,13 @@ export function LanguageSelector() {
     >
       <SelectTrigger
         aria-label={t("footer.language")}
-        className="border-0 bg-transparent px-0 py-0 text-sm text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground data-[size=default]:h-auto dark:hover:bg-transparent"
         data-testid="public-footer-language"
+        variant="footer"
       >
         <TranslateIcon aria-hidden="true" />
         <span className="flex-1 text-left">{APP_LOCALE_LABELS[locale]}</span>
       </SelectTrigger>
-      <SelectContent
-        side="top"
-        sideOffset={8}
-        className="min-w-44 border border-border bg-background shadow-2xl"
-      >
+      <SelectContent side="top" sideOffset={8} className="min-w-44">
         {APP_LOCALES.map((option) => (
           <SelectItem key={option} value={option} lang={option}>
             {APP_LOCALE_LABELS[option]}
