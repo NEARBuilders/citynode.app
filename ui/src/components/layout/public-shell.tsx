@@ -53,10 +53,12 @@ export function PublicShellFooter() {
         >
           nearbuilders.org
         </a>
+        <ClientOnly>
+          <LanguageSelector />
+        </ClientOnly>
       </nav>
       <div className="flex flex-wrap items-center gap-3">
         <ClientOnly>
-          <LanguageSelector />
           <NetworkToggle />
         </ClientOnly>
         <div className="ml-3">

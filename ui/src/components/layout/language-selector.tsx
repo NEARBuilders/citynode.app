@@ -18,7 +18,7 @@ export function LanguageSelector() {
     >
       <SelectTrigger
         aria-label={t("footer.language")}
-        className="min-w-36 border-border bg-muted/50 font-medium shadow-none hover:bg-muted"
+        className="border-0 bg-transparent px-0 py-0 text-sm text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground data-[size=default]:h-auto dark:hover:bg-transparent"
         data-testid="public-footer-language"
       >
         <TranslateIcon aria-hidden="true" />
