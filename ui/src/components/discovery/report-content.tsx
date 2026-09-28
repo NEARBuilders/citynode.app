@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
+import { useAppTranslation } from "@/i18n/runtime";
 import { DiscoveryAction } from "./discovery-action";
 
 export function ReportContent({
@@ -23,6 +24,7 @@ export function ReportContent({
 }) {
   const api = useApiClient();
   const [open, setOpen] = useState(false);
+  const t = useAppTranslation();
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
@@ -36,19 +38,17 @@ export function ReportContent({
         }
       >
         <FlagIcon />
-        Report a problem
+        {t("report.trigger")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Report a problem</DialogTitle>
-          <DialogDescription>
-            Only the people who look after CityNode see reports.
-          </DialogDescription>
+          <DialogTitle>{t("report.trigger")}</DialogTitle>
+          <DialogDescription>{t("report.description")}</DialogDescription>
         </DialogHeader>
         <DiscoveryAction
           testId={`discovery-report-submit-${targetId}`}
-          label="Send report"
-          successMessage="Report sent. Thanks for letting us know."
+          label={t("report.send")}
+          successMessage={t("report.success")}
           onDone={() => setOpen(false)}
           run={(data) => {
             let token = sessionStorage.getItem("discovery-report-token");
@@ -65,7 +65,7 @@ export function ReportContent({
           }}
         >
           <Field>
-            <FieldLabel htmlFor={`report-${targetId}`}>What's wrong?</FieldLabel>
+            <FieldLabel htmlFor={`report-${targetId}`}>{t("report.reason")}</FieldLabel>
             <Textarea
               id={`report-${targetId}`}
               data-testid={`discovery-report-reason-${targetId}`}

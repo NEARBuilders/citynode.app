@@ -37,6 +37,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, EventList } from "./event-list";
 import { ReportContent } from "./report-content";
@@ -45,9 +46,14 @@ const GeographicMap = lazy(() =>
   import("./geographic-map")
     .then((m) => ({ default: m.GeographicMap }))
     .catch(() => ({
-      default: () => <p role="status">Map isn’t available. Use the list instead.</p>,
+      default: MapUnavailable,
     })),
 );
+
+function MapUnavailable() {
+  const t = useAppTranslation();
+  return <p role="status">{t("explore.map.unavailable")}</p>;
+}
 export type DiscoverySearch = {
   campaign?: string;
   node?: string;
@@ -69,6 +75,8 @@ export function DiscoveryExplorer({
   search: DiscoverySearch;
   navigate: (search: DiscoverySearch) => void;
 }) {
+  const { locale } = useAppLocale();
+  const t = useAppTranslation();
   const [mobile, setMobile] = useState(false);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 639px)");
@@ -105,7 +113,7 @@ export function DiscoveryExplorer({
     staleTime: 30_000,
   });
   const regionItems = [
-    { label: "All regions", value: ALL_REGIONS },
+    { label: t("explore.region.all"), value: ALL_REGIONS },
     ...[...new Set([...(regions.data ?? []).map((node) => node.region), search.region ?? ""])]
       .filter(Boolean)
       .sort()
@@ -130,8 +138,8 @@ export function DiscoveryExplorer({
     <div className="flex flex-col gap-8">
       <PageHeader
         headerTestId="explore.heading"
-        title="Explore"
-        description="Find a community near you and see what's coming up."
+        title={t("explore.title")}
+        description={t("explore.description")}
       />
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
@@ -141,30 +149,38 @@ export function DiscoveryExplorer({
             </InputGroupAddon>
             <InputGroupInput
               id="discovery-search"
-              aria-label="Search communities"
+              aria-label={t("explore.search.label")}
               value={search.query ?? ""}
               onChange={(e) => navigate({ ...search, query: e.target.value || undefined })}
-              placeholder="Search a community or city"
+              placeholder={t("explore.search.placeholder")}
             />
           </InputGroup>
           <ToggleGroup
             variant="outline"
             spacing={0}
             className="shrink-0"
-            aria-label="View"
+            aria-label={t("explore.view.label")}
             value={[view]}
             onValueChange={(value) => {
               const next = value[0] as "list" | "map" | undefined;
               if (next) navigate({ ...search, view: next === "map" ? undefined : next });
             }}
           >
-            <ToggleGroupItem value="list" aria-label="List view" data-testid="explore-view-list">
+            <ToggleGroupItem
+              value="list"
+              aria-label={t("explore.view.list")}
+              data-testid="explore-view-list"
+            >
               <ListBulletsIcon />
-              <span className="hidden sm:inline">List</span>
+              <span className="hidden sm:inline">{t("explore.view.list")}</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="map" aria-label="Map view" data-testid="explore-view-map">
+            <ToggleGroupItem
+              value="map"
+              aria-label={t("explore.view.map")}
+              data-testid="explore-view-map"
+            >
               <MapTrifoldIcon />
-              <span className="hidden sm:inline">Map</span>
+              <span className="hidden sm:inline">{t("explore.view.map")}</span>
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -178,7 +194,7 @@ export function DiscoveryExplorer({
           >
             <SelectTrigger
               id="discovery-region"
-              aria-label="Region"
+              aria-label={t("explore.region.label")}
               className="w-full sm:w-auto sm:max-w-48"
             >
               <GlobeIcon />
@@ -193,8 +209,8 @@ export function DiscoveryExplorer({
             </SelectContent>
           </Select>
           {[
-            { key: "upcoming", label: "Upcoming events", icon: CalendarDotsIcon },
-            { key: "active", label: "Recently active", icon: BroadcastIcon },
+            { key: "upcoming", label: t("explore.filter.upcoming"), icon: CalendarDotsIcon },
+            { key: "active", label: t("explore.filter.active"), icon: BroadcastIcon },
           ].map(({ key, label, icon: Icon }) => (
             <Toggle
               key={key}
@@ -213,14 +229,14 @@ export function DiscoveryExplorer({
       {list.isError ? (
         <EmptyState
           icon={CompassIcon}
-          title="Couldn’t load communities"
-          description="Check your connection and try again."
-          action={<Button onClick={() => list.refetch()}>Try again</Button>}
+          title={t("explore.error.title")}
+          description={t("explore.error.description")}
+          action={<Button onClick={() => list.refetch()}>{t("explore.error.retry")}</Button>}
         />
       ) : list.isPending ? (
         <div
           role="status"
-          aria-label="Finding communities"
+          aria-label={t("explore.loading")}
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
           {Array.from({ length: 6 }).map((_, index) => (
@@ -228,17 +244,22 @@ export function DiscoveryExplorer({
           ))}
         </div>
       ) : (
-        <section aria-label="Communities" className="flex flex-col gap-4">
+        <section aria-label={t("explore.communities")} className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground" data-testid="explore-result-count">
-            {nodes.length} {nodes.length === 1 ? "community" : "communities"}
-            {upcomingCount > 0 && ` · ${upcomingCount} with upcoming events`}
+            {t(nodes.length === 1 ? "explore.results.one" : "explore.results.many", {
+              count: new Intl.NumberFormat(locale).format(nodes.length),
+            })}
+            {upcomingCount > 0 &&
+              ` · ${t("explore.results.upcoming", {
+                count: new Intl.NumberFormat(locale).format(upcomingCount),
+              })}`}
           </p>
           {view === "map" ? (
             <div className="overflow-hidden rounded-2xl border border-border">
               <Suspense
                 fallback={
                   <div className="flex h-110 items-center justify-center text-sm text-muted-foreground lg:h-160">
-                    Loading map…
+                    {t("explore.map.loading")}
                   </div>
                 }
               >
@@ -249,8 +270,8 @@ export function DiscoveryExplorer({
           {nodes.length === 0 ? (
             <EmptyState
               icon={MagnifyingGlassIcon}
-              title="No communities match"
-              description="Try another city or broaden your search."
+              title={t("explore.empty.title")}
+              description={t("explore.empty.description")}
               action={
                 filtered ? (
                   <Button
@@ -259,7 +280,7 @@ export function DiscoveryExplorer({
                       navigate({ node: search.node, campaign: search.campaign, view: search.view })
                     }
                   >
-                    Clear filters
+                    {t("explore.empty.clear")}
                   </Button>
                 ) : undefined
               }
@@ -317,27 +338,31 @@ export function DiscoveryExplorer({
           }}
         >
           <SheetHeader className="gap-2 px-6 pt-8 pr-16 pb-2">
-            <SheetTitle>{selected?.name ?? "Community"}</SheetTitle>
+            <SheetTitle>{selected?.name ?? t("explore.detail.community")}</SheetTitle>
             <SheetDescription>
               <span className="flex min-w-0 items-center gap-1.5">
                 <MapPinIcon className="size-4 shrink-0" />
-                {selected?.location || "Location not provided"}
+                {selected?.location || t("explore.detail.noLocation")}
                 {selected?.region ? ` · ${selected.region}` : ""}
               </span>
             </SheetDescription>
           </SheetHeader>
           {search.node && detail.isPending && !selected ? (
-            <div className="flex flex-col gap-3 px-6" role="status" aria-label="Loading">
+            <div
+              className="flex flex-col gap-3 px-6"
+              role="status"
+              aria-label={t("explore.detail.loading")}
+            >
               <Skeleton className="h-5 w-40" />
               <Skeleton className="h-16 w-full" />
             </div>
           ) : detail.isError ? (
             <p role="alert" className="px-6 text-sm">
-              Couldn’t load this community.
+              {t("explore.detail.error")}
             </p>
           ) : !selected ? (
             search.node ? (
-              <p className="px-6 text-sm">This community isn’t available.</p>
+              <p className="px-6 text-sm">{t("explore.detail.unavailable")}</p>
             ) : null
           ) : (
             <div className="flex flex-col gap-8 px-6 pb-8">
@@ -369,7 +394,7 @@ export function DiscoveryExplorer({
                       />
                     }
                   >
-                    Open community
+                    {t("explore.detail.open")}
                     <ArrowRightIcon />
                   </Button>
                   <Button
@@ -377,14 +402,14 @@ export function DiscoveryExplorer({
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(window.location.href);
-                        setShareMessage("Link copied.");
+                        setShareMessage(t("explore.detail.copied"));
                         measurement.track("share", selected.nodeId);
                       } catch {
-                        setShareMessage("Copy the address from your browser to share this page.");
+                        setShareMessage(t("explore.detail.copyFallback"));
                       }
                     }}
                   >
-                    <CopyIcon /> Copy link
+                    <CopyIcon /> {t("explore.detail.copy")}
                   </Button>
                 </div>
                 <p role="status" className="text-sm text-muted-foreground empty:hidden">
@@ -393,7 +418,9 @@ export function DiscoveryExplorer({
               </div>
               {selected.channels.length > 0 && (
                 <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">Where to find them</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    {t("explore.detail.channels")}
+                  </h3>
                   <div className="flex flex-wrap gap-2">
                     {selected.channels.map((channel) => (
                       <Button
@@ -420,7 +447,7 @@ export function DiscoveryExplorer({
                 </section>
               )}
               <section className="flex flex-col gap-4">
-                <h3 className="text-lg font-medium">Upcoming events</h3>
+                <h3 className="text-lg font-medium">{t("explore.detail.upcoming")}</h3>
                 {selected.events.length ? (
                   <EventList
                     events={selected.events}
@@ -432,14 +459,12 @@ export function DiscoveryExplorer({
                     }}
                   />
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nothing scheduled yet. Check back for the next gathering.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t("explore.detail.noEvents")}</p>
                 )}
               </section>
               {selected.updates.length > 0 && (
                 <section className="flex flex-col gap-4">
-                  <h3 className="text-lg font-medium">Latest updates</h3>
+                  <h3 className="text-lg font-medium">{t("explore.detail.updates")}</h3>
                   <EventList
                     events={selected.updates}
                     nodeId={selected.nodeId}
@@ -471,8 +496,10 @@ function CommunityCard({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { locale } = useAppLocale();
+  const t = useAppTranslation();
   const next = node.events[0];
-  const tile = next ? activityDateTile(next) : null;
+  const tile = next ? activityDateTile(next, locale) : null;
   return (
     <Item
       variant={selected ? "muted" : "outline"}
@@ -493,7 +520,7 @@ function CommunityCard({
           <span className="flex items-center gap-1 text-sm text-muted-foreground">
             <MapPinIcon className="size-3.5 shrink-0" />
             <span className="truncate">
-              {node.location || "Location not provided"}
+              {node.location || t("explore.detail.noLocation")}
               {node.region ? ` · ${node.region}` : ""}
             </span>
           </span>
@@ -504,9 +531,9 @@ function CommunityCard({
             {node.featured}
           </Badge>
         ) : node.upcoming ? (
-          <Badge variant="success">Upcoming</Badge>
+          <Badge variant="success">{t("explore.card.upcoming")}</Badge>
         ) : node.active ? (
-          <Badge variant="secondary">Active</Badge>
+          <Badge variant="secondary">{t("explore.card.active")}</Badge>
         ) : null}
       </span>
       {node.summary && (
@@ -516,11 +543,13 @@ function CommunityCard({
         <CalendarDotsIcon className="size-4 shrink-0" />
         {next ? (
           <span className="truncate">
-            <span className="text-foreground">{tile ? `${tile.month} ${tile.day}` : "Soon"}</span>
+            <span className="text-foreground">
+              {tile ? `${tile.month} ${tile.day}` : t("explore.card.soon")}
+            </span>
             {` · ${next.title}`}
           </span>
         ) : (
-          <span>No upcoming events</span>
+          <span>{t("explore.card.noEvents")}</span>
         )}
       </span>
     </Item>

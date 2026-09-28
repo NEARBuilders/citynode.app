@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import type { ApiClient } from "@/app";
 import { Badge } from "@/components/ui/badge";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 
 export type PublicActivity = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryActivity"]>>>;
 
@@ -10,45 +11,65 @@ function clean(text: string) {
   return text.replace(/[  ]/g, " ");
 }
 
-function format(value: string, zone: string | undefined, options: Intl.DateTimeFormatOptions) {
+function format(
+  value: string,
+  zone: string | undefined,
+  options: Intl.DateTimeFormatOptions,
+  locale: string,
+) {
   return clean(
-    new Intl.DateTimeFormat("en-US", { timeZone: zone, ...options }).format(new Date(value)),
+    new Intl.DateTimeFormat(locale, { timeZone: zone, ...options }).format(new Date(value)),
   );
 }
 
-export function activityDateTile(activity: PublicActivity) {
+export function activityDateTile(activity: PublicActivity, locale = "en") {
   const instant = activity.startsAt ?? activity.publishedAt;
   if (!instant) return null;
   const zone = activity.startsAt ? activity.timezone : "UTC";
   return {
-    month: format(instant, zone, { month: "short" }),
-    day: format(instant, zone, { day: "numeric" }),
-    weekday: format(instant, zone, { weekday: "long" }),
-    full: format(instant, zone, {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    }),
+    month: format(instant, zone, { month: "short" }, locale),
+    day: format(instant, zone, { day: "numeric" }, locale),
+    weekday: format(instant, zone, { weekday: "long" }, locale),
+    full: format(
+      instant,
+      zone,
+      {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      },
+      locale,
+    ),
   };
 }
 
-export function activityTimeRange(activity: PublicActivity) {
+export function activityTimeRange(activity: PublicActivity, locale = "en") {
   if (!activity.startsAt) return null;
   const zone = activity.timezone;
   if (!activity.endsAt) {
-    return format(activity.startsAt, zone, {
+    return format(
+      activity.startsAt,
+      zone,
+      {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZoneName: "short",
+      },
+      locale,
+    );
+  }
+  const start = format(activity.startsAt, zone, { hour: "numeric", minute: "2-digit" }, locale);
+  const end = format(
+    activity.endsAt,
+    zone,
+    {
       hour: "numeric",
       minute: "2-digit",
       timeZoneName: "short",
-    });
-  }
-  const start = format(activity.startsAt, zone, { hour: "numeric", minute: "2-digit" });
-  const end = format(activity.endsAt, zone, {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
+    },
+    locale,
+  );
   return `${start} – ${end}`;
 }
 
@@ -59,7 +80,8 @@ export function DateTile({
   activity: PublicActivity;
   size?: "default" | "lg";
 }) {
-  const tile = activityDateTile(activity);
+  const { locale } = useAppLocale();
+  const tile = activityDateTile(activity, locale);
   if (!tile) return null;
   return (
     <div
@@ -95,11 +117,13 @@ export function EventList({
   onOutbound?: (activity: PublicActivity) => void;
   testId?: string;
 }) {
+  const { locale } = useAppLocale();
+  const t = useAppTranslation();
   return (
     <ul data-testid={testId} className="flex flex-col divide-y divide-border">
       {events.map((activity) => {
         const cancelled = activity.status === "cancelled";
-        const time = activityTimeRange(activity);
+        const time = activityTimeRange(activity, locale);
         return (
           <li key={activity.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
             <DateTile activity={activity} />
@@ -118,7 +142,7 @@ export function EventList({
                 <CaretRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
               </Link>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                {cancelled && <Badge variant="destructive">Cancelled</Badge>}
+                {cancelled && <Badge variant="destructive">{t("event.cancelled")}</Badge>}
                 {time && (
                   <span className="flex items-center gap-1.5">
                     <ClockIcon className="size-3.5 shrink-0" />
@@ -140,7 +164,7 @@ export function EventList({
                     onClick={() => onOutbound?.(activity)}
                     className="flex items-center gap-1 font-medium text-foreground hover:underline"
                   >
-                    {activity.source || "Original post"}
+                    {activity.source || t("event.originalPost")}
                     <ArrowUpRightIcon className="size-3.5" />
                   </a>
                 )}
