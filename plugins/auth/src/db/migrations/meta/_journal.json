@@ -50,6 +50,13 @@
       "when": 1790367834594,
       "tag": "0007_onboarding_code_event",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790611423268,
+      "tag": "0008_pale_exiles",
+      "breakpoints": true
     }
   ]
 }

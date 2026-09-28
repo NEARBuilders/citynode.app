@@ -72,6 +72,7 @@ const sessionUserSchema = z.object({
   image: z.string().nullable(),
   role: z.string().nullable(),
   isAnonymous: z.boolean().nullable(),
+  locale: z.string().nullable(),
 });
 
 const sessionDataSchema = z.object({

@@ -19,6 +19,9 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import type { LoginLocale } from "@/i18n/catalogs";
+import { LoginLanguageSelector } from "@/i18n/language-selector";
+import { LoginI18nProvider } from "@/i18n/runtime";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 
 type ProfileUser = {
@@ -26,6 +29,7 @@ type ProfileUser = {
   email?: string;
   name?: string;
   isAnonymous?: boolean | null;
+  locale?: string | null;
 };
 
 export function ProfileSettings() {
@@ -94,9 +98,45 @@ export function ProfileSettings() {
         )}
         <DisplayNameForm key={user.name ?? ""} user={user} />
       </section>
+      <LanguageSettings user={user} />
       <AccountDetails user={user} onAddEmail={() => setAddEmailOpen(true)} />
       <AddEmailDialog open={addEmailOpen} onOpenChange={setAddEmailOpen} />
     </>
+  );
+}
+
+function LanguageSettings({ user }: { user: ProfileUser }) {
+  const auth = useAuthClient();
+  const queryClient = useQueryClient();
+
+  const saveLocale = async (locale: LoginLocale) => {
+    const { error } = await auth.updateUser({ locale });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+    toast.success("Language updated");
+  };
+
+  return (
+    <section className="flex flex-col gap-6">
+      <SectionHeader title="Language" description="Choose the language used across CityNode." />
+      <div className="max-w-md">
+        <Field>
+          <FieldLabel htmlFor="settings-language">Display language</FieldLabel>
+          <LoginI18nProvider
+            initialLocale={user.locale as LoginLocale | undefined}
+            onLocaleChange={saveLocale}
+          >
+            <LoginLanguageSelector id="settings-language" testId="settings.language-select" />
+          </LoginI18nProvider>
+          <FieldDescription>
+            Your choice is saved to your account and used on every device.
+          </FieldDescription>
+        </Field>
+      </div>
+    </section>
   );
 }
 

@@ -56,6 +56,7 @@ export function createSessionHandlers(builder: any) {
               image: u.image ?? null,
               role: u.role ?? null,
               isAnonymous: (u as any).isAnonymous ?? null,
+              locale: (u as any).locale ?? null,
             }
           : null,
       };
@@ -346,6 +347,7 @@ export function createSessionHandlers(builder: any) {
                 image: principal.user.image ?? null,
                 role: principal.user.role ?? null,
                 isAnonymous: principal.user.isAnonymous ?? null,
+                locale: principal.user.locale ?? null,
               },
             }
           : principal.type === "organization"
@@ -366,6 +368,7 @@ export function createSessionHandlers(builder: any) {
               image: user.image ?? null,
               role: user.role ?? null,
               isAnonymous: user.isAnonymous ?? null,
+              locale: user.locale ?? null,
             }
           : null,
         userId: user?.id ?? null,

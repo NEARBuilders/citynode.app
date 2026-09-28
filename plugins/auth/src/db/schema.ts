@@ -27,6 +27,7 @@ export const user = pgTable("user", {
   isAnonymous: boolean("is_anonymous").default(false),
   phoneNumber: text("phone_number").unique(),
   phoneNumberVerified: boolean("phone_number_verified"),
+  locale: text("locale"),
 });
 
 export const session = pgTable(

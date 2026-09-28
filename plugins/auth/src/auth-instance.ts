@@ -295,6 +295,11 @@ export function createAuthInstance(
     trustedOrigins: config.trustedOrigins?.length ? config.trustedOrigins : undefined,
     secret: config.secret,
     baseURL: config.baseUrl,
+    user: {
+      additionalFields: {
+        locale: { type: "string", required: false, input: true },
+      },
+    },
     // better-auth's core limiter defaults to enabled in production with a
     // single shared per-path bucket when no client IP is resolvable — the
     // regression container's whole /api/auth/* traffic shares one bucket and
