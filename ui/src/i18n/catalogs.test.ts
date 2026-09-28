@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_LOCALES, englishAppMessages, getAppMessages } from "./catalogs";
+import { APP_LOCALE_LABELS, APP_LOCALES, englishAppMessages, getAppMessages } from "./catalogs";
 
 describe("app message catalogs", () => {
   it("provides every app message in each supported locale", () => {
@@ -15,6 +15,16 @@ describe("app message catalogs", () => {
     expect(getAppMessages("es")["landing.title"]).toBe("Tu ciudad, en la red.");
     expect(getAppMessages("fr")["landing.title"]).toBe("Votre ville, sur le réseau.");
     expect(getAppMessages("zh")["landing.title"]).toBe("让你的城市加入网络。");
+  });
+
+  it("provides a native label for every language option", () => {
+    expect(Object.keys(APP_LOCALE_LABELS)).toEqual(APP_LOCALES);
+    expect(APP_LOCALE_LABELS).toEqual({
+      en: "English",
+      es: "Español",
+      fr: "Français",
+      zh: "中文",
+    });
   });
 
   it("interpolates translated public-flow values", () => {

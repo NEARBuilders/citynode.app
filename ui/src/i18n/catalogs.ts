@@ -4,6 +4,12 @@ export const APP_LOCALES = ["en", "es", "fr", "zh"] as const;
 export type AppLocale = (typeof APP_LOCALES)[number];
 export const DEFAULT_APP_LOCALE: AppLocale = "en";
 export const APP_LOCALE_COOKIE = "citynode_locale";
+export const APP_LOCALE_LABELS: Record<AppLocale, string> = {
+  en: "English",
+  es: "Español",
+  fr: "Français",
+  zh: "中文",
+};
 
 const englishPublicMessages = {
   "nav.home": "CityNode home",
@@ -17,6 +23,7 @@ const englishPublicMessages = {
   "nav.theme.light": "Switch to light theme",
   "nav.theme.dark": "Switch to dark theme",
   "footer.navigation": "Footer",
+  "footer.language": "Language",
   "footer.about": "About",
   "footer.skill": "Skill",
   "network.switch": "Switch to {network}",
@@ -186,6 +193,7 @@ const spanishAppMessages = {
   "nav.theme.light": "Cambiar al tema claro",
   "nav.theme.dark": "Cambiar al tema oscuro",
   "footer.navigation": "Pie de página",
+  "footer.language": "Idioma",
   "footer.about": "Acerca de",
   "footer.skill": "Skill",
   "network.switch": "Cambiar a {network}",
@@ -345,6 +353,7 @@ const frenchAppMessages = {
   "nav.theme.light": "Passer au thème clair",
   "nav.theme.dark": "Passer au thème sombre",
   "footer.navigation": "Pied de page",
+  "footer.language": "Langue",
   "footer.about": "À propos",
   "footer.skill": "Skill",
   "network.switch": "Passer à {network}",
@@ -505,6 +514,7 @@ const chineseAppMessages = {
   "nav.theme.light": "切换到浅色主题",
   "nav.theme.dark": "切换到深色主题",
   "footer.navigation": "页脚",
+  "footer.language": "语言",
   "footer.about": "关于",
   "footer.skill": "技能",
   "network.switch": "切换到{network}",
