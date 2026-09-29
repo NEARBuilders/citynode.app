@@ -145,6 +145,7 @@ export const TenantAppSchema = z.object({
     .describe("Primary domain binding hostname, or null when the tenant has none"),
   node: z
     .object({
+      id: z.string(),
       slug: z.string(),
       kind: z.string().nullable(),
       name: z.string(),
@@ -395,6 +396,16 @@ export const contract = oc.router({
       summary: "List active tenants for discovery",
       description:
         "Public — DB-backed discovery listing of active tenants with their primary hostname and attached node. Replaces FastKV registry scans for tenant discovery.",
+    })
+    .output(z.array(TenantAppSchema)),
+
+  listStakeCommunities: oc
+    .route({
+      method: "GET",
+      path: "/stake/communities",
+      summary: "List communities available for staking",
+      description:
+        "Session-aware — active organization first, organization memberships as fallback, and the full public directory for anonymous visitors.",
     })
     .output(z.array(TenantAppSchema)),
 

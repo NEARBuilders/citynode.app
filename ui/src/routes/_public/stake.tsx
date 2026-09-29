@@ -15,7 +15,7 @@ import {
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
-import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
+import { stakeCommunitiesQueryOptions } from "@/lib/queries/tenants";
 import { requireTeamArea } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
 import { StakeDirectory } from "./-stake-directory";
@@ -23,6 +23,8 @@ import { StakeForm } from "./-stake-form";
 import { useStakeMutation, useStakeWalletConnection } from "./-stake-mutations";
 import { StakeNodeContent } from "./-stake-node-content";
 import { StakeOnramp } from "./-stake-onramp";
+import { getActiveOrganizationNodeId, getStakeScopeKey } from "./-stake-selection";
+import { StakeSkeleton } from "./-stake-skeleton";
 
 export const Route = createFileRoute("/_public/stake")({
   validateSearch: z.object({ node: z.string().optional(), nodeId: z.uuid().optional() }),
@@ -42,7 +44,7 @@ export const Route = createFileRoute("/_public/stake")({
 });
 
 type ApiClient = ReturnType<typeof useApiClient>;
-type TenantApp = Awaited<ReturnType<ApiClient["listTenantApps"]>>[number];
+type TenantApp = Awaited<ReturnType<ApiClient["listStakeCommunities"]>>[number];
 type Node = Awaited<ReturnType<ApiClient["getNode"]>>;
 
 function getDirectoryNodes(tenantApps: TenantApp[]) {
@@ -50,7 +52,7 @@ function getDirectoryNodes(tenantApps: TenantApp[]) {
     app.node
       ? [
           {
-            id: app.accountId,
+            id: app.node.id,
             name: app.name,
             slug: app.node.slug,
             kind: app.node.kind,
@@ -91,18 +93,31 @@ function StakePage() {
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const { node: nodeSlug, nodeId: selectedNodeId } = Route.useSearch();
-  const slug = nodeSlug ?? getSlugFromHostname();
-  const hasNodeSelection = !!selectedNodeId || !!slug;
+  const { node: nodeSlug, nodeId: requestedNodeId } = Route.useSearch();
+  const hostnameSlug = getSlugFromHostname();
+  const requestedSlug = nodeSlug ?? hostnameSlug;
+  const hasRequestedNode = !!requestedNodeId || !!requestedSlug;
   const { runtimeConfig, session: contextSession } = Route.useRouteContext();
   const { data: session = contextSession } = useQuery(sessionQueryOptions(auth));
+  const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
+  const stakeScopeKey = getStakeScopeKey(session?.user, activeOrganizationId);
   const href = useRouterState({ select: (state) => state.location.href });
   const gateway = getGatewayId(runtimeConfig);
   const { data: tenantApps = [], isLoading: directoryLoading } = useQuery({
-    ...tenantAppsQueryOptions(apiClient),
-    enabled: !hasNodeSelection,
+    ...stakeCommunitiesQueryOptions(apiClient, stakeScopeKey),
+    enabled: !hasRequestedNode,
   });
   const directoryNodes = useMemo(() => getDirectoryNodes(tenantApps), [tenantApps]);
+  const defaultNodeId = getActiveOrganizationNodeId({
+    activeOrganizationId,
+    communities: tenantApps,
+    hasRequestedNode,
+  });
+  const selectedNodeId = requestedNodeId ?? defaultNodeId;
+  const slug = selectedNodeId ? null : requestedSlug;
+  const hasNodeSelection = !!selectedNodeId || !!slug;
+  const resolvingActiveOrganization =
+    !!activeOrganizationId && !hasRequestedNode && directoryLoading;
   const nearAccountId = useNearAccount();
   const [amount, setAmount] = useState("1");
   const [selectedValidatorId, setSelectedValidatorId] = useState<string | null>(null);
@@ -157,6 +172,19 @@ function StakePage() {
       validator={selectedValidator}
     />
   );
+
+  if (resolvingActiveOrganization) {
+    return (
+      <PageContainer>
+        <PageHeader
+          headerTestId="stake.heading"
+          title="Stake"
+          description="Back a community by staking NEAR to its validator."
+        />
+        <StakeSkeleton />
+      </PageContainer>
+    );
+  }
 
   if (!hasNodeSelection) {
     return (
