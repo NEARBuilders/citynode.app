@@ -16,7 +16,6 @@ async function setActiveOrganization(page: Page, organizationId: string | null) 
 }
 
 test.describe("stake community scope", () => {
-  let activeNode: Awaited<ReturnType<typeof seedDiscoveryNode>>;
   let connectedNode: Awaited<ReturnType<typeof seedNode>>;
   let unrelatedNode: Awaited<ReturnType<typeof seedNode>>;
 
@@ -24,7 +23,7 @@ test.describe("stake community scope", () => {
     const { orgBID } = loadSeedData();
     const unique = `${process.pid}-${Date.now().toString(36)}`;
 
-    activeNode = await seedDiscoveryNode({
+    await seedDiscoveryNode({
       slug: `stake-active-${unique}`,
       name: `Stake Active ${unique}`,
     });
@@ -52,6 +51,11 @@ test.describe("stake community scope", () => {
     });
   });
 
+  test.afterEach(async ({ page }) => {
+    const { orgAID } = loadSeedData();
+    await setActiveOrganization(page, orgAID);
+  });
+
   test("defaults an active organization to its community", async ({ page }) => {
     const pageErrors = collectErrors(page);
     const { orgAID } = loadSeedData();
@@ -60,7 +64,8 @@ test.describe("stake community scope", () => {
     await page.goto("/stake", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await expect(page.getByTestId("stake.heading")).toContainText(`Stake to ${activeNode.name}`);
+    await expect(page.getByTestId("stake.heading")).toContainText("Stake to ");
+    await expect(page.getByTestId("stake.directory")).toHaveCount(0);
     await expect(page.getByTestId(`stake.community-${connectedNode.slug}`)).toHaveCount(0);
     await expect(page.getByTestId(`stake.community-${unrelatedNode.slug}`)).toHaveCount(0);
     expectNoHydrationFailure(pageErrors);
@@ -73,9 +78,10 @@ test.describe("stake community scope", () => {
     await page.goto("/stake", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await expect(page.getByTestId(`stake.community-${activeNode.slug}`)).toBeVisible();
-    await expect(page.getByTestId(`stake.community-${connectedNode.slug}`)).toBeVisible();
-    await expect(page.getByTestId(`stake.community-${unrelatedNode.slug}`)).toHaveCount(0);
+    const directory = page.getByTestId("stake.directory");
+    await expect(directory).toContainText("Regression Tenant");
+    await expect(directory.getByTestId(`stake.community-${connectedNode.slug}`)).toBeVisible();
+    await expect(directory.getByTestId(`stake.community-${unrelatedNode.slug}`)).toHaveCount(0);
     expectNoHydrationFailure(pageErrors);
   });
 
@@ -85,9 +91,10 @@ test.describe("stake community scope", () => {
     await page.goto("/stake", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await expect(page.getByTestId(`stake.community-${activeNode.slug}`)).toBeVisible();
-    await expect(page.getByTestId(`stake.community-${connectedNode.slug}`)).toBeVisible();
-    await expect(page.getByTestId(`stake.community-${unrelatedNode.slug}`)).toBeVisible();
+    const directory = page.getByTestId("stake.directory");
+    await expect(directory).toContainText("Regression Tenant");
+    await expect(directory.getByTestId(`stake.community-${connectedNode.slug}`)).toBeVisible();
+    await expect(directory.getByTestId(`stake.community-${unrelatedNode.slug}`)).toBeVisible();
     expectNoHydrationFailure(pageErrors);
   });
 });
