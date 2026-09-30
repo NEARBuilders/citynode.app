@@ -73,6 +73,14 @@ diff --git a/build/SandboxedWallet/iframe.js b/build/SandboxedWallet/iframe.js
 index a540779ee9d78f57e9c0a50721648abaad3280b3..b8548a53da73a1fa7e513418792d8e508c48394c 100644
 --- a/build/SandboxedWallet/iframe.js
 +++ b/build/SandboxedWallet/iframe.js
+@@ -13,6 +13,7 @@ class IframeExecutor {
+     events = new events_1.EventEmitter();
+     popup;
+     handler;
++    disposed = false;
+     readyPromiseResolve;
+     readyPromiseReject;
+     readyPromise = new Promise((resolve, reject) => {
 @@ -48,7 +48,7 @@ class IframeExecutor {
              iframeAllowedPersimissions.push("clipboard-write;");
          this.iframe.allow = iframeAllowedPersimissions.join(" ");
@@ -82,3 +90,30 @@ index a540779ee9d78f57e9c0a50721648abaad3280b3..b8548a53da73a1fa7e513418792d8e50
              this.executor.connector.logger?.log(`Iframe code injected`);
              this.iframe.srcdoc = code;
          });
+@@ -57,6 +58,7 @@ class IframeExecutor {
+             iframe: this.iframe,
+             onApprove: () => { },
+             onReject: () => {
++                this.disposed = true;
+                 window.removeEventListener("message", this.handler);
+                 this.events.emit("close", {});
+                 this.popup.destroy();
+@@ -74,11 +76,15 @@ class IframeExecutor {
+         this.popup.hide();
+     }
+     postMessage(data) {
+-        if (!this.iframe.contentWindow)
+-            throw new Error("Iframe not loaded");
+-        this.iframe.contentWindow.postMessage({ ...data, origin: this.origin }, "*");
++        if (this.disposed)
++            return;
++        const contentWindow = this.iframe.contentWindow;
++        if (!contentWindow)
++            throw new Error(`Iframe not loaded for ${data?.method ?? "unknown method"}`);
++        contentWindow.postMessage({ ...data, origin: this.origin }, "*");
+     }
+     dispose() {
++        this.disposed = true;
+         window.removeEventListener("message", this.handler);
+         this.popup.destroy();
+     }
