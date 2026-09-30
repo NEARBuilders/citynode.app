@@ -17,12 +17,18 @@ function toOrganizationInfo(organization: {
   slug: string;
   logo?: string | null;
   metadata?: unknown;
+  status?: string;
+  requestedBy?: string | null;
+  rejectionReason?: string | null;
 }) {
   return {
     id: organization.id,
     name: organization.name,
     slug: organization.slug,
     logo: organization.logo ?? null,
+    status: organization.status ?? "active",
+    requestedBy: organization.requestedBy ?? null,
+    rejectionReason: organization.rejectionReason ?? null,
     metadata:
       typeof organization.metadata === "string"
         ? tryJsonParse<Record<string, unknown>>(organization.metadata)

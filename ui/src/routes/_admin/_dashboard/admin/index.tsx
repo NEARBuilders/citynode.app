@@ -188,11 +188,11 @@ function AdminOverview() {
             description="Deployments and their DAOs"
           />
           <ManageRow
-            to="/orgs"
+            to="/admin/organizations"
             icon={UsersIcon}
             title="Organizations"
             testId="admin.heading.organizations"
-            description="Members, teams and invitations"
+            description="Review new organization requests"
           />
           <ManageRow
             to="/admin/relayer"

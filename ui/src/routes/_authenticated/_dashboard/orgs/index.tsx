@@ -30,6 +30,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { organizationApproval } from "@/lib/organization-approval";
 import { pageTitle } from "@/lib/page-title";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
@@ -250,6 +251,7 @@ function OrganizationsList() {
               const members = memberQueries[index]?.data;
               const myRole = members?.find((member) => member.userId === user?.id)?.role;
               const isActive = org.id === activeOrgId;
+              const approval = organizationApproval(org);
               const isPersonal = user
                 ? org.slug === user.id || org.metadata?.isPersonal === true
                 : false;
@@ -273,17 +275,44 @@ function OrganizationsList() {
                     </Link>
                     <div className="flex flex-wrap gap-1.5">
                       {myRole && <Badge variant="secondary">{roleLabel(myRole)}</Badge>}
+                      {approval.status === "pending" && (
+                        <Badge variant="warning" data-testid="orgs-pending">
+                          Pending approval
+                        </Badge>
+                      )}
+                      {approval.status === "rejected" && (
+                        <Badge variant="destructive" data-testid="orgs-rejected">
+                          Rejected
+                        </Badge>
+                      )}
                       {isActive && <Badge variant="success">Active</Badge>}
                       {isPersonal && <Badge variant="outline">Personal</Badge>}
                       {tenantOrgIds.has(org.id) && <Badge variant="outline">Community</Badge>}
                     </div>
+                    {approval.status === "rejected" && (
+                      <p
+                        className="text-sm text-muted-foreground"
+                        data-testid="orgs-rejection-reason"
+                      >
+                        {approval.reason}
+                      </p>
+                    )}
                     <div className="mt-auto flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">
                         {members
                           ? `${members.length} member${members.length === 1 ? "" : "s"}`
                           : " "}
                       </span>
-                      {isActive ? (
+                      {approval.status !== "active" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          nativeButton={false}
+                          render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                        >
+                          View request
+                        </Button>
+                      ) : isActive ? (
                         <Button
                           variant="ghost"
                           size="sm"

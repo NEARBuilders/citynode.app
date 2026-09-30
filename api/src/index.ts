@@ -512,6 +512,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireOrganization)
         .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
+          if (
+            context.organization?.organization?.status &&
+            context.organization.organization.status !== "active"
+          ) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: "Organization requires platform-admin approval",
+              }),
+            );
+          }
           yield* validateAccountId(input.accountId);
           const result = yield* verifyDaoMembership({
             daoAccountId: input.accountId,
@@ -722,8 +732,36 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
-      applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).effect(function* ({ input }) {
+      applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).effect(function* ({
+        input,
+        context,
+      }) {
         const services = yield* ApiServices;
+        const authPlugin = plugins.auth;
+        if (!authPlugin) {
+          return yield* Effect.fail(
+            new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
+          );
+        }
+        const organization = yield* Effect.tryPromise({
+          try: () =>
+            authPlugin
+              .client({ reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()) })
+              .getOrganizationForAdmin({ organizationId: input.orgId }),
+          catch: (error) =>
+            error instanceof ORPCError
+              ? error
+              : new ORPCError("INTERNAL_SERVER_ERROR", {
+                  message: "Could not verify organization approval",
+                }),
+        });
+        if (!organization || organization.status !== "active") {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
+              message: "Organization requires platform-admin approval",
+            }),
+          );
+        }
         yield* validateAccountId(input.accountId);
         yield* validateAccountId(input.submitterAccountId);
         if (input.poolAccountId) yield* validateAccountId(input.poolAccountId);

@@ -18,7 +18,21 @@ const adminContext = {
 
 describe("node proposal application", () => {
   beforeAll(async () => {
-    await getPluginClient();
+    await getPluginClient(undefined, {
+      auth: {
+        client: () => ({
+          getOrganizationForAdmin: async ({ organizationId }: { organizationId: string }) => ({
+            id: organizationId,
+            status: organizationId.startsWith("pending")
+              ? "pending"
+              : organizationId.startsWith("rejected")
+                ? "rejected"
+                : "active",
+          }),
+        }),
+        router: {},
+      },
+    } as never);
   }, 30_000);
 
   afterAll(async () => {
@@ -87,6 +101,29 @@ describe("node proposal application", () => {
         hostname: "unauthorized-country.citynode.app",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it.each([
+    "pending",
+    "rejected",
+  ])("does not link a %s organization to a tenant", async (status) => {
+    const admin = await getPluginClient(adminContext);
+    await expect(
+      admin.applyNodeProposal({
+        kind: "country",
+        name: "Gated org",
+        slug: `${status}-org`,
+        parentId: null,
+        orgId: `${status}-org`,
+        motivation: "Test the organization approval gate.",
+        accountId: `${status}-org.near`,
+        submitterAccountId: "proposal-applicant.near",
+        hostname: `${status}-org.citynode.app`,
+      }),
+    ).rejects.toThrow("approval");
+    expect((await admin.listTenants()).some((tenant) => tenant.orgId === `${status}-org`)).toBe(
+      false,
+    );
   });
 
   it("rejects proposals whose applicant is not a member of the tenant DAO", async () => {

@@ -1,0 +1,127 @@
+import { ORPCError } from "@orpc/server";
+import { and, asc, eq } from "drizzle-orm";
+import { Effect } from "effect";
+import * as schema from "../db/schema";
+import { AuthServicesTag } from "../service-types";
+import { createHeaders, tryJsonParse } from "../utils";
+
+const attempt = <A>(run: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: run,
+    catch: (error) =>
+      error instanceof ORPCError
+        ? error
+        : new ORPCError("INTERNAL_SERVER_ERROR", {
+            message: "Could not process the organization request",
+            cause: error,
+          }),
+  });
+
+function requirePlatformAdmin(reqHeaders: Record<string, string> | undefined) {
+  return Effect.gen(function* () {
+    const services = yield* AuthServicesTag;
+    const session = yield* attempt(() =>
+      services.auth.api.getSession({ headers: createHeaders(reqHeaders) }),
+    );
+    if (!session?.user) {
+      return yield* Effect.fail(
+        new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
+      );
+    }
+    if (session.user.role !== "admin") {
+      return yield* Effect.fail(new ORPCError("FORBIDDEN", { message: "Admin access required" }));
+    }
+    return services;
+  });
+}
+
+function serialize(organization: typeof schema.organization.$inferSelect) {
+  return {
+    ...organization,
+    metadata: tryJsonParse<Record<string, unknown>>(organization.metadata),
+  };
+}
+
+export function createOrganizationRequestHandlers(builder: any) {
+  return {
+    listOrganizationRequests: builder.listOrganizationRequests.effect(function* ({
+      context,
+    }: {
+      context: any;
+    }) {
+      const services = yield* requirePlatformAdmin(context.reqHeaders);
+      const organizations = yield* attempt(() =>
+        services.db.query.organization.findMany({
+          where: eq(schema.organization.status, "pending"),
+          orderBy: asc(schema.organization.createdAt),
+        }),
+      );
+      return organizations.map(serialize);
+    }),
+    reviewOrganization: builder.reviewOrganization.effect(function* ({
+      input,
+      context,
+    }: {
+      input: any;
+      context: any;
+    }) {
+      const services = yield* requirePlatformAdmin(context.reqHeaders);
+      const reason = typeof input.reason === "string" ? input.reason.trim() : "";
+      if (
+        input.decision !== "approve" &&
+        (input.decision !== "reject" || !reason || reason.length > 2000)
+      ) {
+        return yield* Effect.fail(
+          new ORPCError("BAD_REQUEST", {
+            message: "A rejection reason is required (up to 2000 characters)",
+          }),
+        );
+      }
+      const organization = yield* attempt(() =>
+        services.db.transaction(async (tx) => {
+          const [reviewed] = await tx
+            .update(schema.organization)
+            .set({
+              status: input.decision === "approve" ? "active" : "rejected",
+              rejectionReason: input.decision === "reject" ? reason : null,
+            })
+            .where(
+              and(
+                eq(schema.organization.id, input.organizationId),
+                eq(schema.organization.status, "pending"),
+              ),
+            )
+            .returning();
+          if (!reviewed)
+            throw new ORPCError("BAD_REQUEST", {
+              message: "Organization is no longer pending or does not exist",
+            });
+          if (input.decision === "approve") {
+            if (!reviewed.requestedBy)
+              throw new ORPCError("BAD_REQUEST", { message: "Organization requester is missing" });
+            const members = await tx
+              .update(schema.member)
+              .set({ role: "owner" })
+              .where(
+                and(
+                  eq(schema.member.organizationId, reviewed.id),
+                  eq(schema.member.userId, reviewed.requestedBy),
+                ),
+              )
+              .returning();
+            if (!members.length)
+              await tx.insert(schema.member).values({
+                id: crypto.randomUUID(),
+                organizationId: reviewed.id,
+                userId: reviewed.requestedBy,
+                role: "owner",
+                createdAt: new Date(),
+              });
+          }
+          return reviewed;
+        }),
+      );
+      return serialize(organization);
+    }),
+  };
+}

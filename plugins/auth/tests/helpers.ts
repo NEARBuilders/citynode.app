@@ -9,6 +9,7 @@ import { createInvitationHandlers } from "../src/handlers/invitations";
 import { createMemberHandlers } from "../src/handlers/members";
 import { createNearHandlers } from "../src/handlers/near";
 import { createOnboardingHandlers } from "../src/handlers/onboarding";
+import { createOrganizationRequestHandlers } from "../src/handlers/organization-requests";
 import { createOrganizationHandlers } from "../src/handlers/organizations";
 import { createSessionHandlers } from "../src/handlers/session";
 import { createTeamHandlers } from "../src/handlers/teams";
@@ -147,6 +148,10 @@ export async function createTestOrg(
   };
 
   const memberId = result.members[0]?.id ?? "";
+  await services.db
+    .update(schema.organization)
+    .set({ status: "active" })
+    .where(eq(schema.organization.id, result.id));
 
   return { id: result.id, name: result.name, slug: result.slug, memberId };
 }
@@ -201,6 +206,7 @@ type HandlerFn<R = unknown> = (opts: {
 }) => Promise<R> | R;
 
 type MockRoute = {
+  effect: (fn: (opts: any) => Generator<any, any, any>) => HandlerFn;
   use: (mw: MiddlewareFn) => { handler: <R>(h: HandlerFn<R>) => HandlerFn<R> };
   handler: <R>(h: HandlerFn<R>) => HandlerFn<R>;
 };
@@ -212,6 +218,12 @@ interface MockBuilder {
 
 function createMockBuilder(): MockBuilder {
   const routeProxy: MockRoute = {
+    effect: (fn) => (opts) =>
+      Effect.runPromise(
+        Effect.gen(() => fn(opts)).pipe(
+          Effect.provideContext(opts.context["effect/context"] as Context.Context<any>),
+        ),
+      ),
     use: (mw: MiddlewareFn) => ({
       handler:
         <R>(handler: HandlerFn<R>): HandlerFn<R> =>
@@ -264,6 +276,7 @@ export function createTestHandlers(services: PluginServices) {
   return {
     session: wrap(createSessionHandlers(builder)),
     organizations: wrap(createOrganizationHandlers(builder, requireAuth)),
+    organizationRequests: wrap(createOrganizationRequestHandlers(builder)),
     members: wrap(createMemberHandlers(builder, requireAuth)),
     invitations: wrap(createInvitationHandlers(builder, requireAuth)),
     apiKeys: wrap(createApiKeyHandlers(builder, requireAuth)),

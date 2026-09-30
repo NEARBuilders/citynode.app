@@ -29,7 +29,10 @@ export function TenantOrganizationGate({
       className="flex max-w-xl flex-col gap-6"
       data-testid="admin-tenant-org-gate"
     >
-      <p className="text-sm text-muted-foreground">Sites belong to an organization.</p>
+      <p className="text-sm text-muted-foreground">
+        Sites belong to an approved organization. Request one below, then continue once a platform
+        admin approves it.
+      </p>
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="org-name">Organization name</FieldLabel>
@@ -67,7 +70,7 @@ export function TenantOrganizationGate({
         className="w-full sm:w-auto sm:self-start"
         disabled={isPending || !orgName || !orgSlug}
       >
-        {isPending ? "Creating…" : "Create organization"}
+        {isPending ? "Submitting…" : "Request organization"}
       </Button>
     </form>
   );

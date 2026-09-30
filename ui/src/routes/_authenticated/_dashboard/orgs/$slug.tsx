@@ -17,6 +17,7 @@ import {
   Button,
   EmptyState,
   PageContainer,
+  PageHeader,
   Skeleton,
   Tabs,
   TabsContent,
@@ -26,6 +27,7 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
+import { organizationApproval } from "@/lib/organization-approval";
 import { pageTitle } from "@/lib/page-title";
 import {
   ApiKeysTab,
@@ -128,6 +130,7 @@ function OrganizationDetail() {
   });
   const org = organizations.find((organization) => organization.slug === orgSlug);
   const orgId = org?.id ?? "";
+  const approval = organizationApproval(org);
   const activeOrgId = session?.session?.activeOrganizationId;
   const isActive = orgId === activeOrgId;
   const members =
@@ -140,7 +143,7 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.members ?? []) as MemberItem[];
       },
-      enabled: !!orgId,
+      enabled: !!orgId && approval.status === "active",
     }).data ?? [];
   const invitations =
     useQuery({
@@ -148,7 +151,7 @@ function OrganizationDetail() {
       queryFn: async (): Promise<InvitationItem[]> => {
         return apiClient.auth.listInvitations({ organizationId: orgId });
       },
-      enabled: !!orgId,
+      enabled: !!orgId && approval.status === "active",
     }).data ?? [];
   const apiKeys =
     useQuery({
@@ -160,7 +163,7 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.apiKeys ?? []) as OrganizationApiKey[];
       },
-      enabled: !!orgId,
+      enabled: !!orgId && approval.status === "active",
     }).data ?? [];
   const myMembership = members.find((member) => member.userId === session?.user?.id);
   const canManageMembers = myMembership?.role === "owner" || myMembership?.role === "admin";
@@ -214,7 +217,10 @@ function OrganizationDetail() {
     if (!isOrganizationTab(value) || value === activeTab) return;
     void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
   };
-  const teamsState = useOrganizationTeams(orgId, activeTab === "teams");
+  const teamsState = useOrganizationTeams(
+    orgId,
+    activeTab === "teams" && approval.status === "active",
+  );
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
     orgId,
@@ -246,6 +252,31 @@ function OrganizationDetail() {
             </Button>
           }
         />
+      </PageContainer>
+    );
+  }
+
+  if (approval.status !== "active") {
+    return (
+      <PageContainer variant="narrow">
+        <PageHeader
+          title={org.name}
+          subtitle={`@${org.slug}`}
+          headerTestId="orgs.request.heading"
+        />
+        <div className="flex flex-col gap-4" data-testid="orgs-request-status">
+          <h2 className="text-lg font-medium">
+            {approval.status === "pending" ? "Pending approval" : "Request rejected"}
+          </h2>
+          <p className="text-sm text-muted-foreground" data-testid="orgs-request-reason">
+            {approval.status === "pending"
+              ? "A platform admin will review your request. Your organization can be used once approved."
+              : approval.reason}
+          </p>
+          <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+            Back to organizations
+          </Button>
+        </div>
       </PageContainer>
     );
   }

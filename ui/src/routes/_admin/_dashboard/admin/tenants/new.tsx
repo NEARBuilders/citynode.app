@@ -128,7 +128,8 @@ function NewTenantPage() {
       queryClient.setQueryData(sessionQueryKey, session);
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await router.invalidate();
-      toast.success("Organization created — continue with the wizard");
+      toast.success("Organization submitted for approval");
+      await router.navigate({ to: "/orgs" });
     },
     onError: (error: Error) => toast.error(error.message || "Failed to create organization"),
   });
