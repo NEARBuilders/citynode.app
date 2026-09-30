@@ -644,6 +644,18 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return yield* services.tenants.listTenantApps();
       }),
 
+      listStakeCommunities: builder.listStakeCommunities.effect(function* ({ context }) {
+        const services = yield* ApiServices;
+        if (!context.user || context.user.isAnonymous === true) {
+          return yield* services.tenants.listTenantApps();
+        }
+        const activeOrganizationId = context.organization?.activeOrganizationId;
+        const organizationIds = activeOrganizationId
+          ? [activeOrganizationId]
+          : (context.organizations ?? []).map((organization) => organization.id);
+        return yield* services.tenants.listTenantApps(organizationIds);
+      }),
+
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
         .use(requireAuth)
         .effect(function* ({ input, context }) {
