@@ -19,8 +19,13 @@ function expectedSharedIdentity(): Map<string, string> {
 
 type RemoteModule = (new () => AnyPlugin) | { default: new () => AnyPlugin };
 
+export const loadEveryPluginSharedModule = () => import("../../index");
+
 const coreModuleLoaders: Record<CoreSharedDepName, () => Promise<unknown>> = {
-  "every-plugin": () => import("every-plugin"),
+  // Keep the host-provided framework share on the same source graph as the
+  // runtime. A package self-import can resolve the published entry when a
+  // workspace script is launched through its package manager shim.
+  "every-plugin": loadEveryPluginSharedModule,
   effect: () => import("effect"),
   zod: () => import("zod"),
   "@orpc/contract": () => import("@orpc/contract"),

@@ -326,14 +326,17 @@ export async function startPluginDevServer(
 
   const load = async () => {
     try {
-      const { createPluginRuntime } = await import("every-plugin");
+      // Import framework internals directly. A package self-import can resolve
+      // the published entry while this source-first dev server is running,
+      // which leaves the runtime exports unavailable on Windows.
+      const { createPluginRuntime } = await import("../runtime");
       const { RPCHandler } = await import("@orpc/server/fetch");
       const { OpenAPIHandler } = await import("@orpc/openapi/fetch");
       const { OpenAPIGenerator } = await import("@orpc/openapi");
       const { OpenAPIReferenceHandlerPlugin } = await import("@orpc/openapi/plugins");
       const { ZodToJsonSchemaConverter } = await import("@orpc/zod");
       const { onError } = await import("@orpc/server");
-      const { formatORPCError } = await import("every-plugin/errors");
+      const { formatORPCError } = await import("../errors");
 
       const runtimeConfig = readRuntimeConfigFromEnv();
       const { siblings, dependsOn } = collectSiblingRemotes(runtimeConfig, pluginId);
