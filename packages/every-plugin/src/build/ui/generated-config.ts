@@ -58,11 +58,12 @@ export function ensureGeneratedUiRsbuildConfig(cwd: string): string | null {
   // Canonical plugin key: the config-layout id (plugins/<id>) — the same key
   // the runtime config and composition use. plugin.dev.ts's pluginId is the
   // npm name, which does not match the composition keying.
-  const layoutKey =
-    bosConfigPath && path.relative(path.dirname(bosConfigPath), cwd).startsWith("plugins/")
-      ? path.relative(path.dirname(bosConfigPath), cwd).split(path.sep)[1]?.split(path.sep)[0]
-      : undefined;
-  const pluginId = layoutKey ?? getPluginInfo(cwd).normalizedName;
+  const relativeWorkspace = bosConfigPath
+    ? path.relative(path.dirname(bosConfigPath), cwd)
+    : undefined;
+  const [workspaceGroup, layoutKey] = relativeWorkspace?.split(path.sep) ?? [];
+  const pluginId =
+    workspaceGroup === "plugins" && layoutKey ? layoutKey : getPluginInfo(cwd).normalizedName;
   const next = generatedUiConfig(pluginId);
   if (!fs.existsSync(outPath) || fs.readFileSync(outPath, "utf8") !== next) {
     fs.writeFileSync(outPath, next);
