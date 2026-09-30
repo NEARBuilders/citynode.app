@@ -54,11 +54,17 @@ export function buildPocFormValues(
   orgId: string | null,
   prefill: Partial<PocFormValues> = {},
 ): PocFormValues {
-  return {
-    ...POC_FORM_DEFAULTS,
-    ...prefill,
-    ...loadPocFormDraft(orgId),
-  };
+  const draft = loadPocFormDraft(orgId);
+  const merged: PocFormValues = { ...POC_FORM_DEFAULTS, ...prefill, ...draft };
+  // Prefill seeds fields the user has not touched — a saved empty draft
+  // (written before the org data loaded) must not swallow it.
+  const seeds = merged as unknown as Record<string, string | boolean>;
+  for (const [key, value] of Object.entries(prefill)) {
+    if (typeof value === "string" && value && seeds[key] === "") {
+      seeds[key] = value;
+    }
+  }
+  return merged;
 }
 
 export function usePocForm(orgId: string | null, initialValues: PocFormValues) {

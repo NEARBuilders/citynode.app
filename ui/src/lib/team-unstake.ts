@@ -34,6 +34,11 @@ export function yoctoToNearInput(yocto: bigint) {
   return fraction ? `${whole}.${fraction}` : `${whole}`;
 }
 
+/** A max fill with a 1 NEAR safety margin — exact-max amounts fail on reserves and rounding. */
+export function maxMinusOneNear(maxYocto: bigint): bigint {
+  return maxYocto > YOCTO_PER_NEAR ? maxYocto - YOCTO_PER_NEAR : maxYocto;
+}
+
 export function parseUnstakeAmount(amount: string, max: bigint) {
   const yocto = parseNearAmount(amount);
   if (!yocto || yocto > max) return null;

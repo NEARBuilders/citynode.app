@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  maxMinusOneNear,
   parseUnstakeAmount,
   proposeTeamPoolAction,
   teamPoolCall,
@@ -7,6 +8,19 @@ import {
 } from "./team-unstake";
 
 const staked = 2_500_000_000_000_000_000_000_000n;
+
+describe("maxMinusOneNear", () => {
+  it("leaves a 1 NEAR margin below the max", () => {
+    expect(maxMinusOneNear(staked)).toBe(staked - 10n ** 24n);
+    expect(maxMinusOneNear(10n ** 24n + 1n)).toBe(1n);
+  });
+
+  it("keeps the full max when the balance is at most 1 NEAR", () => {
+    expect(maxMinusOneNear(10n ** 24n)).toBe(10n ** 24n);
+    expect(maxMinusOneNear(1n)).toBe(1n);
+    expect(maxMinusOneNear(0n)).toBe(0n);
+  });
+});
 
 vi.mock("@/lib/dao-connect", () => ({
   verifyDaoAccount: vi.fn(),

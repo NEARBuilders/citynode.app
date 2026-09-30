@@ -10,7 +10,14 @@ import {
 import type { ComponentType, ReactNode } from "react";
 import { Button, Field, FieldLabel, InfoPopover, type InfoPopoverLink, Input } from "@/components";
 import { FieldDescription, FieldGroup } from "@/components/ui/field";
-import { nearblocksAccount } from "./-poc-chain";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { maxMinusOneNear, yoctoToNearInput } from "@/lib/team-unstake";
+import { formatNear, nearblocksAccount } from "./-poc-chain";
 import type { PocForm } from "./-poc-form";
 import { POOL_PLACEHOLDER, type PocLifecycle, TREZU_CREATE_URL } from "./-poc-lifecycle";
 
@@ -254,6 +261,47 @@ export function PocTreasuryConnection({ lc }: { lc: PocLifecycle }) {
   );
 }
 
+function SponsorAmountField({ lc }: { lc: PocLifecycle }) {
+  const { form, endowmentAvailableYocto } = lc;
+  /** Fills what the lockup can stake, minus a 1 NEAR safety margin. */
+  const maxFill = endowmentAvailableYocto != null ? maxMinusOneNear(endowmentAvailableYocto) : null;
+  return (
+    <form.Field name="sponsorAmount">
+      {(field) => (
+        <Field>
+          <FieldLabel htmlFor="poc-sponsorAmount">Sponsor NEAR</FieldLabel>
+          <InputGroup>
+            <InputGroupInput
+              id="poc-sponsorAmount"
+              inputMode="decimal"
+              value={field.state.value}
+              onChange={(event) => field.handleChange(event.target.value)}
+              data-testid="poc-sponsorAmount"
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                onClick={() => {
+                  if (maxFill != null)
+                    form.setFieldValue("sponsorAmount", yoctoToNearInput(maxFill));
+                }}
+                disabled={maxFill == null}
+                data-testid="poc-sponsorAmount-max"
+              >
+                Max
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          <FieldDescription>
+            {endowmentAvailableYocto != null
+              ? `${formatNear(endowmentAvailableYocto.toString())} available to stake from the lockup`
+              : "Set the endowment treasury to see what its lockup can stake."}
+          </FieldDescription>
+        </Field>
+      )}
+    </form.Field>
+  );
+}
+
 export function PocSetupFields({ lc }: { lc: PocLifecycle }) {
   const { form, values, slug, team, connection, connectTeamDaoMutation, connectEndowmentMutation } =
     lc;
@@ -283,18 +331,28 @@ export function PocSetupFields({ lc }: { lc: PocLifecycle }) {
       <div className="flex flex-col gap-1">
         {values.endowmentLinked ? (
           <ReadOnlyField id="poc-endowment" label="Endowment treasury" value={team} />
-        ) : !values.endowment ? (
-          <ConnectField
-            id="poc-endowment"
-            label="Endowment treasury"
-            connecting={connectEndowmentMutation.isPending || connecting}
-            onClick={() => connectEndowmentMutation.mutate()}
-            testId="poc-connect-endowment"
-          >
-            Connect endowment via Trezu
-          </ConnectField>
         ) : (
-          <PocFormField form={form} name="endowment" label="Endowment treasury" mono />
+          <>
+            <PocFormField
+              form={form}
+              name="endowment"
+              label="Endowment treasury"
+              placeholder="chicagonode.sputnik-dao.near"
+              mono
+              description="Type the treasury account. A wallet with AddProposal rights on its policy stages every step as a proposal — no Trezu connection needed."
+            />
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              className="self-start"
+              onClick={() => connectEndowmentMutation.mutate()}
+              disabled={connectEndowmentMutation.isPending || connecting}
+              data-testid="poc-connect-endowment"
+            >
+              <WalletIcon /> Connect via Trezu instead
+            </Button>
+          </>
         )}
         <Button
           type="button"
@@ -322,7 +380,7 @@ export function PocSetupFields({ lc }: { lc: PocLifecycle }) {
         placeholder={POOL_PLACEHOLDER}
         mono
       />
-      <PocFormField form={form} name="sponsorAmount" label="Sponsor NEAR" type="number" />
+      <SponsorAmountField lc={lc} />
     </FieldGroup>
   );
 }

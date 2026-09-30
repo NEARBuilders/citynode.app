@@ -1,10 +1,12 @@
 import type { DaoPlan, PoolAccountView } from "./-poc-chain";
 import {
+  fetchAccountBalance,
   fetchLockupState,
   fetchVenearAccount,
   formatNear,
   getNear,
   isPositive,
+  lockupAvailableYocto,
   remainingToFund,
   remainingToStake,
   yoctoArg,
@@ -157,6 +159,15 @@ export function createPrecheckPlan(ctx: PrecheckContext) {
         if (remaining <= 0n) {
           log("already staked from the lockup — skipping");
           return null;
+        }
+        const balance = await fetchAccountBalance(endowmentLockup).catch(() => null);
+        if (balance) {
+          const available = lockupAvailableYocto(balance);
+          if (remaining > available) {
+            throw new Error(
+              `the lockup can stake at most ${formatNear(available.toString())} — enter a smaller sponsor amount`,
+            );
+          }
         }
         return { ...plan, args: { ...plan.args, amount: remaining.toString() } };
       }
