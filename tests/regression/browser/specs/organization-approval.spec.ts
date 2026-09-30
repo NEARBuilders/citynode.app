@@ -6,6 +6,56 @@ import { injectAdminCookies } from "../helpers/seeded";
 
 test.use({ trace: "on" });
 
+test("passkey signup creates an active personal organization and can sign in again", async ({
+  page,
+  context,
+}) => {
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  });
+  try {
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("login.create-account-link").click();
+    await page.getByTestId("login.create-account-button").click();
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 20000, waitUntil: "commit" });
+    const signedUp = await (await context.request.get("/api/auth/get-session")).json();
+    expect(signedUp.user.id).toBeTruthy();
+    const organizations = await (await context.request.get("/api/auth/organization/list")).json();
+    expect(organizations).toHaveLength(1);
+    expect(organizations[0]).toMatchObject({ status: "active", requestedBy: null });
+    await page.goto("/orgs", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("orgs.heading")).toBeVisible();
+    await expect(page.getByTestId("orgs-pending")).toHaveCount(0);
+    if (await page.getByTestId("add-email.cancel").isVisible()) {
+      await page.getByTestId("add-email.cancel").click();
+    }
+    await page
+      .getByRole("button", { name: /Passkey user/ })
+      .first()
+      .click();
+    await page.getByTestId("account.signout-menuitem").click();
+    await expect(page).toHaveURL(/\/$/, { waitUntil: "commit" });
+    expect(await (await context.request.get("/api/auth/get-session")).json()).toBeNull();
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("login.passkey-button").click();
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 20000, waitUntil: "commit" });
+    expect((await (await context.request.get("/api/auth/get-session")).json()).user.id).toBe(
+      signedUp.user.id,
+    );
+  } finally {
+    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
+  }
+});
+
 for (const decision of ["approve", "reject"] as const) {
   test(`organization request stays pending until admins ${decision} it`, async ({
     page,

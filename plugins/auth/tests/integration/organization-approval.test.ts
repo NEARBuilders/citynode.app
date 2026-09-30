@@ -289,4 +289,79 @@ describe("organization approval gate", () => {
     ).organizationRequests.listOrganizationRequests({ context: { reqHeaders: admin.reqHeaders } });
     expect(queue).not.toContainEqual(expect.objectContaining({ id: requester.personalOrgId }));
   });
+
+  it.each([
+    "pending",
+    "rejected",
+  ])("blocks direct member additions to %s organizations", async (status) => {
+    const requester = await createTestUser(setup.services);
+    const recipient = await createTestUser(setup.services);
+    const organization = await requestOrganization(requester);
+    const handlers = createTestHandlers(setup.services);
+    if (status === "rejected") {
+      await handlers.organizationRequests.reviewOrganization({
+        input: { organizationId: organization.id, decision: "reject", reason: "Not approved" },
+        context: { reqHeaders: admin.reqHeaders },
+      });
+    }
+    for (const organizationId of [organization.id, undefined]) {
+      await setup.services.db
+        .update(schema.session)
+        .set({ activeOrganizationId: organization.id })
+        .where(eq(schema.session.userId, requester.userId));
+      await expect(
+        handlers.members.addMember({
+          input: { userId: recipient.userId, role: "member", organizationId },
+          context: { reqHeaders: requester.reqHeaders },
+        }),
+      ).rejects.toThrow("approval");
+    }
+    expect(
+      await setup.services.db.query.member.findMany({
+        where: eq(schema.member.organizationId, organization.id),
+      }),
+    ).toEqual([expect.objectContaining({ userId: requester.userId, role: "owner" })]);
+  });
+
+  it("preserves an approved organization after the requester account is removed", async () => {
+    const requester = await createTestUser(setup.services);
+    const successor = await createTestUser(setup.services);
+    const organization = await requestOrganization(requester);
+    const handlers = createTestHandlers(setup.services);
+    await handlers.organizationRequests.reviewOrganization({
+      input: { organizationId: organization.id, decision: "approve" },
+      context: { reqHeaders: admin.reqHeaders },
+    });
+    const successorMember = await handlers.members.addMember({
+      input: { userId: successor.userId, role: "owner", organizationId: organization.id },
+      context: { reqHeaders: requester.reqHeaders },
+    });
+    const team = await setup.services.auth.api.createTeam({
+      headers: requester.headers,
+      body: { organizationId: organization.id, name: "Shared team" },
+    });
+    await setup.services.auth.api.removeUser({
+      headers: admin.headers,
+      body: { userId: requester.userId },
+    });
+    expect(
+      await setup.services.db.query.organization.findFirst({
+        where: eq(schema.organization.id, organization.id),
+      }),
+    ).toMatchObject({ status: "active", requestedBy: null });
+    expect(
+      await setup.services.db.query.member.findFirst({
+        where: eq(schema.member.id, successorMember.id),
+      }),
+    ).toMatchObject({ userId: successor.userId, role: "owner" });
+    expect(
+      await setup.services.db.query.team.findFirst({
+        where: eq(schema.team.id, team.id),
+      }),
+    ).toMatchObject({ organizationId: organization.id });
+    await setup.services.auth.api.setActiveOrganization({
+      headers: successor.headers,
+      body: { organizationId: organization.id },
+    });
+  });
 });

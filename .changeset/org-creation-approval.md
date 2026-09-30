@@ -5,3 +5,5 @@
 ---
 
 Require platform-admin approval for self-service organizations, expose pending and rejected request status, and prevent unapproved organizations from being activated or linked to tenants. Personal signup organizations remain active.
+
+Block direct member additions before approval and preserve shared organizations when the original requester's account is removed.

@@ -136,7 +136,7 @@ export const organization = pgTable(
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
     metadata: text("metadata"),
     status: text("status").default("active").notNull(),
-    requestedBy: text("requested_by").references(() => user.id, { onDelete: "cascade" }),
+    requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
     rejectionReason: text("rejection_reason"),
   },
   (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
