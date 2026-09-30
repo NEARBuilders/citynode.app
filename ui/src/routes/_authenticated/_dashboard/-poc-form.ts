@@ -58,10 +58,10 @@ export function buildPocFormValues(
   const merged: PocFormValues = { ...POC_FORM_DEFAULTS, ...prefill, ...draft };
   // Prefill seeds fields the user has not touched — a saved empty draft
   // (written before the org data loaded) must not swallow it.
-  const seeds = merged as unknown as Record<string, string | boolean>;
+  const fields = merged as unknown as Record<string, string | boolean>;
   for (const [key, value] of Object.entries(prefill)) {
-    if (typeof value === "string" && value && seeds[key] === "") {
-      seeds[key] = value;
+    if (typeof value === "string" && value && fields[key] === "") {
+      fields[key] = value;
     }
   }
   return merged;

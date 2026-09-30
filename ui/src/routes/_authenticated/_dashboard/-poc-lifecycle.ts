@@ -134,7 +134,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
   /** An org can override the name its node gets with `metadata.name`. */
   const orgNamePrefill = (() => {
     const override = activeOrg?.metadata?.name;
-    if (typeof override === "string" && override.trim()) return override;
+    if (typeof override === "string" && override.trim()) return override.trim();
     return activeOrgName ? titleCase(activeOrgName) : null;
   })();
 

@@ -191,6 +191,7 @@ describe("TeamStakeCard", () => {
       "dashboard-node.team-stake-unstake-amount",
     )) as HTMLInputElement;
     expect(amount.value).toBe("1.5");
+    fireEvent.change(amount, { target: { value: "0" } });
     fireEvent.click(screen.getByText("Max"));
     expect(amount.value).toBe("1.5");
   });
