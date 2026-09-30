@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   englishLoginMessages,
+  getLoginMessages,
   LOGIN_LOCALE_COOKIE,
   type LoginMessageId,
   withEnglishLoginFallback,
@@ -57,6 +58,13 @@ describe("login locale resolution", () => {
 });
 
 describe("login message catalogs", () => {
+  it("compiles ICU messages before loading them into Lingui", () => {
+    expect(getLoginMessages("en")["auth.login.near.continueAs"]).toEqual([
+      "Continue as ",
+      ["account"],
+    ]);
+  });
+
   it("interpolates translated values", () => {
     const i18n = createLoginI18n("es");
     expect(i18n._("auth.login.near.continueAs", { account: "maaz.near" })).toBe(

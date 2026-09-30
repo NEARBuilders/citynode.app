@@ -21,6 +21,7 @@
     "@better-auth/api-key": "catalog:",
     "@better-auth/passkey": "catalog:",
     "@lingui/core": "catalog:",
+    "@lingui/message-utils": "catalog:",
     "@lingui/react": "catalog:",
     "@electric-sql/pglite": "catalog:",
     "@orpc/client": "catalog:",

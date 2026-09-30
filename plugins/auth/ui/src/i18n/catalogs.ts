@@ -1,4 +1,5 @@
 import type { Messages } from "@lingui/core";
+import { compileMessageOrThrow } from "@lingui/message-utils/compileMessage";
 
 export const LOGIN_LOCALES = ["en", "es", "fr", "zh"] as const;
 
@@ -254,5 +255,12 @@ export function withEnglishLoginFallback(
 }
 
 export function getLoginMessages(locale: LoginLocale): Messages {
-  return withEnglishLoginFallback(translatedLoginMessages[locale]);
+  return Object.fromEntries(
+    Object.entries(withEnglishLoginFallback(translatedLoginMessages[locale])).map(
+      ([id, message]) => [
+        id,
+        typeof message === "string" ? compileMessageOrThrow(message) : message,
+      ],
+    ),
+  );
 }

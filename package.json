@@ -24,6 +24,7 @@
       "near-kit": "^0.20.2",
       "@fastnear/near-connect": "^0.14.1",
       "@lingui/core": "5.9.0",
+      "@lingui/message-utils": "5.9.0",
       "@lingui/react": "5.9.0",
       "@scure/base": "^2.2.0",
       "drizzle-orm": "^0.45.1",
