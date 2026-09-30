@@ -22,6 +22,7 @@ import type {
 } from "../discovery-contract";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
+import { type GeocodeService, GeocodeTag, shouldGeocodeProfile } from "./discovery-geocode";
 import { createLumaCalendars } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";
 
@@ -31,13 +32,13 @@ function canonicalActivityUrl(value: string) {
   const url = new URL(value);
   url.hash = "";
   if (["lu.ma", "www.lu.ma", "www.luma.com"].includes(url.hostname)) url.hostname = "luma.com";
-  for (const key of [...url.searchParams.keys()])
+  for (const key of url.searchParams.keys())
     if (key.startsWith("utm_") || key === "fbclid") url.searchParams.delete(key);
   url.searchParams.sort();
   return url.toString();
 }
 
-function createDiscovery(db: Database, lumaKeys: string) {
+function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService) {
   const luma = createLumaCalendars(lumaKeys);
 
   const query = <T>(run: () => Promise<T>): DiscoveryEffect<T> =>
@@ -904,21 +905,72 @@ function createDiscovery(db: Database, lumaKeys: string) {
     saveProfile: (input: DiscoveryProfile, context: AuthContext) =>
       Effect.gen(function* () {
         yield* authorize(input.nodeId, context);
+        const [existing] = yield* query(() =>
+          db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, input.nodeId)),
+        );
+        const previous = existing?.data;
+        const geocodedLocation =
+          input.geocodedLocation !== undefined
+            ? input.geocodedLocation
+            : (previous?.geocodedLocation ?? null);
+        let next: DiscoveryProfile = {
+          ...input,
+          geocodedLocation,
+          geocodeHint: null,
+        };
+        if (!next.location.trim()) {
+          next = {
+            ...next,
+            latitude: null,
+            longitude: null,
+            geocodedLocation: null,
+            geocodeHint: null,
+          };
+        } else if (
+          shouldGeocodeProfile({
+            location: next.location,
+            latitude: next.latitude,
+            longitude: next.longitude,
+            geocodedLocation,
+          })
+        ) {
+          const geocoded = yield* geocode.geocode(next.location);
+          if (geocoded.ok) {
+            next = {
+              ...next,
+              latitude: geocoded.latitude,
+              longitude: geocoded.longitude,
+              geocodedLocation: next.location.trim(),
+              geocodeHint: null,
+            };
+          } else {
+            next = {
+              ...next,
+              latitude: null,
+              longitude: null,
+              geocodedLocation: null,
+              geocodeHint:
+                geocoded.reason === "not_found"
+                  ? "Couldn't place that location on the map. Try a clearer city or venue name."
+                  : "Map lookup is unavailable right now. Your profile was saved without a pin.",
+            };
+          }
+        }
         yield* query(() =>
           db.transaction(async (tx) => {
             await tx
               .insert(discoveryProfiles)
-              .values({ nodeId: input.nodeId, data: input })
-              .onConflictDoUpdate({ target: discoveryProfiles.nodeId, set: { data: input } });
+              .values({ nodeId: next.nodeId, data: next })
+              .onConflictDoUpdate({ target: discoveryProfiles.nodeId, set: { data: next } });
             await tx.insert(discoveryHistory).values({
-              nodeId: input.nodeId,
-              targetId: input.nodeId,
+              nodeId: next.nodeId,
+              targetId: next.nodeId,
               actorId: context.userId!,
-              action: input.published ? "profile published" : "profile saved as draft",
+              action: next.published ? "profile published" : "profile saved as draft",
             });
           }),
         );
-        return input;
+        return next;
       }),
   };
 }
@@ -930,7 +982,7 @@ export const DiscoveryLive = (lumaKeys = "") =>
   Layer.effect(
     DiscoveryTag,
     Effect.gen(function* () {
-      const service = createDiscovery(yield* DatabaseTag, lumaKeys);
+      const service = createDiscovery(yield* DatabaseTag, lumaKeys, yield* GeocodeTag);
       yield* Effect.acquireRelease(
         Effect.sync(() =>
           setInterval(() => {

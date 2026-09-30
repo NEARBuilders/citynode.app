@@ -35,12 +35,6 @@ function profileSaveErrorMessage(error: unknown) {
 }
 
 function validateProfile(profile: Profile) {
-  if ((profile.latitude === null) !== (profile.longitude === null)) {
-    return "Provide both coordinates or neither";
-  }
-  if (profile.latitude !== null && profile.location.trim().length === 0) {
-    return "Confirm the location label";
-  }
   for (const channel of profile.channels) {
     if (!channel.label.trim()) return "Each link needs a name";
     if (!/^https?:\/\//i.test(channel.url.trim())) return "Use an HTTP(S) URL for each link";
@@ -129,6 +123,8 @@ export function ProfileEditor({
               longitude: null,
               channels: [],
               published: false,
+              geocodedLocation: null,
+              geocodeHint: null,
             }
           }
         />
@@ -144,9 +140,14 @@ function ProfileForm({ initial }: { initial: Profile }) {
   const client = useQueryClient();
   const save = useMutation({
     mutationFn: () => api.saveDiscoveryProfile(profile),
-    onSuccess: () => {
+    onSuccess: (saved) => {
       setValidationError(null);
-      toast.success(profile.published ? "Profile saved and live on Explore" : "Profile saved");
+      setProfile(saved);
+      if (saved.geocodeHint) {
+        toast.warning(saved.geocodeHint);
+      } else {
+        toast.success(saved.published ? "Profile saved and live on Explore" : "Profile saved");
+      }
       return client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });
@@ -158,6 +159,25 @@ function ProfileForm({ initial }: { initial: Profile }) {
       ...profile,
       channels: profile.channels.map((c, i) => (i === index ? { ...c, ...patch } : c)),
     });
+  const setLocation = (location: string) => {
+    const trimmed = location.trim();
+    const stillMatchesGeocode =
+      trimmed.length > 0 && trimmed === (profile.geocodedLocation?.trim() ?? "");
+    setProfile({
+      ...profile,
+      location,
+      ...(trimmed
+        ? stillMatchesGeocode
+          ? {}
+          : { geocodedLocation: null, geocodeHint: null }
+        : {
+            latitude: null,
+            longitude: null,
+            geocodedLocation: null,
+            geocodeHint: null,
+          }),
+    });
+  };
   return (
     <form
       className="flex max-w-2xl flex-col gap-10"
@@ -214,7 +234,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 data-testid="discovery-profile-location"
                 value={profile.location}
                 maxLength={120}
-                onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                onChange={(e) => setLocation(e.target.value)}
               />
             </Field>
             <Field>
@@ -227,46 +247,16 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 onChange={(e) => setProfile({ ...profile, region: e.target.value })}
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="profile-latitude">Latitude</FieldLabel>
-              <Input
-                id="profile-latitude"
-                data-testid="discovery-profile-latitude"
-                type="number"
-                step="any"
-                min={-85}
-                max={85}
-                value={profile.latitude ?? ""}
-                onChange={(e) =>
-                  setProfile({
-                    ...profile,
-                    latitude: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="profile-longitude">Longitude</FieldLabel>
-              <Input
-                id="profile-longitude"
-                data-testid="discovery-profile-longitude"
-                type="number"
-                step="any"
-                min={-180}
-                max={180}
-                value={profile.longitude ?? ""}
-                onChange={(e) =>
-                  setProfile({
-                    ...profile,
-                    longitude: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </Field>
           </div>
-          <FieldDescription>
-            The map pin should be a public place. Leave it empty if you only meet online.
-          </FieldDescription>
+          {profile.geocodeHint ? (
+            <p
+              role="status"
+              data-testid="discovery-profile-geocode-hint"
+              className="text-sm text-muted-foreground"
+            >
+              {profile.geocodeHint}
+            </p>
+          ) : null}
         </FieldGroup>
       </FieldSet>
 

@@ -13,6 +13,7 @@ import type { PluginsClient } from "./lib/plugins-types.gen";
 import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
+import { GeocodeLive } from "./services/discovery-geocode";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import {
@@ -246,6 +247,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .describe(
         "Comma-separated domains whose subdomains the platform controls (auto-verified bindings)",
       ),
+    domain: z
+      .string()
+      .default("localhost")
+      .describe("Runtime domain used to identify outbound geocode requests"),
+    repository: z
+      .string()
+      .default("")
+      .describe("Repository URL included in the Nominatim User-Agent"),
   }),
 
   secrets: z.object({
@@ -269,7 +278,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
           TenantsLive,
           NodesLive,
           ValidatorsLive,
-          DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS),
+          DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS).pipe(
+            Layer.provide(
+              GeocodeLive({
+                domain: config.variables.domain,
+                repository: config.variables.repository,
+              }),
+            ),
+          ),
           StorageLive,
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );

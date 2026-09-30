@@ -27,8 +27,6 @@ test.describe("discovery profile save → Explore", () => {
       .fill("A community by the sea for builders.");
     await page.getByTestId("discovery-profile-location").fill("Karachi");
     await page.getByTestId("discovery-profile-region").fill("Pakistan");
-    await page.getByTestId("discovery-profile-latitude").fill("24.86");
-    await page.getByTestId("discovery-profile-longitude").fill("67.01");
 
     await page.getByTestId("discovery-profile-add-channel").click();
     await page.getByTestId("discovery-profile-channel-label-0").fill("Community");

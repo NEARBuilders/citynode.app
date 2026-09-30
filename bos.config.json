@@ -35,7 +35,9 @@
       "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/api/",
       "variables": {
         "platformAccount": "v1.citynode.near",
-        "gatewayDomains": "citynode.app,testnet.citynode.app"
+        "gatewayDomains": "citynode.app,testnet.citynode.app",
+        "domain": "citynode.app",
+        "repository": "https://github.com/NEARBuilders/citynode.app"
       },
       "secrets": [
         "API_DATABASE_URL",
