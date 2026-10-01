@@ -34,10 +34,12 @@ export {
 } from "./modules/agents/onboarding-service.js";
 export { getAgentView, listAgents, loadAgent } from "./modules/agents/service.js";
 export { generateIntent, generateResponse } from "./modules/intents/generate.js";
+export { updateOwnerIntent } from "./modules/intents/repository.js";
 export { readHistory, readStatus } from "./modules/intents/status.js";
 export { submitIntent } from "./modules/intents/submit.js";
 export { readBudget } from "./modules/operations/budget-policy-service.js";
 export { execute, recoverExecution } from "./modules/operations/execution-service.js";
+export { requirePrivilegedArtifactDeliveryAllowed } from "./modules/operations/signing-artifact-service.js";
 export {
   listScheduledExecutions,
   readTimelock,
@@ -46,6 +48,7 @@ export { balanceList, walletView } from "./modules/wallet/balance-service.js";
 // Service surface for the agents plugin shell (named exports only — the module
 // families collide under star re-export; the shell imports exactly these).
 export { configurePolicyStorageEstimator } from "./modules/wallet/owner-policy-preparation.js";
+export { requireReadyPolicy } from "./modules/wallet/policy-readiness.js";
 export { readLimits, readPolicy, readPolicyHistory } from "./modules/wallet/policy-service.js";
 export type { Actor } from "./shared/actor.js";
 export * from "./shared/actor.js";
