@@ -85,6 +85,7 @@ let savedEnv: Record<string, string | undefined>;
 
 describe("publishToFastKv preflight ordering", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     configDir = mkdtempSync(join(tmpdir(), "bos-preflight-"));
     savedEnv = {
       BOS_BUNDLE_CDN_ORIGIN: process.env.BOS_BUNDLE_CDN_ORIGIN,
@@ -226,5 +227,17 @@ describe("publishToFastKv preflight ordering", () => {
 
     expect(result.status).toBe("error");
     expect(result.error).toContain("BOS_STORAGE_*");
+  });
+
+  it("a config-only publish (build: false) never invokes the build train", async () => {
+    buildWorkspaceTargetsMock.mockResolvedValue({ built: [], skipped: [], deployResults: [] });
+    fetchBosConfigFromFastKvMock.mockResolvedValue(JSON.parse(JSON.stringify(bosConfig)));
+
+    const result = await publishToFastKv({ ...baseInput, configDir, build: false });
+
+    expect(result.status).toBe("published");
+    expect(generateCodeArtifactsMock).not.toHaveBeenCalled();
+    expect(buildWorkspaceTargetsMock).not.toHaveBeenCalled();
+    expect(uploadWorkspaceDistMock).not.toHaveBeenCalled();
   });
 });

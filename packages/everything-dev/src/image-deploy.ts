@@ -8,11 +8,7 @@ export interface ResolvedImageRef {
   source: "ci" | "env" | "repository";
 }
 
-/**
- * Image-name resolution order: `ci.image` in bos.config.json → `BOS_IMAGE`
- * env → derived from the `repository` field (a GitHub URL becomes
- * `ghcr.io/<owner>/<repo>`, matching the CI workflow's derivation).
- */
+// ci.image in bos.config.json → BOS_IMAGE env → derived from `repository`.
 export function resolveImageRef(input: {
   ciImage?: string;
   repository?: string;
@@ -53,11 +49,7 @@ export interface ImageDeployResult {
   digest?: string;
 }
 
-/**
- * Image leg of the deploy train: build the `runtime` stage, tag it with the
- * short SHA and `latest`, push both tags, and capture the digest from the
- * push output (ADR 0021).
- */
+// Build the runtime stage, tag sha-<short> + latest, push both, capture the digest (ADR 0021).
 export async function buildAndPushImage(input: {
   image: string;
   configDir: string;
@@ -120,12 +112,8 @@ export async function buildAndPushImage(input: {
   return { image: input.image, tag, digest };
 }
 
-/**
- * Railway leg, pull-only (ADR 0021): a thin `FROM <image>@sha256:<digest>`
- * Dockerfile pins the exact pushed bytes; Railway never rebuilds. The
- * generated file lives in `.bos/deploy/` and is referenced through
- * RAILWAY_DOCKERFILE_PATH.
- */
+// Pull-only Railway deploy (ADR 0021): a thin FROM pins the pushed digest so
+// Railway never rebuilds; RAILWAY_DOCKERFILE_PATH points at the generated file.
 export async function deployImageToRailway(input: {
   image: string;
   digest: string;

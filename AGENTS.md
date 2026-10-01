@@ -425,6 +425,7 @@ One image, published by the root to GHCR; children never ship images. `BOS_BUNDL
    # → build + push the runtime image and deploy it to Railway when configured
    ```
    No CDN provider account — the base runtime stores and serves your bytes; you inherit host/api/auth logic from the base's own bundles. Upload credentials come from `BOS_STORAGE_API_KEY` or a `bos login` session (mint once with `bos login --key`, then put the printed key in GitHub repo secrets as `BOS_STORAGE_API_KEY` for CI; the device-flow session works for interactive deploys). See ADR 0020 for the storage design. (Without a CDN origin the deploy stays image-native and writes gateway URLs — the flip is the `BOS_BUNDLE_CDN_ORIGIN`/`BOS_STORAGE_ORIGIN` env pair.)
+   The runtime image leg resolves the image name from `ci.image` in `bos.config.json` → `BOS_IMAGE` env → derived from `repository` (`ghcr.io/<owner>/<repo>`); it only runs when docker is available. The first `bos deploy` populates the R2 bucket for the first time — the committed `cdn.everything.dev` bundle URLs become true only once that run completes.
 
 6. **Run the universal image** — pull `ghcr.io/nearbuilders/everything-dev` (Railway: one-click template or `railway up`; the deploy train deploys the pushed SHA tag). No image build of your own — ever. Set these environment variables on your instance:
    | Variable | Value |

@@ -142,13 +142,9 @@ export type PublishPreflight =
   | { kind: "error"; registryUrl: string; error: string }
   | { kind: "ready"; plan: PublishPreflightPlan };
 
-/**
- * Pure preflight (resolve, don't mutate): config/account/gateway → auth
- * guards → signing strategy → storage/CDN credentials → registry
- * reachability. Every failure returns an actionable message before the
- * build train runs (issue #287). Dry-run exits after the auth guards,
- * before any signing (keychain/TTY side effects).
- */
+// Pure preflight (resolve, don't mutate) — every failure returns before the
+// build train runs (issue #287). Dry-run exits after the auth guards, before
+// any signing (keychain/TTY side effects).
 export async function preflightPublish(input: PublishToFastKvInput): Promise<PublishPreflight> {
   const { configDir } = input;
   const bosConfig = input.bosConfig;

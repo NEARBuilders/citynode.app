@@ -960,12 +960,13 @@ export default createPlugin({
       let imageDigest: string | undefined;
       let service: string | undefined;
 
-      // IMAGE LEG (ADR 0021): build the runtime stage and push it to the
-      // registry by SHA + latest tags. Skips with a notice when no image is
-      // configured (child repos get build+upload+publish only).
+      // IMAGE LEG (ADR 0021): build the runtime stage, push by SHA + latest.
+      // Skips with a notice when no image is configured (child repos get
+      // build+upload+publish only).
       const imageRef = resolveImageRef({
         ciImage: deps.bosConfig.ci?.image,
         repository: deps.bosConfig.repository,
+        env: process.env,
       });
       if (!imageRef) {
         console.log();

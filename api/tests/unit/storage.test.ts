@@ -1,4 +1,5 @@
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { Effect } from "effect";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import {
   BUNDLE_MIME_TYPES,
   buildBundleKey,
@@ -8,6 +9,8 @@ import {
   MemoryStorageClient,
   S3StorageClient,
   StorageHttpError,
+  StorageLive,
+  StorageTag,
   TransientStorageError,
   validateNamespacePart,
   validateObjectPath,
@@ -89,6 +92,53 @@ describe("integrity", () => {
   it("computes sha384 SRI over stored bytes", () => {
     const hash = computeObjectIntegrity(new TextEncoder().encode("hello"));
     expect(hash).toMatch(/^sha384-[A-Za-z0-9+/=]{64}$/);
+  });
+});
+
+describe("StorageLive backend disclosure", () => {
+  const STORAGE_ENV_KEYS = [
+    "BOS_STORAGE_ENDPOINT",
+    "BOS_STORAGE_BUCKET",
+    "BOS_STORAGE_ACCESS_KEY_ID",
+    "BOS_STORAGE_SECRET_ACCESS_KEY",
+    "BOS_STORAGE_REGION",
+  ] as const;
+  let savedEnv: Record<string, string | undefined>;
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    vi.restoreAllMocks();
+  });
+
+  const resolveBackend = (): Promise<"s3" | "memory"> =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const storage = yield* StorageTag;
+        return storage.backend;
+      }).pipe(Effect.provide(StorageLive)),
+    );
+
+  it("reports memory when BOS_STORAGE_* is unset (bytes lost on restart)", async () => {
+    savedEnv = Object.fromEntries(STORAGE_ENV_KEYS.map((key) => [key, process.env[key]]));
+    for (const key of STORAGE_ENV_KEYS) delete process.env[key];
+
+    await expect(resolveBackend()).resolves.toBe("memory");
+  });
+
+  it("reports s3 when BOS_STORAGE_* is configured", async () => {
+    savedEnv = Object.fromEntries(STORAGE_ENV_KEYS.map((key) => [key, process.env[key]]));
+    Object.assign(process.env, {
+      BOS_STORAGE_ENDPOINT: "https://r2.test",
+      BOS_STORAGE_BUCKET: "bundles",
+      BOS_STORAGE_ACCESS_KEY_ID: "test",
+      BOS_STORAGE_SECRET_ACCESS_KEY: "test",
+      BOS_STORAGE_REGION: "auto",
+    });
+
+    await expect(resolveBackend()).resolves.toBe("s3");
   });
 });
 
