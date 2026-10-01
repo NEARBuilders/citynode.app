@@ -107,6 +107,7 @@ export interface PluginDevServerHandle {
 export async function startPluginDevServer(
   options: PluginDevServeOptions = {},
 ): Promise<PluginDevServerHandle> {
+  process.env.BOS_DEV_SERVER = "1";
   const cwd = options.cwd ?? process.cwd();
   const pluginInfo = getPluginInfo(cwd);
   const devConfig = loadDevConfig(path.join(cwd, "plugin.dev.ts"));

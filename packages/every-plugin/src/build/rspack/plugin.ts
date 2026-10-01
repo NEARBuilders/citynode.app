@@ -6,7 +6,7 @@ import type { Compiler, RspackPluginInstance } from "@rspack/core";
 import {
   DEV_ENTRY_FILENAME,
   findHashedEntry,
-  isDeployInvocation,
+  isBuildInvocation,
   uiEntryFilename,
 } from "../artifact-names";
 import { CONTRACT_TYPES_FILE, generateContractTypes } from "../contract-types";
@@ -166,7 +166,7 @@ export class EveryPluginBuild implements RspackPluginInstance {
 
     new ModuleFederationPlugin({
       name: pluginInfo.normalizedName,
-      filename: uiEntryFilename({ isBuild: isDeployInvocation() }),
+      filename: uiEntryFilename({ isBuild: isBuildInvocation() }),
       dts: this.options.dts !== false,
       manifest: {},
       runtimePlugins: [require.resolve("@module-federation/node/runtimePlugin")],
@@ -230,13 +230,12 @@ export class EveryPluginBuild implements RspackPluginInstance {
     }
     compiler.options.resolve.extensions = ["...", ".tsx", ".ts"];
     // Source-first for local flows: resolve framework packages through the
-    // `development` export condition (TS source) unless this is a deploy
-    // build — publish/deploy set DEPLOY=true and keep the dist-first
-    // snapshot that ships. (NODE_ENV is unusable as the gate here: the
-    // rspack CLI defaults it to "production" for every `build` invocation,
-    // including local dev watch.) byDependency entries inherit the root
-    // conditions via "...", so dropping the strip lets esm/cjs deps pick up
-    // `development` too.
+    // `development` export condition (TS source) unless DEPLOY=true — the
+    // manual dist-first switch deploy-identical builds opt into. (NODE_ENV
+    // is unusable as the gate here: the rspack CLI defaults it to
+    // "production" for every `build` invocation, including local dev watch.)
+    // byDependency entries inherit the root conditions via "...", so
+    // dropping the strip lets esm/cjs deps pick up `development` too.
     const sourceFirst = process.env.DEPLOY !== "true";
     compiler.options.resolve.conditionNames = [
       ...(sourceFirst ? ["development"] : []),

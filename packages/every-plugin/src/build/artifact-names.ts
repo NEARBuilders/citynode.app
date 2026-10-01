@@ -13,12 +13,17 @@ export const STYLE_FILENAME = "style.css";
 export const HASHED_ENTRY_PATTERN = "remoteEntry.[contenthash].js";
 export const HASHED_SERVER_ENTRY_PATTERN = "remoteEntry.server.[contenthash].js";
 
-/** DEPLOY=true is the one deploy signal: NODE_ENV is unusable here (vitest
- * runs as "test", the rspack/rsbuild CLIs default "production" even for local
- * dev watches). Deploy builds emit hashed entries + build reports; everything
- * else — dev servers, local builds, regression fixtures — emits fixed names. */
-export function isDeployInvocation(): boolean {
-  return process.env.DEPLOY === "true";
+/** The dev-stack signal: everything a dev server spawns (watch or no-watch
+ * one-shot builds) serves the fixed dev entry names, because every dev
+ * consumer appends them and no build report exists to discover hashed names
+ * from. Every other invocation — local builds, host-test production builds,
+ * regression container builds, deploys — is a build and emits content-hashed
+ * entries + build reports. NODE_ENV cannot carry this decision (vitest runs
+ * as "test", bundler CLIs default "production" even for dev watches), and
+ * DEPLOY=true only marks deploy builds — so the dev server stamps its own
+ * children. */
+export function isBuildInvocation(): boolean {
+  return process.env.BOS_DEV_SERVER !== "1";
 }
 
 export function uiEntryFilename(input: { isBuild: boolean; server?: boolean }): string {

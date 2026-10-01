@@ -4,7 +4,7 @@ import {
   DEV_SERVER_ENTRY_FILENAME,
   HASHED_ENTRY_PATTERN,
   HASHED_SERVER_ENTRY_PATTERN,
-  isDeployInvocation,
+  isBuildInvocation,
   uiEntryFilename,
 } from "../../src/build/artifact-names";
 import { createUiRsbuildConfig } from "../../src/build/ui/rsbuild-config";
@@ -33,39 +33,39 @@ describe("uiEntryFilename", () => {
   });
 });
 
-describe("isDeployInvocation", () => {
+describe("isBuildInvocation", () => {
   const originalNodeEnv = process.env.NODE_ENV;
-  const originalDeploy = process.env.DEPLOY;
+  const originalDevServer = process.env.BOS_DEV_SERVER;
 
   afterEach(() => {
     process.env.NODE_ENV = originalNodeEnv;
-    if (originalDeploy === undefined) delete process.env.DEPLOY;
-    else process.env.DEPLOY = originalDeploy;
+    if (originalDevServer === undefined) delete process.env.BOS_DEV_SERVER;
+    else process.env.BOS_DEV_SERVER = originalDevServer;
   });
 
-  it("is false without DEPLOY=true — NODE_ENV is not a deploy signal (vitest runs as test, bundler CLIs default production)", () => {
+  it("is true without the dev-stack signal — NODE_ENV is not consulted (vitest runs as test, bundler CLIs default production)", () => {
     for (const nodeEnv of ["development", "test", "production"]) {
       process.env.NODE_ENV = nodeEnv;
-      delete process.env.DEPLOY;
-      expect(isDeployInvocation()).toBe(false);
+      delete process.env.BOS_DEV_SERVER;
+      expect(isBuildInvocation()).toBe(true);
     }
   });
 
-  it("is true under DEPLOY=true even in development", () => {
-    process.env.NODE_ENV = "development";
-    process.env.DEPLOY = "true";
-    expect(isDeployInvocation()).toBe(true);
+  it("is false under BOS_DEV_SERVER=1 even in a production-mode environment", () => {
+    process.env.NODE_ENV = "production";
+    process.env.BOS_DEV_SERVER = "1";
+    expect(isBuildInvocation()).toBe(false);
   });
 });
 
 describe("createUiRsbuildConfig artifact aliasing", () => {
   const originalNodeEnv = process.env.NODE_ENV;
-  const originalDeploy = process.env.DEPLOY;
+  const originalDevServer = process.env.BOS_DEV_SERVER;
 
   afterEach(() => {
     process.env.NODE_ENV = originalNodeEnv;
-    if (originalDeploy === undefined) delete process.env.DEPLOY;
-    else process.env.DEPLOY = originalDeploy;
+    if (originalDevServer === undefined) delete process.env.BOS_DEV_SERVER;
+    else process.env.BOS_DEV_SERVER = originalDevServer;
   });
 
   function pluginNames(config: ReturnType<typeof createUiRsbuildConfig>): {
@@ -86,16 +86,16 @@ describe("createUiRsbuildConfig artifact aliasing", () => {
   }
 
   it("skips the dist-aliasing plugin on dev servers (no dist writes exist)", () => {
-    process.env.NODE_ENV = "development";
-    delete process.env.DEPLOY;
+    process.env.NODE_ENV = "test";
+    process.env.BOS_DEV_SERVER = "1";
     const names = pluginNames(createUiRsbuildConfig(options));
     expect(names.web.some((name) => name.includes("hash-artifacts"))).toBe(false);
     expect(names.node.some((name) => name.includes("hash-artifacts"))).toBe(false);
   });
 
-  it("attaches the dist-aliasing plugin on deploy builds", () => {
+  it("attaches the dist-aliasing plugin on builds", () => {
     process.env.NODE_ENV = "production";
-    process.env.DEPLOY = "true";
+    delete process.env.BOS_DEV_SERVER;
     const names = pluginNames(createUiRsbuildConfig(options));
     expect(names.web.some((name) => name.includes("hash-artifacts"))).toBe(true);
     expect(names.node.some((name) => name.includes("hash-artifacts"))).toBe(true);
