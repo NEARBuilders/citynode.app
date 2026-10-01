@@ -88,11 +88,13 @@ import {
   type ConfigHistoryEntry,
   fetchBosConfigFromFastKv,
   fetchConfigHistory,
+  fetchDeployManifests,
   fetchRemotePluginManifest,
   getRegistryNamespaceForAccount,
   type PluginManifest,
   parseBosUrl,
 } from "./fastkv";
+import { pointerFingerprint } from "./fingerprint";
 import {
   buildAndPushImage,
   deployImageToRailway,
@@ -125,6 +127,7 @@ import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors, icons } from "./utils/theme";
+import { computeDeployedVersionStatus, type DeployedVersionStatus } from "./version-status";
 
 export type { DevSessionData, StartSummary } from "./dev-program";
 export { type ProgressEvent, pluginEvents } from "./progress";
@@ -152,6 +155,46 @@ type BosDeps = {
 };
 
 class BosDepsTag extends Context.Service<BosDepsTag, BosDeps>()("bos/BosDeps") {}
+
+async function deployedVersionStatus(deps: BosDeps): Promise<DeployedVersionStatus | undefined> {
+  if (!deps.bosConfig?.account || !deps.bosConfig.domain) return undefined;
+  const { account, domain } = deps.bosConfig;
+  let publishedFingerprint: string | undefined;
+  try {
+    const published = await fetchBosConfigFromFastKv<Record<string, unknown>>(
+      `bos://${account}/${domain}`,
+    );
+    publishedFingerprint = pointerFingerprint(published as never);
+  } catch {
+    return undefined;
+  }
+
+  const hostUrl = deps.runtimeConfig?.host?.url;
+  if (!hostUrl) {
+    return computeDeployedVersionStatus({ publishedFingerprint, servedFingerprint: null });
+  }
+  try {
+    const response = await fetch(new URL("/.well-known/version", hostUrl));
+    if (!response.ok) {
+      return computeDeployedVersionStatus({
+        publishedFingerprint,
+        servedFingerprint: null,
+        servedError: `version endpoint returned ${response.status}`,
+      });
+    }
+    const body = (await response.json()) as { fingerprint?: string };
+    return computeDeployedVersionStatus({
+      publishedFingerprint,
+      servedFingerprint: body.fingerprint ?? null,
+    });
+  } catch (error) {
+    return computeDeployedVersionStatus({
+      publishedFingerprint,
+      servedFingerprint: null,
+      servedError: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 type PluginAttachmentConfig = NonNullable<BosConfig["plugins"]>[string];
 
@@ -1060,6 +1103,44 @@ export default createPlugin({
         };
       }
 
+      if (input.statusList) {
+        if (!deps.bosConfig.account || !deps.bosConfig.domain) {
+          return {
+            status: "error" as const,
+            registryUrl: "",
+            error: "bos.config.json must define account and domain to list deploy manifests",
+          };
+        }
+        try {
+          const manifests = await fetchDeployManifests({
+            accountId: deps.bosConfig.account,
+            gatewayId: deps.bosConfig.domain,
+            registry: input.registry,
+          });
+          return {
+            status: "list" as const,
+            registryUrl: "",
+            history: manifests.map((entry) => ({
+              key: entry.key,
+              blockHeight: entry.blockHeight,
+              blockTimestamp: new Date(Number(entry.blockTimestampNs.slice(0, 13))).toISOString(),
+              ...((entry.value as { txHash?: string } | undefined)?.txHash
+                ? { txHash: (entry.value as { txHash?: string }).txHash }
+                : {}),
+              ...((entry.value as { publishedAt?: string } | undefined)?.publishedAt
+                ? { publishedAt: (entry.value as { publishedAt?: string }).publishedAt }
+                : {}),
+            })),
+          };
+        } catch (error) {
+          return {
+            status: "error" as const,
+            registryUrl: "",
+            error: `Failed to list deploy manifests: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        }
+      }
+
       const result = await publishToFastKv({
         bosConfig: deps.bosConfig,
         runtimeConfig: deps.runtimeConfig,
@@ -1106,6 +1187,8 @@ export default createPlugin({
       const configPublished = {
         registryUrl: result.registryUrl,
         txHash: result.txHash,
+        fingerprint: result.fingerprint,
+        slotPins: result.slotPins,
         built: result.built,
         skipped: result.skipped,
         deployResults: result.deployResults,
@@ -2280,8 +2363,9 @@ export default createPlugin({
       }
     }),
 
-    status: builder.status.handler(async () => {
+    status: builder.status.handler(async ({ context }) => {
       try {
+        const deps = Context.get(context["effect/context"], BosDepsTag);
         const configPath = findConfigPath();
         if (!configPath) {
           return {
@@ -2293,7 +2377,11 @@ export default createPlugin({
         }
 
         const projectDir = resolve(dirname(configPath));
-        return await getStatus(projectDir);
+        const status = await getStatus(projectDir);
+        return {
+          ...status,
+          deployedVersion: await deployedVersionStatus(deps),
+        };
       } catch (error) {
         return {
           status: "error" as const,

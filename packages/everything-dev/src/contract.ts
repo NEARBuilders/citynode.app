@@ -210,6 +210,8 @@ export const PublishResultSchema = z.object({
   status: z.enum(["published", "error", "dry-run"]),
   registryUrl: z.string(),
   txHash: z.string().optional(),
+  fingerprint: z.string().optional(),
+  slotPins: z.record(z.string(), z.string()).optional(),
   error: z.string().optional(),
   built: z.array(z.string()).optional(),
   skipped: z.array(z.string()).optional(),
@@ -217,6 +219,7 @@ export const PublishResultSchema = z.object({
 });
 
 export const DeployOptionsSchema = z.object({
+  statusList: z.boolean().default(false),
   env: z.enum(["production", "staging"]).default("production"),
   build: z.boolean().default(true),
   dryRun: z.boolean().default(false),
@@ -233,10 +236,21 @@ export const DeployOptionsSchema = z.object({
   registry: z.string().optional(),
 });
 
+export const DeployManifestListEntrySchema = z.object({
+  key: z.string(),
+  blockHeight: z.number(),
+  blockTimestamp: z.string(),
+  txHash: z.string().optional(),
+  publishedAt: z.string().optional(),
+});
+
 export const DeployResultSchema = z.object({
-  status: z.enum(["deployed", "published", "error", "dry-run"]),
+  status: z.enum(["deployed", "published", "error", "dry-run", "list"]),
   registryUrl: z.string(),
   txHash: z.string().optional(),
+  fingerprint: z.string().optional(),
+  slotPins: z.record(z.string(), z.string()).optional(),
+  history: z.array(DeployManifestListEntrySchema).optional(),
   built: z.array(z.string()).optional(),
   skipped: z.array(z.string()).optional(),
   image: z.string().optional(),
@@ -403,8 +417,16 @@ export const UpgradeResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const DeployedVersionStatusSchema = z.object({
+  publishedFingerprint: z.string(),
+  servedFingerprint: z.string().optional(),
+  inSync: z.boolean(),
+  error: z.string().optional(),
+});
+
 export const StatusResultSchema = z.object({
   status: z.enum(["ok", "error"]),
+  deployedVersion: DeployedVersionStatusSchema.optional(),
   extends: z.string().optional(),
   account: z.string().optional(),
   domain: z.string().optional(),

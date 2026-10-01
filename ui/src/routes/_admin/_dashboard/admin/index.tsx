@@ -23,6 +23,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { VersionCard } from "@/components/version-card";
 import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
@@ -94,6 +95,8 @@ function AdminOverview() {
           testId="admin.stat.relayer"
         />
       </StatGrid>
+
+      <VersionCard />
 
       <section className="flex flex-col gap-6">
         <SectionHeader

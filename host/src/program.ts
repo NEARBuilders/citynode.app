@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
-import { Cause, Effect, Exit, Fiber, FiberHandle, Layer, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, Fiber, FiberHandle, Layer, ManagedRuntime, Option } from "effect";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
+import { slotPins } from "everything-dev/fingerprint";
 import { type Context, Hono } from "hono";
 import type { AuthVariables } from "./lib/auth";
 import { getCspStrict, SecurityMiddleware } from "./middleware/security";
@@ -125,7 +126,13 @@ export const createStartServer = (onReady?: () => void) =>
         Effect.runPromise(
           Effect.gen(function* () {
             const state = yield* snapshot.get;
-            return { fingerprint: state.config.deploymentFingerprint ?? state.fingerprint };
+            const watch = yield* Effect.serviceOption(SnapshotWatch);
+            const lastOutcome = Option.isSome(watch) ? watch.value.lastOutcome : undefined;
+            return {
+              fingerprint: state.config.deploymentFingerprint ?? state.fingerprint,
+              slots: state.pointer ? slotPins(state.pointer as never) : {},
+              ...(lastOutcome !== undefined ? { watch: { lastOutcome } } : {}),
+            };
           }),
         ),
         { headers: { "cache-control": "public, max-age=30" } },

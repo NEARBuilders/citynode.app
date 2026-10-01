@@ -8,6 +8,9 @@ export interface RuntimeSnapshotState {
   /** hash over the load-bearing slot coordinates — changes on every adopted deploy */
   fingerprint: string;
   config: RuntimeConfig;
+  /** the adopted published pointer — set by the coordinator on every swap;
+   * absent at boot (the fingerprint is the identity until the first adopt) */
+  pointer?: Record<string, unknown>;
   composeState: UiComposeCacheState;
 }
 

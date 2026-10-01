@@ -63,6 +63,11 @@
       "import": "./dist/bundle-cache.mjs",
       "require": "./dist/bundle-cache.cjs"
     },
+    "./fingerprint": {
+      "types": "./src/fingerprint.ts",
+      "import": "./src/fingerprint.ts",
+      "require": "./src/fingerprint.ts"
+    },
     "./bundle-fs-resolve": {
       "development": {
         "types": "./src/bundle-fs-resolve.ts",

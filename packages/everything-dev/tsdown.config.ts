@@ -13,6 +13,8 @@ export default defineConfig({
     "src/dag.ts",
     "src/bundle-cache.ts",
     "src/bundle-fs-resolve.ts",
+    "src/fingerprint.ts",
+    "src/version-status.ts",
     "src/fastkv.ts",
     "src/contract.meta.ts",
     "src/db/index.ts",

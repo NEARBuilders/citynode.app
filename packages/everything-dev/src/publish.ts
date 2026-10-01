@@ -16,6 +16,7 @@ import {
   getRegistryNamespaceForNetwork,
   type NetworkId,
 } from "./fastkv";
+import { pointerFingerprint, slotPins } from "./fingerprint";
 import { applyDeployResults, type DeployResultEntry } from "./integrity";
 import {
   describeSigningStrategy,
@@ -169,6 +170,8 @@ interface PublishToFastKvResult {
   error?: string;
   publishConfig?: BosConfigInput;
   deployResults?: WorkspaceDeployResult[];
+  fingerprint?: string;
+  slotPins?: Record<string, string>;
 }
 
 export interface PublishPreflightPlan {
@@ -606,28 +609,32 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
 
   const registryKey = `apps/${account}/${gateway}/bos.config.json`;
   const publishedAt = new Date().toISOString();
+  // version identity printed + returned for every deploy (atomic-deploys 12)
+  const fingerprint = pointerFingerprint(publishPayload as never);
+  const publishSlotPins = slotPins(publishPayload as never);
   const registryEntries: Record<string, string> = {
     [registryKey]: JSON.stringify(publishPayload),
   };
-  if (input.wallet) {
-    const manifestKey = `apps/${account}/${gateway}/manifests/${publishedAt.replace(/[:.]/g, "-")}.json`;
-    registryEntries[manifestKey] = JSON.stringify({
-      account,
-      gateway,
-      network,
-      publishedAt,
-      registryUrl,
-    });
-  }
+  const manifestKey = `apps/${account}/${gateway}/manifests/${publishedAt.replace(/[:.]/g, "-")}.json`;
+  registryEntries[manifestKey] = JSON.stringify({
+    account,
+    gateway,
+    network,
+    publishedAt,
+    registryUrl,
+  });
 
   console.log();
   console.log("  Publishing to:");
   console.log(`    ${colors.cyan(registryUrl)}`);
-  if (input.wallet) {
-    console.log(
-      `    ${colors.dim(`+ per-deploy manifest written atomically in the same delegation`)}`,
-    );
+  console.log(`    ${colors.dim("Fingerprint:")} ${fingerprint}`);
+  for (const [slot, pin] of Object.entries(publishSlotPins)) {
+    console.log(`    ${colors.dim(`${slot}:`)}`);
+    console.log(`      ${pin}`);
   }
+  console.log(
+    `    ${colors.dim(`+ per-deploy manifest ${manifestKey.split("/").pop()} (audit trail)`)}`,
+  );
 
   try {
     const alreadyPublished = await isConfigAlreadyPublished({
@@ -714,6 +721,8 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       status: "published",
       registryUrl,
       txHash: result.txHash,
+      fingerprint,
+      slotPins: publishSlotPins,
       built,
       skipped,
       deployResults,

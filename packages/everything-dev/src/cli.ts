@@ -1278,6 +1278,20 @@ async function main() {
 
     if (descriptor.key === "deploy") {
       const deployResult = result as any;
+      if (deployResult.status === "list") {
+        console.log();
+        console.log(colors.cyan("Recent publishes (audit trail)"));
+        for (const entry of deployResult.history ?? []) {
+          console.log(
+            `  ${entry.blockTimestamp}  ${colors.dim(`block ${entry.blockHeight}`)}${entry.publishedAt ? colors.dim(`  ${entry.publishedAt}`) : ""}`,
+          );
+        }
+        console.log();
+        return;
+      }
+      if (deployResult.fingerprint) {
+        console.log(`  ${colors.dim("Fingerprint:")} ${deployResult.fingerprint}`);
+      }
       if (deployResult.status === "dry-run") {
         console.log();
         console.log(colors.cyan(`${icons.ok} Dry run complete`));

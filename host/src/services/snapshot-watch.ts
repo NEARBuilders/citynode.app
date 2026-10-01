@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { Context, Effect, Layer } from "effect";
 import { fetchBosConfigFromFastKv } from "everything-dev/fastkv";
+import { pointerFingerprint } from "everything-dev/fingerprint";
 import { verifySriForUrl } from "everything-dev/integrity";
 import type { BosConfig, RuntimeConfig } from "everything-dev/types";
 import { logger } from "../utils/logger";
@@ -22,30 +22,9 @@ export function watchIntervalMs(): number {
  * and stable exactly when the deployed set is. A pointer-fingerprint change
  * is what triggers the adopt transaction.
  */
-export function pointerFingerprint(config: BosConfig): string {
-  const parts: Array<string> = [];
-  const slot = (prefix: string, s: { manifest?: unknown; integrity?: unknown } | undefined) => {
-    if (!s) return;
-    parts.push(
-      `${prefix}:${typeof s.manifest === "string" ? s.manifest : ""}:${typeof s.integrity === "string" ? s.integrity : ""}`,
-    );
-  };
-  for (const [key, entry] of Object.entries(config.app ?? {})) {
-    slot(`app.${key}`, entry);
-    const ui = (entry as { ui?: { manifest?: unknown; integrity?: unknown } }).ui;
-    slot(`app.${key}.ui`, ui);
-  }
-  for (const [key, entry] of Object.entries(config.plugins ?? {})) {
-    if (typeof entry === "string") {
-      parts.push(`plugins.${key}:${entry}`);
-      continue;
-    }
-    slot(`plugins.${key}`, entry);
-    const ui = (entry as { ui?: { manifest?: unknown; integrity?: unknown } }).ui;
-    slot(`plugins.${key}.ui`, ui);
-  }
-  return createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 16);
-}
+export { pointerFingerprint } from "everything-dev/fingerprint";
+
+export type WatchTickOutcome = "clean" | "swapped" | "swap-failed" | "pointer-unreachable";
 
 export interface WatchTickDeps {
   snapshot: RuntimeSnapshot["Service"];
@@ -68,7 +47,7 @@ export interface WatchTickDeps {
  */
 export const runWatchTick = (
   deps: WatchTickDeps,
-): Effect.Effect<{ lastSeen: string | undefined }> =>
+): Effect.Effect<{ lastSeen: string | undefined; outcome: WatchTickOutcome }> =>
   Effect.gen(function* () {
     const state = yield* deps.snapshot.get;
     const config = state.config;
@@ -81,7 +60,7 @@ export const runWatchTick = (
         return Effect.succeed(null);
       }),
     );
-    if (!pointer) return { lastSeen: deps.lastSeen };
+    if (!pointer) return { lastSeen: deps.lastSeen, outcome: "pointer-unreachable" };
 
     const fingerprint = pointerFingerprint(pointer);
     if (fingerprint !== deps.lastSeen) {
@@ -100,7 +79,10 @@ export const runWatchTick = (
           return Effect.succeed(false as const);
         }),
       );
-      return { lastSeen: adopted ? fingerprint : deps.lastSeen };
+      return {
+        lastSeen: adopted ? fingerprint : deps.lastSeen,
+        outcome: adopted ? "swapped" : "swap-failed",
+      };
     }
 
     yield* Effect.tryPromise(() => deps.verifyEntries(config)).pipe(
@@ -112,7 +94,7 @@ export const runWatchTick = (
         return Effect.void;
       }),
     );
-    return { lastSeen: deps.lastSeen };
+    return { lastSeen: deps.lastSeen, outcome: "clean" };
   });
 
 interface VerifyTarget {
@@ -238,7 +220,10 @@ function getIntegrityForExtends(config: Record<string, unknown>, key: string): s
  */
 export class SnapshotWatch extends Context.Service<
   SnapshotWatch,
-  { readonly tick: Effect.Effect<{ lastSeen: string | undefined }> }
+  {
+    readonly tick: Effect.Effect<{ lastSeen: string | undefined; outcome: WatchTickOutcome }>;
+    readonly lastOutcome: WatchTickOutcome | undefined;
+  }
 >()("host/SnapshotWatch") {
   static readonly layer = (intervalMs = watchIntervalMs()) =>
     Layer.effect(
@@ -249,6 +234,7 @@ export class SnapshotWatch extends Context.Service<
         const config = yield* ConfigService;
 
         let lastSeen: string | undefined;
+        let lastOutcome: WatchTickOutcome | undefined;
         const tick = Effect.gen(function* () {
           const result = yield* runWatchTick({
             snapshot,
@@ -261,6 +247,7 @@ export class SnapshotWatch extends Context.Service<
             lastSeen,
           });
           lastSeen = result.lastSeen;
+          lastOutcome = result.outcome;
           return result;
         });
 
@@ -268,7 +255,12 @@ export class SnapshotWatch extends Context.Service<
           logger.info(
             "[SnapshotWatch] disabled outside production (boot config is the truth in dev)",
           );
-          return SnapshotWatch.of({ tick });
+          return SnapshotWatch.of({
+            tick,
+            get lastOutcome() {
+              return lastOutcome;
+            },
+          });
         }
 
         logger.info(
@@ -277,7 +269,12 @@ export class SnapshotWatch extends Context.Service<
         yield* Effect.forkScoped(
           Effect.forever(Effect.flatMap(Effect.sleep(intervalMs), () => tick)),
         );
-        return SnapshotWatch.of({ tick });
+        return SnapshotWatch.of({
+          tick,
+          get lastOutcome() {
+            return lastOutcome;
+          },
+        });
       }),
     );
 }
