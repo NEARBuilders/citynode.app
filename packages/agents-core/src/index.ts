@@ -13,6 +13,7 @@ export * from "./lib/sponsor-pool.js";
 export * from "./lib/token-catalog.js";
 export { getTokenCatalog } from "./lib/token-catalog.js";
 export * from "./lib/wallet-sponsor.js";
+export { listAgentGrants } from "./modules/agents/grant-service.js";
 export {
   createAgent,
   getOnboarding,

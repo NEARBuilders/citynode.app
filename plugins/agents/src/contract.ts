@@ -11,6 +11,7 @@ import {
   balancesViewSchema,
   budgetViewSchema,
   generateIntentRequestSchema,
+  grantListViewSchema,
   historyPageSchema,
   historyQuerySchema,
   limitsViewSchema,
@@ -184,6 +185,12 @@ export const contract = {
     .route({ method: "POST", path: "/agents/history", summary: "Intent and operation history" })
     .input(historyQuerySchema.and(z.object({ agentId: z.string() })))
     .output(historyPageSchema)
+    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+
+  listGrants: oc
+    .route({ method: "POST", path: "/agents/grants", summary: "Grants issued for one agent" })
+    .input(z.object({ agentId: z.string() }))
+    .output(grantListViewSchema)
     .errors({ UNAUTHORIZED: { message: "Session user required" } }),
 };
 

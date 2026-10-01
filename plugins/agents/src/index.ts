@@ -8,6 +8,7 @@ import {
   generateResponse,
   getAgentView,
   getTokenCatalog,
+  listAgentGrants,
   listAgents,
   listScheduledExecutions,
   readBudget,
@@ -299,6 +300,14 @@ export default createPlugin({
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(() => readHistory(actor, input.agentId, input));
+      }),
+
+      listGrants: builder.listGrants.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const grants = yield* Effect.tryPromise(() => listAgentGrants(actor, input.agentId));
+        return { data: grants.map(views.grantView) };
       }),
     };
   },
