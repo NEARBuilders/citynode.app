@@ -32,9 +32,16 @@ export interface HomepageTabProps {
   gatewayId: string;
   baseAccount: string;
   canManage: boolean;
+  isActive: boolean;
 }
 
-export function HomepageTab({ orgId, gatewayId, baseAccount, canManage }: HomepageTabProps) {
+export function HomepageTab({
+  orgId,
+  gatewayId,
+  baseAccount,
+  canManage,
+  isActive,
+}: HomepageTabProps) {
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -166,19 +173,21 @@ export function HomepageTab({ orgId, gatewayId, baseAccount, canManage }: Homepa
   const busy = proposeMutation.isPending || verifying || computing;
   const blockReason = !canManage
     ? "Only owners and admins can propose a new homepage."
-    : tenant.status !== "active"
-      ? `This community is ${tenant.status}.`
-      : !parsedDraft.success
-        ? (parsedDraft.error.issues[0]?.message ?? "Fix the form first.")
-        : daoOwned && !nearAccountId
-          ? "Connect your NEAR wallet to propose."
-          : daoOwned && activeNetwork !== "mainnet"
-            ? "Switch your NEAR wallet to mainnet to propose."
-            : daoOwned && policy && !canAccountPropose(policy, nearAccountId)
-              ? `${nearAccountId} has no AddProposal permission on ${tenantAccount}.`
-              : !daoOwned && !hasSigningWallet
-                ? "Connect your NEAR wallet to publish."
-                : null;
+    : !isActive
+      ? "Make this organization active to propose a new homepage."
+      : tenant.status !== "active"
+        ? `This community is ${tenant.status}.`
+        : !parsedDraft.success
+          ? (parsedDraft.error.issues[0]?.message ?? "Fix the form first.")
+          : daoOwned && !nearAccountId
+            ? "Connect your NEAR wallet to propose."
+            : daoOwned && activeNetwork !== "mainnet"
+              ? "Switch your NEAR wallet to mainnet to propose."
+              : daoOwned && policy && !canAccountPropose(policy, nearAccountId)
+                ? `${nearAccountId} has no AddProposal permission on ${tenantAccount}.`
+                : !daoOwned && !hasSigningWallet
+                  ? "Connect your NEAR wallet to publish."
+                  : null;
   const canPropose = blockReason === null && !busy;
 
   return (

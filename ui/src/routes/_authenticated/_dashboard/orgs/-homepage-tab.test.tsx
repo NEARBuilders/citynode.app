@@ -117,7 +117,7 @@ function mockTenant(overrides: Record<string, unknown> = {}) {
   });
 }
 
-function renderTab(canManage = true) {
+function renderTab(canManage = true, isActive = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
@@ -126,6 +126,7 @@ function renderTab(canManage = true) {
         gatewayId="citynode.app"
         baseAccount="v1.citynode.near"
         canManage={canManage}
+        isActive={isActive}
       />
     </QueryClientProvider>,
   );
@@ -211,6 +212,19 @@ describe("HomepageTab", () => {
     expect((screen.getByTestId("orgs-homepage-title") as HTMLInputElement).value).toBe(
       "Chicago Builders",
     );
+  });
+
+  it("asks to make the organization active before proposing", async () => {
+    mockTenant();
+    mockChain({ policy: policy(["alice.near"]) });
+    renderTab(true, false);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("orgs-homepage-block-reason").textContent).toBe(
+        "Make this organization active to propose a new homepage.",
+      ),
+    );
+    expect((screen.getByTestId("orgs-homepage-propose") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("blocks proposing while the wallet is on testnet", async () => {

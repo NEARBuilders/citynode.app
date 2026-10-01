@@ -395,6 +395,7 @@ function OrganizationDetail() {
             gatewayId={gatewayId}
             baseAccount={baseAccount}
             canManage={canManageMembers}
+            isActive={isActive}
           />
         </TabsContent>
       </Tabs>
