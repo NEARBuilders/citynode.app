@@ -14,6 +14,7 @@ import {
   Textarea,
 } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
+import { useAppTranslation } from "@/i18n/runtime";
 
 interface ProposalReviewActionsProps {
   isPending: boolean;
@@ -40,21 +41,20 @@ export function ProposalReviewActions({
   onApprove,
   onReject,
 }: ProposalReviewActionsProps) {
+  const translate = useAppTranslation();
   const [rejecting, setRejecting] = useState(false);
   if (!isPending) return null;
 
   return (
     <div className="flex flex-col gap-6" data-testid="admin-proposal-decision">
-      <h2 className="text-xl font-semibold">Decision</h2>
+      <h2 className="text-xl font-semibold">{translate("admin.proposal.decision")}</h2>
 
       {isNodeProposal && (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            Connect{" "}
-            <span className="font-mono break-all text-foreground">
-              {proposalDaoAccountId ?? "the proposed DAO"}
-            </span>{" "}
-            to approve.
+            {translate("admin.connectApproveNamed", {
+              account: proposalDaoAccountId ?? translate("admin.proposal.daoFallback"),
+            })}
           </p>
           <ConnectDao purpose="proposal-review" variant="plain" onVerified={onDaoVerified} />
         </div>
@@ -68,7 +68,7 @@ export function ProposalReviewActions({
             data-testid="admin-proposal-approve"
           >
             <CheckIcon />
-            {isReviewing ? "Approving…" : "Approve"}
+            {isReviewing ? translate("admin.proposal.approving") : translate("common.approve")}
           </Button>
           <Button
             variant="ghost"
@@ -76,34 +76,34 @@ export function ProposalReviewActions({
             disabled={isReviewing}
             data-testid="admin-proposal-reject"
           >
-            Reject
+            {translate("common.reject")}
           </Button>
         </div>
         {!daoIsVerified && (
-          <p className="text-sm text-muted-foreground">Approve unlocks once the DAO is verified.</p>
+          <p className="text-sm text-muted-foreground">{translate("admin.proposal.daoHint")}</p>
         )}
       </div>
 
       <Dialog open={rejecting} onOpenChange={setRejecting}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reject this proposal?</DialogTitle>
-            <DialogDescription>Your reason is saved with the proposal.</DialogDescription>
+            <DialogTitle>{translate("admin.proposal.rejectTitle")}</DialogTitle>
+            <DialogDescription>{translate("admin.proposal.reasonSaved")}</DialogDescription>
           </DialogHeader>
           <Field>
-            <FieldLabel htmlFor="rejection-reason">Reason</FieldLabel>
+            <FieldLabel htmlFor="rejection-reason">{translate("admin.proposal.reason")}</FieldLabel>
             <Textarea
               id="rejection-reason"
               value={rejectionReason}
               onChange={onRejectionReasonChange}
-              placeholder="What needs to change"
+              placeholder={translate("admin.proposal.reasonExample")}
               rows={4}
             />
-            <FieldDescription>Required.</FieldDescription>
+            <FieldDescription>{translate("common.required")}</FieldDescription>
           </Field>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejecting(false)} disabled={isReviewing}>
-              Cancel
+              {translate("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -114,7 +114,7 @@ export function ProposalReviewActions({
               disabled={!rejectionReason.trim() || isReviewing}
               data-testid="admin-proposal-reject-confirm"
             >
-              Reject proposal
+              {translate("admin.proposal.reject")}
             </Button>
           </DialogFooter>
         </DialogContent>

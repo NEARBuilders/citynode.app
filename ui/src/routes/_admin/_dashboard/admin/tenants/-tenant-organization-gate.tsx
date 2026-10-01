@@ -1,6 +1,7 @@
 import type { MutableRefObject } from "react";
 import { Button, Field, FieldLabel, Input } from "@/components";
 import { FieldDescription, FieldGroup } from "@/components/ui/field";
+import { useAppTranslation } from "@/i18n/runtime";
 import { deriveSlug } from "@/lib/slug";
 
 export function TenantOrganizationGate({
@@ -20,6 +21,7 @@ export function TenantOrganizationGate({
   onOrgSlugChange: (value: string) => void;
   onSubmit: () => void;
 }) {
+  const translate = useAppTranslation();
   return (
     <form
       onSubmit={(event) => {
@@ -29,10 +31,10 @@ export function TenantOrganizationGate({
       className="flex max-w-xl flex-col gap-6"
       data-testid="admin-tenant-org-gate"
     >
-      <p className="text-sm text-muted-foreground">Sites belong to an organization.</p>
+      <p className="text-sm text-muted-foreground">{translate("admin.site.orgRequired")}</p>
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="org-name">Organization name</FieldLabel>
+          <FieldLabel htmlFor="org-name">{translate("org.name")}</FieldLabel>
           <Input
             id="org-name"
             value={orgName}
@@ -41,12 +43,12 @@ export function TenantOrganizationGate({
               onOrgNameChange(value);
               onOrgSlugChange(deriveSlug(value, orgSlug, orgSlugManuallyEdited.current));
             }}
-            placeholder="My Organization"
+            placeholder={translate("admin.site.orgExample")}
             required
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="org-slug">Organization slug</FieldLabel>
+          <FieldLabel htmlFor="org-slug">{translate("admin.site.orgSlug")}</FieldLabel>
           <Input
             id="org-slug"
             value={orgSlug}
@@ -59,7 +61,7 @@ export function TenantOrganizationGate({
             required
             className="font-mono"
           />
-          <FieldDescription>Lowercase letters, numbers and hyphens.</FieldDescription>
+          <FieldDescription>{translate("admin.site.slugHint")}</FieldDescription>
         </Field>
       </FieldGroup>
       <Button
@@ -67,7 +69,7 @@ export function TenantOrganizationGate({
         className="w-full sm:w-auto sm:self-start"
         disabled={isPending || !orgName || !orgSlug}
       >
-        {isPending ? "Creating…" : "Create organization"}
+        {isPending ? translate("common.creating") : translate("org.create")}
       </Button>
     </form>
   );

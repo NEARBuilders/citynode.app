@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { deriveSlug } from "@/lib/slug";
 
 export { generateSlug } from "@/lib/slug";
@@ -11,26 +13,29 @@ export const nodeKinds = ["country", "state", "city"] as const;
 
 export type NodeKind = (typeof nodeKinds)[number];
 
-export const tenantWizardSchema = z
-  .object({
-    kind: z.enum(nodeKinds),
-    parentId: z.string(),
-    name: z.string().trim().min(1, "name is required"),
-    slug: z
-      .string()
-      .min(1, "slug is required")
-      .regex(/^[a-z0-9-]+$/, "only lowercase letters, numbers, and hyphens"),
-    tenantName: z.string().trim().min(1, "tenant name is required"),
-  })
-  .superRefine((values, context) => {
-    if (values.kind !== "country" && !values.parentId) {
-      context.addIssue({
-        code: "custom",
-        path: ["parentId"],
-        message: "parent is required",
-      });
-    }
-  });
+export function createTenantWizardSchema(t: AppTranslator) {
+  return z
+    .object({
+      kind: z.enum(nodeKinds),
+      parentId: z.string(),
+      name: z.string().trim().min(1, t("application.nameRequired")),
+      slug: z
+        .string()
+        .min(1, t("application.slugRequired"))
+        .regex(/^[a-z0-9-]+$/, t("application.slugInvalid")),
+      tenantName: z.string().trim().min(1, t("application.tenantNameRequired")),
+    })
+    .superRefine((values, context) => {
+      if (values.kind !== "country" && !values.parentId) {
+        context.addIssue({
+          code: "custom",
+          path: ["parentId"],
+          message: t("application.parentError"),
+        });
+      }
+    });
+}
+export const tenantWizardSchema = createTenantWizardSchema(translateEnglishAppMessage);
 
 export type TenantWizardValues = z.infer<typeof tenantWizardSchema>;
 

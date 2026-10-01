@@ -5,12 +5,15 @@ import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, Field, FieldLabel, Input, Textarea } from "@/components";
 import { FieldGroup } from "@/components/ui/field";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { parseNodeMetadata } from "./-node-management";
 
 type Node = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["node"];
 
 export function NodeMetadataForm({ node }: { node: Node }) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -31,10 +34,10 @@ export function NodeMetadataForm({ node }: { node: Node }) {
       }),
     onSuccess: async () => {
       await invalidateNodeQueries(queryClient);
-      toast.success("Community updated");
+      toast.success(translate("admin.community.updated"));
       await navigate({ to: "/admin/nodes/$nodeId", params: { nodeId: node.id }, search: {} });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return (
@@ -47,7 +50,7 @@ export function NodeMetadataForm({ node }: { node: Node }) {
     >
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="node-name">Name</FieldLabel>
+          <FieldLabel htmlFor="node-name">{translate("common.name")}</FieldLabel>
           <Input
             id="node-name"
             value={name}
@@ -56,7 +59,7 @@ export function NodeMetadataForm({ node }: { node: Node }) {
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="node-description">Description</FieldLabel>
+          <FieldLabel htmlFor="node-description">{translate("common.description")}</FieldLabel>
           <Textarea
             id="node-description"
             value={description}
@@ -65,7 +68,9 @@ export function NodeMetadataForm({ node }: { node: Node }) {
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="node-metadata">Extra metadata (JSON)</FieldLabel>
+          <FieldLabel htmlFor="node-metadata">
+            {translate("admin.community.extraMetadata")}
+          </FieldLabel>
           <Textarea
             id="node-metadata"
             value={metadata}
@@ -78,7 +83,7 @@ export function NodeMetadataForm({ node }: { node: Node }) {
       </FieldGroup>
       {saveMutation.isError && (
         <p role="alert" className="text-sm text-destructive">
-          {saveMutation.error.message}
+          {appErrorMessage(saveMutation.error, translate)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
@@ -87,14 +92,14 @@ export function NodeMetadataForm({ node }: { node: Node }) {
           data-testid="admin-node-edit-save"
           disabled={!name.trim() || saveMutation.isPending}
         >
-          {saveMutation.isPending ? "Saving…" : "Save changes"}
+          {saveMutation.isPending ? translate("common.saving") : translate("common.saveChanges")}
         </Button>
         <Button
           variant="ghost"
           nativeButton={false}
           render={<Link to="/admin/nodes/$nodeId" params={{ nodeId: node.id }} search={{}} />}
         >
-          Cancel
+          {translate("common.cancel")}
         </Button>
       </div>
     </form>

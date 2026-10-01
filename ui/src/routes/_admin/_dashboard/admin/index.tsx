@@ -11,6 +11,7 @@ import {
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
 import { cn } from "cn";
+import { Trans } from "everything-dev/ui/i18n";
 import type { ComponentType, ReactNode } from "react";
 import { getAccount, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, PageHeader, SectionHeader } from "@/components";
@@ -23,6 +24,12 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import {
+  resolveAppLocale,
+  translateAppMessage,
+  useAppLocale,
+  useAppTranslation,
+} from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
@@ -44,12 +51,25 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/")({
       adminProposalListQueryOptions(context.apiClient, "pending"),
     ),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.admin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: AdminOverview,
 });
 
 function AdminOverview() {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const { auth, tenant, tenantOrganizationSlug, runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
   const platformAccount = getAccount(runtimeConfig);
@@ -67,29 +87,39 @@ function AdminOverview() {
 
   return (
     <>
-      <PageHeader title="Admin" subtitle={platformAccount} headerTestId="admin.heading" />
+      <PageHeader
+        title={translate("common.admin")}
+        subtitle={platformAccount}
+        headerTestId="admin.heading"
+      />
 
       <StatGrid>
         <StatFigure
-          label="Waiting for review"
+          label={translate("admin.waitingReview")}
           value={pendingTotal ?? "—"}
           tone={pendingTotal ? "attention" : "default"}
           testId="admin.stat.pending-proposals"
         />
         <StatFigure
-          label="Communities"
+          label={translate("common.communities")}
           value={nodesQuery.data?.length ?? "—"}
           testId="admin.stat.nodes"
         />
         <StatFigure
-          label="Sites"
+          label={translate("nav.sites")}
           value={tenantsQuery.data?.length ?? "—"}
           testId="admin.stat.tenants"
         />
         <StatFigure
-          label="Relayer balance"
-          value={relayer?.enabled ? formatNearFigure(relayer.balance) : relayer ? "0" : "—"}
-          hint={relayer ? (relayer.enabled ? "NEAR" : "Needs funding") : "Not configured"}
+          label={translate("admin.relayer.balance")}
+          value={relayer?.enabled ? formatNearFigure(relayer.balance, locale) : relayer ? "0" : "—"}
+          hint={
+            relayer
+              ? relayer.enabled
+                ? "NEAR"
+                : translate("admin.relayer.needsFunding")
+              : translate("admin.relayer.notConfigured")
+          }
           tone={relayer && !relayer.enabled ? "attention" : "default"}
           testId="admin.stat.relayer"
         />
@@ -97,7 +127,7 @@ function AdminOverview() {
 
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title="Waiting for review"
+          title={translate("admin.waitingReview")}
           sectionTestId="admin.section.queue"
           action={
             pendingTotal ? (
@@ -107,7 +137,7 @@ function AdminOverview() {
                 nativeButton={false}
                 render={<Link to="/admin/proposals" search={{ status: "pending" }} />}
               >
-                See all {pendingTotal}
+                {translate("common.seeAllCount", { count: pendingTotal })}
               </Button>
             ) : undefined
           }
@@ -116,13 +146,13 @@ function AdminOverview() {
           <ListSkeleton rows={3} />
         ) : pendingQuery.isError ? (
           <p role="alert" className="text-sm text-destructive">
-            Couldn't load proposals: {pendingQuery.error.message}
+            {translate("admin.proposalsFailed")}
           </p>
         ) : pending.length === 0 ? (
           <EmptyState
             icon={CheckCircleIcon}
-            title="All caught up"
-            description="New community applications and submissions show up here."
+            title={translate("admin.caughtUp")}
+            description={translate("admin.queueEmpty")}
             className="py-10"
           />
         ) : (
@@ -145,15 +175,22 @@ function AdminOverview() {
                 </ItemMedia>
                 <ItemContent className="min-w-0">
                   <ItemTitle className="max-w-full">
-                    <span className="min-w-0 truncate">{proposalTitle(proposal)}</span>
+                    <span className="min-w-0 truncate">{proposalTitle(proposal, translate)}</span>
                   </ItemTitle>
                   <ItemDescription>
-                    {proposalTypeLabel(proposal.pluginId)} · submitted{" "}
-                    <LocalDate value={proposal.createdAt} format="relative" />
+                    <Trans
+                      id="admin.submittedTypeDate"
+                      values={{ type: proposalTypeLabel(proposal.pluginId, translate) }}
+                      components={{
+                        date: <LocalDate value={proposal.createdAt} format="relative" />,
+                      }}
+                    />
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
-                  <span className="hidden text-sm font-medium sm:inline">Review</span>
+                  <span className="hidden text-sm font-medium sm:inline">
+                    {translate("common.review")}
+                  </span>
                   <CaretRightIcon className="size-4 text-muted-foreground" />
                 </ItemActions>
               </Item>
@@ -163,62 +200,69 @@ function AdminOverview() {
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="Manage" sectionTestId="admin.section.manage" />
+        <SectionHeader title={translate("nav.manage")} sectionTestId="admin.section.manage" />
         <ItemGroup>
           <ManageRow
             to="/admin/nodes"
             icon={TreeStructureIcon}
-            title="Communities"
+            title={translate("common.communities")}
             testId="admin.heading.nodes"
-            description="The community tree, validators and domains"
+            description={translate("admin.communitiesDescription")}
           />
           <ManageRow
             to="/admin/proposals"
             icon={GavelIcon}
-            title="Proposals"
+            title={translate("common.proposals")}
             testId="admin.heading.proposals"
-            description="Every application and decision"
-            badge={pendingTotal ? <Badge variant="warning">{pendingTotal} pending</Badge> : null}
+            description={translate("admin.proposalsDescription")}
+            badge={
+              pendingTotal ? (
+                <Badge variant="warning">
+                  {pendingTotal}
+                  {translate("common.pendingLower")}
+                </Badge>
+              ) : null
+            }
           />
           <ManageRow
             to="/admin/tenants"
             icon={BuildingsIcon}
-            title="Sites"
+            title={translate("nav.sites")}
             testId="admin.heading.tenants"
-            description="Deployments and their DAOs"
+            description={translate("admin.sitesDescription")}
           />
           <ManageRow
             to="/orgs"
             icon={UsersIcon}
-            title="Organizations"
+            title={translate("common.organizations")}
             testId="admin.heading.organizations"
-            description="Members, teams and invitations"
+            description={translate("admin.orgsDescription")}
           />
           <ManageRow
             to="/admin/relayer"
             icon={GasPumpIcon}
-            title="Relayer"
+            title={translate("nav.relayer")}
             testId="admin.heading.relayer"
-            description="Gas for gasless writes"
+            description={translate("admin.relayerDescription")}
           />
           <ManageRow
             to="/admin/system"
             icon={GearIcon}
-            title="System"
+            title={translate("nav.system")}
             testId="admin.heading.system"
-            description="Runtime configuration and endpoints"
+            description={translate("admin.systemDescription")}
           />
         </ItemGroup>
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="This runtime" />
+        <SectionHeader title={translate("admin.runtime")} />
         <div className="flex flex-col">
-          <ContextRow label="Platform account" value={platformAccount} mono />
-          {tenant && <ContextRow label="Site" value={tenant.name} />}
+          <ContextRow label={translate("admin.platformAccount")} value={platformAccount} mono />
+          {tenant && <ContextRow label={translate("common.site")} value={tenant.name} />}
           {tenant && (
             <ContextRow
-              label="Organization"
+              label={translate("common.organization")}
               value={
                 tenantOrganizationSlug ? (
                   <Link
@@ -235,16 +279,19 @@ function AdminOverview() {
             />
           )}
           {tenant?.createdAt && (
-            <ContextRow label="Created" value={<LocalDate value={tenant.createdAt} />} />
+            <ContextRow
+              label={translate("things.created")}
+              value={<LocalDate value={tenant.createdAt} />}
+            />
           )}
           <ContextRow
-            label="Name"
+            label={translate("common.name")}
             value={user?.name || (isSyntheticEmail(user?.email) ? null : user?.email) || "—"}
           />
-          <ContextRow label="Role" value={user?.role ?? "—"} />
+          <ContextRow label={translate("org.role")} value={user?.role ?? "—"} />
           <ContextRow
-            label="Wallet"
-            value={walletAccount ?? "Not connected"}
+            label={translate("common.wallet")}
+            value={walletAccount ?? translate("wallet.notConnected")}
             mono={!!walletAccount}
           />
         </div>

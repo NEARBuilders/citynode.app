@@ -9,6 +9,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 
 export type StatusTone = "success" | "warning" | "destructive" | "secondary" | "outline";
 
@@ -19,9 +22,8 @@ export function tenantStatusTone(status: string): StatusTone {
   return "outline";
 }
 
-export function humanize(value: string) {
-  const text = value.replaceAll("_", " ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+export function humanize(value: string, t: AppTranslator = translateEnglishAppMessage) {
+  return presentationLabel(value, t);
 }
 
 export function BackLink({ to, children }: { to: LinkProps["to"]; children: ReactNode }) {
@@ -125,13 +127,14 @@ export function RawJson({ value }: { value: unknown }) {
 
 export function RawJsonDisclosure({
   value,
-  label = "raw JSON",
+  label,
   testId,
 }: {
   value: unknown;
   label?: string;
   testId?: string;
 }) {
+  const translate = useAppTranslation();
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col gap-3">
@@ -144,16 +147,18 @@ export function RawJsonDisclosure({
         data-testid={testId}
       >
         {open ? <CaretDownIcon /> : <CaretRightIcon />}
-        {open ? `Hide ${label}` : `Show ${label}`}
+        {translate(open ? "admin.hideNamed" : "admin.showNamed", {
+          label: label ?? translate("admin.rawJson"),
+        })}
       </Button>
       {open && <RawJson value={value} />}
     </div>
   );
 }
 
-export function formatNearFigure(value: string | number | null | undefined) {
+export function formatNearFigure(value: string | number | null | undefined, locale = "en") {
   if (value === null || value === undefined || value === "") return "—";
   const amount = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(amount)) return String(value);
-  return amount.toFixed(2).replace(/\.?0+$/, "") || "0";
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(amount);
 }

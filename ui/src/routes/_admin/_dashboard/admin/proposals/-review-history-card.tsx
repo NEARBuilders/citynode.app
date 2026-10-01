@@ -1,6 +1,7 @@
 import type { useApiClient } from "@/app";
 import { Badge, LocalDate } from "@/components";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { humanize, RawJsonDisclosure } from "../-admin-ui";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -8,6 +9,7 @@ type ReviewHistoryResult = Awaited<ReturnType<ApiClient["proposals"]["getReviewH
 export type ReviewHistoryEntry = ReviewHistoryResult["data"][number];
 
 export function ReviewHistoryCard({ entry }: { entry: ReviewHistoryEntry }) {
+  const translate = useAppTranslation();
   return (
     <Item variant="outline" size="sm">
       <ItemContent className="min-w-0">
@@ -21,12 +23,12 @@ export function ReviewHistoryCard({ entry }: { entry: ReviewHistoryEntry }) {
       </ItemContent>
       <ItemActions>
         <Badge variant={entry.action === "rejected" ? "destructive" : "success"}>
-          {humanize(entry.action)}
+          {humanize(entry.action, translate)}
         </Badge>
       </ItemActions>
       {entry.details !== null && (
         <div className="basis-full">
-          <RawJsonDisclosure value={entry.details} label="details" />
+          <RawJsonDisclosure value={entry.details} label={translate("common.detailsLower")} />
         </div>
       )}
     </Item>

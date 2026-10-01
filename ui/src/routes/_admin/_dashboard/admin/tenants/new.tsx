@@ -6,6 +6,9 @@ import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getGatewayId, sessionQueryKey, useApiClient, useAuthClient } from "@/app";
 import { useStepper } from "@/components";
+import type { AppMessageId } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { disconnectDaoAccount, useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -45,13 +48,30 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/new")({
       queryClient: context.queryClient,
     }),
   head: ({ match }) => ({
-    title: pageTitle("New site · Admin", match.context.runtimeConfig),
-    meta: [{ name: "description", content: "Create a new tenant, node, and domain binding." }],
+    title: pageTitle(
+      translateAppMessage(
+        "meta.newSiteAdmin",
+        undefined,
+        resolveAppLocale(undefined, match.context.locale),
+      ),
+      match.context.runtimeConfig,
+    ),
+    meta: [
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.newSiteDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
+    ],
   }),
   component: NewTenantPage,
 });
 
 function NewTenantPage() {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -74,13 +94,13 @@ function NewTenantPage() {
   const [verifyState, setVerifyState] = useState<"idle" | "checking" | "verified" | "failed">(
     "idle",
   );
-  const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
+  const [verifyMessage, setVerifyMessage] = useState<AppMessageId | null>(null);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
   const [detailsConfirmed, setDetailsConfirmed] = useState(false);
 
   const stepper = useStepper([
-    { id: "create", label: "Create site, community and domain", blocking: true },
-    { id: "publish", label: "Publish config as DAO", blocking: false },
+    { id: "create", label: translate("admin.site.createStep"), blocking: true },
+    { id: "publish", label: translate("admin.site.publishAsDao"), blocking: false },
   ]);
 
   const form = useTenantWizardForm((value) => submitMutation.mutateAsync(value));
@@ -128,9 +148,9 @@ function NewTenantPage() {
       queryClient.setQueryData(sessionQueryKey, session);
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await router.invalidate();
-      toast.success("Organization created — continue with the wizard");
+      toast.success(translate("admin.site.orgCreated"));
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to create organization"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const submitMutation = useMutation({
@@ -148,7 +168,7 @@ function NewTenantPage() {
         values,
         daoAccountId,
         gatewayId,
-        onStep: (state, error) => stepper.updateStep(0, state, error),
+        onStep: (state, error) => stepper.updateStep(0, state, error ? "error.action" : undefined),
         onTenantCreated: setCreatedTenantId,
       });
     },
@@ -157,8 +177,7 @@ function NewTenantPage() {
       await router.invalidate({ sync: true });
       setPhase("deploy");
     },
-    onError: (error: Error) =>
-      toast.error(error.message || "Failed to create tenant — rolled back"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const deployPublish = useMutation({
@@ -185,21 +204,19 @@ function NewTenantPage() {
         stepper.updateStep(1, "success");
         return true;
       } catch (err) {
-        stepper.updateStep(1, "failed", err instanceof Error ? err.message : String(err));
+        stepper.updateStep(1, "failed", "error.action");
         throw err;
       }
     },
-    onSuccess: () => toast.success("Config submitted to DAO"),
-    onError: (error: Error) => toast.error(error.message || "Failed to submit config"),
+    onSuccess: () => toast.success(translate("admin.site.configSubmitted")),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   async function recheckPublish() {
     if (!daoConnection.daoAccountId) return;
     if (!gatewayId) {
       setVerifyState("failed");
-      setVerifyMessage(
-        "Runtime configuration is missing the gateway id — this deployment is misconfigured",
-      );
+      setVerifyMessage("admin.gatewayMissing");
       return;
     }
     setVerifyState("checking");
@@ -211,10 +228,10 @@ function NewTenantPage() {
         return;
       }
       setVerifyState("failed");
-      setVerifyMessage("config not yet published — approve in Trezu if pending");
-    } catch (err) {
+      setVerifyMessage("admin.configPending");
+    } catch {
       setVerifyState("failed");
-      setVerifyMessage(err instanceof Error ? err.message : String(err));
+      setVerifyMessage("error.action");
     }
   }
 
@@ -226,9 +243,9 @@ function NewTenantPage() {
     hasOrg && formValuesValid && hostnameAvailable && daoReady && activeNetwork === "mainnet";
   const blockedReason =
     activeNetwork !== "mainnet"
-      ? "Switch to mainnet to create this tenant."
+      ? translate("admin.mainnetRequired")
       : !hostnameAvailable
-        ? `${hostname} is already taken.`
+        ? translate("admin.hostnameTakenNamed", { hostname })
         : null;
   const parentNode = [...rootNodes, ...stateNodes].find((node) => node.id === formValues.parentId);
   const parentName = kind === "country" ? null : (parentNode?.name ?? null);
@@ -238,7 +255,7 @@ function NewTenantPage() {
       <TenantDeployPhase
         steps={stepper.steps}
         verifyState={verifyState}
-        verifyMessage={verifyMessage}
+        verifyMessage={verifyMessage ? translate(verifyMessage) : null}
         hostname={hostname}
         daoAccountId={daoConnection.daoAccountId}
         createdTenantId={createdTenantId}
@@ -277,7 +294,7 @@ function NewTenantPage() {
       }}
       details={{
         confirmed: detailsConfirmed && canContinueDetails,
-        summary: [name, humanize(kind), hostname].filter(Boolean).join(" · "),
+        summary: [name, humanize(kind, translate), hostname].filter(Boolean).join(" · "),
         onEdit: () => setDetailsConfirmed(false),
         form,
         kind,

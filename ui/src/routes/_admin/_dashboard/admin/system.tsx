@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
 import { Badge, InfoRow, PageHeader, SectionHeader } from "@/components";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/system")({
@@ -8,12 +9,24 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/system")({
     runtimeConfig: context.runtimeConfig,
   }),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("System · Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.systemAdmin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: AdminSystem,
 });
 
 function AdminSystem() {
+  const translate = useAppTranslation();
   const { runtimeConfig } = Route.useLoaderData();
   const account = getAccount(runtimeConfig);
   const appName = getAppName(runtimeConfig);
@@ -31,8 +44,8 @@ function AdminSystem() {
   return (
     <>
       <PageHeader
-        title="System"
-        description="Runtime configuration for this deployment."
+        title={translate("nav.system")}
+        description={translate("admin.system.runtimeDescription")}
         actions={
           <div className="flex flex-wrap gap-2">
             {env && (
@@ -54,31 +67,37 @@ function AdminSystem() {
       />
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="Runtime" sectionTestId="admin.heading.runtime" />
+        <SectionHeader title={translate("about.runtime")} sectionTestId="admin.heading.runtime" />
         <div className="flex flex-col">
-          <InfoRow label="Account" value={runtime?.accountId ?? account} mono />
-          <InfoRow label="Name" value={appName} />
-          <InfoRow label="Gateway" value={runtime?.gatewayId} mono />
-          <InfoRow label="Base path" value={runtimeBasePath ?? "/"} mono />
+          <InfoRow label={translate("common.account")} value={runtime?.accountId ?? account} mono />
+          <InfoRow label={translate("common.name")} value={appName} />
+          <InfoRow label={translate("about.gateway")} value={runtime?.gatewayId} mono />
+          <InfoRow label={translate("admin.system.basePath")} value={runtimeBasePath ?? "/"} mono />
         </div>
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="Deployment" sectionTestId="admin.heading.deployment" />
+        <SectionHeader
+          title={translate("admin.system.deployment")}
+          sectionTestId="admin.heading.deployment"
+        />
         <div className="flex flex-col">
-          <InfoRow label="Environment" value={env ?? "—"} mono />
-          <InfoRow label="Network" value={networkId ?? "—"} mono />
-          <InfoRow label="Host" value={hostUrl ?? "—"} mono />
-          <InfoRow label="Repository" value={repository} mono />
+          <InfoRow label={translate("admin.system.environment")} value={env ?? "—"} mono />
+          <InfoRow label={translate("common.network")} value={networkId ?? "—"} mono />
+          <InfoRow label={translate("admin.system.host")} value={hostUrl ?? "—"} mono />
+          <InfoRow label={translate("about.repository")} value={repository} mono />
         </div>
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="Endpoints" sectionTestId="admin.heading.endpoints" />
+        <SectionHeader
+          title={translate("admin.system.endpoints")}
+          sectionTestId="admin.heading.endpoints"
+        />
         <div className="flex flex-col">
           <InfoRow label="API" value={apiBase} mono />
           <InfoRow label="RPC" value={rpcBase} mono />
-          <InfoRow label="Assets" value={assetsUrl} mono />
+          <InfoRow label={translate("admin.system.assets")} value={assetsUrl} mono />
         </div>
       </section>
     </>
