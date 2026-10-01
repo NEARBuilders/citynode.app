@@ -21,6 +21,7 @@ import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -63,14 +64,7 @@ function Home() {
     },
     staleTime: 60 * 1000,
   });
-  const organizations = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data } = await auth.organization.list();
-      return data || [];
-    },
-    staleTime: 30 * 1000,
-  });
+  const organizations = useQuery(organizationsQueryOptions(apiClient));
   const invitations = useQuery({
     queryKey: ["user-invitations"],
     queryFn: async (): Promise<HomeInvitation[]> => {

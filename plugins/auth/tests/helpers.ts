@@ -1,6 +1,9 @@
+import "@orpc/experimental-effect/extensions/effect";
+import { call, implement } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { Context, Effect } from "effect";
 import { type AuthConfig, createAuthInstance } from "../src/auth-instance";
+import { contract, type InferInput } from "../src/contract";
 import { createDatabaseDriver } from "../src/db";
 import { loadMigrations, migrate } from "../src/db/migrate";
 import * as schema from "../src/db/schema";
@@ -9,7 +12,10 @@ import { createInvitationHandlers } from "../src/handlers/invitations";
 import { createMemberHandlers } from "../src/handlers/members";
 import { createNearHandlers } from "../src/handlers/near";
 import { createOnboardingHandlers } from "../src/handlers/onboarding";
-import { createOrganizationRequestHandlers } from "../src/handlers/organization-requests";
+import {
+  createOrganizationRequestHandlers,
+  type OrganizationRequestContext,
+} from "../src/handlers/organization-requests";
 import { createOrganizationHandlers } from "../src/handlers/organizations";
 import { createSessionHandlers } from "../src/handlers/session";
 import { createTeamHandlers } from "../src/handlers/teams";
@@ -256,6 +262,11 @@ export function createTestHandlers(services: PluginServices) {
   const builder = createMockBuilder();
   const requireAuth = createRequireAuth(builder);
   const effectContext = Context.make(AuthServicesTag, services);
+  const requestBuilder = implement(contract).$context<OrganizationRequestContext>();
+  const requestHandlers = createOrganizationRequestHandlers(
+    requestBuilder,
+    createRequireAuth(requestBuilder),
+  );
 
   const withEffectContext =
     <R>(fn: HandlerFn<R>): HandlerFn<R> =>
@@ -276,7 +287,19 @@ export function createTestHandlers(services: PluginServices) {
   return {
     session: wrap(createSessionHandlers(builder)),
     organizations: wrap(createOrganizationHandlers(builder, requireAuth)),
-    organizationRequests: wrap(createOrganizationRequestHandlers(builder)),
+    organizationRequests: {
+      listOrganizationRequests: (opts: { context: { reqHeaders?: Record<string, string> } }) =>
+        call(requestHandlers.listOrganizationRequests, undefined, {
+          context: { ...opts.context, "effect/context": effectContext },
+        }),
+      reviewOrganization: (opts: {
+        input: InferInput<"reviewOrganization">;
+        context: { reqHeaders?: Record<string, string> };
+      }) =>
+        call(requestHandlers.reviewOrganization, opts.input, {
+          context: { ...opts.context, "effect/context": effectContext },
+        }),
+    },
     members: wrap(createMemberHandlers(builder, requireAuth)),
     invitations: wrap(createInvitationHandlers(builder, requireAuth)),
     apiKeys: wrap(createApiKeyHandlers(builder, requireAuth)),

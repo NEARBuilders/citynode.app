@@ -13,6 +13,7 @@ import { PageContainer, Skeleton } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -73,15 +74,7 @@ export function TenantDetailContent({
     enabled: !!tenantId,
   });
 
-  const { data: organizations } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data, error } = await auth.organization.list();
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
-    staleTime: 60 * 1000,
-  });
+  const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
 
   const { data: members = [] } = useQuery({
     queryKey: ["org-members", tenant?.orgId],

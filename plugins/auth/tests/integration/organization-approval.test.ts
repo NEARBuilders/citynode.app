@@ -55,6 +55,26 @@ describe("organization approval gate", () => {
         body: { organizationId: organization.id },
       }),
     ).rejects.toThrow("approval");
+    const stored = await setup.services.db.query.organization.findFirst({
+      where: eq(schema.organization.id, organization.id),
+    });
+    await expect(
+      setup.services.auth.api.setActiveOrganization({
+        headers: requester.headers,
+        body: { organizationSlug: stored!.slug },
+      }),
+    ).rejects.toThrow("approval");
+    await setup.services.auth.api.setActiveOrganization({
+      headers: requester.headers,
+      body: { organizationId: null },
+    });
+    expect(
+      (
+        await setup.services.db.query.session.findFirst({
+          where: eq(schema.session.userId, requester.userId),
+        })
+      )?.activeOrganizationId,
+    ).toBeNull();
     await expect(
       setup.services.auth.api.createInvitation({
         headers: requester.headers,
@@ -168,7 +188,7 @@ describe("organization approval gate", () => {
         input: { organizationId: organization.id, decision: "reject", reason: "   " },
         context: { reqHeaders: admin.reqHeaders },
       }),
-    ).rejects.toThrow("reason");
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await handlers.organizationRequests.reviewOrganization({
       input: {
         organizationId: organization.id,

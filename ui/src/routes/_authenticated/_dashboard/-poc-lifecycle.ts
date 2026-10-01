@@ -10,6 +10,7 @@ import {
   useDaoConnection,
   verifyDaoAccount,
 } from "@/lib/dao-connect";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { generateSlug } from "@/lib/slug";
 import { useNearAccount } from "@/lib/use-near-account";
 import { parseNodeProposalPayload } from "./-node-application";
@@ -120,13 +121,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
 
   /* ------------------------------------------------------------------ queries */
 
-  const { data: organizations = [] } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data } = await auth.organization.list();
-      return data ?? [];
-    },
-  });
+  const { data: organizations = [] } = useQuery(organizationsQueryOptions(apiClient));
 
   const activeOrg = organizations.find((org) => org.id === activeOrgId);
   const activeOrgName = activeOrg?.name ?? null;

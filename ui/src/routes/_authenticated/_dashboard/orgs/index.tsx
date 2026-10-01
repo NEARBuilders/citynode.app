@@ -2,13 +2,7 @@ import { BankIcon, EnvelopeSimpleIcon, PlusIcon, WalletIcon } from "@phosphor-ic
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
-import {
-  type Organization,
-  type SessionData,
-  sessionQueryOptions,
-  useApiClient,
-  useAuthClient,
-} from "@/app";
+import { type SessionData, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import {
   Badge,
   Button,
@@ -30,8 +24,8 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import { organizationApproval } from "@/lib/organization-approval";
 import { pageTitle } from "@/lib/page-title";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
 import { orgMembersQueryKey } from "./-organization-query-keys";
@@ -52,14 +46,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
   }),
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
-    await context.queryClient.ensureQueryData({
-      queryKey: ["organizations"],
-      queryFn: async () => {
-        const { data } = await context.authClient.organization.list();
-        return (data || []) as Organization[];
-      },
-      staleTime: 30 * 1000,
-    });
+    await context.queryClient.ensureQueryData(organizationsQueryOptions(context.apiClient));
     await context.queryClient.ensureQueryData({
       queryKey: ["user-invitations"],
       queryFn: async (): Promise<UserInvitationItem[]> => {
@@ -80,14 +67,7 @@ function OrganizationsList() {
   const apiClient = useApiClient();
   const router = useRouter();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const { data: organizations, isLoading } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data } = await auth.organization.list();
-      return (data || []) as Organization[];
-    },
-    staleTime: 30 * 1000,
-  });
+  const { data: organizations, isLoading } = useQuery(organizationsQueryOptions(apiClient));
 
   const { data: userInvitations = [] } = useQuery({
     queryKey: ["user-invitations"],
@@ -251,7 +231,6 @@ function OrganizationsList() {
               const members = memberQueries[index]?.data;
               const myRole = members?.find((member) => member.userId === user?.id)?.role;
               const isActive = org.id === activeOrgId;
-              const approval = organizationApproval(org);
               const isPersonal = user
                 ? org.slug === user.id || org.metadata?.isPersonal === true
                 : false;
@@ -275,12 +254,12 @@ function OrganizationsList() {
                     </Link>
                     <div className="flex flex-wrap gap-1.5">
                       {myRole && <Badge variant="secondary">{roleLabel(myRole)}</Badge>}
-                      {approval.status === "pending" && (
+                      {org.status === "pending" && (
                         <Badge variant="warning" data-testid="orgs-pending">
                           Pending approval
                         </Badge>
                       )}
-                      {approval.status === "rejected" && (
+                      {org.status === "rejected" && (
                         <Badge variant="destructive" data-testid="orgs-rejected">
                           Rejected
                         </Badge>
@@ -289,12 +268,12 @@ function OrganizationsList() {
                       {isPersonal && <Badge variant="outline">Personal</Badge>}
                       {tenantOrgIds.has(org.id) && <Badge variant="outline">Community</Badge>}
                     </div>
-                    {approval.status === "rejected" && (
+                    {org.status === "rejected" && (
                       <p
                         className="text-sm text-muted-foreground"
                         data-testid="orgs-rejection-reason"
                       >
-                        {approval.reason}
+                        {org.rejectionReason}
                       </p>
                     )}
                     <div className="mt-auto flex items-center justify-between gap-3">
@@ -303,7 +282,7 @@ function OrganizationsList() {
                           ? `${members.length} member${members.length === 1 ? "" : "s"}`
                           : " "}
                       </span>
-                      {approval.status !== "active" ? (
+                      {org.status !== "active" ? (
                         <Button
                           variant="ghost"
                           size="sm"

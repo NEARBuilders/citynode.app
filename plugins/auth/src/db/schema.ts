@@ -135,7 +135,7 @@ export const organization = pgTable(
     logo: text("logo"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
     metadata: text("metadata"),
-    status: text("status").default("active").notNull(),
+    status: text("status").$type<"active" | "pending" | "rejected">().default("active").notNull(),
     requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
     rejectionReason: text("rejection_reason"),
   },

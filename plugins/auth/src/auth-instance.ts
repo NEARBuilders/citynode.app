@@ -2,7 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError } from "better-auth/api";
 import {
   admin,
   anonymous,
@@ -20,6 +20,7 @@ import {
 import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
 import { eq, gt } from "drizzle-orm";
 import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
+import { organizationApproval } from "./organization-approval";
 import {
   createPasskeySignUpUser,
   passkeyAuthenticatorSelection,
@@ -298,25 +299,6 @@ export function createAuthInstance(
     trustedOrigins: config.trustedOrigins?.length ? config.trustedOrigins : undefined,
     secret: config.secret,
     baseURL: config.baseUrl,
-    hooks: {
-      before: createAuthMiddleware(async (ctx) => {
-        if (ctx.path === "/organization/create") {
-          ctx.body.keepCurrentActiveOrganization = true;
-        }
-        if (ctx.path === "/organization/set-active") {
-          const organization = await db.query.organization.findFirst({
-            where: ctx.body.organizationId
-              ? eq(schema.organization.id, ctx.body.organizationId)
-              : eq(schema.organization.slug, ctx.body.organizationSlug ?? ""),
-          });
-          if (organization && organization.status !== "active") {
-            throw new APIError("FORBIDDEN", {
-              message: "Organization requires platform-admin approval",
-            });
-          }
-        }
-      }),
-    },
     user: {
       additionalFields: {
         locale: { type: "string", required: false, input: true },
@@ -368,6 +350,7 @@ export function createAuthInstance(
       }),
       passkeySignUp({ network }),
       setEmail(),
+      organizationApproval(db),
       organization({
         ac: orgAc,
         roles: orgRoles,

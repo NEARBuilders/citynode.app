@@ -7,7 +7,6 @@ import { z } from "zod";
 import {
   getAccount,
   getActiveRuntime,
-  type Organization,
   type SessionData,
   sessionQueryOptions,
   useApiClient,
@@ -27,8 +26,8 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
-import { organizationApproval } from "@/lib/organization-approval";
 import { pageTitle } from "@/lib/page-title";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import {
   ApiKeysTab,
   type CreatedOrganizationApiKey,
@@ -97,14 +96,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
   }),
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
-    await context.queryClient.ensureQueryData({
-      queryKey: ["organizations"],
-      queryFn: async () => {
-        const { data } = await context.authClient.organization.list();
-        return (data || []) as Organization[];
-      },
-      staleTime: 30 * 1000,
-    });
+    await context.queryClient.ensureQueryData(organizationsQueryOptions(context.apiClient));
   },
   component: OrganizationDetail,
 });
@@ -120,17 +112,11 @@ function OrganizationDetail() {
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "";
   const baseAccount = getAccount(runtimeConfig);
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data } = await auth.organization.list();
-      return (data || []) as Organization[];
-    },
-    staleTime: 30 * 1000,
-  });
+  const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery(
+    organizationsQueryOptions(apiClient),
+  );
   const org = organizations.find((organization) => organization.slug === orgSlug);
   const orgId = org?.id ?? "";
-  const approval = organizationApproval(org);
   const activeOrgId = session?.session?.activeOrganizationId;
   const isActive = orgId === activeOrgId;
   const members =
@@ -143,7 +129,7 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.members ?? []) as MemberItem[];
       },
-      enabled: !!orgId && approval.status === "active",
+      enabled: !!orgId && org?.status === "active",
     }).data ?? [];
   const invitations =
     useQuery({
@@ -151,7 +137,7 @@ function OrganizationDetail() {
       queryFn: async (): Promise<InvitationItem[]> => {
         return apiClient.auth.listInvitations({ organizationId: orgId });
       },
-      enabled: !!orgId && approval.status === "active",
+      enabled: !!orgId && org?.status === "active",
     }).data ?? [];
   const apiKeys =
     useQuery({
@@ -163,7 +149,7 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.apiKeys ?? []) as OrganizationApiKey[];
       },
-      enabled: !!orgId && approval.status === "active",
+      enabled: !!orgId && org?.status === "active",
     }).data ?? [];
   const myMembership = members.find((member) => member.userId === session?.user?.id);
   const canManageMembers = myMembership?.role === "owner" || myMembership?.role === "admin";
@@ -217,10 +203,7 @@ function OrganizationDetail() {
     if (!isOrganizationTab(value) || value === activeTab) return;
     void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
   };
-  const teamsState = useOrganizationTeams(
-    orgId,
-    activeTab === "teams" && approval.status === "active",
-  );
+  const teamsState = useOrganizationTeams(orgId, activeTab === "teams" && org?.status === "active");
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
     orgId,
@@ -256,7 +239,7 @@ function OrganizationDetail() {
     );
   }
 
-  if (approval.status !== "active") {
+  if (org?.status !== "active") {
     return (
       <PageContainer variant="narrow">
         <PageHeader
@@ -266,12 +249,12 @@ function OrganizationDetail() {
         />
         <div className="flex flex-col gap-4" data-testid="orgs-request-status">
           <h2 className="text-lg font-medium">
-            {approval.status === "pending" ? "Pending approval" : "Request rejected"}
+            {org?.status === "pending" ? "Pending approval" : "Request rejected"}
           </h2>
           <p className="text-sm text-muted-foreground" data-testid="orgs-request-reason">
-            {approval.status === "pending"
+            {org?.status === "pending"
               ? "A platform admin will review your request. Your organization can be used once approved."
-              : approval.reason}
+              : org.rejectionReason}
           </p>
           <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
             Back to organizations

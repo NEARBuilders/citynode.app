@@ -72,7 +72,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     return {
       ...createSessionHandlers(builder),
       ...createOrganizationHandlers(builder, requireAuth),
-      ...createOrganizationRequestHandlers(builder),
+      ...createOrganizationRequestHandlers(builder, requireAuth),
       ...createMemberHandlers(builder, requireAuth),
       ...createInvitationHandlers(builder, requireAuth),
       ...createApiKeyHandlers(builder, requireAuth),

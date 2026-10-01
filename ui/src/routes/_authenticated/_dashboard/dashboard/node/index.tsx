@@ -8,13 +8,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  buildTenantUrl,
-  getActiveRuntime,
-  type Organization,
-  useApiClient,
-  useAuthClient,
-} from "@/app";
+import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import {
   Badge,
   Bulletin,
@@ -34,6 +28,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
   CONFIG_WRITE_PLAN,
@@ -58,7 +53,6 @@ function NodeOverview() {
   const { runtimeConfig, selectedNode, summary, stakingSourceNode, tenant, auth, canManage } =
     Route.useRouteContext();
   const apiClient = useApiClient();
-  const authClient = useAuthClient();
   const [now] = useState(() => Date.now());
   const orgId = tenant?.orgId ?? auth.activeOrganizationId;
   const nodeId = selectedNode?.id ?? "";
@@ -89,11 +83,7 @@ function NodeOverview() {
     refetchInterval: 15_000,
   });
   const orgsQuery = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data } = await authClient.organization.list();
-      return (data || []) as Organization[];
-    },
+    ...organizationsQueryOptions(apiClient),
     enabled: daoOwned && canManage && !!orgId,
     staleTime: 30_000,
   });
