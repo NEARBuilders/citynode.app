@@ -3,6 +3,7 @@ import type {
   GenerateIntentRequest,
   SubmitIntentRequest,
 } from "@near-intents-agent-api/contracts/api";
+import { generateIntentResponseSchema } from "@near-intents-agent-api/contracts/api";
 import {
   agentListQuerySchema,
   agentPageSchema,
@@ -47,17 +48,12 @@ const pingOutputSchema = z.object({
   timestamp: z.string(),
 });
 
-const generateIntentOutputSchema = z.object({
-  correlationId: z.string(),
-  type: z.string(),
-  agentId: z.string(),
-  status: z.literal("PENDING_SIGNATURE"),
-  expiresAt: z.string(),
-  preview: z.unknown(),
+const submitIntentOutputSchema = statusResponseSchema;
+
+/** Upstream wire shape + the plugin's replay signal (strict superset). */
+const generateIntentOutputSchema = generateIntentResponseSchema.extend({
   replayed: z.boolean(),
 });
-
-const submitIntentOutputSchema = statusResponseSchema;
 
 export const contract = {
   ping: oc

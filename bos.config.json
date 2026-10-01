@@ -147,7 +147,11 @@
         "AGENTS_SPONSOR_KEYS",
         "AGENTS_SECRET_ENCRYPTION_KEYS",
         "AGENTS_SECRET_ENCRYPTION_ACTIVE_KEY_ID"
-      ]
+      ],
+      "ui": {
+        "name": "_everything_dev_agents_plugin",
+        "development": "local:plugins/agents/ui"
+      }
     },
     "template": {
       "development": "local:plugins/_template",

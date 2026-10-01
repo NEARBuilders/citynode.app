@@ -813,7 +813,15 @@ export async function resolveComposableReference(
     entry: stripUnsafeLocalDevelopment(resolvedEntry, allowLocalPaths || Boolean(localDevelopment)),
     providerBaseDir,
     targetPath,
-    associatedUi: stripUnsafeLocalDevelopment(associatedUi, allowLocalPaths),
+    // The associated ui comes from the same authored source as the entry —
+    // when the entry itself resolves locally, its ui's local development is
+    // equally trusted. Without this, a local plugin's folder-form ui is
+    // stripped (no plugin ships a nested bos.config.json, so allowLocalPaths
+    // stays false) and the dev harness never wires BOS_UI_PORT for it.
+    associatedUi: stripUnsafeLocalDevelopment(
+      associatedUi,
+      allowLocalPaths || Boolean(localDevelopment),
+    ),
   };
 }
 
