@@ -89,11 +89,16 @@ class MockStorage {
   }
 
   async fetch(account: string, gateway: string, workspace: string, path: string) {
-    const response = await fetch(`${this.origin}/bundles/${account}/${gateway}/${workspace}/${path}`);
+    const response = await fetch(
+      `${this.origin}/bundles/${account}/${gateway}/${workspace}/${path}`,
+    );
     return response.ok ? await response.text() : null;
   }
 
-  private handle(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) {
+  private handle(
+    req: import("node:http").IncomingMessage,
+    res: import("node:http").ServerResponse,
+  ) {
     const url = req.url ?? "";
     if (this.killSockets && req.method === "POST") {
       req.socket.destroy();
@@ -313,13 +318,8 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
     expect(result.error).toContain("fetch failed");
     expect(publishedPayloads).toHaveLength(1);
     // GET serving: v1's pinned entry + manifest still serve their exact bytes
-    const servedEntry = await storage.fetch(
-      "v1.citynode.near",
-      "citynode.app",
-      "ui",
-      v1EntryName,
-    );
-    expect(servedEntry).toBe("console.log(\"v1 entry\");");
+    const servedEntry = await storage.fetch("v1.citynode.near", "citynode.app", "ui", v1EntryName);
+    expect(servedEntry).toBe('console.log("v1 entry");');
     const servedManifest = await storage.fetch(
       "v1.citynode.near",
       "citynode.app",

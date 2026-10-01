@@ -11,10 +11,11 @@ import { createSsrFallbackHandler } from "./routes/ssr";
 import { createSessionMiddleware, registerAuthHandler } from "./services/auth";
 import { ConfigService, type RuntimeConfig } from "./services/config";
 import { FederationLifecycle } from "./services/federation.server";
-import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { closeMcpServer } from "./services/mcp";
 import { PluginsService } from "./services/plugins";
 import { RuntimeSnapshot } from "./services/runtime-snapshot";
+import { SnapshotCoordinator } from "./services/snapshot-coordinator";
+import { SnapshotWatch, watchIntervalMs } from "./services/snapshot-watch";
 import { ClientConfigCache } from "./services/ssr-render";
 import {
   composeUi,
@@ -278,15 +279,21 @@ export const runServer = (input: ServerInput): ServerHandle => {
   }
   const ConfigLive = Layer.succeed(ConfigService, input.config);
   const AppLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
+  const SnapshotLive = RuntimeSnapshot.layer.pipe(Layer.provide(ConfigLive));
+  const CoordinatorLive = SnapshotCoordinator.layer.pipe(Layer.provide(SnapshotLive));
+  const WatchLive = SnapshotWatch.layer(watchIntervalMs()).pipe(
+    Layer.provide(CoordinatorLive),
+    Layer.provide(SnapshotLive),
+    Layer.provide(ConfigLive),
+  );
   const ServerLive = Layer.mergeAll(
     Layer.provideMerge(SecurityMiddleware.Live, AppLive),
     input.composeCache ? UiComposeCache.layerFrom(input.composeCache) : UiComposeCache.layer,
     ClientConfigCache.layer,
     FederationLifecycle.layer,
-    RuntimeSnapshot.layer.pipe(Layer.provide(ConfigLive)),
+    Layer.provideMerge(CoordinatorLive, SnapshotLive),
+    WatchLive,
   );
-
-  const stopMonitor = startIntegrityMonitor(input.config);
 
   const runtime = ManagedRuntime.make(ServerLive);
   let programFiber: Fiber.Fiber<void, unknown> | null = null;
@@ -311,7 +318,6 @@ export const runServer = (input: ServerInput): ServerHandle => {
 
   const shutdown = async () => {
     logger.info("[Server] Shutting down...");
-    stopMonitor();
 
     if (programFiber) {
       await Effect.runPromise(

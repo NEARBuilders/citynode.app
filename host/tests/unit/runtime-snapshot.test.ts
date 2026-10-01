@@ -1,12 +1,8 @@
-import { Effect, Exit, Fiber, Layer } from "effect";
+import { Effect, Fiber, Layer } from "effect";
 import type { RuntimeConfig } from "everything-dev/types";
 import { describe, expect, it, vi } from "vitest";
 import { ConfigService } from "../../src/services/config";
-import {
-  deploymentFingerprint,
-  type RuntimeSnapshotState,
-  RuntimeSnapshot,
-} from "../../src/services/runtime-snapshot";
+import { deploymentFingerprint, RuntimeSnapshot } from "../../src/services/runtime-snapshot";
 import { createSsrRender } from "../../src/services/ssr-render";
 
 const baseConfig = {
@@ -87,43 +83,6 @@ describe("RuntimeSnapshot service", () => {
     }
     expect(observed).toContain("sha384-ui-entry");
     expect(observed).toContain("sha384-ui-entry-v2");
-  });
-
-  it("modify writes the next state under the Ref; a throwing modify leaves it untouched", async () => {
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const snapshot = yield* RuntimeSnapshot;
-        const before = yield* snapshot.get;
-        const nextConfig = {
-          ...baseConfig,
-          ui: { ...baseConfig.ui, integrity: "sha384-ui-entry-v2" },
-        } as RuntimeConfig;
-
-        const written = yield* snapshot.modify((state) => {
-          const next: RuntimeSnapshotState = {
-            fingerprint: "written",
-            config: nextConfig,
-            composeState: state.composeState,
-          };
-          return ["ok" as const, next];
-        });
-
-        const exit = yield* Effect.exit(
-          Effect.gen(function* () {
-            return yield* snapshot.modify(() => {
-              throw new Error("transaction step failed");
-            });
-          }),
-        );
-
-        const after = yield* snapshot.get;
-        return { before, written, exit, after };
-      }).pipe(Effect.provide(snapshotLayer)),
-    );
-    expect(result.written).toBe("ok");
-    expect(result.after.config.ui.integrity).toBe("sha384-ui-entry-v2");
-    expect(result.after.fingerprint).toBe("written");
-    expect(Exit.isFailure(result.exit)).toBe(true);
   });
 });
 

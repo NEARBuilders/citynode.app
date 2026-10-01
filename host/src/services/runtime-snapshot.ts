@@ -24,15 +24,10 @@ export class RuntimeSnapshot extends Context.Service<
   RuntimeSnapshot,
   {
     readonly get: Effect.Effect<RuntimeSnapshotState>;
-    /** Atomically install the next state (ticket 07's transaction is the
-     * fallible, pre-warmed path that produces it). */
+    /** Atomically install the next state. The fallible transaction that
+     * produces it (derive → pre-warm → verify) lives in the coordinator —
+     * the Ref only ever receives complete, pre-warmed states. */
     readonly swap: (next: RuntimeSnapshotState) => Effect.Effect<void>;
-    /** Read-modify-write under the Ref: `f` returns the transaction's result
-     * and the NEXT state; `f` throwing (a failed transaction step) leaves
-     * the state untouched. */
-    readonly modify: <A>(
-      f: (state: RuntimeSnapshotState) => [A, RuntimeSnapshotState],
-    ) => Effect.Effect<A>;
   }
 >()("host/RuntimeSnapshot") {
   static readonly layer = Layer.effect(
@@ -47,7 +42,6 @@ export class RuntimeSnapshot extends Context.Service<
       return RuntimeSnapshot.of({
         get: Ref.get(ref),
         swap: (next) => Ref.set(ref, next),
-        modify: (f) => Ref.modify(ref, (state) => f(state)),
       });
     }),
   );
