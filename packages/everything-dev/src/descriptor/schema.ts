@@ -7,6 +7,7 @@ export const PipelineFieldsSchema = z.object({
   integrity: z.string().optional(),
   ssr: z.string().optional(),
   ssrIntegrity: z.string().optional(),
+  manifest: z.string().optional(),
 });
 export type PipelineFields = z.infer<typeof PipelineFieldsSchema>;
 
@@ -36,6 +37,7 @@ export const AttachmentRefSchema = DevelopmentRefSchema.extend({
       path: z.string().optional(),
       development: z.string().optional(),
       integrity: z.string().optional(),
+      manifest: z.string().optional(),
     })
     .strict()
     .optional(),

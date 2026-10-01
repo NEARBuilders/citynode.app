@@ -12,6 +12,7 @@ export {
   type PluginBaseConfigOptions,
 } from "./compose";
 export { FixMfDataUriPlugin } from "./fix-mf-data-uri-plugin";
+export { HashEntryAliasPlugin } from "./hash-entry-alias-plugin";
 export {
   type AdditionalExport,
   EmitPluginManifest,

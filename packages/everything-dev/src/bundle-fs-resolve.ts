@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { cacheControlOf } from "every-plugin/build/artifact-names";
 import {
   bundleCachePath,
   bundleCacheRoot,
@@ -60,9 +61,6 @@ const MIME_TYPES: Record<string, string> = {
   ".xml": "application/xml",
 };
 
-/** Entrypoints are fixed-name files a redeploy replaces — they must revalidate. */
-const ENTRYPOINT_PATTERN = /^(remoteEntry|remoteEntry\.server|mf-manifest|index|manifest\.gen)\./;
-
 const notFound = (): Response =>
   new Response("Not Found", { status: 404, headers: { "content-type": "text/plain" } });
 
@@ -120,13 +118,10 @@ export class BundleResolver extends Context.Service<
           const name = path.basename(filePath);
           const contentType =
             MIME_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
-          const entrypoint = ENTRYPOINT_PATTERN.test(name) || !/\.[a-f0-9]{8,}\./.test(name);
           return new Response(new Uint8Array(bytes), {
             headers: {
               "content-type": contentType,
-              "cache-control": entrypoint
-                ? "public, max-age=0, must-revalidate"
-                : "public, max-age=31536000, immutable",
+              "cache-control": cacheControlOf(name),
               etag: `"${Buffer.from(bytes.subarray(0, 4096)).toString("base64").slice(0, 24)}"`,
             },
           });

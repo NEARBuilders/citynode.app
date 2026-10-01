@@ -4,6 +4,7 @@ import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
 import { CONTRACT_TYPES_FILE, generateContractTypes } from "../contract-types";
+import { HashEntryAliasPlugin } from "./hash-entry-alias-plugin";
 import { buildSharedDependencies } from "./module-federation";
 import { getPluginInfo } from "./utils";
 
@@ -82,6 +83,9 @@ export class EmitPluginManifest implements RspackPluginInstance {
         }
 
         const contractSha256 = crypto.createHash("sha256").update(contractTypes).digest("hex");
+        const hashedEntry = Object.keys(compilation.assets).find((name) =>
+          /^remoteEntry\.[a-f0-9]{8,}\.js$/.test(name),
+        );
         const manifest: Record<string, unknown> = {
           schemaVersion: 1,
           kind: "every-plugin/manifest",
@@ -90,7 +94,7 @@ export class EmitPluginManifest implements RspackPluginInstance {
             version: pluginInfo.version,
           },
           runtime: {
-            remoteEntry: "./remoteEntry.js",
+            remoteEntry: `./${hashedEntry ?? "remoteEntry.js"}`,
           },
           contract: {
             kind: "orpc",
@@ -158,7 +162,7 @@ export class EveryPluginBuild implements RspackPluginInstance {
 
     new ModuleFederationPlugin({
       name: pluginInfo.normalizedName,
-      filename: "remoteEntry.js",
+      filename: "remoteEntry.[contenthash].js",
       dts: this.options.dts !== false,
       manifest: {},
       runtimePlugins: [require.resolve("@module-federation/node/runtimePlugin")],
@@ -169,6 +173,8 @@ export class EveryPluginBuild implements RspackPluginInstance {
       shared: buildSharedDependencies(pluginInfo),
       shareStrategy: "version-first",
     }).apply(compiler);
+
+    new HashEntryAliasPlugin().apply(compiler);
 
     if (this.options.dts === false) {
       compiler.options.plugins = (compiler.options.plugins ?? []).filter(

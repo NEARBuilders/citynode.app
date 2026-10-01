@@ -5,13 +5,8 @@ import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
 import { FixMfDataUriPlugin } from "../../build/rspack";
 import { sanitizeContainerName } from "../../ui/manifest/contract";
-import {
-  createUiSharedDeps,
-  MANIFEST_FILENAME,
-  restoreManifestPublicPath,
-  UI_REMOTE_ENTRY_FILENAME,
-  UI_REMOTE_SERVER_ENTRY_FILENAME,
-} from "./index";
+import { hashArtifactsPlugin } from "./hash-artifacts-plugin";
+import { createUiSharedDeps, MANIFEST_FILENAME, restoreManifestPublicPath } from "./index";
 import { uiManifestGenPlugin } from "./manifest-plugin";
 
 /**
@@ -86,13 +81,17 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
       pluginModuleFederation(
         {
           name: normalizedName,
-          filename: UI_REMOTE_ENTRY_FILENAME,
+          filename: "remoteEntry.[contenthash].js",
           dts: false,
           exposes: webExposes,
           shared: uiSharedDeps,
         },
         { environment: "web" },
       ),
+      hashArtifactsPlugin({
+        entryBase: "remoteEntry",
+        distRoot: path.join(workspaceRootAbsolute, "dist"),
+      }),
     ],
     source: { entry: { index: webEntry }, ...(define ? { define } : {}) },
     resolve: { alias: { "@": path.join(workspaceRootAbsolute, "src") } },
@@ -165,7 +164,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
       pluginModuleFederation(
         {
           name: normalizedName,
-          filename: UI_REMOTE_SERVER_ENTRY_FILENAME,
+          filename: "remoteEntry.server.[contenthash].js",
           dts: false,
           exposes: nodeExposes,
           shared: uiSharedDeps,
@@ -173,6 +172,10 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
         { target: "node", environment: "node" },
       ),
       restoreManifestPublicPath(path.resolve(workspaceRootAbsolute, "dist", "ssr")),
+      hashArtifactsPlugin({
+        entryBase: "remoteEntry.server",
+        distRoot: path.resolve(workspaceRootAbsolute, "dist", "ssr"),
+      }),
     ],
     source: { entry: { index: nodeEntry } },
     resolve: {

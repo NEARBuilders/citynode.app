@@ -27,6 +27,13 @@ describe("bundle name → response policy", () => {
     expect(bundleCacheControl("index.html")).toContain("must-revalidate");
   });
 
+  it("marks hashed entrypoints immutable regardless of base name", () => {
+    expect(bundleCacheControl("remoteEntry.8f3ac1d2feedbeef.js")).toContain("immutable");
+    expect(bundleCacheControl("remoteEntry.server.a71fb2c3d4e5f601.js")).toContain("immutable");
+    expect(bundleCacheControl("mf-manifest.9d2e1a3b5c7d9021.json")).toContain("immutable");
+    expect(bundleCacheControl("style.6c596dfcdd12ab34.css")).toContain("immutable");
+  });
+
   it("derives content types from extensions", () => {
     expect(bundleContentType("remoteEntry.js")).toBe("text/javascript");
     expect(bundleContentType("styles.css")).toBe("text/css");

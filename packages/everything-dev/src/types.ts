@@ -66,6 +66,9 @@ export const PluginUiConfigSchema = z.object({
   integrity: z.string().optional(),
   ssr: z.string().optional(),
   ssrIntegrity: z.string().optional(),
+  /** versioned WorkspaceVersionManifest filename, relative to `production` —
+   * when set, `integrity` pins the manifest document, not the entry */
+  manifest: z.string().optional(),
 });
 export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
 
@@ -82,6 +85,9 @@ export const ComposableAppEntrySchema = z.object({
   shared: SharedDepMapSchema.optional(),
   connectSrc: z.array(z.string()).optional(),
   ui: PluginUiConfigSchema.optional(),
+  /** versioned WorkspaceVersionManifest filename, relative to `production` —
+   * when set, `integrity` pins the manifest document, not the entry */
+  manifest: z.string().optional(),
 });
 export type ComposableAppEntry = z.infer<typeof ComposableAppEntrySchema>;
 
@@ -170,9 +176,12 @@ export const UiConfigSchema = z
     production: z.string().optional(),
     /** browser-facing base overriding `production` (see PluginUiConfigSchema) */
     publicUrl: z.string().optional(),
+    /** entry SRI, or the version manifest's SRI when `manifest` is set */
     integrity: z.string().optional(),
     ssr: z.string().optional(),
     ssrIntegrity: z.string().optional(),
+    /** versioned WorkspaceVersionManifest filename, relative to `production` */
+    manifest: z.string().optional(),
   })
   .strict();
 export type UiConfig = z.infer<typeof UiConfigSchema>;
@@ -180,8 +189,11 @@ export type UiConfig = z.infer<typeof UiConfigSchema>;
 export const HostConfigSchema = z.object({
   development: z.string(),
   production: z.string(),
+  /** entry SRI, or the version manifest's SRI when `manifest` is set */
   integrity: z.string().optional(),
   secrets: z.array(z.string()).optional(),
+  /** versioned WorkspaceVersionManifest filename, relative to `production` */
+  manifest: z.string().optional(),
 });
 export type HostConfig = z.infer<typeof HostConfigSchema>;
 

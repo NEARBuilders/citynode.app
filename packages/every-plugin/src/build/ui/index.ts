@@ -36,6 +36,10 @@ export {
   hasFolderFormUi,
 } from "./generated-config";
 export {
+  type HashArtifactsPluginOptions,
+  hashArtifactsPlugin,
+} from "./hash-artifacts-plugin";
+export {
   createUiRsbuildConfig,
   sanitizeContainerName,
   type UiRsbuildConfigOptions,
