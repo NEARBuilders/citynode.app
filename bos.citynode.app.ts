@@ -89,6 +89,8 @@ export default App({
       ui: { path: "plugins/agents/ui" },
       variables: {
         agentsNearRpcUrls: "https://near.drpc.org,https://free.rpc.fastnear.com",
+        agentsTrustedOrigins: "https://citynode.app",
+        agentsServiceUrl: "https://agents.local",
         agentsSponsorDailyGlobalLimit: 100,
         agentsSponsorDailyTenantLimit: 20,
         agentsSponsorDailyAgentLimit: 10,

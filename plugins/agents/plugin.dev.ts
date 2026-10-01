@@ -10,6 +10,8 @@ export default {
     variables: {
       agentsNearRpcUrls:
         process.env.AGENTS_NEAR_RPC_URLS || "https://near.drpc.org,https://free.rpc.fastnear.com",
+      agentsTrustedOrigins: process.env.AGENTS_TRUSTED_ORIGINS || "https://citynode.app",
+      agentsServiceUrl: process.env.AGENTS_SERVICE_URL || "https://agents.local",
       agentsSponsorDailyGlobalLimit: Number(process.env.AGENTS_SPONSOR_DAILY_GLOBAL_LIMIT) || 100,
       agentsSponsorDailyTenantLimit: Number(process.env.AGENTS_SPONSOR_DAILY_TENANT_LIMIT) || 20,
       agentsSponsorDailyAgentLimit: Number(process.env.AGENTS_SPONSOR_DAILY_AGENT_LIMIT) || 10,

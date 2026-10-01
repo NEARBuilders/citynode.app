@@ -1,5 +1,6 @@
 import {
   ApiError,
+  acknowledgeSigningArtifact,
   balanceList,
   balanceMoveExecution,
   configureDatabase,
@@ -21,6 +22,7 @@ import {
   readLimits,
   readPolicy,
   readPolicyHistory,
+  readSigningArtifact,
   readStatus,
   readTimelock,
   recoverExecutionRequest,
@@ -56,6 +58,18 @@ export default createPlugin({
       .string()
       .default("https://near.drpc.org,https://free.rpc.fastnear.com")
       .describe("Comma-separated NEAR RPC endpoints used by the sponsor and verification paths"),
+    agentsTrustedOrigins: z
+      .string()
+      .describe(
+        "Comma-separated trusted origins for the runtime (e.g. the opencrosspost relying-party origin)",
+      ),
+    agentsServiceUrl: z
+      .string()
+      .url()
+      .default("https://agents.local")
+      .describe(
+        "This service's public origin — its hostname is the NEP-413 recipient owners sign into every owner message",
+      ),
     agentsSponsorDailyGlobalLimit: z.number().min(1).default(100),
     agentsSponsorDailyTenantLimit: z.number().min(1).default(20),
     agentsSponsorDailyAgentLimit: z.number().min(1).default(10),
@@ -92,8 +106,8 @@ export default createPlugin({
 
         const envConfig = envSchema.parse({
           DATABASE_URL: config.secrets.AGENTS_DATABASE_URL,
-          BETTER_AUTH_URL: "https://agents.local",
-          TRUSTED_ORIGINS: "https://citynode.app",
+          BETTER_AUTH_URL: config.variables.agentsServiceUrl,
+          TRUSTED_ORIGINS: config.variables.agentsTrustedOrigins,
           NEAR_RPC_URLS: config.variables.agentsNearRpcUrls,
           ...(config.secrets.AGENTS_SPONSOR_KEYS
             ? { NEAR_SPONSOR_KEYS: config.secrets.AGENTS_SPONSOR_KEYS }
@@ -466,6 +480,27 @@ export default createPlugin({
         );
         if (!record) throw new ApiError("operation_not_found", 404);
         return operationStatus(record);
+      }),
+
+      getSignature: builder.getSignature.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        const delivery = yield* Effect.tryPromise(() =>
+          readSigningArtifact(actor, input.agentId, input.correlationId, headers.grantToken),
+        );
+        return views.signatureDelivery(delivery);
+      }),
+
+      acknowledgeSignature: builder.acknowledgeSignature.effect(function* ({
+        input,
+        context,
+        errors,
+      }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        return yield* Effect.tryPromise(() =>
+          acknowledgeSigningArtifact(actor, input.agentId, input.correlationId, headers.grantToken),
+        );
       }),
     };
   },

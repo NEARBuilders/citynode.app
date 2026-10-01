@@ -3,8 +3,8 @@ import type {
   GenerateIntentRequest,
   SubmitIntentRequest,
 } from "@near-intents-agent-api/contracts/api";
-import { generateIntentResponseSchema } from "@near-intents-agent-api/contracts/api";
 import {
+  acknowledgementSchema,
   agentListQuerySchema,
   agentPageSchema,
   agentViewSchema,
@@ -14,6 +14,7 @@ import {
   budgetViewSchema,
   depositRequestSchema,
   generateIntentRequestSchema,
+  generateIntentResponseSchema,
   grantListViewSchema,
   historyPageSchema,
   historyQuerySchema,
@@ -25,6 +26,7 @@ import {
   recoverRequestSchema,
   scheduledPageSchema,
   scheduledQuerySchema,
+  signatureDeliverySchema,
   signMessageRequestSchema,
   statusResponseSchema,
   submitIntentRequestSchema,
@@ -260,6 +262,26 @@ export const contract = {
     })
     .input(signMessageRequestSchema.and(z.object({ agentId: z.string() })))
     .output(statusResponseSchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  getSignature: oc
+    .route({
+      method: "POST",
+      path: "/agents/signatures",
+      summary: "Read a completed signature once, under the grant that authorized it",
+    })
+    .input(z.object({ agentId: z.string(), correlationId: z.string() }))
+    .output(signatureDeliverySchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  acknowledgeSignature: oc
+    .route({
+      method: "POST",
+      path: "/agents/signatures/ack",
+      summary: "Erase a delivered signature from the server",
+    })
+    .input(z.object({ agentId: z.string(), correlationId: z.string() }))
+    .output(acknowledgementSchema)
     .errors({ UNAUTHORIZED: UnauthorizedError }),
 };
 

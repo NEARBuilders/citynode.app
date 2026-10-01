@@ -297,7 +297,139 @@ export declare const contract: {
         agentId: z.ZodString;
         type: z.ZodLiteral<"signing_artifact_ack">;
         correlationId: z.ZodString;
-    }, z.core.$strict>], "type">, any, {
+    }, z.core.$strict>], "type">, z.ZodObject<{
+        correlationId: z.ZodString;
+        type: z.ZodEnum<{
+            agent_archive: "agent_archive";
+            agent_create: "agent_create";
+            agent_delete: "agent_delete";
+            agent_freeze: "agent_freeze";
+            agent_restore: "agent_restore";
+            agent_unfreeze: "agent_unfreeze";
+            approval_vote: "approval_vote";
+            budget_set: "budget_set";
+            execution_cancel: "execution_cancel";
+            grant_issue: "grant_issue";
+            grant_revoke: "grant_revoke";
+            policy_update: "policy_update";
+            signing_artifact_ack: "signing_artifact_ack";
+            signing_artifact_read: "signing_artifact_read";
+            timelock_set: "timelock_set";
+        }>;
+        agentId: z.ZodString;
+        status: z.ZodLiteral<"PENDING_SIGNATURE">;
+        expiresAt: z.ZodISODateTime;
+        signer: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            type: z.ZodLiteral<"near">;
+            accountId: z.ZodString;
+            publicKey: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            type: z.ZodLiteral<"evm">;
+            address: z.ZodString;
+            chainId: z.ZodNumber;
+            publicKey: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            type: z.ZodLiteral<"passkey">;
+            credentialId: z.ZodString;
+            publicKey: z.ZodString;
+            rpId: z.ZodString;
+            origin: z.ZodString;
+        }, z.core.$strict>], "type">;
+        intent: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            standard: z.ZodLiteral<"nep413">;
+            payload: z.ZodObject<{
+                message: z.ZodString;
+                recipient: z.ZodString;
+                nonce: z.ZodString;
+            }, z.core.$strict>;
+        }, z.core.$strict>, z.ZodObject<{
+            standard: z.ZodLiteral<"nep366">;
+            payload: z.ZodObject<{
+                receiverId: z.ZodString;
+                actions: z.ZodArray<z.ZodObject<{
+                    type: z.ZodLiteral<"FunctionCall">;
+                    params: z.ZodObject<{
+                        methodName: z.ZodString;
+                        args: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                        gas: z.ZodString;
+                        deposit: z.ZodString;
+                    }, z.core.$strict>;
+                }, z.core.$strict>>;
+            }, z.core.$strict>;
+        }, z.core.$strict>, z.ZodObject<{
+            standard: z.ZodLiteral<"eip712">;
+            payload: z.ZodObject<{
+                domain: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                types: z.ZodRecord<z.ZodString, z.ZodArray<z.ZodObject<{
+                    name: z.ZodString;
+                    type: z.ZodString;
+                }, z.core.$strict>>>;
+                primaryType: z.ZodString;
+                message: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+            }, z.core.$strict>;
+        }, z.core.$strict>, z.ZodObject<{
+            standard: z.ZodLiteral<"webauthn">;
+            payload: z.ZodObject<{
+                challenge: z.ZodString;
+                rpId: z.ZodString;
+                allowCredentials: z.ZodArray<z.ZodObject<{
+                    id: z.ZodString;
+                    type: z.ZodLiteral<"public-key">;
+                }, z.core.$strict>>;
+                userVerification: z.ZodLiteral<"required">;
+                timeout: z.ZodNumber;
+            }, z.core.$strict>;
+        }, z.core.$strict>], "standard">;
+        preview: z.ZodObject<{
+            summary: z.ZodString;
+            revision: z.ZodOptional<z.ZodNumber>;
+            previousRevision: z.ZodOptional<z.ZodNumber>;
+            policyHash: z.ZodOptional<z.ZodString>;
+            deletion: z.ZodOptional<z.ZodObject<{
+                nearAccountId: z.ZodString;
+                beneficiary: z.ZodString;
+                nativeBalance: z.ZodString;
+                public: z.ZodArray<z.ZodObject<{
+                    assetId: z.ZodString;
+                    price: z.ZodNullable<z.ZodNumber>;
+                    priceUpdatedAt: z.ZodNullable<z.ZodString>;
+                    priceExpiresAt: z.ZodNullable<z.ZodString>;
+                    symbol: z.ZodNullable<z.ZodString>;
+                    decimals: z.ZodNullable<z.ZodNumber>;
+                    blockchain: z.ZodNullable<z.ZodString>;
+                    balanceRaw: z.ZodString;
+                    balance: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+                confidential: z.ZodArray<z.ZodObject<{
+                    assetId: z.ZodString;
+                    price: z.ZodNullable<z.ZodNumber>;
+                    priceUpdatedAt: z.ZodNullable<z.ZodString>;
+                    priceExpiresAt: z.ZodNullable<z.ZodString>;
+                    symbol: z.ZodNullable<z.ZodString>;
+                    decimals: z.ZodNullable<z.ZodNumber>;
+                    blockchain: z.ZodNullable<z.ZodString>;
+                    balanceRaw: z.ZodString;
+                    balance: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+                assetsLost: z.ZodBoolean;
+                retirement: z.ZodEnum<{
+                    credential_erase: "credential_erase";
+                    provider_delete: "provider_delete";
+                }>;
+                policyAllowsDelete: z.ZodBoolean;
+            }, z.core.$strict>>;
+            approval: z.ZodOptional<z.ZodObject<{
+                approvalId: z.ZodUUID;
+                requestType: z.ZodString;
+                requestHash: z.ZodString;
+                verdict: z.ZodEnum<{
+                    approve: "approve";
+                    reject: "reject";
+                }>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>;
+        replayed: z.ZodBoolean;
+    }, z.core.$strict>, {
         UNAUTHORIZED: {
             readonly status: 401;
             readonly data: z.ZodObject<{
