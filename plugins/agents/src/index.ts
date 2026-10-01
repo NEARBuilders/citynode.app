@@ -16,6 +16,7 @@ import { Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
 import { z } from "zod";
 import { actorForSession } from "./actor";
+import { ContextSchema } from "./context";
 import { contract } from "./contract";
 import { DatabaseLive, DatabaseTag } from "./db/layer";
 
@@ -49,6 +50,8 @@ export default createPlugin({
       .describe("JSON map of env:vN → 32+ byte encryption keys for grant tokens at rest"),
     AGENTS_SECRET_ENCRYPTION_ACTIVE_KEY_ID: z.string().optional(),
   }),
+
+  context: ContextSchema,
 
   contract,
 
@@ -142,7 +145,10 @@ export default createPlugin({
         if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
-        const { row, replayed } = yield* Effect.tryPromise(() => generateIntent(actor, input));
+        const idempotencyKey = context.reqHeaders?.get("idempotency-key") ?? undefined;
+        const { row, replayed } = yield* Effect.tryPromise(() =>
+          generateIntent(actor, input, idempotencyKey),
+        );
         return { ...generateResponse(row), replayed };
       }),
 
