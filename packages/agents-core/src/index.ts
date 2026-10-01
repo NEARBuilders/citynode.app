@@ -28,3 +28,12 @@ export * from "./shared/owner-proof.js";
 export * from "./shared/secret-rotation.js";
 export * from "./shared/secrets.js";
 export * from "./shared/wallet-authorization.js";
+
+// Service surface for the agents plugin shell (named exports only — the module
+// families collide under star re-export; the shell imports exactly these).
+export { generateIntent, generateResponse } from "./modules/intents/generate.js";
+export { submitIntent } from "./modules/intents/submit.js";
+export { readStatus, readHistory } from "./modules/intents/status.js";
+export { createAgent, getOnboarding, submitOnboarding, refreshOnboarding } from "./modules/agents/onboarding-service.js";
+export { listAgents, getAgentView, loadAgent } from "./modules/agents/service.js";
+export type { Actor } from "./shared/actor.js";
