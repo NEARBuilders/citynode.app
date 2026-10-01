@@ -30,7 +30,6 @@ import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
-import { isRegistryStart, resolveStartConfigSource } from "./local-prod-config";
 import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { type ProgressEvent, pluginEvents, timePhase } from "./progress";
 import {
@@ -41,6 +40,7 @@ import {
   type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
+import { isRegistryStart, resolveStartConfigSource } from "./start-config-source";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
 

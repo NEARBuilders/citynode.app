@@ -16,6 +16,7 @@ import {
   buildDraftFromResolvedConfig,
   buildTenantUrl,
   computeSsrEntryIntegrity,
+  computeSubresourceIntegrity,
   computeUiEntryIntegrity,
   diffDraft,
   draftUiOverride,
@@ -28,6 +29,7 @@ import {
   useAuthClient,
   verifySsrIntegrity,
   verifyUiIntegrity,
+  verifyUiPin,
 } from "@/app";
 import {
   Badge,
@@ -173,12 +175,22 @@ export function NodeConfigTab({
       const result = await apiClient.apps.getRegistryApp({ accountId: account, gatewayId });
       const resolved = result.data?.resolvedConfig ?? null;
       const ui =
-        (resolved?.app as { ui?: { production?: unknown; integrity?: unknown } } | null)?.ui ?? {};
+        (
+          resolved?.app as {
+            ui?: {
+              production?: unknown;
+              integrity?: unknown;
+              pin?: { manifest?: unknown; integrity?: unknown };
+            };
+          } | null
+        )?.ui ?? {};
       const production = typeof ui.production === "string" ? ui.production : "";
       const integrity = typeof ui.integrity === "string" ? ui.integrity : "";
-      if (!production || !integrity) {
+      const pinManifest = typeof ui.pin?.manifest === "string" ? ui.pin.manifest : "";
+      const pinIntegrity = typeof ui.pin?.integrity === "string" ? ui.pin.integrity : "";
+      if (!production || (!integrity && !(pinManifest && pinIntegrity))) {
         toast.error(
-          `${account} publishes no custom UI bundle yet — run \`bos publish --deploy\` in the app repo with a local UI first.`,
+          `${account} publishes no custom UI bundle yet — run \`bos deploy\` in the app repo with a local UI first.`,
         );
         return;
       }
@@ -189,13 +201,15 @@ export function NodeConfigTab({
       setDraft((prev) => ({
         ...prev,
         uiProduction: production,
-        uiIntegrity: integrity,
+        uiIntegrity: pinManifest ? "" : integrity,
+        uiManifest: pinManifest,
+        uiPinIntegrity: pinIntegrity,
         ...(tenant?.allowSsr && ssrUrl && ssrIntegrity ? { ssrUrl, ssrIntegrity } : {}),
       }));
       toast.success(`Bundle and integrity filled from ${account}`);
     } catch {
       toast.error(
-        `No published config for ${account} on this gateway — run \`bos publish --deploy\` in the app repo first.`,
+        `No published config for ${account} on this gateway — run \`bos deploy\` in the app repo first.`,
       );
     } finally {
       setFetchingSource(false);
@@ -294,6 +308,21 @@ export function NodeConfigTab({
       toast.error("Enter the UI bundle URL first");
       return;
     }
+    if (draft.uiManifest) {
+      if (!draft.uiPinIntegrity) {
+        toast.error("Enter the pin integrity first (or use Verify to fill it)");
+      }
+      return onVerifyBundle(
+        draft.uiManifest,
+        draft.uiPinIntegrity,
+        (manifestName) =>
+          computeSubresourceIntegrity(
+            `${draft.uiProduction.replace(/\/$/, "")}/${manifestName.replace(/^\//, "")}`,
+          ),
+        (computed) => setDraft((prev) => ({ ...prev, uiPinIntegrity: computed })),
+        "UI pin",
+      );
+    }
     return onVerifyBundle(
       draft.uiProduction,
       draft.uiIntegrity,
@@ -324,7 +353,20 @@ export function NodeConfigTab({
     }
     const value = parsedDraft.data;
     const checks: { label: string; check: IntegrityCheckResult }[] = [];
-    if (value.uiProduction && value.uiIntegrity) {
+    if (value.uiProduction && value.uiManifest && value.uiPinIntegrity) {
+      setVerifying(true);
+      try {
+        checks.push({
+          label: "UI pin",
+          check: await verifyUiPin(value.uiProduction, {
+            manifest: value.uiManifest,
+            integrity: value.uiPinIntegrity,
+          }),
+        });
+      } finally {
+        setVerifying(false);
+      }
+    } else if (value.uiProduction && value.uiIntegrity) {
       setVerifying(true);
       try {
         checks.push({
@@ -626,13 +668,51 @@ export function NodeConfigTab({
                 </div>
                 <ConfigField
                   id="orgs-node-config-ui-integrity"
-                  label="UI integrity"
+                  label="UI integrity (direct entry hash)"
                   value={draft.uiIntegrity}
-                  onChange={(value) => setDraft((prev) => ({ ...prev, uiIntegrity: value }))}
+                  onChange={(value) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      uiIntegrity: value,
+                      ...(value ? { uiManifest: "", uiPinIntegrity: "" } : {}),
+                    }))
+                  }
                   placeholder="sha384-…"
                   mono
                   disabled={!editable}
                 />
+                <ConfigField
+                  id="orgs-node-config-ui-pin-manifest"
+                  label="UI version-manifest pin"
+                  value={draft.uiManifest}
+                  onChange={(value) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      uiManifest: value,
+                      ...(value ? { uiIntegrity: "" } : {}),
+                    }))
+                  }
+                  onBlur={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      uiManifest: prev.uiManifest.trim().replace(/^\//, ""),
+                    }))
+                  }
+                  placeholder="versions/<version-id>.json"
+                  mono
+                  disabled={!editable}
+                />
+                {draft.uiManifest && (
+                  <ConfigField
+                    id="orgs-node-config-ui-pin-integrity"
+                    label="Pin integrity (the manifest document's SRI)"
+                    value={draft.uiPinIntegrity}
+                    onChange={(value) => setDraft((prev) => ({ ...prev, uiPinIntegrity: value }))}
+                    placeholder="sha384-…"
+                    mono
+                    disabled={!editable}
+                  />
+                )}
                 {tenant.allowSsr && (
                   <>
                     <div className="flex flex-col gap-1">

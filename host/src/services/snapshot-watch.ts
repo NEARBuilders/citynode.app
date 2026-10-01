@@ -3,6 +3,7 @@ import { fetchBosConfigFromFastKv } from "everything-dev/fastkv";
 import { pointerFingerprint } from "everything-dev/fingerprint";
 import { verifySriForUrl } from "everything-dev/integrity";
 import type { BosConfig, RuntimeConfig } from "everything-dev/types";
+import { resolveSlotVersion } from "everything-dev/version-manifest-resolve";
 import { logger } from "../utils/logger";
 import { ConfigService } from "./config";
 import { RuntimeSnapshot } from "./runtime-snapshot";
@@ -18,9 +19,9 @@ export function watchIntervalMs(): number {
 
 /**
  * The published pointer's version identity: a hash over every slot's
- * `manifest`/`integrity` pair — cheap to compute (no version-manifest fetch),
- * and stable exactly when the deployed set is. A pointer-fingerprint change
- * is what triggers the adopt transaction.
+ * `pin` — cheap to compute (no version-manifest fetch), and stable exactly
+ * when the deployed set is. A pointer-fingerprint change is what triggers
+ * the adopt transaction.
  */
 export { pointerFingerprint } from "everything-dev/fingerprint";
 
@@ -65,18 +66,20 @@ export const runWatchTick = (
     const fingerprint = pointerFingerprint(pointer);
     if (fingerprint !== deps.lastSeen) {
       const adopted = yield* Effect.tryPromise(() => deps.adopt(pointer)).pipe(
-        Effect.map((outcome) => {
-          if (outcome.status === "swapped") {
-            logger.info(`[SnapshotWatch] snapshot swapped to ${fingerprint}`);
-          }
-          return true as const;
-        }),
-        Effect.catch((cause) => {
-          logger.error(
-            `[SnapshotWatch] adopt failed for ${fingerprint} — retrying next tick:`,
-            cause instanceof Error ? cause.message : cause,
-          );
-          return Effect.succeed(false as const);
+        Effect.match({
+          onSuccess: (outcome) => {
+            if (outcome.status === "swapped") {
+              logger.info(`[SnapshotWatch] snapshot swapped to ${fingerprint}`);
+            }
+            return true;
+          },
+          onFailure: (cause) => {
+            logger.error(
+              `[SnapshotWatch] adopt failed for ${fingerprint} — retrying next tick:`,
+              cause instanceof Error ? cause.message : cause,
+            );
+            return false;
+          },
         }),
       );
       return {
@@ -108,9 +111,11 @@ interface VerifyTarget {
 
 /**
  * SRI-verify the live slots against their derived pins (the monitor's old
- * job, ported): own pins for manifest slots; extends-ref slots re-read the
- * PARENT config from FastKV and verify against the parent's latest
- * integrity — an upstream republish is noticed without a restart.
+ * job, ported): own pins verify their derived hashed entry URLs directly;
+ * extends-ref slots re-read the PARENT config from FastKV and verify against
+ * the parent's latest pin — an upstream republish is noticed without a
+ * restart (the parent's freshly-resolved `entryIntegrity` no longer matches
+ * this snapshot's (older) entry bytes).
  */
 async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
   const targets: Array<VerifyTarget> = [
@@ -179,9 +184,21 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
       const parentConfig = await fetchBosConfigFromFastKv<Record<string, unknown>>(
         target.extendsRef,
       );
-      const latestIntegrity = getIntegrityForExtends(parentConfig, target.key);
-      if (latestIntegrity) {
-        await verifySriForUrl(target.url, latestIntegrity, { resolveEntryUrl: !target.direct });
+      const parentSlot = getSlotForExtends(parentConfig, target.key);
+      const parentPin = getPinForExtends(parentConfig, target.key);
+      if (parentPin) {
+        // resolve the parent's pin to its (possibly newer) entry coordinates
+        // and verify this snapshot's (older) entry bytes against them — an
+        // upstream republish surfaces as an integrity failure
+        const resolved = await resolveSlotVersion({
+          base: typeof parentSlot?.production === "string" ? parentSlot.production : "",
+          pin: parentPin,
+        });
+        await verifySriForUrl(target.url, resolved.entryIntegrity, { resolveEntryUrl: false });
+      } else if (parentSlot && typeof parentSlot.integrity === "string") {
+        await verifySriForUrl(target.url, parentSlot.integrity, {
+          resolveEntryUrl: !target.direct,
+        });
       }
       continue;
     }
@@ -191,7 +208,10 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
   }
 }
 
-function getIntegrityForExtends(config: Record<string, unknown>, key: string): string | undefined {
+function getSlotForExtends(
+  config: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | undefined {
   const targetPath =
     key === "ui"
       ? "app.ui"
@@ -206,8 +226,23 @@ function getIntegrityForExtends(config: Record<string, unknown>, key: string): s
     if (!current || typeof current !== "object") return undefined;
     current = (current as Record<string, unknown>)[part];
   }
-  if (current && typeof current === "object") {
-    return (current as Record<string, unknown>).integrity as string | undefined;
+  return current && typeof current === "object" ? (current as Record<string, unknown>) : undefined;
+}
+
+function getPinForExtends(
+  config: Record<string, unknown>,
+  key: string,
+): { manifest: string; integrity: string } | undefined {
+  const slot = getSlotForExtends(config, key);
+  const pin = slot?.pin as { manifest?: unknown; integrity?: unknown } | undefined;
+  if (
+    pin &&
+    typeof pin.manifest === "string" &&
+    typeof pin.integrity === "string" &&
+    pin.manifest &&
+    pin.integrity
+  ) {
+    return { manifest: pin.manifest, integrity: pin.integrity };
   }
   return undefined;
 }

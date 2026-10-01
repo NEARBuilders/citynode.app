@@ -116,9 +116,7 @@ async function composeFromPayload(
   };
 
   try {
-    const [{ registerRemotes, loadRemote }] = await Promise.all([
-      import("@module-federation/enhanced/runtime"),
-    ]);
+    const { registerRemotes, loadRemote } = await import("@module-federation/enhanced/runtime");
 
     mark(`compose payload: digest ${payload.digest}, ${payload.remotes.length} remote(s)`);
 

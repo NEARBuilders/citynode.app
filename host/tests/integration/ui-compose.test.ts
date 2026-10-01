@@ -83,10 +83,12 @@ function createBaseRuntimeConfig(): RuntimeConfig {
       name: "ui",
       url: "https://cdn.example.com/base-ui",
       entry: "https://cdn.example.com/base-ui/mf-manifest.json",
+      entryUrl: "https://cdn.example.com/base-ui/remoteEntry.aaa.js",
       source: "remote",
       integrity: "sha384-base",
       ssrUrl: "https://cdn.example.com/base-ui-ssr",
       ssrIntegrity: "sha384-base-ssr",
+      ssrEntryUrl: "https://cdn.example.com/base-ui-ssr/remoteEntry.server.aaa.js",
     },
   } as RuntimeConfig;
 }
@@ -103,9 +105,11 @@ function configWithPlugin(): RuntimeConfig {
         name: "auth-ui",
         url: "https://cdn.example.com/auth-ui",
         entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
+        entryUrl: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
         source: "remote",
         ssrUrl: "https://cdn.example.com/auth-ui-ssr",
         ssrIntegrity: "sha384-a",
+        ssrEntryUrl: "https://cdn.example.com/auth-ui-ssr/remoteEntry.server.aaa.js",
       },
     } as never,
   };
@@ -186,7 +190,7 @@ describe("uiSources", () => {
     expect(sources.map((source) => source.key)).toEqual(["auth", "ui"]);
     expect(sources.map((source) => source.mfName)).toEqual(["auth-ui", "ui"]);
     expect(sources.find((source) => source.key === "auth")?.webEntry).toBe(
-      "https://cdn.example.com/auth-ui/remoteEntry.js",
+      "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
     );
     expect(sources.find((source) => source.key === "ui")?.manifestUrl).toBe(
       "https://cdn.example.com/base-ui/manifest.gen.json",
@@ -285,7 +289,7 @@ describe("composeUi", () => {
       {
         key: "auth",
         name: "auth-ui",
-        entry: "https://cdn.example.com/auth-ui/remoteEntry.js",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
         manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
       },
     ]);
@@ -294,6 +298,9 @@ describe("composeUi", () => {
 
   it("local plugin ui slots carry no manifestUrl — a relative entry resolves against the page origin and registers the wrong container", async () => {
     const config = configWithPlugin();
+    // a local plugin ui slot only exists in development (dev targets resolve
+    // only there) — and the fixed-name fallback is the dev contract
+    config.env = "development";
     config.plugins!.auth!.ui = {
       name: "auth-ui",
       url: "http://localhost:4111",
@@ -369,7 +376,7 @@ describe("composeUi", () => {
       {
         key: "auth",
         name: "auth-ui",
-        entry: "https://cdn.example.com/auth-ui/remoteEntry.js",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
         manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
       },
     ]);
@@ -410,7 +417,7 @@ describe("composeClientPayload", () => {
       {
         key: "auth",
         name: "auth-ui",
-        entry: "https://cdn.example.com/auth-ui/remoteEntry.js",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
         manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
       },
     ]);

@@ -41,6 +41,7 @@ afterEach(async () => {
 function createRuntimeConfig(options?: {
   source?: "local" | "remote";
   ssrIntegrity?: string;
+  ssrEntryUrl?: string;
 }): RuntimeConfig {
   return {
     env: "production",
@@ -60,6 +61,7 @@ function createRuntimeConfig(options?: {
       integrity: "sha384-ui",
       ssrUrl: "https://cdn.example.com/ui-ssr",
       ssrIntegrity: options?.ssrIntegrity,
+      ssrEntryUrl: options?.ssrEntryUrl,
     },
     api: {
       name: "api",
@@ -77,7 +79,7 @@ describe("loadRouterModule cache", () => {
     verifySriForUrlMock.mockResolvedValue(undefined);
   });
 
-  it("reloads the router module when SSR integrity changes at the same url", async () => {
+  it("reloads the router module when the deployed SSR coordinates change", async () => {
     const routerOne = {
       default: { renderToStream: vi.fn(), getRouteHead: vi.fn(), createRouter: vi.fn() },
     };
@@ -87,10 +89,20 @@ describe("loadRouterModule cache", () => {
     loadRemoteMock.mockResolvedValueOnce(routerOne).mockResolvedValueOnce(routerTwo);
 
     const first = await Effect.runPromise(
-      loadRouterModule(createRuntimeConfig({ ssrIntegrity: "sha384-ssr-a" })),
+      loadRouterModule(
+        createRuntimeConfig({
+          ssrIntegrity: "sha384-ssr-a",
+          ssrEntryUrl: "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
+        }),
+      ),
     );
     const second = await Effect.runPromise(
-      loadRouterModule(createRuntimeConfig({ ssrIntegrity: "sha384-ssr-b" })),
+      loadRouterModule(
+        createRuntimeConfig({
+          ssrIntegrity: "sha384-ssr-b",
+          ssrEntryUrl: "https://cdn.example.com/ui-ssr/remoteEntry.server.bbb.js",
+        }),
+      ),
     );
 
     expect(first).toBe(routerOne.default);
@@ -99,19 +111,19 @@ describe("loadRouterModule cache", () => {
     expect(registerRemotesMock).toHaveBeenCalledWith([
       {
         name: "ui",
-        entry: "https://cdn.example.com/ui-ssr/remoteEntry.server.js?v=sha384-ssr-b",
+        entry: "https://cdn.example.com/ui-ssr/remoteEntry.server.bbb.js",
         alias: "ui",
       },
     ]);
     expect(verifySriForUrlMock).toHaveBeenNthCalledWith(
       1,
-      "https://cdn.example.com/ui-ssr/remoteEntry.server.js?v=sha384-ssr-a",
+      "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
       "sha384-ssr-a",
       { resolveEntryUrl: false },
     );
     expect(verifySriForUrlMock).toHaveBeenNthCalledWith(
       2,
-      "https://cdn.example.com/ui-ssr/remoteEntry.server.js?v=sha384-ssr-b",
+      "https://cdn.example.com/ui-ssr/remoteEntry.server.bbb.js",
       "sha384-ssr-b",
       { resolveEntryUrl: false },
     );
@@ -123,11 +135,18 @@ describe("loadRouterModule cache", () => {
     };
     loadRemoteMock.mockResolvedValue(router);
 
-    const first = await Effect.runPromise(
-      loadRouterModule(createRuntimeConfig({ ssrIntegrity: "sha384-ssr-a" })),
-    );
+    const config = createRuntimeConfig({
+      ssrIntegrity: "sha384-ssr-a",
+      ssrEntryUrl: "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
+    });
+    const first = await Effect.runPromise(loadRouterModule(config));
     const second = await Effect.runPromise(
-      loadRouterModule(createRuntimeConfig({ ssrIntegrity: "sha384-ssr-a" })),
+      loadRouterModule(
+        createRuntimeConfig({
+          ssrIntegrity: "sha384-ssr-a",
+          ssrEntryUrl: "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
+        }),
+      ),
     );
 
     expect(first).toBe(router.default);
@@ -154,8 +173,20 @@ describe("loadRouterModule cache", () => {
     };
     loadRemoteMock.mockResolvedValueOnce(routerOne).mockResolvedValueOnce(routerTwo);
 
-    const first = await Effect.runPromise(loadRouterModule(createRuntimeConfig()));
-    const second = await Effect.runPromise(loadRouterModule(createRuntimeConfig()));
+    const first = await Effect.runPromise(
+      loadRouterModule(
+        createRuntimeConfig({
+          ssrEntryUrl: "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
+        }),
+      ),
+    );
+    const second = await Effect.runPromise(
+      loadRouterModule(
+        createRuntimeConfig({
+          ssrEntryUrl: "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
+        }),
+      ),
+    );
 
     expect(first).toBe(routerOne.default);
     expect(second).toBe(routerTwo.default);
@@ -170,7 +201,10 @@ describe("loadRouterModule cache", () => {
     };
     loadRemoteMock.mockResolvedValue(router);
 
-    const config = createRuntimeConfig({ ssrIntegrity: "sha384-ssr-a" });
+    const config = createRuntimeConfig({
+      ssrIntegrity: "sha384-ssr-a",
+      ssrEntryUrl: "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
+    });
     await Effect.runPromise(loadRouterModule(config));
     await Effect.runPromise(loadRouterModule({ ...config }));
     await Effect.runPromise(
@@ -185,7 +219,10 @@ describe("loadRouterModule cache", () => {
   it("keeps the failing promise cached so a downed remote is probed once per window", async () => {
     loadRemoteMock.mockRejectedValue(new Error("remote down"));
 
-    const config = createRuntimeConfig({ ssrIntegrity: "sha384-ssr-a" });
+    const config = createRuntimeConfig({
+      ssrIntegrity: "sha384-ssr-a",
+      ssrEntryUrl: "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
+    });
 
     await expect(Effect.runPromise(loadRouterModule(config))).rejects.toThrow();
 
@@ -209,6 +246,7 @@ describe("ui expose loads (routeConfig / compose)", () => {
   function uiEntry(options?: { ssrUrl?: string; localPath?: string }) {
     return {
       name: "auth-ui",
+      env: "development",
       ssrUrl: options?.ssrUrl,
       ssrIntegrity: undefined,
       localPath: options?.localPath,

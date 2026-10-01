@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Cause, Effect, Exit, Layer } from "effect";
-import { buildRuntimeConfig } from "everything-dev/config";
+import { buildRuntimeConfigEffect, type ConfigVersionManifestError } from "everything-dev/config";
 import type { BosConfig, RuntimeConfig } from "everything-dev/types";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ConfigService } from "../../src/services/config";
@@ -34,8 +34,10 @@ const publishedPointer = {
     ui: {
       development: "local:ui",
       production: "https://cdn.example.test/ui/",
-      integrity: "sha384-slot-pin",
-      manifest: "versions/8f3ac1d2feedbeef.json",
+      pin: {
+        manifest: "versions/8f3ac1d2feedbeef.json",
+        integrity: "sha384-slot-pin",
+      },
     },
     api: { development: "local:api", production: "https://cdn.example.test/api/" },
   },
@@ -59,12 +61,12 @@ const snapshotLayer = RuntimeSnapshot.layer.pipe(
   Layer.provide(Layer.succeed(ConfigService, bootConfig)),
 );
 
-const buildRuntimeConfigMock = vi.mocked(buildRuntimeConfig);
+const buildRuntimeConfigMock = vi.mocked(buildRuntimeConfigEffect);
 const composeUiMock = vi.hoisted(() => vi.fn());
 
 vi.mock("everything-dev/config", async (importOriginal) => {
   const actual = await importOriginal<typeof import("everything-dev/config")>();
-  return { ...actual, buildRuntimeConfig: vi.fn() };
+  return { ...actual, buildRuntimeConfigEffect: vi.fn() };
 });
 
 // the pre-warm compose is the seam: its internals (SSR container loads, digest
@@ -91,7 +93,7 @@ afterAll(() => {
 
 describe("adoptPublishedPointer", () => {
   it("derives the new config, pre-warms a fresh compose state, and swaps", async () => {
-    buildRuntimeConfigMock.mockResolvedValue(derivedConfig);
+    buildRuntimeConfigMock.mockReturnValue(Effect.succeed(derivedConfig));
     composeUiMock.mockReturnValue(Effect.succeed({ digest: "digest-prewarm" }));
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -123,7 +125,7 @@ describe("adoptPublishedPointer", () => {
   });
 
   it("is a no-op when the derived fingerprint is unchanged", async () => {
-    buildRuntimeConfigMock.mockResolvedValue(derivedConfig);
+    buildRuntimeConfigMock.mockReturnValue(Effect.succeed(derivedConfig));
     composeUiMock.mockReturnValue(Effect.succeed({ digest: "digest-prewarm" }));
     const outcomes = await Effect.runPromise(
       Effect.gen(function* () {
@@ -141,7 +143,11 @@ describe("adoptPublishedPointer", () => {
   });
 
   it("a failed derivation leaves the live snapshot untouched", async () => {
-    buildRuntimeConfigMock.mockRejectedValueOnce(new Error("version manifest fetch failed"));
+    buildRuntimeConfigMock.mockReturnValueOnce(
+      Effect.fail(
+        new Error("version manifest fetch failed") as unknown as ConfigVersionManifestError,
+      ),
+    );
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const snapshot = yield* RuntimeSnapshot;
@@ -161,7 +167,7 @@ describe("adoptPublishedPointer", () => {
   });
 
   it("a failed pre-warm compose aborts the adopt before the swap", async () => {
-    buildRuntimeConfigMock.mockResolvedValue(derivedConfig);
+    buildRuntimeConfigMock.mockReturnValue(Effect.succeed(derivedConfig));
     composeUiMock.mockReturnValue(Effect.fail(new Error("compose digest mismatch")));
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -181,7 +187,7 @@ describe("adoptPublishedPointer", () => {
   });
 
   it("a pinned entry failing SRI verification aborts the adopt", async () => {
-    buildRuntimeConfigMock.mockResolvedValue(derivedConfig);
+    buildRuntimeConfigMock.mockReturnValue(Effect.succeed(derivedConfig));
     composeUiMock.mockReturnValue(Effect.succeed({ digest: "digest-prewarm" }));
     // the fake CDN serves bytes whose SRI does not match the derived pin
     const tampered = vi.fn(async () => new Response("tampered bytes", { status: 200 }));

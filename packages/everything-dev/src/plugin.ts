@@ -17,13 +17,7 @@ import {
   type SessionCredential,
   writeSessionHandle,
 } from "./auth-session";
-import {
-  buildWorkspaceTargets,
-  fileExists,
-  getPluginRef,
-  readJsonFile,
-  selectWorkspaceTargets,
-} from "./build";
+import { buildWorkspaceTargets, getPluginRef, selectWorkspaceTargets } from "./build";
 import { buildCiInfraPlan, type CiInfraPlan } from "./cli/infra";
 import {
   buildInitPatterns,
@@ -91,7 +85,6 @@ import {
   fetchDeployManifests,
   fetchRemotePluginManifest,
   getRegistryNamespaceForAccount,
-  type PluginManifest,
   parseBosUrl,
 } from "./fastkv";
 import { pointerFingerprint } from "./fingerprint";
@@ -113,7 +106,6 @@ import {
   listPublishKeys,
 } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
-import { applyPluginPublishUrl } from "./platform-deploy";
 import { killProcessGroupEscalating, reapGroup } from "./process-kill";
 import { isPidAlive, pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
 import { timePhase } from "./progress";
@@ -638,8 +630,6 @@ export default createPlugin({
         };
       }
 
-      const attachmentRef = getPluginRef(attachment);
-
       const localPath = pluginLocalPath(deps.configDir, attachment);
       if (!localPath) {
         return {
@@ -649,93 +639,50 @@ export default createPlugin({
         };
       }
 
-      const pkgPath = join(localPath, "package.json");
-      if (!(await fileExists(pkgPath))) {
+      // Full deploy-train parity for one plugin (ADR 0020, as amended): the
+      // preflight (storage/CDN creds + signing) fails fast before the build,
+      // then build → upload → version-manifest pin → config write-back →
+      // FastKV publish + read-back. A single-plugin redeploy ships real bytes
+      // to the storage origin — same as the train, nothing image-native left.
+      const result = await publishToFastKv({
+        bosConfig: deps.bosConfig,
+        runtimeConfig: deps.runtimeConfig,
+        configDir: deps.configDir,
+        env: "production",
+        build: true,
+        dryRun: false,
+        verbose: false,
+        packages: input.key,
+      });
+      if (result.status === "error") {
         return {
           status: "error" as const,
           key: input.key,
-          error: `Missing package.json at ${localPath}`,
+          error: result.error,
         };
       }
 
-      const pkgJson = await readJsonFile<{
-        scripts?: Record<string, string>;
-        name?: string;
-        version?: string;
-      }>(pkgPath);
-
-      const { stdout, stderr, exitCode } = (await run("bun", ["run", "build"], {
-        cwd: localPath,
-        capture: true,
-      })) as { stdout: string; stderr: string; exitCode: number };
-
-      if (exitCode !== 0) {
-        if (stdout.trim()) process.stdout.write(stdout);
-        if (stderr.trim()) process.stderr.write(stderr);
-        return {
-          status: "error" as const,
-          key: input.key,
-          error: `Build failed with exit code ${exitCode}`,
-        };
+      const refreshed = await loadResolvedConfig({ cwd: deps.configDir });
+      const bosConfig = refreshed?.config ?? deps.bosConfig;
+      if (refreshed?.config) {
+        deps.bosConfig = refreshed.config;
+        deps.runtimeConfig = refreshed.runtime;
       }
+      const production = (bosConfig?.plugins?.[input.key] as { production?: string } | undefined)
+        ?.production;
 
-      const account = deps.bosConfig.account;
-      const gateway = deps.bosConfig.domain;
-      if (!account || !gateway) {
-        return {
-          status: "error" as const,
-          key: input.key,
-          error: "bos.config.json must define account and domain to publish a plugin",
-        };
-      }
-
-      const rootConfigPath = join(deps.configDir, "bos.config.json");
-      let publishedUrl: string | undefined;
-      try {
-        const rootConfig = JSON.parse(readFileSync(rootConfigPath, "utf-8")) as Record<
-          string,
-          unknown
-        >;
-        const merged = applyPluginPublishUrl(rootConfig, {
-          origin: `https://${gateway}`,
-          account,
-          gateway,
-          key: input.key,
-        });
-        writeFileSync(rootConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
-        const plugins = merged.plugins as Record<string, Record<string, unknown>> | undefined;
-        publishedUrl = plugins?.[input.key]?.production as string | undefined;
-        console.log(`   ✅ Updated bos.config.json: plugins.${input.key}.production`);
-      } catch (err) {
-        console.error(
-          `   ❌ Failed to update bos.config.json:`,
-          err instanceof Error ? err.message : err,
-        );
-      }
-
-      let manifest: PluginManifest | null = null;
-      if (publishedUrl) {
-        manifest = await fetchRemotePluginManifest(publishedUrl);
-      } else if (attachmentRef?.production) {
-        manifest = await fetchRemotePluginManifest(attachmentRef.production);
-        if (manifest) {
-          publishedUrl = attachmentRef.production;
-        }
-      }
-
-      const version = manifest?.plugin.version ?? pkgJson.version;
-
-      if (publishedUrl) {
-        await generateCodeArtifacts(deps.configDir, deps.bosConfig);
+      const manifest = production ? await fetchRemotePluginManifest(production) : null;
+      if (production) {
+        await generateCodeArtifacts(deps.configDir, bosConfig);
       }
 
       return {
         status: "published" as const,
         key: input.key,
         path: localPath,
-        script: "build",
-        production: publishedUrl ?? attachmentRef?.production,
-        version: version ?? undefined,
+        production,
+        fingerprint: result.fingerprint,
+        version: manifest?.plugin.version,
       };
     }),
 

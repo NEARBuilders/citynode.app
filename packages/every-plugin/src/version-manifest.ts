@@ -5,9 +5,9 @@ import { z } from "zod";
  * WorkspaceVersionManifest — the immutable per-deploy document at
  * `bundles/<account>/<gateway>/<workspace>/versions/<version>.json`
  * (ADR 0020, as amended; atomic-deploys MAP decision 1). The published
- * config's slot pins this document (`manifest` + the manifest's own SRI);
- * every artifact coordinate lives here, so the config stops growing with
- * artifact kinds and old versions stay fully servable.
+ * config's slot pins this document via its `pin` (`manifest` + the
+ * manifest's own SRI); every artifact coordinate lives here, so the config
+ * stops growing with artifact kinds and old versions stay fully servable.
  */
 
 const SRI = z.string().regex(/^sha384-[A-Za-z0-9+/=]+$/);

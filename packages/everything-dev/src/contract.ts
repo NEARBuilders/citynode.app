@@ -144,10 +144,9 @@ export const PluginPublishResultSchema = z.object({
   status: z.enum(["published", "error"]),
   key: z.string(),
   path: z.string().optional(),
-  script: z.string().optional(),
   production: z.string().optional(),
-  integrity: z.string().optional(),
   version: z.string().optional(),
+  fingerprint: z.string().optional(),
   error: z.string().optional(),
 });
 

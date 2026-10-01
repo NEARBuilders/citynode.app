@@ -154,10 +154,10 @@ Replaced with immutable, content-addressed artifacts and manifest pointers:
 1. **Hashed artifacts.** Entrypoints build as `remoteEntry.[contenthash].js`
    / `remoteEntry.server.[contenthash].js`; the build additively emits hashed
    copies of the fixed-name browser artifacts (`mf-manifest.json`,
-   `static/css/style.css`) plus byte-identical legacy fixed-name aliases
-   (the rollout shim for consumers still appending the fixed name), and a
-   per-dist `build-report.json` naming the hashed artifacts for the deploy
-   leg. rspack plugin dists (api/auth) hash the entry and alias it; their
+   `static/css/style.css`) and a per-dist `build-report.json` naming the
+   hashed entry for the deploy leg — fixed-name entry aliases are fully
+   retired (hard break; dev servers keep the fixed dev names as the dev
+   serving contract). rspack plugin dists (api/auth) hash the entry; their
    `mf-manifest.json` stays toolchain-consumed (never browser-loaded).
 2. **Version manifests.** Each deploy composes an immutable
    `WorkspaceVersionManifest` (`every-plugin/version-manifest`) — entry +
@@ -167,15 +167,20 @@ Replaced with immutable, content-addressed artifacts and manifest pointers:
    The version id is content-derived (key-order stable, build time excluded):
    unchanged bytes keep one id, so republishing unchanged content is a
    pointer no-op.
-3. **Config slots become pointers.** Slots carry `manifest` (versioned
-   manifest filename, relative to `production`) and `integrity` pins the
-   *manifest document* when `manifest` is set. The resolved internal
-   `RuntimeConfig` derives the flattened fields (`ui.entry`, `ui.integrity`,
-   `ui.ssrUrl`, …) so consumers change once, not per artifact kind. Slots
-   without `manifest` resolve exactly as before (back-compat). Extends
-   inheritance: `app.*` slots inherit the parent's manifest field-wise;
-   child `plugins.*` entries replace parent entries wholesale (existing
-   semantics — a child publishes its own manifests for every slot it ships).
+3. **Config slots become pointers.** Slots carry an explicit
+   `pin: { manifest, integrity }` — the versioned manifest filename
+   (relative to `production`) and that *manifest document's* SRI. The
+   top-level `integrity` is unambiguous: a direct entry SRI, only for
+   slots without a pin (fixed-name slots — a development-only shape).
+   The resolved internal `RuntimeConfig` derives the flattened fields
+   (`ui.entryUrl`, `ui.integrity`, `ui.ssrEntryUrl`, …) so consumers change
+   once, not per artifact kind. Outside development every remote slot MUST
+   pin — an unpinned remote slot fails resolution loudly (pre-pin configs
+   are pre-atomic-deploy and not servable). Extends inheritance: `app.*`
+   slots inherit the parent's fields; the `pin` merges atomically (a child
+   pin replaces the parent's whole, never half-mixed); child `plugins.*`
+   entries replace parent entries wholesale (existing semantics — a child
+   publishes its own manifests for every slot it ships).
 4. **Cache classification flipped.** A content-hash segment in the object
    name now *wins*: hashed names (including hashed entrypoints) serve
    `immutable, max-age=31536500`; fixed-name and non-hashed files serve
@@ -187,3 +192,16 @@ Deploy ordering is unchanged (upload everything → publish pointer), but with
 additive artifacts an aborted train is now a no-op: the previously published
 version stays fully live and consistent, and completing the train switches
 atomically at publish.
+
+## Amendment — `bos plugin publish` joins the train (2026-10-01)
+
+`bos plugin publish <key>` was the last ADR-0011 command: it built the plugin
+locally, wrote a deterministic URL at the hardcoded `https://<gateway>` origin,
+uploaded nothing, pinned nothing, and didn't publish the config — its bytes
+went live only when the next image rebuild staged them, and the URL dangled
+for every non-root runtime. Superseded: `bos plugin publish` now runs the
+same per-workspace train as `bos deploy` scoped to one plugin — preflight
+(storage/CDN credentials + signing, before any build) → build → upload to the
+R2-backed storage → compose + pin the workspace's version manifest →
+config write-back → FastKV publish + read-back confirmation. The
+image-native `applyPluginPublishUrl` path is deleted.

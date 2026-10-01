@@ -59,6 +59,20 @@ export const FederationEntrySchema = z.object({
 });
 export type FederationEntry = z.infer<typeof FederationEntrySchema>;
 
+/**
+ * Slot pin (atomic-deploys): an explicit pointer to the slot's immutable
+ * per-deploy WorkspaceVersionManifest — `manifest` is the versioned manifest
+ * filename relative to the slot's production base, `integrity` is that
+ * document's SRI. Resolving the pin derives the slot's entry-level fields
+ * (`entryUrl`, entry integrity, ssr entry). A slot without a `pin` uses its
+ * top-level `integrity` as a direct entry SRI (fixed-name slots only).
+ */
+export const SlotPinSchema = z.object({
+  manifest: z.string().min(1),
+  integrity: z.string().min(1),
+});
+export type SlotPin = z.infer<typeof SlotPinSchema>;
+
 export const PluginUiConfigSchema = z.object({
   name: z.string(),
   development: z.string().optional(),
@@ -70,9 +84,7 @@ export const PluginUiConfigSchema = z.object({
   integrity: z.string().optional(),
   ssr: z.string().optional(),
   ssrIntegrity: z.string().optional(),
-  /** versioned WorkspaceVersionManifest filename, relative to `production` —
-   * when set, `integrity` pins the manifest document, not the entry */
-  manifest: z.string().optional(),
+  pin: SlotPinSchema.optional(),
 });
 export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
 
@@ -89,9 +101,7 @@ export const ComposableAppEntrySchema = z.object({
   shared: SharedDepMapSchema.optional(),
   connectSrc: z.array(z.string()).optional(),
   ui: PluginUiConfigSchema.optional(),
-  /** versioned WorkspaceVersionManifest filename, relative to `production` —
-   * when set, `integrity` pins the manifest document, not the entry */
-  manifest: z.string().optional(),
+  pin: SlotPinSchema.optional(),
 });
 export type ComposableAppEntry = z.infer<typeof ComposableAppEntrySchema>;
 
@@ -184,12 +194,11 @@ export const UiConfigSchema = z
     production: z.string().optional(),
     /** browser-facing base overriding `production` (see PluginUiConfigSchema) */
     publicUrl: z.string().optional(),
-    /** entry SRI, or the version manifest's SRI when `manifest` is set */
+    /** direct entry SRI — only for slots without a `pin` */
     integrity: z.string().optional(),
     ssr: z.string().optional(),
     ssrIntegrity: z.string().optional(),
-    /** versioned WorkspaceVersionManifest filename, relative to `production` */
-    manifest: z.string().optional(),
+    pin: SlotPinSchema.optional(),
   })
   .strict();
 export type UiConfig = z.infer<typeof UiConfigSchema>;
@@ -197,11 +206,10 @@ export type UiConfig = z.infer<typeof UiConfigSchema>;
 export const HostConfigSchema = z.object({
   development: z.string(),
   production: z.string(),
-  /** entry SRI, or the version manifest's SRI when `manifest` is set */
+  /** direct entry SRI — only for slots without a `pin` */
   integrity: z.string().optional(),
   secrets: z.array(z.string()).optional(),
-  /** versioned WorkspaceVersionManifest filename, relative to `production` */
-  manifest: z.string().optional(),
+  pin: SlotPinSchema.optional(),
 });
 export type HostConfig = z.infer<typeof HostConfigSchema>;
 

@@ -22,8 +22,8 @@ export function readBuildReport(distRoot: string): BuildEntryReport | null {
  * the **server-computed** SRI map of the upload response (MAP decision 6 —
  * SRI is authoritative from the storage boundary, never computed
  * client-side). Returns null when the dist predates hashed entry names
- * (no report, or the SRI map lacks the entry) — the deploy leg then falls
- * back to legacy pointer entries without a manifest.
+ * (no report, or the SRI map lacks the entry) — the deploy leg then aborts:
+ * uploaded workspaces must pin.
  */
 export function composeWorkspaceVersionManifest(input: {
   report: BuildEntryReport;

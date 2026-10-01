@@ -41,8 +41,8 @@ function sleep(ms: number): Promise<void> {
  * manifest is built from the dist build report + the **server-computed** SRI
  * map of the just-finished upload, uploaded additively at
  * `versions/<version>.json`, and returned as the slot's pointer. Returns
- * undefined for dists predating hashed entry names (no report / no entry
- * SRI) — the deploy then writes legacy pointer entries only.
+ * undefined when the dist predates hashed entry names (no report / no entry
+ * SRI) — the caller aborts the train: uploaded workspaces must pin.
  */
 async function pinWorkspaceVersionManifest(input: {
   origin: string;
@@ -470,13 +470,9 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     }
     const report = readBuildReport(join(ws.path, "dist"));
     const ssrReport = readBuildReport(join(ws.path, "dist", "ssr"));
-    // the entry SRI keyed by the build report's hashed name; the literal
-    // fixed-name fallback covers dists predating hashed entry names
-    const integrity = result.integrity[report?.entry ?? "remoteEntry.js"];
-    const ssrIntegrity =
-      (ssrReport?.entry && result.integrity[`ssr/${ssrReport.entry}`]) ??
-      result.integrity["ssr/remoteEntry.server.js"] ??
-      result.integrity["remoteEntry.server.js"];
+    // the entry SRI keyed by the build report's hashed name
+    const integrity = report ? result.integrity[report.entry] : undefined;
+    const ssrIntegrity = ssrReport?.entry ? result.integrity[`ssr/${ssrReport.entry}`] : undefined;
     const fileCount = result.stored;
 
     const manifestPointer = await pinWorkspaceVersionManifest({
@@ -489,6 +485,16 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       ssrReport,
       integrityMap: result.integrity,
     });
+    if (!manifestPointer) {
+      return {
+        status: "error",
+        registryUrl,
+        built,
+        skipped,
+        deployResults,
+        error: `bundle upload for ${key}: version manifest missing — the dist predates hashed entry names (rebuild required; atomic-deploys hard break)`,
+      };
+    }
 
     if (result.storage === "memory") {
       return {
@@ -515,7 +521,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
         kind: ws.kind,
         integrity,
         ssrIntegrity,
-        ...(manifestPointer ? { manifest: manifestPointer } : {}),
+        pin: manifestPointer,
       }),
     );
 
@@ -548,10 +554,12 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
           workspace: `${key}-ui`,
           files: uiDistFiles,
         });
-        uiIntegrity = uiResult.integrity["remoteEntry.js"];
-        uiSsrIntegrity =
-          uiResult.integrity["ssr/remoteEntry.server.js"] ??
-          uiResult.integrity["remoteEntry.server.js"];
+        const uiReport = readBuildReport(uiDistDir);
+        const uiSsrReport = readBuildReport(join(uiDistDir, "ssr"));
+        uiIntegrity = uiReport ? uiResult.integrity[uiReport.entry] : undefined;
+        uiSsrIntegrity = uiSsrReport?.entry
+          ? uiResult.integrity[`ssr/${uiSsrReport.entry}`]
+          : undefined;
         uiFileCount = uiResult.stored;
 
         uiManifestPointer = await pinWorkspaceVersionManifest({
@@ -560,10 +568,20 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
           account,
           gateway,
           workspace: `${key}-ui`,
-          report: readBuildReport(uiDistDir),
-          ssrReport: readBuildReport(join(uiDistDir, "ssr")),
+          report: uiReport,
+          ssrReport: uiSsrReport,
           integrityMap: uiResult.integrity,
         });
+        if (!uiManifestPointer) {
+          return {
+            status: "error",
+            registryUrl,
+            built,
+            skipped,
+            deployResults,
+            error: `bundle upload for ${key}-ui: version manifest missing — the dist predates hashed entry names (rebuild required; atomic-deploys hard break)`,
+          };
+        }
 
         console.log(
           `    ${colors.green(icons.ok)} ${padRight(`${key}-ui`, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}-ui/ (${uiFileCount} files, ${formatDuration(Date.now() - uiStartedAt)})`,
@@ -584,7 +602,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
           integrity: uiIntegrity,
           ssrIntegrity: uiSsrIntegrity,
           name: uiName,
-          ...(uiManifestPointer ? { manifest: uiManifestPointer } : {}),
+          pin: uiManifestPointer,
         }),
       );
     }

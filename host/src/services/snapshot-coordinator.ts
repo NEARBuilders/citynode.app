@@ -1,7 +1,7 @@
 import { Context, Effect, Layer, Schema, Semaphore } from "effect";
-import { buildRuntimeConfig } from "everything-dev/config";
+import { buildRuntimeConfigEffect } from "everything-dev/config";
 import { verifySriForUrl } from "everything-dev/integrity";
-import type { BosConfig, RuntimeConfig } from "everything-dev/types";
+import type { BosConfig } from "everything-dev/types";
 import { deploymentFingerprint, RuntimeSnapshot } from "./runtime-snapshot";
 import { composeUi, createUiComposeCacheState } from "./ui-compose";
 
@@ -55,11 +55,11 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
 > {
   const { snapshot, publishedConfig } = input;
 
-  const nextConfig = (yield* Effect.tryPromise(() =>
-    buildRuntimeConfig(publishedConfig, input.baseDir ?? process.cwd(), "production"),
-  ).pipe(
-    Effect.catch((cause) => adoptFailure("deriving the published pointer failed", cause)),
-  )) as RuntimeConfig;
+  const nextConfig = yield* buildRuntimeConfigEffect(
+    publishedConfig,
+    input.baseDir ?? process.cwd(),
+    "production",
+  ).pipe(Effect.catch((cause) => adoptFailure("deriving the published pointer failed", cause)));
 
   const current = yield* snapshot.get;
   const nextFingerprint = deploymentFingerprint(nextConfig);
@@ -72,16 +72,19 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
     Effect.catch((cause) => adoptFailure("pre-warm compose failed", cause)),
   );
 
-  const verifyTargets: Array<{ url?: string; integrity?: string }> = [
-    { url: nextConfig.ui.entryUrl, integrity: nextConfig.ui.integrity },
-  ];
-  if (nextConfig.ui.ssrEntryUrl) {
-    verifyTargets.push({ url: nextConfig.ui.ssrEntryUrl, integrity: nextConfig.ui.ssrIntegrity });
-  }
+  const verifyTargets = (
+    [
+      { url: nextConfig.ui.entryUrl, integrity: nextConfig.ui.integrity },
+      nextConfig.ui.ssrEntryUrl
+        ? { url: nextConfig.ui.ssrEntryUrl, integrity: nextConfig.ui.ssrIntegrity }
+        : null,
+    ] satisfies Array<{ url?: string; integrity?: string } | null>
+  ).filter((target): target is { url: string; integrity: string } =>
+    Boolean(target?.url && target?.integrity),
+  );
   for (const target of verifyTargets) {
-    if (!target.url || !target.integrity) continue;
     yield* Effect.tryPromise(() =>
-      verifySriForUrl(target.url!, target.integrity!, { resolveEntryUrl: false }),
+      verifySriForUrl(target.url, target.integrity, { resolveEntryUrl: false }),
     ).pipe(
       Effect.catch((cause) =>
         adoptFailure(`pinned entry failed verification (${target.url})`, cause),

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  DEV_ENTRY_FILENAME,
+  DEV_SERVER_ENTRY_FILENAME,
   HASHED_ENTRY_PATTERN,
   HASHED_SERVER_ENTRY_PATTERN,
   isBuildInvocation,
-  LEGACY_ENTRY_FILENAME,
-  LEGACY_SERVER_ENTRY_FILENAME,
   uiEntryFilename,
 } from "../../src/build/artifact-names";
 import { createUiRsbuildConfig } from "../../src/build/ui/rsbuild-config";
@@ -22,9 +22,9 @@ const options = {
 } as const;
 
 describe("uiEntryFilename", () => {
-  it("dev servers emit the legacy fixed names — every dev consumer appends them", () => {
-    expect(uiEntryFilename({ isBuild: false })).toBe(LEGACY_ENTRY_FILENAME);
-    expect(uiEntryFilename({ isBuild: false, server: true })).toBe(LEGACY_SERVER_ENTRY_FILENAME);
+  it("dev servers emit the fixed dev names — every dev consumer appends them", () => {
+    expect(uiEntryFilename({ isBuild: false })).toBe(DEV_ENTRY_FILENAME);
+    expect(uiEntryFilename({ isBuild: false, server: true })).toBe(DEV_SERVER_ENTRY_FILENAME);
   });
 
   it("builds emit content-hashed entry names (atomic-deploys 01)", () => {

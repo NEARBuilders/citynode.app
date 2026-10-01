@@ -14,6 +14,14 @@ import {
   writeResolvedConfig,
 } from "../../src/config";
 
+vi.mock("../../src/version-manifest-resolve", () => ({
+  resolveSlotVersion: vi.fn(async () => ({
+    entryUrl: "https://cdn.example.test/remoteEntry.aaa.js",
+    entryIntegrity: "sha384-entry",
+  })),
+  clearSlotVersionCache: vi.fn(),
+}));
+
 vi.mock("../../src/fastkv", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/fastkv")>();
   return {
@@ -504,20 +512,24 @@ describe("loadConfig plugin runtime filtering", () => {
               host: {
                 development: "http://localhost:3000",
                 production: "https://host.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
               },
               ui: {
                 name: "ui",
                 development: "http://localhost:3003",
                 production: "https://ui.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
               },
               api: {
                 name: "api",
                 development: "http://localhost:3001",
                 production: "https://api.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
               },
               auth: {
                 name: "auth",
                 production: "https://auth.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
                 variables: {
                   baseUrl: "https://auth.everything.near",
                   trustedOrigins: ["https://everything.dev", "https://*.everything.dev"],
@@ -541,6 +553,7 @@ describe("loadConfig plugin runtime filtering", () => {
             plugins: {
               example: {
                 production: "https://example.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
                 variables: {
                   sections: ["profile", "security"],
                   featureFlags: {

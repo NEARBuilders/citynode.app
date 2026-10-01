@@ -3,10 +3,10 @@ import path from "node:path";
 import type { RsbuildPlugin } from "@rsbuild/core";
 import {
   BuildEntryReportSchema,
-  LEGACY_MF_MANIFEST_FILENAME,
-  LEGACY_STYLE_FILENAME,
+  findHashedEntry,
+  MF_MANIFEST_FILENAME,
   planArtifactCopies,
-  planHashedEntry,
+  STYLE_FILENAME,
 } from "../artifact-names";
 
 export interface HashArtifactsPluginOptions {
@@ -28,13 +28,12 @@ function listFiles(dir: string, out: string[] = []): string[] {
 }
 
 /**
- * Emits the additive hashed copies + legacy fixed-name aliases for one
- * environment's dist root (ticket: atomic-deploys 01). The entry itself is
- * hashed by the build (filename template); this plugin adds the byte-identical
- * fixed-name alias for consumers still appending the fixed name, hashed
- * copies of the fixed-name browser artifacts (mf-manifest.json at the root,
- * style.css under static/css), and `build-report.json` for the deploy leg.
- * Idempotent under watch: same bytes → same hashed names.
+ * Emits the additive hashed copies for one environment's dist root (ticket:
+ * atomic-deploys 01). The entry itself is hashed by the build (filename
+ * template); this plugin adds immutable hashed copies of the fixed-name
+ * browser artifacts (mf-manifest.json at the root, style.css under
+ * static/css), and `build-report.json` for the deploy leg. Idempotent under
+ * watch: same bytes → same hashed names.
  */
 export function hashArtifactsPlugin(options: HashArtifactsPluginOptions): RsbuildPlugin {
   return {
@@ -53,13 +52,13 @@ export function hashArtifactsPlugin(options: HashArtifactsPluginOptions): Rsbuil
         };
 
         const assetNames = listFiles(distRoot);
-        const entry = planHashedEntry(assetNames, options.entryBase);
+        const entry = findHashedEntry(assetNames, options.entryBase);
         if (!entry) return;
 
         const contents: Record<string, string> = {};
-        for (const legacyName of [LEGACY_MF_MANIFEST_FILENAME, LEGACY_STYLE_FILENAME]) {
-          const from = resolveExisting(legacyName);
-          if (from) contents[legacyName] = fs.readFileSync(from, "utf8");
+        for (const fixedName of [MF_MANIFEST_FILENAME, STYLE_FILENAME]) {
+          const from = resolveExisting(fixedName);
+          if (from) contents[fixedName] = fs.readFileSync(from, "utf8");
         }
 
         const plan = planArtifactCopies({ assetNames, entryBase: options.entryBase, contents });

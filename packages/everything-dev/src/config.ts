@@ -1099,13 +1099,17 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
 });
 
 /**
- * Version-manifest derivation (atomic-deploys 04): for every remote slot
- * pinning a version manifest, resolve it (fetch + SRI-verify against the
- * slot pin, process-cached per pin) and stamp the derived entry-level fields
- * — `entryUrl` (hashed container entry), the browser-manifest `entry`, and
- * entry-level `integrity`/`ssrIntegrity`/`ssrEntryUrl` — so consumers load
- * immutable hashed bytes without knowing the pointer indirection. Slots
- * without a manifest resolve exactly as before.
+ * Version-manifest derivation (atomic-deploys 04): for every remote slot,
+ * resolve its `pin` (fetch + SRI-verify the pinned manifest, process-cached
+ * per pin) and stamp the derived entry-level fields — `entryUrl` (hashed
+ * container entry), the browser-manifest `entry`, and entry-level
+ * `integrity`/`ssrIntegrity`/`ssrEntryUrl` — so consumers load immutable
+ * hashed bytes without knowing the pointer indirection.
+ *
+ * Hard break: outside development every remote slot MUST pin a version
+ * manifest — an unpinned remote slot fails resolution loudly (the deploy
+ * train pins every workspace it uploads; a manifest-less slot means a
+ * pre-atomic-deploy config).
  */
 async function deriveVersionManifestFields(
   result: RuntimeConfig,
@@ -1115,19 +1119,29 @@ async function deriveVersionManifestFields(
   if (env === "development") return;
 
   const derive = async (
-    slotConfig: { manifest?: unknown; integrity?: unknown } | undefined,
+    label: string,
+    slotConfig: { pin?: unknown } | undefined,
     slot: { url?: string; source?: string } | undefined,
     apply: (resolved: ResolvedSlotVersion) => void,
   ): Promise<void> => {
-    if (!slotConfig || !slot) return;
-    if (typeof slotConfig.manifest !== "string" || slot.source !== "remote" || !slot.url) return;
-    if (typeof slotConfig.integrity !== "string") return;
-    const resolved = await resolveSlotVersion({
-      base: slot.url,
-      manifest: slotConfig.manifest,
-      integrity: slotConfig.integrity,
-    });
-    if (resolved) apply(resolved);
+    if (!slot || slot.source !== "remote" || !slot.url) return;
+    const rawPin = slotConfig?.pin as { manifest?: unknown; integrity?: unknown } | undefined;
+    const pin =
+      rawPin &&
+      typeof rawPin.manifest === "string" &&
+      rawPin.manifest &&
+      typeof rawPin.integrity === "string" &&
+      rawPin.integrity
+        ? { manifest: rawPin.manifest, integrity: rawPin.integrity }
+        : undefined;
+    if (!pin) {
+      throw new Error(
+        `slot "${label}" (${slot.url}) pins no version manifest — remote slots must pin ` +
+          `a version manifest outside development (pre-atomic-deploy config; redeploy required)`,
+      );
+    }
+    const resolved = await resolveSlotVersion({ base: slot.url, pin });
+    apply(resolved);
   };
 
   const applyUi = (ui: RuntimePluginConfig["ui"], r: ResolvedSlotVersion): void => {
@@ -1139,21 +1153,22 @@ async function deriveVersionManifestFields(
     ui.ssrIntegrity = r.ssrIntegrity ?? ui.ssrIntegrity;
   };
 
-  await derive(config.app.host, result.host, (r) => {
+  await derive("app.host", config.app.host, result.host, (r) => {
     result.host.entryUrl = r.entryUrl;
     result.host.integrity = r.entryIntegrity;
   });
-  await derive(config.app.ui, result.ui, (r) => applyUi(result.ui, r));
-  await derive(config.app.api, result.api, (r) => {
+  await derive("app.ui", config.app.ui, result.ui, (r) => applyUi(result.ui, r));
+  await derive("app.api", config.app.api, result.api, (r) => {
     result.api.entryUrl = r.entryUrl;
     result.api.integrity = r.entryIntegrity;
   });
   if (result.auth) {
-    await derive(config.app.auth, result.auth, (r) => {
+    await derive("app.auth", config.app.auth, result.auth, (r) => {
       result.auth!.entryUrl = r.entryUrl;
       result.auth!.integrity = r.entryIntegrity;
     });
     await derive(
+      "app.auth.ui",
       getEntryAssociatedUi(config.app.auth as Partial<BosPluginRef>),
       result.auth.ui,
       (r) => applyUi(result.auth!.ui, r),
@@ -1162,12 +1177,15 @@ async function deriveVersionManifestFields(
   for (const [key, plugin] of Object.entries(result.plugins ?? {})) {
     const pluginConfig = config.plugins?.[key];
     if (!pluginConfig || typeof pluginConfig === "string") continue;
-    await derive(pluginConfig, plugin, (r) => {
+    await derive(`plugins.${key}`, pluginConfig, plugin, (r) => {
       plugin.entryUrl = r.entryUrl;
       plugin.integrity = r.entryIntegrity;
     });
-    await derive(getEntryAssociatedUi(pluginConfig as Partial<BosPluginRef>), plugin.ui, (r) =>
-      applyUi(plugin.ui, r),
+    await derive(
+      `plugins.${key}.ui`,
+      getEntryAssociatedUi(pluginConfig as Partial<BosPluginRef>),
+      plugin.ui,
+      (r) => applyUi(plugin.ui, r),
     );
   }
 }

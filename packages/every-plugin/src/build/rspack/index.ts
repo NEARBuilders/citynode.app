@@ -4,6 +4,7 @@ export {
   type SharedDependencies,
   type SharedDependencyConfig,
 } from "../shared-deps";
+export { BuildReportPlugin } from "./build-report-plugin";
 export {
   createPluginBaseConfig,
   EveryPluginComposedBuild,
@@ -12,7 +13,6 @@ export {
   type PluginBaseConfigOptions,
 } from "./compose";
 export { FixMfDataUriPlugin } from "./fix-mf-data-uri-plugin";
-export { HashEntryAliasPlugin } from "./hash-entry-alias-plugin";
 export {
   type AdditionalExport,
   EmitPluginManifest,

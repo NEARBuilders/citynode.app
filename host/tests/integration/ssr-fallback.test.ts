@@ -61,9 +61,11 @@ function createBaseConfig(ssrUrl?: string) {
       name: "ui",
       url: "http://127.0.0.1:0/ui",
       entry: "http://127.0.0.1:0/ui/mf-manifest.json",
+      entryUrl: "http://127.0.0.1:0/ui/remoteEntry.aaa.js",
       source: "remote",
       integrity: "sha384-base",
       ssrUrl,
+      ssrEntryUrl: ssrUrl ? `${ssrUrl.replace(/\/$/, "")}/remoteEntry.server.aaa.js` : undefined,
     },
     api: {
       name: "api",
@@ -323,7 +325,7 @@ describe("SSR fallback paths", () => {
 
       expect(response.status).toBe(200);
       expect(html).toContain("Loading...");
-      expect(html).toContain("remoteEntry.js");
+      expect(html).toContain("remoteEntry.aaa.js");
     });
   });
 
@@ -345,7 +347,7 @@ describe("SSR fallback paths", () => {
       expect(response.status).toBe(200);
       expect(html).toContain("SSR unavailable");
       expect(html).toContain("React render error");
-      expect(html).toContain("remoteEntry.js");
+      expect(html).toContain("remoteEntry.aaa.js");
     });
   });
 

@@ -9,6 +9,7 @@ import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "eve
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
 import type { RuntimeConfig, SharedConfig } from "everything-dev/types";
+import { resolveEntryUrlForEnv } from "everything-dev/ui/manifest";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
 import { maskDbUrl } from "../utils/mask-db-url";
@@ -358,10 +359,9 @@ export function buildAuthBaseVariables(
         `[Auth] Ignoring BASE_URL="${envRaw}" — not an http(s) origin; using the derived origin.`,
       );
     }
+    const authVariables = config.auth?.variables;
     const authoredBaseUrl = asOrigin(
-      typeof (config.auth?.variables as { baseUrl?: unknown } | undefined)?.baseUrl === "string"
-        ? (config.auth?.variables as { baseUrl: string }).baseUrl
-        : undefined,
+      typeof authVariables?.baseUrl === "string" ? authVariables.baseUrl : undefined,
     );
     const baseUrl = envBaseUrl ?? authoredBaseUrl ?? hostUrl;
 
@@ -440,6 +440,7 @@ function loadPluginEntryEffect(
   runtime: any,
   entry: RuntimePluginEntry,
   integrityRegistry: IntegrityRegistry,
+  env: string,
   pluginsClient?: Record<string, unknown>,
   baseVariables?: Record<string, unknown>,
 ): Effect.Effect<HostPluginEntry, PluginBootstrapError | Config.ConfigError> {
@@ -464,8 +465,12 @@ function loadPluginEntryEffect(
     const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
-    const remoteUrl =
-      entry.config.entryUrl ?? `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`;
+    const remoteUrl = resolveEntryUrlForEnv({
+      entryUrl: entry.config.entryUrl,
+      env,
+      devFixed: `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`,
+      slot: entry.key,
+    });
     const result = yield* loadRemoteWithRetry<Omit<HostPluginEntry, "key" | "name">>({
       label: entry.key,
       remoteUrl,
@@ -667,6 +672,7 @@ export const initializePlugins = Effect.gen(function* () {
       runtime,
       entry,
       integrityRegistry,
+      config.env,
       Object.keys(nodePluginsClient).length > 0 ? nodePluginsClient : undefined,
       baseVariables,
     ).pipe(

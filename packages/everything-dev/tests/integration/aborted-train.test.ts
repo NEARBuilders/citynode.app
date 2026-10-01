@@ -269,11 +269,11 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
     expect(result.status).toBe("published");
     expect(publishedPayloads).toHaveLength(1);
     const ui = (publishedPayloads[0] as { app: { ui: Record<string, string> } }).app.ui;
-    expect(ui.manifest).toMatch(/^versions\/[0-9a-f]{16}\.json$/);
+    expect(ui.pin.manifest).toMatch(/^versions\/[0-9a-f]{16}\.json$/);
 
-    const stored = storage.get("v1.citynode.near", "citynode.app", "ui", ui.manifest);
+    const stored = storage.get("v1.citynode.near", "citynode.app", "ui", ui.pin.manifest);
     expect(stored).not.toBeNull();
-    expect(stored!.sri).toBe(ui.integrity);
+    expect(stored!.sri).toBe(ui.pin.integrity);
   });
 
   it("an aborted v2 train leaves v1's pointer, bytes, and SRI fully live", async () => {
@@ -282,7 +282,9 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
     await runDeploy();
     const v1Ui = (publishedPayloads[0] as { app: { ui: Record<string, string> } }).app.ui;
     const v1EntryPath = JSON.parse(
-      storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.manifest)!.bytes.toString("utf8"),
+      storage
+        .get("v1.citynode.near", "citynode.app", "ui", v1Ui.pin.manifest)!
+        .bytes.toString("utf8"),
     ) as { entry: string };
 
     // v2: different bytes → different hashes → a different version id
@@ -297,8 +299,8 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
     const v1Entry = storage.get("v1.citynode.near", "citynode.app", "ui", v1EntryPath.entry);
     expect(v1Entry!.bytes.toString("utf8")).toBe('console.log("v1 entry");');
     expect(v1Entry!.sri).toBe(sriOf(v1Entry!.bytes));
-    const v1Manifest = storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.manifest);
-    expect(v1Manifest!.sri).toBe(v1Ui.integrity);
+    const v1Manifest = storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.pin.manifest);
+    expect(v1Manifest!.sri).toBe(v1Ui.pin.integrity);
   });
 
   it("a socket-kill v2 train (the 2026-09-30 transport failure) also leaves v1 fully live", async () => {
@@ -307,7 +309,9 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
     await runDeploy();
     const v1Ui = (publishedPayloads[0] as { app: { ui: Record<string, string> } }).app.ui;
     const v1EntryName = JSON.parse(
-      storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.manifest)!.bytes.toString("utf8"),
+      storage
+        .get("v1.citynode.near", "citynode.app", "ui", v1Ui.pin.manifest)!
+        .bytes.toString("utf8"),
     ).entry as string;
 
     writeDist(dist, "v2");
@@ -324,11 +328,11 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
       "v1.citynode.near",
       "citynode.app",
       "ui",
-      v1Ui.manifest,
+      v1Ui.pin.manifest,
     );
     expect(servedManifest).not.toBeNull();
-    expect(storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.manifest)!.sri).toBe(
-      v1Ui.integrity,
+    expect(storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.pin.manifest)!.sri).toBe(
+      v1Ui.pin.integrity,
     );
   });
 
@@ -338,7 +342,9 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
     await runDeploy();
     const v1Ui = (publishedPayloads[0] as { app: { ui: Record<string, string> } }).app.ui;
     const v1EntryName = JSON.parse(
-      storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.manifest)!.bytes.toString("utf8"),
+      storage
+        .get("v1.citynode.near", "citynode.app", "ui", v1Ui.pin.manifest)!
+        .bytes.toString("utf8"),
     ).entry as string;
 
     writeDist(dist, "v2");
@@ -347,13 +353,13 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
     expect(result.status).toBe("published");
     expect(publishedPayloads).toHaveLength(2);
     const v2Ui = (publishedPayloads[1] as { app: { ui: Record<string, string> } }).app.ui;
-    expect(v2Ui.manifest).not.toBe(v1Ui.manifest);
+    expect(v2Ui.pin.manifest).not.toBe(v1Ui.pin.manifest);
 
     // retention: v1's hashed entry + version manifest are still exactly v1's bytes
     const v1Entry = storage.get("v1.citynode.near", "citynode.app", "ui", v1EntryName);
     expect(v1Entry!.bytes.toString("utf8")).toBe(v1.entryContent);
-    const v1Manifest = storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.manifest);
+    const v1Manifest = storage.get("v1.citynode.near", "citynode.app", "ui", v1Ui.pin.manifest);
     expect(v1Manifest!.bytes.toString("utf8")).toContain("mf-manifest");
-    expect(v1Manifest!.sri).toBe(v1Ui.integrity);
+    expect(v1Manifest!.sri).toBe(v1Ui.pin.integrity);
   });
 });

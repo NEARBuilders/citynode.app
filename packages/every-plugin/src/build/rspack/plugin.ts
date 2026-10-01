@@ -4,7 +4,7 @@ import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
 import { CONTRACT_TYPES_FILE, generateContractTypes } from "../contract-types";
-import { HashEntryAliasPlugin } from "./hash-entry-alias-plugin";
+import { BuildReportPlugin } from "./build-report-plugin";
 import { buildSharedDependencies } from "./module-federation";
 import { getPluginInfo } from "./utils";
 
@@ -174,7 +174,7 @@ export class EveryPluginBuild implements RspackPluginInstance {
       shareStrategy: "version-first",
     }).apply(compiler);
 
-    new HashEntryAliasPlugin().apply(compiler);
+    new BuildReportPlugin().apply(compiler);
 
     if (this.options.dts === false) {
       compiler.options.plugins = (compiler.options.plugins ?? []).filter(

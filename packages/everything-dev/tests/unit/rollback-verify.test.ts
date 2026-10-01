@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearHttpCache } from "../../src/http-client";
 import { buildRollbackPayload, verifyRollbackSnapshot } from "../../src/rollback";
-import { BosConfigSchema } from "../../src/types";
+import { type BosConfigInput, BosConfigSchema } from "../../src/types";
 
 beforeEach(() => {
   clearHttpCache();
@@ -41,8 +41,7 @@ describe("verifyRollbackSnapshot", () => {
       ui: {
         development: "local:ui",
         production: "https://cdn/ui/",
-        manifest: "versions/aaa.json",
-        integrity: sriFor(manifestBody),
+        pin: { manifest: "versions/aaa.json", integrity: sriFor(manifestBody) },
       },
     });
 
@@ -59,8 +58,7 @@ describe("verifyRollbackSnapshot", () => {
       ui: {
         development: "local:ui",
         production: "https://cdn/ui/",
-        manifest: "versions/gone.json",
-        integrity: sriFor(manifestBody),
+        pin: { manifest: "versions/gone.json", integrity: sriFor(manifestBody) },
       },
     });
 
@@ -77,8 +75,7 @@ describe("verifyRollbackSnapshot", () => {
       ui: {
         development: "local:ui",
         production: "https://cdn/ui/",
-        manifest: "versions/aaa.json",
-        integrity: "sha384-doesnotmatch",
+        pin: { manifest: "versions/aaa.json", integrity: "sha384-doesnotmatch" },
       },
     });
 
@@ -88,22 +85,43 @@ describe("verifyRollbackSnapshot", () => {
     expect(report.slots[0]?.reason).toContain("integrity");
   });
 
-  it("marks a slot pinning a manifest without an integrity pin as unverifiable and refuses", async () => {
-    const config = configWithSlots({
-      ui: {
-        development: "local:ui",
-        production: "https://cdn/ui/",
-        manifest: "versions/aaa.json",
+  it("rejects a partial pin (manifest without integrity) at the schema boundary — the pin is atomic", () => {
+    expect(() =>
+      BosConfigSchema.parse({
+        account: "v1.citynode.near",
+        domain: "citynode.app",
+        app: {
+          ui: {
+            development: "local:ui",
+            production: "https://cdn/ui/",
+            pin: { manifest: "versions/aaa.json" },
+          },
+        },
+      }),
+    ).toThrow(/integrity/i);
+  });
+
+  it("treats a raw partial pin as unpinned — the snapshot is unverifiable so --force is required", async () => {
+    const config = {
+      account: "v1.citynode.near",
+      domain: "citynode.app",
+      app: {
+        ui: {
+          development: "local:ui",
+          production: "https://cdn/ui/",
+          pin: { manifest: "versions/aaa.json" },
+        },
       },
-    });
+    } as BosConfigInput;
 
     const report = await verifyRollbackSnapshot(config, { fetchImpl: vi.fn() as typeof fetch });
 
     expect(report.ok).toBe(false);
-    expect(report.slots[0]?.reason).toContain("without integrity");
+    expect(report.verifiable).toBe(false);
+    expect(report.slots).toHaveLength(0);
   });
 
-  it("flags a pre-Phase-A snapshot (no manifest pointers) as unverifiable so --force is required", async () => {
+  it("flags a pre-pin snapshot (no pins) as unverifiable so --force is required", async () => {
     const config = configWithSlots({});
 
     const report = await verifyRollbackSnapshot(config, { fetchImpl: vi.fn() as typeof fetch });
@@ -119,16 +137,14 @@ describe("verifyRollbackSnapshot", () => {
       ui: {
         development: "local:ui",
         production: "https://cdn/ui/",
-        manifest: "versions/gone.json",
-        integrity: sriFor(manifestBody),
+        pin: { manifest: "versions/gone.json", integrity: sriFor(manifestBody) },
       },
       plugins: {
         auth: {
           name: "auth",
           development: "local:plugins/auth",
           production: "https://cdn/auth/",
-          manifest: "versions/gone2.json",
-          integrity: sriFor(manifestBody),
+          pin: { manifest: "versions/gone2.json", integrity: sriFor(manifestBody) },
         },
       },
     });
@@ -184,7 +200,7 @@ describe("rollback dedup guard", () => {
         host: {
           development: "local:host",
           production: "https://cdn/host/",
-          manifest: "versions/old.json",
+          pin: { manifest: "versions/old.json", integrity: "sha384-old-pin" },
         },
         ui: { development: "local:ui", production: "https://cdn/ui/" },
         api: { development: "local:api", production: "https://cdn/api/" },

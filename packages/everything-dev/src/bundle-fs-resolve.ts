@@ -102,39 +102,39 @@ export class BundleResolver extends Context.Service<
   }
 >()("everything-dev/bundle-fs-resolve/BundleResolver") {
   static layer(namespace: BundleNamespace): Layer.Layer<BundleResolver> {
+    const respond = Effect.fn("BundleResolver.respond")(function* (
+      url: string,
+    ): Effect.fn.Return<Response | null, never> {
+      const filePath = bundleUrlToLocalPath(url, namespace);
+      if (!filePath) return null;
+      const bytes = yield* Effect.tryPromise({
+        try: () => readFile(filePath),
+        catch: (cause) => new BundleReadError({ path: filePath, cause }),
+      }).pipe(Effect.catchTag("BundleReadError", () => Effect.succeed(null)));
+      if (bytes === null) return notFound();
+      const name = path.basename(filePath);
+      const contentType =
+        MIME_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
+      return new Response(new Uint8Array(bytes), {
+        headers: {
+          "content-type": contentType,
+          "cache-control": cacheControlOf(name),
+          etag: `"${Buffer.from(bytes.subarray(0, 4096)).toString("base64").slice(0, 24)}"`,
+        },
+      });
+    });
+
     return Layer.effect(
       BundleResolver,
-      Effect.gen(function* () {
-        const respond = Effect.fn("BundleResolver.respond")(function* (
-          url: string,
-        ): Effect.fn.Return<Response | null, never> {
-          const filePath = bundleUrlToLocalPath(url, namespace);
-          if (!filePath) return null;
-          const bytes = yield* Effect.tryPromise({
-            try: () => readFile(filePath),
-            catch: (cause) => new BundleReadError({ path: filePath, cause }),
-          }).pipe(Effect.catchTag("BundleReadError", () => Effect.succeed(null)));
-          if (bytes === null) return notFound();
-          const name = path.basename(filePath);
-          const contentType =
-            MIME_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
-          return new Response(new Uint8Array(bytes), {
-            headers: {
-              "content-type": contentType,
-              "cache-control": cacheControlOf(name),
-              etag: `"${Buffer.from(bytes.subarray(0, 4096)).toString("base64").slice(0, 24)}"`,
-            },
-          });
-        });
-
-        return BundleResolver.of({
+      Effect.succeed(
+        BundleResolver.of({
           lookup: (input) => {
             const url =
               typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
             return respond(url);
           },
-        });
-      }),
+        }),
+      ),
     );
   }
 }

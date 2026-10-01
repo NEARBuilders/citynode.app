@@ -48,8 +48,6 @@ const authTimeoutResponse = () =>
   });
 
 export function registerAuthHandler(app: Hono<HonoEnv>, plugins: PluginResult) {
-  // Boot-frozen (atomic-deploys 06): auth services resolve from the boot
-  // plugin state once — auth does not hot-swap.
   const services = getAuthServices(plugins);
   if (!services) {
     // Fail loud: an auth plugin that loaded but exposes no services silently

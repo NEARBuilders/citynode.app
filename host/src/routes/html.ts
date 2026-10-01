@@ -1,4 +1,5 @@
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
+import { resolveEntryUrlForEnv } from "everything-dev/ui/manifest";
 import type { ClientRuntimeConfig, RuntimeConfig } from "../services/config";
 
 const escapeHtml = (value: string): string =>
@@ -21,6 +22,12 @@ export function renderClientShellHtml(
   const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
   const sriAttr = ` crossorigin="anonymous"${uiIntegrity ? ` integrity="${uiIntegrity}"` : ""}`;
   const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
+  const coreEntrySrc = resolveEntryUrlForEnv({
+    entryUrl: runtimeSourceConfig.ui.entryUrl,
+    env: runtimeSourceConfig.env,
+    devFixed: `${assetsUrl}/remoteEntry.js${uiVersion}`,
+    slot: "ui",
+  });
 
   const pluginUiScripts = (
     runtimeConfig.ui?.compose
@@ -29,7 +36,12 @@ export function renderClientShellHtml(
           if (!ui?.url) return [];
           const pluginVersion = ui.integrity ? `?v=${encodeURIComponent(ui.integrity)}` : "";
           const pluginSri = ui.integrity ? ` integrity="${ui.integrity}"` : "";
-          const pluginSrc = ui.entryUrl ?? `${ui.url.replace(/\/$/, "")}/remoteEntry.js`;
+          const pluginSrc = resolveEntryUrlForEnv({
+            entryUrl: ui.entryUrl,
+            env: runtimeSourceConfig.env,
+            devFixed: `${ui.url.replace(/\/$/, "")}/remoteEntry.js`,
+            slot: plugin.name,
+          });
           return [
             `<script${nonceAttr} src="${pluginSrc}${ui.entryUrl ? "" : pluginVersion}" crossorigin="anonymous"${pluginSri}></script>`,
           ];
@@ -75,7 +87,7 @@ export function renderClientShellHtml(
           <link rel="stylesheet" href="${assetsUrl}/static/css/style.css${uiVersion}" />
           <style>${baseStyles}</style>
           ${themeScript}
-          <script${nonceAttr} src="${runtimeSourceConfig.ui.entryUrl ?? `${assetsUrl}/remoteEntry.js${uiVersion}`}"${sriAttr}></script>
+          <script${nonceAttr} src="${coreEntrySrc}"${sriAttr}></script>
           ${pluginUiScripts}
           <script${nonceAttr}>${hydrateScript}</script>
         </head>

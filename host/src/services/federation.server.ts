@@ -7,6 +7,7 @@ import {
   type ConstructedTree,
   type ConstructInput,
   type RouteConfigModule,
+  resolveEntryUrlForEnv,
   UI_EXPOSES,
   UI_REMOTE_SERVER_ENTRY_FILENAME,
 } from "everything-dev/ui/manifest";
@@ -97,10 +98,11 @@ function removeInstanceRemotes(instance: ModuleFederationInstance, remoteName?: 
         remoteHandler?: { removeRemote?: (remote: unknown) => void };
       }
     ).remoteHandler;
-    for (const remote of [...instance.options.remotes]) {
-      if (remoteName === undefined || remote.name === remoteName) {
-        handler?.removeRemote?.(remote);
-      }
+    const targets = instance.options.remotes.filter(
+      (remote) => remoteName === undefined || remote.name === remoteName,
+    );
+    for (const remote of targets) {
+      handler?.removeRemote?.(remote);
     }
   } catch {
     /* noop */
@@ -196,6 +198,7 @@ export async function localUiRemoteEntry(source: {
     : "pending";
   return {
     name: source.name,
+    env: "development",
     localPath: source.localRoot,
     ssrUrl: `${server.baseUrl}/ssr`,
     containerVersion,
@@ -273,6 +276,10 @@ async function verifySsrEntryIntegrity(entryUrl: string, expectedIntegrity: stri
 }
 
 function getSsrEntryUrl(config: RuntimeConfig) {
+  if (config.ui.ssrEntryUrl) {
+    // derived (content-hashed, no cache-buster) — the pinned path
+    return config.ui.ssrEntryUrl;
+  }
   const ssrUrl = config.ui.ssrUrl;
   if (!ssrUrl) {
     throw new FederationError({
@@ -283,11 +290,16 @@ function getSsrEntryUrl(config: RuntimeConfig) {
     });
   }
 
-  const entryUrl = `${ssrUrl.replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`;
-  if (config.ui.ssrIntegrity) {
-    return `${entryUrl}?v=${encodeURIComponent(config.ui.ssrIntegrity)}`;
+  const entryUrl = resolveEntryUrlForEnv({
+    env: config.env,
+    devFixed: `${ssrUrl.replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`,
+    slot: config.ui.name,
+  });
+  if (config.env === "development") {
+    return config.ui.ssrIntegrity
+      ? `${entryUrl}?v=${encodeURIComponent(config.ui.ssrIntegrity)}`
+      : entryUrl;
   }
-
   return entryUrl;
 }
 
@@ -397,10 +409,12 @@ function loadRemoteExpose<T>(params: RemoteModuleLoad<T>): Promise<T> {
  */
 export interface UiRemoteEntry {
   name: string;
+  /** the config's environment — gates the fixed-name dev fallback */
+  env?: string;
   ssrUrl?: string;
   ssrIntegrity?: string;
   /** the content-hashed SSR entry URL (version-manifest derived) — preferred
-   * over appending the legacy fixed name to `ssrUrl` */
+   * over appending the fixed dev name to `ssrUrl` */
   ssrEntryUrl?: string;
   /** Source workspace of the ui surface (local dev target only). */
   localPath?: string;
@@ -419,10 +433,13 @@ function ssrEntryUrlOf(entry: UiRemoteEntry): string {
     });
   }
   // a manifest-derived ssrEntryUrl is content-hashed — no cache-buster; the
-  // legacy fixed-name path keeps one
-  const entryUrl =
-    entry.ssrEntryUrl ??
-    `${(entry.ssrUrl ?? "").replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`;
+  // fixed name is the dev contract (dev servers serve exactly that name)
+  const entryUrl = resolveEntryUrlForEnv({
+    entryUrl: entry.ssrEntryUrl,
+    env: entry.env,
+    devFixed: `${(entry.ssrUrl ?? "").replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`,
+    slot: entry.name,
+  });
   if (entry.ssrEntryUrl) return entryUrl;
   if (entry.ssrIntegrity) {
     return `${entryUrl}?v=${encodeURIComponent(entry.ssrIntegrity)}`;

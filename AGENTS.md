@@ -739,7 +739,7 @@ See `tests/regression/browser/specs/admin.spec.ts` and `settings-api-keys.spec.t
 
 **Plugin fails to load with `ModuleFederationError` / `__webpack_modules__[e].call`:**
 - The plugin's deployed `mf-manifest.json` reports a `metaData.pluginVersion` older than the host's. Each plugin bundle is built against a specific `@module-federation/runtime`; the host and each plugin must agree on that version, and the plugin's bundle must provide every `shared[]` dependency the host requires (`requiredVersion: ^X.Y.Z`).
-- Run `bos mf check` to see which plugin is behind. Redeploy it via `cd plugins/<key> && bos plugin publish <key>` (or `bos deploy` from the repo root), then re-run `bos mf check`.
+- Run `bos mf check` to see which plugin is behind. Redeploy it via `cd plugins/<key> && bos plugin publish <key>` (runs the same train as `bos deploy` scoped to the one plugin: preflight → build → upload → version-manifest pin → FastKV publish; or `bos deploy` from the repo root), then re-run `bos mf check`.
 - See `packages/everything-dev/skills/publish-sync` (Federation runtime compatibility section) for the full failure mode and recovery workflow.
 
 **Database issues:**

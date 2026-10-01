@@ -23,7 +23,7 @@ export function resolveImageRef(input: {
     .replace(/\.git$/i, "")
     .replace(/\/+$/, "")
     .toLowerCase();
-  if (!repo || !repo.includes("/") || repo.split("/").length !== 2) return undefined;
+  if (!repo?.includes("/") || repo.split("/").length !== 2) return undefined;
   return { image: `ghcr.io/${repo}`, source: "repository" };
 }
 
@@ -138,7 +138,7 @@ export async function deployImageToRailway(input: {
   }
   if (!result || result.exitCode !== 0) {
     throw new Error(
-      result && result.stderr.trim()
+      result?.stderr.trim()
         ? `railway up failed: ${result.stderr.trim().split("\n").slice(-3).join(" ")}`
         : `railway up failed with exit code ${result?.exitCode ?? "unknown"}`,
     );

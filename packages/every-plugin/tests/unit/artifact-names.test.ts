@@ -3,9 +3,9 @@ import {
   BuildEntryReportSchema,
   cacheControlOf,
   contentHashOf,
+  findHashedEntry,
   hashedArtifactName,
   planArtifactCopies,
-  planHashedEntry,
 } from "../../src/build/artifact-names";
 
 describe("classifyBundlePath / cacheControlOf", () => {
@@ -65,27 +65,26 @@ describe("hashedArtifactName", () => {
   });
 });
 
-describe("planHashedEntry", () => {
-  it("finds the hashed entry for a base name and pairs it with the legacy alias", () => {
-    const plan = planHashedEntry(
+describe("findHashedEntry", () => {
+  it("finds the hashed entry for a base name", () => {
+    const entry = findHashedEntry(
       ["remoteEntry.8f3ac1d2feedbeef.js", "remoteEntry.js", "static/js/async/ih.2afef.js"],
       "remoteEntry",
     );
-    expect(plan).toEqual({ hashed: "remoteEntry.8f3ac1d2feedbeef.js", alias: "remoteEntry.js" });
+    expect(entry).toBe("remoteEntry.8f3ac1d2feedbeef.js");
   });
 
   it("finds the server entry base independently", () => {
-    const plan = planHashedEntry(["remoteEntry.server.9d2e1a3b.js"], "remoteEntry.server");
-    expect(plan?.hashed).toBe("remoteEntry.server.9d2e1a3b.js");
-    expect(plan?.alias).toBe("remoteEntry.server.js");
+    const entry = findHashedEntry(["remoteEntry.server.9d2e1a3b.js"], "remoteEntry.server");
+    expect(entry).toBe("remoteEntry.server.9d2e1a3b.js");
   });
 
-  it("returns null when only the legacy name exists (pre-hashed build)", () => {
-    expect(planHashedEntry(["remoteEntry.js"], "remoteEntry")).toBeNull();
+  it("returns null when only the fixed name exists (pre-hashed build)", () => {
+    expect(findHashedEntry(["remoteEntry.js"], "remoteEntry")).toBeNull();
   });
 
-  it("never aliases a hashed name onto a different base", () => {
-    expect(planHashedEntry(["remoteEntry.8f3ac1d2.js"], "remoteEntry.server")).toBeNull();
+  it("never matches a hashed name onto a different base", () => {
+    expect(findHashedEntry(["remoteEntry.8f3ac1d2.js"], "remoteEntry.server")).toBeNull();
   });
 });
 
@@ -107,7 +106,7 @@ describe("BuildEntryReportSchema", () => {
 });
 
 describe("planArtifactCopies", () => {
-  it("plans the entry alias, hashed manifest and css copies, and the report", () => {
+  it("plans the hashed manifest and css copies, and the report", () => {
     const manifestContent = JSON.stringify({ metaData: { publicPath: "auto" } });
     const cssContent = ".box{color:red}";
     const manifestHash = contentHashOf(manifestContent);
@@ -120,7 +119,6 @@ describe("planArtifactCopies", () => {
     });
 
     expect(plan.copies).toEqual([
-      { from: "remoteEntry.8f3ac1d2feedbeef.js", to: "remoteEntry.js" },
       {
         from: "mf-manifest.json",
         to: `mf-manifest.${manifestHash}.json`,
@@ -134,19 +132,17 @@ describe("planArtifactCopies", () => {
     });
   });
 
-  it("plans only the entry alias for the ssr dist root", () => {
+  it("plans no copies for the ssr dist root (entry only in the report)", () => {
     const plan = planArtifactCopies({
       assetNames: ["remoteEntry.server.9d2e1a3b5c7d9021.js", "mf-manifest.json"],
       entryBase: "remoteEntry.server",
       contents: {},
     });
-    expect(plan.copies).toEqual([
-      { from: "remoteEntry.server.9d2e1a3b5c7d9021.js", to: "remoteEntry.server.js" },
-    ]);
+    expect(plan.copies).toEqual([]);
     expect(plan.report).toEqual({ entry: "remoteEntry.server.9d2e1a3b5c7d9021.js" });
   });
 
-  it("degrades to no plan when only legacy names exist", () => {
+  it("degrades to no plan when only fixed names exist", () => {
     const plan = planArtifactCopies({
       assetNames: ["remoteEntry.js", "mf-manifest.json"],
       entryBase: "remoteEntry",

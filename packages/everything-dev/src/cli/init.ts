@@ -472,6 +472,7 @@ function stripProductionFields(entry: Record<string, unknown>): void {
   delete entry.integrity;
   delete entry.ssr;
   delete entry.ssrIntegrity;
+  delete entry.pin;
 }
 
 /**

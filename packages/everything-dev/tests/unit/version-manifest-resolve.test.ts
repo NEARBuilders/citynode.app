@@ -25,8 +25,10 @@ const okFetch = async (input: string | URL) => {
 
 const slot = {
   base: manifestBase,
-  manifest: "versions/8f3ac1d2feedbeef.json",
-  integrity: sri(manifestJson),
+  pin: {
+    manifest: "versions/8f3ac1d2feedbeef.json",
+    integrity: sri(manifestJson),
+  },
 };
 
 describe("resolveSlotVersion", () => {
@@ -34,14 +36,13 @@ describe("resolveSlotVersion", () => {
     clearSlotVersionCache();
     const fetchImpl = vi.fn(okFetch) as typeof fetch;
     const resolved = await resolveSlotVersion({ ...slot, fetchImpl });
-    expect(resolved).not.toBeNull();
-    expect(resolved!.entryUrl).toBe(`${manifestBase}${versionManifest.entry}`);
-    expect(resolved!.entryIntegrity).toBe("sha384-entry");
-    expect(resolved!.browserManifestUrl).toBe(
+    expect(resolved.entryUrl).toBe(`${manifestBase}${versionManifest.entry}`);
+    expect(resolved.entryIntegrity).toBe("sha384-entry");
+    expect(resolved.browserManifestUrl).toBe(
       `${manifestBase}${versionManifest.browserManifest!.file}`,
     );
-    expect(resolved!.ssrEntryUrl).toBe(`${manifestBase}${versionManifest.ssr!.entry}`);
-    expect(resolved!.ssrIntegrity).toBe("sha384-ssr");
+    expect(resolved.ssrEntryUrl).toBe(`${manifestBase}${versionManifest.ssr!.entry}`);
+    expect(resolved.ssrIntegrity).toBe("sha384-ssr");
   });
 
   it("caches per pin: the same slot pin fetches the manifest exactly once", async () => {
@@ -56,7 +57,7 @@ describe("resolveSlotVersion", () => {
     clearSlotVersionCache();
     const fetchImpl = (async () => new Response(manifestJson, { status: 200 })) as typeof fetch;
     await expect(
-      resolveSlotVersion({ ...slot, integrity: "sha384-wrong", fetchImpl }),
+      resolveSlotVersion({ ...slot, pin: { ...slot.pin, integrity: "sha384-wrong" }, fetchImpl }),
     ).rejects.toThrow(/Integrity/i);
   });
 

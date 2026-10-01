@@ -1151,8 +1151,9 @@ async function main() {
       console.log();
       console.log(colors.green(`${icons.ok} Published plugin ${result.key}`));
       if (result.path) console.log(`  ${colors.dim("Path:")} ${result.path}`);
-      if (result.script) console.log(`  ${colors.dim("Script:")} bun run ${result.script}`);
       if (result.production) console.log(`  ${colors.dim("Production:")} ${result.production}`);
+      if (result.version) console.log(`  ${colors.dim("Version:")} ${result.version}`);
+      if (result.fingerprint) console.log(`  ${colors.dim("Fingerprint:")} ${result.fingerprint}`);
       console.log();
       return;
     }

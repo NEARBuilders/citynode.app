@@ -68,6 +68,11 @@
       "import": "./src/fingerprint.ts",
       "require": "./src/fingerprint.ts"
     },
+    "./version-manifest-resolve": {
+      "types": "./src/version-manifest-resolve.ts",
+      "import": "./src/version-manifest-resolve.ts",
+      "require": "./src/version-manifest-resolve.ts"
+    },
     "./bundle-fs-resolve": {
       "development": {
         "types": "./src/bundle-fs-resolve.ts",

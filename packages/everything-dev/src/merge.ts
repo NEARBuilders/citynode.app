@@ -68,6 +68,12 @@ function cleanNullSentinels(obj: Record<string, unknown>): Record<string, unknow
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const bosConfigMerger = createDefu((obj: any, key: any, value: any): boolean | undefined => {
+  if (key === "pin") {
+    // the pin is an atomic unit — a child pin replaces the parent's whole
+    // (per-key defu merging would half-mix manifest/integrity across runtimes)
+    obj[key] = value;
+    return true;
+  }
   if (obj[key] === null) return true;
   if (value === null) {
     obj[key] = null;

@@ -26,8 +26,10 @@ const publishedPointer = {
     ui: {
       development: "local:ui",
       production: "https://cdn.example.test/ui/",
-      integrity: "sha384-pin",
-      manifest: "versions/8f3ac1d2feedbeef.json",
+      pin: {
+        manifest: "versions/8f3ac1d2feedbeef.json",
+        integrity: "sha384-pin",
+      },
     },
   },
 } as unknown as BosConfig;

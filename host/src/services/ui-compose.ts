@@ -26,6 +26,7 @@ import {
   type PluginManifest,
   PluginManifestSchema,
   type RouteConfigModule,
+  resolveEntryUrlForEnv,
   UI_REMOTE_ENTRY_FILENAME,
 } from "everything-dev/ui/manifest";
 import type { RouterModule } from "../types";
@@ -99,6 +100,7 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       mfName: config.ui.name,
       remote: {
         name: config.ui.name,
+        env: config.env,
         ssrUrl: config.ui.ssrUrl,
         ssrIntegrity: config.ui.ssrIntegrity,
         ssrEntryUrl: config.ui.ssrEntryUrl,
@@ -113,7 +115,12 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
           ? undefined
           : `${config.ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
       browserManifestUrl: config.ui.source === "local" ? undefined : config.ui.entry,
-      webEntry: config.ui.entryUrl ?? `${browserUiBase(config.ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+      webEntry: resolveEntryUrlForEnv({
+        entryUrl: config.ui.entryUrl,
+        env: config.env,
+        devFixed: `${browserUiBase(config.ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+        slot: CORE_UI_KEY,
+      }),
     },
   ];
   for (const [id, plugin] of Object.entries(config.plugins ?? {})) {
@@ -130,6 +137,7 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       mfName: ui.name,
       remote: {
         name: ui.name,
+        env: config.env,
         ssrUrl: ui.ssrUrl,
         ssrIntegrity: ui.ssrIntegrity,
         ssrEntryUrl: ui.ssrEntryUrl,
@@ -141,7 +149,12 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       // resolving it as a registration manifest fetches the WRONG container (the page
       // origin's) and breaks the compose; dev derives from webEntry instead (atomic-deploys 08)
       browserManifestUrl: ui.source === "local" ? undefined : ui.entry,
-      webEntry: ui.entryUrl ?? `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+      webEntry: resolveEntryUrlForEnv({
+        entryUrl: ui.entryUrl,
+        env: config.env,
+        devFixed: `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+        slot: id,
+      }),
     });
   }
   return sources.sort((a, b) => a.key.localeCompare(b.key));
