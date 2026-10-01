@@ -108,6 +108,12 @@ export const AppDescriptorSchema = z
       })
       .strict()
       .optional(),
+    cdn: z
+      .object({
+        origin: z.string().optional(),
+      })
+      .strict()
+      .optional(),
     publish: z
       .object({
         auth: z.enum(["session", "key", "custody"]).optional(),

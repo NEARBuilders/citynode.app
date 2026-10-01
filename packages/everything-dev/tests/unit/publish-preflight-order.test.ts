@@ -12,6 +12,7 @@ const {
   loadResolvedConfigMock,
   collectDistFilesMock,
   uploadWorkspaceDistMock,
+  probeStorageOriginMock,
 } = vi.hoisted(() => ({
   buildWorkspaceTargetsMock: vi.fn(),
   generateCodeArtifactsMock: vi.fn(),
@@ -20,6 +21,7 @@ const {
   loadResolvedConfigMock: vi.fn(),
   collectDistFilesMock: vi.fn(),
   uploadWorkspaceDistMock: vi.fn(),
+  probeStorageOriginMock: vi.fn(),
 }));
 
 vi.mock("../../src/build", async (importOriginal) => {
@@ -56,12 +58,18 @@ vi.mock("../../src/platform-deploy", () => ({
   pluginUiUrlDeployEntries: vi.fn(() => []),
 }));
 
+vi.mock("../../src/cdn-deploy", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/cdn-deploy")>();
+  return { ...actual, probeStorageOrigin: probeStorageOriginMock };
+});
+
 import { writeSessionHandle } from "../../src/auth-session";
 import { publishToFastKv } from "../../src/publish";
 
 const bosConfig = {
   account: "dev.everything.near",
   domain: "dev.everything.dev",
+  cdn: { origin: "https://cdn.example.test" },
   app: {
     host: { development: "local:host", production: "https://host.example" },
     ui: { development: "local:ui", production: "https://ui.example" },
@@ -86,6 +94,7 @@ let savedEnv: Record<string, string | undefined>;
 describe("publishToFastKv preflight ordering", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    probeStorageOriginMock.mockResolvedValue(undefined);
     configDir = mkdtempSync(join(tmpdir(), "bos-preflight-"));
     savedEnv = {
       BOS_BUNDLE_CDN_ORIGIN: process.env.BOS_BUNDLE_CDN_ORIGIN,

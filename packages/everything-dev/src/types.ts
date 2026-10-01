@@ -244,6 +244,7 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
       })
       .optional(),
     ci: CiConfigSchema.optional(),
+    cdn: CdnConfigSchema.optional(),
   }),
 );
 
@@ -274,6 +275,7 @@ export interface BosConfigInput {
   plugins?: Record<string, string | BosConfigInput>;
   publish?: PublishConfig;
   ci?: CiConfig;
+  cdn?: CdnConfig;
 }
 
 export const RailwayCiSchema = z.object({
@@ -286,6 +288,12 @@ export const CiConfigSchema = z.object({
   railway: RailwayCiSchema.optional(),
 });
 export type CiConfig = z.infer<typeof CiConfigSchema>;
+
+/** Where this runtime's built bundles are served from. Inherited via extends. */
+export const CdnConfigSchema = z.object({
+  origin: z.string().optional(),
+});
+export type CdnConfig = z.infer<typeof CdnConfigSchema>;
 
 export const PublishAuthSchema = z.enum(["session", "key", "custody"]);
 export type PublishAuth = z.infer<typeof PublishAuthSchema>;
@@ -313,6 +321,7 @@ export const BosConfigSchema = z.object({
   repository: z.string().optional(),
   publish: PublishConfigSchema.optional(),
   ci: CiConfigSchema.optional(),
+  cdn: CdnConfigSchema.optional(),
   plugins: z.record(PluginKeySchema, z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
     host: HostConfigSchema,

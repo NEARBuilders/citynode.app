@@ -88,6 +88,7 @@ export function toConfigInput(descriptor: AppDescriptor): BosConfigInput {
       "testnet",
       "staging",
       "ci",
+      "cdn",
       "publish",
     ]),
   };
@@ -252,6 +253,7 @@ export function configInputToDescriptor(input: BosConfigInput): AppDescriptor {
     "testnet",
     "staging",
     "ci",
+    "cdn",
     "publish",
   ] as const) {
     if (source[field] !== undefined) descriptor[field] = source[field];

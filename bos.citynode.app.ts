@@ -22,6 +22,7 @@ export default App({
   staging: { domain: "testnet.citynode.app", account: "v1.citynode.testnet" },
   repository: "https://github.com/NEARBuilders/citynode.app",
   ci: { railway: { service: "app" } },
+  cdn: { origin: "https://cdn.everything.dev" },
   host: { path: "host", secrets: ["CORS_ORIGIN", "CSP_STRICT"] },
   ui: UI({ path: "ui" }),
   api: API({

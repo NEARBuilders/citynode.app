@@ -4,7 +4,7 @@ import process from "node:process";
 import { hasFolderFormUi } from "every-plugin/build/ui";
 import { readSessionHandle } from "./auth-session";
 import { buildWorkspaceTargets, resolveWorkspaceTarget, selectWorkspaceTargets } from "./build";
-import { resolveCdnDeployInputs } from "./cdn-deploy";
+import { type CdnDeployInputs, probeStorageOrigin, resolveCdnDeployInputs } from "./cdn-deploy";
 import { formatDuration } from "./cli/timing";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig, resolveUiRuntimeName } from "./config";
@@ -132,7 +132,7 @@ export interface PublishPreflightPlan {
   targets: string[];
   useWallet: boolean;
   strategy?: SigningStrategy;
-  cdnOrigin?: string;
+  cdnOrigin: string | undefined;
   storageOrigin: string;
   storageApiKey?: string;
 }
@@ -148,7 +148,6 @@ export type PublishPreflight =
 export async function preflightPublish(input: PublishToFastKvInput): Promise<PublishPreflight> {
   const { configDir } = input;
   const bosConfig = input.bosConfig;
-  const runtimeConfig = input.runtimeConfig;
 
   const isStaging = input.env === "staging";
   const account = isStaging ? (bosConfig.staging?.account ?? bosConfig.account) : bosConfig.account;
@@ -213,17 +212,41 @@ export async function preflightPublish(input: PublishToFastKvInput): Promise<Pub
   }
 
   // CDN deploy credentials (ADR 0020) — resolved before the build train so a
-  // missing BOS_STORAGE_API_KEY fails fast instead of after the full build.
+  // missing bundle origin or BOS_STORAGE_API_KEY fails fast instead of after
+  // the full build. Config-only publishes ship the committed config verbatim;
+  // nothing is uploaded, so no deploy origins are required.
   const session = readSessionHandle(configDir);
-  const cdnDeploy = resolveCdnDeployInputs({
-    env: process.env as Record<string, string | undefined>,
-    runtimeConfig: runtimeConfig ?? null,
-    session: session?.credential ?? null,
-    account,
-    gateway,
-  });
-  if (cdnDeploy.error) {
-    return fail(cdnDeploy.error);
+  let cdnDeploy: CdnDeployInputs = {
+    cdnOrigin: undefined,
+    storageOrigin: "",
+    apiKey: undefined,
+  };
+  if (input.build) {
+    cdnDeploy = resolveCdnDeployInputs({
+      env: process.env as Record<string, string | undefined>,
+      bosConfig,
+      session: session?.credential ?? null,
+      account,
+      gateway,
+      uploadsPlanned: input.build,
+    });
+    if (cdnDeploy.error) {
+      return fail(cdnDeploy.error);
+    }
+    if (cdnDeploy.warning) {
+      console.log(colors.yellow(`  ! ${cdnDeploy.warning}`));
+    }
+    const cdnOrigin = cdnDeploy.cdnOrigin;
+    if (!cdnOrigin) {
+      return fail("CDN deploy resolved no bundle origin");
+    }
+    const probeError = await probeStorageOrigin(cdnDeploy.storageOrigin);
+    if (probeError) {
+      return fail(
+        `The bundle upload origin ${cdnDeploy.storageOrigin} is not running the platform API — ` +
+          `${probeError}. Check BOS_STORAGE_ORIGIN / the bos login session, then re-run.`,
+      );
+    }
   }
 
   // Registry reachability: one FastKV read. A missing config is fine for a
@@ -277,14 +300,12 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     useWallet,
     strategy,
   } = plan;
-  const cdnOrigin = plan.cdnOrigin;
   const storageOrigin = plan.storageOrigin;
   const storageApiKey = plan.storageApiKey;
 
   const { configDir } = input;
   let bosConfig = input.bosConfig;
   const runtimeConfig = input.runtimeConfig;
-
   let built: string[] | undefined;
   let skipped: string[] | undefined;
   let deployResults: WorkspaceDeployResult[] | undefined;
@@ -357,63 +378,50 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
   let publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
 
-  const urlOrigin = cdnOrigin ?? `https://${gateway}`;
+  const urlOrigin = plan.cdnOrigin ?? `https://${gateway}`;
   const deployTargets = (built ?? []).filter((key) => targets.includes(key));
   const platformEntries: DeployResultEntry[] = [];
 
   console.log();
-  if (cdnOrigin) {
-    console.log(`  CDN deploy — uploading workspace dists to ${storageOrigin}...`);
-  } else {
-    console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
-  }
+  console.log(`  CDN deploy — uploading workspace dists to ${storageOrigin}...`);
   for (const key of deployTargets) {
     const ws = resolveWorkspaceTarget(key, bosConfig, runtimeConfig, configDir);
     if (!ws) continue;
 
-    let integrity: string | undefined;
-    let ssrIntegrity: string | undefined;
-    let fileCount: number | undefined;
-    if (cdnOrigin) {
-      const distFiles = await collectDistFiles(join(ws.path, "dist"));
-      const totalMb = formatBundleMb(distFiles);
-      console.log(
-        `    ${padRight(key, 28)} uploading ${distFiles.length} files (${totalMb}) → ${urlOrigin}/bundles/${account}/${gateway}/${key}/`,
-      );
-      const startedAt = Date.now();
-      const result = await uploadWorkspaceDist({
-        origin: storageOrigin,
-        apiKey: storageApiKey,
-        account,
-        gateway,
-        workspace: key,
-        files: distFiles,
-      });
-      integrity = result.integrity["remoteEntry.js"];
-      ssrIntegrity =
-        result.integrity["ssr/remoteEntry.server.js"] ?? result.integrity["remoteEntry.server.js"];
-      fileCount = result.stored;
+    const distFiles = await collectDistFiles(join(ws.path, "dist"));
+    const totalMb = formatBundleMb(distFiles);
+    console.log(
+      `    ${padRight(key, 28)} uploading ${distFiles.length} files (${totalMb}) → ${urlOrigin}/bundles/${account}/${gateway}/${key}/`,
+    );
+    const startedAt = Date.now();
+    const result = await uploadWorkspaceDist({
+      origin: storageOrigin,
+      apiKey: storageApiKey,
+      account,
+      gateway,
+      workspace: key,
+      files: distFiles,
+    });
+    const integrity = result.integrity["remoteEntry.js"];
+    const ssrIntegrity =
+      result.integrity["ssr/remoteEntry.server.js"] ?? result.integrity["remoteEntry.server.js"];
+    const fileCount = result.stored;
 
-      if (result.storage === "memory") {
-        return {
-          status: "error",
-          registryUrl,
-          built,
-          skipped,
-          deployResults,
-          error:
-            "The receiving instance is serving bundle storage from memory (BOS_STORAGE_* R2 credentials are not configured there) — uploaded bytes would be lost on restart. Aborting before publish.",
-        };
-      }
-
-      console.log(
-        `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/${fileCount !== undefined ? ` (${fileCount} files, ${formatDuration(Date.now() - startedAt)})` : ""}`,
-      );
-    } else {
-      console.log(
-        `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/`,
-      );
+    if (result.storage === "memory") {
+      return {
+        status: "error",
+        registryUrl,
+        built,
+        skipped,
+        deployResults,
+        error:
+          "The receiving instance is serving bundle storage from memory (BOS_STORAGE_* R2 credentials are not configured there) — uploaded bytes would be lost on restart. Aborting before publish.",
+      };
     }
+
+    console.log(
+      `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/ (${fileCount} files, ${formatDuration(Date.now() - startedAt)})`,
+    );
 
     platformEntries.push(
       ...platformUrlDeployEntries({
@@ -441,7 +449,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       let uiIntegrity: string | undefined;
       let uiSsrIntegrity: string | undefined;
       let uiFileCount: number | undefined;
-      if (cdnOrigin && existsSync(uiDistDir)) {
+      if (existsSync(uiDistDir)) {
         const uiDistFiles = await collectDistFiles(uiDistDir);
         console.log(
           `    ${padRight(`${key}-ui`, 28)} uploading ${uiDistFiles.length} files (${formatBundleMb(uiDistFiles)}) → ${urlOrigin}/bundles/${account}/${gateway}/${key}-ui/`,

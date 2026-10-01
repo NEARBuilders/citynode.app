@@ -105,3 +105,37 @@ ADR 0011 rejected a central CDN for two reasons, both re-examined:
 - ADR 0015's route design (auth trust family, path allowlist, traversal
   rejection, size ceiling, server-side SRI) is adopted as written; only the
   serving mount and storage backend differ.
+
+## Amendment (2026-09-30): authored `cdn.origin` — deploy origins are never derived from dev-resolved slots
+
+The zero-config CDN-origin derivation (`env BOS_BUNDLE_CDN_ORIGIN` → the
+resolved runtime config's `host.url`) promoted a dev listening URL to the
+published CDN origin whenever a deploy ran outside production resolution:
+the host slot resolves in development mode (`development: "local:host"`
+beating the committed `production` URL), so `host.url` became
+`http://localhost:<port>` and a local deploy wrote localhost bundle URLs
+into `bos.config.json` and published them to FastKV. This shipped once
+on-chain (a `localhost:3000` config at registry height 217486764, later
+overwritten by CI deploys) and repeatedly wasted local deploy trains.
+
+Replaced with an explicit authored field, `cdn: { origin }` in
+`bos.config.json` (a `BosConfigInput`/`BosConfig` schema field, surviving
+descriptor roundtrips and extending child-wins like `ci` — children inherit
+the base's CDN with zero config, which is what ADR 0020's zero-config path
+always meant). Deploy resolution is now:
+
+1. `BOS_BUNDLE_CDN_ORIGIN` env — wins; a local URL is a deliberate local
+   deploy and only warns.
+2. Authored `cdn.origin` (extends-inherited); a local URL here is a hard
+   error, not a silent promotion.
+3. Neither set with uploads planned — hard error. The silent image-native
+   fallback (gateway URLs the host can no longer serve) is gone; a
+   config-only `bos publish` (`build: false`) uploads nothing and requires
+   no origins.
+
+Guards in the same amendment: a `bos login` session pinned to a local
+`siteUrl` is a hard error for uploads (the session site can only ever be a
+squatter's port — the same-account guard cannot catch it); and the upload
+origin is probed (`GET /.well-known/mcp.json`) in preflight before the build
+train, so a wrong-port target fails in seconds with a named remedy instead
+of a foreign 413 after a full build.
