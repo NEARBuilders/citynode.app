@@ -7,7 +7,6 @@ import { z } from "zod";
 import {
   getAccount,
   getActiveRuntime,
-  type Organization,
   type SessionData,
   sessionQueryOptions,
   useApiClient,
@@ -17,6 +16,7 @@ import {
   Button,
   EmptyState,
   PageContainer,
+  PageHeader,
   Skeleton,
   Tabs,
   TabsContent,
@@ -27,11 +27,13 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
 import { pageTitle } from "@/lib/page-title";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import {
   ApiKeysTab,
   type CreatedOrganizationApiKey,
   type OrganizationApiKey,
 } from "./-api-keys-tab";
+import { HomepageTab } from "./-homepage-tab";
 import { InvitationsTab } from "./-invitations-tab";
 import { MembersTab } from "./-members-tab";
 import { NodeConfigTab } from "./-node-config";
@@ -63,6 +65,7 @@ const ORGANIZATION_TABS = [
   "onboard",
   "apikeys",
   "node-config",
+  "homepage",
 ] as const;
 
 type OrganizationTab = (typeof ORGANIZATION_TABS)[number];
@@ -95,14 +98,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
   }),
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
-    await context.queryClient.ensureQueryData({
-      queryKey: ["organizations"],
-      queryFn: async () => {
-        const { data } = await context.authClient.organization.list();
-        return (data || []) as Organization[];
-      },
-      staleTime: 30 * 1000,
-    });
+    await context.queryClient.ensureQueryData(organizationsQueryOptions(context.apiClient));
   },
   component: OrganizationDetail,
 });
@@ -118,14 +114,9 @@ function OrganizationDetail() {
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "";
   const baseAccount = getAccount(runtimeConfig);
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data } = await auth.organization.list();
-      return (data || []) as Organization[];
-    },
-    staleTime: 30 * 1000,
-  });
+  const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery(
+    organizationsQueryOptions(apiClient),
+  );
   const org = organizations.find((organization) => organization.slug === orgSlug);
   const orgId = org?.id ?? "";
   const activeOrgId = session?.session?.activeOrganizationId;
@@ -140,7 +131,7 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.members ?? []) as MemberItem[];
       },
-      enabled: !!orgId,
+      enabled: !!orgId && org?.status === "active",
     }).data ?? [];
   const invitations =
     useQuery({
@@ -148,7 +139,7 @@ function OrganizationDetail() {
       queryFn: async (): Promise<InvitationItem[]> => {
         return apiClient.auth.listInvitations({ organizationId: orgId });
       },
-      enabled: !!orgId,
+      enabled: !!orgId && org?.status === "active",
     }).data ?? [];
   const apiKeys =
     useQuery({
@@ -160,7 +151,7 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.apiKeys ?? []) as OrganizationApiKey[];
       },
-      enabled: !!orgId,
+      enabled: !!orgId && org?.status === "active",
     }).data ?? [];
   const myMembership = members.find((member) => member.userId === session?.user?.id);
   const canManageMembers = myMembership?.role === "owner" || myMembership?.role === "admin";
@@ -214,7 +205,7 @@ function OrganizationDetail() {
     if (!isOrganizationTab(value) || value === activeTab) return;
     void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
   };
-  const teamsState = useOrganizationTeams(orgId, activeTab === "teams");
+  const teamsState = useOrganizationTeams(orgId, activeTab === "teams" && org?.status === "active");
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
     orgId,
@@ -246,6 +237,31 @@ function OrganizationDetail() {
             </Button>
           }
         />
+      </PageContainer>
+    );
+  }
+
+  if (org?.status !== "active") {
+    return (
+      <PageContainer variant="narrow">
+        <PageHeader
+          title={org.name}
+          subtitle={`@${org.slug}`}
+          headerTestId="orgs.request.heading"
+        />
+        <div className="flex flex-col gap-4" data-testid="orgs-request-status">
+          <h2 className="text-lg font-medium">
+            {org?.status === "pending" ? "Pending approval" : "Request rejected"}
+          </h2>
+          <p className="text-sm text-muted-foreground" data-testid="orgs-request-reason">
+            {org?.status === "pending"
+              ? "A platform admin will review your request. Your organization can be used once approved."
+              : org.rejectionReason}
+          </p>
+          <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+            Back to organizations
+          </Button>
+        </div>
       </PageContainer>
     );
   }
@@ -305,6 +321,9 @@ function OrganizationDetail() {
             </TabsTrigger>
             <TabsTrigger value="node-config" data-testid="orgs-tab-node-config">
               Community
+            </TabsTrigger>
+            <TabsTrigger value="homepage" data-testid="orgs-tab-homepage">
+              Homepage
             </TabsTrigger>
           </TabsList>
         </div>
@@ -382,6 +401,15 @@ function OrganizationDetail() {
             baseAccount={baseAccount}
             canManage={canManageMembers}
             isPlatformAdmin={session?.user?.role === "admin"}
+          />
+        </TabsContent>
+        <TabsContent value="homepage" className="flex flex-col gap-6 pt-6">
+          <HomepageTab
+            orgId={orgId}
+            gatewayId={gatewayId}
+            baseAccount={baseAccount}
+            canManage={canManageMembers}
+            isActive={isActive}
           />
         </TabsContent>
       </Tabs>

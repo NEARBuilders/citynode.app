@@ -24,6 +24,24 @@ describe("Tenant + Node + Binding wizard flow", () => {
     await teardown();
   });
 
+  it.each([
+    "pending",
+    "rejected",
+  ])("blocks direct tenant creation with a %s organization", async (status) => {
+    const ctx = daoContext("unapproved-user", `unapproved-${status}`, "unapproved-user.near");
+    const organization = ctx.organization as { organization: Record<string, unknown> };
+    organization.organization.status = status;
+    const client = await getPluginClient(ctx);
+    await expect(
+      client.createTenant({ name: "Unapproved tenant", accountId: `unapproved-${status}.near` }),
+    ).rejects.toThrow("approval");
+    expect(
+      (await client.listTenants()).some(
+        (tenant) => tenant.accountId === `unapproved-${status}.near`,
+      ),
+    ).toBe(false);
+  });
+
   describe("full chain: createTenant → createNode → createBinding", () => {
     it("creates a tenant, root country node, and primary binding in sequence", async () => {
       const ctx = daoContext("wizard-user-1", "org-wizard-1", "admin-wizard-1.near");

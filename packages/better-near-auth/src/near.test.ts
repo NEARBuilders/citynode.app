@@ -155,7 +155,7 @@ vi.mock("near-kit", () => {
   };
 });
 
-vi.mock("@fastnear/near-connect", () => ({
+vi.mock("@hot-labs/near-connect", () => ({
   NearConnector: vi.fn().mockImplementation(function (
     this: unknown,
     { network }: { network: "mainnet" | "testnet" },
@@ -373,6 +373,40 @@ describe("siwn plugin", () => {
       expect(data?.success).toBe(true);
       const params = (verifyNep413Signature as any).mock.calls.at(-1)?.[1];
       expect(params?.callbackUrl).toBe("myapp://callback/success");
+    });
+
+    it("accepts wallets that sign without the callbackUrl", async () => {
+      const { verifyNep413Signature } = await import("near-kit");
+      (verifyNep413Signature as any).mockClear();
+      (verifyNep413Signature as any).mockImplementation(
+        async (_signed: unknown, payload: { callbackUrl?: string }) => !payload.callbackUrl,
+      );
+      try {
+        const { client } = await setup();
+
+        const { data, error } = await client.near.verify({
+          ...makeVerifyBody(),
+          callbackUrl: "http://localhost:3000/login?redirect=%2Fdashboard",
+        });
+
+        expect(error).toBeNull();
+        expect(data?.success).toBe(true);
+      } finally {
+        (verifyNep413Signature as any).mockResolvedValue(true);
+      }
+    });
+
+    it("rejects a signature that fails with and without the callbackUrl", async () => {
+      const { verifyNep413Signature } = await import("near-kit");
+      (verifyNep413Signature as any).mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+      const { client } = await setup();
+
+      const { error } = await client.near.verify({
+        ...makeVerifyBody(),
+        callbackUrl: "http://localhost:3000/login",
+      });
+
+      expect(error?.status).toBe(401);
     });
 
     it("should detect nonce replay", async () => {
@@ -1220,7 +1254,7 @@ describe("siwnClient getActions", () => {
     Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
 
     try {
-      const { NearConnector } = await import("@fastnear/near-connect");
+      const { NearConnector } = await import("@hot-labs/near-connect");
       const connectorMock = NearConnector as any;
       const callStart = connectorMock.mock.calls.length;
       const { actions, plugin } = setupClient(null);
@@ -1276,7 +1310,7 @@ describe("siwnClient getActions", () => {
     mockWalletSignMessage.mockClear();
 
     try {
-      const { NearConnector } = await import("@fastnear/near-connect");
+      const { NearConnector } = await import("@hot-labs/near-connect");
       const connectorMock = NearConnector as any;
       const callStart = connectorMock.mock.calls.length;
       const { actions, $fetch } = setupClient(null, (path) =>
@@ -1330,7 +1364,7 @@ describe("siwnClient getActions", () => {
     Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
 
     try {
-      const { NearConnector } = await import("@fastnear/near-connect");
+      const { NearConnector } = await import("@hot-labs/near-connect");
       const connectorMock = NearConnector as any;
       const callStart = connectorMock.mock.calls.length;
       const { sessionAtom } = setupClient(null);

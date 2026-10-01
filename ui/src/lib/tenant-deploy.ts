@@ -1,4 +1,4 @@
-import type { TransactionBuilder } from "near-kit";
+import type { FinalExecutionOutcome, TransactionBuilder } from "near-kit";
 import type { ApiClient, TenantUiOverride, useAuthClient } from "@/app";
 import {
   buildTenantPublishConfig,
@@ -7,6 +7,13 @@ import {
   type TenantPublishConfigInput,
 } from "./dao-connect";
 import { trySendWithGasKey } from "./gas-key";
+import {
+  canAccountPropose,
+  type DaoPlan,
+  fetchSputnikPolicy,
+  proposeAsSession,
+  type SessionWallet,
+} from "./sputnik-proposals";
 
 const CONFIG_GAS = "300000000000000";
 
@@ -164,4 +171,44 @@ export async function publishTenantConfigForMode(
       attachedDeposit: 0n,
     })
     .send({ waitUntil: "EXECUTED" });
+}
+
+export type TenantConfigProposalInput = TenantPublishConfigInput;
+
+function toYoctoString(amount: string | undefined): string {
+  return amount?.replace(/\s*yocto$/, "") || "0";
+}
+
+function describeTenantConfigProposal(input: TenantConfigProposalInput): string {
+  const bundle = input.app ? "custom UI bundle" : "platform UI";
+  return `Set homepage for ${input.hostname} — title '${input.title}', ${bundle}`;
+}
+
+export async function proposeTenantConfigAsMember(
+  apiClient: ApiClient,
+  wallet: SessionWallet,
+  input: TenantConfigProposalInput,
+): Promise<FinalExecutionOutcome> {
+  const connected = await wallet.ensureConnected();
+  const accountId = wallet.getAccountId();
+  if (!connected || !accountId) throw new Error("Connect your NEAR wallet first");
+
+  const policy = await fetchSputnikPolicy(input.daoAccountId);
+  if (!policy) throw new Error(`Couldn't read the policy of ${input.daoAccountId}. Try again.`);
+  if (!canAccountPropose(policy, accountId)) {
+    throw new Error(
+      `${accountId} can't propose to ${input.daoAccountId}: its policy grants this account no AddProposal permission.`,
+    );
+  }
+
+  const prepared = await prepareTenantConfigWrite(apiClient, input);
+  const plan: DaoPlan = {
+    kind: "call",
+    receiverId: prepared.data.contractId,
+    methodName: prepared.data.methodName,
+    args: prepared.data.args as unknown as Record<string, unknown>,
+    gas: prepared.data.gas,
+    attachedDeposit: toYoctoString(prepared.data.attachedDeposit),
+  };
+  return proposeAsSession(wallet, input.daoAccountId, plan, describeTenantConfigProposal(input));
 }

@@ -19,6 +19,15 @@ export function PublicShell({
   focused = false,
   showSignIn = true,
 }: PublicShellProps) {
+  if (focused) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="public-shell">
+        <PublicHeader focused={focused} showSignIn={showSignIn} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="public-shell">
       <div className="sticky-offset-public flex min-h-0 flex-1 flex-col overflow-y-auto">

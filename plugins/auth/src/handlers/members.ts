@@ -1,5 +1,7 @@
 import { ORPCError } from "@orpc/server";
+import { eq } from "drizzle-orm";
 import { Context } from "effect";
+import * as schema from "../db/schema";
 import { AuthServicesTag } from "../service-types";
 import { canReadMemberEmails, createHeaders, safeAuthApi, visibleEmail } from "../utils";
 
@@ -116,13 +118,35 @@ export function createMemberHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
+        const headers = createHeaders(context.reqHeaders);
+        const session = input.organizationId
+          ? null
+          : await safeAuthApi(() => services.auth.api.getSession({ headers }));
+        const activeSession = session
+          ? await services.db.query.session.findFirst({
+              where: eq(schema.session.id, session.session.id),
+            })
+          : null;
+        const organizationId = input.organizationId ?? activeSession?.activeOrganizationId;
+        if (!organizationId) {
+          throw new ORPCError("BAD_REQUEST", { message: "No active organization" });
+        }
+        const organization = await services.db.query.organization.findFirst({
+          where: eq(schema.organization.id, organizationId),
+        });
+        if (!organization) {
+          throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
+        }
+        if (organization.status !== "active") {
+          throw new ORPCError("FORBIDDEN", { message: "Organization approval is required" });
+        }
         const result = await safeAuthApi(() =>
           services.auth.api.addMember({
-            headers: createHeaders(context.reqHeaders),
+            headers,
             body: {
               userId: input.userId,
               role: input.role,
-              organizationId: input.organizationId,
+              organizationId,
             },
           }),
         );

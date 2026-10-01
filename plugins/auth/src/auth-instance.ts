@@ -18,8 +18,9 @@ import {
   ownerAc,
 } from "better-auth/plugins/organization/access";
 import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
-import { gt } from "drizzle-orm";
+import { eq, gt } from "drizzle-orm";
 import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
+import { organizationApproval } from "./organization-approval";
 import {
   createPasskeySignUpUser,
   passkeyAuthenticatorSelection,
@@ -349,6 +350,7 @@ export function createAuthInstance(
       }),
       passkeySignUp({ network }),
       setEmail(),
+      organizationApproval(db),
       organization({
         ac: orgAc,
         roles: orgRoles,
@@ -359,6 +361,13 @@ export function createAuthInstance(
           allowRemovingAllTeams: true,
         },
         schema: {
+          organization: {
+            additionalFields: {
+              status: { type: "string", required: false, input: false, defaultValue: "active" },
+              requestedBy: { type: "string", required: false, input: false },
+              rejectionReason: { type: "string", required: false, input: false },
+            },
+          },
           team: {
             additionalFields: {
               metadata: { type: "string", required: false, input: true },
@@ -372,7 +381,15 @@ export function createAuthInstance(
           },
         },
         organizationHooks: {
-          beforeCreateInvitation: async ({ invitation }) => {
+          beforeCreateOrganization: async ({ user }) => ({
+            data: { status: "pending", requestedBy: user.id, rejectionReason: null },
+          }),
+          beforeCreateInvitation: async ({ invitation, organization }) => {
+            if (organization.status !== "active") {
+              throw new APIError("FORBIDDEN", {
+                message: "Organization requires platform-admin approval",
+              });
+            }
             const accountId =
               typeof invitation.nearAccountId === "string" ? invitation.nearAccountId : undefined;
             const suppliedNetwork = invitation.nearNetwork;
@@ -418,6 +435,14 @@ export function createAuthInstance(
             return undefined;
           },
           beforeAcceptInvitation: async ({ invitation }) => {
+            const organization = await db.query.organization.findFirst({
+              where: eq(schema.organization.id, invitation.organizationId),
+            });
+            if (organization?.status !== "active") {
+              throw new APIError("FORBIDDEN", {
+                message: "Organization requires platform-admin approval",
+              });
+            }
             if (isNearInvitation(invitation)) {
               throw new APIError("BAD_REQUEST", {
                 message:

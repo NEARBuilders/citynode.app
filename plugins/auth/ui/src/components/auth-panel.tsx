@@ -24,8 +24,11 @@ export function AuthPanel({
   footer,
 }: AuthPanelProps) {
   return (
-    <div className="flex flex-1 items-center justify-center px-4 py-12 sm:py-20">
-      <div className="flex w-full max-w-sm flex-col gap-8">
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-4 py-12 sm:py-20"
+      data-testid="auth-panel"
+    >
+      <div className="mx-auto my-auto flex w-full max-w-sm flex-col gap-8">
         {toolbar && <div className="flex justify-end">{toolbar}</div>}
         <header className="flex flex-col items-center gap-3 text-center">
           {icon && (

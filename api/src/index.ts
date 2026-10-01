@@ -307,6 +307,33 @@ export default createPlugin.withPlugins<PluginsClient>()({
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
       createAuthMiddleware<AuthContext>(builder);
     const requireNodeOperations = createRequireTeamArea(builder)("node-operations");
+    const resolveProposalOrganization = builder.middleware(
+      async ({ context, next }, input: { orgId: string }) => {
+        const authPlugin = plugins.auth;
+        if (!authPlugin) {
+          throw new ORPCError("INTERNAL_SERVER_ERROR", {
+            message: "The auth plugin is not available",
+          });
+        }
+        const organization = await authPlugin
+          .client({ reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()) })
+          .getOrganizationForAdmin({ organizationId: input.orgId });
+        const organizationContext: NonNullable<AuthContext["organization"]> = {
+          activeOrganizationId: organization?.id ?? null,
+          organization,
+          member: null,
+          isPersonal: false,
+          hasOrganization: !!organization,
+          teams: [],
+          activeTeamId: null,
+        };
+        return next({
+          context: {
+            organization: organizationContext,
+          },
+        });
+      },
+    );
 
     const router = {
       trackDiscovery: builder.trackDiscovery.effect(function* ({ input, context }) {
@@ -738,38 +765,42 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
-      applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).effect(function* ({ input }) {
-        const services = yield* ApiServices;
-        yield* validateAccountId(input.accountId);
-        yield* validateAccountId(input.submitterAccountId);
-        if (input.poolAccountId) yield* validateAccountId(input.poolAccountId);
-        yield* validateHostname(input.hostname);
-        const result = yield* verifyDaoMembership({
-          daoAccountId: input.accountId,
-          memberAccountId: input.submitterAccountId,
-        });
-        if (!result.isMember) {
-          return yield* Effect.fail(
-            new ORPCError("FORBIDDEN", {
-              message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
-              data: {
-                daoAccountId: input.accountId,
-                submitterAccountId: input.submitterAccountId,
-              },
-            }),
-          );
-        }
-        return yield* services.tenants.applyNodeProposal({
-          kind: input.kind,
-          name: input.name,
-          slug: input.slug,
-          parentId: input.parentId,
-          orgId: input.orgId,
-          accountId: input.accountId,
-          hostname: input.hostname.toLowerCase(),
-          ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
-        });
-      }),
+      applyNodeProposal: builder.applyNodeProposal
+        .use(requireAdmin)
+        .use(resolveProposalOrganization)
+        .use(requireOrganization)
+        .effect(function* ({ input }) {
+          const services = yield* ApiServices;
+          yield* validateAccountId(input.accountId);
+          yield* validateAccountId(input.submitterAccountId);
+          if (input.poolAccountId) yield* validateAccountId(input.poolAccountId);
+          yield* validateHostname(input.hostname);
+          const result = yield* verifyDaoMembership({
+            daoAccountId: input.accountId,
+            memberAccountId: input.submitterAccountId,
+          });
+          if (!result.isMember) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
+                data: {
+                  daoAccountId: input.accountId,
+                  submitterAccountId: input.submitterAccountId,
+                },
+              }),
+            );
+          }
+          return yield* services.tenants.applyNodeProposal({
+            kind: input.kind,
+            name: input.name,
+            slug: input.slug,
+            parentId: input.parentId,
+            orgId: input.orgId,
+            accountId: input.accountId,
+            hostname: input.hostname.toLowerCase(),
+            ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
+          });
+        }),
 
       listNodes: builder.listNodes.effect(function* ({ input }) {
         const services = yield* ApiServices;

@@ -12,7 +12,7 @@
  * consume it today.
  */
 
-import { LocalStorage, NearConnector } from "@fastnear/near-connect";
+import { LocalStorage, NearConnector } from "@hot-labs/near-connect";
 import { Amount, type FinalExecutionOutcome, fromNearConnect, Gas, Near } from "near-kit";
 import { useEffect } from "react";
 import { create } from "zustand";
