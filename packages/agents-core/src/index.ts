@@ -1,3 +1,15 @@
+export {
+  balanceMoveExecution,
+  depositExecution,
+  recoverExecutionRequest,
+  runExecution,
+  runRecovery,
+  swapExecution,
+  swapQuote,
+  transferExecution,
+  withdrawExecution,
+  withdrawQuote,
+} from "./api/executions.js";
 export * from "./config/env.js";
 export * from "./config/runtime.js";
 export * from "./config/sponsor-keys.js";
@@ -25,6 +37,7 @@ export { generateIntent, generateResponse } from "./modules/intents/generate.js"
 export { readHistory, readStatus } from "./modules/intents/status.js";
 export { submitIntent } from "./modules/intents/submit.js";
 export { readBudget } from "./modules/operations/budget-policy-service.js";
+export { execute, recoverExecution } from "./modules/operations/execution-service.js";
 export {
   listScheduledExecutions,
   readTimelock,

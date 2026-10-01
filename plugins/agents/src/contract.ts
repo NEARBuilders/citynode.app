@@ -7,9 +7,11 @@ import {
   agentListQuerySchema,
   agentPageSchema,
   agentViewSchema,
+  balanceMoveRequestSchema,
   balanceQuerySchema,
   balancesViewSchema,
   budgetViewSchema,
+  depositRequestSchema,
   generateIntentRequestSchema,
   grantListViewSchema,
   historyPageSchema,
@@ -18,13 +20,18 @@ import {
   policyHistoryQuerySchema,
   policyHistoryViewSchema,
   policyViewSchema,
+  quoteResponseSchema,
+  recoverRequestSchema,
   scheduledPageSchema,
   scheduledQuerySchema,
   statusResponseSchema,
   submitIntentRequestSchema,
+  swapRequestSchema,
   timelockViewSchema,
   tokenListViewSchema,
+  transferRequestSchema,
   walletViewSchema,
+  withdrawRequestSchema,
 } from "@near-intents-agent-api/contracts/api";
 import { oc } from "@orpc/contract";
 import { UNAUTHORIZED as UnauthorizedError } from "every-plugin/errors";
@@ -115,61 +122,61 @@ export const contract = {
     .route({ method: "POST", path: "/agents", summary: "Agents bound to the session's owner" })
     .input(agentListQuerySchema)
     .output(agentPageSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getAgent: oc
     .route({ method: "POST", path: "/agents/get", summary: "One agent's view" })
     .input(z.object({ agentId: z.string() }))
     .output(agentViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getWallet: oc
     .route({ method: "POST", path: "/agents/wallet", summary: "Custody wallet identity" })
     .input(z.object({ agentId: z.string() }))
     .output(walletViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getBalances: oc
     .route({ method: "POST", path: "/agents/balances", summary: "Balances for one agent" })
     .input(balanceQuerySchema.and(z.object({ agentId: z.string() })))
     .output(balancesViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getPolicy: oc
     .route({ method: "POST", path: "/agents/policy", summary: "Current policy state" })
     .input(z.object({ agentId: z.string() }))
     .output(policyViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getPolicyHistory: oc
     .route({ method: "POST", path: "/agents/policy-history", summary: "Policy revision history" })
     .input(policyHistoryQuerySchema.and(z.object({ agentId: z.string() })))
     .output(policyHistoryViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getLimits: oc
     .route({ method: "POST", path: "/agents/limits", summary: "Sponsor and policy limits" })
     .input(z.object({ agentId: z.string() }))
     .output(limitsViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getBudget: oc
     .route({ method: "POST", path: "/agents/budget", summary: "USD budget window" })
     .input(z.object({ agentId: z.string() }))
     .output(budgetViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getTimelock: oc
     .route({ method: "POST", path: "/agents/timelock", summary: "Timelock configuration" })
     .input(z.object({ agentId: z.string() }))
     .output(timelockViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   listScheduledExecutions: oc
     .route({ method: "POST", path: "/agents/scheduled", summary: "Scheduled executions" })
     .input(scheduledQuerySchema.and(z.object({ agentId: z.string() })))
     .output(scheduledPageSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   getTokenCatalog: oc
     .route({ method: "POST", path: "/tokens", summary: "Provider token catalog" })
@@ -180,13 +187,73 @@ export const contract = {
     .route({ method: "POST", path: "/agents/history", summary: "Intent and operation history" })
     .input(historyQuerySchema.and(z.object({ agentId: z.string() })))
     .output(historyPageSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   listGrants: oc
     .route({ method: "POST", path: "/agents/grants", summary: "Grants issued for one agent" })
     .input(z.object({ agentId: z.string() }))
     .output(grantListViewSchema)
-    .errors({ UNAUTHORIZED: { message: "Session user required" } }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  swap: oc
+    .route({ method: "POST", path: "/agents/swap", summary: "Swap under a grant (dry = quote)" })
+    .input(swapRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(z.union([quoteResponseSchema, statusResponseSchema]))
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  withdraw: oc
+    .route({
+      method: "POST",
+      path: "/agents/withdraw",
+      summary: "Withdraw under a grant (dry = quote)",
+    })
+    .input(withdrawRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(z.union([quoteResponseSchema, statusResponseSchema]))
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  transfer: oc
+    .route({ method: "POST", path: "/agents/transfer", summary: "Transfer under a grant" })
+    .input(transferRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(statusResponseSchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  shield: oc
+    .route({ method: "POST", path: "/agents/shield", summary: "Shield into confidential balance" })
+    .input(balanceMoveRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(statusResponseSchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  unshield: oc
+    .route({
+      method: "POST",
+      path: "/agents/unshield",
+      summary: "Unshield from confidential balance",
+    })
+    .input(balanceMoveRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(statusResponseSchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  confidentialDeposit: oc
+    .route({
+      method: "POST",
+      path: "/agents/confidential-deposit",
+      summary: "Confidential deposit",
+    })
+    .input(balanceMoveRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(statusResponseSchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  deposit: oc
+    .route({ method: "POST", path: "/agents/deposit", summary: "Cross-chain deposit" })
+    .input(depositRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(statusResponseSchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  recover: oc
+    .route({ method: "POST", path: "/agents/recover", summary: "Recover an interrupted execution" })
+    .input(recoverRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(statusResponseSchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 };
 
 export type GenerateIntentInput = GenerateIntentRequest;

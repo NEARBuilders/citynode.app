@@ -1,9 +1,11 @@
 import {
   balanceList,
+  balanceMoveExecution,
   configureDatabase,
   configureOutlayer,
   configureRuntime,
   configureSponsorClients,
+  depositExecution,
   generateIntent,
   generateResponse,
   getAgentView,
@@ -18,8 +20,16 @@ import {
   readPolicyHistory,
   readStatus,
   readTimelock,
+  recoverExecutionRequest,
+  runExecution,
+  runRecovery,
   submitIntent,
+  swapExecution,
+  swapQuote,
+  transferExecution,
   walletView,
+  withdrawExecution,
+  withdrawQuote,
 } from "@near-intents-agent-api/agents-core";
 import { envSchema } from "@near-intents-agent-api/agents-core/config";
 import * as views from "@near-intents-agent-api/agents-core/views";
@@ -33,6 +43,7 @@ import { actorForSession } from "./actor";
 import { ContextSchema } from "./context";
 import { contract } from "./contract";
 import { DatabaseLive, DatabaseTag } from "./db/layer";
+import { requireIdempotencyKey } from "./idempotency";
 
 export default createPlugin({
   variables: z.object({
@@ -139,6 +150,24 @@ export default createPlugin({
   },
 
   createRouter: (builder) => {
+    const requireActor = (
+      context: { userId?: string },
+      errors: { UNAUTHORIZED(options: { data: { apiKeyProvided: boolean } }): unknown },
+    ) =>
+      Effect.gen(function* () {
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
+        const database = yield* DatabaseTag;
+        return yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+      });
+
+    function grantAndKeyHeaders(context: { reqHeaders?: Headers }) {
+      return {
+        grantToken: context.reqHeaders?.get("x-grant-token") ?? undefined,
+        idempotencyKey: context.reqHeaders?.get("idempotency-key") ?? undefined,
+      };
+    }
+
     return {
       ping: builder.ping.handler(async ({ input }) => {
         return {
@@ -157,10 +186,7 @@ export default createPlugin({
       }),
 
       generateIntent: builder.generateIntent.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         const idempotencyKey = context.reqHeaders?.get("idempotency-key") ?? undefined;
         const { row, replayed } = yield* Effect.tryPromise(() =>
           generateIntent(actor, input, idempotencyKey),
@@ -169,26 +195,17 @@ export default createPlugin({
       }),
 
       submitIntent: builder.submitIntent.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(() => submitIntent(actor, input));
       }),
 
       intentStatus: builder.intentStatus.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(() => readStatus(actor, input.correlationId, input.waitMs));
       }),
 
       listAgents: builder.listAgents.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         const page = yield* Effect.tryPromise(() =>
           listAgents(actor, {
             ...(input.externalUserId ? { externalUserId: input.externalUserId } : {}),
@@ -199,30 +216,21 @@ export default createPlugin({
       }),
 
       getAgent: builder.getAgent.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(async () =>
           views.agentView(await getAgentView(actor, input.agentId)),
         );
       }),
 
       getWallet: builder.getWallet.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(async () =>
           views.walletView(await walletView(actor, input.agentId)),
         );
       }),
 
       getBalances: builder.getBalances.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         const list = yield* Effect.tryPromise(() =>
           balanceList(actor, input.agentId, { source: input.source }),
         );
@@ -236,20 +244,14 @@ export default createPlugin({
       }),
 
       getPolicy: builder.getPolicy.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(async () =>
           views.policyView(await readPolicy(actor, input.agentId)),
         );
       }),
 
       getPolicyHistory: builder.getPolicyHistory.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         const history = yield* Effect.tryPromise(() =>
           readPolicyHistory(actor, input.agentId, {
             limit: input.limit,
@@ -260,30 +262,21 @@ export default createPlugin({
       }),
 
       getLimits: builder.getLimits.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(async () =>
           views.limitsView(await readLimits(actor, input.agentId)),
         );
       }),
 
       getBudget: builder.getBudget.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(async () =>
           views.budgetView(await readBudget(actor, input.agentId)),
         );
       }),
 
       getTimelock: builder.getTimelock.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(async () =>
           views.timelockView(await readTimelock(actor, input.agentId)),
         );
@@ -294,10 +287,7 @@ export default createPlugin({
         context,
         errors,
       }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         const page = yield* Effect.tryPromise(() =>
           listScheduledExecutions(actor, input.agentId, input),
         );
@@ -310,20 +300,131 @@ export default createPlugin({
       }),
 
       getHistory: builder.getHistory.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         return yield* Effect.tryPromise(() => readHistory(actor, input.agentId, input));
       }),
 
       listGrants: builder.listGrants.effect(function* ({ input, context, errors }) {
-        if (!context.userId)
-          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
-        const database = yield* DatabaseTag;
-        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const actor = yield* requireActor(context, errors);
         const grants = yield* Effect.tryPromise(() => listAgentGrants(actor, input.agentId));
         return { data: grants.map(views.grantView) };
+      }),
+
+      swap: builder.swap.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        if (input.dry)
+          return yield* Effect.tryPromise(() => swapQuote(actor, input.agentId, input));
+        return yield* Effect.tryPromise(() =>
+          runExecution(
+            actor,
+            input.agentId,
+            swapExecution(input, requireIdempotencyKey(headers.idempotencyKey)),
+            headers.grantToken,
+          ),
+        );
+      }),
+
+      withdraw: builder.withdraw.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        if (input.dry)
+          return yield* Effect.tryPromise(() => withdrawQuote(actor, input.agentId, input));
+        return yield* Effect.tryPromise(() =>
+          runExecution(
+            actor,
+            input.agentId,
+            withdrawExecution(input, requireIdempotencyKey(headers.idempotencyKey)),
+            headers.grantToken,
+          ),
+        );
+      }),
+
+      transfer: builder.transfer.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        return yield* Effect.tryPromise(() =>
+          runExecution(
+            actor,
+            input.agentId,
+            transferExecution(input, requireIdempotencyKey(headers.idempotencyKey)),
+            headers.grantToken,
+          ),
+        );
+      }),
+
+      shield: builder.shield.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        return yield* Effect.tryPromise(() =>
+          runExecution(
+            actor,
+            input.agentId,
+            balanceMoveExecution("shield", input, requireIdempotencyKey(headers.idempotencyKey)),
+            headers.grantToken,
+          ),
+        );
+      }),
+
+      unshield: builder.unshield.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        return yield* Effect.tryPromise(() =>
+          runExecution(
+            actor,
+            input.agentId,
+            balanceMoveExecution("unshield", input, requireIdempotencyKey(headers.idempotencyKey)),
+            headers.grantToken,
+          ),
+        );
+      }),
+
+      confidentialDeposit: builder.confidentialDeposit.effect(function* ({
+        input,
+        context,
+        errors,
+      }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        return yield* Effect.tryPromise(() =>
+          runExecution(
+            actor,
+            input.agentId,
+            balanceMoveExecution(
+              "confidential_deposit",
+              input,
+              requireIdempotencyKey(headers.idempotencyKey),
+            ),
+            headers.grantToken,
+          ),
+        );
+      }),
+
+      deposit: builder.deposit.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        return yield* Effect.tryPromise(() =>
+          runExecution(
+            actor,
+            input.agentId,
+            depositExecution(input, requireIdempotencyKey(headers.idempotencyKey)),
+            headers.grantToken,
+          ),
+        );
+      }),
+
+      recover: builder.recover.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        return yield* Effect.tryPromise(() =>
+          runRecovery(
+            actor,
+            input.agentId,
+            input.correlationId,
+            recoverExecutionRequest(input, requireIdempotencyKey(headers.idempotencyKey)),
+            headers.grantToken,
+          ),
+        );
       }),
     };
   },
