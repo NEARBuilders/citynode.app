@@ -1,12 +1,8 @@
 import type { Actor } from "@near-intents-agent-api/agents-core";
 import { apiKeys, tenants, user } from "@near-intents-agent-api/database/schema";
+import { sql } from "drizzle-orm";
 import type { DatabaseDriver } from "./db";
 
-/**
- * Delegated dispatch share-locks the admitting key's row (dispatch-fence), so
- * the session actor provisions its own key row: the session cookie is the
- * credential, and revoking the key stops the work it admitted.
- */
 export async function actorForSession(
   database: DatabaseDriver,
   userId: string,
@@ -31,6 +27,9 @@ export async function actorForSession(
       prefix: keyId.slice(0, 8),
       expiresAt: new Date(Date.now() + 30 * 24 * 3_600_000),
     })
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: apiKeys.id,
+      set: { expiresAt: sql`now() + interval '30 days'` },
+    });
   return { tenantId: userId, keyId };
 }
