@@ -34,6 +34,10 @@ export function yoctoToNearInput(yocto: bigint) {
   return fraction ? `${whole}.${fraction}` : `${whole}`;
 }
 
+export function maxMinusOneNear(maxYocto: bigint): bigint {
+  return maxYocto > YOCTO_PER_NEAR ? maxYocto - YOCTO_PER_NEAR : maxYocto;
+}
+
 export function parseUnstakeAmount(amount: string, max: bigint) {
   const yocto = parseNearAmount(amount);
   if (!yocto || yocto > max) return null;

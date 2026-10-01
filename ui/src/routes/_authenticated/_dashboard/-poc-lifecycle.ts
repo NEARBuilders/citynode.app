@@ -30,6 +30,7 @@ import {
   getNear,
   isPositive,
   LOCKUP_DEPLOY_DEPOSIT,
+  lockupAvailableYocto,
   meetsTeamStakeMinimum,
   type PoolAccountView,
   parseNearAmount,
@@ -125,17 +126,27 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
 
   const activeOrg = organizations.find((org) => org.id === activeOrgId);
   const activeOrgName = activeOrg?.name ?? null;
+  /** An org can override the name its node gets with `metadata.name`. */
+  const orgNamePrefill = (() => {
+    const override = activeOrg?.metadata?.name;
+    if (typeof override === "string" && override.trim()) return override.trim();
+    return activeOrgName ? titleCase(activeOrgName) : null;
+  })();
 
   const lastOrgId = useRef<string | null>(null);
+  const lastPrefillKey = useRef<string | null>(null);
   useEffect(() => {
-    if (activeOrgId === lastOrgId.current) return;
+    const prefillKey = `${activeOrgId ?? ""}:${orgNamePrefill ?? ""}`;
+    if (activeOrgId === lastOrgId.current && prefillKey === lastPrefillKey.current) return;
+    const orgChanged = lastOrgId.current !== activeOrgId;
     lastOrgId.current = activeOrgId;
-    setFailures({});
-    setConnectedTeamDao(null);
-    form.reset(
-      buildPocFormValues(activeOrgId, activeOrgName ? { name: titleCase(activeOrgName) } : {}),
-    );
-  }, [activeOrgId, activeOrgName, form]);
+    lastPrefillKey.current = prefillKey;
+    if (orgChanged) {
+      setFailures({});
+      setConnectedTeamDao(null);
+    }
+    form.reset(buildPocFormValues(activeOrgId, orgNamePrefill ? { name: orgNamePrefill } : {}));
+  }, [activeOrgId, orgNamePrefill, form]);
 
   const poc = <T>(key: readonly unknown[], queryFn: () => Promise<T>, enabled = true) =>
     ({ queryKey: ["poc", ...key], queryFn, enabled, refetchInterval: REFETCH_MS }) as const;
@@ -206,6 +217,18 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
       () => fetchLockupState(endowmentLockup),
       !!endowmentLockup,
     ),
+  );
+  const { data: endowmentLockupBalance } = useQuery(
+    poc(
+      ["lockup-balance", endowmentLockup],
+      () => fetchAccountBalance(endowmentLockup),
+      !!endowmentLockup,
+    ),
+  );
+  /** The lockup can stake its balance minus the storage reserve it refuses to spend. */
+  const endowmentAvailableYocto = useMemo(
+    () => (endowmentLockupBalance == null ? null : lockupAvailableYocto(endowmentLockupBalance)),
+    [endowmentLockupBalance],
   );
   const { data: poolMeta } = useQuery(poc(["pool-meta", pool], () => fetchPoolMeta(pool), !!pool));
   const { data: teamPoolAccount } = useQuery(
@@ -713,6 +736,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
     voteRecord,
     endowmentLockup,
     endowmentLockupState,
+    endowmentAvailableYocto,
     endowmentPoolAccount,
     endowmentVe,
     poolMeta,

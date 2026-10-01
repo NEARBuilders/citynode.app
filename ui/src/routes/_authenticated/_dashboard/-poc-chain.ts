@@ -99,6 +99,16 @@ export function yoctoArg(value: unknown): bigint {
 }
 
 /**
+ * What a lockup can stake: its account balance minus the min lockup deposit —
+ * the storage reserve `deposit_and_stake` refuses to spend.
+ */
+export function lockupAvailableYocto(balanceYocto: string | null | undefined): bigint {
+  const balance = yoctoArg(balanceYocto);
+  const reserve = BigInt(LOCKUP_DEPLOY_DEPOSIT);
+  return balance > reserve ? balance - reserve : 0n;
+}
+
+/**
  * Re-run math: steps must top up what is missing instead of re-sending the
  * full configured amount, so retrying a half-done station never double-funds.
  */

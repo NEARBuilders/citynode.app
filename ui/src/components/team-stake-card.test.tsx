@@ -170,9 +170,29 @@ describe("TeamStakeCard", () => {
           teamAccountId: "india.sputnik-dao.near",
           poolAccountId: "india.poolv1.near",
           method: "withdraw",
-          amountYocto: 1_500_000_000_000_000_000_000_000n,
+          amountYocto: 500_000_000_000_000_000_000_000n,
         }),
       ),
     );
+  });
+
+  it("fills max minus 1 NEAR when Max is clicked", async () => {
+    stubPool({
+      account_id: "india.sputnik-dao.near",
+      staked_balance: "2500000000000000000000000",
+      unstaked_balance: "0",
+      can_withdraw: true,
+    });
+    renderCard();
+    const unstake = await screen.findByTestId("dashboard-node.team-stake-unstake");
+    await waitFor(() => expect((unstake as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(unstake);
+    const amount = (await screen.findByTestId(
+      "dashboard-node.team-stake-unstake-amount",
+    )) as HTMLInputElement;
+    expect(amount.value).toBe("1.5");
+    fireEvent.change(amount, { target: { value: "0" } });
+    fireEvent.click(screen.getByText("Max"));
+    expect(amount.value).toBe("1.5");
   });
 });

@@ -28,7 +28,12 @@ import {
   stakePoolAccountQueryOptions,
   type TeamStakeTarget,
 } from "@/lib/queries/stake-pool";
-import { parseUnstakeAmount, proposeTeamPoolAction, yoctoToNearInput } from "@/lib/team-unstake";
+import {
+  maxMinusOneNear,
+  parseUnstakeAmount,
+  proposeTeamPoolAction,
+  yoctoToNearInput,
+} from "@/lib/team-unstake";
 import { useNearAccount } from "@/lib/use-near-account";
 
 type PoolPhase = "unstake" | "pending-release" | "withdraw";
@@ -215,7 +220,7 @@ function PoolActionDialog({
   const [amount, setAmount] = useState("");
   const parsed = parseUnstakeAmount(amount, max);
   useEffect(() => {
-    if (open) setAmount(yoctoToNearInput(max));
+    if (open) setAmount(yoctoToNearInput(maxMinusOneNear(max)));
   }, [open, max]);
   const propose = useMutation({
     mutationFn: async () => {
@@ -246,7 +251,7 @@ function PoolActionDialog({
               onChange={(event) => setAmount(event.target.value)}
             />
             <InputGroupAddon align="inline-end">
-              <InputGroupButton onClick={() => setAmount(yoctoToNearInput(max))}>
+              <InputGroupButton onClick={() => setAmount(yoctoToNearInput(maxMinusOneNear(max)))}>
                 Max
               </InputGroupButton>
             </InputGroupAddon>

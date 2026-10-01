@@ -32,6 +32,16 @@ describe("buildPocFormValues", () => {
     expect(values.name).toBe("Thing");
   });
 
+  it("does not let an empty saved draft swallow the prefill", () => {
+    localStorage.setItem(KEY_A, JSON.stringify({ name: "" }));
+    expect(buildPocFormValues(ORG_A, { name: "Thing" }).name).toBe("Thing");
+  });
+
+  it("keeps a user-entered draft name over the prefill", () => {
+    localStorage.setItem(KEY_A, JSON.stringify({ name: "My Node" }));
+    expect(buildPocFormValues(ORG_A, { name: "Thing" }).name).toBe("My Node");
+  });
+
   it("keeps drafts isolated per organization", () => {
     localStorage.setItem(KEY_A, JSON.stringify({ name: "Node A" }));
     localStorage.setItem(KEY_B, JSON.stringify({ name: "Node B" }));

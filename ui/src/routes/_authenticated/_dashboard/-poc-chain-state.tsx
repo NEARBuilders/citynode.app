@@ -81,6 +81,7 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
     treasuriesShared,
     endowmentLockup,
     endowmentLockupState,
+    endowmentAvailableYocto,
     endowmentPoolAccount,
     endowmentVe,
     poolMeta,
@@ -191,6 +192,13 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
           />
           <InfoRow label="Locked" value={formatNear(endowmentLockupState?.locked)} mono />
           <InfoRow label="Liquid" value={formatNear(endowmentLockupState?.liquid)} mono />
+          <InfoRow
+            label="Available to stake"
+            value={
+              endowmentAvailableYocto != null ? formatNear(endowmentAvailableYocto.toString()) : "—"
+            }
+            mono
+          />
           <InfoRow
             label="Staked from lockup"
             value={formatNear(endowmentLockupState?.knownDeposited)}
