@@ -18,7 +18,9 @@ export function LoginLanguageSelector({
       className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
       data-testid={testId}
       value={locale}
-      onChange={(event) => selectLocale(event.target.value as LoginLocale)}
+      onChange={(event) => {
+        void selectLocale(event.target.value as LoginLocale).catch(() => undefined);
+      }}
     >
       {LOGIN_LOCALES.map((option) => (
         <option key={option} value={option} lang={option}>

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import { SecurityTab } from "./-security-tab";
 
 const harness = vi.hoisted(() => ({
@@ -85,7 +86,7 @@ describe("security settings", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Update password" }));
 
-    await waitFor(() => expect(harness.error).toHaveBeenCalledWith("Passwords do not match"));
+    await waitFor(() => expect(harness.error).toHaveBeenCalledWith("The passwords do not match."));
     expect(harness.changePassword).not.toHaveBeenCalled();
   });
 

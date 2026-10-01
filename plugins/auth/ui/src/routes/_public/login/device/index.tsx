@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import type { LoginMessageId } from "@/i18n/catalogs";
+import { useLoginTranslation } from "@/i18n/runtime";
 import { sanitizeUserCode } from "./-user-code";
 
 type SearchParams = {
@@ -33,12 +35,13 @@ export const Route = createFileRoute("/_public/login/device/")({
 });
 
 function DeviceVerifyPage() {
+  const translate = useLoginTranslation();
   const navigate = useNavigate();
   const auth = useAuthClient();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const { user_code, pubKey, contract, account, network, source } = Route.useSearch();
   const [code, setCode] = useState(user_code ?? "");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoginMessageId | null>(null);
   const [claiming, setClaiming] = useState(false);
 
   useEffect(() => {
@@ -47,7 +50,7 @@ function DeviceVerifyPage() {
     void auth.device({ query: { user_code } }).then(({ data, error }) => {
       if (error || !data) {
         setClaiming(false);
-        setError("This code is invalid or has expired. Ask for a new one.");
+        setError("auth.pair.invalidCode");
         return;
       }
       void navigate({
@@ -90,13 +93,9 @@ function DeviceVerifyPage() {
   return (
     <AuthPanel
       icon={<DeviceMobileIcon />}
-      title="Approve a sign-in"
+      title={translate("auth.pair.title")}
       titleTestId="device.verify-heading"
-      description={
-        user_code
-          ? "Check this code matches the one on your other screen."
-          : "Enter the code shown on your other screen."
-      }
+      description={user_code ? translate("auth.pair.matches") : translate("auth.pair.enterCode")}
     >
       {user_code ? (
         <div className="flex flex-col items-center gap-2 rounded-3xl bg-muted px-6 py-8">
@@ -111,7 +110,7 @@ function DeviceVerifyPage() {
         <form onSubmit={handleSubmit}>
           <Field>
             <FieldLabel htmlFor="device-user-code" className="sr-only">
-              Device code
+              {translate("auth.pair.deviceCode")}
             </FieldLabel>
             <div className="flex gap-2">
               <Input
@@ -127,7 +126,7 @@ function DeviceVerifyPage() {
                 data-testid="device.user-code-input"
               />
               <Button type="submit" disabled={!code.trim()} data-testid="device.verify-button">
-                Continue
+                {translate("auth.common.continue")}
               </Button>
             </div>
           </Field>
@@ -136,7 +135,7 @@ function DeviceVerifyPage() {
 
       {error && (
         <p className="text-center text-sm text-destructive" data-testid="device.verify-error">
-          {error}
+          {translate(error)}
         </p>
       )}
 
@@ -146,7 +145,7 @@ function DeviceVerifyPage() {
           data-testid="device.claiming"
         >
           <Spinner />
-          Checking the code…
+          {translate("auth.pair.checking")}
         </p>
       )}
 
@@ -159,7 +158,7 @@ function DeviceVerifyPage() {
           onClick={signInToContinue}
           data-testid="device.signin-redirect-button"
         >
-          Sign in to continue
+          {translate("auth.pair.signInContinue")}
         </Button>
       )}
     </AuthPanel>

@@ -8,6 +8,9 @@ import { AuthPanel } from "@/components/auth-panel";
 import { InfoPopover } from "@/components/info-popover";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import type { LoginMessageId } from "@/i18n/catalogs";
+import { authErrorMessage } from "@/i18n/error-message";
+import { useLoginTranslation } from "@/i18n/runtime";
 import { sanitizeUserCode } from "./-user-code";
 
 type SearchParams = {
@@ -33,12 +36,13 @@ export const Route = createFileRoute("/_public/login/device/approve")({
 });
 
 function DeviceApprovePage() {
+  const translate = useLoginTranslation();
   const navigate = useNavigate();
   const auth = useAuthClient();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const { user_code, pubKey, contract, account: configAccount, source } = Route.useSearch();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoginMessageId | null>(null);
   const [approved, setApproved] = useState(false);
 
   const nearAccountsQuery = useQuery({
@@ -72,7 +76,7 @@ function DeviceApprovePage() {
       return true;
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to add delegate key");
+      toast.error(authErrorMessage(error, translate));
     },
   });
 
@@ -91,22 +95,22 @@ function DeviceApprovePage() {
         await addDelegateKey.mutateAsync();
       } catch {
         setPending(false);
-        setError("The wallet did not add the delegate key. Nothing was approved — try again.");
+        setError("auth.pair.keyDeclined");
         return;
       }
     }
     const { error: approveError } = await auth.device.approve({ userCode: user_code });
     setPending(false);
     if (approveError) {
-      setError("Could not approve this code. It may have expired or been claimed elsewhere.");
+      setError("auth.pair.approveFailed");
       return;
     }
     if (isDelegateMode || source === "cli") {
       setApproved(true);
-      toast.success("Approved — return to your terminal");
+      toast.success(translate("auth.pair.approvedTerminal"));
       return;
     }
-    toast.success("Approved — your other device is signing in");
+    toast.success(translate("auth.pair.approvedDevice"));
     void navigate({ to: "/dashboard" });
   };
 
@@ -115,7 +119,7 @@ function DeviceApprovePage() {
     setPending(true);
     await auth.device.deny({ userCode: user_code });
     setPending(false);
-    toast.info("Sign-in request denied");
+    toast.info(translate("auth.pair.denied"));
     void navigate({ to: "/", replace: true });
   };
 
@@ -123,9 +127,9 @@ function DeviceApprovePage() {
     return (
       <AuthPanel
         icon={<CheckCircleIcon />}
-        title="Return to your terminal"
+        title={translate("auth.pair.returnTerminal")}
         titleTestId="device.approved-heading"
-        description="The CLI received the credential. You can close this window."
+        description={translate("auth.pair.credentialReceived")}
       />
     );
   }
@@ -133,17 +137,21 @@ function DeviceApprovePage() {
   return (
     <AuthPanel
       icon={isDelegateMode ? <KeyIcon /> : <DevicesIcon />}
-      title={isDelegateMode ? "Approve publish key" : "Approve sign-in"}
+      title={
+        isDelegateMode
+          ? translate("auth.pair.approvePublish")
+          : translate("auth.pair.approveSignIn")
+      }
       titleTestId="device.approve-heading"
       description={
         isDelegateMode
-          ? "Adds a publish-only key to your NEAR account so the CLI can publish without gas."
-          : "Your other device will be signed in to this account."
+          ? translate("auth.pair.publishDescription")
+          : translate("auth.pair.signInDescription")
       }
     >
       {user_code ? (
         <div className="flex flex-col items-center gap-2 rounded-3xl bg-muted px-6 py-8">
-          <span className="text-sm text-muted-foreground">Check it matches your other screen</span>
+          <span className="text-sm text-muted-foreground">{translate("auth.pair.checkCode")}</span>
           <span
             className="font-mono text-3xl font-semibold tracking-widest break-all text-foreground"
             data-testid="device.approve-code"
@@ -156,17 +164,17 @@ function DeviceApprovePage() {
           className="text-center text-sm text-muted-foreground"
           data-testid="device.approve-missing-code"
         >
-          No code provided. Start again from the other device.
+          {translate("auth.pair.noCode")}
         </p>
       )}
 
       {isDelegateMode && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-muted-foreground">Public key</span>
+            <span className="text-muted-foreground">{translate("auth.pair.publicKey")}</span>
             <InfoPopover
-              title="Publish key"
-              body="Only allowed to call __fastdata_kv on the registry, with a 1 NEAR gas allowance. The private key stays on your computer."
+              title={translate("auth.pair.publishKey")}
+              body={translate("auth.pair.publishAllowance")}
             />
           </div>
           <p
@@ -180,8 +188,10 @@ function DeviceApprovePage() {
               className="text-sm wrap-anywhere text-warning-muted-foreground"
               data-testid="device.account-mismatch"
             >
-              You're signed in as {signedInAccountId}, not {configAccount}. The key will be added to{" "}
-              {signedInAccountId}.
+              {translate("auth.pair.accountMismatch", {
+                signedIn: signedInAccountId,
+                configured: configAccount,
+              })}
             </p>
           )}
         </div>
@@ -189,7 +199,7 @@ function DeviceApprovePage() {
 
       {error && (
         <p className="text-center text-sm text-destructive" data-testid="device.approve-error">
-          {error}
+          {translate(error)}
         </p>
       )}
 
@@ -204,7 +214,7 @@ function DeviceApprovePage() {
             data-testid="device.approve-button"
           >
             {pending && <Spinner data-icon="inline-start" />}
-            {isDelegateMode ? "Approve key" : "Approve"}
+            {isDelegateMode ? translate("auth.pair.approveKey") : translate("auth.common.approve")}
           </Button>
           <Button
             type="button"
@@ -215,7 +225,7 @@ function DeviceApprovePage() {
             disabled={pending}
             data-testid="device.deny-button"
           >
-            Deny
+            {translate("auth.common.deny")}
           </Button>
         </div>
       )}
@@ -224,14 +234,15 @@ function DeviceApprovePage() {
 }
 
 function NavigateToLogin({ userCode }: { userCode?: string }) {
+  const translate = useLoginTranslation();
   const navigate = useNavigate();
   const target = userCode ? `/login/device?user_code=${userCode}` : "/login/device";
   return (
     <AuthPanel
       icon={<DevicesIcon />}
-      title="Sign in to approve"
+      title={translate("auth.pair.signInToApprove")}
       titleTestId="device.approve-heading"
-      description="Sign in on this device first, then approve the request."
+      description={translate("auth.pair.signInHint")}
     >
       <Button
         type="button"
@@ -240,7 +251,7 @@ function NavigateToLogin({ userCode }: { userCode?: string }) {
         onClick={() => void navigate({ to: "/login", search: { redirect: target } })}
         data-testid="device.approve-signin-button"
       >
-        Sign in to continue
+        {translate("auth.pair.signInContinue")}
       </Button>
     </AuthPanel>
   );

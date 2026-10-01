@@ -1,16 +1,33 @@
 import { KeyIcon, ShieldCheckIcon, UserCircleIcon, UserIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { sessionQueryOptions } from "everything-dev/ui/auth";
+import { matchLocale } from "everything-dev/ui/i18n";
 import { useEffect, useRef } from "react";
 import { PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
+import { LOGIN_LOCALES } from "@/i18n/catalogs";
+import { translateLoginMessage, useLoginTranslation } from "@/i18n/runtime";
 import "../../styles.css";
+import { LoginAccountLocaleProvider } from "@/i18n/account-locale-provider";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "Settings" },
-      { name: "description", content: "Manage your profile, sign-in methods and API keys." },
+      {
+        title: translateLoginMessage(
+          "auth.meta.settings",
+          undefined,
+          matchLocale(match.context.locale, LOGIN_LOCALES) ?? "en",
+        ),
+      },
+      {
+        name: "description",
+        content: translateLoginMessage(
+          "auth.meta.settingsDescription",
+          undefined,
+          matchLocale(match.context.locale, LOGIN_LOCALES) ?? "en",
+        ),
+      },
     ],
   }),
   loader: async ({ context }) => {
@@ -20,18 +37,32 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 const tabs = [
-  { value: "profile", to: "/settings/profile", label: "Profile", icon: UserIcon },
+  { value: "profile", to: "/settings/profile", label: "auth.settings.profile", icon: UserIcon },
   {
     value: "auth-methods",
     to: "/settings/auth-methods",
-    label: "Sign-in methods",
+    label: "auth.settings.methods",
     icon: UserCircleIcon,
   },
-  { value: "api-keys", to: "/settings/api-keys", label: "API keys", icon: KeyIcon },
-  { value: "security", to: "/settings/security", label: "Security", icon: ShieldCheckIcon },
+  { value: "api-keys", to: "/settings/api-keys", label: "auth.settings.apiKeys", icon: KeyIcon },
+  {
+    value: "security",
+    to: "/settings/security",
+    label: "auth.settings.security",
+    icon: ShieldCheckIcon,
+  },
 ] as const;
 
 function SettingsLayout() {
+  return (
+    <LoginAccountLocaleProvider>
+      <SettingsContent />
+    </LoginAccountLocaleProvider>
+  );
+}
+
+function SettingsContent() {
+  const translate = useLoginTranslation();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const activeTab =
     tabs.find((t) => pathname === t.to || pathname.startsWith(`${t.to}/`))?.value ?? "profile";
@@ -43,10 +74,10 @@ function SettingsLayout() {
 
   return (
     <PageContainer>
-      <PageHeader title="Settings" headerTestId="settings.heading" />
+      <PageHeader title={translate("auth.common.settings")} headerTestId="settings.heading" />
       <div className="flex flex-col gap-8 md:flex-row md:gap-12">
         <nav
-          aria-label="Settings"
+          aria-label={translate("auth.common.settings")}
           className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:-mx-8 sm:px-8 md:mx-0 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:px-0"
         >
           {tabs.map((tab) => {
@@ -63,7 +94,7 @@ function SettingsLayout() {
                 className="shrink-0 md:w-full md:justify-start"
               >
                 <Icon data-icon="inline-start" />
-                <span className="flex-1 text-start">{tab.label}</span>
+                <span className="flex-1 text-start">{translate(tab.label)}</span>
               </Button>
             );
           })}

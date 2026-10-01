@@ -19,6 +19,7 @@ import { Field, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { LoginTranslator } from "@/i18n/catalogs";
+import { authErrorMessage } from "@/i18n/error-message";
 import { LoginLanguageSelector } from "@/i18n/language-selector";
 import { LoginI18nProvider, useLoginTranslation } from "@/i18n/runtime";
 import { markAddEmailPromptPending } from "@/lib/add-email-prompt";
@@ -189,7 +190,7 @@ function LoginPageContent() {
       onError: (error) => {
         setPending(null);
         if (isUnsupportedAuthenticatorError(error)) setUnsupported(true);
-        else toast.error(error.message);
+        else toast.error(authErrorMessage(error, t));
       },
     });
   };
