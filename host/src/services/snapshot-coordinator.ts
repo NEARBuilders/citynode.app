@@ -89,6 +89,9 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
     );
   }
 
+  // the fingerprint rides the config so the client config (and the
+  // soft-refresh signal) carries it (atomic-deploys 10)
+  nextConfig.deploymentFingerprint = nextFingerprint;
   yield* snapshot.swap({ fingerprint: nextFingerprint, config: nextConfig, composeState });
   return { status: "swapped", fingerprint: nextFingerprint, digest: composed.digest };
 });

@@ -27,6 +27,7 @@ import { RootError } from "@/components/root-error";
 import { RootNotFound } from "@/components/root-not-found";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { VersionRefreshBanner } from "@/components/version-refresh-banner";
 import { useMediaQuery } from "@/hooks";
 import { AppI18nProvider } from "@/i18n/runtime";
 import { resolveSessionFromCache, sessionQueryKey } from "@/lib/auth";
@@ -142,7 +143,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-  const { cspNonce, session } = Route.useRouteContext();
+  const { cspNonce, session, runtimeConfig } = Route.useRouteContext();
   const isDesktop = useMediaQuery("(min-width: 640px)");
   const isSsr = typeof window === "undefined";
   return (
@@ -167,6 +168,9 @@ function RootComponent() {
               </AppI18nProvider>
             </div>
             <Toaster position={isDesktop ? "bottom-right" : "top-center"} closeButton />
+            <ClientOnly>
+              <VersionRefreshBanner runtimeConfig={runtimeConfig} />
+            </ClientOnly>
           </ThemeProvider>
         </MotionConfig>
         <Scripts />

@@ -13,7 +13,7 @@ import { ConfigService, type RuntimeConfig } from "./services/config";
 import { FederationLifecycle } from "./services/federation.server";
 import { closeMcpServer } from "./services/mcp";
 import { PluginsService } from "./services/plugins";
-import { RuntimeSnapshot } from "./services/runtime-snapshot";
+import { deploymentFingerprint, RuntimeSnapshot } from "./services/runtime-snapshot";
 import { SnapshotCoordinator } from "./services/snapshot-coordinator";
 import { SnapshotWatch, watchIntervalMs } from "./services/snapshot-watch";
 import { ClientConfigCache } from "./services/ssr-render";
@@ -119,6 +119,18 @@ export const createStartServer = (onReady?: () => void) =>
         compositionHealth.status === "failed" ? 503 : 200,
       );
     });
+
+    app.get("/.well-known/version", (c: Context<HonoEnv>) =>
+      c.json(
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const state = yield* snapshot.get;
+            return { fingerprint: state.config.deploymentFingerprint ?? state.fingerprint };
+          }),
+        ),
+        { headers: { "cache-control": "public, max-age=30" } },
+      ),
+    );
 
     app.get("/.well-known/mcp.json", (c: Context<HonoEnv>) => {
       const url = new URL(c.req.url);
@@ -277,6 +289,7 @@ export const runServer = (input: ServerInput): ServerHandle => {
       process.env[key] = value;
     }
   }
+  input.config.deploymentFingerprint = deploymentFingerprint(input.config);
   const ConfigLive = Layer.succeed(ConfigService, input.config);
   const AppLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
   const SnapshotLive = RuntimeSnapshot.layer.pipe(Layer.provide(ConfigLive));

@@ -80,6 +80,7 @@ export function buildRuntimeClientConfig(
   return {
     env: config.env,
     account: activeRuntime.accountId,
+    deploymentFingerprint: config.deploymentFingerprint,
     networkId: config.account.endsWith(".testnet") ? "testnet" : "mainnet",
     hostUrl: requestUrl.origin,
     assetsUrl: coreUiUrl,

@@ -63,6 +63,15 @@
       "import": "./dist/bundle-cache.mjs",
       "require": "./dist/bundle-cache.cjs"
     },
+    "./bundle-fs-resolve": {
+      "development": {
+        "types": "./src/bundle-fs-resolve.ts",
+        "import": "./src/bundle-fs-resolve.ts"
+      },
+      "types": "./dist/bundle-fs-resolve.d.mts",
+      "import": "./dist/bundle-fs-resolve.mjs",
+      "require": "./dist/bundle-fs-resolve.cjs"
+    },
     "./fastkv": {
       "development": {
         "types": "./src/fastkv.ts",
@@ -315,6 +324,10 @@
       "types": "./dist/db/index.d.mts",
       "import": "./dist/db/index.mjs",
       "require": "./dist/db/index.cjs"
+    },
+    "./ui/version-check": {
+      "types": "./src/ui/version-check.ts",
+      "import": "./src/ui/version-check.ts"
     }
   },
   "files": [

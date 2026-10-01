@@ -31,6 +31,7 @@ export default defineConfig({
     "src/ui/router.ts",
     "src/ui/api.ts",
     "src/ui/auth.ts",
+    "src/ui/version-check.ts",
     "src/api/auth-middleware.ts",
     "src/ui/tenant.ts",
     "src/ui/entry.ts",

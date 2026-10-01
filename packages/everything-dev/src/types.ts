@@ -357,6 +357,9 @@ export const RuntimeConfigSchema = z.object({
   account: z.string(),
   domain: z.string().optional(),
   networkId: z.enum(["mainnet", "testnet"]),
+  /** the deploy fingerprint of the snapshot this config came from
+   * (atomic-deploys 10) — rides the client config for the soft-refresh signal */
+  deploymentFingerprint: z.string().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
   repository: z.string().optional(),
@@ -406,6 +409,8 @@ export const ClientRuntimeConfigSchema = z.object({
   env: z.enum(["development", "production", "staging"]),
   account: z.string(),
   networkId: z.enum(["mainnet", "testnet"]),
+  /** the deploy fingerprint this document was rendered from (soft refresh) */
+  deploymentFingerprint: z.string().optional(),
   hostUrl: z.string().optional(),
   assetsUrl: z.string(),
   apiBase: z.string(),
