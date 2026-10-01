@@ -222,7 +222,8 @@ export function createUiSharedDeps(
 ): Record<string, UiSharedDepEntry> {
   const fallbacks = { ...pkg.dependencies, ...pkg.devDependencies };
   const deps: Record<string, UiSharedDepEntry> = {};
-  for (const name of SHARE_MODULE_NAMES) {
+  const sharedNames = [...SHARE_MODULE_NAMES, ...(fallbacks.sonner ? ["sonner"] : [])];
+  for (const name of sharedNames) {
     const version = getInstalledVersion(name, fallbacks[name]);
     deps[name] = {
       version,
