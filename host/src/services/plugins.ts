@@ -464,7 +464,8 @@ function loadPluginEntryEffect(
     const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
-    const remoteUrl = `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`;
+    const remoteUrl =
+      entry.config.entryUrl ?? `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`;
     const result = yield* loadRemoteWithRetry<Omit<HostPluginEntry, "key" | "name">>({
       label: entry.key,
       remoteUrl,

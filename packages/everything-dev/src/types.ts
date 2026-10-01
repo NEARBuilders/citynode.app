@@ -50,6 +50,10 @@ export const FederationEntrySchema = z.object({
   name: z.string(),
   url: z.string(),
   entry: z.string(),
+  /** the content-hashed container entry URL (derived from the version
+   * manifest when the slot pins one) — consumers load this instead of
+   * appending the legacy fixed name */
+  entryUrl: z.string().optional(),
   source: SourceModeSchema,
   integrity: z.string().optional(),
 });
@@ -119,6 +123,9 @@ const PluginRuntimeUiSchema = z.object({
   integrity: z.string().optional(),
   ssrUrl: z.string().optional(),
   ssrIntegrity: z.string().optional(),
+  entryUrl: z.string().optional(),
+  ssrEntryUrl: z.string().optional(),
+  dependsOn: z.array(z.string()).optional(),
 });
 export type PluginRuntimeUi = z.infer<typeof PluginRuntimeUiSchema>;
 
@@ -134,6 +141,7 @@ export const RuntimePluginConfigSchema = z.object({
   variables: JsonObjectSchema.optional(),
   secrets: z.array(z.string()).optional(),
   integrity: z.string().optional(),
+  entryUrl: z.string().optional(),
   shared: SharedDepMapSchema.optional(),
   connectSrc: z.array(z.string()).optional(),
   ui: PluginRuntimeUiSchema.optional(),
@@ -366,6 +374,7 @@ export const RuntimeConfigSchema = z.object({
     publicUrl: z.string().optional(),
     ssrUrl: z.string().optional(),
     ssrIntegrity: z.string().optional(),
+    ssrEntryUrl: z.string().optional(),
     dependsOn: z.array(z.string()).optional(),
   }),
   api: FederationEntrySchema.extend({
@@ -386,6 +395,7 @@ export const RuntimeConfigSchema = z.object({
     secrets: z.array(z.string()).optional(),
     shared: SharedDepMapSchema.optional(),
     dependsOn: z.array(z.string()).optional(),
+    ui: PluginRuntimeUiSchema.optional(),
   }).optional(),
   plugins: z.record(PluginKeySchema, RuntimePluginConfigSchema).optional(),
   nodes: z.record(z.string(), RuntimeDependencyNodeSchema).optional(),
@@ -409,6 +419,8 @@ export const ClientRuntimeConfigSchema = z.object({
       url: z.string(),
       entry: z.string(),
       integrity: z.string().optional(),
+      /** the content-hashed container entry URL when the slot pins a version manifest */
+      entryUrl: z.string().optional(),
       /** composition payload — the server sets it; the client reconstructs the same tree from it before hydrate */
       compose: ComposePayloadSchema.optional(),
     })
@@ -449,6 +461,7 @@ export const ClientRuntimeConfigSchema = z.object({
             integrity: z.string().optional(),
             ssrUrl: z.string().optional(),
             ssrIntegrity: z.string().optional(),
+            entryUrl: z.string().optional(),
           })
           .optional(),
       }),

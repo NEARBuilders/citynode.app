@@ -16,16 +16,21 @@ export function platformUrlDeployEntries(input: {
   kind: "app" | "plugin";
   integrity?: string;
   ssrIntegrity?: string;
+  /** the workspace's uploaded version manifest: filename (relative to the
+   * bundle base) + its own SRI — when set, the slot's `integrity` pins the
+   * manifest, not the entry */
+  manifest?: { file: string; integrity: string };
 }): DeployResultEntry[] {
-  const { origin, account, gateway, key, kind, integrity, ssrIntegrity } = input;
+  const { origin, account, gateway, key, kind, integrity, ssrIntegrity, manifest } = input;
   const slot = kind === "app" ? "app" : "plugins";
   const base = `${origin.replace(/\/$/, "")}/bundles/${account}/${gateway}/${key}/`;
   const entries: DeployResultEntry[] = [
     {
       url: base,
-      integrity,
+      integrity: manifest?.integrity ?? integrity,
       urlField: `${slot}.${key}.production`,
       integrityField: `${slot}.${key}.integrity`,
+      ...(manifest ? { value: manifest.file, valueField: `${slot}.${key}.manifest` } : {}),
     },
   ];
 
@@ -56,27 +61,38 @@ export function pluginUiUrlDeployEntries(input: {
   kind: "app" | "plugin";
   integrity?: string;
   ssrIntegrity?: string;
+  /** the uploaded version manifest: filename + its own SRI */
+  manifest?: { file: string; integrity: string };
   /** The built MF container name — remote boots need it pinned in the config. */
   name?: string;
 }): DeployResultEntry[] {
-  const { origin, account, gateway, key, kind, integrity, ssrIntegrity, name } = input;
+  const { origin, account, gateway, key, kind, integrity, ssrIntegrity, manifest, name } = input;
   const slot = kind === "app" ? "app" : "plugins";
   const base = `${origin.replace(/\/$/, "")}/bundles/${account}/${gateway}/${key}-ui/`;
-  return [
+  const entries: DeployResultEntry[] = [
     {
       url: base,
-      integrity,
+      integrity: manifest?.integrity ?? integrity,
       urlField: `${slot}.${key}.ui.production`,
       integrityField: `${slot}.${key}.ui.integrity`,
-      ...(name ? { value: name, valueField: `${slot}.${key}.ui.name` } : {}),
-    },
-    {
-      url: `${base}ssr/`,
-      integrity: ssrIntegrity,
-      urlField: `${slot}.${key}.ui.ssr`,
-      integrityField: `${slot}.${key}.ui.ssrIntegrity`,
+      ...(manifest ? { value: manifest.file, valueField: `${slot}.${key}.ui.manifest` } : {}),
     },
   ];
+  if (name) {
+    entries.push({
+      url: base,
+      urlField: `${slot}.${key}.ui.production`,
+      value: name,
+      valueField: `${slot}.${key}.ui.name`,
+    });
+  }
+  entries.push({
+    url: `${base}ssr/`,
+    integrity: ssrIntegrity,
+    urlField: `${slot}.${key}.ui.ssr`,
+    integrityField: `${slot}.${key}.ui.ssrIntegrity`,
+  });
+  return entries;
 }
 
 /**

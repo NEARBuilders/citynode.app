@@ -399,6 +399,9 @@ export interface UiRemoteEntry {
   name: string;
   ssrUrl?: string;
   ssrIntegrity?: string;
+  /** the content-hashed SSR entry URL (version-manifest derived) — preferred
+   * over appending the legacy fixed name to `ssrUrl` */
+  ssrEntryUrl?: string;
   /** Source workspace of the ui surface (local dev target only). */
   localPath?: string;
   /** Dev-only freshness token — the built container's mtime. Cache-busts rebuilds. */
@@ -406,7 +409,7 @@ export interface UiRemoteEntry {
 }
 
 function ssrEntryUrlOf(entry: UiRemoteEntry): string {
-  if (!entry.ssrUrl) {
+  if (!entry.ssrUrl && !entry.ssrEntryUrl) {
     throw new FederationError({
       remoteName: entry.name,
       remoteUrl: entry.localPath,
@@ -415,7 +418,12 @@ function ssrEntryUrlOf(entry: UiRemoteEntry): string {
       ),
     });
   }
-  const entryUrl = `${entry.ssrUrl.replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`;
+  // a manifest-derived ssrEntryUrl is content-hashed — no cache-buster; the
+  // legacy fixed-name path keeps one
+  const entryUrl =
+    entry.ssrEntryUrl ??
+    `${(entry.ssrUrl ?? "").replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`;
+  if (entry.ssrEntryUrl) return entryUrl;
   if (entry.ssrIntegrity) {
     return `${entryUrl}?v=${encodeURIComponent(entry.ssrIntegrity)}`;
   }

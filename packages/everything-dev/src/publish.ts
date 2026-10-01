@@ -25,13 +25,62 @@ import {
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
 import { platformUrlDeployEntries, pluginUiUrlDeployEntries } from "./platform-deploy";
-import { collectDistFiles, uploadWorkspaceDist } from "./storage-upload";
+import { collectDistFiles, uploadBundle, uploadWorkspaceDist } from "./storage-upload";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
 import { colors, icons } from "./utils/theme";
+import { composeWorkspaceVersionManifest, readBuildReport } from "./version-manifest-deploy";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Compose + upload the workspace's version manifest (atomic-deploys 03): the
+ * manifest is built from the dist build report + the **server-computed** SRI
+ * map of the just-finished upload, uploaded additively at
+ * `versions/<version>.json`, and returned as the slot's pointer. Returns
+ * undefined for dists predating hashed entry names (no report / no entry
+ * SRI) — the deploy then writes legacy pointer entries only.
+ */
+async function pinWorkspaceVersionManifest(input: {
+  origin: string;
+  apiKey?: string;
+  account: string;
+  gateway: string;
+  workspace: string;
+  report: ReturnType<typeof readBuildReport>;
+  ssrReport: ReturnType<typeof readBuildReport>;
+  integrityMap: Record<string, string>;
+}): Promise<{ file: string; integrity: string } | undefined> {
+  if (!input.report) return undefined;
+  const versionManifest = composeWorkspaceVersionManifest({
+    report: input.report,
+    ssrReport: input.ssrReport,
+    integrityMap: input.integrityMap,
+  });
+  if (!versionManifest) return undefined;
+
+  const manifestFile = `versions/${versionManifest.version}.json`;
+  const manifestUpload = await uploadBundle({
+    origin: input.origin,
+    apiKey: input.apiKey,
+    account: input.account,
+    gateway: input.gateway,
+    workspace: input.workspace,
+    files: [
+      {
+        path: manifestFile,
+        bytes: new TextEncoder().encode(`${JSON.stringify(versionManifest, null, 2)}\n`),
+      },
+    ],
+  });
+  const manifestIntegrity = manifestUpload.integrity[manifestFile];
+  if (!manifestIntegrity) return undefined;
+  console.log(
+    `    ${colors.dim(`${padRight("", 28)} version manifest ${manifestFile} (SRI pinned)`)}`,
+  );
+  return { file: manifestFile, integrity: manifestIntegrity };
 }
 
 function formatBundleMb(files: Array<{ bytes: Uint8Array }>): string {
@@ -402,10 +451,27 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       workspace: key,
       files: distFiles,
     });
-    const integrity = result.integrity["remoteEntry.js"];
+    const report = readBuildReport(join(ws.path, "dist"));
+    const ssrReport = readBuildReport(join(ws.path, "dist", "ssr"));
+    // the entry SRI keyed by the build report's hashed name; the literal
+    // fixed-name fallback covers dists predating hashed entry names
+    const integrity = result.integrity[report?.entry ?? "remoteEntry.js"];
     const ssrIntegrity =
-      result.integrity["ssr/remoteEntry.server.js"] ?? result.integrity["remoteEntry.server.js"];
+      (ssrReport?.entry && result.integrity[`ssr/${ssrReport.entry}`]) ??
+      result.integrity["ssr/remoteEntry.server.js"] ??
+      result.integrity["remoteEntry.server.js"];
     const fileCount = result.stored;
+
+    const manifestPointer = await pinWorkspaceVersionManifest({
+      origin: storageOrigin,
+      apiKey: storageApiKey,
+      account,
+      gateway,
+      workspace: key,
+      report,
+      ssrReport,
+      integrityMap: result.integrity,
+    });
 
     if (result.storage === "memory") {
       return {
@@ -432,6 +498,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
         kind: ws.kind,
         integrity,
         ssrIntegrity,
+        ...(manifestPointer ? { manifest: manifestPointer } : {}),
       }),
     );
 
@@ -449,6 +516,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       let uiIntegrity: string | undefined;
       let uiSsrIntegrity: string | undefined;
       let uiFileCount: number | undefined;
+      let uiManifestPointer: { file: string; integrity: string } | undefined;
       if (existsSync(uiDistDir)) {
         const uiDistFiles = await collectDistFiles(uiDistDir);
         console.log(
@@ -469,6 +537,17 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
           uiResult.integrity["remoteEntry.server.js"];
         uiFileCount = uiResult.stored;
 
+        uiManifestPointer = await pinWorkspaceVersionManifest({
+          origin: storageOrigin,
+          apiKey: storageApiKey,
+          account,
+          gateway,
+          workspace: `${key}-ui`,
+          report: readBuildReport(uiDistDir),
+          ssrReport: readBuildReport(join(uiDistDir, "ssr")),
+          integrityMap: uiResult.integrity,
+        });
+
         console.log(
           `    ${colors.green(icons.ok)} ${padRight(`${key}-ui`, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}-ui/ (${uiFileCount} files, ${formatDuration(Date.now() - uiStartedAt)})`,
         );
@@ -488,6 +567,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
           integrity: uiIntegrity,
           ssrIntegrity: uiSsrIntegrity,
           name: uiName,
+          ...(uiManifestPointer ? { manifest: uiManifestPointer } : {}),
         }),
       );
     }

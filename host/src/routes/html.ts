@@ -29,8 +29,9 @@ export function renderClientShellHtml(
           if (!ui?.url) return [];
           const pluginVersion = ui.integrity ? `?v=${encodeURIComponent(ui.integrity)}` : "";
           const pluginSri = ui.integrity ? ` integrity="${ui.integrity}"` : "";
+          const pluginSrc = ui.entryUrl ?? `${ui.url.replace(/\/$/, "")}/remoteEntry.js`;
           return [
-            `<script${nonceAttr} src="${ui.url.replace(/\/$/, "")}/remoteEntry.js${pluginVersion}" crossorigin="anonymous"${pluginSri}></script>`,
+            `<script${nonceAttr} src="${pluginSrc}${ui.entryUrl ? "" : pluginVersion}" crossorigin="anonymous"${pluginSri}></script>`,
           ];
         })
       : []
@@ -74,7 +75,7 @@ export function renderClientShellHtml(
           <link rel="stylesheet" href="${assetsUrl}/static/css/style.css${uiVersion}" />
           <style>${baseStyles}</style>
           ${themeScript}
-          <script${nonceAttr} src="${assetsUrl}/remoteEntry.js${uiVersion}"${sriAttr}></script>
+          <script${nonceAttr} src="${runtimeSourceConfig.ui.entryUrl ?? `${assetsUrl}/remoteEntry.js${uiVersion}`}"${sriAttr}></script>
           ${pluginUiScripts}
           <script${nonceAttr}>${hydrateScript}</script>
         </head>

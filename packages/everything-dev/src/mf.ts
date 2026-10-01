@@ -111,7 +111,7 @@ export async function registerRemote(opts: {
   const inferType = (): "manifest" | "script" => {
     if (opts.type) return opts.type;
     if (opts.entry.endsWith("/mf-manifest.json")) return "manifest";
-    if (opts.entry.endsWith("/remoteEntry.js")) return "script";
+    if (/\/remoteEntry(\.[a-f0-9]{8,})?\.js$/.test(opts.entry)) return "script";
     return typeof window === "undefined" ? "script" : "manifest";
   };
 

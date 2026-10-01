@@ -94,6 +94,7 @@ export function buildRuntimeClientConfig(
         ? `${uiConfig.publicUrl.replace(/\/$/, "")}/mf-manifest.json`
         : uiConfig.entry,
       integrity: uiConfig.integrity,
+      entryUrl: uiConfig.entryUrl,
       compose: composePayload,
     },
     api: config.api
@@ -136,6 +137,7 @@ export function buildRuntimeClientConfig(
                     integrity: plugin.ui.integrity,
                     ssrUrl: plugin.ui.ssrUrl,
                     ssrIntegrity: plugin.ui.ssrIntegrity,
+                    ...(plugin.ui.entryUrl ? { entryUrl: plugin.ui.entryUrl } : {}),
                   },
                 }
               : {}),

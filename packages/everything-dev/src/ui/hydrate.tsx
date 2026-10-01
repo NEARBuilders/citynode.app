@@ -121,8 +121,11 @@ async function composeFromPayload(
         // Manifest-driven registration: the manifest carries the remote's
         // true container identity (its build-time package name), which the
         // plain remoteEntry URL cannot resolve — the entry script's global
-        // name doesn't match the registered name.
-        entry: remote.entry.replace(/\/?remoteEntry\.js$/, "/mf-manifest.json"),
+        // name doesn't match the registered name. Versioned deploys carry
+        // the (hashed) manifest URL in the payload; legacy payloads derive
+        // it by stripping the fixed entry name.
+        entry:
+          remote.manifestUrl ?? remote.entry.replace(/\/?remoteEntry\.js$/, "/mf-manifest.json"),
       })),
     );
     for (const remote of payload.remotes) {

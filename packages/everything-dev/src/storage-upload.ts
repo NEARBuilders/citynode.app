@@ -36,9 +36,11 @@ export async function collectDistFiles(distDir: string): Promise<DistFile[]> {
   return walkDist(distDir, distDir);
 }
 
-const UPLOAD_ATTEMPTS = 3;
+const STATUS_ATTEMPTS = 3;
+const TRANSPORT_ATTEMPTS = 5;
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const backoffMs = (attempt: number) => 1000 * attempt + Math.floor(Math.random() * 500);
 
 class BundleUploadError extends Error {
   constructor(
@@ -73,7 +75,9 @@ export async function uploadBundle(input: {
   gateway: string;
   workspace: string;
   files: DistFile[];
+  fetchImpl?: typeof fetch;
 }): Promise<BundleUploadResult> {
+  const fetchImpl = input.fetchImpl ?? fetch;
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (input.apiKey) headers["x-api-key"] = input.apiKey;
 
@@ -88,11 +92,18 @@ export async function uploadBundle(input: {
   });
 
   let lastError: BundleUploadError | Error | undefined;
-  for (let attempt = 1; attempt <= UPLOAD_ATTEMPTS; attempt++) {
+  let transportFailures = 0;
+  let statusFailures = 0;
+  for (let attempt = 1; attempt <= TRANSPORT_ATTEMPTS; attempt++) {
     try {
-      const response = await fetch(`${input.origin.replace(/\/$/, "")}/api/storage/bundles`, {
+      const response = await fetchImpl(`${input.origin.replace(/\/$/, "")}/api/storage/bundles`, {
         method: "POST",
-        headers,
+        headers:
+          transportFailures > 0
+            ? // a transport failure killed the pooled keepalive socket — do not
+              // reuse it (the "socket connection closed unexpectedly" incident)
+              { ...headers, connection: "close" }
+            : headers,
         body,
       });
 
@@ -108,16 +119,22 @@ export async function uploadBundle(input: {
       // Retries are safe: the storage route stores by account/gateway/
       // workspace/path, so re-posting a batch overwrites idempotently.
       if (!RETRYABLE_STATUSES.has(response.status)) break;
+      statusFailures += 1;
+      if (statusFailures >= STATUS_ATTEMPTS) break;
     } catch (error) {
+      transportFailures += 1;
       lastError = new BundleUploadError(
         0,
         `[publish] bundle upload for ${input.workspace} failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 
-    if (attempt < UPLOAD_ATTEMPTS) await sleep(1000 * attempt);
+    if (attempt < TRANSPORT_ATTEMPTS) await sleep(backoffMs(attempt));
   }
 
+  if (lastError instanceof BundleUploadError && lastError.status === 0) {
+    lastError.message += " (Bun fetch note: re-run with fetch verbose diagnostics for detail)";
+  }
   throw lastError ?? new Error(`[publish] bundle upload for ${input.workspace} failed`);
 }
 

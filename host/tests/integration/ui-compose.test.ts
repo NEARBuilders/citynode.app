@@ -282,7 +282,12 @@ describe("composeUi", () => {
 
     expect(variant.clientPayload.digest).toBe(variant.digest);
     expect(variant.clientPayload.remotes).toEqual([
-      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+      {
+        key: "auth",
+        name: "auth-ui",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.js",
+        manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
+      },
     ]);
     expect(variant.clientPayload.manifests).toEqual([AUTH_MANIFEST, CORE_MANIFEST]);
   });
@@ -331,7 +336,12 @@ describe("composeUi", () => {
 
     expect(variant.routerModule).toBe(ROUTER_MODULE);
     expect(variant.clientPayload.remotes).toEqual([
-      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+      {
+        key: "auth",
+        name: "auth-ui",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.js",
+        manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
+      },
     ]);
 
     await rm(localRoot, { recursive: true, force: true });
@@ -367,7 +377,12 @@ describe("composeClientPayload", () => {
 
     expect(client).toEqual({ digest: variant.digest, clientPayload: variant.clientPayload });
     expect(client?.clientPayload.remotes).toEqual([
-      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+      {
+        key: "auth",
+        name: "auth-ui",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.js",
+        manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
+      },
     ]);
     expect(client?.clientPayload.manifests).toEqual([AUTH_MANIFEST, CORE_MANIFEST]);
   });

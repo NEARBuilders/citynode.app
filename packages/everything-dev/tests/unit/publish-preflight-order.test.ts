@@ -12,6 +12,9 @@ const {
   loadResolvedConfigMock,
   collectDistFilesMock,
   uploadWorkspaceDistMock,
+  uploadBundleMock,
+  readBuildReportMock,
+  platformUrlDeployEntriesMock,
   probeStorageOriginMock,
 } = vi.hoisted(() => ({
   buildWorkspaceTargetsMock: vi.fn(),
@@ -21,6 +24,9 @@ const {
   loadResolvedConfigMock: vi.fn(),
   collectDistFilesMock: vi.fn(),
   uploadWorkspaceDistMock: vi.fn(),
+  uploadBundleMock: vi.fn(),
+  readBuildReportMock: vi.fn(),
+  platformUrlDeployEntriesMock: vi.fn(() => []),
   probeStorageOriginMock: vi.fn(),
 }));
 
@@ -51,12 +57,18 @@ vi.mock("../../src/config", async (importOriginal) => {
 vi.mock("../../src/storage-upload", () => ({
   collectDistFiles: collectDistFilesMock,
   uploadWorkspaceDist: uploadWorkspaceDistMock,
+  uploadBundle: uploadBundleMock,
 }));
 
 vi.mock("../../src/platform-deploy", () => ({
-  platformUrlDeployEntries: vi.fn(() => []),
+  platformUrlDeployEntries: platformUrlDeployEntriesMock,
   pluginUiUrlDeployEntries: vi.fn(() => []),
 }));
+
+vi.mock("../../src/version-manifest-deploy", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/version-manifest-deploy")>();
+  return { ...actual, readBuildReport: readBuildReportMock };
+});
 
 vi.mock("../../src/cdn-deploy", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/cdn-deploy")>();
@@ -95,6 +107,7 @@ describe("publishToFastKv preflight ordering", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     probeStorageOriginMock.mockResolvedValue(undefined);
+    readBuildReportMock.mockReturnValue(null);
     configDir = mkdtempSync(join(tmpdir(), "bos-preflight-"));
     savedEnv = {
       BOS_BUNDLE_CDN_ORIGIN: process.env.BOS_BUNDLE_CDN_ORIGIN,
@@ -236,6 +249,44 @@ describe("publishToFastKv preflight ordering", () => {
 
     expect(result.status).toBe("error");
     expect(result.error).toContain("BOS_STORAGE_*");
+  });
+
+  it("pins the version manifest: composes from the server SRI map, uploads it, passes the pointer", async () => {
+    process.env.BOS_BUNDLE_CDN_ORIGIN = "https://cdn.example.test";
+    process.env.BOS_STORAGE_API_KEY = "api_ci_key";
+    buildWorkspaceTargetsMock.mockResolvedValue({
+      built: ["host"],
+      skipped: [],
+      deployResults: [{ key: "host", kind: "app", success: true }],
+    });
+    collectDistFilesMock.mockResolvedValue([]);
+    uploadWorkspaceDistMock.mockResolvedValue({
+      stored: 1,
+      totalBytes: 3,
+      integrity: { "remoteEntry.8f3ac1d2.js": "sha384-entry" },
+      storage: "s3",
+    });
+    readBuildReportMock.mockReturnValue({ entry: "remoteEntry.8f3ac1d2.js" });
+    uploadBundleMock.mockImplementation(async (input: { files: Array<{ path: string }> }) => ({
+      stored: 1,
+      totalBytes: 3,
+      integrity: { [input.files[0]!.path]: "sha384-manifest" },
+      storage: "s3",
+    }));
+    fetchBosConfigFromFastKvMock.mockResolvedValue(JSON.parse(JSON.stringify(bosConfig)));
+
+    const result = await publishToFastKv({ ...baseInput, configDir, packages: "all" });
+
+    expect(result.status).toBe("published");
+    expect(uploadBundleMock).toHaveBeenCalledTimes(1);
+    expect(platformUrlDeployEntriesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        manifest: {
+          file: expect.stringMatching(/^versions\/[0-9a-f]{16}\.json$/),
+          integrity: "sha384-manifest",
+        },
+      }),
+    );
   });
 
   it("a config-only publish (build: false) never invokes the build train", async () => {

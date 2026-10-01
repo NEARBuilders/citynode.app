@@ -58,6 +58,35 @@ describe("platformUrlDeployEntries (image-native)", () => {
       integrityField: "plugins.votes.integrity",
     });
   });
+
+  it("carries the version-manifest pointer: manifest field + integrity pins the manifest", () => {
+    const config = {
+      account: "v1.citynode.near",
+      domain: "citynode.app",
+      app: {
+        ui: { development: "local:ui", integrity: "sha384-stale-entry-sri" },
+      },
+    };
+
+    const merged = applyDeployResults(
+      config,
+      platformUrlDeployEntries({
+        origin: ORIGIN,
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        key: "ui",
+        kind: "app",
+        manifest: { file: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-manifest-sri" },
+        integrity: "sha384-entry-sri",
+        ssrIntegrity: "sha384-ssr-entry-sri",
+      }),
+    );
+
+    const ui = (merged.app as Record<string, Record<string, unknown>>).ui;
+    expect(ui.manifest).toBe("versions/8f3ac1d2feedbeef.json");
+    // when `manifest` is set, `integrity` pins the manifest document
+    expect(ui.integrity).toBe("sha384-manifest-sri");
+  });
 });
 
 describe("pluginUiUrlDeployEntries (folder-form plugin ui)", () => {
@@ -172,6 +201,26 @@ describe("pluginUiUrlDeployEntries (folder-form plugin ui)", () => {
     >;
     expect(authUi.name).toBe("_everything_dev_auth_plugin");
     expect(authUi.development).toBe("local:plugins/auth/ui");
+  });
+
+  it("carries the version-manifest pointer on the ui slot", () => {
+    const merged = applyDeployResults(
+      { account: "v1.citynode.near", app: { auth: { ui: { name: "auth-ui" } } } },
+      pluginUiUrlDeployEntries({
+        origin: ORIGIN,
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        key: "auth",
+        kind: "app",
+        manifest: { file: "versions/eee.json", integrity: "sha384-ui-manifest-sri" },
+      }),
+    );
+    const authUi = (merged.app as Record<string, Record<string, unknown>>).auth.ui as Record<
+      string,
+      unknown
+    >;
+    expect(authUi.manifest).toBe("versions/eee.json");
+    expect(authUi.integrity).toBe("sha384-ui-manifest-sri");
   });
 });
 

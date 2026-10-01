@@ -67,6 +67,10 @@ interface UiSource {
   remote?: UiRemoteEntry;
   localRoot?: string;
   manifestUrl?: string;
+  /** the MF browser manifest URL (mf-manifest.json — hashed when the slot
+   * pins a version manifest); rides the compose payload for hydrate-time
+   * remote registration */
+  browserManifestUrl?: string;
   /** client-side web entry (browser remoteEntry.js) — the publicUrl base
    * when the runtime declares one (image-native /bundles), else the url */
   webEntry?: string;
@@ -97,6 +101,7 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
         name: config.ui.name,
         ssrUrl: config.ui.ssrUrl,
         ssrIntegrity: config.ui.ssrIntegrity,
+        ssrEntryUrl: config.ui.ssrEntryUrl,
         localPath: config.ui.localPath,
       },
       localRoot:
@@ -107,7 +112,8 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
         config.ui.source === "local"
           ? undefined
           : `${config.ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      webEntry: `${browserUiBase(config.ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+      browserManifestUrl: config.ui.source === "local" ? undefined : config.ui.entry,
+      webEntry: config.ui.entryUrl ?? `${browserUiBase(config.ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
     },
   ];
   for (const [id, plugin] of Object.entries(config.plugins ?? {})) {
@@ -126,11 +132,13 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
         name: ui.name,
         ssrUrl: ui.ssrUrl,
         ssrIntegrity: ui.ssrIntegrity,
+        ssrEntryUrl: ui.ssrEntryUrl,
         localPath: ui.localPath,
       },
       localRoot: ui.localPath ? resolveLocalRoot(ui.localPath) : undefined,
       manifestUrl: `${ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      webEntry: `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+      browserManifestUrl: ui.entry,
+      webEntry: ui.entryUrl ?? `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
     });
   }
   return sources.sort((a, b) => a.key.localeCompare(b.key));
@@ -278,7 +286,12 @@ const clientPayloadOf = (
   digest,
   remotes: sources
     .filter((source) => source.key !== CORE_UI_KEY && source.webEntry)
-    .map((source) => ({ key: source.key, name: source.mfName, entry: source.webEntry! })),
+    .map((source) => ({
+      key: source.key,
+      name: source.mfName,
+      entry: source.webEntry!,
+      ...(source.browserManifestUrl ? { manifestUrl: source.browserManifestUrl } : {}),
+    })),
   manifests,
 });
 
