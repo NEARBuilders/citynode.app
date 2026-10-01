@@ -3,6 +3,8 @@ import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { buildTenantUrl, getAccount, getGatewayId, useApiClient, useAuthClient } from "@/app";
+import { AppActionError } from "@/i18n/error-message";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import {
   describeDaoError,
   isExplicitDaoMember,
@@ -39,6 +41,7 @@ import {
   yoctoArg,
 } from "./-poc-chain";
 import { buildPocFormValues, prefillIfEmpty, usePocForm, usePocFormValues } from "./-poc-form";
+import type { PocLogDetail, PocLogMessage } from "./-poc-log-message";
 import { createPrecheckPlan } from "./-poc-precheck";
 import { createStepRunner } from "./-poc-run-step";
 import {
@@ -65,8 +68,8 @@ export const hosDelegateUrl = (accountId: string) => `${HOS_URL}/delegates/${acc
 export interface LogEntry {
   id: string;
   at: number;
-  label: string;
-  detail?: string;
+  label: PocLogMessage;
+  detail?: PocLogDetail;
 }
 
 /** "near builders" → "Near Builders" — the default node name from the org name. */
@@ -82,6 +85,8 @@ export interface PocRouteAuth {
 
 /** Every query, derived fact, and signed action behind the node lifecycle walkthrough. */
 export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeConfig) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const sessionAccount = useNearAccount();
   useDaoAutoRestore(sessionAccount);
   const apiClient = useApiClient();
@@ -101,9 +106,11 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
   const [connectedTeamDao, setConnectedTeamDao] = useState<string | null>(null);
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [runningStation, setRunningStation] = useState<StationId | null>(null);
-  const [failures, setFailures] = useState<Partial<Record<StationId, string>>>({});
+  const [failures, setFailures] = useState<
+    Partial<Record<StationId, { error: unknown; account: string }>>
+  >({});
 
-  const log = (label: string, detail?: string) => {
+  const log = (label: PocLogMessage, detail?: PocLogDetail) => {
     setEntries((prev) =>
       [
         {
@@ -402,81 +409,110 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
 
   const daoTakenElsewhere =
     !!team && !!tenantByDao && tenantByDao.orgId != null && tenantByDao.orgId !== activeOrgId;
-  const daoBlocked = daoTakenElsewhere
-    ? "this organization's DAO already runs a tenant elsewhere"
-    : null;
+  const daoBlocked = daoTakenElsewhere ? translate("lifecycle.daoElsewhere") : null;
 
+  const membershipBlocked =
+    !!daoPolicyForAudit &&
+    !!sessionAccount &&
+    !isExplicitDaoMember(daoPolicyForAudit, sessionAccount);
   const blockers: Partial<Record<StationId, string>> = {};
-  if (!activeOrgId) blockers.apply = "select an organization";
-  else if (!team) blockers.apply = "connect your team DAO with Trezu";
+  if (!activeOrgId) blockers.apply = translate("lifecycle.chooseOrgLower");
+  else if (!team) blockers.apply = translate("lifecycle.connectTeamReason");
   else if (daoBlocked) blockers.apply = daoBlocked;
-  else if (!sessionAccount) blockers.apply = "sign in with your NEAR wallet";
-  else if (!values.name.trim()) blockers.apply = "enter a node name";
-  if (!sessionAccount) blockers.approve = "sign in to approve";
-  else if (!isAdmin) blockers.approve = "admin access required — sign in as an admin";
-  else if (!team) blockers.approve = "connect your team DAO with Trezu";
+  else if (!sessionAccount) blockers.apply = translate("lifecycle.signinWalletReason");
+  else if (!values.name.trim()) blockers.apply = translate("lifecycle.nodeNameReason");
+  if (!sessionAccount) blockers.approve = translate("lifecycle.signinApproveReason");
+  else if (!isAdmin) blockers.approve = translate("lifecycle.adminApproveReason");
+  else if (!team) blockers.approve = translate("lifecycle.connectTeamReason");
   else if (daoBlocked) blockers.approve = daoBlocked;
-  else if (daoPolicyForAudit && !isExplicitDaoMember(daoPolicyForAudit, sessionAccount)) {
-    blockers.approve = `${sessionAccount} is not a member of ${team}`;
+  else if (membershipBlocked) {
+    blockers.approve = translate("wallet.daoNotMember", { account: sessionAccount, dao: team });
   }
-  if (!team) blockers.fund = "connect your team DAO with Trezu";
-  else if (!sessionAccount) blockers.fund = "sign in with your NEAR wallet";
-  else if (!isAdmin) blockers.fund = "admin access required — the admin's wallet does the funding";
-  if (!team) blockers.publish = "connect your team DAO with Trezu";
+  if (!team) blockers.fund = translate("lifecycle.connectTeamReason");
+  else if (!sessionAccount) blockers.fund = translate("lifecycle.signinWalletReason");
+  else if (!isAdmin) blockers.fund = translate("lifecycle.adminFundingReason");
+  if (!team) blockers.publish = translate("lifecycle.connectTeamReason");
   else if (application && facts.configPublished && !isAdmin) {
-    blockers.publish = "config is live — an admin must mark the application applied";
+    blockers.publish = translate("lifecycle.adminMarkReason");
   }
-  if (!team) blockers.stake = "connect your team DAO with Trezu";
-  else if (!pool) blockers.stake = "enter the staking pool";
-  if (!team) blockers["setup-hos"] = "connect your team DAO with Trezu";
-  if (!endowment) blockers["sponsor-lock"] = "set the endowment treasury";
-  else if (!sponsorYocto) blockers["sponsor-lock"] = "enter the sponsor amount";
-  if (!endowment) blockers["sponsor-stake"] = "set the endowment treasury";
-  else if (!pool) blockers["sponsor-stake"] = "enter the staking pool";
-  else if (!sponsorYocto) blockers["sponsor-stake"] = "enter the sponsor amount";
-  if (!endowment) blockers["sponsor-delegate"] = "set the endowment treasury";
-  if (!team) blockers.vote = "connect your team DAO with Trezu";
-  else if (!govProposal) blockers.vote = "no active House of Stake proposal";
-  if (!team) blockers.unstake = "connect your team DAO with Trezu";
-  else if (!pool) blockers.unstake = "enter the staking pool";
-  if (!endowment) blockers["sponsor-unwind"] = "set the endowment treasury";
+  if (!team) blockers.stake = translate("lifecycle.connectTeamReason");
+  else if (!pool) blockers.stake = translate("lifecycle.poolReason");
+  if (!team) blockers["setup-hos"] = translate("lifecycle.connectTeamReason");
+  if (!endowment) blockers["sponsor-lock"] = translate("lifecycle.endowmentReason");
+  else if (!sponsorYocto) blockers["sponsor-lock"] = translate("lifecycle.sponsorAmountReason");
+  if (!endowment) blockers["sponsor-stake"] = translate("lifecycle.endowmentReason");
+  else if (!pool) blockers["sponsor-stake"] = translate("lifecycle.poolReason");
+  else if (!sponsorYocto) blockers["sponsor-stake"] = translate("lifecycle.sponsorAmountReason");
+  if (!endowment) blockers["sponsor-delegate"] = translate("lifecycle.endowmentReason");
+  if (!team) blockers.vote = translate("lifecycle.connectTeamReason");
+  else if (!govProposal) blockers.vote = translate("lifecycle.noGovProposalReason");
+  if (!team) blockers.unstake = translate("lifecycle.connectTeamReason");
+  else if (!pool) blockers.unstake = translate("lifecycle.poolReason");
+  if (!endowment) blockers["sponsor-unwind"] = translate("lifecycle.endowmentReason");
 
   const platformAuditWarning =
     daoPolicyForAudit && baseAccount && !isExplicitDaoMember(daoPolicyForAudit, baseAccount) && team
-      ? `the platform audit account ${baseAccount} is not a member of ${team}`
+      ? translate("poc.auditNotMember", { account: baseAccount, dao: team })
       : null;
   const trezuMembersUrl = team ? `https://trezu.app/${team}/members` : null;
 
   const stationDefs = useMemo(
     () =>
-      buildStations({
-        slug,
-        pool,
-        teamAccount: team,
-        endowmentAccount: endowment,
-        teamLockup,
-        endowmentLockup,
-        sponsorYocto,
-        sponsorStakeYocto,
-        govProposalId: govProposal?.id ?? null,
-      }),
-    [slug, pool, team, endowment, teamLockup, endowmentLockup, sponsorYocto, govProposal?.id],
+      buildStations(
+        {
+          slug,
+          pool,
+          teamAccount: team,
+          endowmentAccount: endowment,
+          teamLockup,
+          endowmentLockup,
+          sponsorYocto,
+          sponsorStakeYocto,
+          govProposalId: govProposal?.id ?? null,
+        },
+        translate,
+      ),
+    [
+      slug,
+      pool,
+      team,
+      endowment,
+      teamLockup,
+      endowmentLockup,
+      sponsorYocto,
+      sponsorStakeYocto,
+      govProposal?.id,
+      translate,
+    ],
   );
 
   /** The session wallet connects to the endowment through policy membership. */
   const sessionCanProposeEndowment = canAccountPropose(endowmentPolicy, sessionAccount);
 
-  const stations = deriveStations({
-    stations: stationDefs,
-    facts,
-    proposalsBySigner: { endowment: endowmentProposals, team: teamProposals },
-    accounts: { session: sessionAccount, endowment, team },
-    connectedDao: connection.daoAccountId,
-    sessionProposerSigners: sessionCanProposeEndowment ? (["endowment"] as const) : [],
-    blockers,
-    runningStation,
-    failedStations: failures,
-  });
+  const localizedFailures: Partial<Record<StationId, string>> = {};
+  for (const [id, failure] of Object.entries(failures)) {
+    if (failure)
+      localizedFailures[id as StationId] = describeDaoError(
+        failure.error,
+        failure.account,
+        translate,
+      );
+  }
+
+  const stations = deriveStations(
+    {
+      stations: stationDefs,
+      facts,
+      proposalsBySigner: { endowment: endowmentProposals, team: teamProposals },
+      accounts: { session: sessionAccount, endowment, team },
+      connectedDao: connection.daoAccountId,
+      sessionProposerSigners: sessionCanProposeEndowment ? (["endowment"] as const) : [],
+      blockers,
+      runningStation,
+      failedStations: localizedFailures,
+    },
+    translate,
+  );
 
   const accountFor = (signer: SignerKind) =>
     signer === "session" ? sessionAccount : signer === "endowment" ? endowment : team;
@@ -501,19 +537,15 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
   const requireConnected = async (signer: SignerKind) => {
     const want = accountFor(signer);
     if (signer === "session") {
-      if (!sessionAccount) throw new Error("Sign in with your NEAR wallet first");
+      if (!sessionAccount) throw new AppActionError("poc.nearSignInFirst");
       return;
     }
-    if (!want) throw new Error("Set the treasury account first");
+    if (!want) throw new AppActionError("poc.treasuryMissing");
     if (connection.daoAccountId === want && (await verifyDaoAccount(want))) return;
     if (connection.daoAccountId) await connection.disconnect();
-    try {
-      const connected = await connection.connect();
-      if (connected !== want) {
-        throw new Error(`Trezu connected ${connected}, but this step must be signed by ${want}`);
-      }
-    } catch (error) {
-      throw new Error(describeDaoError(error, want));
+    const connected = await connection.connect();
+    if (connected !== want) {
+      throw new AppActionError("wallet.daoWrongAccount", { actual: connected, expected: want });
     }
   };
 
@@ -550,19 +582,20 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
       if (!viaSessionProposal(def.signer)) await requireConnected(def.signer);
       for (const step of station.steps) {
         if (step.status !== "pending") continue;
-        try {
-          await runStep(station, step.id);
-        } catch (error) {
-          const detail = error instanceof Error ? error.message : String(error);
-          throw new Error(`${step.label} — ${detail}`);
-        }
+        await runStep(station, step.id);
       }
-      toast.success(`${def.title} — done`);
+      toast.success(translate("lifecycle.stepDone", { step: def.title ?? "" }));
     } catch (error) {
-      const message = describeDaoError(error, accountFor(def.signer) ?? def.signer);
-      setFailures((prev) => ({ ...prev, [def.id]: message }));
+      const message = describeDaoError(error, accountFor(def.signer) ?? def.signer, translate);
+      setFailures((prev) => ({
+        ...prev,
+        [def.id]: { error, account: accountFor(def.signer) ?? def.signer },
+      }));
       toast.error(message);
-      log(`${def.title} failed`, message);
+      log(
+        { messageId: "poc.stationFailed", values: { station: def.title ?? "" } },
+        { error, account: accountFor(def.signer) ?? def.signer },
+      );
       throw error;
     } finally {
       setRunningStation(null);
@@ -571,6 +604,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
   };
 
   const precheckPlan = createPrecheckPlan({
+    locale,
     pool,
     teamLockup,
     endowmentLockup,
@@ -582,6 +616,8 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
 
   const runStep = gatewayId
     ? createStepRunner({
+        t: translate,
+        locale,
         apiClient,
         auth,
         activeOrgId,
@@ -608,9 +644,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
         viaSessionProposal,
       })
     : async () => {
-        throw new Error(
-          "Runtime configuration is missing the gateway id — this deployment is misconfigured",
-        );
+        throw new AppActionError("poc.gatewayMissing");
       };
 
   const runChainMutation = useMutation({
@@ -637,16 +671,28 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
       dao: string;
       proposalId: number;
     }) => {
-      if (!dao) throw new Error("Set the treasury account first");
+      if (!dao) throw new AppActionError("poc.treasuryMissing");
       await requireConnected(signer);
       return signPlanAsDao(dao, approveProposalPlan(dao, proposalId));
     },
     onSuccess: (result, variables) => {
-      toast.success(`approved proposal ${variables.proposalId}`);
-      log(`voted Approve on ${variables.dao} proposal ${variables.proposalId}`, txHash(result));
+      toast.success(
+        translate("lifecycle.proposalApprovedNamed", { id: variables.proposalId ?? "" }),
+      );
+      log(
+        {
+          messageId: "poc.voteApproved",
+          values: {
+            account: variables.dao ?? "",
+            proposal: variables.proposalId ?? "",
+          },
+        },
+        txHash(result),
+      );
       refresh();
     },
-    onError: (error: Error, variables) => toast.error(describeDaoError(error, variables.dao)),
+    onError: (error: Error, variables) =>
+      toast.error(describeDaoError(error, variables.dao, translate)),
   });
 
   const connectTeamDaoMutation = useMutation({
@@ -666,11 +712,13 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
       return dao;
     },
     onSuccess: (dao) => {
-      log(`team wallet set to ${dao} — linked to the organization`);
+      log({ messageId: "poc.teamLinked", values: { account: dao ?? "" } });
       refresh();
     },
     onError: (error: Error) =>
-      toast.error(describeDaoError(error, connection.daoAccountId ?? "the treasury")),
+      toast.error(
+        describeDaoError(error, connection.daoAccountId ?? translate("wallet.treasury"), translate),
+      ),
   });
 
   const connectEndowmentMutation = useMutation({
@@ -686,10 +734,12 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
       return dao;
     },
     onSuccess: (dao) => {
-      log(`endowment treasury set to ${dao}`);
+      log({ messageId: "poc.endowmentSet", values: { account: dao ?? "" } });
     },
     onError: (error: Error) =>
-      toast.error(describeDaoError(error, connection.daoAccountId ?? "the treasury")),
+      toast.error(
+        describeDaoError(error, connection.daoAccountId ?? translate("wallet.treasury"), translate),
+      ),
   });
 
   /* --------------------------------------------------------------------- view */
@@ -723,6 +773,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
     runningStation,
     policyFor,
     platformAuditWarning,
+    membershipBlocked,
     trezuMembersUrl,
     sessionCanProposeEndowment,
     tenantUrl,

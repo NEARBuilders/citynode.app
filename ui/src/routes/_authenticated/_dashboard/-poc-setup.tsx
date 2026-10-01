@@ -16,6 +16,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { maxMinusOneNear, yoctoToNearInput } from "@/lib/team-unstake";
 import { formatNear, nearblocksAccount } from "./-poc-chain";
 import type { PocForm } from "./-poc-form";
@@ -103,6 +104,7 @@ function ConnectField({
   testId: string;
   children: string;
 }) {
+  const translate = useAppTranslation();
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
@@ -114,7 +116,7 @@ function ConnectField({
         disabled={connecting}
         data-testid={testId}
       >
-        {connecting ? "Connecting…" : children}
+        {connecting ? translate("wallet.connecting") : children}
       </Button>
     </Field>
   );
@@ -133,6 +135,7 @@ function ActorRow({
   connected: boolean;
   popover: { title: string; body: string; links: InfoPopoverLink[] };
 }) {
+  const translate = useAppTranslation();
   return (
     <div
       className="flex items-center gap-3 rounded-2xl border border-border px-4 py-3"
@@ -142,17 +145,20 @@ function ActorRow({
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="text-sm font-medium text-foreground">{label}</span>
         <span className="truncate font-mono text-xs text-muted-foreground">
-          {account ?? "not set"}
+          {account ?? translate("lifecycle.notSet")}
         </span>
       </div>
       {connected ? (
         <CheckCircleIcon
           className="size-4 shrink-0 text-success"
           weight="fill"
-          aria-label="connected"
+          aria-label={translate("lifecycle.connectedLower")}
         />
       ) : (
-        <CircleIcon className="size-4 shrink-0 text-muted-foreground" aria-label="not connected" />
+        <CircleIcon
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-label={translate("lifecycle.disconnectedLower")}
+        />
       )}
       <InfoPopover title={popover.title} body={popover.body} links={popover.links} />
     </div>
@@ -160,21 +166,24 @@ function ActorRow({
 }
 
 export function PocActors({ lc }: { lc: PocLifecycle }) {
+  const translate = useAppTranslation();
   const { sessionAccount, team, endowment, connection, sessionCanProposeEndowment } = lc;
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <ActorRow
         icon={WalletIcon}
-        label="You"
+        label={translate("lifecycle.you")}
         account={sessionAccount}
         connected={!!sessionAccount}
         popover={{
-          title: "You",
-          body: "Your SIWN wallet. Submits the application, and as the admin approves it, assigns the pre-deployed pool, and funds the team treasury from this wallet.",
+          title: translate("lifecycle.you"),
+          body: translate("lifecycle.walletDescription"),
           links: sessionAccount
             ? [
                 {
-                  label: `${sessionAccount} on nearblocks`,
+                  label: translate("lifecycle.nearblocksAccount", {
+                    account: sessionAccount ?? "",
+                  }),
                   href: nearblocksAccount(sessionAccount),
                 },
               ]
@@ -183,32 +192,42 @@ export function PocActors({ lc }: { lc: PocLifecycle }) {
       />
       <ActorRow
         icon={GavelIcon}
-        label="Team"
+        label={translate("org.team")}
         account={team || null}
         connected={connection.daoAccountId === team && !!team}
         popover={{
-          title: "Team",
-          body: "The DAO linked to your organization. Owns the node's validator pool and the tenant config, stakes its own skin in the game, locks NEAR for its veNEAR, and casts the votes the sponsor's stake buys.",
+          title: translate("org.team"),
+          body: translate("lifecycle.daoDescription"),
           links: [
-            { label: "Deploy one on trezu.app/create", href: TREZU_CREATE_URL },
-            ...(team ? [{ label: `${team} on nearblocks`, href: nearblocksAccount(team) }] : []),
+            { label: translate("lifecycle.deployTrezu"), href: TREZU_CREATE_URL },
+            ...(team
+              ? [
+                  {
+                    label: translate("lifecycle.nearblocksAccount", { account: team ?? "" }),
+                    href: nearblocksAccount(team),
+                  },
+                ]
+              : []),
           ],
         }}
       />
       <ActorRow
         icon={StackIcon}
-        label="Endowment"
+        label={translate("lifecycle.endowment")}
         account={endowment || null}
         connected={
           !!endowment && (sessionCanProposeEndowment || connection.daoAccountId === endowment)
         }
         popover={{
-          title: "Endowment (sponsor)",
-          body: "A separate treasury that puts up the capital: its NEAR is locked in a veNEAR lockup, staked into the node's pool from that lockup, and all of its voting power is delegated to the team. You connect to it through policy membership — a wallet holding AddProposal rights stages each step as a proposal — or by connecting the treasury itself in Trezu. Its approvers pass the proposals by vote. Optional — it never blocks the team's track.",
+          title: translate("lifecycle.sponsor"),
+          body: translate("lifecycle.sponsorDescription"),
           links: endowment
             ? [
-                { label: "View proposals on Trezu", href: `https://trezu.app/${endowment}` },
-                { label: `${endowment} on nearblocks`, href: nearblocksAccount(endowment) },
+                { label: translate("lifecycle.viewTrezu"), href: `https://trezu.app/${endowment}` },
+                {
+                  label: translate("lifecycle.nearblocksAccount", { account: endowment ?? "" }),
+                  href: nearblocksAccount(endowment),
+                },
               ]
             : [],
         }}
@@ -218,19 +237,20 @@ export function PocActors({ lc }: { lc: PocLifecycle }) {
 }
 
 export function PocTreasuryConnection({ lc }: { lc: PocLifecycle }) {
+  const translate = useAppTranslation();
   const { connection } = lc;
   if (!connection.daoAccountId) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3" data-testid="poc-treasury">
         <span className="text-sm text-muted-foreground">
-          No treasury connected.{" "}
+          {translate("lifecycle.noTreasury")}{" "}
           <a
             href={TREZU_CREATE_URL}
             target="_blank"
             rel="noreferrer"
             className="underline underline-offset-4 hover:text-foreground"
           >
-            Create one on Trezu
+            {translate("lifecycle.createTrezu")}
           </a>
         </span>
         <Button
@@ -239,7 +259,9 @@ export function PocTreasuryConnection({ lc }: { lc: PocLifecycle }) {
           disabled={connection.status === "connecting"}
           data-testid="poc-connect"
         >
-          {connection.status === "connecting" ? "Connecting…" : "Connect a treasury"}
+          {connection.status === "connecting"
+            ? translate("wallet.connecting")
+            : translate("lifecycle.connectTreasury")}
         </Button>
       </div>
     );
@@ -247,21 +269,22 @@ export function PocTreasuryConnection({ lc }: { lc: PocLifecycle }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3" data-testid="poc-treasury">
       <span className="min-w-0 text-sm text-muted-foreground">
-        Trezu connected as{" "}
-        <span className="font-mono break-all text-foreground">{connection.daoAccountId}</span>
+        {translate("lifecycle.trezuConnected", { account: connection.daoAccountId ?? "" })}
       </span>
       <Button
         variant="ghost"
         onClick={() => void connection.disconnect()}
         data-testid="poc-disconnect"
       >
-        Disconnect
+        {translate("common.disconnect")}
       </Button>
     </div>
   );
 }
 
 function SponsorAmountField({ lc }: { lc: PocLifecycle }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
   const { form, endowmentAvailableYocto } = lc;
   /** Fills what the lockup can stake, minus a 1 NEAR safety margin. */
   const maxFill = endowmentAvailableYocto != null ? maxMinusOneNear(endowmentAvailableYocto) : null;
@@ -269,7 +292,7 @@ function SponsorAmountField({ lc }: { lc: PocLifecycle }) {
     <form.Field name="sponsorAmount">
       {(field) => (
         <Field>
-          <FieldLabel htmlFor="poc-sponsorAmount">Sponsor NEAR</FieldLabel>
+          <FieldLabel htmlFor="poc-sponsorAmount">{translate("lifecycle.sponsorNear")}</FieldLabel>
           <InputGroup>
             <InputGroupInput
               id="poc-sponsorAmount"
@@ -287,14 +310,16 @@ function SponsorAmountField({ lc }: { lc: PocLifecycle }) {
                 disabled={maxFill == null}
                 data-testid="poc-sponsorAmount-max"
               >
-                Max
+                {translate("stake.max")}
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
           <FieldDescription>
             {endowmentAvailableYocto != null
-              ? `${formatNear(endowmentAvailableYocto.toString())} available to stake from the lockup`
-              : "Set the endowment treasury to see what its lockup can stake."}
+              ? translate("lifecycle.lockupAvailable", {
+                  amount: formatNear(endowmentAvailableYocto.toString(), locale),
+                })
+              : translate("lifecycle.setEndowmentHint")}
           </FieldDescription>
         </Field>
       )}
@@ -303,43 +328,53 @@ function SponsorAmountField({ lc }: { lc: PocLifecycle }) {
 }
 
 export function PocSetupFields({ lc }: { lc: PocLifecycle }) {
+  const translate = useAppTranslation();
   const { form, values, slug, team, connection, connectTeamDaoMutation, connectEndowmentMutation } =
     lc;
   const connecting = connection.status === "connecting";
   return (
     <FieldGroup className="grid sm:grid-cols-2 lg:grid-cols-3">
-      <PocFormField form={form} name="name" label="Node name" placeholder="Lisbon Builders" />
+      <PocFormField
+        form={form}
+        name="name"
+        label={translate("tenant.nodeName")}
+        placeholder={translate("lifecycle.nodeExample")}
+      />
       <ReadOnlyField
         id="poc-slug"
-        label="Node slug"
+        label={translate("lifecycle.nodeSlug")}
         value={slug}
-        placeholder="select an organization"
+        placeholder={translate("lifecycle.chooseOrgLower")}
       />
       {team ? (
-        <ReadOnlyField id="poc-team" label="Team wallet" value={team} />
+        <ReadOnlyField id="poc-team" label={translate("lifecycle.teamWallet")} value={team} />
       ) : (
         <ConnectField
           id="poc-team"
-          label="Team wallet"
+          label={translate("lifecycle.teamWallet")}
           connecting={connectTeamDaoMutation.isPending || connecting}
           onClick={() => connectTeamDaoMutation.mutate()}
           testId="poc-connect-team"
         >
-          Connect team DAO
+          {translate("lifecycle.connectTeamDao")}
         </ConnectField>
       )}
       <div className="flex flex-col gap-1">
         {values.endowmentLinked ? (
-          <ReadOnlyField id="poc-endowment" label="Endowment treasury" value={team} />
+          <ReadOnlyField
+            id="poc-endowment"
+            label={translate("lifecycle.endowmentTreasury")}
+            value={team}
+          />
         ) : (
           <>
             <PocFormField
               form={form}
               name="endowment"
-              label="Endowment treasury"
+              label={translate("lifecycle.endowmentTreasury")}
               placeholder="chicagonode.sputnik-dao.near"
               mono
-              description="Type the treasury account. A wallet with AddProposal rights on its policy stages every step as a proposal — no Trezu connection needed."
+              description={translate("lifecycle.treasuryPolicyHint")}
             />
             <Button
               type="button"
@@ -350,7 +385,8 @@ export function PocSetupFields({ lc }: { lc: PocLifecycle }) {
               disabled={connectEndowmentMutation.isPending || connecting}
               data-testid="poc-connect-endowment"
             >
-              <WalletIcon /> Connect via Trezu instead
+              <WalletIcon />
+              {translate("lifecycle.connectViaTrezu")}
             </Button>
           </>
         )}
@@ -364,11 +400,13 @@ export function PocSetupFields({ lc }: { lc: PocLifecycle }) {
         >
           {values.endowmentLinked ? (
             <>
-              <LinkIcon /> Same as team wallet
+              <LinkIcon />
+              {translate("lifecycle.sameTeam")}
             </>
           ) : (
             <>
-              <LinkBreakIcon /> Separate treasuries
+              <LinkBreakIcon />
+              {translate("lifecycle.separateTreasuries")}
             </>
           )}
         </Button>
@@ -376,7 +414,7 @@ export function PocSetupFields({ lc }: { lc: PocLifecycle }) {
       <PocFormField
         form={form}
         name="pool"
-        label="Staking pool"
+        label={translate("stake.stakingPool")}
         placeholder={POOL_PLACEHOLDER}
         mono
       />

@@ -1,6 +1,7 @@
 import { CalendarDotsIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import { useApiClient } from "@/app";
 import {
   ActivityForm,
@@ -11,18 +12,31 @@ import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 
 export const Route = createFileRoute(
   "/_authenticated/_dashboard/nodes/$nodeId/events/$activityId/edit",
 )({
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Edit event", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.editEvent",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: EditActivity,
 });
 
 function EditActivity() {
+  const translate = useAppTranslation();
   const { nodeId, activityId } = Route.useParams();
   const api = useApiClient();
   const list = useQuery(activitiesQueryOptions(api, nodeId));
@@ -46,17 +60,21 @@ function EditActivity() {
 
   if (!activity) {
     return (
-      <ActivityFormPage nodeId={nodeId} title="Edit event" headerTestId="activity-form.heading">
+      <ActivityFormPage
+        nodeId={nodeId}
+        title={translate("events.edit")}
+        headerTestId="activity-form.heading"
+      >
         <EmptyState
           icon={CalendarDotsIcon}
-          title={list.isError ? "Couldn't load this event" : "Event not found"}
+          title={list.isError ? translate("events.loadEditError") : translate("events.notFound")}
           description={
-            list.isError ? "Check your connection and try again." : "It may have been removed."
+            list.isError ? translate("events.connectionHint") : translate("events.removedHint")
           }
           action={
             list.isError ? (
               <Button variant="outline" onClick={() => list.refetch()}>
-                Try again
+                {translate("common.retry")}
               </Button>
             ) : (
               <Button
@@ -70,7 +88,7 @@ function EditActivity() {
                   />
                 }
               >
-                Back to events
+                {translate("events.back")}
               </Button>
             )
           }
@@ -84,18 +102,20 @@ function EditActivity() {
   return (
     <ActivityFormPage
       nodeId={nodeId}
-      title={isEvent ? "Edit event" : "Edit post"}
+      title={isEvent ? translate("events.edit") : translate("events.editPost")}
       description={
         imported ? (
           <>
-            Synced from Luma <LocalDate value={imported.syncedAt} format="relative" />. Edit details
-            on Luma.
-            {!imported.available && " This event is no longer public there."}
+            <Trans
+              id="events.importedDate"
+              components={{ date: <LocalDate value={imported.syncedAt} format="relative" /> }}
+            />
+            {!imported.available && translate("event.noLongerPublic")}
           </>
         ) : isEvent ? (
-          "When, where, and how to join."
+          translate("events.formDescription")
         ) : (
-          "Link to a post and add a short note."
+          translate("events.postDescription")
         )
       }
       headerTestId="activity-form.heading"

@@ -3,6 +3,7 @@ import { PageContainer } from "@/components";
 import { BulletinEditor } from "@/components/discovery/bulletin-editor";
 import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { ProfileEditor } from "@/components/discovery/profile-editor";
+import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { CommunityHeader, ensureCommunityHeaderData } from "../../dashboard/node/-community-header";
 
@@ -15,7 +16,18 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
     TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {},
   loader: ({ context, params }) => ensureCommunityHeaderData(context, params.nodeId),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Events & profile", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.eventsProfile",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: CommunityContent,
 });

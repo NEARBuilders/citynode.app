@@ -8,6 +8,8 @@
  */
 
 import { Amount, type FinalExecutionOutcome, Near } from "near-kit";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { getDaoConnector, toNearKitWallet } from "@/lib/dao-connect";
 import { type DaoPlan, getNear } from "@/lib/sputnik-proposals";
 
@@ -54,15 +56,17 @@ export type VoteOption = (typeof VOTE_OPTIONS)[number];
 
 /* ---------------------------------------------------------------- formatting */
 
-export function formatNear(yocto: string | undefined | null): string {
+export function formatNear(yocto: string | undefined | null, locale = "en"): string {
   if (!yocto) return "0 NEAR";
   try {
-    const units = Number(BigInt(yocto) / 10n ** 20n) / 10000;
-    if (!Number.isFinite(units)) return yocto;
-    return `${units.toLocaleString("en-US", {
-      minimumFractionDigits: 4,
-      maximumFractionDigits: 4,
-    })} NEAR`;
+    const amount = BigInt(yocto);
+    const whole = amount / 10n ** 24n;
+    const fraction = ((amount < 0n ? -amount : amount) / 10n ** 20n) % 10000n;
+    const formatter = new Intl.NumberFormat(locale);
+    const decimal =
+      formatter.formatToParts(1.1).find((part) => part.type === "decimal")?.value ?? ".";
+    const sign = amount < 0n && whole === 0n ? "−" : "";
+    return `${sign}${formatter.format(whole)}${decimal}${fraction.toString().padStart(4, "0")} NEAR`;
   } catch {
     return yocto;
   }
@@ -153,11 +157,13 @@ export function poolValidatorUrl(poolAccountId: string): string {
 }
 
 /** Renders a staking-pool fee fraction ("5/100") as a percent ("5%"). */
-export function poolFeePercent(fee: string | undefined | null): string | null {
+export function poolFeePercent(fee: string | undefined | null, locale = "en"): string | null {
   if (!fee) return null;
   const [numerator, denominator] = fee.split("/").map(Number);
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null;
-  return `${Math.round((numerator / denominator) * 10000) / 100}%`;
+  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 2 }).format(
+    numerator / denominator,
+  );
 }
 
 /* -------------------------------------------------------------- view models */
@@ -318,9 +324,16 @@ export async function fetchActiveGovProposals(): Promise<GovProposalView[]> {
 
 /* ----------------------------------------------------------------- dao plans */
 
-export function describePlan(plan: DaoPlan): string {
+export function describePlan(
+  plan: DaoPlan,
+  t: AppTranslator = translateEnglishAppMessage,
+  locale = "en",
+): string {
   if (plan.kind === "transfer") {
-    return `transfer ${formatNear(plan.amountYocto)} to ${plan.receiverId}`;
+    return t("poc.transferPlan", {
+      amount: formatNear(plan.amountYocto, locale),
+      account: plan.receiverId,
+    });
   }
   return `${plan.receiverId}.${plan.methodName}()`;
 }
