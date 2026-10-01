@@ -1,5 +1,5 @@
+import { AppActionError } from "@/i18n/error-message";
 import {
-  describeDaoError,
   signAsDaoTransaction,
   type UseDaoConnectionResult,
   verifyDaoAccount,
@@ -54,26 +54,25 @@ export async function proposeTeamPoolAction(input: {
   connection: Pick<UseDaoConnectionResult, "daoAccountId" | "connect" | "disconnect">;
 }) {
   if (input.amountYocto <= 0n || input.amountYocto > input.maxAmountYocto) {
-    throw new Error(`Enter an amount within the available team ${input.method} balance.`);
-  }
-  try {
-    let dao = input.connection.daoAccountId;
-    if (dao !== input.teamAccountId || !(await verifyDaoAccount(input.teamAccountId))) {
-      if (dao) await input.connection.disconnect();
-      dao = await input.connection.connect({
-        authAccountId: input.authAccountId ?? undefined,
-      });
-    }
-    if (dao !== input.teamAccountId) {
-      throw new Error(
-        `Trezu connected ${dao}, but this ${input.method} must be signed by ${input.teamAccountId}`,
-      );
-    }
-    await signAsDaoTransaction(
-      input.teamAccountId,
-      teamPoolCall(input.poolAccountId, input.method, input.amountYocto),
+    throw new AppActionError(
+      input.method === "unstake" ? "stake.invalidTeamUnstake" : "stake.invalidTeamWithdraw",
     );
-  } catch (error) {
-    throw new Error(describeDaoError(error, input.teamAccountId));
   }
+  let dao = input.connection.daoAccountId;
+  if (dao !== input.teamAccountId || !(await verifyDaoAccount(input.teamAccountId))) {
+    if (dao) await input.connection.disconnect();
+    dao = await input.connection.connect({
+      authAccountId: input.authAccountId ?? undefined,
+    });
+  }
+  if (dao !== input.teamAccountId) {
+    throw new AppActionError("wallet.daoWrongAccount", {
+      actual: dao,
+      expected: input.teamAccountId,
+    });
+  }
+  await signAsDaoTransaction(
+    input.teamAccountId,
+    teamPoolCall(input.poolAccountId, input.method, input.amountYocto),
+  );
 }

@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "@/i18n/test-render";
 import { Bulletin } from "./bulletin";
 
 describe("Bulletin", () => {

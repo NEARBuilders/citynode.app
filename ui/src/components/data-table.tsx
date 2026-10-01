@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAppTranslation } from "@/i18n/runtime";
 
 const dataTableFeatures = tableFeatures({
   rowSortingFeature,
@@ -56,6 +57,7 @@ interface DataTableProps<TData extends RowData> {
 }
 
 export function DataTable<TData extends RowData>({ columns, data }: DataTableProps<TData>) {
+  const translate = useAppTranslation();
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const table = useTable({
@@ -101,7 +103,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  <span className="text-muted-foreground">No results.</span>
+                  <span className="text-muted-foreground">{translate("table.empty")}</span>
                 </TableCell>
               </TableRow>
             )}
@@ -110,11 +112,13 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
       </div>
       <div className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1 text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length} of {table.getPrePaginatedRowModel().rows.length}{" "}
-          row(s).
+          {translate("table.rows", {
+            shown: table.getRowModel().rows.length,
+            total: table.getPrePaginatedRowModel().rows.length,
+          })}
         </div>
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium">Rows per page</p>
+          <p className="text-sm font-medium">{translate("table.pageSize")}</p>
           <Select
             value={`${table.state.pagination.pageSize}`}
             onValueChange={(value) => {
@@ -135,7 +139,10 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center text-sm font-medium sm:w-25 sm:justify-center">
-            Page {table.state.pagination.pageIndex + 1} of {table.getPageCount()}
+            {translate("table.page", {
+              page: table.state.pagination.pageIndex + 1,
+              total: table.getPageCount(),
+            })}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -144,7 +151,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               onClick={() => table.setPageIndex(0)}
               disabled={!table.getCanPreviousPage()}
             >
-              <span className="sr-only">Go to first page</span>
+              <span className="sr-only">{translate("table.first")}</span>
               <CaretDoubleLeftIcon className="h-4 w-4" />
             </Button>
             <Button
@@ -153,7 +160,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
             >
-              <span className="sr-only">Go to previous page</span>
+              <span className="sr-only">{translate("table.previous")}</span>
               <CaretLeftIcon className="h-4 w-4" />
             </Button>
             <Button
@@ -162,7 +169,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >
-              <span className="sr-only">Go to next page</span>
+              <span className="sr-only">{translate("table.next")}</span>
               <CaretRightIcon className="h-4 w-4" />
             </Button>
             <Button
@@ -171,7 +178,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               onClick={() => table.setPageIndex(table.getPageCount() - 1)}
               disabled={!table.getCanNextPage()}
             >
-              <span className="sr-only">Go to last page</span>
+              <span className="sr-only">{translate("table.last")}</span>
               <CaretDoubleRightIcon className="h-4 w-4" />
             </Button>
           </div>

@@ -1,3 +1,6 @@
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
+
 export type OnboardingCodeState = "active" | "expired" | "revoked" | "used-up";
 
 export function onboardingCodeState(
@@ -10,13 +13,24 @@ export function onboardingCodeState(
   return "active";
 }
 
-export function formatRemaining(expiresAt: Date, now: number = Date.now()): string {
+export function formatRemaining(
+  expiresAt: Date,
+  now: number = Date.now(),
+  t: AppTranslator = translateEnglishAppMessage,
+  locale = "en",
+): string {
   const ms = new Date(expiresAt).getTime() - now;
-  if (ms <= 0) return "expired";
+  if (ms <= 0) return t("station.expired");
   const days = Math.floor(ms / 86_400_000);
   const hours = Math.floor((ms % 86_400_000) / 3_600_000);
   const minutes = Math.floor((ms % 3_600_000) / 60_000);
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+  const number = new Intl.NumberFormat(locale);
+  const values = {
+    days: number.format(days),
+    hours: number.format(hours),
+    minutes: number.format(minutes),
+  };
+  if (days > 0) return t("station.daysHours", values);
+  if (hours > 0) return t("station.hoursMinutes", values);
+  return t("station.minutes", values);
 }

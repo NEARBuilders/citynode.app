@@ -20,24 +20,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { ActivityEditor } from "./activity-editor";
 
 type Profile = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryProfile"]>>>;
 export type ProfileEditorTab = "profile" | "events";
 
-function profileSaveErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (error && typeof error === "object" && "message" in error) {
-    const message = String((error as { message: unknown }).message).trim();
-    if (message) return message;
-  }
-  return "Couldn't save the profile.";
+function profileSaveErrorMessage(error: unknown, t: AppTranslator) {
+  return appErrorMessage(error, t, "community.saveError");
 }
 
-function validateProfile(profile: Profile) {
+function validateProfile(profile: Profile): AppMessageId | null {
   for (const channel of profile.channels) {
-    if (!channel.label.trim()) return "Each link needs a name";
-    if (!/^https?:\/\//i.test(channel.url.trim())) return "Use an HTTP(S) URL for each link";
+    if (!channel.label.trim()) return "community.linkNameRequired";
+    if (!/^https?:\/\//i.test(channel.url.trim())) return "community.linkUrlRequired";
   }
   return null;
 }
@@ -53,6 +51,7 @@ export function ProfileEditor({
   tab?: ProfileEditorTab;
   onTabChange?: (tab: ProfileEditorTab) => void;
 }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const [localTab, setLocalTab] = useState<ProfileEditorTab>(defaultTab);
   const current = tab ?? localTab;
@@ -76,8 +75,8 @@ export function ProfileEditor({
     return (
       <EmptyState
         icon={LockSimpleIcon}
-        title="You can't edit this community"
-        description="Only its owners and admins can change the profile or publish events."
+        title={translate("community.cannotEdit")}
+        description={translate("community.cannotEditHint")}
       />
     );
   return (
@@ -87,10 +86,10 @@ export function ProfileEditor({
     >
       <TabsList>
         <TabsTrigger value="events" data-testid="content-tab-events">
-          Events
+          {translate("events.title")}
         </TabsTrigger>
         <TabsTrigger value="profile" data-testid="content-tab-profile">
-          Profile
+          {translate("community.profile")}
         </TabsTrigger>
       </TabsList>
       <TabsContent value="events" className="flex flex-col gap-8 pt-8">
@@ -99,12 +98,10 @@ export function ProfileEditor({
             className="flex flex-wrap items-center gap-3 text-sm"
             data-testid="content-not-published"
           >
-            <Badge variant="warning">Hidden from Explore</Badge>
-            <span className="text-muted-foreground">
-              Published events show up once your profile is public.
-            </span>
+            <Badge variant="warning">{translate("community.hidden")}</Badge>
+            <span className="text-muted-foreground">{translate("community.hiddenHint")}</span>
             <Button variant="link" size="xs" onClick={() => select("profile")}>
-              Open profile
+              {translate("community.openProfile")}
             </Button>
           </div>
         )}
@@ -134,8 +131,9 @@ export function ProfileEditor({
 }
 
 function ProfileForm({ initial }: { initial: Profile }) {
+  const translate = useAppTranslation();
   const [profile, setProfile] = useState(initial);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<AppMessageId | null>(null);
   const api = useApiClient();
   const client = useQueryClient();
   const save = useMutation({
@@ -144,15 +142,19 @@ function ProfileForm({ initial }: { initial: Profile }) {
       setValidationError(null);
       setProfile(saved);
       if (saved.geocodeHint) {
-        toast.warning(saved.geocodeHint);
+        toast.warning(translate("community.geocodeHint"));
       } else {
-        toast.success(saved.published ? "Profile saved and live on Explore" : "Profile saved");
+        toast.success(
+          saved.published
+            ? translate("community.profileSavedPublished")
+            : translate("community.profileSaved"),
+        );
       }
       return client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });
     },
-    onError: (error: unknown) => toast.error(profileSaveErrorMessage(error)),
+    onError: (error: unknown) => toast.error(profileSaveErrorMessage(error, translate)),
   });
   const setChannel = (index: number, patch: Partial<Profile["channels"][number]>) =>
     setProfile({
@@ -188,7 +190,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
         const issue = validateProfile(profile);
         if (issue) {
           setValidationError(issue);
-          toast.error(issue);
+          toast.error(translate(issue));
           return;
         }
         setValidationError(null);
@@ -197,8 +199,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
     >
       <Field orientation="horizontal">
         <FieldContent>
-          <FieldLabel htmlFor="profile-published">Show on Explore</FieldLabel>
-          <FieldDescription>People can find this community and its events.</FieldDescription>
+          <FieldLabel htmlFor="profile-published">{translate("community.showExplore")}</FieldLabel>
+          <FieldDescription>{translate("community.showExploreHint")}</FieldDescription>
         </FieldContent>
         <Switch
           id="profile-published"
@@ -209,14 +211,14 @@ function ProfileForm({ initial }: { initial: Profile }) {
       </Field>
 
       <FieldSet>
-        <FieldLegend>About</FieldLegend>
+        <FieldLegend>{translate("about.title")}</FieldLegend>
         <Field>
-          <FieldLabel htmlFor="profile-summary">Description</FieldLabel>
+          <FieldLabel htmlFor="profile-summary">{translate("common.description")}</FieldLabel>
           <Textarea
             id="profile-summary"
             data-testid="discovery-profile-summary"
             value={profile.summary}
-            placeholder="Who is this community for? What do you do together?"
+            placeholder={translate("community.profileExample")}
             maxLength={1000}
             onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
           />
@@ -224,11 +226,13 @@ function ProfileForm({ initial }: { initial: Profile }) {
       </FieldSet>
 
       <FieldSet>
-        <FieldLegend>Where you meet</FieldLegend>
+        <FieldLegend>{translate("community.whereMeet")}</FieldLegend>
         <FieldGroup>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="profile-location">City or venue</FieldLabel>
+              <FieldLabel htmlFor="profile-location">
+                {translate("community.cityExample")}
+              </FieldLabel>
               <Input
                 id="profile-location"
                 data-testid="discovery-profile-location"
@@ -238,7 +242,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="profile-region">Region</FieldLabel>
+              <FieldLabel htmlFor="profile-region">{translate("community.region")}</FieldLabel>
               <Input
                 id="profile-region"
                 data-testid="discovery-profile-region"
@@ -254,19 +258,21 @@ function ProfileForm({ initial }: { initial: Profile }) {
               data-testid="discovery-profile-geocode-hint"
               className="text-sm text-muted-foreground"
             >
-              {profile.geocodeHint}
+              {translate("community.geocodeHint")}
             </p>
           ) : null}
         </FieldGroup>
       </FieldSet>
 
       <FieldSet>
-        <FieldLegend>Where people can join</FieldLegend>
+        <FieldLegend>{translate("community.joinLinks")}</FieldLegend>
         <FieldGroup>
           {profile.channels.map((channel, index) => (
             <div key={index} className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
               <Field className="w-full sm:w-36 sm:shrink-0">
-                <FieldLabel htmlFor={`channel-label-${index}`}>Name</FieldLabel>
+                <FieldLabel htmlFor={`channel-label-${index}`}>
+                  {translate("common.name")}
+                </FieldLabel>
                 <Input
                   id={`channel-label-${index}`}
                   data-testid={`discovery-profile-channel-label-${index}`}
@@ -276,7 +282,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 />
               </Field>
               <Field className="min-w-0 flex-1">
-                <FieldLabel htmlFor={`channel-url-${index}`}>Link</FieldLabel>
+                <FieldLabel htmlFor={`channel-url-${index}`}>{translate("common.link")}</FieldLabel>
                 <Input
                   id={`channel-url-${index}`}
                   data-testid={`discovery-profile-channel-url-${index}`}
@@ -290,7 +296,9 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label={`Remove ${channel.label || "link"}`}
+                aria-label={translate("common.removeNamed", {
+                  name: channel.label || translate("community.linkFallback"),
+                })}
                 onClick={() =>
                   setProfile({
                     ...profile,
@@ -314,7 +322,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
             }
           >
             <PlusIcon />
-            Add link
+            {translate("community.addLink")}
           </Button>
         </FieldGroup>
       </FieldSet>
@@ -326,7 +334,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
           className="self-start"
           disabled={save.isPending}
         >
-          {save.isPending ? "Saving…" : "Save profile"}
+          {save.isPending ? translate("common.saving") : translate("community.saveProfile")}
         </Button>
         {(validationError || save.isError) && (
           <p
@@ -334,7 +342,9 @@ function ProfileForm({ initial }: { initial: Profile }) {
             data-testid="discovery-profile-save-error"
             className="text-sm text-destructive"
           >
-            {validationError ?? profileSaveErrorMessage(save.error)}
+            {validationError
+              ? translate(validationError)
+              : profileSaveErrorMessage(save.error, translate)}
           </p>
         )}
       </div>

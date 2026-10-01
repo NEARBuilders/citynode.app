@@ -12,6 +12,7 @@ import { cn } from "cn";
 import { useApiClient } from "@/app";
 import { Badge, Button, EmptyState } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppTranslation } from "@/i18n/runtime";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, activityTimeRange, DateTile } from "./event-list";
 import { ReportContent } from "./report-content";
@@ -25,6 +26,7 @@ export function ActivityDetail({
   node?: string;
   campaign?: string;
 }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const measurement = useDiscoveryMeasurement(api, campaign);
   const activity = useQuery({
@@ -53,13 +55,13 @@ export function ActivityDetail({
       }
     >
       <ArrowLeftIcon />
-      Back to Explore
+      {translate("community.backExplore")}
     </Button>
   );
 
   if (activity.isPending) {
     return (
-      <div className="flex flex-col gap-8" role="status" aria-label="Loading">
+      <div className="flex flex-col gap-8" role="status" aria-label={translate("common.loading")}>
         {back}
         <div className="flex items-center gap-5">
           <Skeleton className="size-20 rounded-xl" />
@@ -78,18 +80,16 @@ export function ActivityDetail({
         {back}
         <EmptyState
           icon={CalendarXIcon}
-          title={activity.isError ? "Couldn’t load this event" : "Event not found"}
+          title={activity.isError ? translate("events.loadError") : translate("events.notFound")}
           description={
-            activity.isError
-              ? "Check your connection and try again."
-              : "This event or post isn’t available anymore."
+            activity.isError ? translate("events.connectionHint") : translate("events.unavailable")
           }
           action={
             activity.isError ? (
-              <Button onClick={() => activity.refetch()}>Try again</Button>
+              <Button onClick={() => activity.refetch()}>{translate("common.retry")}</Button>
             ) : (
               <Button nativeButton={false} render={<Link to="/explore" />}>
-                Find other events
+                {translate("events.findOthers")}
               </Button>
             )
           }
@@ -115,8 +115,10 @@ export function ActivityDetail({
           <DateTile activity={data} size="lg" />
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{isEvent ? "Event" : "Update"}</Badge>
-              {cancelled && <Badge variant="destructive">Cancelled</Badge>}
+              <Badge variant="secondary">
+                {isEvent ? translate("events.event") : translate("events.update")}
+              </Badge>
+              {cancelled && <Badge variant="destructive">{translate("events.cancelled")}</Badge>}
             </div>
             <h1
               className={cn(
@@ -131,7 +133,7 @@ export function ActivityDetail({
         <dl className="flex flex-col gap-3 text-base">
           {tile && (
             <div className="flex items-center gap-3">
-              <dt className="sr-only">Date</dt>
+              <dt className="sr-only">{translate("events.date")}</dt>
               <ClockIcon className="size-5 shrink-0 text-muted-foreground" />
               <dd>
                 {tile.full}
@@ -141,7 +143,7 @@ export function ActivityDetail({
           )}
           {isEvent && data.venue && (
             <div className="flex items-center gap-3">
-              <dt className="sr-only">Venue</dt>
+              <dt className="sr-only">{translate("events.venue")}</dt>
               <MapPinIcon className="size-5 shrink-0 text-muted-foreground" />
               <dd className="min-w-0 wrap-anywhere">{data.venue}</dd>
             </div>
@@ -161,7 +163,11 @@ export function ActivityDetail({
               />
             )}
           >
-            {isEvent ? (data.luma ? "Register on Luma" : "Event details") : "Read original post"}
+            {isEvent
+              ? data.luma
+                ? translate("events.registerLuma")
+                : translate("events.details")
+              : translate("events.original")}
             <ArrowUpRightIcon />
           </Button>
         </div>
@@ -169,7 +175,7 @@ export function ActivityDetail({
 
       {data.summary && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold">About</h2>
+          <h2 className="text-xl font-semibold">{translate("about.title")}</h2>
           <p className="max-w-2xl whitespace-pre-line text-base text-muted-foreground">
             {data.summary}
           </p>
@@ -178,7 +184,7 @@ export function ActivityDetail({
 
       {host.data && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold">Hosted by</h2>
+          <h2 className="text-xl font-semibold">{translate("activity.hostedBy")}</h2>
           <Link
             to="/n/$slug"
             params={{ slug: host.data.slug }}

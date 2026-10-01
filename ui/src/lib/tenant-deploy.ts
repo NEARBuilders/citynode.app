@@ -1,5 +1,6 @@
 import type { TransactionBuilder } from "near-kit";
 import type { ApiClient, TenantUiOverride, useAuthClient } from "@/app";
+import { AppActionError } from "@/i18n/error-message";
 import {
   buildTenantPublishConfig,
   type SignAsDaoSpec,
@@ -76,7 +77,7 @@ export async function publishTenantConfigForMode(
   signTransaction: DaoTransactionSigner = signAsDaoTransaction,
 ) {
   if (!input.hostname) {
-    throw new Error("No primary domain binding configured for this tenant");
+    throw new AppActionError("tenant.publishDomainRequired");
   }
 
   const passthrough = {
@@ -103,24 +104,26 @@ export async function publishTenantConfigForMode(
 
   const connected = await auth.near.ensureConnected();
   if (!connected) {
-    throw new Error("Connect a NEAR wallet first");
+    throw new AppActionError("poc.nearSignInFirst");
   }
 
   const signerAccountId = auth.near.getAccountId();
   if (!signerAccountId) {
-    throw new Error("Connect a NEAR wallet first");
+    throw new AppActionError("poc.nearSignInFirst");
   }
   if (signerAccountId !== input.accountId) {
-    throw new Error(
-      `Connected NEAR account ${signerAccountId} cannot publish ${input.accountId}. Connect ${input.accountId}.`,
-    );
+    throw new AppActionError("wallet.daoWrongAccount", {
+      actual: signerAccountId,
+      expected: input.accountId,
+    });
   }
 
   const expectedNetwork = networkForAccount(input.accountId);
   if (auth.near.getNetwork() !== expectedNetwork) {
-    throw new Error(
-      `Switch your wallet to ${expectedNetwork} before publishing ${input.accountId}.`,
-    );
+    throw new AppActionError("tenant.publishNetworkNamed", {
+      network: expectedNetwork,
+      account: input.accountId,
+    });
   }
 
   const prepared = await prepareTenantConfigWrite(apiClient, {

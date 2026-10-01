@@ -104,6 +104,7 @@ export {
   computeSsrEntryIntegrity,
   computeSubresourceIntegrity,
   computeUiEntryIntegrity,
+  createTenantConfigDraftSchema,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,

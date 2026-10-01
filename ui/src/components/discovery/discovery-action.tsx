@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export function DiscoveryAction({
   children,
@@ -20,6 +22,7 @@ export function DiscoveryAction({
   variant?: "default" | "outline" | "ghost" | "destructive";
   onDone?: () => void;
 }) {
+  const translate = useAppTranslation();
   const client = useQueryClient();
   const mutation = useMutation({
     mutationFn: run,
@@ -42,7 +45,7 @@ export function DiscoveryAction({
       {children}
       {mutation.isError && (
         <p role="alert" className="text-sm text-destructive">
-          {mutation.error.message}
+          {appErrorMessage(mutation.error, translate)}
         </p>
       )}
       <Button

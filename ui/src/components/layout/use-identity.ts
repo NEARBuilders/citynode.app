@@ -3,11 +3,13 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { clearAuthenticatedQueries, sessionQueryOptions, useAuthClient } from "@/app";
+import { useAppTranslation } from "@/i18n/runtime";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
 
 export function useIdentity() {
+  const translate = useAppTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -63,8 +65,9 @@ export function useIdentity() {
   const avatarSrc = resolveNearImageUrl(nearProfile?.image) ?? user?.image ?? undefined;
   const validEmail =
     user && !user.isAnonymous && user.email && !isSyntheticEmail(user.email) ? user.email : null;
-  const displayName = nearProfile?.name || user?.name || nearAccountId || validEmail || "guest";
-  const handle = nearAccountId || validEmail || "anonymous session";
+  const displayName =
+    nearProfile?.name || user?.name || nearAccountId || validEmail || translate("identity.guest");
+  const handle = nearAccountId || validEmail || translate("identity.anonymous");
   const showHandle = handle !== displayName;
   const initials = getNearInitials(nearProfile?.name || user?.name || nearAccountId);
 

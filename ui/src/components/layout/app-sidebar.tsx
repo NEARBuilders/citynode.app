@@ -20,6 +20,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAppTranslation } from "@/i18n/runtime";
 import { groupSidebarItems, isNavItemActive, navSlug, type SidebarItem } from "./nav-items";
 import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
 import { SidebarTeamSwitcher } from "./sidebar-team-switcher";
@@ -34,6 +35,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
+  const translate = useAppTranslation();
   const { user, organizations, activeOrgId } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
   const switchTeam = useSwitchTeam();
@@ -46,7 +48,7 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
   const search = { tab };
   const teams = workspace?.teams ?? [];
   const activeTeamId = workspace?.activeTeam?.id ?? null;
-  const sections = groupSidebarItems(items);
+  const sections = groupSidebarItems(items, translate);
   const { isMobile, setOpenMobile } = useSidebar();
 
   useEffect(() => {
@@ -92,21 +94,21 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton
               isActive={pathname.startsWith("/settings")}
-              tooltip="Settings"
+              tooltip={translate("common.settings")}
               render={<Link to={pluginPath("/settings")} data-testid="sidebar-nav-settings" />}
             >
               <GearIcon />
-              <span>Settings</span>
+              <span>{translate("common.settings")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               isActive={pathname === "/about" || pathname === "/skill"}
-              tooltip="Docs"
+              tooltip={translate("common.docs")}
               render={<Link to="/about" data-testid="sidebar-nav-docs" />}
             >
               <BookOpenIcon />
-              <span>Docs</span>
+              <span>{translate("common.docs")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -173,6 +175,7 @@ function SidebarNavSubItem({ item, pathname, search }: NavItemProps) {
 }
 
 function SidebarNavGroup({ item, pathname, search }: NavItemProps) {
+  const translate = useAppTranslation();
   const Icon = item.icon;
   const active = isNavItemActive(item, pathname, search);
   const children = item.children ?? [];
@@ -209,7 +212,7 @@ function SidebarNavGroup({ item, pathname, search }: NavItemProps) {
       <CollapsiblePrimitive.Trigger
         render={
           <SidebarMenuAction
-            aria-label={`Toggle ${item.label}`}
+            aria-label={translate("nav.toggle", { name: item.label })}
             data-testid={`sidebar-nav-${slug}-toggle`}
           />
         }

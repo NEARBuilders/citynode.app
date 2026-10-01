@@ -8,9 +8,16 @@
 
 import "./styles.css";
 import { hydrate as coreHydrate } from "everything-dev/ui/hydrate";
+import { RootNotFound } from "./components/root-not-found";
+import { RouterError, RouterPending } from "./components/router-error";
 
 export function hydrate() {
-  return coreHydrate({ routeConfig: () => import("./routeConfig.gen") });
+  return coreHydrate({
+    routeConfig: () => import("./routeConfig.gen"),
+    defaultErrorComponent: RouterError,
+    defaultPendingComponent: RouterPending,
+    defaultNotFoundComponent: RootNotFound,
+  });
 }
 
 export default hydrate;

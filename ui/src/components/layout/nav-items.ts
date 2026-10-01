@@ -17,6 +17,8 @@ import {
   TreeStructureIcon,
   WrenchIcon,
 } from "@phosphor-icons/react";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 import type { FeatureArea } from "@/lib/feature-areas";
 
 export type SidebarRole = "anon" | "member" | "admin";
@@ -55,58 +57,64 @@ export interface NavContext {
   isAdmin?: boolean;
 }
 
-const ADMIN_CHILDREN: SidebarItem[] = [
-  {
-    icon: ChartBarIcon,
-    label: "Overview",
-    slug: "admin-overview",
-    to: "/admin",
-    exact: true,
-    roleRequired: "admin",
-  },
-  {
-    icon: NetworkIcon,
-    label: "Communities",
-    slug: "admin-nodes",
-    to: "/admin/nodes",
-    roleRequired: "admin",
-  },
-  {
-    icon: ScrollIcon,
-    label: "Proposals",
-    slug: "admin-proposals",
-    to: "/admin/proposals",
-    roleRequired: "admin",
-  },
-  {
-    icon: TreeStructureIcon,
-    label: "Sites",
-    slug: "admin-tenants",
-    to: "/admin/tenants",
-    roleRequired: "admin",
-  },
-  {
-    icon: LightningIcon,
-    label: "Relayer",
-    slug: "admin-relayer",
-    to: "/admin/relayer",
-    roleRequired: "admin",
-  },
-  {
-    icon: WrenchIcon,
-    label: "System",
-    slug: "admin-system",
-    to: "/admin/system",
-    roleRequired: "admin",
-  },
-];
+export function createAdminChildren(t: AppTranslator): SidebarItem[] {
+  return [
+    {
+      icon: ChartBarIcon,
+      label: t("common.overview"),
+      slug: "admin-overview",
+      to: "/admin",
+      exact: true,
+      roleRequired: "admin",
+    },
+    {
+      icon: NetworkIcon,
+      label: t("common.communities"),
+      slug: "admin-nodes",
+      to: "/admin/nodes",
+      roleRequired: "admin",
+    },
+    {
+      icon: ScrollIcon,
+      label: t("common.proposals"),
+      slug: "admin-proposals",
+      to: "/admin/proposals",
+      roleRequired: "admin",
+    },
+    {
+      icon: TreeStructureIcon,
+      label: t("nav.sites"),
+      slug: "admin-tenants",
+      to: "/admin/tenants",
+      roleRequired: "admin",
+    },
+    {
+      icon: LightningIcon,
+      label: t("nav.relayer"),
+      slug: "admin-relayer",
+      to: "/admin/relayer",
+      roleRequired: "admin",
+    },
+    {
+      icon: WrenchIcon,
+      label: t("nav.system"),
+      slug: "admin-system",
+      to: "/admin/system",
+      roleRequired: "admin",
+    },
+  ];
+}
 
-export function buildNavItems(context: NavContext = {}): SidebarItem[] {
+export function buildNavItems(
+  context: NavContext = {},
+  t: AppTranslator = translateEnglishAppMessage,
+): SidebarItem[] {
+  const ADMIN_CHILDREN = createAdminChildren(t);
   const orgPath = context.activeOrgSlug ? `/orgs/${context.activeOrgSlug}` : "/orgs";
   return [
     {
       icon: HouseIcon,
-      label: "Home",
+      label: t("common.home"),
       slug: "dashboard",
       to: "/dashboard",
       exact: true,
@@ -115,7 +123,7 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
     },
     {
       icon: CompassIcon,
-      label: "Explore",
+      label: t("common.explore"),
       slug: "explore",
       to: "/explore",
       activePrefixes: ["/explore", "/n/", "/activity/"],
@@ -124,7 +132,7 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
     },
     {
       icon: CoinsIcon,
-      label: "Stake",
+      label: t("common.stake"),
       slug: "stake",
       to: "/stake",
       roleRequired: "anon",
@@ -133,7 +141,7 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
     },
     {
       icon: HammerIcon,
-      label: "Build",
+      label: t("nav.build"),
       slug: "build",
       to: "/build",
       roleRequired: "anon",
@@ -141,7 +149,7 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
     },
     {
       icon: NetworkIcon,
-      label: "My community",
+      label: t("nav.myCommunity"),
       slug: "my-node",
       to: "/dashboard/node",
       activePrefixes: ["/dashboard/node", "/nodes/", "/tenant/"],
@@ -151,7 +159,7 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
     },
     {
       icon: BuildingsIcon,
-      label: "Organization",
+      label: t("common.organization"),
       slug: "orgs",
       to: orgPath,
       activePrefixes: ["/orgs"],
@@ -160,7 +168,7 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
     },
     {
       icon: CubeIcon,
-      label: "Things",
+      label: t("common.things"),
       slug: "things",
       to: "/things",
       roleRequired: "member",
@@ -171,7 +179,7 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
       ? [
           {
             icon: ListChecksIcon,
-            label: "Directory",
+            label: t("nav.directory"),
             slug: "discover",
             to: "/discover",
             roleRequired: "member" as const,
@@ -181,7 +189,7 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
       : []),
     {
       icon: ShieldIcon,
-      label: "Admin",
+      label: t("org.admin"),
       slug: "admin",
       to: "/admin",
       roleRequired: "admin",
@@ -304,12 +312,21 @@ export const SECTION_LABELS: Record<SidebarSection, string | null> = {
   manage: "Manage",
 };
 
-export function groupSidebarItems(items: SidebarItem[]) {
+export function groupSidebarItems(
+  items: SidebarItem[],
+  t: AppTranslator = translateEnglishAppMessage,
+) {
   const sections: Array<{ key: string; label: string | null; items: SidebarItem[] }> = [];
   for (const item of items) {
     const key = item.section ?? item.group ?? "more";
     const label =
-      item.section !== undefined ? SECTION_LABELS[item.section] : (item.group ?? "More");
+      item.section === "organization"
+        ? t("nav.workspace")
+        : item.section === "manage"
+          ? t("nav.manage")
+          : item.section === "main"
+            ? null
+            : (item.group ?? t("common.more"));
     const existing = sections.find((section) => section.key === key);
     if (existing) existing.items.push(item);
     else sections.push({ key, label, items: [item] });

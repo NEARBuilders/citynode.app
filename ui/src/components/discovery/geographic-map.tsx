@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
+import { useAppTranslation } from "@/i18n/runtime";
 import "leaflet/dist/leaflet.css";
 
 type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
@@ -12,6 +13,9 @@ export function GeographicMap({
   onSelect: (id: string) => void;
   selectedId?: string;
 }) {
+  const translate = useAppTranslation();
+  const translation = useRef(translate);
+  translation.current = translate;
   const container = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const select = useRef(onSelect);
@@ -64,7 +68,10 @@ export function GeographicMap({
             const active = group.some((entry) => entry.node.nodeId === selected.current);
             const label =
               group.length > 1
-                ? `${group.length} communities near ${first.node.location}`
+                ? translation.current("directory.communitiesNear", {
+                    count: group.length,
+                    location: first.node.location ?? "",
+                  })
                 : first.node.name;
             const content = document.createElement("span");
             content.className = `flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold shadow-lg ${
@@ -156,15 +163,18 @@ export function GeographicMap({
   }, [nodes]);
   useEffect(() => {
     redraw.current?.();
+  }, [translate]);
+  useEffect(() => {
+    redraw.current?.();
     const node = nodesRef.current.find((entry) => entry.nodeId === selectedId);
     if (node && node.latitude !== null && node.longitude !== null)
       mapRef.current?.panTo([node.latitude, node.longitude]);
   }, [selectedId]);
   return (
-    <section aria-label="Map" className="flex flex-col">
+    <section aria-label={translate("directory.map")} className="flex flex-col">
       {failed && (
         <p role="status" className="border-b border-border px-4 py-2 text-sm text-muted-foreground">
-          Map isn’t loading. Use the list instead.
+          {translate("directory.mapError")}
         </p>
       )}
       <div ref={container} className="relative z-0 h-87.5 w-full sm:h-110 lg:h-160" />

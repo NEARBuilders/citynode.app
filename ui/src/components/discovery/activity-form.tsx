@@ -25,6 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export type Activity = Awaited<ReturnType<ApiClient["saveDiscoveryActivity"]>>;
 export type ActivityDraft = Parameters<ApiClient["saveDiscoveryActivity"]>[0];
@@ -69,6 +71,7 @@ export function ActivityFormPage({
   headerTestId: string;
   children: ReactNode;
 }) {
+  const translate = useAppTranslation();
   return (
     <PageContainer variant="narrow">
       <div className="flex flex-col gap-4">
@@ -83,7 +86,7 @@ export function ActivityFormPage({
           }
         >
           <ArrowLeftIcon />
-          Events
+          {translate("events.title")}
         </Button>
         <PageHeader title={title} description={description} headerTestId={headerTestId} />
       </div>
@@ -101,6 +104,7 @@ export function ActivityForm({
   initial: ActivityDraft;
   imported?: Activity["luma"];
 }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -114,7 +118,7 @@ export function ActivityForm({
   const save = useMutation({
     mutationFn: (input: ActivityDraft) => api.saveDiscoveryActivity(input),
     onSuccess: async (saved) => {
-      toast.success(saved.status === "published" ? "Published on Explore" : "Saved");
+      toast.success(saved.status === "published" ? translate("events.publishedExplore") : "Saved");
       await client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });
@@ -135,7 +139,7 @@ export function ActivityForm({
     >
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="activity-title">Title</FieldLabel>
+          <FieldLabel htmlFor="activity-title">{translate("common.title")}</FieldLabel>
           <Input
             id="activity-title"
             readOnly={locked}
@@ -146,7 +150,7 @@ export function ActivityForm({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="activity-summary">Summary</FieldLabel>
+          <FieldLabel htmlFor="activity-summary">{translate("events.summary")}</FieldLabel>
           <Textarea
             readOnly={locked}
             id="activity-summary"
@@ -156,7 +160,7 @@ export function ActivityForm({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="activity-url">Link</FieldLabel>
+          <FieldLabel htmlFor="activity-url">{translate("common.link")}</FieldLabel>
           <Input
             id="activity-url"
             readOnly={locked}
@@ -169,7 +173,7 @@ export function ActivityForm({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="activity-source">Organizer</FieldLabel>
+          <FieldLabel htmlFor="activity-source">{translate("events.organizer")}</FieldLabel>
           <Input
             id="activity-source"
             readOnly={locked}
@@ -182,7 +186,7 @@ export function ActivityForm({
       </FieldGroup>
       {draft.kind === "event" ? (
         <FieldSet>
-          <FieldLegend>When and where</FieldLegend>
+          <FieldLegend>{translate("events.whenWhere")}</FieldLegend>
           <FieldGroup>
             {(
               [
@@ -205,7 +209,7 @@ export function ActivityForm({
               </Field>
             ))}
             <Field>
-              <FieldLabel htmlFor="activity-timezone">Event timezone</FieldLabel>
+              <FieldLabel htmlFor="activity-timezone">{translate("events.timezone")}</FieldLabel>
               <Input
                 readOnly={locked}
                 id="activity-timezone"
@@ -213,12 +217,10 @@ export function ActivityForm({
                 value={draft.timezone}
                 onChange={(e) => update("timezone", e.target.value)}
               />
-              <FieldDescription>
-                Enter times in your own timezone; visitors see them in this one.
-              </FieldDescription>
+              <FieldDescription>{translate("events.timezoneHint")}</FieldDescription>
             </Field>
             <Field>
-              <FieldLabel htmlFor="activity-venue">Venue or meeting link</FieldLabel>
+              <FieldLabel htmlFor="activity-venue">{translate("events.venueExample")}</FieldLabel>
               <Input
                 readOnly={locked}
                 id="activity-venue"
@@ -231,7 +233,7 @@ export function ActivityForm({
         </FieldSet>
       ) : (
         <Field>
-          <FieldLabel htmlFor="activity-published">Posted on</FieldLabel>
+          <FieldLabel htmlFor="activity-published">{translate("events.postedOn")}</FieldLabel>
           <Input
             readOnly={locked}
             id="activity-published"
@@ -246,7 +248,7 @@ export function ActivityForm({
       )}
       {draft.kind === "event" && (nodes.data?.length ?? 0) > 1 && (
         <FieldSet>
-          <FieldLegend variant="label">Also show in</FieldLegend>
+          <FieldLegend variant="label">{translate("events.alsoShow")}</FieldLegend>
           <FieldGroup>
             {nodes.data
               ?.filter((n) => n.id !== nodeId)
@@ -271,12 +273,12 @@ export function ActivityForm({
         </FieldSet>
       )}
       <Field>
-        <FieldLabel htmlFor="activity-status">Visibility</FieldLabel>
+        <FieldLabel htmlFor="activity-status">{translate("events.visibility")}</FieldLabel>
         <Select
           items={[
-            { label: "Draft", value: "draft" },
-            { label: "Published on Explore", value: "published" },
-            { label: "Cancelled", value: "cancelled" },
+            { label: translate("events.draft"), value: "draft" },
+            { label: translate("events.publishedExplore"), value: "published" },
+            { label: translate("events.cancelled"), value: "cancelled" },
           ]}
           value={draft.status}
           onValueChange={(value) => {
@@ -288,13 +290,13 @@ export function ActivityForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="draft">{translate("events.draft")}</SelectItem>
             <SelectItem value="published" disabled={imported?.available === false}>
-              Published on Explore
+              {translate("events.publishedExplore")}
             </SelectItem>
             {draft.kind === "event" && (
               <SelectItem value="cancelled" disabled={imported?.available === false}>
-                Cancelled
+                {translate("events.cancelled")}
               </SelectItem>
             )}
           </SelectContent>
@@ -302,12 +304,12 @@ export function ActivityForm({
       </Field>
       {save.isError && (
         <p role="alert" className="text-sm text-destructive">
-          {save.error.message}
+          {appErrorMessage(save.error, translate)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" data-testid="discovery-activity-save" disabled={save.isPending}>
-          {save.isPending ? "Saving…" : "Save"}
+          {save.isPending ? translate("common.saving") : translate("common.save")}
         </Button>
         <Button
           variant="ghost"
@@ -317,7 +319,7 @@ export function ActivityForm({
             <Link to="/nodes/$nodeId/content" params={{ nodeId }} search={{ tab: "events" }} />
           }
         >
-          Cancel
+          {translate("common.cancel")}
         </Button>
       </div>
     </form>

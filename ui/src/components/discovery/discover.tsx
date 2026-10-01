@@ -45,6 +45,9 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { CurateReports } from "./curate-reports";
 import { CurateTeam } from "./curate-team";
 import { DiscoveryAction } from "./discovery-action";
@@ -53,11 +56,13 @@ import { DiscoveryMetrics } from "./discovery-measurement";
 type Studio = Awaited<ReturnType<ApiClient["getDiscoveryStudio"]>>;
 type StudioNode = Studio["nodes"][number];
 
-const COMMUNITY_FILTERS = [
-  { label: "All communities", value: "all" },
-  { label: "Needs attention", value: "attention" },
-  { label: "Featured", value: "featured" },
-];
+export function createCommunityFilters(t: AppTranslator) {
+  return [
+    { label: t("directory.all"), value: "all" },
+    { label: t("directory.attention"), value: "attention" },
+    { label: t("directory.featured"), value: "featured" },
+  ];
+}
 
 export function needsAttention(node: Pick<StudioNode, "summary" | "channels" | "active">) {
   return !node.summary || !node.channels.length || !node.active;
@@ -73,6 +78,9 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 export function Discover() {
+  const translate = useAppTranslation();
+  const COMMUNITY_FILTERS = createCommunityFilters(translate);
+
   const api = useApiClient();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -106,15 +114,15 @@ export function Discover() {
     return (
       <EmptyState
         icon={ShieldCheckIcon}
-        title="Directory is for curators"
-        description="Ask a site admin for curator access. To edit your own community, use My community."
+        title={translate("directory.curatorsOnly")}
+        description={translate("directory.curatorsOnlyHint")}
         action={
           <>
             <Button nativeButton={false} render={<Link to="/dashboard/node" />}>
-              Go to My community
+              {translate("directory.myCommunity")}
             </Button>
             <Button variant="ghost" onClick={() => studio.refetch()}>
-              Try again
+              {translate("common.retry")}
             </Button>
           </>
         }
@@ -136,39 +144,39 @@ export function Discover() {
     <div className="flex flex-col gap-10">
       <PageHeader
         headerTestId="curate.heading"
-        title="Directory"
-        description="Feature good communities and keep Explore accurate."
+        title={translate("nav.directory")}
+        description={translate("directory.description")}
         actions={
           <Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>
-            Open Explore
+            {translate("directory.openExplore")}
             <ArrowUpRightIcon />
           </Button>
         }
       />
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-        <Stat label="Communities" value={data.nodes.length} />
-        <Stat label="Need attention" value={attentionCount} />
-        <Stat label="Featured" value={featuredCount} />
-        {data.isAdmin && <Stat label="Open reports" value={reportsOpen} />}
+        <Stat label={translate("common.communities")} value={data.nodes.length} />
+        <Stat label={translate("directory.attentionShort")} value={attentionCount} />
+        <Stat label={translate("directory.featured")} value={featuredCount} />
+        {data.isAdmin && <Stat label={translate("reports.open")} value={reportsOpen} />}
       </dl>
       <Tabs defaultValue="communities">
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <TabsList variant="line">
             <TabsTrigger value="communities" data-testid="studio-tab-communities">
-              Communities
+              {translate("common.communities")}
             </TabsTrigger>
             {data.isAdmin && (
               <TabsTrigger value="reports" data-testid="studio-tab-reports">
-                Reports
+                {translate("directory.reports")}
                 {reportsOpen > 0 && <Badge variant="warning">{reportsOpen}</Badge>}
               </TabsTrigger>
             )}
             <TabsTrigger value="engagement" data-testid="studio-tab-engagement">
-              Engagement
+              {translate("directory.engagement")}
             </TabsTrigger>
             {data.isAdmin && (
               <TabsTrigger value="access" data-testid="studio-tab-access">
-                Team
+                {translate("org.team")}
               </TabsTrigger>
             )}
           </TabsList>
@@ -180,8 +188,8 @@ export function Discover() {
                 <MagnifyingGlassIcon />
               </InputGroupAddon>
               <InputGroupInput
-                aria-label="Search communities"
-                placeholder="Search communities"
+                aria-label={translate("directory.search")}
+                placeholder={translate("directory.search")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -191,7 +199,10 @@ export function Discover() {
               value={filter}
               onValueChange={(value) => setFilter(value ?? "all")}
             >
-              <SelectTrigger aria-label="Community filter" className="w-full sm:w-auto">
+              <SelectTrigger
+                aria-label={translate("directory.filter")}
+                className="w-full sm:w-auto"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -206,8 +217,8 @@ export function Discover() {
           {rows.length === 0 ? (
             <EmptyState
               icon={MagnifyingGlassIcon}
-              title="No communities match"
-              description="Try another search or filter."
+              title={translate("directory.noMatches")}
+              description={translate("directory.noMatchesHint")}
             />
           ) : (
             <ItemGroup data-testid="curate-communities">
@@ -219,15 +230,18 @@ export function Discover() {
                       {node.featured && (
                         <Badge variant="success">
                           <SparkleIcon />
-                          Featured
+                          {translate("directory.featured")}
                         </Badge>
                       )}
-                      {needsAttention(node) && <Badge variant="warning">Needs attention</Badge>}
+                      {needsAttention(node) && (
+                        <Badge variant="warning">{translate("directory.attention")}</Badge>
+                      )}
                     </ItemTitle>
                     <ItemDescription>
-                      {[node.location, node.region].filter(Boolean).join(" · ") || "No location"}
+                      {[node.location, node.region].filter(Boolean).join(" · ") ||
+                        translate("directory.noLocation")}
                       {" · "}
-                      {node.active ? "Active" : "Quiet lately"}
+                      {node.active ? translate("common.active") : translate("directory.quiet")}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -237,7 +251,7 @@ export function Discover() {
                       data-testid={`studio-manage-${node.nodeId}`}
                       onClick={() => setSelectedId(node.nodeId)}
                     >
-                      Manage
+                      {translate("nav.manage")}
                     </Button>
                   </ItemActions>
                 </Item>
@@ -277,6 +291,7 @@ export function Discover() {
 }
 
 function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: boolean }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [confirmUnfeature, setConfirmUnfeature] = useState(false);
@@ -284,27 +299,34 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
     mutationFn: () =>
       api.featureDiscoveryNode({
         nodeId: node.nodeId,
-        label: "Expired",
+        label: translate("common.expired"),
         expiresAt: new Date(0).toISOString(),
       }),
     onSuccess: async () => {
-      toast.success(`${node.name} is no longer featured`);
+      toast.success(translate("community.unfeaturedNamed", { name: node.name ?? "" }));
       setConfirmUnfeature(false);
       await queryClient.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discover"),
       });
     },
-    onError: (error: Error) => toast.error(error.message || "Couldn't update the feature."),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   const checks = [
-    { ready: !!node.summary, label: node.summary ? "Has a description" : "No description yet" },
+    {
+      ready: !!node.summary,
+      label: node.summary
+        ? translate("community.hasDescription")
+        : translate("community.noDescription"),
+    },
     {
       ready: node.latitude !== null,
-      label: node.latitude !== null ? "On the map" : "Not on the map",
+      label: node.latitude !== null ? translate("community.onMap") : translate("community.offMap"),
     },
     {
       ready: !!node.channels.length,
-      label: node.channels.length ? "Has a join link" : "No join link yet",
+      label: node.channels.length
+        ? translate("community.hasJoinLink")
+        : translate("community.noJoinLink"),
     },
     { ready: node.active, label: node.activityReason },
   ];
@@ -313,12 +335,13 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
       <SheetHeader className="px-6 pt-8 pr-16">
         <SheetTitle>{node.name}</SheetTitle>
         <SheetDescription>
-          {[node.location, node.region].filter(Boolean).join(" · ") || "No location"}
+          {[node.location, node.region].filter(Boolean).join(" · ") ||
+            translate("directory.noLocation")}
         </SheetDescription>
       </SheetHeader>
       <div className="flex flex-col gap-10 px-6 pb-8">
         <section className="flex flex-col gap-3">
-          <h3 className="text-lg font-medium">What visitors see</h3>
+          <h3 className="text-lg font-medium">{translate("directory.visitorView")}</h3>
           <ul className="flex flex-col gap-2">
             {checks.map(({ ready, label }) => (
               <li key={label} className="flex items-center gap-2.5 text-sm">
@@ -345,17 +368,17 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
                 />
               }
             >
-              Edit events & profile
+              {translate("directory.editContent")}
             </Button>
           )}
         </section>
 
         <section className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-medium">Feature on Explore</h3>
+            <h3 className="text-lg font-medium">{translate("directory.feature")}</h3>
             {node.featured && (
               <Button variant="ghost" size="sm" onClick={() => setConfirmUnfeature(true)}>
-                Stop featuring
+                {translate("directory.stopFeature")}
               </Button>
             )}
           </div>
@@ -363,15 +386,19 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
             <p className="flex flex-wrap items-center gap-2 text-sm">
               <Badge variant="success">
                 <SparkleIcon />
-                Featured
+                {translate("directory.featured")}
               </Badge>
               {node.featured}
             </p>
           )}
           <DiscoveryAction
             testId={`discovery-feature-${node.nodeId}`}
-            label={node.featured ? "Update feature" : "Feature community"}
-            successMessage={`${node.name} is featured`}
+            label={
+              node.featured
+                ? translate("directory.updateFeature")
+                : translate("directory.featureCommunity")
+            }
+            successMessage={translate("community.featuredNamed", { name: node.name ?? "" })}
             run={(data) =>
               api.featureDiscoveryNode({
                 nodeId: node.nodeId,
@@ -382,17 +409,21 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor={`feature-label-${node.nodeId}`}>Label</FieldLabel>
+                <FieldLabel htmlFor={`feature-label-${node.nodeId}`}>
+                  {translate("directory.label")}
+                </FieldLabel>
                 <Input
                   id={`feature-label-${node.nodeId}`}
                   name="label"
                   required
                   maxLength={80}
-                  placeholder="New this month"
+                  placeholder={translate("directory.labelExample")}
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor={`feature-expires-${node.nodeId}`}>Until</FieldLabel>
+                <FieldLabel htmlFor={`feature-expires-${node.nodeId}`}>
+                  {translate("directory.until")}
+                </FieldLabel>
                 <Input
                   id={`feature-expires-${node.nodeId}`}
                   name="expires"
@@ -409,10 +440,10 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
       <ConfirmDialog
         open={confirmUnfeature}
         onOpenChange={setConfirmUnfeature}
-        title={`Stop featuring ${node.name}?`}
-        description="It stays on Explore without the featured label."
-        confirmLabel="Stop featuring"
-        cancelLabel="Cancel"
+        title={translate("community.unfeatureQuestion", { name: node.name ?? "" })}
+        description={translate("directory.featureRemovalHint")}
+        confirmLabel={translate("community.stopFeaturing")}
+        cancelLabel={translate("common.cancel")}
         variant="destructive"
         isPending={unfeature.isPending}
         onConfirm={() => unfeature.mutate()}
@@ -422,6 +453,7 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
 }
 
 export function DiscoveryHistory({ nodeId }: { nodeId: string }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const history = useQuery({
     queryKey: ["discovery-history", nodeId],
@@ -431,11 +463,11 @@ export function DiscoveryHistory({ nodeId }: { nodeId: string }) {
   if (!history.data?.length) return null;
   return (
     <section className="flex flex-col gap-3">
-      <SectionHeader title="Recent changes" />
+      <SectionHeader title={translate("directory.recentChanges")} />
       <ul className="flex flex-col divide-y divide-border text-sm">
         {history.data.slice(0, 8).map((entry) => (
           <li key={entry.id} className="flex items-center justify-between gap-3 py-2">
-            <span className="min-w-0">{historyLabel(entry.action)}</span>
+            <span className="min-w-0">{historyLabel(entry.action, translate)}</span>
             <span className="shrink-0 text-muted-foreground">
               <LocalDate value={entry.recordedAt} format="relative" />
             </span>
@@ -446,14 +478,14 @@ export function DiscoveryHistory({ nodeId }: { nodeId: string }) {
   );
 }
 
-function historyLabel(action: string) {
-  if (action.startsWith("Luma connected")) return "Connected a Luma calendar";
-  if (action === "Luma calendar disconnected") return "Disconnected Luma";
-  if (action === "moderation: unpublish") return "Hidden from Explore";
-  if (action === "profile published") return "Published this community";
-  if (action === "profile saved as draft") return "Saved as a draft";
-  if (action.endsWith(" published")) return "Published";
-  if (action.endsWith(" draft")) return "Saved a draft";
-  if (action.endsWith(" cancelled")) return "Marked as cancelled";
-  return "Updated";
+function historyLabel(action: string, t: AppTranslator = translateEnglishAppMessage) {
+  if (action.startsWith("Luma connected")) return t("community.historyLumaConnected");
+  if (action === "Luma calendar disconnected") return t("community.historyLumaDisconnected");
+  if (action === "moderation: unpublish") return t("community.historyUnpublished");
+  if (action === "profile published") return t("community.historyPublished");
+  if (action === "profile saved as draft") return t("community.historyDraft");
+  if (action.endsWith(" published")) return t("events.published");
+  if (action.endsWith(" draft")) return t("community.historySavedDraft");
+  if (action.endsWith(" cancelled")) return t("events.historyCancelled");
+  return t("things.actionUpdated");
 }
