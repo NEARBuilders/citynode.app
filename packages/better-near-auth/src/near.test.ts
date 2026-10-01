@@ -375,6 +375,40 @@ describe("siwn plugin", () => {
       expect(params?.callbackUrl).toBe("myapp://callback/success");
     });
 
+    it("accepts wallets that sign without the callbackUrl", async () => {
+      const { verifyNep413Signature } = await import("near-kit");
+      (verifyNep413Signature as any).mockClear();
+      (verifyNep413Signature as any).mockImplementation(
+        async (_signed: unknown, payload: { callbackUrl?: string }) => !payload.callbackUrl,
+      );
+      try {
+        const { client } = await setup();
+
+        const { data, error } = await client.near.verify({
+          ...makeVerifyBody(),
+          callbackUrl: "http://localhost:3000/login?redirect=%2Fdashboard",
+        });
+
+        expect(error).toBeNull();
+        expect(data?.success).toBe(true);
+      } finally {
+        (verifyNep413Signature as any).mockResolvedValue(true);
+      }
+    });
+
+    it("rejects a signature that fails with and without the callbackUrl", async () => {
+      const { verifyNep413Signature } = await import("near-kit");
+      (verifyNep413Signature as any).mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+      const { client } = await setup();
+
+      const { error } = await client.near.verify({
+        ...makeVerifyBody(),
+        callbackUrl: "http://localhost:3000/login",
+      });
+
+      expect(error?.status).toBe(401);
+    });
+
     it("should detect nonce replay", async () => {
       const { client } = await setup();
       const body = makeVerifyBody();
