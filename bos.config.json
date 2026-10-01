@@ -134,6 +134,25 @@
     }
   },
   "plugins": {
+    "agents": {
+      "development": "local:plugins/agents",
+      "variables": {
+        "agentsNearRpcUrls": "https://near.drpc.org,https://free.rpc.fastnear.com",
+        "agentsSponsorDailyGlobalLimit": 100,
+        "agentsSponsorDailyTenantLimit": 20,
+        "agentsSponsorDailyAgentLimit": 10
+      },
+      "secrets": [
+        "AGENTS_DATABASE_URL",
+        "AGENTS_SPONSOR_KEYS",
+        "AGENTS_SECRET_ENCRYPTION_KEYS",
+        "AGENTS_SECRET_ENCRYPTION_ACTIVE_KEY_ID"
+      ],
+      "ui": {
+        "name": "_everything_dev_agents_plugin",
+        "development": "local:plugins/agents/ui"
+      }
+    },
     "template": {
       "development": "local:plugins/_template",
       "variables": {},

@@ -84,6 +84,22 @@ export default App({
     },
   }),
   plugins: {
+    agents: Plugin("agents").path("plugins/agents", {
+      name: "@everything-dev/agents-plugin",
+      ui: { path: "plugins/agents/ui" },
+      variables: {
+        agentsNearRpcUrls: "https://near.drpc.org,https://free.rpc.fastnear.com",
+        agentsSponsorDailyGlobalLimit: 100,
+        agentsSponsorDailyTenantLimit: 20,
+        agentsSponsorDailyAgentLimit: 10,
+      },
+      secrets: [
+        "AGENTS_DATABASE_URL",
+        "AGENTS_SPONSOR_KEYS",
+        "AGENTS_SECRET_ENCRYPTION_KEYS",
+        "AGENTS_SECRET_ENCRYPTION_ACTIVE_KEY_ID",
+      ],
+    }),
     template: Plugin("template").path("plugins/_template", {
       secrets: ["TEMPLATE_DATABASE_URL"],
     }),
