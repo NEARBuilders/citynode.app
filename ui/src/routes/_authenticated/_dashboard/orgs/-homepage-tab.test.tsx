@@ -119,7 +119,7 @@ function mockTenant(overrides: Record<string, unknown> = {}) {
 
 function renderTab(canManage = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <HomepageTab
         orgId="org-1"
@@ -129,6 +129,7 @@ function renderTab(canManage = true) {
       />
     </QueryClientProvider>,
   );
+  return { ...view, client };
 }
 
 async function editTitle(value: string) {
@@ -179,6 +180,37 @@ describe("HomepageTab", () => {
     );
     expect(harness.publishTenantConfigForMode).not.toHaveBeenCalled();
     expect(harness.updateTenant).not.toHaveBeenCalled();
+  });
+
+  it("refills the form when the published config arrives after a failed first read", async () => {
+    mockTenant();
+    mockChain({ policy: policy(["alice.near"]) });
+    harness.getRegistryApp.mockRejectedValueOnce(new Error("api warming up"));
+    const { client } = renderTab();
+
+    const description = (await screen.findByTestId(
+      "orgs-homepage-description",
+    )) as HTMLInputElement;
+    await waitFor(() => expect(harness.getRegistryApp).toHaveBeenCalledTimes(1));
+    expect(description.value).not.toBe("Chicago builders");
+
+    await client.invalidateQueries({ queryKey: ["node-config", "registry-app"] });
+
+    await waitFor(() => expect(description.value).toBe("Chicago builders"));
+  });
+
+  it("keeps the member's edits when the published config refreshes", async () => {
+    mockTenant();
+    mockChain({ policy: policy(["alice.near"]) });
+    const { client } = renderTab();
+
+    await editTitle("Chicago Builders");
+    await client.invalidateQueries({ queryKey: ["node-config", "registry-app"] });
+    await waitFor(() => expect(harness.getRegistryApp).toHaveBeenCalledTimes(2));
+
+    expect((screen.getByTestId("orgs-homepage-title") as HTMLInputElement).value).toBe(
+      "Chicago Builders",
+    );
   });
 
   it("blocks proposing while the wallet is on testnet", async () => {

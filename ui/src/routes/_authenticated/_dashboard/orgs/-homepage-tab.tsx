@@ -1,7 +1,7 @@
 import { ArrowSquareOutIcon, HouseIcon, StackIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   buildDraftFromResolvedConfig,
@@ -58,12 +58,15 @@ export function HomepageTab({ orgId, gatewayId, baseAccount, canManage }: Homepa
   } = usePendingConfigProposal(tenantAccount, daoOwned);
 
   const [draft, setDraft] = useState<TenantConfigDraft>(emptyTenantConfigDraft);
-  const [prefilled, setPrefilled] = useState(false);
+  const [edited, setEdited] = useState(false);
   useEffect(() => {
-    if (prefilled || !tenant || !registryQuery.isSuccess) return;
-    setPrefilled(true);
+    if (edited || !tenant || !registryQuery.isSuccess) return;
     setDraft(buildDraftFromResolvedConfig(resolvedConfig, { title: tenant.name }));
-  }, [prefilled, tenant, registryQuery.isSuccess, resolvedConfig]);
+  }, [edited, tenant, registryQuery.isSuccess, resolvedConfig]);
+  const editDraft: Dispatch<SetStateAction<TenantConfigDraft>> = (update) => {
+    setEdited(true);
+    setDraft(update);
+  };
 
   const parsedDraft = tenantConfigDraftSchema.safeParse(draft);
   const diff = useMemo(() => diffDraft(draft, resolvedConfig), [draft, resolvedConfig]);
@@ -256,14 +259,14 @@ export function HomepageTab({ orgId, gatewayId, baseAccount, canManage }: Homepa
             id="orgs-homepage-title"
             label="Title"
             value={draft.title}
-            onChange={(value) => setDraft((prev) => ({ ...prev, title: value }))}
+            onChange={(value) => editDraft((prev) => ({ ...prev, title: value }))}
             disabled={!editable}
           />
           <ConfigField
             id="orgs-homepage-description"
             label="Description"
             value={draft.description}
-            onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))}
+            onChange={(value) => editDraft((prev) => ({ ...prev, description: value }))}
             disabled={!editable}
           />
         </FieldGroup>
@@ -273,7 +276,7 @@ export function HomepageTab({ orgId, gatewayId, baseAccount, canManage }: Homepa
             <CustomUiBundleFields
               idPrefix="orgs-homepage"
               draft={draft}
-              setDraft={setDraft}
+              setDraft={editDraft}
               allowSsr={tenant.allowSsr}
               disabled={!editable}
               gatewayId={gatewayId}
