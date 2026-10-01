@@ -57,7 +57,8 @@
       "!!**/virtual-modules.d.ts",
       "!!bos.config.json",
       "!!plans",
-      "!!.agents"
+      "!!.agents",
+      "!!packages/database/drizzle"
     ],
     "ignoreUnknown": true
   },

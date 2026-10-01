@@ -1,0 +1,32 @@
+{
+  "name": "@near-intents-agent-api/contracts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./borsh": {
+      "types": "./src/borsh.ts",
+      "import": "./src/borsh.ts"
+    },
+    "./api": {
+      "types": "./src/api/index.ts",
+      "import": "./src/api/index.ts"
+    }
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "@scure/base": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}
