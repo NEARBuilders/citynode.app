@@ -32,6 +32,7 @@ import {
   type CreatedOrganizationApiKey,
   type OrganizationApiKey,
 } from "./-api-keys-tab";
+import { HomepageTab } from "./-homepage-tab";
 import { InvitationsTab } from "./-invitations-tab";
 import { MembersTab } from "./-members-tab";
 import { NodeConfigTab } from "./-node-config";
@@ -63,6 +64,7 @@ const ORGANIZATION_TABS = [
   "onboard",
   "apikeys",
   "node-config",
+  "homepage",
 ] as const;
 
 type OrganizationTab = (typeof ORGANIZATION_TABS)[number];
@@ -306,6 +308,9 @@ function OrganizationDetail() {
             <TabsTrigger value="node-config" data-testid="orgs-tab-node-config">
               Community
             </TabsTrigger>
+            <TabsTrigger value="homepage" data-testid="orgs-tab-homepage">
+              Homepage
+            </TabsTrigger>
           </TabsList>
         </div>
         <MembersTab
@@ -382,6 +387,14 @@ function OrganizationDetail() {
             baseAccount={baseAccount}
             canManage={canManageMembers}
             isPlatformAdmin={session?.user?.role === "admin"}
+          />
+        </TabsContent>
+        <TabsContent value="homepage" className="flex flex-col gap-6 pt-6">
+          <HomepageTab
+            orgId={orgId}
+            gatewayId={gatewayId}
+            baseAccount={baseAccount}
+            canManage={canManageMembers}
           />
         </TabsContent>
       </Tabs>

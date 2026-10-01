@@ -14,6 +14,10 @@ export function getNear(): Near {
   return _near;
 }
 
+export function trezuDaoUrl(daoAccountId: string): string {
+  return `https://trezu.app/${daoAccountId}`;
+}
+
 export async function waitFor(
   check: () => Promise<boolean>,
   timeoutMs = 60_000,

@@ -9,7 +9,7 @@
 
 import { Amount, type FinalExecutionOutcome, Near } from "near-kit";
 import { getDaoConnector, toNearKitWallet } from "@/lib/dao-connect";
-import { type DaoPlan, getNear, type SessionWallet } from "@/lib/sputnik-proposals";
+import { type DaoPlan, getNear, type SessionWallet, trezuDaoUrl } from "@/lib/sputnik-proposals";
 
 export { parseNearAmount } from "@/lib/near-amount";
 export type {
@@ -148,7 +148,7 @@ export function nearblocksAccount(accountId: string): string {
 /** Sputnik treasuries read best on trezu.app; everything else on nearblocks. */
 export function accountExplorerUrl(accountId: string): string {
   return accountId.endsWith(".sputnik-dao.near")
-    ? `https://trezu.app/${accountId}`
+    ? trezuDaoUrl(accountId)
     : nearblocksAccount(accountId);
 }
 
