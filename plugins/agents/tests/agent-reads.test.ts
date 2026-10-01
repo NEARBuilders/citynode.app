@@ -61,8 +61,13 @@ describe("agent reads (ticket 10)", () => {
       expect(view.status).toBe("applied");
 
       const stranger = await env.actorAs("someone-else");
-      await expect(listAgents(stranger, {})).resolves.toHaveProperty("agents");
+      const strangerPage = await listAgents(stranger, {});
+      expect(strangerPage.agents).toHaveLength(0);
       await expect(walletView(stranger, agentId)).rejects.toMatchObject({
+        code: "agent_not_found",
+        status: 404,
+      });
+      await expect(readPolicy(stranger, agentId)).rejects.toMatchObject({
         code: "agent_not_found",
         status: 404,
       });

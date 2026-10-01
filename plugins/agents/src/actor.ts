@@ -3,12 +3,6 @@ import { tenants, user } from "@near-intents-agent-api/database/schema";
 import { eq } from "drizzle-orm";
 import type { DatabaseDriver } from "./db";
 
-/**
- * Session → actor mapping: the better-near-auth session user IS the tenant.
- * First agent activity provisions the tenant row (ownerUserId = user id) that
- * the domain schema's foreign keys expect. The session key id is the actor's
- * key identity; every domain authorization check runs against this actor.
- */
 export async function actorForSession(
   database: DatabaseDriver,
   userId: string,

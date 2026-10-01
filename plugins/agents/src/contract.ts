@@ -27,6 +27,7 @@ import {
   walletViewSchema,
 } from "@near-intents-agent-api/contracts/api";
 import { oc } from "@orpc/contract";
+import { UNAUTHORIZED as UnauthorizedError } from "every-plugin/errors";
 import { z } from "zod";
 
 const pingInputSchema = z.object({
@@ -83,9 +84,7 @@ export const contract = {
     })
     .input(generateIntentRequestSchema)
     .output(generateIntentOutputSchema)
-    .errors({
-      UNAUTHORIZED: { message: "Session user required" },
-    }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   submitIntent: oc
     .route({
@@ -95,9 +94,7 @@ export const contract = {
     })
     .input(submitIntentRequestSchema)
     .output(submitIntentOutputSchema)
-    .errors({
-      UNAUTHORIZED: { message: "Session user required" },
-    }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   intentStatus: oc
     .route({
@@ -112,9 +109,7 @@ export const contract = {
       }),
     )
     .output(statusResponseSchema)
-    .errors({
-      UNAUTHORIZED: { message: "Session user required" },
-    }),
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
 
   listAgents: oc
     .route({ method: "POST", path: "/agents", summary: "Agents bound to the session's owner" })

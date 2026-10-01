@@ -151,12 +151,14 @@ export default createPlugin({
         const database = yield* DatabaseTag;
         const rows = yield* Effect.tryPromise(() =>
           database.db.select({ count: sql<number>`count(*)::int` }).from(agents),
-        ).pipe(Effect.catch(() => Effect.succeed([{ count: 0 }])));
-        return { ok: true, agentCount: rows[0]?.count ?? 0 };
+        ).pipe(Effect.catch(() => Effect.succeed([{ count: -1 }])));
+        const count = rows[0]?.count ?? -1;
+        return { ok: count >= 0, agentCount: Math.max(count, 0) };
       }),
 
       generateIntent: builder.generateIntent.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         const idempotencyKey = context.reqHeaders?.get("idempotency-key") ?? undefined;
@@ -167,21 +169,24 @@ export default createPlugin({
       }),
 
       submitIntent: builder.submitIntent.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(() => submitIntent(actor, input));
       }),
 
       intentStatus: builder.intentStatus.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(() => readStatus(actor, input.correlationId, input.waitMs));
       }),
 
       listAgents: builder.listAgents.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         const page = yield* Effect.tryPromise(() =>
@@ -194,7 +199,8 @@ export default createPlugin({
       }),
 
       getAgent: builder.getAgent.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(async () =>
@@ -203,7 +209,8 @@ export default createPlugin({
       }),
 
       getWallet: builder.getWallet.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(async () =>
@@ -212,7 +219,8 @@ export default createPlugin({
       }),
 
       getBalances: builder.getBalances.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         const list = yield* Effect.tryPromise(() =>
@@ -228,7 +236,8 @@ export default createPlugin({
       }),
 
       getPolicy: builder.getPolicy.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(async () =>
@@ -237,7 +246,8 @@ export default createPlugin({
       }),
 
       getPolicyHistory: builder.getPolicyHistory.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         const history = yield* Effect.tryPromise(() =>
@@ -250,7 +260,8 @@ export default createPlugin({
       }),
 
       getLimits: builder.getLimits.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(async () =>
@@ -259,7 +270,8 @@ export default createPlugin({
       }),
 
       getBudget: builder.getBudget.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(async () =>
@@ -268,7 +280,8 @@ export default createPlugin({
       }),
 
       getTimelock: builder.getTimelock.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(async () =>
@@ -281,7 +294,8 @@ export default createPlugin({
         context,
         errors,
       }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         const page = yield* Effect.tryPromise(() =>
@@ -296,14 +310,16 @@ export default createPlugin({
       }),
 
       getHistory: builder.getHistory.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(() => readHistory(actor, input.agentId, input));
       }),
 
       listGrants: builder.listGrants.effect(function* ({ input, context, errors }) {
-        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        if (!context.userId)
+          return yield* Effect.fail(errors.UNAUTHORIZED({ data: { apiKeyProvided: false } }));
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         const grants = yield* Effect.tryPromise(() => listAgentGrants(actor, input.agentId));

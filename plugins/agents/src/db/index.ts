@@ -16,20 +16,12 @@ export interface DatabaseDriver {
   close(): Promise<void>;
 }
 
-/**
- * Engine selection for the agents plugin's dedicated database:
- * `pglite:` / `:memory:` → in-memory PGlite (dev/test — single connection, so
- * session advisory locks serialize trivially); anything else → the vendored
- * production driver (pg Pool + queued session advisory locks + a dedicated
- * lock pool).
- */
 export async function createDatabaseDriver(url: string): Promise<DatabaseDriver> {
   if (url.startsWith("pglite:") || url.includes(":memory:")) {
     const client = new PGlite();
     const db = drizzle(client, { schema });
     return {
       db: db as unknown as DatabaseHandle["db"],
-      // PGlite is a single connection: the session lock cannot race another holder.
       withAdvisoryLock: async (_key, run) => run(),
       close: () => client.close(),
     };
@@ -44,7 +36,6 @@ export async function createDatabaseDriver(url: string): Promise<DatabaseDriver>
   };
 }
 
-/** The migration journal lives in the `drizzle` schema of the dedicated database. */
 export async function ensureJournalSchema(driver: DatabaseDriver): Promise<void> {
   await driver.db.execute(sql`CREATE SCHEMA IF NOT EXISTS "drizzle"`);
 }

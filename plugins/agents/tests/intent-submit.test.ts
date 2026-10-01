@@ -5,6 +5,7 @@ import {
   submitIntent,
 } from "@near-intents-agent-api/agents-core";
 import { policySchema } from "@near-intents-agent-api/contracts";
+import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { setupCore } from "./support/core-setup";
 import { nearOwnerFixture } from "./support/intent-signers";
@@ -72,6 +73,33 @@ describe("owner intent submit (sponsor relay leg)", () => {
       expect(second.replayed).toBe(true);
       expect(second.row.id).toBe(first.row.id);
       expect(second.row.intent).toEqual(first.row.intent);
+    } finally {
+      await env.close();
+    }
+  });
+
+  it("fails an expired unsigned intent per the wire contract", async () => {
+    const env = await setupCore("expired-intent");
+    try {
+      const actor = await env.actor();
+      const { owner, signer } = nearOwnerFixture();
+      const created = await generateIntent(actor, {
+        type: "agent_create",
+        name: "Late",
+        owner,
+        policy,
+      });
+      const generated = generateResponse(created.row);
+      await env.database.db.execute(
+        sql`update owner_intents set expires_at = now() - interval '1 hour' where id = ${generated.correlationId}`,
+      );
+      await expect(
+        submitIntent(actor, {
+          type: "agent_create",
+          correlationId: generated.correlationId,
+          signedData: signer.sign(generated.intent),
+        }),
+      ).rejects.toMatchObject({ code: "intent_expired", status: 409 });
     } finally {
       await env.close();
     }
