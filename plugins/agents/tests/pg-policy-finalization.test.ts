@@ -1,4 +1,4 @@
-import { configureDatabase, finalizePolicyOperation } from "@near-intents-agent-api/agents-core";
+import { finalizePolicyOperation } from "@near-intents-agent-api/agents-core";
 import {
   agents,
   auditEvents,
@@ -8,40 +8,15 @@ import {
   walletPolicies,
 } from "@near-intents-agent-api/database";
 import { and, eq } from "drizzle-orm";
-import { Context, Effect, Layer } from "effect";
-import { PluginIdTag } from "every-plugin";
-import pg from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DatabaseDriver } from "../src/db";
-import { DatabaseLive, DatabaseTag } from "../src/db/layer";
-
-const adminUrl = process.env.AGENTS_RACE_DATABASE_URL;
-const raceDb = "agents_finalize_race_test";
-const raceUrl = adminUrl?.replace(/\/[^/]+$/, `/${raceDb}`) ?? "";
-
-async function resetRaceDatabase() {
-  const admin = new pg.Pool({ connectionString: adminUrl });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS ${raceDb} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${raceDb}`);
-  } finally {
-    await admin.end();
-  }
-}
-
-function withDatabase(run: (driver: DatabaseDriver) => Promise<void>): Promise<void> {
-  const layer = DatabaseLive(raceUrl).pipe(Layer.provide(Layer.succeed(PluginIdTag, "agents")));
-  return Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const scope = yield* Effect.scope;
-        const context = yield* Layer.buildWithScope(layer, scope);
-        const driver = Context.get(context, DatabaseTag);
-        yield* Effect.tryPromise(() => run(driver));
-      }),
-    ),
-  );
-}
+import {
+  dropRaceDatabase,
+  raceDatabaseUrl,
+  raceSuitesEnabled,
+  resetRaceDatabase,
+  withDatabase,
+} from "./support/race-db";
 
 async function seed(database: DatabaseDriver) {
   const id = crypto.randomUUID();
@@ -115,85 +90,78 @@ async function seed(database: DatabaseDriver) {
   return { id, revision, state, cleanup };
 }
 
-afterAll(async () => {
-  if (!adminUrl) return;
-  const admin = new pg.Pool({ connectionString: adminUrl });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS ${raceDb} WITH (FORCE)`);
-  } finally {
-    await admin.end();
-  }
-});
+afterAll(() => dropRaceDatabase("agents_finalize_race_test"));
 
-describe.skipIf(!adminUrl)("policy finalization races against postgres (ticket 12)", () => {
-  it("concurrent policy confirmations apply a revision and advance its epoch once", async () => {
-    await resetRaceDatabase();
-    await withDatabase(async (database) => {
-      configureDatabase(database);
-      const { id, revision, state, cleanup } = await seed(database);
-      try {
-        const { policyId, operation } = await revision("tx-applied");
-        const before = await state(policyId, operation.id);
-        const results = await Promise.all(
-          Array.from({ length: 5 }, () =>
-            finalizePolicyOperation({
-              tenantId: id,
-              agentId: id,
-              operationId: operation.id,
-              policyId,
-              observed: operation,
-              outcome: { status: "applied", transactionHash: "tx-applied" },
-              result: { status: "applied", transaction_hash: "tx-applied" },
-            }),
-          ),
-        );
-        for (const result of results) expect(result?.status).toBe("completed");
-        const after = await state(policyId, operation.id);
-        expect(after.epoch).toBe((before.epoch ?? 0) + 1);
-        expect(after.appliedEvents).toBe(1);
-        expect(after.policy?.status).toBe("applied");
-      } finally {
-        await cleanup();
-      }
-    });
-  });
-
-  it("racing success and failure settle policy and operation consistently", async () => {
-    await resetRaceDatabase();
-    await withDatabase(async (database) => {
-      configureDatabase(database);
-      const { id, revision, state, cleanup } = await seed(database);
-      try {
-        for (const order of ["applied-first", "failed-first"] as const) {
-          const { policyId, operation } = await revision(`tx-${order}`);
-          const settle = (status: "applied" | "failed") =>
-            finalizePolicyOperation({
-              tenantId: id,
-              agentId: id,
-              operationId: operation.id,
-              policyId,
-              observed: operation,
-              outcome:
-                status === "applied"
-                  ? { status, transactionHash: `tx-${order}` }
-                  : { status, failureCode: "policy_transaction_dropped" },
-              result: { status, transaction_hash: `tx-${order}` },
-            });
-          await Promise.allSettled(
-            order === "applied-first"
-              ? [settle("applied"), settle("failed")]
-              : [settle("failed"), settle("applied")],
+describe.skipIf(!raceSuitesEnabled())(
+  "policy finalization races against postgres (ticket 12)",
+  () => {
+    it("concurrent policy confirmations apply a revision and advance its epoch once", async () => {
+      await resetRaceDatabase("agents_finalize_race_test");
+      await withDatabase(raceDatabaseUrl("agents_finalize_race_test"), async (database) => {
+        const { id, revision, state, cleanup } = await seed(database);
+        try {
+          const { policyId, operation } = await revision("tx-applied");
+          const before = await state(policyId, operation.id);
+          const results = await Promise.all(
+            Array.from({ length: 5 }, () =>
+              finalizePolicyOperation({
+                tenantId: id,
+                agentId: id,
+                operationId: operation.id,
+                policyId,
+                observed: operation,
+                outcome: { status: "applied", transactionHash: "tx-applied" },
+                result: { status: "applied", transaction_hash: "tx-applied" },
+              }),
+            ),
           );
-          const { operation: settled, policy } = await state(policyId, operation.id);
-          expect(
-            (settled?.status === "completed" && policy?.status === "applied") ||
-              (settled?.status === "failed" && policy?.status === "failed"),
-            `${order}: operation ${settled?.status} with policy ${policy?.status}`,
-          ).toBe(true);
+          for (const result of results) expect(result?.status).toBe("completed");
+          const after = await state(policyId, operation.id);
+          expect(after.epoch).toBe((before.epoch ?? 0) + 1);
+          expect(after.appliedEvents).toBe(1);
+          expect(after.policy?.status).toBe("applied");
+        } finally {
+          await cleanup();
         }
-      } finally {
-        await cleanup();
-      }
+      });
     });
-  });
-});
+
+    it("racing success and failure settle policy and operation consistently", async () => {
+      await resetRaceDatabase("agents_finalize_race_test");
+      await withDatabase(raceDatabaseUrl("agents_finalize_race_test"), async (database) => {
+        const { id, revision, state, cleanup } = await seed(database);
+        try {
+          for (const order of ["applied-first", "failed-first"] as const) {
+            const { policyId, operation } = await revision(`tx-${order}`);
+            const settle = (status: "applied" | "failed") =>
+              finalizePolicyOperation({
+                tenantId: id,
+                agentId: id,
+                operationId: operation.id,
+                policyId,
+                observed: operation,
+                outcome:
+                  status === "applied"
+                    ? { status, transactionHash: `tx-${order}` }
+                    : { status, failureCode: "policy_transaction_dropped" },
+                result: { status, transaction_hash: `tx-${order}` },
+              });
+            await Promise.allSettled(
+              order === "applied-first"
+                ? [settle("applied"), settle("failed")]
+                : [settle("failed"), settle("applied")],
+            );
+            const { operation: settled, policy } = await state(policyId, operation.id);
+            expect(
+              (settled?.status === "completed" && policy?.status === "applied") ||
+                (settled?.status === "failed" && policy?.status === "failed"),
+              `${order}: operation ${settled?.status} with policy ${policy?.status}`,
+            ).toBe(true);
+          }
+        } finally {
+          await cleanup();
+        }
+      });
+    });
+  },
+);

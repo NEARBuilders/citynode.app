@@ -48,7 +48,7 @@ export {
 } from "./modules/operations/repository.js";
 export { requirePrivilegedArtifactDeliveryAllowed } from "./modules/operations/signing-artifact-service.js";
 export { signEvmMessage, signMessage } from "./modules/operations/signing-service.js";
-export { readBudgetFor, refundSpend } from "./modules/operations/spend-budget.js";
+export { readBudgetFor } from "./modules/operations/spend-budget.js";
 export {
   listScheduledExecutions,
   readTimelock,

@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { configureDatabase, sweepUnsettledPolicies } from "@near-intents-agent-api/agents-core";
+import { sweepUnsettledPolicies } from "@near-intents-agent-api/agents-core";
 import {
   agents,
   auditEvents,
@@ -9,41 +9,15 @@ import {
   user,
 } from "@near-intents-agent-api/database";
 import { eq, sql } from "drizzle-orm";
-import { Context, Effect, Layer } from "effect";
-import { PluginIdTag } from "every-plugin";
-import pg from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DatabaseDriver } from "../src/db";
-import { DatabaseLive, DatabaseTag } from "../src/db/layer";
-
-const adminUrl = process.env.AGENTS_RACE_DATABASE_URL;
-const raceDb = "agents_maintenance_race_test";
-const raceUrl = adminUrl?.replace(/\/[^/]+$/, `/${raceDb}`) ?? "";
-
-async function resetRaceDatabase() {
-  const admin = new pg.Pool({ connectionString: adminUrl });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS ${raceDb} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${raceDb}`);
-  } finally {
-    await admin.end();
-  }
-}
-
-function withDatabase(run: (driver: DatabaseDriver) => Promise<void>): Promise<void> {
-  const layer = DatabaseLive(raceUrl).pipe(Layer.provide(Layer.succeed(PluginIdTag, "agents")));
-  return Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const scope = yield* Effect.scope;
-        const context = yield* Layer.buildWithScope(layer, scope);
-        const driver = Context.get(context, DatabaseTag);
-        configureDatabase(driver);
-        yield* Effect.tryPromise(() => run(driver));
-      }),
-    ),
-  );
-}
+import {
+  dropRaceDatabase,
+  raceDatabaseUrl,
+  raceSuitesEnabled,
+  resetRaceDatabase,
+  withDatabase,
+} from "./support/race-db";
 
 const twoHoursAgo = () => new Date(Date.now() - 2 * 60 * 60_000);
 
@@ -139,22 +113,14 @@ async function blockedOrDone(database: DatabaseDriver, sweep: Promise<unknown>) 
   }
 }
 
-afterAll(async () => {
-  if (!adminUrl) return;
-  const admin = new pg.Pool({ connectionString: adminUrl });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS ${raceDb} WITH (FORCE)`);
-  } finally {
-    await admin.end();
-  }
-});
+afterAll(() => dropRaceDatabase("agents_maintenance_race_test"));
 
-describe.skipIf(!adminUrl)("maintenance races against postgres (ticket 12)", () => {
+describe.skipIf(!raceSuitesEnabled())("maintenance races against postgres (ticket 12)", () => {
   it("a stale interrupted-preparation sweep never fails work that progressed", {
     timeout: 30_000,
   }, async () => {
-    await resetRaceDatabase();
-    await withDatabase(async (database) => {
+    await resetRaceDatabase("agents_maintenance_race_test");
+    await withDatabase(raceDatabaseUrl("agents_maintenance_race_test"), async (database) => {
       const { agent, interrupted, state, cleanup } = await seed(database);
       try {
         const progress = {
@@ -208,8 +174,8 @@ describe.skipIf(!adminUrl)("maintenance races against postgres (ticket 12)", () 
   });
 
   it("concurrent sweeps fail a truly interrupted preparation once", async () => {
-    await resetRaceDatabase();
-    await withDatabase(async (database) => {
+    await resetRaceDatabase("agents_maintenance_race_test");
+    await withDatabase(raceDatabaseUrl("agents_maintenance_race_test"), async (database) => {
       const { agent, interrupted, state, cleanup } = await seed(database);
       try {
         const agentId = await agent("interrupted");

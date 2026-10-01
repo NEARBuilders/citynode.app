@@ -13,47 +13,20 @@ import {
   transferExecution,
 } from "@near-intents-agent-api/agents-core";
 import { policySchema } from "@near-intents-agent-api/contracts";
-import { sql } from "drizzle-orm";
-import { Context, Effect, Layer } from "effect";
-import { PluginIdTag } from "every-plugin";
-import pg from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import { actorForSession } from "../src/actor";
-import type { DatabaseDriver } from "../src/db";
-import { DatabaseLive, DatabaseTag } from "../src/db/layer";
 import { stubOwnerSponsor, stubProvider, stubWalletSponsor } from "./support/agent-harness";
 import { createGrantCredential } from "./support/grant-credential";
 import { testDestinations } from "./support/grant-destinations";
 import { nearOwnerFixture } from "./support/intent-signers";
 import { closeServer, startNearRpc } from "./support/near-rpc-double";
-
-const adminUrl = process.env.AGENTS_RACE_DATABASE_URL;
-const raceDb = "agents_race_test";
-const raceUrl = adminUrl?.replace(/\/[^/]+$/, `/${raceDb}`) ?? "";
-
-async function resetRaceDatabase() {
-  const admin = new pg.Pool({ connectionString: adminUrl });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS ${raceDb} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${raceDb}`);
-  } finally {
-    await admin.end();
-  }
-}
-
-function withDatabase(url: string, run: (driver: DatabaseDriver) => Promise<void>): Promise<void> {
-  const layer = DatabaseLive(url).pipe(Layer.provide(Layer.succeed(PluginIdTag, "agents")));
-  return Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const scope = yield* Effect.scope;
-        const context = yield* Layer.buildWithScope(layer, scope);
-        const driver = Context.get(context, DatabaseTag);
-        yield* Effect.tryPromise(() => run(driver));
-      }),
-    ),
-  );
-}
+import {
+  dropRaceDatabase,
+  raceDatabaseUrl,
+  raceSuitesEnabled,
+  resetRaceDatabase,
+  withDatabase,
+} from "./support/race-db";
 
 const policy = policySchema.parse({
   version: 1,
@@ -69,21 +42,14 @@ const policy = policySchema.parse({
   rules: { allowed_tokens: ["nep141:wrap.near"], transaction_types: ["transfer", "swap"] },
 });
 
-afterAll(async () => {
-  const admin = new pg.Pool({ connectionString: adminUrl });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS ${raceDb} WITH (FORCE)`);
-  } finally {
-    await admin.end();
-  }
-});
+afterAll(() => dropRaceDatabase("agents_race_test"));
 
-describe.skipIf(!adminUrl)("concurrent admission against postgres (ticket 12)", () => {
+describe.skipIf(!raceSuitesEnabled())("concurrent admission against postgres (ticket 12)", () => {
   it("concurrent grant dispatches of one request commit the provider write exactly once", async () => {
-    await resetRaceDatabase();
+    await resetRaceDatabase("agents_race_test");
     const rpc = await startNearRpc();
     try {
-      await withDatabase(raceUrl, async (driver) => {
+      await withDatabase(raceDatabaseUrl("agents_race_test"), async (driver) => {
         configureDatabase(driver);
         const provider = stubProvider();
         configureOutlayer(provider.client);

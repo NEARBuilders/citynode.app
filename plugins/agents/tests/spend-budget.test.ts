@@ -2,7 +2,6 @@ import {
   configurePrices,
   generateIntent,
   generateResponse,
-  listAgentGrants,
   readBudget,
   readStatus,
   runExecution,

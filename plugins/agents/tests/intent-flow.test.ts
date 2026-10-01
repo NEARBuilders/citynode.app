@@ -20,7 +20,7 @@ import type { DatabaseDriver } from "../src/db";
 import { DatabaseLive, DatabaseTag } from "../src/db/layer";
 import { closeServer, startNearRpc } from "./support/near-rpc-double";
 
-const sponsorPrivateKey =
+const _sponsorPrivateKey =
   "ed25519:51wkXZuAj4mUpd8GskACyNj5omyifyUEKGECqiVRviBzT4gTFAFAVD5jYcmMdFEHRcDLt2iktJ6irQtzpa8PBmso";
 
 function fakeOutlayerClient(): OutlayerWalletClient {

@@ -1,7 +1,6 @@
 import {
   claimOperationDispatch,
   commitExecutionDispatch,
-  configureDatabase,
   configurePrices,
   createPendingOperation,
   readBudgetFor,
@@ -16,26 +15,15 @@ import {
   user,
 } from "@near-intents-agent-api/database";
 import { eq, sql } from "drizzle-orm";
-import { Context, Effect, Layer } from "effect";
-import { PluginIdTag } from "every-plugin";
-import pg from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DatabaseDriver } from "../src/db";
-import { DatabaseLive, DatabaseTag } from "../src/db/layer";
-
-const adminUrl = process.env.AGENTS_RACE_DATABASE_URL;
-const raceDb = "agents_budget_race_test";
-const raceUrl = adminUrl?.replace(/\/[^/]+$/, `/${raceDb}`) ?? "";
-
-async function resetRaceDatabase() {
-  const admin = new pg.Pool({ connectionString: adminUrl });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS ${raceDb} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${raceDb}`);
-  } finally {
-    await admin.end();
-  }
-}
+import {
+  dropRaceDatabase,
+  raceDatabaseUrl,
+  raceSuitesEnabled,
+  resetRaceDatabase,
+  withDatabase,
+} from "./support/race-db";
 
 const token = "nep141:wrap.near";
 const transfer = (idempotencyKey: string) => ({
@@ -52,21 +40,6 @@ const settle = (attempt: Promise<unknown>) =>
   );
 
 type Caps = { daily?: number; weekly?: number; monthly?: number };
-
-function withDatabase(url: string, run: (driver: DatabaseDriver) => Promise<void>): Promise<void> {
-  const layer = DatabaseLive(url).pipe(Layer.provide(Layer.succeed(PluginIdTag, "agents")));
-  return Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const scope = yield* Effect.scope;
-        const context = yield* Layer.buildWithScope(layer, scope);
-        const driver = Context.get(context, DatabaseTag);
-        configureDatabase(driver);
-        yield* Effect.tryPromise(() => run(driver));
-      }),
-    ),
-  );
-}
 
 /** A tenant and agent under `caps` (cents), and helpers to admit and commit operations for it. */
 async function fixture(database: DatabaseDriver, caps: Caps) {
@@ -156,23 +129,15 @@ async function holdAgent(
   return { release, done: held };
 }
 
-afterAll(async () => {
-  if (!adminUrl) return;
-  const admin = new pg.Pool({ connectionString: adminUrl });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS ${raceDb} WITH (FORCE)`);
-  } finally {
-    await admin.end();
-  }
-});
+afterAll(() => dropRaceDatabase("agents_budget_race_test"));
 
-describe.skipIf(!adminUrl)("spend-budget races against postgres (ticket 12)", () => {
+describe.skipIf(!raceSuitesEnabled())("spend-budget races against postgres (ticket 12)", () => {
   it("concurrent commitments never charge past the cap, and only the ones that fit dispatch", {
     timeout: 30_000,
   }, async () => {
-    await resetRaceDatabase();
+    await resetRaceDatabase("agents_budget_race_test");
     configurePrices({ price: async () => oneDollar() });
-    await withDatabase(raceUrl, async (database) => {
+    await withDatabase(raceDatabaseUrl("agents_budget_race_test"), async (database) => {
       // $3.50 a day fits three $1 transfers and not a fourth.
       const f = await fixture(database, { daily: 350 });
       try {
@@ -200,8 +165,8 @@ describe.skipIf(!adminUrl)("spend-budget races against postgres (ticket 12)", ()
   });
 
   it("a cap that commits before an uncapped dispatch commits governs it", async () => {
-    await resetRaceDatabase();
-    await withDatabase(raceUrl, async (database) => {
+    await resetRaceDatabase("agents_budget_race_test");
+    await withDatabase(raceDatabaseUrl("agents_budget_race_test"), async (database) => {
       let lookups = 0;
       configurePrices({
         price: async () => {
@@ -229,8 +194,8 @@ describe.skipIf(!adminUrl)("spend-budget races against postgres (ticket 12)", ()
   });
 
   it("a cap lowered before a dispatch commits is applied to it", async () => {
-    await resetRaceDatabase();
-    await withDatabase(raceUrl, async (database) => {
+    await resetRaceDatabase("agents_budget_race_test");
+    await withDatabase(raceDatabaseUrl("agents_budget_race_test"), async (database) => {
       configurePrices({ price: async () => oneDollar() });
       const f = await fixture(database, { daily: 200 });
       try {
@@ -251,8 +216,8 @@ describe.skipIf(!adminUrl)("spend-budget races against postgres (ticket 12)", ()
   });
 
   it("a dispatch that commits first is charged under the old caps and cannot be retracted", async () => {
-    await resetRaceDatabase();
-    await withDatabase(raceUrl, async (database) => {
+    await resetRaceDatabase("agents_budget_race_test");
+    await withDatabase(raceDatabaseUrl("agents_budget_race_test"), async (database) => {
       configurePrices({ price: async () => oneDollar() });
       const f = await fixture(database, { daily: 200 });
       try {
@@ -273,8 +238,8 @@ describe.skipIf(!adminUrl)("spend-budget races against postgres (ticket 12)", ()
   });
 
   it("clearing configured caps keeps accounting so restoring caps cannot reset usage", async () => {
-    await resetRaceDatabase();
-    await withDatabase(raceUrl, async (database) => {
+    await resetRaceDatabase("agents_budget_race_test");
+    await withDatabase(raceDatabaseUrl("agents_budget_race_test"), async (database) => {
       let lookups = 0;
       configurePrices({
         price: async () => {
@@ -300,8 +265,8 @@ describe.skipIf(!adminUrl)("spend-budget races against postgres (ticket 12)", ()
   });
 
   it("a stalled worker that loses the commitment neither dispatches nor refunds the winner", async () => {
-    await resetRaceDatabase();
-    await withDatabase(raceUrl, async (database) => {
+    await resetRaceDatabase("agents_budget_race_test");
+    await withDatabase(raceDatabaseUrl("agents_budget_race_test"), async (database) => {
       configurePrices({ price: async () => oneDollar() });
       const f = await fixture(database, { daily: 100 });
       try {

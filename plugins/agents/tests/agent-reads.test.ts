@@ -28,7 +28,7 @@ const policy = policySchema.parse({
   rules: { allowed_tokens: ["native"], transaction_types: ["transfer", "swap"] },
 });
 
-async function onboard(env: Awaited<ReturnType<typeof setupCore>>, actor: Actor, name: string) {
+async function onboard(_env: Awaited<ReturnType<typeof setupCore>>, actor: Actor, name: string) {
   const { owner, signer } = nearOwnerFixture();
   const created = await generateIntent(actor, { type: "agent_create", name, owner, policy });
   const generated = generateResponse(created.row);
