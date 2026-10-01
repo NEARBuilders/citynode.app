@@ -45,6 +45,10 @@ test("passkey signup creates an active personal organization and can sign in aga
     await page.getByTestId("account.signout-menuitem").click();
     await expect(page).toHaveURL(/\/$/, { waitUntil: "commit" });
     expect(await (await context.request.get("/api/auth/get-session")).json()).toBeNull();
+    // Exercise the sign-in button before conditional autofill can navigate away.
+    await page.addInitScript(() => {
+      PublicKeyCredential.isConditionalMediationAvailable = async () => false;
+    });
     await page.goto("/login", { waitUntil: "domcontentloaded" });
     await page.getByTestId("login.passkey-button").click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 20000, waitUntil: "commit" });
@@ -52,7 +56,11 @@ test("passkey signup creates an active personal organization and can sign in aga
       signedUp.user.id,
     );
   } finally {
-    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
+    if (!page.isClosed()) {
+      await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId }).catch((error) => {
+        if (!page.isClosed()) throw error;
+      });
+    }
   }
 });
 
