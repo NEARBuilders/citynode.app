@@ -100,6 +100,9 @@ export function HomepageTab({ orgId, gatewayId, baseAccount, canManage }: Homepa
           ...common,
         });
       }
+      if (value.title !== tenant.name) {
+        await apiClient.updateTenant({ tenantId: tenant.id, name: value.title });
+      }
       return publishTenantConfigForMode(apiClient, auth, {
         accountId: tenant.accountId,
         ...common,
@@ -166,11 +169,13 @@ export function HomepageTab({ orgId, gatewayId, baseAccount, canManage }: Homepa
         ? (parsedDraft.error.issues[0]?.message ?? "Fix the form first.")
         : daoOwned && !nearAccountId
           ? "Connect your NEAR wallet to propose."
-          : daoOwned && policy && !canAccountPropose(policy, nearAccountId)
-            ? `${nearAccountId} has no AddProposal permission on ${tenantAccount}.`
-            : !daoOwned && !hasSigningWallet
-              ? "Connect your NEAR wallet to publish."
-              : null;
+          : daoOwned && activeNetwork !== "mainnet"
+            ? "Switch your NEAR wallet to mainnet to propose."
+            : daoOwned && policy && !canAccountPropose(policy, nearAccountId)
+              ? `${nearAccountId} has no AddProposal permission on ${tenantAccount}.`
+              : !daoOwned && !hasSigningWallet
+                ? "Connect your NEAR wallet to publish."
+                : null;
   const canPropose = blockReason === null && !busy;
 
   return (

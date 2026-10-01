@@ -13,6 +13,8 @@ const harness = vi.hoisted(() => ({
   resolveTenantByOrgId: vi.fn(),
   listTenantBindingsForTenant: vi.fn(),
   getRegistryApp: vi.fn(),
+  updateTenant: vi.fn(),
+  activeNetwork: "mainnet",
   proposeTenantConfigAsMember: vi.fn(),
   publishTenantConfigForMode: vi.fn(),
   toastError: vi.fn(),
@@ -27,10 +29,11 @@ vi.mock("@/app", async () => {
       resolveTenantByOrgId: harness.resolveTenantByOrgId,
       listTenantBindingsForTenant: harness.listTenantBindingsForTenant,
       apps: { getRegistryApp: harness.getRegistryApp },
+      updateTenant: harness.updateTenant,
     }),
     useAuthClient: () => ({
       near: harness.authNear,
-      useActiveNetwork: () => "mainnet",
+      useActiveNetwork: () => harness.activeNetwork,
     }),
   };
 });
@@ -136,6 +139,8 @@ async function editTitle(value: string) {
 
 beforeEach(() => {
   harness.nearAccount = "alice.near";
+  harness.activeNetwork = "mainnet";
+  harness.updateTenant.mockResolvedValue({});
   harness.proposeTenantConfigAsMember.mockResolvedValue({});
   harness.publishTenantConfigForMode.mockResolvedValue({});
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
@@ -173,6 +178,21 @@ describe("HomepageTab", () => {
       },
     );
     expect(harness.publishTenantConfigForMode).not.toHaveBeenCalled();
+    expect(harness.updateTenant).not.toHaveBeenCalled();
+  });
+
+  it("blocks proposing while the wallet is on testnet", async () => {
+    harness.activeNetwork = "testnet";
+    mockTenant();
+    mockChain({ policy: policy(["alice.near"]) });
+    renderTab();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("orgs-homepage-block-reason").textContent).toBe(
+        "Switch your NEAR wallet to mainnet to propose.",
+      ),
+    );
+    expect((screen.getByTestId("orgs-homepage-propose") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it.each([
@@ -262,6 +282,10 @@ describe("HomepageTab", () => {
         mode: "platform",
       },
     );
+    expect(harness.updateTenant).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      name: "Chicago Builders",
+    });
     expect(harness.proposeTenantConfigAsMember).not.toHaveBeenCalled();
   });
 });
