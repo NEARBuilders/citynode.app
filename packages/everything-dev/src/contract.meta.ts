@@ -107,10 +107,10 @@ export const cliCommandMeta = {
   },
   publish: {
     commandPath: ["publish"],
-    summary: "Publish the current workspace configuration",
+    summary:
+      "Publish the current workspace configuration (no build — use bos deploy for the full train)",
     interactive: false,
     fields: {
-      deploy: { description: "Build and deploy all workspaces before publish" },
       dryRun: { description: "Preview what would be published without writing" },
       verbose: { description: "Show full build output instead of clean summary" },
       env: { description: "Environment: production or staging" },
@@ -127,7 +127,8 @@ export const cliCommandMeta = {
   },
   deploy: {
     commandPath: ["deploy"],
-    summary: "Publish config and trigger Railway redeploy",
+    summary:
+      "Full deploy train: preflight → build → upload bundles → publish config → push runtime image → Railway (pull-only)",
     interactive: false,
     fields: {
       env: { description: "Environment: production or staging" },

@@ -27,6 +27,7 @@ jobs:
     timeout-minutes: 30
     env:
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
+      BOS_STORAGE_API_KEY: ${{ secrets.BOS_STORAGE_API_KEY }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - name: Checkout code
@@ -42,12 +43,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Publish with deploy
-        timeout-minutes: 20
-        run: bun run bos publish --deploy${{ inputs.verbose == true && ' --verbose' || '' }}
-
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli@5.47.1
-
-      - name: Ship the image (railway up builds the deployment artifact)
-        run: railway up --service app --ci
+      - name: Deploy (build → upload → publish → image → Railway)
+        timeout-minutes: 25
+        run: bun run bos deploy${{ inputs.verbose == true && ' --verbose' || '' }}

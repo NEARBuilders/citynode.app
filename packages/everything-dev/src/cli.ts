@@ -1252,12 +1252,11 @@ async function main() {
             }
           }
         }
-        if (deployResult.redeployed) {
-          console.log(
-            `  ${colors.dim("Railway:")} redeployed ${deployResult.service ?? "service"}`,
-          );
-        } else if (!process.env.RAILWAY_TOKEN) {
-          console.log(`  ${colors.yellow("Railway:")} skipped (RAILWAY_TOKEN not set)`);
+        if (deployResult.image) {
+          console.log(`  ${colors.dim("Image:")} ${deployResult.image}`);
+        }
+        if (deployResult.service) {
+          console.log(`  ${colors.dim("Railway:")} deployed ${deployResult.service}`);
         }
         console.log();
         return;
@@ -1265,13 +1264,13 @@ async function main() {
 
       if (deployResult.status === "published") {
         console.log();
-        console.log(colors.yellow(`${icons.err} Config published, but Railway redeploy failed`));
+        console.log(colors.yellow(`${icons.err} Config published, but a deploy leg failed`));
         console.log(`  ${colors.dim("Registry URL:")} ${deployResult.registryUrl}`);
         if (deployResult.txHash) {
           console.log(`  ${colors.dim("Transaction:")} ${deployResult.txHash}`);
         }
         if (deployResult.error) {
-          console.log(`  ${colors.dim("Railway:")} ${deployResult.error}`);
+          console.log(`  ${colors.dim("Error:")} ${deployResult.error}`);
         }
         console.log();
         process.exit(1);

@@ -50,7 +50,8 @@ export function resolveCdnDeployInputs(input: {
       storageOrigin,
       apiKey,
       error:
-        "CDN deploy requires bundle-upload credentials — run `bos login` or set BOS_STORAGE_API_KEY",
+        "CDN deploy requires bundle-upload credentials — run `bos login --key` and add the printed key " +
+        "to GitHub secrets as BOS_STORAGE_API_KEY (or run `bos login` for interactive deploys)",
     };
   }
   if (input.session?.accountId && input.session.accountId !== input.account) {

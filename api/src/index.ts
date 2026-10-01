@@ -1249,7 +1249,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         );
         const integrity = Object.fromEntries(integrityEntries);
 
-        return { stored: decoded.length, totalBytes, integrity };
+        return { stored: decoded.length, totalBytes, integrity, storage: services.storage.backend };
       }),
     };
 

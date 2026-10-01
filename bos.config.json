@@ -9,6 +9,7 @@
     "account": "v1.citynode.testnet"
   },
   "ci": {
+    "image": "ghcr.io/nearbuilders/citynode.app",
     "railway": {
       "service": "app"
     }

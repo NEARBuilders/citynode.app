@@ -548,7 +548,7 @@ export function buildChildRootScripts(sections: {
     dev: "bos dev",
     "dev:proxy": "bos dev --proxy",
     build: "bos build",
-    deploy: "bos build --deploy",
+    deploy: "bos deploy",
     publish: "bos publish",
     start: "bos start",
     typecheck: buildRootTypecheckScript(sections),
@@ -1529,10 +1529,10 @@ You don't need to wait for a PR to merge and run through CI/CD. Publish your own
    \`\`\`json
    { "extends": "bos://<parent-account>/<parent-gateway>", "account": "<your-account>.near", "domain": "<parent-gateway>" }
    \`\`\`
-5. **Publish and deploy:**
-   \`\`\`bash
-   bos publish --deploy    # builds → writes deterministic bundle URLs → publishes config to FastKV at bos://<your-account>/<gateway>
-   \`\`\`
+ 5. **Publish and deploy:**
+    \`\`\`bash
+    bos deploy           # preflight → build → upload bundles → publish config to FastKV at bos://<your-account>/<gateway> → image/Railway when configured
+    \`\`\`
 6. **Deploy to Railway** (one-click template or \`railway up\`), set \`BOS_ACCOUNT\`, \`BOS_GATEWAY\` (same gateway as parent), and \`BETTER_AUTH_SECRET\`. Your Railway host fetches your config from FastKV and serves live.
 
 \`BOS_GATEWAY\` is the **FastKV lookup key**, not the DNS domain your Railway instance serves on. By keeping the same gateway while using your own \`BOS_ACCOUNT\`, your config lives at a separate FastKV path that \`extends\` the base runtime — you inherit the full platform and override only what you change.
@@ -1892,8 +1892,7 @@ bos dev
 ### Publish
 
 \`\`\`bash
-bos build
-bos publish --deploy
+bos deploy
 \`\`\`
 
 ## Source

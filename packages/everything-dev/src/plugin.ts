@@ -91,6 +91,12 @@ import {
   type PluginManifest,
   parseBosUrl,
 } from "./fastkv";
+import {
+  buildAndPushImage,
+  deployImageToRailway,
+  hasDocker,
+  resolveImageRef,
+} from "./image-deploy";
 import { materializeViaLayer } from "./infra/materializer";
 import { ownerOfPort } from "./infra/port-ownership";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
@@ -115,7 +121,7 @@ import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig } from "./
 import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
-import { colors } from "./utils/theme";
+import { colors, icons } from "./utils/theme";
 
 export type { DevSessionData, StartSummary } from "./dev-program";
 export { type ProgressEvent, pluginEvents } from "./progress";
@@ -788,7 +794,7 @@ export default createPlugin({
         };
       }
 
-      const buildEnv: BosEnv = input.deploy ? "production" : "development";
+      const buildEnv: BosEnv = "development";
 
       const targets = selectWorkspaceTargets(input.packages, deps.bosConfig);
       if (targets.length === 0) {
@@ -826,7 +832,7 @@ export default createPlugin({
         bosConfig: deps.bosConfig,
         runtimeConfig: runtimeConfig,
         targets,
-        deploy: input.deploy,
+        deploy: false,
       });
 
       if (built.length === 0) {
@@ -842,7 +848,6 @@ export default createPlugin({
         status: "success" as const,
         built,
         skipped,
-        deployed: input.deploy,
       };
     }),
 
@@ -861,10 +866,10 @@ export default createPlugin({
         runtimeConfig: deps.runtimeConfig,
         configDir: deps.configDir,
         env: input.env,
-        build: input.deploy,
+        build: false,
         dryRun: input.dryRun,
         verbose: input.verbose,
-        packages: input.packages,
+        packages: "all",
         network: input.network,
         privateKey: input.privateKey,
         wallet: input.wallet,
@@ -896,7 +901,6 @@ export default createPlugin({
         return {
           status: "error" as const,
           registryUrl: "",
-          redeployed: false,
           error: "No bos.config.json found",
         };
       }
@@ -922,7 +926,6 @@ export default createPlugin({
           txHash: result.txHash,
           built: result.built,
           skipped: result.skipped,
-          redeployed: false,
           error: result.error,
           deployResults: result.deployResults,
         };
@@ -934,7 +937,6 @@ export default createPlugin({
           registryUrl: result.registryUrl,
           built: result.built,
           skipped: result.skipped,
-          redeployed: false,
         };
       }
 
@@ -946,82 +948,134 @@ export default createPlugin({
         }
       }
 
-      let redeployed = false;
+      const configPublished = {
+        registryUrl: result.registryUrl,
+        txHash: result.txHash,
+        built: result.built,
+        skipped: result.skipped,
+        deployResults: result.deployResults,
+      } as const;
+
+      let image: string | undefined;
+      let imageDigest: string | undefined;
       let service: string | undefined;
 
+      // IMAGE LEG (ADR 0021): build the runtime stage and push it to the
+      // registry by SHA + latest tags. Skips with a notice when no image is
+      // configured (child repos get build+upload+publish only).
+      const imageRef = resolveImageRef({
+        ciImage: deps.bosConfig.ci?.image,
+        repository: deps.bosConfig.repository,
+      });
+      if (!imageRef) {
+        console.log();
+        console.log(
+          colors.yellow(
+            "  Image skipped: set ci.image in bos.config.json (or BOS_IMAGE) to build and push the runtime image",
+          ),
+        );
+      } else if (!(await hasDocker())) {
+        console.log();
+        console.log(colors.yellow("  Image skipped: docker is not available"));
+      } else {
+        console.log();
+        try {
+          const imageResult = await buildAndPushImage({
+            image: imageRef.image,
+            configDir: deps.configDir,
+            verbose: input.verbose,
+          });
+          image = imageResult.image;
+          imageDigest = imageResult.digest;
+          console.log(
+            colors.green(
+              `  ${icons.ok} Image pushed ${imageResult.image}:${imageResult.tag}${imageResult.digest ? ` (${imageResult.digest.slice(0, 19)}…)` : ""}`,
+            ),
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const imageError =
+            message.includes("not found") || message.includes("ENOENT")
+              ? "Docker not found — install Docker to build the runtime image"
+              : `Image build/push failed: ${message}`;
+          console.log(colors.yellow(`  ${imageError}`));
+          return {
+            status: "published" as const,
+            ...configPublished,
+            error: `Config published but ${imageError}`,
+          };
+        }
+      }
+
+      // RAILWAY LEG: pull-only deploy of the pushed image digest (thin
+      // FROM Dockerfile, ADR 0021 — Railway never rebuilds).
       if (process.env.RAILWAY_TOKEN) {
         const railwayService = input.service ?? deps.bosConfig.ci?.railway?.service;
         if (!railwayService) {
           console.log();
           console.log(
             colors.yellow(
-              "  Railway redeploy skipped: ci.railway.service is not configured in bos.config.json",
+              "  Railway deploy skipped: ci.railway.service is not configured in bos.config.json",
             ),
           );
           return {
             status: "published" as const,
-            registryUrl: result.registryUrl,
-            txHash: result.txHash,
-            built: result.built,
-            skipped: result.skipped,
-            redeployed: false,
-            deployResults: result.deployResults,
+            ...configPublished,
+            image,
             error:
-              "Config published but Railway redeploy failed: ci.railway.service is not configured in bos.config.json",
+              "Config published but Railway deploy failed: ci.railway.service is not configured in bos.config.json",
+          };
+        }
+        if (!image || !imageDigest) {
+          console.log();
+          console.log(
+            colors.yellow(
+              "  Railway deploy skipped: no pushed image digest — set ci.image and install docker",
+            ),
+          );
+          return {
+            status: "published" as const,
+            ...configPublished,
+            image,
+            service: railwayService,
+            error:
+              "Config published but Railway deploy requires a pushed image (set ci.image and install docker)",
           };
         }
 
         service = railwayService;
-        console.log();
-        console.log(`  Redeploying Railway service ${colors.cyan(railwayService)}...`);
         try {
-          const railResult = await run(
-            "railway",
-            ["redeploy", "--service", railwayService, "--yes"],
-            {
-              capture: true,
-            },
-          );
-          if (railResult?.stdout) {
-            for (const line of railResult.stdout.split("\n")) {
-              if (line.trim()) console.log(`  ${colors.dim(line.trim())}`);
-            }
-          }
-          redeployed = true;
-          console.log(colors.green(`  Railway redeploy complete`));
+          await deployImageToRailway({
+            image,
+            digest: imageDigest,
+            service: railwayService,
+            configDir: deps.configDir,
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           const railError =
             message.includes("not found") || message.includes("ENOENT")
               ? "Railway CLI not found. Install it: npm i -g @railway/cli"
-              : `Railway redeploy failed: ${message}`;
+              : `Railway deploy failed: ${message}`;
           console.log(colors.yellow(`  ${railError}`));
           return {
             status: "published" as const,
-            registryUrl: result.registryUrl,
-            txHash: result.txHash,
-            built: result.built,
-            skipped: result.skipped,
-            redeployed: false,
+            ...configPublished,
+            image,
             service,
-            deployResults: result.deployResults,
             error: `Config published but ${railError}`,
           };
         }
       } else {
         console.log();
-        console.log(colors.yellow("  Railway redeploy skipped (RAILWAY_TOKEN not set)"));
+        console.log(colors.yellow("  Railway deploy skipped (RAILWAY_TOKEN not set)"));
       }
 
       return {
         status: "deployed" as const,
-        registryUrl: result.registryUrl,
-        txHash: result.txHash,
-        built: result.built,
-        skipped: result.skipped,
-        redeployed,
+        ...configPublished,
+        image,
         service,
-        deployResults: result.deployResults,
       };
     }),
 

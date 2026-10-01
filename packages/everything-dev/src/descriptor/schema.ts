@@ -98,6 +98,7 @@ export const AppDescriptorSchema = z
       .optional(),
     ci: z
       .object({
+        image: z.string().optional(),
         railway: z
           .object({
             service: z.string(),

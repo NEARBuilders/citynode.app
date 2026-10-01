@@ -122,17 +122,44 @@ interface PublishToFastKvResult {
   deployResults?: WorkspaceDeployResult[];
 }
 
-export async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFastKvResult> {
-  const { env, dryRun, configDir } = input;
-  let bosConfig = input.bosConfig;
+export interface PublishPreflightPlan {
+  isStaging: boolean;
+  account: string;
+  gateway: string;
+  network: NetworkId;
+  registryUrl: string;
+  registryNamespace: string;
+  targets: string[];
+  useWallet: boolean;
+  strategy?: SigningStrategy;
+  cdnOrigin?: string;
+  storageOrigin: string;
+  storageApiKey?: string;
+}
+
+export type PublishPreflight =
+  | { kind: "dry-run"; registryUrl: string }
+  | { kind: "error"; registryUrl: string; error: string }
+  | { kind: "ready"; plan: PublishPreflightPlan };
+
+/**
+ * Pure preflight (resolve, don't mutate): config/account/gateway → auth
+ * guards → signing strategy → storage/CDN credentials → registry
+ * reachability. Every failure returns an actionable message before the
+ * build train runs (issue #287). Dry-run exits after the auth guards,
+ * before any signing (keychain/TTY side effects).
+ */
+export async function preflightPublish(input: PublishToFastKvInput): Promise<PublishPreflight> {
+  const { configDir } = input;
+  const bosConfig = input.bosConfig;
   const runtimeConfig = input.runtimeConfig;
 
-  const isStaging = env === "staging";
+  const isStaging = input.env === "staging";
   const account = isStaging ? (bosConfig.staging?.account ?? bosConfig.account) : bosConfig.account;
   const gateway = isStaging ? (bosConfig.staging?.domain ?? bosConfig.domain) : bosConfig.domain;
   if (!gateway) {
     return {
-      status: "error",
+      kind: "error",
       registryUrl: "",
       error: "bos.config.json must define domain to publish",
     };
@@ -140,51 +167,38 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
 
   const network: NetworkId = input.network ?? getNetworkIdForAccount(account);
   const registryUrl = buildRegistryConfigUrlForNetwork(network, account, gateway, input.registry);
-  const targets = selectWorkspaceTargets(input.packages, bosConfig);
-
-  let built: string[] | undefined;
-  let skipped: string[] | undefined;
-  let deployResults: WorkspaceDeployResult[] | undefined;
+  const fail = (error: string): PublishPreflight => ({ kind: "error", registryUrl, error });
 
   const publishAuth: PublishConfig["auth"] = bosConfig.publish?.auth;
   const governsWalletPublish = (publishAuth === "session" || input.wallet) && !input.privateKey;
   if (governsWalletPublish) {
     const session = readSessionHandle(configDir);
     if (!session?.credential) {
-      return {
-        status: "error",
-        registryUrl,
-        error:
-          (input.wallet
-            ? "--wallet requires"
-            : 'bos.config.json sets publish.auth = "session", but') +
+      return fail(
+        (input.wallet
+          ? "--wallet requires"
+          : 'bos.config.json sets publish.auth = "session", but') +
           " no CLI session is stored in .bos/ for this project. Run bos login to create one.",
-      };
+      );
     }
     if (session.credential.accountId && session.credential.accountId !== account) {
-      return {
-        status: "error",
-        registryUrl,
-        error:
-          `The CLI session was created for ${session.credential.accountId}, but the configured ` +
+      return fail(
+        `The CLI session was created for ${session.credential.accountId}, but the configured ` +
           `account is ${account}. Gasless wallet publish relays the FastKV write under the session's ` +
           "NEAR account. Run bos login again under the matching account.",
-      };
+      );
     }
   }
   if (publishAuth && !input.privateKey) {
     if (publishAuth === "custody") {
-      return {
-        status: "error",
-        registryUrl,
-        error:
-          'bos.config.json sets publish.auth = "custody", but custody publish is not implemented yet (see NEARBuilders/everything-dev#291).',
-      };
+      return fail(
+        'bos.config.json sets publish.auth = "custody", but custody publish is not implemented yet (see NEARBuilders/everything-dev#291).',
+      );
     }
   }
 
-  if (dryRun) {
-    return { status: "dry-run", registryUrl, built, skipped };
+  if (input.dryRun) {
+    return { kind: "dry-run", registryUrl };
   }
 
   const useWallet = input.wallet === true;
@@ -198,13 +212,86 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       strategy = await resolveSigningStrategy({ privateKey: input.privateKey, account, network });
       console.log(`  Signing via ${colors.cyan(describeSigningStrategy(strategy))}`);
     } catch (error) {
-      return {
-        status: "error" as const,
-        registryUrl,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
+      return fail(error instanceof Error ? error.message : "Unknown error");
     }
   }
+
+  // CDN deploy credentials (ADR 0020) — resolved before the build train so a
+  // missing BOS_STORAGE_API_KEY fails fast instead of after the full build.
+  const session = readSessionHandle(configDir);
+  const cdnDeploy = resolveCdnDeployInputs({
+    env: process.env as Record<string, string | undefined>,
+    runtimeConfig: runtimeConfig ?? null,
+    session: session?.credential ?? null,
+    account,
+    gateway,
+  });
+  if (cdnDeploy.error) {
+    return fail(cdnDeploy.error);
+  }
+
+  // Registry reachability: one FastKV read. A missing config is fine for a
+  // first publish — an early signal, not a hard gate.
+  try {
+    await fetchBosConfigFromFastKv(registryUrl, input.registry);
+  } catch {
+    console.log(
+      colors.dim(
+        "  Note: no published config found yet (first publish, or registry unreachable) — continuing",
+      ),
+    );
+  }
+
+  return {
+    kind: "ready",
+    plan: {
+      isStaging,
+      account,
+      gateway,
+      network,
+      registryUrl,
+      registryNamespace: getRegistryNamespaceForNetwork(network, input.registry),
+      targets: selectWorkspaceTargets(input.packages, bosConfig),
+      useWallet,
+      strategy,
+      cdnOrigin: cdnDeploy.cdnOrigin,
+      storageOrigin: cdnDeploy.storageOrigin,
+      storageApiKey: cdnDeploy.apiKey,
+    },
+  };
+}
+
+export async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFastKvResult> {
+  const preflight = await preflightPublish(input);
+  if (preflight.kind === "error") {
+    return { status: "error", registryUrl: preflight.registryUrl, error: preflight.error };
+  }
+  if (preflight.kind === "dry-run") {
+    return { status: "dry-run", registryUrl: preflight.registryUrl };
+  }
+  const plan = preflight.plan;
+  const {
+    isStaging,
+    account,
+    gateway,
+    network,
+    registryUrl,
+    registryNamespace,
+    targets,
+    useWallet,
+    strategy,
+  } = plan;
+  const cdnOrigin = plan.cdnOrigin;
+  const storageOrigin = plan.storageOrigin;
+  const storageApiKey = plan.storageApiKey;
+
+  const { configDir } = input;
+  let bosConfig = input.bosConfig;
+  const runtimeConfig = input.runtimeConfig;
+
+  let built: string[] | undefined;
+  let skipped: string[] | undefined;
+  let deployResults: WorkspaceDeployResult[] | undefined;
 
   if (input.build) {
     await generateCodeArtifacts(configDir, bosConfig, {
@@ -274,30 +361,6 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
   let publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
 
-  // CDN deploy (ADR 0020): the resolution chain (env → bos login session →
-  // derived from the base's inherited bundle URLs) lives in cdn-deploy.ts.
-  // The image keeps only the boot role.
-  const session = readSessionHandle(configDir);
-  const cdnDeploy = resolveCdnDeployInputs({
-    env: process.env as Record<string, string | undefined>,
-    runtimeConfig: runtimeConfig ?? null,
-    session: session?.credential ?? null,
-    account,
-    gateway,
-  });
-  if (cdnDeploy.error) {
-    return {
-      status: "error",
-      registryUrl,
-      built,
-      skipped,
-      deployResults,
-      error: cdnDeploy.error,
-    };
-  }
-  const cdnOrigin = cdnDeploy.cdnOrigin;
-  const storageOrigin = cdnDeploy.storageOrigin;
-  const storageApiKey = cdnDeploy.apiKey;
   const urlOrigin = cdnOrigin ?? `https://${gateway}`;
   const deployTargets = (built ?? []).filter((key) => targets.includes(key));
   const platformEntries: DeployResultEntry[] = [];
@@ -334,6 +397,18 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       ssrIntegrity =
         result.integrity["ssr/remoteEntry.server.js"] ?? result.integrity["remoteEntry.server.js"];
       fileCount = result.stored;
+
+      if (result.storage === "memory") {
+        return {
+          status: "error",
+          registryUrl,
+          built,
+          skipped,
+          deployResults,
+          error:
+            "The receiving instance is serving bundle storage from memory (BOS_STORAGE_* R2 credentials are not configured there) — uploaded bytes would be lost on restart. Aborting before publish.",
+        };
+      }
 
       console.log(
         `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/${fileCount !== undefined ? ` (${fileCount} files, ${formatDuration(Date.now() - startedAt)})` : ""}`,
@@ -432,7 +507,6 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   }
 
   const registryKey = `apps/${account}/${gateway}/bos.config.json`;
-  const registryNamespace = getRegistryNamespaceForNetwork(network, input.registry);
   const publishedAt = new Date().toISOString();
   const registryEntries: Record<string, string> = {
     [registryKey]: JSON.stringify(publishPayload),

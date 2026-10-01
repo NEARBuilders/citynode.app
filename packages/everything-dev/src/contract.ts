@@ -56,7 +56,6 @@ export const BuildOptionsSchema = z.object({
       "Comma-separated keys, 'all' (default), or 'local' (only this repo's local plugins hosted via 'local:…')",
     ),
   force: z.boolean().default(false),
-  deploy: z.boolean().default(false),
 });
 
 export const BuildResultSchema = z.object({
@@ -64,7 +63,6 @@ export const BuildResultSchema = z.object({
   error: z.string().optional(),
   built: z.array(z.string()),
   skipped: z.array(z.string()).optional(),
-  deployed: z.boolean().optional(),
 });
 
 export const ConfigOptionsSchema = z.object({
@@ -162,15 +160,8 @@ export const WorkspaceDeployResultSchema = z.object({
 });
 
 export const PublishOptionsSchema = z.object({
-  deploy: z.boolean().default(false),
   dryRun: z.boolean().default(false),
   verbose: z.boolean().default(false),
-  packages: z
-    .string()
-    .default("all")
-    .describe(
-      "Comma-separated keys, 'all' (default), or 'local' (only this repo's local plugins hosted via 'local:…')",
-    ),
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   wallet: z.boolean().default(false),
@@ -211,7 +202,7 @@ export const DeployResultSchema = z.object({
   txHash: z.string().optional(),
   built: z.array(z.string()).optional(),
   skipped: z.array(z.string()).optional(),
-  redeployed: z.boolean(),
+  image: z.string().optional(),
   service: z.string().optional(),
   error: z.string().optional(),
   deployResults: z.array(WorkspaceDeployResultSchema).optional(),

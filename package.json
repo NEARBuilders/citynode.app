@@ -80,7 +80,7 @@
     "dev:api": "bun --conditions=development packages/everything-dev/src/cli.ts dev --ui remote",
     "dev:proxy": "bun --conditions=development packages/everything-dev/src/cli.ts dev --proxy",
     "build": "bun packages/everything-dev/src/cli.ts build",
-    "deploy": "bun packages/everything-dev/src/cli.ts build --deploy",
+    "deploy": "bun packages/everything-dev/src/cli.ts deploy",
     "infra:deploy": "cd infra && bun run alchemy deploy",
     "infra:plan": "cd infra && bun run alchemy plan",
     "publish": "bun packages/everything-dev/src/cli.ts publish",

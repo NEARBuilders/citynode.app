@@ -10,6 +10,7 @@ export interface BundleUploadResult {
   stored: number;
   totalBytes: number;
   integrity: Record<string, string>;
+  storage?: "s3" | "memory";
 }
 
 async function walkDist(dir: string, baseDir: string): Promise<DistFile[]> {
@@ -151,6 +152,7 @@ export async function uploadWorkspaceDist(input: {
     merged.stored += result.stored;
     merged.totalBytes += result.totalBytes;
     Object.assign(merged.integrity, result.integrity);
+    merged.storage = result.storage;
     batch = [];
     batchBytes = 0;
   };
