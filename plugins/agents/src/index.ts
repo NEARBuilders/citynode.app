@@ -3,6 +3,10 @@ import {
   configureOutlayer,
   configureRuntime,
   configureSponsorClients,
+  generateIntent,
+  generateResponse,
+  readStatus,
+  submitIntent,
 } from "@near-intents-agent-api/agents-core";
 import { envSchema } from "@near-intents-agent-api/agents-core/config";
 import { agents } from "@near-intents-agent-api/database/schema";
@@ -11,6 +15,7 @@ import { sql } from "drizzle-orm";
 import { Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
 import { z } from "zod";
+import { actorForSession } from "./actor";
 import { contract } from "./contract";
 import { DatabaseLive, DatabaseTag } from "./db/layer";
 
@@ -131,6 +136,28 @@ export default createPlugin({
           database.db.select({ count: sql<number>`count(*)::int` }).from(agents),
         ).pipe(Effect.catch(() => Effect.succeed([{ count: 0 }])));
         return { ok: true, agentCount: rows[0]?.count ?? 0 };
+      }),
+
+      generateIntent: builder.generateIntent.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const { row, replayed } = yield* Effect.tryPromise(() => generateIntent(actor, input));
+        return { ...generateResponse(row), replayed };
+      }),
+
+      submitIntent: builder.submitIntent.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(() => submitIntent(actor, input));
+      }),
+
+      intentStatus: builder.intentStatus.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(() => readStatus(actor, input.correlationId, input.waitMs));
       }),
     };
   },
