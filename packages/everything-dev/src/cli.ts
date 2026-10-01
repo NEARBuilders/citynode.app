@@ -218,6 +218,45 @@ async function main() {
   try {
     const input = parseCommandInput(descriptor, commandArgs);
 
+    const rollbackInput = input as {
+      listOnly?: boolean;
+      version?: string;
+      previous?: boolean;
+      [key: string]: unknown;
+    };
+    if (
+      descriptor.key === "rollback" &&
+      !rollbackInput.listOnly &&
+      !rollbackInput.version &&
+      !rollbackInput.previous
+    ) {
+      const listing = await (client as any).rollback({ ...rollbackInput, listOnly: true });
+      if (listing.status !== "list" || !listing.history?.length) {
+        console.error(listing.error ?? "No publish history found");
+        process.exit(1);
+      }
+      console.log();
+      const selection = await p.select({
+        message: "Roll back to which publish?",
+        options: listing.history.map(
+          (entry: {
+            blockHeight: number;
+            blockTimestamp: string;
+            txHash?: string;
+            summary: string;
+          }) => ({
+            value: String(entry.blockHeight),
+            label: `${entry.blockTimestamp}  (block ${entry.blockHeight})`,
+            hint: entry.summary,
+          }),
+        ),
+      });
+      if (p.isCancel(selection)) {
+        return;
+      }
+      rollbackInput.version = selection as string;
+    }
+
     if (descriptor.key === "dev") {
       const devSpinner = p.spinner();
       devSpinner.start("Starting dev environment");
@@ -1197,6 +1236,44 @@ async function main() {
         console.log();
         return;
       }
+    }
+
+    if (descriptor.key === "rollback") {
+      const rollbackResult = result as any;
+      if (rollbackResult.status === "error") {
+        console.log();
+        console.log(colors.error(`${icons.err} Roll back failed`));
+        if (rollbackResult.error) {
+          console.log(`  ${colors.dim("Error:")} ${rollbackResult.error}`);
+        }
+        if (rollbackResult.verification) {
+          console.log();
+          for (const check of rollbackResult.verification) {
+            const mark = check.ok ? colors.green(icons.ok) : colors.error(icons.err);
+            const reason = check.reason ? colors.dim(` — ${check.reason}`) : "";
+            console.log(`  ${mark} ${check.slot}${reason}`);
+          }
+        }
+        console.log();
+        process.exit(1);
+      }
+
+      if (rollbackResult.status === "dry-run") {
+        console.log();
+        console.log(colors.cyan(`${icons.ok} Rollback dry run complete`));
+        console.log(`  ${colors.dim("Registry URL:")} ${rollbackResult.registryUrl}`);
+        console.log();
+        return;
+      }
+
+      console.log();
+      console.log(colors.green(`${icons.ok} Rolled back`));
+      console.log(`  ${colors.dim("Registry URL:")} ${rollbackResult.registryUrl}`);
+      if (rollbackResult.txHash) {
+        console.log(`  ${colors.dim("Transaction:")} ${rollbackResult.txHash}`);
+      }
+      console.log();
+      return;
     }
 
     if (descriptor.key === "deploy") {

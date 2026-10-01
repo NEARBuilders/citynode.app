@@ -125,6 +125,31 @@ export const cliCommandMeta = {
       },
     },
   },
+  rollback: {
+    commandPath: ["rollback"],
+    summary: "Republish an earlier config snapshot from the registry publish history",
+    interactive: true,
+    fields: {
+      version: { description: "Block height (or timestamp) of the snapshot from the listing" },
+      previous: { description: "Roll back to the write immediately before the current one" },
+      force: {
+        description:
+          "Allow pre-Phase-A snapshots without verifiable manifest pins (their bytes were overwritten in place)",
+      },
+      limit: { description: "Listing depth (1-200, default 20)" },
+      dryRun: { description: "Preview the rollback without publishing" },
+      env: { description: "Environment: production or staging" },
+      network: { description: "NEAR network: mainnet or testnet" },
+      wallet: {
+        description:
+          "Publish gaslessly with a one-time wallet approval (NEP-366 delegate action relayed by the platform relayer)",
+      },
+      registry: {
+        description:
+          "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
+      },
+    },
+  },
   deploy: {
     commandPath: ["deploy"],
     summary:

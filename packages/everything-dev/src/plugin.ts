@@ -85,7 +85,9 @@ import {
 } from "./dev-program";
 import { makeProjectEnv, ProjectEnv, ProjectEnvLive } from "./env/project-env";
 import {
+  type ConfigHistoryEntry,
   fetchBosConfigFromFastKv,
+  fetchConfigHistory,
   fetchRemotePluginManifest,
   getRegistryNamespaceForAccount,
   type PluginManifest,
@@ -115,6 +117,7 @@ import { isPidAlive, pruneDeadEffect, readRegistry, unregisterPid } from "./proc
 import { timePhase } from "./progress";
 import { publishToFastKv } from "./publish";
 import { applyRegistrySections } from "./registry-use";
+import { buildRollbackPayload, summarizeSlotPins, verifyRollbackSnapshot } from "./rollback";
 import { createPlugin, z } from "./sdk";
 import { syncResolvedSharedDeps } from "./shared-deps";
 import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig } from "./types";
@@ -892,6 +895,158 @@ export default createPlugin({
         built: result.built,
         skipped: result.skipped,
         deployResults: result.deployResults,
+      };
+    }),
+
+    rollback: builder.rollback.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
+      if (!deps.bosConfig) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: "No bos.config.json found",
+        };
+      }
+
+      const { account, domain } = deps.bosConfig;
+      if (!account || !domain) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: "bos.config.json must define account and domain to roll back",
+        };
+      }
+
+      let history: ConfigHistoryEntry[];
+      try {
+        history = await fetchConfigHistory({
+          accountId: account,
+          gatewayId: domain,
+          registry: input.registry,
+          limit: input.limit,
+        });
+      } catch (error) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: `Failed to fetch publish history: ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+
+      if (history.length === 0) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: `No publish history for ${account}/${domain} — nothing to roll back to`,
+        };
+      }
+
+      const historyEntries = history.map((entry) => ({
+        blockHeight: entry.blockHeight,
+        blockTimestamp: new Date(Number(entry.blockTimestampNs.slice(0, 13))).toISOString(),
+        ...(entry.txHash ? { txHash: entry.txHash } : {}),
+        summary: summarizeSlotPins(entry.value as BosConfigInput),
+      }));
+
+      if (input.listOnly) {
+        return {
+          status: "list" as const,
+          registryUrl: "",
+          history: historyEntries,
+        };
+      }
+
+      const target =
+        input.version !== undefined
+          ? history.find((entry) => {
+              const iso = new Date(Number(entry.blockTimestampNs.slice(0, 13))).toISOString();
+              return (
+                String(entry.blockHeight) === input.version ||
+                iso.startsWith(input.version as string)
+              );
+            })
+          : input.previous
+            ? history[1]
+            : undefined;
+
+      if (!target) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          history: historyEntries,
+          error: input.version
+            ? `No history entry matches "${input.version}" — pick a block height from the listing`
+            : "Specify --version <block-height> or --previous (interactive selection happens CLI-side)",
+        };
+      }
+
+      let liveValue: unknown;
+      try {
+        liveValue = await fetchBosConfigFromFastKv<unknown>(
+          `bos://${account}/${domain}`,
+          input.registry,
+        );
+      } catch {
+        liveValue = undefined;
+      }
+      if (liveValue && JSON.stringify(liveValue) === JSON.stringify(target.value)) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: "The selected snapshot is identical to the live config — nothing to do",
+        };
+      }
+
+      const verification = await verifyRollbackSnapshot(target.value as BosConfigInput);
+      const slotChecks = verification.slots.map((check) => ({
+        slot: check.slot,
+        ok: check.ok,
+        ...(check.reason ? { reason: check.reason } : {}),
+      }));
+      if (!verification.ok && verification.verifiable) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          verification: slotChecks,
+          error:
+            "Refusing to roll back — a pinned slot's bytes are gone or no longer match their SRI",
+        };
+      }
+
+      if (!verification.verifiable && !input.force) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error:
+            "Snapshot predates version manifests and cannot be verified — its bytes were overwritten in place. Re-run with --force to publish it anyway.",
+        };
+      }
+
+      const parsedTarget = BosConfigSchema.parse(target.value);
+      const payload = buildRollbackPayload(parsedTarget, new Date().toISOString());
+
+      const result = await publishToFastKv({
+        bosConfig: payload,
+        runtimeConfig: deps.runtimeConfig,
+        configDir: deps.configDir,
+        env: input.env,
+        build: false,
+        dryRun: input.dryRun,
+        verbose: input.verbose,
+        packages: "all",
+        network: input.network,
+        privateKey: input.privateKey,
+        wallet: input.wallet,
+        registry: input.registry,
+      });
+
+      return {
+        status: result.status,
+        registryUrl: result.registryUrl,
+        txHash: result.txHash,
+        error: result.error,
+        history: historyEntries,
+        ...(slotChecks.length > 0 ? { verification: slotChecks } : {}),
       };
     }),
 

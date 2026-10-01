@@ -14,6 +14,7 @@ export const BOS_CONFIG_ORDER = [
   "ci",
   "app",
   "plugins",
+  "rolledBackFrom",
 ] as const;
 
 export type BosConfigFieldName = (typeof BOS_CONFIG_ORDER)[number];

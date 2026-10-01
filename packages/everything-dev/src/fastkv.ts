@@ -127,6 +127,57 @@ export async function fetchBosConfigFromFastKv<T>(bosUrl: string, registry?: str
   return value as T;
 }
 
+export interface ConfigHistoryEntry {
+  blockHeight: number;
+  blockTimestampNs: string;
+  txHash?: string;
+  value: unknown;
+}
+
+interface FastKvHistoryEntry {
+  block_height?: number;
+  block_timestamp?: string | number;
+  tx_hash?: string;
+  value?: unknown;
+}
+
+interface FastKvHistoryResponse {
+  entries?: Array<FastKvHistoryEntry | null>;
+}
+
+const FASTKV_HISTORY_MAX_LIMIT = 200;
+
+/**
+ * Publish history for the registry config key (atomic-deploys 11): the
+ * exact-key variant of FastData's history endpoint, newest-first. The API
+ * caps a page at 200 rows; a config key's write history fits well inside
+ * that, so a single request is the whole story (the limit param is clamped).
+ */
+export async function fetchConfigHistory(opts: {
+  accountId: string;
+  gatewayId: string;
+  registry?: string;
+  limit?: number;
+}): Promise<ConfigHistoryEntry[]> {
+  const key = encodeURIComponent(getRegistryConfigKey(opts.accountId, opts.gatewayId));
+  const limit = Math.max(1, Math.min(opts.limit ?? 20, FASTKV_HISTORY_MAX_LIMIT));
+  const url = `${getFastKvBaseUrlForAccount(opts.accountId)}/v0/history/${encodeURIComponent(getRegistryNamespaceForAccount(opts.accountId, opts.registry))}/${encodeURIComponent(opts.accountId)}/${key}?limit=${limit}`;
+  const payload = await fetchJson<FastKvHistoryResponse>(url);
+  const entries = (payload?.entries ?? []).filter(Boolean) as FastKvHistoryEntry[];
+
+  return entries
+    .map((entry) => ({
+      blockHeight: entry.block_height ?? 0,
+      blockTimestampNs: String(entry.block_timestamp ?? ""),
+      ...(entry.tx_hash ? { txHash: entry.tx_hash } : {}),
+      value:
+        typeof entry.value === "string" && entry.value.length > 0
+          ? (JSON.parse(entry.value) as unknown)
+          : entry.value,
+    }))
+    .sort((a, b) => b.blockHeight - a.blockHeight);
+}
+
 export interface PluginManifest {
   schemaVersion: number;
   kind: string;

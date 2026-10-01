@@ -296,6 +296,7 @@ export interface BosConfigInput {
   publish?: PublishConfig;
   ci?: CiConfig;
   cdn?: CdnConfig;
+  rolledBackFrom?: string;
 }
 
 export const RailwayCiSchema = z.object({
@@ -342,6 +343,7 @@ export const BosConfigSchema = z.object({
   publish: PublishConfigSchema.optional(),
   ci: CiConfigSchema.optional(),
   cdn: CdnConfigSchema.optional(),
+  rolledBackFrom: z.string().optional(),
   plugins: z.record(PluginKeySchema, z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
     host: HostConfigSchema,

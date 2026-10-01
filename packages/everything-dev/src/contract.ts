@@ -169,6 +169,43 @@ export const PublishOptionsSchema = z.object({
   registry: z.string().optional(),
 });
 
+export const RollbackOptionsSchema = z.object({
+  listOnly: z.boolean().default(false),
+  version: z.string().optional(),
+  previous: z.boolean().default(false),
+  force: z.boolean().default(false),
+  limit: z.number().int().min(1).max(200).default(20),
+  dryRun: z.boolean().default(false),
+  verbose: z.boolean().default(false),
+  network: z.enum(["mainnet", "testnet"]).optional(),
+  privateKey: z.string().optional(),
+  wallet: z.boolean().default(false),
+  env: z.enum(["production", "staging"]).default("production"),
+  registry: z.string().optional(),
+});
+
+export const RollbackHistoryEntrySchema = z.object({
+  blockHeight: z.number(),
+  blockTimestamp: z.string(),
+  txHash: z.string().optional(),
+  summary: z.string(),
+});
+
+export const RollbackSlotCheckSchema = z.object({
+  slot: z.string(),
+  ok: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const RollbackResultSchema = z.object({
+  status: z.enum(["published", "error", "dry-run", "list"]),
+  registryUrl: z.string(),
+  txHash: z.string().optional(),
+  error: z.string().optional(),
+  history: z.array(RollbackHistoryEntrySchema).optional(),
+  verification: z.array(RollbackSlotCheckSchema).optional(),
+});
+
 export const PublishResultSchema = z.object({
   status: z.enum(["published", "error", "dry-run"]),
   registryUrl: z.string(),
@@ -586,6 +623,7 @@ export const commandOptionSchemas = {
   pluginRemove: PluginRemoveOptionsSchema,
   pluginPublish: PluginPublishOptionsSchema,
   publish: PublishOptionsSchema,
+  rollback: RollbackOptionsSchema,
   deploy: DeployOptionsSchema,
   keyPublish: KeyPublishOptionsSchema,
   login: LoginOptionsSchema,
@@ -638,6 +676,10 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/publish" })
     .input(PublishOptionsSchema)
     .output(PublishResultSchema),
+  rollback: oc
+    .route({ method: "POST", path: "/rollback" })
+    .input(RollbackOptionsSchema)
+    .output(RollbackResultSchema),
   deploy: oc
     .route({ method: "POST", path: "/deploy" })
     .input(DeployOptionsSchema)

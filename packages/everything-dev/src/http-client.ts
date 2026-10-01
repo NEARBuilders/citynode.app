@@ -132,6 +132,10 @@ export const fetchWithRetryEff = (
 const getCache = new Map<string, { data: unknown; expiresAt: number }>();
 const GET_CACHE_TTL_MS = 30_000;
 
+export function clearHttpCache(): void {
+  getCache.clear();
+}
+
 function isCacheable(_url: string, options?: FetchWithRetryOptions): boolean {
   if (options?.method && options.method !== "GET") return false;
   if (options?.body) return false;
