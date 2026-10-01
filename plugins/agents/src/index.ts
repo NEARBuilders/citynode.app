@@ -1,4 +1,5 @@
 import {
+  ApiError,
   balanceList,
   balanceMoveExecution,
   configureDatabase,
@@ -6,6 +7,7 @@ import {
   configureRuntime,
   configureSponsorClients,
   depositExecution,
+  findOperation,
   generateIntent,
   generateResponse,
   getAgentView,
@@ -13,6 +15,7 @@ import {
   listAgentGrants,
   listAgents,
   listScheduledExecutions,
+  operationStatus,
   readBudget,
   readHistory,
   readLimits,
@@ -23,6 +26,8 @@ import {
   recoverExecutionRequest,
   runExecution,
   runRecovery,
+  signEvmMessage,
+  signMessage,
   submitIntent,
   swapExecution,
   swapQuote,
@@ -425,6 +430,42 @@ export default createPlugin({
             headers.grantToken,
           ),
         );
+      }),
+
+      signMessage: builder.signMessage.effect(function* ({ input, context, errors }) {
+        const actor = yield* requireActor(context, errors);
+        const headers = grantAndKeyHeaders(context);
+        const idempotencyKey = requireIdempotencyKey(headers.idempotencyKey);
+        const operation = yield* Effect.tryPromise(() =>
+          input.chain === "near"
+            ? signMessage(
+                actor,
+                input.agentId,
+                {
+                  message: input.message,
+                  encoding: input.encoding,
+                  ...(input.recipient ? { recipient: input.recipient } : {}),
+                  idempotencyKey,
+                },
+                headers.grantToken,
+              )
+            : signEvmMessage(
+                actor,
+                input.agentId,
+                {
+                  message: input.message,
+                  encoding: input.encoding,
+                  chain: input.chain,
+                  idempotencyKey,
+                },
+                headers.grantToken,
+              ),
+        );
+        const record = yield* Effect.tryPromise(() =>
+          findOperation(actor.tenantId, input.agentId, operation.id),
+        );
+        if (!record) throw new ApiError("operation_not_found", 404);
+        return operationStatus(record);
       }),
     };
   },

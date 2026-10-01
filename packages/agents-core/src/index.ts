@@ -35,11 +35,13 @@ export {
 export { getAgentView, listAgents, loadAgent } from "./modules/agents/service.js";
 export { generateIntent, generateResponse } from "./modules/intents/generate.js";
 export { updateOwnerIntent } from "./modules/intents/repository.js";
-export { readHistory, readStatus } from "./modules/intents/status.js";
+export { operationStatus, readHistory, readStatus } from "./modules/intents/status.js";
 export { submitIntent } from "./modules/intents/submit.js";
 export { readBudget } from "./modules/operations/budget-policy-service.js";
 export { execute, recoverExecution } from "./modules/operations/execution-service.js";
+export { findOperation } from "./modules/operations/repository.js";
 export { requirePrivilegedArtifactDeliveryAllowed } from "./modules/operations/signing-artifact-service.js";
+export { signEvmMessage, signMessage } from "./modules/operations/signing-service.js";
 export {
   listScheduledExecutions,
   readTimelock,

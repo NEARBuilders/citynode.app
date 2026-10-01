@@ -25,7 +25,8 @@ export type StubProvider = {
   state: {
     submissions: number;
     registerCalls: number;
-    policyStatus: "success" | "failed";
+    nearMessageCalls: number;
+    policyStatus: "success" | "failed" | "pending";
     custodyKeys: Map<string, string>;
     controllers: Map<string, string>;
     controller: string;
@@ -44,7 +45,8 @@ export function stubProvider(): StubProvider {
     encryptedPolicies: [] as string[],
     submissions: 0,
     registerCalls: 0,
-    policyStatus: "success" as "success" | "failed",
+    nearMessageCalls: 0,
+    policyStatus: "success" as "success" | "failed" | "pending",
     registerFailure: false,
     controllers: new Map<string, string>(),
     custodyKeys: new Map<string, string>(),
@@ -128,6 +130,13 @@ export function stubProvider(): StubProvider {
       state.controller = input.caller;
       state.controllers.set(apiKey, input.caller);
       return { public_key_hex: "2".repeat(64), signature_hex: "3".repeat(128) };
+    },
+    async signNearMessage() {
+      state.nearMessageCalls += 1;
+      return {
+        public_key: `ed25519:${"4".repeat(64)}`,
+        signature: "5".repeat(128),
+      };
     },
     invalidatePolicyCache() {
       return Promise.resolve({});

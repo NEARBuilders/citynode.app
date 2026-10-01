@@ -24,6 +24,7 @@ import {
   recoverRequestSchema,
   scheduledPageSchema,
   scheduledQuerySchema,
+  signMessageRequestSchema,
   statusResponseSchema,
   submitIntentRequestSchema,
   swapRequestSchema,
@@ -252,6 +253,16 @@ export const contract = {
   recover: oc
     .route({ method: "POST", path: "/agents/recover", summary: "Recover an interrupted execution" })
     .input(recoverRequestSchema.and(z.object({ agentId: z.string() })))
+    .output(statusResponseSchema)
+    .errors({ UNAUTHORIZED: UnauthorizedError }),
+
+  signMessage: oc
+    .route({
+      method: "POST",
+      path: "/agents/sign-message",
+      summary: "Detached signature under a sign-grant (NEP-413 / EIP-191 identity challenge)",
+    })
+    .input(signMessageRequestSchema.and(z.object({ agentId: z.string() })))
     .output(statusResponseSchema)
     .errors({ UNAUTHORIZED: UnauthorizedError }),
 };
