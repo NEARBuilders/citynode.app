@@ -37,6 +37,16 @@ const mark = (message: string) => {
   if (import.meta.env.DEV) console.log(`[Hydrate] ${message}`);
 };
 
+function isAbsoluteHttpUrl(value: string | undefined): value is string {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export interface CoreHydrateOptions {
   /**
    * Loads the app's generated core route config — the only app-specific
@@ -123,9 +133,12 @@ async function composeFromPayload(
         // plain remoteEntry URL cannot resolve — the entry script's global
         // name doesn't match the registered name. Versioned deploys carry
         // the (hashed) manifest URL in the payload; legacy payloads derive
-        // it by stripping the fixed entry name.
-        entry:
-          remote.manifestUrl ?? remote.entry.replace(/\/?remoteEntry\.js$/, "/mf-manifest.json"),
+        // it by stripping the fixed entry name. Only absolute URLs qualify —
+        // a relative manifestUrl would resolve against the page origin and
+        // register the wrong container.
+        entry: isAbsoluteHttpUrl(remote.manifestUrl)
+          ? remote.manifestUrl
+          : remote.entry.replace(/\/?remoteEntry\.js$/, "/mf-manifest.json"),
       })),
     );
     for (const remote of payload.remotes) {

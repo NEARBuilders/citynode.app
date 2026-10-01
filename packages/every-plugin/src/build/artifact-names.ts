@@ -5,6 +5,23 @@ import { z } from "zod";
 export const LEGACY_ENTRY_FILENAME = "remoteEntry.js";
 export const LEGACY_SERVER_ENTRY_FILENAME = "remoteEntry.server.js";
 export const LEGACY_MF_MANIFEST_FILENAME = "mf-manifest.json";
+export const HASHED_ENTRY_PATTERN = "remoteEntry.[contenthash].js";
+export const HASHED_SERVER_ENTRY_PATTERN = "remoteEntry.server.[contenthash].js";
+
+/**
+ * Whether this rsbuild invocation is a disk build (hashed entry names +
+ * legacy aliases exist) or an in-memory dev server. Dev consumers — the
+ * host's html shell, the compose client payload, the readiness probe —
+ * append the legacy fixed name, so dev must emit exactly that name.
+ */
+export function isBuildInvocation(): boolean {
+  return process.env.DEPLOY === "true" || process.env.NODE_ENV !== "development";
+}
+
+export function uiEntryFilename(input: { isBuild: boolean; server?: boolean }): string {
+  if (!input.isBuild) return input.server ? LEGACY_SERVER_ENTRY_FILENAME : LEGACY_ENTRY_FILENAME;
+  return input.server ? HASHED_SERVER_ENTRY_PATTERN : HASHED_ENTRY_PATTERN;
+}
 export const LEGACY_STYLE_FILENAME = "style.css";
 
 const HASH_SEGMENT_PATTERN = /\.[a-f0-9]{8,}\./;

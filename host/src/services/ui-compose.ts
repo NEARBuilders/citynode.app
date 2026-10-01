@@ -137,7 +137,10 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       },
       localRoot: ui.localPath ? resolveLocalRoot(ui.localPath) : undefined,
       manifestUrl: `${ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      browserManifestUrl: ui.entry,
+      // a local slot's `entry` is the relative client convention ("/mf-manifest.json") —
+      // resolving it as a registration manifest fetches the WRONG container (the page
+      // origin's) and breaks the compose; dev derives from webEntry instead (atomic-deploys 08)
+      browserManifestUrl: ui.source === "local" ? undefined : ui.entry,
       webEntry: ui.entryUrl ?? `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
     });
   }

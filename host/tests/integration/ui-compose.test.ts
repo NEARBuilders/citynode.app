@@ -292,6 +292,36 @@ describe("composeUi", () => {
     expect(variant.clientPayload.manifests).toEqual([AUTH_MANIFEST, CORE_MANIFEST]);
   });
 
+  it("local plugin ui slots carry no manifestUrl — a relative entry resolves against the page origin and registers the wrong container", async () => {
+    const config = configWithPlugin();
+    config.plugins!.auth!.ui = {
+      name: "auth-ui",
+      url: "http://localhost:4111",
+      entry: "/mf-manifest.json",
+      source: "local",
+      ssrUrl: "http://localhost:4111/ssr",
+    } as never;
+
+    fetchMock.mockImplementation(async (url: unknown) => {
+      const target = String(url);
+      if (target === "http://localhost:4111/manifest.gen.json") {
+        return { ok: true, status: 200, json: async () => AUTH_MANIFEST };
+      }
+      return { ok: true, status: 200, json: async () => CORE_MANIFEST };
+    });
+    cache.remoteManifests.clear();
+
+    const client = await composeClient(config);
+
+    expect(client?.clientPayload.remotes).toEqual([
+      {
+        key: "auth",
+        name: "auth-ui",
+        entry: "http://localhost:4111/remoteEntry.js",
+      },
+    ]);
+  });
+
   it("local dev composes through the same MF loaders via the local dist container", async () => {
     const localRoot = await mkdtemp(path.join(tmpdir(), "ui-compose-local-"));
     const fixture = async (name: string, manifestName: string) => {

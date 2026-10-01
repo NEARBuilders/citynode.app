@@ -5,6 +5,7 @@ import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
 import { FixMfDataUriPlugin } from "../../build/rspack";
 import { sanitizeContainerName } from "../../ui/manifest/contract";
+import { isBuildInvocation, uiEntryFilename } from "../artifact-names";
 import { hashArtifactsPlugin } from "./hash-artifacts-plugin";
 import { createUiSharedDeps, MANIFEST_FILENAME, restoreManifestPublicPath } from "./index";
 import { uiManifestGenPlugin } from "./manifest-plugin";
@@ -74,6 +75,8 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
     uiManifestGenPlugin({ workspaceRoot: workspaceRootAbsolute, pluginName: manifestName });
   const uiSharedDeps = createUiSharedDeps(pkg, { role, workspaceRoot: workspaceRootAbsolute });
 
+  const isBuild = isBuildInvocation();
+
   const webEnvironment: EnvironmentConfig = {
     plugins: [
       pluginReact(),
@@ -81,17 +84,21 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
       pluginModuleFederation(
         {
           name: normalizedName,
-          filename: "remoteEntry.[contenthash].js",
+          filename: uiEntryFilename({ isBuild }),
           dts: false,
           exposes: webExposes,
           shared: uiSharedDeps,
         },
         { environment: "web" },
       ),
-      hashArtifactsPlugin({
-        entryBase: "remoteEntry",
-        distRoot: path.join(workspaceRootAbsolute, "dist"),
-      }),
+      ...(isBuild
+        ? [
+            hashArtifactsPlugin({
+              entryBase: "remoteEntry",
+              distRoot: path.join(workspaceRootAbsolute, "dist"),
+            }),
+          ]
+        : []),
     ],
     source: { entry: { index: webEntry }, ...(define ? { define } : {}) },
     resolve: { alias: { "@": path.join(workspaceRootAbsolute, "src") } },
@@ -164,7 +171,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
       pluginModuleFederation(
         {
           name: normalizedName,
-          filename: "remoteEntry.server.[contenthash].js",
+          filename: uiEntryFilename({ isBuild, server: true }),
           dts: false,
           exposes: nodeExposes,
           shared: uiSharedDeps,
@@ -172,10 +179,14 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
         { target: "node", environment: "node" },
       ),
       restoreManifestPublicPath(path.resolve(workspaceRootAbsolute, "dist", "ssr")),
-      hashArtifactsPlugin({
-        entryBase: "remoteEntry.server",
-        distRoot: path.resolve(workspaceRootAbsolute, "dist", "ssr"),
-      }),
+      ...(isBuild
+        ? [
+            hashArtifactsPlugin({
+              entryBase: "remoteEntry.server",
+              distRoot: path.resolve(workspaceRootAbsolute, "dist", "ssr"),
+            }),
+          ]
+        : []),
     ],
     source: { entry: { index: nodeEntry } },
     resolve: {
