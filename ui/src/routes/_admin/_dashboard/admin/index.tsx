@@ -31,6 +31,7 @@ import {
   useAppTranslation,
 } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { presentationLabel } from "@/lib/presentation-label";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
@@ -258,10 +259,16 @@ function AdminOverview() {
       <section className="flex flex-col gap-6">
         <SectionHeader title={translate("admin.runtime")} />
         <div className="flex flex-col">
-          <ContextRow label={translate("admin.platformAccount")} value={platformAccount} mono />
-          {tenant && <ContextRow label={translate("common.site")} value={tenant.name} />}
+          <ContextRow
+            id="platform-account"
+            label={translate("admin.platformAccount")}
+            value={platformAccount}
+            mono
+          />
+          {tenant && <ContextRow id="site" label={translate("common.site")} value={tenant.name} />}
           {tenant && (
             <ContextRow
+              id="organization"
               label={translate("common.organization")}
               value={
                 tenantOrganizationSlug ? (
@@ -280,16 +287,23 @@ function AdminOverview() {
           )}
           {tenant?.createdAt && (
             <ContextRow
+              id="created"
               label={translate("things.created")}
               value={<LocalDate value={tenant.createdAt} />}
             />
           )}
           <ContextRow
+            id="name"
             label={translate("common.name")}
             value={user?.name || (isSyntheticEmail(user?.email) ? null : user?.email) || "—"}
           />
-          <ContextRow label={translate("org.role")} value={user?.role ?? "—"} />
           <ContextRow
+            id="role"
+            label={translate("org.role")}
+            value={user?.role ? presentationLabel(user.role, translate) : "—"}
+          />
+          <ContextRow
+            id="wallet"
             label={translate("common.wallet")}
             value={walletAccount ?? translate("wallet.notConnected")}
             mono={!!walletAccount}
@@ -336,19 +350,28 @@ function ManageRow({
   );
 }
 
-function ContextRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  const slug = label.toLowerCase().replace(/\s+/g, "-");
+function ContextRow({
+  id,
+  label,
+  value,
+  mono,
+}: {
+  id: string;
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+}) {
   return (
     <div
       className="flex flex-col gap-1 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
-      data-testid={`admin.stat.${slug}`}
+      data-testid={`admin.stat.${id}`}
     >
-      <span className="text-sm text-muted-foreground" data-testid={`admin.stat.${slug}.label`}>
+      <span className="text-sm text-muted-foreground" data-testid={`admin.stat.${id}.label`}>
         {label}
       </span>
       <span
         className={cn("text-sm break-all text-foreground sm:text-right", mono && "font-mono")}
-        data-testid={`admin.stat.${slug}.value`}
+        data-testid={`admin.stat.${id}.value`}
       >
         {value}
       </span>
