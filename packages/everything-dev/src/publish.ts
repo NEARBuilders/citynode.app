@@ -443,14 +443,28 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       `    ${padRight(key, 28)} uploading ${distFiles.length} files (${totalMb}) → ${urlOrigin}/bundles/${account}/${gateway}/${key}/`,
     );
     const startedAt = Date.now();
-    const result = await uploadWorkspaceDist({
-      origin: storageOrigin,
-      apiKey: storageApiKey,
-      account,
-      gateway,
-      workspace: key,
-      files: distFiles,
-    });
+    // an upload failure aborts the train as a structured error — the
+    // previously published version stays fully live (ticket 05)
+    let result: Awaited<ReturnType<typeof uploadWorkspaceDist>>;
+    try {
+      result = await uploadWorkspaceDist({
+        origin: storageOrigin,
+        apiKey: storageApiKey,
+        account,
+        gateway,
+        workspace: key,
+        files: distFiles,
+      });
+    } catch (error) {
+      return {
+        status: "error",
+        registryUrl,
+        built,
+        skipped,
+        deployResults,
+        error: error instanceof Error ? error.message : `[publish] bundle upload for ${key} failed`,
+      };
+    }
     const report = readBuildReport(join(ws.path, "dist"));
     const ssrReport = readBuildReport(join(ws.path, "dist", "ssr"));
     // the entry SRI keyed by the build report's hashed name; the literal

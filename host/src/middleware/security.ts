@@ -44,6 +44,11 @@ export class SecurityMiddleware extends Context.Service<
     csp: MiddlewareHandler;
   }
 >()("host/SecurityMiddleware") {
+  /**
+   * Boot-frozen (atomic-deploys 06): the CORS allow-list and CSP origins are
+   * derived from the boot `ConfigService` value, never from the
+   * `RuntimeSnapshot` — API/auth surfaces do not hot-swap.
+   */
   static Live = Layer.effect(
     SecurityMiddleware,
     Effect.gen(function* () {

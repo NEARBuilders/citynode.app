@@ -39,6 +39,10 @@ import {
 
 export interface SsrRenderDeps {
   config: RuntimeConfig;
+  /** per-request base-config override (atomic-deploys 06): when present, the
+   * request resolves against the CURRENT snapshot's config instead of the
+   * boot-frozen one — in-flight requests keep the state they captured */
+  getBaseConfig?: () => Promise<RuntimeConfig>;
   plugins: PluginResult;
   composeCache?: UiComposeCacheState;
   clientConfigCache?: ClientConfigCacheState;
@@ -138,7 +142,8 @@ export function createSsrRender(deps: SsrRenderDeps) {
 
     let resolved: Awaited<ReturnType<typeof resolveRequestRuntime>>;
     try {
-      resolved = await resolveRequestRuntime(deps.config, request, {
+      const baseConfig = deps.getBaseConfig ? await deps.getBaseConfig() : deps.config;
+      resolved = await resolveRequestRuntime(baseConfig, request, {
         verification: "blocking",
       });
     } catch (error) {

@@ -14,6 +14,7 @@ import { FederationLifecycle } from "./services/federation.server";
 import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { closeMcpServer } from "./services/mcp";
 import { PluginsService } from "./services/plugins";
+import { RuntimeSnapshot } from "./services/runtime-snapshot";
 import { ClientConfigCache } from "./services/ssr-render";
 import {
   composeUi,
@@ -55,6 +56,8 @@ export const createStartServer = (onReady?: () => void) =>
       ? { status: "composing" }
       : { status: "disabled" };
 
+    const snapshot = yield* RuntimeSnapshot;
+    const getBaseConfig = async () => (await Effect.runPromise(snapshot.get)).config;
     const app = new Hono<HonoEnv>();
 
     app.onError((err: unknown, c: Context<HonoEnv>) => {
@@ -141,7 +144,7 @@ export const createStartServer = (onReady?: () => void) =>
       ssrEnabled,
     };
 
-    app.on(["GET", "HEAD"], "*", createStaticAssetProxyHandler(config));
+    app.on(["GET", "HEAD"], "*", createStaticAssetProxyHandler(config, getBaseConfig));
 
     const sessionMiddleware = createSessionMiddleware(plugins);
 
@@ -164,7 +167,14 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.get(
       "*",
-      createSsrFallbackHandler(config, plugins, CSP_STRICT, composeCache, clientConfigCache),
+      createSsrFallbackHandler(
+        config,
+        plugins,
+        CSP_STRICT,
+        composeCache,
+        clientConfigCache,
+        getBaseConfig,
+      ),
     );
 
     const startHttpServer = () => {
@@ -273,6 +283,7 @@ export const runServer = (input: ServerInput): ServerHandle => {
     input.composeCache ? UiComposeCache.layerFrom(input.composeCache) : UiComposeCache.layer,
     ClientConfigCache.layer,
     FederationLifecycle.layer,
+    RuntimeSnapshot.layer.pipe(Layer.provide(ConfigLive)),
   );
 
   const stopMonitor = startIntegrityMonitor(input.config);

@@ -19,8 +19,15 @@ export function createSsrFallbackHandler(
   CSP_STRICT: boolean,
   composeCache?: UiComposeCacheState,
   clientConfigCache?: ClientConfigCacheState,
+  getBaseConfig?: () => Promise<RuntimeConfig>,
 ) {
-  const render = createSsrRender({ config, plugins, composeCache, clientConfigCache });
+  const render = createSsrRender({
+    config,
+    getBaseConfig,
+    plugins,
+    composeCache,
+    clientConfigCache,
+  });
   return async (c: Context<HonoEnv>) => {
     if (c.req.path === "/api" || c.req.path.startsWith("/api/")) {
       return c.notFound();

@@ -214,6 +214,9 @@ export async function setupApiRoutes(
 
   app.use("/api/*", sessionMiddleware);
 
+  // Boot-frozen (atomic-deploys 06): the API plugin's oRPC registration +
+  // merged effect context are built once from the boot config — API plugins
+  // do not hot-swap (restart/rolling via the image leg).
   const apiRouter = plugins.api?.router;
 
   if (!apiRouter) {
