@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { useApiClient } from "@/app";
 import { EmptyState } from "@/components";
 import { Button } from "@/components/ui/button";
+import { useAppTranslation } from "@/i18n/runtime";
 import { StakeNoValidator } from "./-stake-no-validator";
 import { StakeSkeleton } from "./-stake-skeleton";
 import { StakeValidatorList } from "./-stake-validator-list";
@@ -36,16 +37,17 @@ export function StakeNodeContent({
   stakingLoading: boolean;
   validators: Validator[];
 }) {
+  const translate = useAppTranslation();
   if (nodeLoading || stakingLoading) return <StakeSkeleton />;
   if (!node) {
     return (
       <EmptyState
         icon={MagnifyingGlassIcon}
-        title="Community not found"
-        description="It may have moved or not be set up yet."
+        title={translate("community.notFound")}
+        description={translate("community.notFoundDescription")}
         action={
           <Button nativeButton={false} render={<Link to="/stake" />}>
-            See all communities
+            {translate("community.seeAll")}
           </Button>
         }
       />
@@ -64,8 +66,10 @@ export function StakeNodeContent({
       <div className="flex min-w-0 flex-col gap-4 lg:col-span-3">
         {isInherited && sourceNode && (
           <p className="text-sm text-muted-foreground" data-testid="stake.inherited">
-            {node.name} uses the validator from{" "}
-            <span className="font-medium text-foreground">{sourceNode.name}</span>.
+            {translate("stake.inheritsValidator", {
+              community: node.name,
+              source: sourceNode.name,
+            })}
           </p>
         )}
         <StakeValidatorList

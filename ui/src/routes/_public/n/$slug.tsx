@@ -16,6 +16,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { NodeDirectorySkeleton } from "@/components/node-directory-skeleton";
 import { NodeStakeSection } from "@/components/node-stake-section";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -55,16 +56,32 @@ export const Route = createFileRoute("/_public/n/$slug")({
 
     return { slug, parentId, runtimeConfig, nodeName: node?.name ?? null };
   },
-  head: ({ loaderData }) => ({
+  head: ({ loaderData, match }) => ({
     meta: [
       {
-        title: pageTitle(loaderData?.nodeName ?? "Community", loaderData?.runtimeConfig),
+        title: pageTitle(
+          loaderData?.nodeName ??
+            translateAppMessage(
+              "nav.community",
+              undefined,
+              resolveAppLocale(undefined, match.context.locale),
+            ),
+          loaderData?.runtimeConfig,
+        ),
       },
       {
         name: "description",
         content: loaderData?.nodeName
-          ? `${loaderData.nodeName} on CityNode — events, local communities and staking pools.`
-          : "A local community on CityNode.",
+          ? translateAppMessage(
+              "meta.communityDescriptionNamed",
+              { name: loaderData.nodeName },
+              resolveAppLocale(undefined, match.context.locale),
+            )
+          : translateAppMessage(
+              "meta.communityDescription",
+              undefined,
+              resolveAppLocale(undefined, match.context.locale),
+            ),
       },
     ],
   }),
@@ -72,6 +89,7 @@ export const Route = createFileRoute("/_public/n/$slug")({
 });
 
 function NodePage() {
+  const translate = useAppTranslation();
   const { slug, parentId, runtimeConfig } = Route.useLoaderData();
   const apiClient = useApiClient();
   const gateway = getGatewayId(runtimeConfig);
@@ -107,14 +125,14 @@ function NodePage() {
       <PageContainer variant="default">
         <EmptyState
           icon={CompassIcon}
-          title="Community not found"
-          description={`There's no community at /n/${slug}. It may have moved or not exist yet.`}
+          title={translate("community.notFound")}
+          description={translate("community.missingNamed", { slug: slug ?? "" })}
           action={
             <Button
               nativeButton={false}
               render={<Link to="/explore" data-testid="node-page.back-to-explore" />}
             >
-              Back to Explore
+              {translate("community.backExplore")}
             </Button>
           }
         />
@@ -130,7 +148,7 @@ function NodePage() {
     hostname && gateway
       ? (buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`)
       : null;
-  const kindLabel = nodeKindLabel(node.kind);
+  const kindLabel = nodeKindLabel(node.kind, undefined, translate);
 
   return (
     <PageContainer variant="default">
@@ -149,7 +167,9 @@ function NodePage() {
               {profile.featured}
             </Badge>
           )}
-          {profile?.active && <Badge variant="success">Recently active</Badge>}
+          {profile?.active && (
+            <Badge variant="success">{translate("community.recentlyActive")}</Badge>
+          )}
         </div>
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex min-w-0 flex-col gap-3">
@@ -176,7 +196,7 @@ function NodePage() {
                   />
                 }
               >
-                Stake NEAR
+                {translate("stake.action")}
                 <ArrowRightIcon />
               </Button>
             )}
@@ -194,7 +214,7 @@ function NodePage() {
                   />
                 )}
               >
-                Visit site
+                {translate("community.visit")}
                 <ArrowUpRightIcon />
               </Button>
             )}
@@ -224,25 +244,31 @@ function NodePage() {
         data-testid="node-page.stats"
         className="grid grid-cols-3 gap-4 border-y border-border py-6 sm:gap-6"
       >
-        <Stat label="Upcoming events" value={events.length} />
+        <Stat label={translate("community.upcoming")} value={events.length} />
         <Stat
-          label={children.length === 1 ? "Local community" : "Local communities"}
+          label={
+            children.length === 1 ? translate("community.local") : translate("community.locals")
+          }
           value={children.length}
         />
         <Stat
-          label={validators.length === 1 ? "Staking pool" : "Staking pools"}
+          label={
+            validators.length === 1
+              ? translate("stake.stakingPool")
+              : translate("stake.stakingPools")
+          }
           value={validators.length}
         />
       </dl>
 
       <section className="flex flex-col gap-6" data-testid="node-page.events">
-        <SectionHeader title="Upcoming events" />
+        <SectionHeader title={translate("community.upcoming")} />
         {events.length > 0 ? (
           <EventList events={events} nodeId={node.id} />
         ) : (
           <div className="flex items-center gap-4 rounded-2xl bg-muted p-6">
             <CalendarBlankIcon className="size-6 shrink-0 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
+            <p className="text-sm text-muted-foreground">{translate("community.noEvents")}</p>
           </div>
         )}
       </section>
@@ -250,8 +276,8 @@ function NodePage() {
       {(childrenLoading || children.length > 0) && (
         <section className="flex flex-col gap-6" data-testid="node-page.children">
           <SectionHeader
-            title="Local communities"
-            description={`States and cities under ${node.name}.`}
+            title={translate("community.locals")}
+            description={translate("community.childrenNamed", { name: node.name ?? "" })}
           />
           <NodeDirectory
             nodes={children}
