@@ -23,7 +23,7 @@ describe("composeWorkspaceVersionManifest", () => {
     expect(manifest.entry).toBe("remoteEntry.cf712c39e56dc37f.js");
     expect(manifest.entryIntegrity).toBe("sha384-entry");
     expect(manifest.ssr).toEqual({
-      entry: "remoteEntry.server.153cffaa67fea40a.js",
+      entry: "ssr/remoteEntry.server.153cffaa67fea40a.js",
       integrity: "sha384-ssr",
     });
     expect(manifest.browserManifest).toEqual({

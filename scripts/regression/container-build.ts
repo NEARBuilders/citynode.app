@@ -9,8 +9,10 @@
  * it derives everything from their own bos.config.json.
  */
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { composeVersionManifest } from "every-plugin/version-manifest";
 
 /**
  * Local production fixture rewriting (ADR 0009): a section named in the plan
@@ -19,15 +21,30 @@ import path from "node:path";
  * artifact to a deployment and local artifacts change every build. Sections
  * absent from the plan stay verbatim.
  */
+interface SlotPin {
+  manifest: string;
+  integrity: string;
+}
+
 interface OriginPlan {
   host?: string;
-  ui?: { production?: string; ssr?: string; name?: string; publicUrl?: string };
+  hostPin?: SlotPin;
+  ui?: { production?: string; ssr?: string; name?: string; publicUrl?: string; pin?: SlotPin };
   api?: string;
+  apiPin?: SlotPin;
   auth?: string;
-  authUi?: { production?: string; ssr?: string; name?: string; publicUrl?: string };
+  authPin?: SlotPin;
+  authUi?: { production?: string; ssr?: string; name?: string; publicUrl?: string; pin?: SlotPin };
   plugins?: Record<
     string,
-    { production?: string; ui?: string; uiName?: string; uiPublicUrl?: string }
+    {
+      production?: string;
+      ui?: string;
+      uiName?: string;
+      uiPublicUrl?: string;
+      pin?: SlotPin;
+      uiPin?: SlotPin;
+    }
   >;
 }
 
@@ -47,7 +64,15 @@ function rewriteUi<
   T extends { production?: string; ssr?: string; name?: string; publicUrl?: string },
 >(
   ui: T,
-  planned: { production?: string; ssr?: string; name?: string; publicUrl?: string } | undefined,
+  planned:
+    | {
+        production?: string;
+        ssr?: string;
+        name?: string;
+        publicUrl?: string;
+        pin?: SlotPin;
+      }
+    | undefined,
 ): T {
   if (!planned) return ui;
   const next = stripIntegrity(ui);
@@ -65,6 +90,9 @@ function rewriteUi<
   if (planned.publicUrl !== undefined) {
     next.publicUrl = planned.publicUrl;
   }
+  if (planned.pin !== undefined) {
+    (next as Record<string, unknown>).pin = planned.pin;
+  }
   return next;
 }
 
@@ -76,14 +104,22 @@ function rewritePluginRef(
         ui?: string;
         uiName?: string;
         uiPublicUrl?: string;
+        pin?: SlotPin;
+        uiPin?: SlotPin;
       }
     | undefined,
 ): Record<string, unknown> {
   if (!planned) return plugin;
-  const next =
-    planned.production !== undefined
-      ? stripIntegrity({ ...plugin, production: planned.production })
-      : stripIntegrity(plugin);
+  const next = {
+    ...stripIntegrity(
+      planned.production !== undefined
+        ? { ...plugin, production: planned.production }
+        : plugin,
+    ),
+  } as Record<string, unknown>;
+  if (planned.pin !== undefined) {
+    next.pin = planned.pin;
+  }
   if (next.ui) {
     next.ui = rewriteUi(
       { ...(next.ui as Record<string, unknown>) },
@@ -91,6 +127,7 @@ function rewritePluginRef(
         ...(planned.ui ? { production: planned.ui } : {}),
         ...(planned.uiName ? { name: planned.uiName } : {}),
         ...(planned.uiPublicUrl ? { publicUrl: planned.uiPublicUrl } : {}),
+        ...(planned.uiPin ? { pin: planned.uiPin } : {}),
       },
     );
   }
@@ -104,7 +141,11 @@ function prepareLocalProductionConfig(
   const app = { ...config.app } as Record<string, unknown>;
 
   if (app.host && plan.host !== undefined) {
-    app.host = { ...(app.host as Record<string, unknown>), production: plan.host };
+    app.host = {
+      ...(app.host as Record<string, unknown>),
+      production: plan.host,
+      ...(plan.hostPin ? { pin: plan.hostPin } : {}),
+    };
   }
 
   if (app.ui) {
@@ -112,13 +153,22 @@ function prepareLocalProductionConfig(
   }
 
   if (app.api && plan.api !== undefined) {
-    app.api = stripIntegrity({ ...(app.api as Record<string, unknown>), production: plan.api });
+    app.api = {
+      ...stripIntegrity({ ...(app.api as Record<string, unknown>), production: plan.api }),
+      ...(plan.apiPin ? { pin: plan.apiPin } : {}),
+    };
   }
 
   if (app.auth) {
     let auth =
       plan.auth !== undefined
-        ? stripIntegrity({ ...(app.auth as Record<string, unknown>), production: plan.auth })
+        ? {
+            ...stripIntegrity({
+              ...(app.auth as Record<string, unknown>),
+              production: plan.auth,
+            }),
+            ...(plan.authPin ? { pin: plan.authPin } : {}),
+          }
         : app.auth;
     const authRef = auth as Record<string, unknown>;
     if (authRef.ui) {
@@ -211,6 +261,71 @@ const ports = {
 
 const sanitizeContainerName = (pkgName: string): string => pkgName.replace(/[^A-Za-z0-9_]/g, "_");
 
+const sri384 = (bytes: string | Uint8Array): string =>
+  `sha384-${createHash("sha384").update(bytes).digest("base64")}`;
+
+function readBuildReport(
+  distDir: string,
+): { entry: string; browserManifest?: string; css?: string } | null {
+  const reportPath = path.join(root, distDir, "build-report.json");
+  if (!existsSync(reportPath)) return null;
+  try {
+    const report = JSON.parse(readFileSync(reportPath, "utf8")) as { entry?: string };
+    if (typeof report.entry !== "string" || !report.entry) return null;
+    return report as { entry: string; browserManifest?: string; css?: string };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The fixture pins every slot it serves (ADR 0009 amendment: version-manifest
+ * pins are the only production slot shape). Composes the workspace's version
+ * manifest from its dist build reports + locally-computed SRI — the staged
+ * static servers ARE the storage boundary here — writes it at
+ * `versions/<version>.json` inside the dist (both the image copy and the
+ * BOS_BUNDLE_DIR namespace copy carry it), and returns the slot's `pin`.
+ */
+function pinDist(distDir: string, ssrDistDir?: string): SlotPin {
+  const report = readBuildReport(distDir);
+  if (!report) {
+    throw new Error(
+      `[container-build] ${distDir} has no build-report.json — the fixture pins every ` +
+        `remote slot (atomic-deploys hard break); rebuild the workspace`,
+    );
+  }
+  const ssrReport = ssrDistDir ? readBuildReport(ssrDistDir) : null;
+  const manifest = composeVersionManifest({
+    builtAt: new Date().toISOString(),
+    entry: report.entry,
+    entryIntegrity: sri384(readFileSync(path.join(root, distDir, report.entry))),
+    ...(ssrReport
+      ? {
+          ssr: {
+            entry: `ssr/${ssrReport.entry}`,
+            integrity: sri384(readFileSync(path.join(root, ssrDistDir!, ssrReport.entry))),
+          },
+        }
+      : {}),
+    ...(report.browserManifest
+      ? {
+          browserManifest: {
+            file: report.browserManifest,
+            integrity: sri384(readFileSync(path.join(root, distDir, report.browserManifest))),
+          },
+        }
+      : {}),
+    ...(report.css
+      ? { assets: { css: sri384(readFileSync(path.join(root, distDir, report.css))) } }
+      : {}),
+  });
+  const manifestFile = `versions/${manifest.version}.json`;
+  const body = `${JSON.stringify(manifest, null, 2)}\n`;
+  mkdirSync(path.join(root, distDir, "versions"), { recursive: true });
+  writeFileSync(path.join(root, distDir, manifestFile), body);
+  return { manifest: manifestFile, integrity: sri384(body) };
+}
+
 const stage = () => {
   rmSync(imageDir, { recursive: true, force: true });
   mkdirSync(imageDir, { recursive: true });
@@ -229,6 +344,23 @@ const stage = () => {
     typeof authDevelopment === "string" && authDevelopment.startsWith("local:")
       ? authDevelopment.slice("local:".length)
       : null;
+
+  // Slot pins are composed FIRST, from the repo dist dirs, so both the image
+  // copy and the namespace copy carry the version manifests.
+  const pins: Record<string, SlotPin> = {
+    host: pinDist("host/dist"),
+    ui: pinDist("ui/dist", "ui/dist/ssr"),
+    api: pinDist("api/dist"),
+    ...(authWorkspace
+      ? {
+          auth: pinDist(path.join(authWorkspace, "dist")),
+          authUi: pinDist("plugins/auth/ui/dist"),
+        }
+      : {}),
+    ...Object.fromEntries(
+      localPlugins.map(([key, workspace]) => [key, pinDist(path.join(workspace, "dist"))]),
+    ),
+  };
 
   copyDist("host/dist", "host");
   copyDist("ui/dist", "ui");
@@ -278,14 +410,19 @@ const stage = () => {
 
   const plan = {
     host: `http://localhost:${ports.hostDist}`,
+    hostPin: pins.host,
     ui: {
       production: slotUrl(ports.ui, "ui"),
+      pin: pins.ui,
     },
     api: `http://localhost:${ports.api}`,
+    apiPin: pins.api,
     auth: slotUrl(ports.auth, "auth"),
+    authPin: pins.auth,
     authUi: {
       production: slotUrl(ports.authUi, "auth-ui"),
       name: sanitizeContainerName(authPkgName),
+      pin: pins.authUi,
     },
     plugins: Object.fromEntries(
       localPlugins.map(([key]) => {
@@ -295,6 +432,7 @@ const stage = () => {
           key,
           {
             production: slotUrl(port, key),
+            pin: pins[key],
           },
         ];
       }),

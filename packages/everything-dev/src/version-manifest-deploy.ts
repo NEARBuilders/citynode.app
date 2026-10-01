@@ -42,7 +42,9 @@ export function composeWorkspaceVersionManifest(input: {
     builtAt: new Date().toISOString(),
     entry: report.entry,
     entryIntegrity,
-    ...(ssrEntry && ssrIntegrity ? { ssr: { entry: ssrEntry, integrity: ssrIntegrity } } : {}),
+    ...(ssrEntry && ssrIntegrity
+      ? { ssr: { entry: `ssr/${ssrEntry}`, integrity: ssrIntegrity } }
+      : {}),
     ...(report.browserManifest && integrityMap[report.browserManifest]
       ? {
           browserManifest: {

@@ -1121,7 +1121,7 @@ async function deriveVersionManifestFields(
   const derive = async (
     label: string,
     slotConfig: { pin?: unknown } | undefined,
-    slot: { url?: string; source?: string } | undefined,
+    slot: { url?: string; remoteUrl?: string; source?: string } | undefined,
     apply: (resolved: ResolvedSlotVersion) => void,
   ): Promise<void> => {
     if (!slot || slot.source !== "remote" || !slot.url) return;
@@ -1140,7 +1140,10 @@ async function deriveVersionManifestFields(
           `a version manifest outside development (pre-atomic-deploy config; redeploy required)`,
       );
     }
-    const resolved = await resolveSlotVersion({ base: slot.url, pin });
+    // The pin resolves against the slot's REMOTE base — the host slot's `url`
+    // is its own listening origin (the bytes it would serve don't exist
+    // there); its `remoteUrl` carries the deployment bundle base.
+    const resolved = await resolveSlotVersion({ base: slot.remoteUrl ?? slot.url, pin });
     apply(resolved);
   };
 
