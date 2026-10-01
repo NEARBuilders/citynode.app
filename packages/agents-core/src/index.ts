@@ -38,10 +38,17 @@ export { updateOwnerIntent } from "./modules/intents/repository.js";
 export { operationStatus, readHistory, readStatus } from "./modules/intents/status.js";
 export { submitIntent } from "./modules/intents/submit.js";
 export { readBudget } from "./modules/operations/budget-policy-service.js";
+export { commitExecutionDispatch } from "./modules/operations/execution-dispatch.js";
 export { execute, recoverExecution } from "./modules/operations/execution-service.js";
-export { findOperation } from "./modules/operations/repository.js";
+export {
+  claimOperationDispatch,
+  createPendingOperation,
+  findOperation,
+  sweepUncommittedOperations,
+} from "./modules/operations/repository.js";
 export { requirePrivilegedArtifactDeliveryAllowed } from "./modules/operations/signing-artifact-service.js";
 export { signEvmMessage, signMessage } from "./modules/operations/signing-service.js";
+export { readBudgetFor, refundSpend } from "./modules/operations/spend-budget.js";
 export {
   listScheduledExecutions,
   readTimelock,
@@ -50,8 +57,10 @@ export { balanceList, walletView } from "./modules/wallet/balance-service.js";
 // Service surface for the agents plugin shell (named exports only — the module
 // families collide under star re-export; the shell imports exactly these).
 export { configurePolicyStorageEstimator } from "./modules/wallet/owner-policy-preparation.js";
+export { finalizePolicyOperation } from "./modules/wallet/policy-finalization.js";
 export { requireReadyPolicy } from "./modules/wallet/policy-readiness.js";
 export { readLimits, readPolicy, readPolicyHistory } from "./modules/wallet/policy-service.js";
+export { sweepUnsettledPolicies } from "./modules/wallet/policy-settlement.js";
 export type { Actor } from "./shared/actor.js";
 export * from "./shared/actor.js";
 export * from "./shared/audit-retention.js";
