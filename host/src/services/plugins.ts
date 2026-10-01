@@ -2,6 +2,7 @@ import { createInstance, getInstance } from "@module-federation/enhanced/runtime
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
+import { DEV_ENTRY_FILENAME } from "every-plugin/build/artifact-names";
 import type { PluginLoadFailureInfo } from "every-plugin/errors";
 import { classifyPluginFailure, PluginRuntimeError } from "every-plugin/errors";
 import { loadRemoteWithRetry } from "every-plugin/remote-entry";
@@ -468,7 +469,7 @@ function loadPluginEntryEffect(
     const remoteUrl = resolveEntryUrlForEnv({
       entryUrl: entry.config.entryUrl,
       env,
-      devFixed: `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`,
+      devFixed: `${entry.config.url.replace(/\/$/, "")}/${DEV_ENTRY_FILENAME}`,
       slot: entry.key,
     });
     const result = yield* loadRemoteWithRetry<Omit<HostPluginEntry, "key" | "name">>({

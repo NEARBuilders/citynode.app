@@ -1,3 +1,4 @@
+import { DEV_ENTRY_FILENAME } from "every-plugin/build/artifact-names";
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
 import { resolveEntryUrlForEnv } from "everything-dev/ui/manifest";
 import type { ClientRuntimeConfig, RuntimeConfig } from "../services/config";
@@ -25,7 +26,7 @@ export function renderClientShellHtml(
   const coreEntrySrc = resolveEntryUrlForEnv({
     entryUrl: runtimeSourceConfig.ui.entryUrl,
     env: runtimeSourceConfig.env,
-    devFixed: `${assetsUrl}/remoteEntry.js${uiVersion}`,
+    devFixed: `${assetsUrl}/${DEV_ENTRY_FILENAME}${uiVersion}`,
     slot: "ui",
   });
 
@@ -39,7 +40,7 @@ export function renderClientShellHtml(
           const pluginSrc = resolveEntryUrlForEnv({
             entryUrl: ui.entryUrl,
             env: runtimeSourceConfig.env,
-            devFixed: `${ui.url.replace(/\/$/, "")}/remoteEntry.js`,
+            devFixed: `${ui.url.replace(/\/$/, "")}/${DEV_ENTRY_FILENAME}`,
             slot: plugin.name,
           });
           return [

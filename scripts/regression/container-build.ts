@@ -11,7 +11,137 @@
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { prepareLocalProductionConfig } from "../../packages/everything-dev/src/local-prod-config";
+
+/**
+ * Local production fixture rewriting (ADR 0009): a section named in the plan
+ * has its production origin rewritten (when given) and its ssr URL set (when
+ * given) or dropped; its integrity fields are dropped, because hashes bind an
+ * artifact to a deployment and local artifacts change every build. Sections
+ * absent from the plan stay verbatim.
+ */
+interface OriginPlan {
+  host?: string;
+  ui?: { production?: string; ssr?: string; name?: string; publicUrl?: string };
+  api?: string;
+  auth?: string;
+  authUi?: { production?: string; ssr?: string; name?: string; publicUrl?: string };
+  plugins?: Record<
+    string,
+    { production?: string; ui?: string; uiName?: string; uiPublicUrl?: string }
+  >;
+}
+
+type ConfigSection = Record<string, unknown> & {
+  integrity?: string;
+  ssrIntegrity?: string;
+};
+
+function stripIntegrity<T extends ConfigSection>(section: T): T {
+  const next = { ...section };
+  delete next.integrity;
+  delete next.ssrIntegrity;
+  return next;
+}
+
+function rewriteUi<
+  T extends { production?: string; ssr?: string; name?: string; publicUrl?: string },
+>(
+  ui: T,
+  planned: { production?: string; ssr?: string; name?: string; publicUrl?: string } | undefined,
+): T {
+  if (!planned) return ui;
+  const next = stripIntegrity(ui);
+  if (planned.production !== undefined) {
+    next.production = planned.production;
+  }
+  if (planned.ssr !== undefined) {
+    next.ssr = planned.ssr;
+  } else {
+    delete next.ssr;
+  }
+  if (planned.name !== undefined) {
+    next.name = planned.name;
+  }
+  if (planned.publicUrl !== undefined) {
+    next.publicUrl = planned.publicUrl;
+  }
+  return next;
+}
+
+function rewritePluginRef(
+  plugin: Record<string, unknown>,
+  planned:
+    | {
+        production?: string;
+        ui?: string;
+        uiName?: string;
+        uiPublicUrl?: string;
+      }
+    | undefined,
+): Record<string, unknown> {
+  if (!planned) return plugin;
+  const next =
+    planned.production !== undefined
+      ? stripIntegrity({ ...plugin, production: planned.production })
+      : stripIntegrity(plugin);
+  if (next.ui) {
+    next.ui = rewriteUi(
+      { ...(next.ui as Record<string, unknown>) },
+      {
+        ...(planned.ui ? { production: planned.ui } : {}),
+        ...(planned.uiName ? { name: planned.uiName } : {}),
+        ...(planned.uiPublicUrl ? { publicUrl: planned.uiPublicUrl } : {}),
+      },
+    );
+  }
+  return next;
+}
+
+function prepareLocalProductionConfig(
+  config: Record<string, unknown> & { app?: Record<string, unknown>; plugins?: unknown },
+  plan: OriginPlan,
+): Record<string, unknown> {
+  const app = { ...config.app } as Record<string, unknown>;
+
+  if (app.host && plan.host !== undefined) {
+    app.host = { ...(app.host as Record<string, unknown>), production: plan.host };
+  }
+
+  if (app.ui) {
+    app.ui = rewriteUi(app.ui as Record<string, unknown>, plan.ui);
+  }
+
+  if (app.api && plan.api !== undefined) {
+    app.api = stripIntegrity({ ...(app.api as Record<string, unknown>), production: plan.api });
+  }
+
+  if (app.auth) {
+    let auth =
+      plan.auth !== undefined
+        ? stripIntegrity({ ...(app.auth as Record<string, unknown>), production: plan.auth })
+        : app.auth;
+    const authRef = auth as Record<string, unknown>;
+    if (authRef.ui) {
+      auth = { ...authRef, ui: rewriteUi(authRef.ui as Record<string, unknown>, plan.authUi) };
+    }
+    app.auth = auth;
+  }
+
+  let plugins = config.plugins;
+  if (plugins && plan.plugins) {
+    const next: Record<string, unknown> = {};
+    for (const [key, plugin] of Object.entries(plugins)) {
+      if (typeof plugin === "string") {
+        next[key] = plugin;
+        continue;
+      }
+      next[key] = rewritePluginRef(plugin as Record<string, unknown>, plan.plugins[key]);
+    }
+    plugins = next;
+  }
+
+  return { ...config, app, ...(plugins ? { plugins } : {}) };
+}
 
 const root = process.cwd();
 const imageDir = path.join(root, ".bos", "regression", "image");

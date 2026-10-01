@@ -13,8 +13,12 @@ export const STYLE_FILENAME = "style.css";
 export const HASHED_ENTRY_PATTERN = "remoteEntry.[contenthash].js";
 export const HASHED_SERVER_ENTRY_PATTERN = "remoteEntry.server.[contenthash].js";
 
-export function isBuildInvocation(): boolean {
-  return process.env.DEPLOY === "true" || process.env.NODE_ENV !== "development";
+/** DEPLOY=true is the one deploy signal: NODE_ENV is unusable here (vitest
+ * runs as "test", the rspack/rsbuild CLIs default "production" even for local
+ * dev watches). Deploy builds emit hashed entries + build reports; everything
+ * else — dev servers, local builds, regression fixtures — emits fixed names. */
+export function isDeployInvocation(): boolean {
+  return process.env.DEPLOY === "true";
 }
 
 export function uiEntryFilename(input: { isBuild: boolean; server?: boolean }): string {

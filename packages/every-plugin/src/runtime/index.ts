@@ -3,6 +3,7 @@ import "@orpc/openapi/extensions/route";
 
 import { createRouterClient } from "@orpc/server";
 import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
+import { DEV_ENTRY_FILENAME } from "../build/artifact-names";
 import type {
   AnyPlugin,
   AnyPluginConstructor,
@@ -298,7 +299,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
 function normalizeRemoteUrl(url: string): string {
   if (!url) return url;
   if (url.endsWith(".js") || url.endsWith(".json")) return url;
-  return `${url.endsWith("/") ? url.slice(0, -1) : url}/remoteEntry.js`;
+  return `${url.endsWith("/") ? url.slice(0, -1) : url}/${DEV_ENTRY_FILENAME}`;
 }
 
 /**

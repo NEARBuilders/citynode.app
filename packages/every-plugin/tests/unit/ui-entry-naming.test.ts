@@ -4,7 +4,7 @@ import {
   DEV_SERVER_ENTRY_FILENAME,
   HASHED_ENTRY_PATTERN,
   HASHED_SERVER_ENTRY_PATTERN,
-  isBuildInvocation,
+  isDeployInvocation,
   uiEntryFilename,
 } from "../../src/build/artifact-names";
 import { createUiRsbuildConfig } from "../../src/build/ui/rsbuild-config";
@@ -33,7 +33,7 @@ describe("uiEntryFilename", () => {
   });
 });
 
-describe("isBuildInvocation", () => {
+describe("isDeployInvocation", () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalDeploy = process.env.DEPLOY;
 
@@ -43,22 +43,18 @@ describe("isBuildInvocation", () => {
     else process.env.DEPLOY = originalDeploy;
   });
 
-  it("is false on dev servers", () => {
-    process.env.NODE_ENV = "development";
-    delete process.env.DEPLOY;
-    expect(isBuildInvocation()).toBe(false);
-  });
-
-  it("is true for production builds", () => {
-    process.env.NODE_ENV = "production";
-    delete process.env.DEPLOY;
-    expect(isBuildInvocation()).toBe(true);
+  it("is false without DEPLOY=true — NODE_ENV is not a deploy signal (vitest runs as test, bundler CLIs default production)", () => {
+    for (const nodeEnv of ["development", "test", "production"]) {
+      process.env.NODE_ENV = nodeEnv;
+      delete process.env.DEPLOY;
+      expect(isDeployInvocation()).toBe(false);
+    }
   });
 
   it("is true under DEPLOY=true even in development", () => {
     process.env.NODE_ENV = "development";
     process.env.DEPLOY = "true";
-    expect(isBuildInvocation()).toBe(true);
+    expect(isDeployInvocation()).toBe(true);
   });
 });
 
@@ -97,9 +93,9 @@ describe("createUiRsbuildConfig artifact aliasing", () => {
     expect(names.node.some((name) => name.includes("hash-artifacts"))).toBe(false);
   });
 
-  it("attaches the dist-aliasing plugin on builds", () => {
+  it("attaches the dist-aliasing plugin on deploy builds", () => {
     process.env.NODE_ENV = "production";
-    delete process.env.DEPLOY;
+    process.env.DEPLOY = "true";
     const names = pluginNames(createUiRsbuildConfig(options));
     expect(names.web.some((name) => name.includes("hash-artifacts"))).toBe(true);
     expect(names.node.some((name) => name.includes("hash-artifacts"))).toBe(true);

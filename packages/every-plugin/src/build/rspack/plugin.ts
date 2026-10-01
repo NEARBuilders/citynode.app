@@ -3,6 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
+import {
+  DEV_ENTRY_FILENAME,
+  findHashedEntry,
+  isDeployInvocation,
+  uiEntryFilename,
+} from "../artifact-names";
 import { CONTRACT_TYPES_FILE, generateContractTypes } from "../contract-types";
 import { BuildReportPlugin } from "./build-report-plugin";
 import { buildSharedDependencies } from "./module-federation";
@@ -83,9 +89,7 @@ export class EmitPluginManifest implements RspackPluginInstance {
         }
 
         const contractSha256 = crypto.createHash("sha256").update(contractTypes).digest("hex");
-        const hashedEntry = Object.keys(compilation.assets).find((name) =>
-          /^remoteEntry\.[a-f0-9]{8,}\.js$/.test(name),
-        );
+        const hashedEntry = findHashedEntry(Object.keys(compilation.assets), "remoteEntry");
         const manifest: Record<string, unknown> = {
           schemaVersion: 1,
           kind: "every-plugin/manifest",
@@ -94,7 +98,7 @@ export class EmitPluginManifest implements RspackPluginInstance {
             version: pluginInfo.version,
           },
           runtime: {
-            remoteEntry: `./${hashedEntry ?? "remoteEntry.js"}`,
+            remoteEntry: `./${hashedEntry ?? DEV_ENTRY_FILENAME}`,
           },
           contract: {
             kind: "orpc",
@@ -162,7 +166,7 @@ export class EveryPluginBuild implements RspackPluginInstance {
 
     new ModuleFederationPlugin({
       name: pluginInfo.normalizedName,
-      filename: "remoteEntry.[contenthash].js",
+      filename: uiEntryFilename({ isBuild: isDeployInvocation() }),
       dts: this.options.dts !== false,
       manifest: {},
       runtimePlugins: [require.resolve("@module-federation/node/runtimePlugin")],

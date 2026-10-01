@@ -223,6 +223,7 @@ export async function buildWorkspaceTargets(opts: {
   const env: Record<string, string> = {
     ...process.env,
     NODE_ENV: opts.deploy ? "production" : "development",
+    ...(opts.deploy ? { DEPLOY: "true" } : {}),
   };
 
   const orderedExisting = opts.deploy
