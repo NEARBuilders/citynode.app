@@ -1,5 +1,7 @@
 import type { useApiClient } from "@/app";
 import { Badge } from "@/components";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 export type ThingProposal = Awaited<
@@ -14,51 +16,55 @@ export type ThingProposalStatusContent = {
   variant: BadgeVariant;
 };
 
-export function getThingProposalStatusContent(proposal: ThingProposal): ThingProposalStatusContent {
+export function getThingProposalStatusContent(
+  proposal: ThingProposal,
+  t: AppTranslator = translateEnglishAppMessage,
+): ThingProposalStatusContent {
   if (proposal.reviewStatus === "pending") {
     return {
-      title: "Pending review",
-      description: "An admin must approve this proposal before the thing goes live.",
+      title: t("things.pending"),
+      description: t("things.pendingDescription"),
       variant: "warning",
     };
   }
   if (proposal.reviewStatus === "approved") {
     if (proposal.applyStatus === "applied") {
       return {
-        title: "Approved",
-        description: "Approved and live in the thing registry.",
+        title: t("dashboard.approved"),
+        description: t("things.approvedDescription"),
         variant: "success",
       };
     }
     if (proposal.applyStatus === "failed") {
       return {
-        title: "Apply failed",
-        description: `Approved, but applying it failed${proposal.applyError ? `: ${proposal.applyError}` : "."}`,
+        title: t("things.applyFailed"),
+        description: t("things.applyFailedDescription"),
         variant: "destructive",
       };
     }
     return {
-      title: "Approved · applying",
-      description: "Approved and being applied to the thing registry.",
+      title: t("things.applying"),
+      description: t("things.applyingDescription"),
       variant: "success",
     };
   }
   if (proposal.reviewStatus === "rejected") {
     return {
-      title: "Rejected",
-      description: proposal.rejectionReason || "This proposal was not approved.",
+      title: t("dashboard.rejected"),
+      description: proposal.rejectionReason || t("things.rejectedDescription"),
       variant: "destructive",
     };
   }
   return {
-    title: "Removed",
-    description: "This proposal is no longer active.",
+    title: t("dashboard.removed"),
+    description: t("things.inactiveDescription"),
     variant: "secondary",
   };
 }
 
 export function ThingProposalStatus({ proposal }: { proposal: ThingProposal }) {
-  const content = getThingProposalStatusContent(proposal);
+  const translate = useAppTranslation();
+  const content = getThingProposalStatusContent(proposal, translate);
 
   return (
     <div className="flex flex-wrap items-center gap-3" data-testid="thing-proposal-status">

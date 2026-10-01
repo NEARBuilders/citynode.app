@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Tabs } from "@/components";
+import { render } from "@/i18n/test-render";
 import { TeamsTab, type TeamsTabTeam } from "./-teams-tab";
 
 const orgMembers = [

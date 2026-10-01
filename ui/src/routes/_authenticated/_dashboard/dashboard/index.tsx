@@ -17,6 +17,7 @@ import {
   SectionHeader,
   Skeleton,
 } from "@/components";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
@@ -39,14 +40,31 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
         : {},
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Home", match.context.runtimeConfig) },
-      { name: "description", content: "Your next steps." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.home",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.homeDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   component: Home,
 });
 
 function Home() {
+  const translate = useAppTranslation();
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const { restricted } = Route.useSearch();
@@ -107,27 +125,30 @@ function Home() {
     !user || organizations.isPending || (!!activeOrgId && tenant.isPending) || passkeys.isPending;
 
   const hasRealEmail = !isSyntheticEmail(user?.email);
-  const steps = getNextSteps({
-    isAnonymous: user?.isAnonymous ?? false,
-    hasPasskey: (passkeys.data?.length ?? 0) > 0,
-    hasNear: !!nearAccountId,
-    hasRealEmail,
-    organizationCount: orgs.length,
-    activeOrganizationName: activeOrg?.name ?? null,
-    community,
-    canManageCommunity: isAdmin || orgRole === "owner" || orgRole === "admin",
-    isAdmin,
-  });
+  const steps = getNextSteps(
+    {
+      isAnonymous: user?.isAnonymous ?? false,
+      hasPasskey: (passkeys.data?.length ?? 0) > 0,
+      hasNear: !!nearAccountId,
+      hasRealEmail,
+      organizationCount: orgs.length,
+      activeOrganizationName: activeOrg?.name ?? null,
+      community,
+      canManageCommunity: isAdmin || orgRole === "owner" || orgRole === "admin",
+      isAdmin,
+    },
+    translate,
+  );
 
   const [addEmailOpen, setAddEmailOpen] = useState(false);
 
   useEffect(() => {
     if (loading || !user || user.isAnonymous || hasRealEmail) return;
     if (!consumeAddEmailPromptPending()) return;
-    toast.info("Add your email so you can sign in from another device.", {
+    toast.info(translate("dashboard.addEmailHint"), {
       duration: Infinity,
       action: {
-        label: "Add email",
+        label: translate("dashboard.addEmailAction"),
         onClick: () => setAddEmailOpen(true),
       },
     });
@@ -140,8 +161,12 @@ function Home() {
       {restricted && <RestrictedAreaNotice area={restricted} />}
       <PageHeader
         headerTestId="home.heading"
-        title={firstName ? `Welcome back, ${firstName}` : "Home"}
-        description="Pick up where you left off."
+        title={
+          firstName
+            ? translate("dashboard.welcomeNamed", { name: firstName ?? "" })
+            : translate("common.home")
+        }
+        description={translate("dashboard.description")}
       />
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
@@ -150,12 +175,12 @@ function Home() {
           )}
           {pending.length > 0 && (
             <section className="flex flex-col gap-6">
-              <SectionHeader title="Invitations" />
+              <SectionHeader title={translate("org.invitations")} />
               <InvitationSteps invitations={pending} />
             </section>
           )}
           <section className="flex flex-col gap-6">
-            <SectionHeader title="Next steps" />
+            <SectionHeader title={translate("dashboard.nextSteps")} />
             {loading ? (
               <div className="flex flex-col gap-3">
                 <Skeleton className="h-20 w-full rounded-2xl" />

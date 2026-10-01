@@ -2,6 +2,7 @@ import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import type { ReactNode } from "react";
 import { Button, SectionHeader } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { useNearAccount } from "@/lib/use-near-account";
 import { SettingsRow } from "./-settings-row";
@@ -20,6 +21,7 @@ export function TenantLiveSite({
   republish: TenantAction;
   children?: ReactNode;
 }) {
+  const translate = useAppTranslation();
   const isDaoOwned = tenant.ownerKind === "dao";
   const daoConnection = useDaoConnection();
   const nearAccountId = useNearAccount();
@@ -27,22 +29,25 @@ export function TenantLiveSite({
     ? daoConnection.status === "connected" && daoConnection.daoAccountId === tenant.accountId
     : !!nearAccountId;
   const blockedReason = !hostname
-    ? "Add an address before republishing."
+    ? translate("tenant.republishAddress")
     : !hasSigningWallet
       ? isDaoOwned
-        ? "Connect the DAO through Trezu to republish."
-        : "Connect your NEAR wallet to republish."
+        ? translate("tenant.republishDao")
+        : translate("tenant.republishWallet")
       : null;
   const bosUrl = `bos://${tenant.accountId}/${gatewayId}`;
   const fastKvUrl = buildRegistryConfigUrl(tenant.accountId, gatewayId);
 
   return (
     <section className="flex flex-col gap-2">
-      <SectionHeader title="Publishing" sectionTestId="tenant.section.publishing" />
+      <SectionHeader
+        title={translate("tenant.publishing")}
+        sectionTestId="tenant.section.publishing"
+      />
       <div className="flex flex-col">
         <SettingsRow
-          label="Published config"
-          description={blockedReason ?? "Push the current settings to the registry again."}
+          label={translate("tenant.publishedConfig")}
+          description={blockedReason ?? translate("tenant.republishDescription")}
           action={
             <Button
               variant="outline"

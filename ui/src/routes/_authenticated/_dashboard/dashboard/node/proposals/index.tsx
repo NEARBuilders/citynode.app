@@ -27,6 +27,8 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { NODE_PLUGIN_ID, nodeProposalsQueryOptions } from "./-node-proposals-query";
 import {
   applyStatusLabel,
@@ -40,6 +42,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/
 });
 
 function NodeProposals() {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const { selectedNode, canReview } = Route.useRouteContext();
@@ -72,11 +75,15 @@ function NodeProposals() {
       });
     },
     onSuccess: async (_, variables) => {
-      toast.success(variables.action === "approve" ? "Proposal approved" : "Proposal rejected");
+      toast.success(
+        variables.action === "approve"
+          ? translate("admin.proposalApproved")
+          : translate("admin.proposalRejected"),
+      );
       setRejectingId(null);
       await queryClient.invalidateQueries({ queryKey });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to review proposal"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   if (!selectedNode) return null;
@@ -88,11 +95,11 @@ function NodeProposals() {
   return (
     <section className="flex flex-col gap-6">
       <SectionHeader
-        title="Changes"
-        description="Proposed changes to this community."
+        title={translate("dashboard.changes")}
+        description={translate("dashboard.changesHint")}
         action={
           <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/apply" />}>
-            Propose a sub-community
+            {translate("dashboard.proposeChild")}
           </Button>
         }
       />
@@ -104,22 +111,22 @@ function NodeProposals() {
         </div>
       ) : proposalsQuery.isError ? (
         <p role="alert" className="text-sm text-destructive">
-          Couldn't load proposals.{" "}
+          {translate("dashboard.proposalsLoadError")}{" "}
           <Button variant="link" size="xs" onClick={() => proposalsQuery.refetch()}>
-            Try again
+            {translate("common.retry")}
           </Button>
         </p>
       ) : proposals.length === 0 ? (
         <EmptyState
           icon={SealCheckIcon}
-          title="No proposals yet"
-          description={`Nothing is waiting for review in ${selectedNode.name}.`}
+          title={translate("dashboard.noProposals")}
+          description={translate("proposal.noneWaitingNamed", { name: selectedNode.name ?? "" })}
         />
       ) : (
         <ItemGroup data-testid="dashboard-node.proposals">
           {proposals.map((proposal) => {
-            const badge = reviewStatusBadge(proposal.reviewStatus);
-            const applied = applyStatusLabel(proposal.applyStatus);
+            const badge = reviewStatusBadge(proposal.reviewStatus, translate);
+            const applied = applyStatusLabel(proposal.applyStatus, translate);
             const reviewable = canReview && proposal.reviewStatus === "pending";
             const isPrimary = reviewable && !primaryUsed;
             if (isPrimary) primaryUsed = true;
@@ -131,14 +138,17 @@ function NodeProposals() {
               >
                 <ItemContent className="min-w-0">
                   <ItemTitle className="max-w-full">
-                    <span className="truncate">{proposalTitle(proposal.payload, "Proposal")}</span>
+                    <span className="truncate">
+                      {proposalTitle(proposal.payload, "Proposal", translate)}
+                    </span>
                   </ItemTitle>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={badge.variant}>{badge.label}</Badge>
                     {applied && <Badge variant="outline">{applied}</Badge>}
                   </div>
                   <ItemDescription>
-                    Submitted <LocalDate value={proposal.createdAt} format="relative" />
+                    {translate("common.submitted")}
+                    <LocalDate value={proposal.createdAt} format="relative" />
                     {proposal.rejectionReason ? ` · ${proposal.rejectionReason}` : ""}
                   </ItemDescription>
                 </ItemContent>
@@ -156,7 +166,7 @@ function NodeProposals() {
                       />
                     }
                   >
-                    Details
+                    {translate("things.details")}
                   </Button>
                   {reviewable && (
                     <>
@@ -172,12 +182,16 @@ function NodeProposals() {
                           })
                         }
                       >
-                        Approve
+                        {translate("common.approve")}
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           render={
-                            <Button variant="ghost" size="icon-sm" aria-label="More actions" />
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={translate("dashboard.moreActions")}
+                            />
                           }
                         >
                           <DotsThreeIcon />
@@ -187,7 +201,7 @@ function NodeProposals() {
                             variant="destructive"
                             onClick={() => setRejectingId(proposal.id)}
                           >
-                            Reject
+                            {translate("common.reject")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -205,10 +219,10 @@ function NodeProposals() {
         onOpenChange={(open) => {
           if (!open) setRejectingId(null);
         }}
-        title="Reject this proposal?"
-        description="The submitter will see it as rejected. This can't be undone."
-        confirmLabel="Reject"
-        cancelLabel="Cancel"
+        title={translate("admin.proposal.rejectTitle")}
+        description={translate("dashboard.rejectHint")}
+        confirmLabel={translate("common.reject")}
+        cancelLabel={translate("common.cancel")}
         variant="destructive"
         isPending={reviewMutation.isPending}
         onConfirm={() => {

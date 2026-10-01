@@ -34,6 +34,8 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
   CONFIG_WRITE_PLAN,
@@ -55,6 +57,7 @@ function Stat({ label, value, testId }: { label: string; value: string; testId: 
 }
 
 function NodeOverview() {
+  const translate = useAppTranslation();
   const { runtimeConfig, selectedNode, summary, stakingSourceNode, tenant, auth, canManage } =
     Route.useRouteContext();
   const apiClient = useApiClient();
@@ -124,22 +127,22 @@ function NodeOverview() {
       )}
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         <Stat
-          label="Upcoming events"
+          label={translate("community.upcoming")}
           value={activities.isSuccess ? String(upcoming.length) : "—"}
           testId="dashboard-node.stat-events"
         />
         <Stat
-          label="Validators"
+          label={translate("common.validators")}
           value={String(summary.validators.length)}
           testId="dashboard-node.stat-validators"
         />
         <Stat
-          label="Sub-communities"
+          label={translate("dashboard.subcommunities")}
           value={String(summary.children.length)}
           testId="dashboard-node.stat-children"
         />
         <Stat
-          label="Staking"
+          label={translate("common.staking")}
           value={
             summary.stakingValidators.validators.length === 0
               ? "—"
@@ -157,10 +160,10 @@ function NodeOverview() {
             <HourglassMediumIcon />
           </ItemMedia>
           <ItemContent className="min-w-0">
-            <ItemTitle>Awaiting votes · #{pendingConfig.id}</ItemTitle>
-            <ItemDescription>
-              A community config change (e.g. a custom UI bundle) is waiting for DAO approval.
-            </ItemDescription>
+            <ItemTitle>
+              {translate("lifecycle.awaitingProposal", { proposal: pendingConfig.id })}
+            </ItemTitle>
+            <ItemDescription>{translate("dashboard.configWaitingHint")}</ItemDescription>
           </ItemContent>
           <ItemActions>
             <Button
@@ -172,7 +175,7 @@ function NodeOverview() {
               }
               data-testid="dashboard-node.pending-config-open"
             >
-              Review
+              {translate("common.review")}
             </Button>
           </ItemActions>
         </Item>
@@ -180,7 +183,7 @@ function NodeOverview() {
 
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title="Coming up"
+          title={translate("dashboard.comingUp")}
           action={
             <Button
               size="sm"
@@ -189,15 +192,15 @@ function NodeOverview() {
               data-testid="dashboard-node.add-event"
             >
               <CalendarDotsIcon />
-              Add event
+              {translate("events.add")}
             </Button>
           }
         />
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {activities.isError
-              ? "Events are managed by this community's owners."
-              : "Nothing scheduled. Add an event to show up on Explore."}
+              ? translate("dashboard.eventsOwnerHint")
+              : translate("dashboard.noEventsHint")}
           </p>
         ) : (
           <ItemGroup>
@@ -209,7 +212,9 @@ function NodeOverview() {
                 <ItemContent className="min-w-0">
                   <ItemTitle>
                     {event.title}
-                    {event.status === "draft" && <Badge variant="secondary">Draft</Badge>}
+                    {event.status === "draft" && (
+                      <Badge variant="secondary">{translate("events.draft")}</Badge>
+                    )}
                   </ItemTitle>
                   <ItemDescription>
                     {event.startsAt && <LocalDate value={event.startsAt} format="datetime" />}
@@ -222,10 +227,10 @@ function NodeOverview() {
                     variant="outline"
                     nativeButton={false}
                     render={contentLink("onboarding")}
-                    aria-label={`Onboarding for ${event.title}`}
+                    aria-label={translate("station.onboardingNamed", { event: event.title ?? "" })}
                   >
                     <QrCodeIcon />
-                    <span className="hidden sm:inline">Onboarding</span>
+                    <span className="hidden sm:inline">{translate("org.onboarding")}</span>
                   </Button>
                 </ItemActions>
               </Item>
@@ -238,15 +243,17 @@ function NodeOverview() {
 
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title="Validators"
+          title={translate("common.validators")}
           description={
             stakingIsInherited
-              ? `Stake goes to ${stakingSourceNode?.name ?? "a parent community"}'s validators.`
-              : "Stake goes to this community's validators."
+              ? translate("stake.sourceNamed", {
+                  name: stakingSourceNode?.name ?? translate("dashboard.parentFallback"),
+                })
+              : translate("dashboard.stakeHintDirect")
           }
         />
         {summary.stakingValidators.validators.length === 0 && summary.validators.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No validators yet.</p>
+          <p className="text-sm text-muted-foreground">{translate("tenant.noValidators")}</p>
         ) : (
           <NodeValidatorTable
             validators={
@@ -260,7 +267,7 @@ function NodeOverview() {
 
       {summary.children.length > 0 && (
         <section className="flex flex-col gap-6">
-          <SectionHeader title="Sub-communities" />
+          <SectionHeader title={translate("dashboard.subcommunities")} />
           <ItemGroup>
             {summary.children.map((child) => {
               const childUrl = gateway ? buildTenantUrl(child.slug, gateway) : null;
@@ -272,7 +279,9 @@ function NodeOverview() {
                   <ItemContent className="min-w-0">
                     <ItemTitle>{child.name}</ItemTitle>
                     <ItemDescription>
-                      <span className="capitalize">{child.kind}</span>
+                      <span className="capitalize">
+                        {presentationLabel(child.kind ?? "member", translate)}
+                      </span>
                     </ItemDescription>
                   </ItemContent>
                   {childUrl && (
@@ -285,7 +294,7 @@ function NodeOverview() {
                           <a {...props} href={childUrl} target="_blank" rel="noopener noreferrer" />
                         )}
                       >
-                        Visit
+                        {translate("dashboard.visit")}
                         <ArrowSquareOutIcon />
                       </Button>
                     </ItemActions>

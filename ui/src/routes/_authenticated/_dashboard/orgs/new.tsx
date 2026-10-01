@@ -23,20 +23,39 @@ import {
   InputGroupText,
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { deriveSlug, generateSlug, suggestAvailableSlug } from "@/lib/slug";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/new")({
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("New organization", match.context.runtimeConfig) },
-      { name: "description", content: "Create a new organization." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.newOrganization",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.newOrganizationDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   component: NewOrganization,
 });
 
 function NewOrganization() {
+  const translate = useAppTranslation();
   const router = useRouter();
   const auth = useAuthClient();
   const apiClient = useApiClient();
@@ -53,7 +72,7 @@ function NewOrganization() {
       return data;
     },
     onSuccess: async (data) => {
-      toast.success(`Organization "${data?.name}" created`);
+      toast.success(translate("org.createdNamed", { name: data?.name ?? "" }));
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await queryClient.refetchQueries({ queryKey: ["organizations"] });
       if (data?.slug) {
@@ -64,7 +83,7 @@ function NewOrganization() {
       }
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to create organization");
+      toast.error(appErrorMessage(error, translate));
     },
   });
 
@@ -109,16 +128,16 @@ function NewOrganization() {
   const slugStatus = slugChecking
     ? "checking"
     : slugTaken
-      ? "taken"
+      ? translate("org.handleTaken")
       : slugValue
-        ? "available"
+        ? translate("org.handleAvailable")
         : "idle";
 
   return (
     <PageContainer variant="narrow">
       <PageHeader
-        title="New organization"
-        description="You'll be the owner. Invite people once it's created."
+        title={translate("org.new")}
+        description={translate("org.ownerHint")}
         headerTestId="orgs.new.heading"
       />
 
@@ -133,14 +152,15 @@ function NewOrganization() {
           <form.Field
             name="name"
             validators={{
-              onChange: ({ value }) => (!value.trim() ? "Name is required" : undefined),
+              onChange: ({ value }) =>
+                !value.trim() ? translate("application.displayNameRequired") : undefined,
             }}
           >
             {(field) => {
               const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
               return (
                 <Field data-invalid={errors.length > 0 || undefined}>
-                  <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+                  <FieldLabel htmlFor={field.name}>{translate("common.name")}</FieldLabel>
                   <Input
                     id={field.name}
                     name={field.name}
@@ -160,7 +180,7 @@ function NewOrganization() {
                         { dontUpdateMeta: true },
                       );
                     }}
-                    placeholder="My Team"
+                    placeholder={translate("org.nameExample")}
                     aria-invalid={errors.length > 0 || undefined}
                   />
                   {errors.length > 0 ? <FieldError>{errors.join(", ")}</FieldError> : null}
@@ -173,9 +193,9 @@ function NewOrganization() {
             name="slug"
             validators={{
               onChange: ({ value }) => {
-                if (!value) return "Handle is required";
+                if (!value) return translate("application.handleRequired");
                 if (!/^[a-z0-9-]+$/.test(value)) {
-                  return "Use lowercase letters, numbers and hyphens";
+                  return translate("application.handleInvalid");
                 }
                 return undefined;
               },
@@ -185,7 +205,7 @@ function NewOrganization() {
               const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
               return (
                 <Field data-invalid={errors.length > 0 || undefined}>
-                  <FieldLabel htmlFor={field.name}>Handle</FieldLabel>
+                  <FieldLabel htmlFor={field.name}>{translate("org.handle")}</FieldLabel>
                   <InputGroup>
                     <InputGroupAddon>
                       <InputGroupText>@</InputGroupText>
@@ -210,9 +230,15 @@ function NewOrganization() {
                       {slugStatus === "checking" ? (
                         <Spinner />
                       ) : slugStatus === "available" ? (
-                        <CheckCircleIcon className="text-success" aria-label="available" />
+                        <CheckCircleIcon
+                          className="text-success"
+                          aria-label={translate("org.handleAvailable")}
+                        />
                       ) : slugStatus === "taken" ? (
-                        <XCircleIcon className="text-destructive" aria-label="taken" />
+                        <XCircleIcon
+                          className="text-destructive"
+                          aria-label={translate("org.handleTaken")}
+                        />
                       ) : null}
                     </InputGroupAddon>
                   </InputGroup>
@@ -221,8 +247,8 @@ function NewOrganization() {
                   ) : (
                     <FieldDescription>
                       {slugStatus === "taken"
-                        ? "Taken. We'll suggest a free one, or pick your own."
-                        : "Used in links to your organization."}
+                        ? translate("org.handleTakenHint")
+                        : translate("org.handleHint")}
                     </FieldDescription>
                   )}
                 </Field>
@@ -243,12 +269,12 @@ function NewOrganization() {
                 disabled={createMutation.isPending || !canSubmit}
                 data-testid="orgs.new.submit"
               >
-                {createMutation.isPending ? "Creating…" : "Create organization"}
+                {createMutation.isPending ? translate("common.creating") : translate("org.create")}
               </Button>
             )}
           </form.Subscribe>
           <Button variant="ghost" nativeButton={false} render={<Link to="/orgs" />}>
-            Cancel
+            {translate("common.cancel")}
           </Button>
         </div>
       </form>

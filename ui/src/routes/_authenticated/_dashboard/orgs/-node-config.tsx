@@ -17,13 +17,13 @@ import {
   buildTenantUrl,
   computeSsrEntryIntegrity,
   computeUiEntryIntegrity,
+  createTenantConfigDraftSchema,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,
   type IntegrityCheckResult,
   normalizeBundleBaseUrl,
   type TenantConfigDraft,
-  tenantConfigDraftSchema,
   useApiClient,
   useAuthClient,
   verifySsrIntegrity,
@@ -44,7 +44,10 @@ import {
 import { ConnectDao } from "@/components/connect-dao";
 import { FieldGroup } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { describeDaoError, useDaoConnection } from "@/lib/dao-connect";
+import { presentationLabel } from "@/lib/presentation-label";
 import {
   invalidateTenantQueries,
   tenantBindingsQueryOptions,
@@ -79,6 +82,7 @@ export function NodeConfigTab({
   canManage,
   isPlatformAdmin = false,
 }: NodeConfigTabProps) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -143,7 +147,15 @@ export function NodeConfigTab({
     setDraft(buildDraftFromResolvedConfig(resolvedConfig, { title: tenant.name }));
   }, [prefilled, tenant, registryQuery.isSuccess, resolvedConfig]);
 
-  const parsedDraft = tenantConfigDraftSchema.safeParse(draft);
+  const draftSchema = createTenantConfigDraftSchema({
+    url: translate("nodeConfig.urlInvalid"),
+    integrity: translate("nodeConfig.integrityInvalid"),
+    title: translate("nodeConfig.titleRequired"),
+    description: translate("nodeConfig.descriptionRequired"),
+    uiPair: translate("nodeConfig.uiPairRequired"),
+    ssrPair: translate("nodeConfig.ssrPairRequired"),
+  });
+  const parsedDraft = draftSchema.safeParse(draft);
   const diff = useMemo(() => diffDraft(draft, resolvedConfig), [draft, resolvedConfig]);
 
   const tenantUrl = hostname ? buildTenantUrl(hostname, gatewayId) : null;
@@ -165,7 +177,7 @@ export function NodeConfigTab({
   const onFillFromDeployedApp = async () => {
     const account = sourceAccount.trim();
     if (!account) {
-      toast.error("Enter the NEAR account your app deployed under");
+      toast.error(translate("tenant.deployedAccountRequired"));
       return;
     }
     setFetchingSource(true);
@@ -177,9 +189,7 @@ export function NodeConfigTab({
       const production = typeof ui.production === "string" ? ui.production : "";
       const integrity = typeof ui.integrity === "string" ? ui.integrity : "";
       if (!production || !integrity) {
-        toast.error(
-          `${account} publishes no custom UI bundle yet — run \`bos publish --deploy\` in the app repo with a local UI first.`,
-        );
+        toast.error(translate("tenant.noCustomBundle", { account: account ?? "" }));
         return;
       }
       const ssr =
@@ -192,11 +202,9 @@ export function NodeConfigTab({
         uiIntegrity: integrity,
         ...(tenant?.allowSsr && ssrUrl && ssrIntegrity ? { ssrUrl, ssrIntegrity } : {}),
       }));
-      toast.success(`Bundle and integrity filled from ${account}`);
+      toast.success(translate("tenant.bundleFilled", { account: account ?? "" }));
     } catch {
-      toast.error(
-        `No published config for ${account} on this gateway — run \`bos publish --deploy\` in the app repo first.`,
-      );
+      toast.error(translate("tenant.noPublishedConfig", { account: account ?? "" }));
     } finally {
       setFetchingSource(false);
     }
@@ -220,7 +228,7 @@ export function NodeConfigTab({
       if (!tenant) throw new Error("Tenant not loaded");
       if (!gatewayId) throw new Error("Gateway not configured");
       if (!hostname) throw new Error("No primary domain binding configured for this tenant");
-      const value = tenantConfigDraftSchema.parse(draft);
+      const value = draftSchema.parse(draft);
       const app = draftUiOverride(value);
       if (value.title !== tenant.name) {
         await apiClient.updateTenant({ tenantId: tenant.id, name: value.title });
@@ -248,18 +256,26 @@ export function NodeConfigTab({
           3_000,
         );
         if (live) {
-          toast.success(`Config is live at ${tenantUrl ?? hostname}`);
+          toast.success(
+            translate("tenant.configLiveNamed", { url: String(tenantUrl ?? hostname ?? "") }),
+          );
         } else {
-          toast.info("Proposal submitted. The config goes live once it passes.");
+          toast.info(translate("tenant.proposalSubmitted"));
         }
       } else {
-        toast.success("Config published");
+        toast.success(translate("tenant.configPublished"));
       }
       await invalidateTenantQueries(queryClient);
       await queryClient.invalidateQueries({ queryKey: ["node-config"] });
     },
     onError: (error: Error) =>
-      toast.error(describeDaoError(error, daoOwned ? tenantAccount : "the session wallet")),
+      toast.error(
+        describeDaoError(
+          error,
+          daoOwned ? tenantAccount : translate("wallet.sessionAccount"),
+          translate,
+        ),
+      ),
   });
 
   const onVerifyBundle = async (
@@ -274,16 +290,18 @@ export function NodeConfigTab({
       const computed = await compute(url);
       if (!currentIntegrity) {
         apply(computed);
-        toast.success(`${label} integrity filled from the bundle`);
+        toast.success(translate("tenant.integrityFilled", { label: label ?? "" }));
         return;
       }
       if (computed === currentIntegrity) {
-        toast.success(`${label} integrity matches the bundle`);
+        toast.success(translate("tenant.integrityMatches", { label: label ?? "" }));
       } else {
-        toast.error(`${label} integrity mismatch — the bundle hashes to ${computed}`);
+        toast.error(
+          translate("tenant.integrityMismatch", { label: label ?? "", hash: computed ?? "" }),
+        );
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(appErrorMessage(error, translate));
     } finally {
       setComputing(false);
     }
@@ -291,7 +309,7 @@ export function NodeConfigTab({
 
   const onVerifyUiBundle = () => {
     if (!draft.uiProduction) {
-      toast.error("Enter the UI bundle URL first");
+      toast.error(translate("tenant.uiUrlRequired"));
       return;
     }
     return onVerifyBundle(
@@ -305,7 +323,7 @@ export function NodeConfigTab({
 
   const onVerifySsrBundle = () => {
     if (!draft.ssrUrl) {
-      toast.error("Enter the SSR bundle URL first");
+      toast.error(translate("tenant.ssrUrlRequired"));
       return;
     }
     return onVerifyBundle(
@@ -319,7 +337,7 @@ export function NodeConfigTab({
 
   const onPropose = async () => {
     if (!parsedDraft.success) {
-      toast.error(parsedDraft.error.issues[0]?.message ?? "Fix the form first");
+      toast.error(parsedDraft.error.issues[0]?.message ?? translate("nodeConfig.fixForm"));
       return;
     }
     const value = parsedDraft.data;
@@ -348,11 +366,13 @@ export function NodeConfigTab({
     }
     for (const { label, check } of checks) {
       if (check.status === "mismatch") {
-        toast.error(`${label} integrity mismatch — the bundle hashes to ${check.computed}`);
+        toast.error(
+          translate("tenant.integrityMismatch", { label: label ?? "", hash: check.computed ?? "" }),
+        );
         return;
       }
       if (check.status === "unverified") {
-        setUnverified(`Couldn't fetch the ${label} bundle to verify it (${check.reason}).`);
+        setUnverified(label);
         return;
       }
     }
@@ -365,18 +385,18 @@ export function NodeConfigTab({
         {!gatewayId ? (
           <EmptyState
             icon={StackIcon}
-            title="Gateway not configured"
-            description="The active runtime declares no gateway, so community config can't be resolved here."
+            title={translate("tenant.noGateway")}
+            description={translate("tenant.noGatewayDescription")}
           />
         ) : (
           <EmptyState
             icon={StackIcon}
-            title="No community yet"
-            description="Start a community to get its own site, events and staking."
+            title={translate("tenant.noCommunity")}
+            description={translate("tenant.startHint")}
             action={
               <>
                 <Button nativeButton={false} render={<Link to="/apply" />}>
-                  Start a community
+                  {translate("community.start")}
                 </Button>
                 {isPlatformAdmin && (
                   <Button
@@ -385,7 +405,7 @@ export function NodeConfigTab({
                     render={<Link to="/prototype-staking-poc" />}
                   >
                     <FlaskIcon />
-                    Node lifecycle
+                    {translate("tenant.lifecycle")}
                   </Button>
                 )}
               </>
@@ -399,27 +419,29 @@ export function NodeConfigTab({
   const busy = proposeMutation.isPending || verifying || computing;
   const proposeBlockReason = !editable
     ? !canManage
-      ? "Only owners and admins can change the config."
-      : `This community is ${tenant.status}.`
+      ? translate("nodeConfig.ownerPermission")
+      : translate("nodeConfig.communityStatusNamed", {
+          status: presentationLabel(tenant.status, translate),
+        })
     : !parsedDraft.success
-      ? (parsedDraft.error.issues[0]?.message ?? "Fix the form first.")
+      ? (parsedDraft.error.issues[0]?.message ?? translate("nodeConfig.fixFormSentence"))
       : !hasSigningWallet
         ? daoOwned
-          ? `Connect ${tenantAccount} via Trezu to propose.`
-          : "Connect your NEAR wallet to publish."
+          ? translate("nodeConfig.connectAccount", { account: tenantAccount })
+          : translate("nodeConfig.connectPublish")
         : null;
   const canPropose = editable && parsedDraft.success && hasSigningWallet && !busy;
   const bundleOpen = showBundle || !!draft.uiProduction || !!draft.ssrUrl;
   const allowed = [
-    tenant.allowUiOverrides ? "Custom UI" : null,
-    tenant.allowSsr ? "Server rendering" : null,
+    tenant.allowUiOverrides ? translate("nodeConfig.customUi") : null,
+    tenant.allowSsr ? translate("nodeConfig.serverRendering") : null,
   ].filter(Boolean);
 
   return (
     <div className="flex flex-col gap-12">
       <section className="flex flex-col gap-4">
         <SectionHeader
-          title="Published config"
+          title={translate("tenant.publishedConfig")}
           sectionTestId="orgs-node-config-state"
           action={
             <Button
@@ -430,24 +452,28 @@ export function NodeConfigTab({
               data-testid="orgs-node-config-settings"
             >
               <GearSixIcon />
-              Community settings
+              {translate("tenant.settings")}
             </Button>
           }
         />
         <div className="flex flex-col">
           <InfoRow
-            label="Status"
+            label={translate("common.status")}
             value={
               <span
                 className="inline-flex flex-wrap items-center justify-end gap-2"
                 data-testid="orgs-node-config-config"
               >
                 {configPublished ? (
-                  <Badge variant="success">Live</Badge>
+                  <Badge variant="success">{translate("things.live")}</Badge>
                 ) : pendingConfigProposal ? (
-                  <Badge variant="warning">Awaiting votes · #{pendingConfigProposal.id}</Badge>
+                  <Badge variant="warning">
+                    {translate("lifecycle.awaitingProposal", {
+                      proposal: pendingConfigProposal.id,
+                    })}
+                  </Badge>
                 ) : (
-                  <Badge variant="outline">Not published</Badge>
+                  <Badge variant="outline">{translate("tenant.notPublished")}</Badge>
                 )}
                 {fastKvUrl && (
                   <a
@@ -463,7 +489,7 @@ export function NodeConfigTab({
             }
           />
           <InfoRow
-            label="Address"
+            label={translate("common.address")}
             value={
               tenantUrl && configPublished ? (
                 <a
@@ -477,24 +503,48 @@ export function NodeConfigTab({
                   <ArrowSquareOutIcon className="size-3.5 shrink-0" />
                 </a>
               ) : (
-                (hostname ?? "Not bound yet")
+                (hostname ?? translate("nodeConfig.notBound"))
               )
             }
             mono
           />
-          <InfoRow label="Owner" value={daoOwned ? "DAO · changes go live by vote" : "Platform"} />
-          <InfoRow label="Account" value={tenantAccount} mono />
+          <InfoRow
+            label={translate("common.owner")}
+            value={translate(daoOwned ? "nodeConfig.daoVotes" : "common.platform")}
+          />
+          <InfoRow label={translate("common.account")} value={tenantAccount} mono />
           {pendingConfigProposal && (
             <InfoRow
-              label="Pending proposal"
-              value={`#${pendingConfigProposal.id} · ${pendingThreshold.approved}${
-                pendingThreshold.required == null ? "" : `/${pendingThreshold.required}`
-              } approvals`}
+              label={translate("tenant.pendingProposal")}
+              value={
+                pendingThreshold.required == null
+                  ? translate("nodeConfig.pendingApprovalsNamed", {
+                      id: pendingConfigProposal.id,
+                      count: pendingThreshold.approved,
+                    })
+                  : translate("nodeConfig.pendingThresholdNamed", {
+                      id: pendingConfigProposal.id,
+                      approved: pendingThreshold.approved,
+                      required: pendingThreshold.required,
+                    })
+              }
             />
           )}
           <InfoRow
-            label="Allowed"
-            value={allowed.length > 0 ? allowed.join(" · ") : "Metadata only"}
+            label={translate("common.allowed")}
+            value={
+              allowed.length > 0
+                ? allowed
+                    .map((value) =>
+                      value === "ui"
+                        ? translate("nodeConfig.customUi")
+                        : value === "ssr"
+                          ? translate("nodeConfig.serverRendering")
+                          : value,
+                    )
+                    .join(" · ")
+                : translate("nodeConfig.metadataOnly")
+            }
           />
         </div>
       </section>
@@ -503,12 +553,10 @@ export function NodeConfigTab({
 
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title="Customize"
+          title={translate("tenant.customize")}
           sectionTestId="orgs-node-config-editor"
           description={
-            daoOwned
-              ? "Changes go live when the DAO proposal passes."
-              : "Changes publish immediately."
+            daoOwned ? translate("tenant.daoChangesHint") : translate("tenant.immediateChangesHint")
           }
         />
 
@@ -521,21 +569,21 @@ export function NodeConfigTab({
         <FieldGroup className="max-w-2xl">
           <ConfigField
             id="orgs-node-config-title"
-            label="Title"
+            label={translate("common.title")}
             value={draft.title}
             onChange={(value) => setDraft((prev) => ({ ...prev, title: value }))}
             disabled={!editable}
           />
           <ConfigField
             id="orgs-node-config-description"
-            label="Description"
+            label={translate("common.description")}
             value={draft.description}
             onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))}
             disabled={!editable}
           />
           <ConfigField
             id="orgs-node-config-repository"
-            label="Repository"
+            label={translate("about.repository")}
             value={draft.repository}
             onChange={(value) => setDraft((prev) => ({ ...prev, repository: value }))}
             placeholder="https://github.com/…"
@@ -556,25 +604,25 @@ export function NodeConfigTab({
                 data-testid="orgs-node-config-bundle-toggle"
               >
                 {bundleOpen ? <CaretDownIcon /> : <CaretRightIcon />}
-                Custom UI bundle
+                {translate("tenant.customBundle")}
               </Button>
               <InfoPopover
-                title="Custom UI bundle"
-                body="A deployed UI bundle that replaces the platform UI for this community. Integrity is the sha384 of <base>/remoteEntry.js (SSR: remoteEntry.server.js). A mismatch makes the host refuse the community until fixed."
+                title={translate("tenant.customBundle")}
+                body={translate("tenant.integrityDescription")}
               />
             </div>
             {bundleOpen && (
               <FieldGroup>
                 <div className="flex flex-col gap-1">
                   <FieldLabel htmlFor="orgs-node-config-source-account">
-                    Fill from a deployed app
+                    {translate("tenant.fillDeployed")}
                   </FieldLabel>
                   <div className="flex items-center gap-2">
                     <Input
                       id="orgs-node-config-source-account"
                       type="text"
                       value={sourceAccount}
-                      placeholder="<your-app>.near — the account that ran bos publish --deploy"
+                      placeholder={translate("tenant.accountExample")}
                       onChange={(event) => setSourceAccount(event.target.value)}
                       disabled={!editable}
                       className="font-mono"
@@ -588,18 +636,15 @@ export function NodeConfigTab({
                       data-testid="orgs-node-config-autofill"
                     >
                       {fetchingSource ? <Spinner /> : null}
-                      Fetch bundle
+                      {translate("tenant.fetchBundle")}
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Reads the published config of your deployed app and fills the bundle URL and
-                    integrity below.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{translate("tenant.fetchHint")}</p>
                 </div>
                 <div className="flex flex-col gap-1">
                   <ConfigField
                     id="orgs-node-config-ui-url"
-                    label="UI bundle URL"
+                    label={translate("tenant.uiUrl")}
                     value={draft.uiProduction}
                     onChange={(value) => setDraft((prev) => ({ ...prev, uiProduction: value }))}
                     onBlur={() =>
@@ -621,12 +666,12 @@ export function NodeConfigTab({
                     className="self-start"
                     data-testid="orgs-node-config-verify"
                   >
-                    {computing ? "Hashing…" : "Verify and fill integrity"}
+                    {computing ? translate("tenant.hashing") : translate("tenant.verifyIntegrity")}
                   </Button>
                 </div>
                 <ConfigField
                   id="orgs-node-config-ui-integrity"
-                  label="UI integrity"
+                  label={translate("tenant.uiIntegrity")}
                   value={draft.uiIntegrity}
                   onChange={(value) => setDraft((prev) => ({ ...prev, uiIntegrity: value }))}
                   placeholder="sha384-…"
@@ -638,7 +683,7 @@ export function NodeConfigTab({
                     <div className="flex flex-col gap-1">
                       <ConfigField
                         id="orgs-node-config-ssr-url"
-                        label="SSR bundle URL"
+                        label={translate("tenant.ssrUrl")}
                         value={draft.ssrUrl}
                         onChange={(value) => setDraft((prev) => ({ ...prev, ssrUrl: value }))}
                         onBlur={() =>
@@ -660,12 +705,14 @@ export function NodeConfigTab({
                         className="self-start"
                         data-testid="orgs-node-config-verify-ssr"
                       >
-                        {computing ? "Hashing…" : "Verify and fill integrity"}
+                        {computing
+                          ? translate("tenant.hashing")
+                          : translate("tenant.verifyIntegrity")}
                       </Button>
                     </div>
                     <ConfigField
                       id="orgs-node-config-ssr-integrity"
-                      label="SSR integrity"
+                      label={translate("tenant.ssrIntegrity")}
                       value={draft.ssrIntegrity}
                       onChange={(value) => setDraft((prev) => ({ ...prev, ssrIntegrity: value }))}
                       placeholder="sha384-…"
@@ -682,7 +729,7 @@ export function NodeConfigTab({
         {diff.length > 0 && (
           <div className="flex max-w-2xl flex-col gap-2" data-testid="orgs-node-config-diff">
             <p className="text-sm font-medium text-foreground">
-              {diff.length} change{diff.length === 1 ? "" : "s"}
+              {translate("nodeConfig.changes", { count: diff.length })}
             </p>
             {diff.map((entry) => (
               <p key={entry.field} className="truncate font-mono text-xs text-muted-foreground">
@@ -701,7 +748,7 @@ export function NodeConfigTab({
             data-testid="orgs-node-config-propose"
           >
             {busy ? <Spinner /> : <ShieldCheckIcon />}
-            {daoOwned ? "Propose changes" : "Publish changes"}
+            {daoOwned ? translate("tenant.proposeChanges") : translate("tenant.publishChanges")}
           </Button>
           {editable && proposeBlockReason && (
             <span className="text-sm text-muted-foreground">{proposeBlockReason}</span>
@@ -712,9 +759,15 @@ export function NodeConfigTab({
       <ConfirmDialog
         open={unverified !== null}
         onOpenChange={(open) => !open && setUnverified(null)}
-        title={daoOwned ? "Propose without verifying?" : "Publish without verifying?"}
-        description={unverified ?? ""}
-        confirmLabel={daoOwned ? "Propose anyway" : "Publish anyway"}
+        title={
+          daoOwned ? translate("tenant.proposeUnverified") : translate("tenant.publishUnverified")
+        }
+        description={
+          unverified ? translate("nodeConfig.bundleUnverified", { bundle: unverified }) : ""
+        }
+        confirmLabel={
+          daoOwned ? translate("nodeConfig.proposeAnyway") : translate("nodeConfig.publishAnyway")
+        }
         onConfirm={() => {
           setUnverified(null);
           proposeMutation.mutate();

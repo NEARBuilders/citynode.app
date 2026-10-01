@@ -9,6 +9,8 @@ import { useRouter } from "@tanstack/react-router";
 import { useRef } from "react";
 import { toast } from "sonner";
 import { useApiClient, useAuthClient } from "@/app";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import {
   createWorkspaceSynchronization,
   reportWorkspaceRefreshError,
@@ -17,6 +19,7 @@ import { orgTeamMembersQueryKey, orgTeamsQueryKey } from "./-organization-query-
 import type { TeamMembershipStatus, TeamsTabTeam } from "./-teams-tab";
 
 export function useOrganizationTeams(orgId: string, membershipsEnabled = false) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -43,8 +46,7 @@ export function useOrganizationTeams(orgId: string, membershipsEnabled = false) 
     areas: team.areas,
     memberUserIds: (memberQueries[index]?.data ?? []).map((member) => member.userId),
     memberStatus: resolveMembershipStatus(membershipsEnabled, memberQueries[index]),
-    memberError:
-      memberQueries[index]?.error instanceof Error ? memberQueries[index].error.message : undefined,
+    memberError: memberQueries[index]?.isError ? translate("org.teamMembersError") : undefined,
   }));
 
   const synchronizeAfterMutation = (queryKeys: readonly QueryKey[]) => {
@@ -53,20 +55,20 @@ export function useOrganizationTeams(orgId: string, membershipsEnabled = false) 
   };
   const refreshWorkspace = () =>
     synchronization.synchronize({ queryKeys: lastRefreshKeys.current });
-  const onError = (fallback: string) => (error: Error) => {
-    if (reportWorkspaceRefreshError(error, refreshWorkspace, onError(fallback))) {
+  const onError = (error: Error) => {
+    if (reportWorkspaceRefreshError(error, refreshWorkspace, onError)) {
       return;
     }
-    toast.error(error.message || fallback);
+    toast.error(appErrorMessage(error, translate));
   };
 
   const createTeam = useMutation({
     mutationFn: (name: string) => apiClient.auth.createTeam({ name, organizationId: orgId }),
     onSuccess: async (team) => {
       await synchronizeAfterMutation([orgTeamsQueryKey(orgId)]);
-      toast.success(`Team "${team.name}" created`);
+      toast.success(translate("org.teamCreatedNamed", { name: team.name ?? "" }));
     },
-    onError: onError("Failed to create team"),
+    onError,
   });
   const updateTeam = useMutation({
     mutationFn: (input: { teamId: string; name?: string; areas?: string[] }) =>
@@ -79,27 +81,27 @@ export function useOrganizationTeams(orgId: string, membershipsEnabled = false) 
         },
       }),
     onSuccess: () => synchronizeAfterMutation([orgTeamsQueryKey(orgId)]),
-    onError: onError("Failed to update team"),
+    onError,
   });
   const deleteTeam = useMutation({
     mutationFn: (teamId: string) => apiClient.auth.deleteTeam({ teamId, organizationId: orgId }),
     onSuccess: async () => {
       await synchronizeAfterMutation([orgTeamsQueryKey(orgId)]);
-      toast.success("Team deleted");
+      toast.success(translate("org.teamDeleted"));
     },
-    onError: onError("Failed to delete team"),
+    onError,
   });
   const addTeamMember = useMutation({
     mutationFn: (input: { teamId: string; userId: string }) =>
       apiClient.auth.addTeamMember({ ...input, organizationId: orgId }),
     onSuccess: (_, input) => synchronizeAfterMutation([orgTeamMembersQueryKey(input.teamId)]),
-    onError: onError("Failed to add team member"),
+    onError,
   });
   const removeTeamMember = useMutation({
     mutationFn: (input: { teamId: string; userId: string }) =>
       apiClient.auth.removeTeamMember({ ...input, organizationId: orgId }),
     onSuccess: (_, input) => synchronizeAfterMutation([orgTeamMembersQueryKey(input.teamId)]),
-    onError: onError("Failed to remove team member"),
+    onError,
   });
 
   return {
