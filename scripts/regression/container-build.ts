@@ -112,9 +112,7 @@ function rewritePluginRef(
   if (!planned) return plugin;
   const next = {
     ...stripIntegrity(
-      planned.production !== undefined
-        ? { ...plugin, production: planned.production }
-        : plugin,
+      planned.production !== undefined ? { ...plugin, production: planned.production } : plugin,
     ),
   } as Record<string, unknown>;
   if (planned.pin !== undefined) {
