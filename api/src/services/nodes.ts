@@ -118,7 +118,7 @@ function mergeKindMetadata(
   metadata: Record<string, unknown> | undefined,
 ): NodeMetadata {
   return {
-    ...(metadata ?? {}),
+    ...metadata,
     ...(kind !== undefined && { kind }),
   } as NodeMetadata;
 }

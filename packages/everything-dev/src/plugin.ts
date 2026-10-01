@@ -116,7 +116,6 @@ import { createPlugin, z } from "./sdk";
 import { syncResolvedSharedDeps } from "./shared-deps";
 import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig } from "./types";
 import { BosConfigSchema } from "./types";
-import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors, icons } from "./utils/theme";
 import { computeDeployedVersionStatus, type DeployedVersionStatus } from "./version-status";
