@@ -1,14 +1,27 @@
 import {
+  balanceList,
   configureDatabase,
   configureOutlayer,
   configureRuntime,
   configureSponsorClients,
   generateIntent,
   generateResponse,
+  getAgentView,
+  getTokenCatalog,
+  listAgents,
+  listScheduledExecutions,
+  readBudget,
+  readHistory,
+  readLimits,
+  readPolicy,
+  readPolicyHistory,
   readStatus,
+  readTimelock,
   submitIntent,
+  walletView,
 } from "@near-intents-agent-api/agents-core";
 import { envSchema } from "@near-intents-agent-api/agents-core/config";
+import * as views from "@near-intents-agent-api/agents-core/views";
 import { agents } from "@near-intents-agent-api/database/schema";
 import { createOutlayerClient } from "@near-intents-agent-api/outlayer";
 import { sql } from "drizzle-orm";
@@ -164,6 +177,128 @@ export default createPlugin({
         const database = yield* DatabaseTag;
         const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
         return yield* Effect.tryPromise(() => readStatus(actor, input.correlationId, input.waitMs));
+      }),
+
+      listAgents: builder.listAgents.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const page = yield* Effect.tryPromise(() =>
+          listAgents(actor, {
+            ...(input.externalUserId ? { externalUserId: input.externalUserId } : {}),
+            ...(input.cursor ? { after: input.cursor } : {}),
+          }),
+        );
+        return { data: page.agents.map(views.agentView), nextCursor: page.next_cursor };
+      }),
+
+      getAgent: builder.getAgent.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(async () =>
+          views.agentView(await getAgentView(actor, input.agentId)),
+        );
+      }),
+
+      getWallet: builder.getWallet.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(async () =>
+          views.walletView(await walletView(actor, input.agentId)),
+        );
+      }),
+
+      getBalances: builder.getBalances.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const list = yield* Effect.tryPromise(() =>
+          balanceList(actor, input.agentId, { source: input.source }),
+        );
+        return {
+          nearAccountId: list.near_account_id,
+          source: input.source,
+          balances: list.balances
+            .filter((entry) => !input.asset || entry.assetId === input.asset)
+            .map(views.balanceEntry),
+        };
+      }),
+
+      getPolicy: builder.getPolicy.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(async () =>
+          views.policyView(await readPolicy(actor, input.agentId)),
+        );
+      }),
+
+      getPolicyHistory: builder.getPolicyHistory.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const history = yield* Effect.tryPromise(() =>
+          readPolicyHistory(actor, input.agentId, {
+            limit: input.limit,
+            ...(input.cursor ? { beforeRevision: input.cursor } : {}),
+          }),
+        );
+        return views.policyHistoryView(history);
+      }),
+
+      getLimits: builder.getLimits.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(async () =>
+          views.limitsView(await readLimits(actor, input.agentId)),
+        );
+      }),
+
+      getBudget: builder.getBudget.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(async () =>
+          views.budgetView(await readBudget(actor, input.agentId)),
+        );
+      }),
+
+      getTimelock: builder.getTimelock.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(async () =>
+          views.timelockView(await readTimelock(actor, input.agentId)),
+        );
+      }),
+
+      listScheduledExecutions: builder.listScheduledExecutions.effect(function* ({
+        input,
+        context,
+        errors,
+      }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        const page = yield* Effect.tryPromise(() =>
+          listScheduledExecutions(actor, input.agentId, input),
+        );
+        return views.scheduledPage(page);
+      }),
+
+      getTokenCatalog: builder.getTokenCatalog.effect(function* () {
+        const catalog = getTokenCatalog();
+        return { data: yield* Effect.tryPromise(() => catalog.list()) };
+      }),
+
+      getHistory: builder.getHistory.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
+        const database = yield* DatabaseTag;
+        const actor = yield* Effect.tryPromise(() => actorForSession(database, context.userId!));
+        return yield* Effect.tryPromise(() => readHistory(actor, input.agentId, input));
       }),
     };
   },

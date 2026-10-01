@@ -15,6 +15,10 @@
     "./config": {
       "types": "./src/config/env.ts",
       "import": "./src/config/env.ts"
+    },
+    "./views": {
+      "types": "./src/api/views.ts",
+      "import": "./src/api/views.ts"
     }
   },
   "dependencies": {

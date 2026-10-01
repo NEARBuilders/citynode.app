@@ -56,6 +56,12 @@ export async function setupCore(userId: string) {
   });
   const actor = (keyId = "session") =>
     actorForSession(database as unknown as DatabaseDriver, userId, keyId) as Promise<Actor>;
+  const actorAs = (otherUserId: string) =>
+    actorForSession(
+      database as unknown as DatabaseDriver,
+      otherUserId,
+      "session",
+    ) as Promise<Actor>;
   return {
     database,
     provider,
@@ -63,6 +69,7 @@ export async function setupCore(userId: string) {
     walletSponsor,
     rpc,
     actor,
+    actorAs,
     async close() {
       configureWalletSponsor(undefined);
       configureNearVerifier(undefined);
