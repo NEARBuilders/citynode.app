@@ -10,6 +10,13 @@ import {
 } from "./catalogs";
 
 describe("app message catalogs", () => {
+  it("uses singular table summaries for one row and plural summaries for several", () => {
+    const en = setupI18n({ locale: "en", messages: { en: getAppMessages("en") } });
+    const fr = setupI18n({ locale: "fr", messages: { fr: getAppMessages("fr") } });
+    expect(en._("table.rows", { shown: 1, total: 1 })).toBe("Showing 1 of 1 row.");
+    expect(fr._("table.rows", { shown: 1, total: 1 })).toBe("1 ligne affichée sur 1.");
+    expect(fr._("table.rows", { shown: 2, total: 2 })).toBe("2 lignes affichées sur 2.");
+  });
   it("keeps feature message keys unique so interpolation cannot be overwritten", () => {
     const ids = appFeatureCatalogs.flatMap((catalog) => Object.keys(catalog.en));
     expect(new Set(ids).size).toBe(ids.length);

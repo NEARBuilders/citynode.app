@@ -1398,10 +1398,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "转到上一页",
   ],
   "table.rows": [
-    "Showing {shown} of {total} rows.",
-    "Mostrando {shown} de {total} filas.",
-    "{shown} lignes affichées sur {total}.",
-    "显示 {total} 行中的 {shown} 行。",
+    "Showing {shown, number} of {total, plural, one {# row} other {# rows}}.",
+    "Mostrando {shown, number} de {total, plural, one {# fila} other {# filas}}.",
+    "{shown, plural, one {# ligne affichée} other {# lignes affichées}} sur {total, number}.",
+    "显示 {total, number} 行中的 {shown, number} 行。",
   ],
   "wallet.cancelled": [
     "The wallet request was cancelled.",
