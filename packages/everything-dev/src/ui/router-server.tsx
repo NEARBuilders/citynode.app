@@ -19,6 +19,7 @@ import {
 } from "@tanstack/react-router/ssr/server";
 import { createApiClient } from "./api";
 import { createAuthClient } from "./auth";
+import { type LocaleOptions, readAcceptLanguage, resolveLocale } from "./locale";
 import { collectHeadData } from "./router";
 import {
   defaultNotFoundComponent,
@@ -34,9 +35,14 @@ import type {
   RouterContextWithApi,
 } from "./types";
 
-export interface ServerRouterModuleOptions<TRouteTree extends AnyRoute = AnyRoute> {
+export interface ServerRouterModuleOptions<TRouteTree extends AnyRoute = AnyRoute>
+  extends Pick<
+    CreateRouterOptions,
+    "defaultErrorComponent" | "defaultPendingComponent" | "defaultNotFoundComponent"
+  > {
   /** The app's generated route tree — the core-only fallback when no composed tree is passed. */
   defaultRouteTree?: TRouteTree;
+  locale?: LocaleOptions;
 }
 
 type ServerRouterOptions<TRouteTree extends AnyRoute> = CreateRouterOptions & {
@@ -77,6 +83,7 @@ export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>
           }),
         session: context?.session,
         cspNonce,
+        locale: context?.locale,
         pluginNav: context?.pluginNav,
       },
       ...(cspNonce ? { ssr: { nonce: cspNonce } } : {}),
@@ -84,14 +91,19 @@ export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>
       scrollRestoration: true,
       defaultStructuralSharing: true,
       defaultPreloadStaleTime: 0,
-      defaultErrorComponent: RouterError,
+      defaultErrorComponent:
+        opts?.defaultErrorComponent ?? options.defaultErrorComponent ?? RouterError,
       defaultOnCatch: (error, errorInfo) => {
         console.error("[SSR] Router error boundary caught:", error, {
           componentStack: errorInfo.componentStack,
         });
       },
-      defaultNotFoundComponent,
-      defaultPendingComponent,
+      defaultNotFoundComponent:
+        opts?.defaultNotFoundComponent ??
+        options.defaultNotFoundComponent ??
+        defaultNotFoundComponent,
+      defaultPendingComponent:
+        opts?.defaultPendingComponent ?? options.defaultPendingComponent ?? defaultPendingComponent,
       defaultPendingMinMs: 0,
       dehydrate: () => {
         if (typeof window === "undefined") {
@@ -133,6 +145,7 @@ export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>
         authClient:
           context?.authClient ?? createAuthClient({ runtimeConfig, cspNonce: context?.cspNonce }),
         session: context?.session,
+        locale: context?.locale,
       },
     });
 
@@ -167,6 +180,13 @@ export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>
             session: renderOptions.session,
             cspNonce: renderOptions.cspNonce,
             pluginNav: renderOptions.pluginNav,
+            locale: options.locale
+              ? resolveLocale({
+                  ...options.locale,
+                  cookie: request.headers.get("cookie") ?? "",
+                  browserLocales: readAcceptLanguage(request.headers.get("accept-language")),
+                })
+              : undefined,
           },
         });
         queryClientRef = localQueryClient;
@@ -187,6 +207,7 @@ export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>
       }),
     );
 
+    if (options.locale) response.headers.append("Vary", "Cookie, Accept-Language");
     return {
       stream: response.body!,
       statusCode: response.status,

@@ -109,37 +109,51 @@ export interface TenantUiOverride {
 
 export const INTEGRITY_PATTERN = /^sha384-[A-Za-z0-9+/=]+$/;
 
-const optionalUrl = z
-  .string()
-  .trim()
-  .url("must be a valid URL")
-  .or(z.literal(""))
-  .transform((value) => value.trim());
+export const defaultTenantConfigDraftMessages = {
+  url: "must be a valid URL",
+  integrity: "must look like sha384-… (base64)",
+  title: "title is required",
+  description: "description is required",
+  uiPair: "a UI bundle needs both its URL and its integrity hash",
+  ssrPair: "an SSR bundle needs both its URL and its integrity hash",
+};
 
-const optionalIntegrity = z
-  .string()
-  .trim()
-  .regex(INTEGRITY_PATTERN, "must look like sha384-… (base64)")
-  .or(z.literal(""));
+export function createTenantConfigDraftSchema(
+  messages: typeof defaultTenantConfigDraftMessages = defaultTenantConfigDraftMessages,
+) {
+  const optionalUrl = z
+    .string()
+    .trim()
+    .url(messages.url)
+    .or(z.literal(""))
+    .transform((value) => value.trim());
 
-export const tenantConfigDraftSchema = z
-  .object({
-    title: z.string().trim().min(1, "title is required"),
-    description: z.string().trim().min(1, "description is required"),
-    repository: optionalUrl,
-    uiProduction: optionalUrl,
-    uiIntegrity: optionalIntegrity,
-    ssrUrl: optionalUrl,
-    ssrIntegrity: optionalIntegrity,
-  })
-  .refine((draft) => !!draft.uiProduction === !!draft.uiIntegrity, {
-    message: "a UI bundle needs both its URL and its integrity hash",
-    path: ["uiIntegrity"],
-  })
-  .refine((draft) => !!draft.ssrUrl === !!draft.ssrIntegrity, {
-    message: "an SSR bundle needs both its URL and its integrity hash",
-    path: ["ssrIntegrity"],
-  });
+  const optionalIntegrity = z
+    .string()
+    .trim()
+    .regex(INTEGRITY_PATTERN, messages.integrity)
+    .or(z.literal(""));
+
+  return z
+    .object({
+      title: z.string().trim().min(1, messages.title),
+      description: z.string().trim().min(1, messages.description),
+      repository: optionalUrl,
+      uiProduction: optionalUrl,
+      uiIntegrity: optionalIntegrity,
+      ssrUrl: optionalUrl,
+      ssrIntegrity: optionalIntegrity,
+    })
+    .refine((draft) => !!draft.uiProduction === !!draft.uiIntegrity, {
+      message: messages.uiPair,
+      path: ["uiIntegrity"],
+    })
+    .refine((draft) => !!draft.ssrUrl === !!draft.ssrIntegrity, {
+      message: messages.ssrPair,
+      path: ["ssrIntegrity"],
+    });
+}
+export const tenantConfigDraftSchema = createTenantConfigDraftSchema();
 
 export type TenantConfigDraft = z.infer<typeof tenantConfigDraftSchema>;
 

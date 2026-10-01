@@ -21,6 +21,7 @@ import {
 } from "./manifest";
 import { defaultQueryClient } from "./router-defaults";
 import { getCspNonce, getRuntimeConfig } from "./runtime";
+import type { CreateRouterOptions } from "./types";
 
 declare global {
   interface Window {
@@ -37,7 +38,11 @@ const mark = (message: string) => {
   if (import.meta.env.DEV) console.log(`[Hydrate] ${message}`);
 };
 
-export interface CoreHydrateOptions {
+export interface CoreHydrateOptions
+  extends Pick<
+    CreateRouterOptions,
+    "defaultErrorComponent" | "defaultPendingComponent" | "defaultNotFoundComponent"
+  > {
   /**
    * Loads the app's generated core route config — the only app-specific
    * input; clients, compose machinery, and the router come from the package.
@@ -227,11 +232,15 @@ export async function hydrate(options: CoreHydrateOptions) {
 
     const { router } = createRouter({
       routeTree: composed?.routeTree,
+      defaultErrorComponent: options.defaultErrorComponent,
+      defaultPendingComponent: options.defaultPendingComponent,
+      defaultNotFoundComponent: options.defaultNotFoundComponent,
       context: {
         pluginNav: composed?.nav,
         queryClient: client,
         runtimeConfig,
         cspNonce,
+        locale: isServerRendered() ? document.documentElement.lang : undefined,
         apiClient: createApiClient({
           hostUrl: runtimeConfig.hostUrl,
           rpcBase: runtimeConfig.rpcBase,
