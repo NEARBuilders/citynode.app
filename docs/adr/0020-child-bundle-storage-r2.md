@@ -139,3 +139,51 @@ squatter's port — the same-account guard cannot catch it); and the upload
 origin is probed (`GET /.well-known/mcp.json`) in preflight before the build
 train, so a wrong-port target fails in seconds with a named remedy instead
 of a foreign 413 after a full build.
+
+## Amendment (2026-09-30): hashed artifacts + version manifests — the deploy unit is additive
+
+The overwrite-in-place serving model (fixed-name entrypoints) has a
+non-atomic window in every deploy: uploaded bytes go live at fixed URLs
+(`max-age=0, must-revalidate`) minutes before the publish transaction swaps
+the pinned SRI — and an aborted train (a 2026-09-30 `auth-ui` socket failure)
+made the window permanent: new bytes on the CDN, old pins in the published
+config, browsers SRI-blocked.
+
+Replaced with immutable, content-addressed artifacts and manifest pointers:
+
+1. **Hashed artifacts.** Entrypoints build as `remoteEntry.[contenthash].js`
+   / `remoteEntry.server.[contenthash].js`; the build additively emits hashed
+   copies of the fixed-name browser artifacts (`mf-manifest.json`,
+   `static/css/style.css`) plus byte-identical legacy fixed-name aliases
+   (the rollout shim for consumers still appending the fixed name), and a
+   per-dist `build-report.json` naming the hashed artifacts for the deploy
+   leg. rspack plugin dists (api/auth) hash the entry and alias it; their
+   `mf-manifest.json` stays toolchain-consumed (never browser-loaded).
+2. **Version manifests.** Each deploy composes an immutable
+   `WorkspaceVersionManifest` (`every-plugin/version-manifest`) — entry +
+   per-file SRI, ssr entry + SRI, browser-manifest reference, shared-dep
+   versions — from the **server-computed SRI map** of the upload response,
+   and uploads it at `bundles/<account>/<gateway>/<workspace>/versions/<id>.json`.
+   The version id is content-derived (key-order stable, build time excluded):
+   unchanged bytes keep one id, so republishing unchanged content is a
+   pointer no-op.
+3. **Config slots become pointers.** Slots carry `manifest` (versioned
+   manifest filename, relative to `production`) and `integrity` pins the
+   *manifest document* when `manifest` is set. The resolved internal
+   `RuntimeConfig` derives the flattened fields (`ui.entry`, `ui.integrity`,
+   `ui.ssrUrl`, …) so consumers change once, not per artifact kind. Slots
+   without `manifest` resolve exactly as before (back-compat). Extends
+   inheritance: `app.*` slots inherit the parent's manifest field-wise;
+   child `plugins.*` entries replace parent entries wholesale (existing
+   semantics — a child publishes its own manifests for every slot it ships).
+4. **Cache classification flipped.** A content-hash segment in the object
+   name now *wins*: hashed names (including hashed entrypoints) serve
+   `immutable, max-age=31536500`; fixed-name and non-hashed files serve
+   `max-age=0, must-revalidate` (`every-plugin/build/artifact-names`
+   `cacheControlOf`, shared by the storage route and the local bundle
+   resolver).
+
+Deploy ordering is unchanged (upload everything → publish pointer), but with
+additive artifacts an aborted train is now a no-op: the previously published
+version stays fully live and consistent, and completing the train switches
+atomically at publish.

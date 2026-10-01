@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { configInputToDescriptor, toConfigInput } from "../../src/descriptor/resolve";
+import { mergeBosConfigWithExtends } from "../../src/merge";
 import { BosConfigSchema } from "../../src/types";
 
 const configWithManifest = {
@@ -70,5 +71,54 @@ describe("config slot `manifest` pointer", () => {
     const authored = toConfigInput(descriptor as never) as typeof configWithManifest;
     expect(authored.plugins?.auth?.ui?.manifest).toBe("versions/eee.json");
     expect(authored.plugins?.auth?.ui?.integrity).toBe("sha384-auth-ui-manifest-sri");
+  });
+
+  it("extends merge: app slots inherit the parent's manifest field-wise, child wins on override", () => {
+    const parent = {
+      account: "dev.everything.near",
+      domain: "everything.dev",
+      app: {
+        ui: {
+          development: "local:ui",
+          production: "https://cdn.everything.dev/ui/",
+          manifest: "versions/parent-ui.json",
+        },
+      },
+    };
+    const childOverride = {
+      account: "v1.citynode.near",
+      domain: "citynode.app",
+      app: { ui: { development: "local:ui", manifest: "versions/child-ui.json" } },
+    };
+    const childInherit = {
+      account: "v1.citynode.near",
+      domain: "citynode.app",
+      app: { ui: { development: "local:ui" } },
+    };
+    expect(mergeBosConfigWithExtends(parent, childOverride).app?.ui?.manifest).toBe(
+      "versions/child-ui.json",
+    );
+    expect(mergeBosConfigWithExtends(parent, childInherit).app?.ui?.manifest).toBe(
+      "versions/parent-ui.json",
+    );
+  });
+
+  it("extends merge: child plugin entries replace parent entries wholesale (no field-level fill)", () => {
+    const parent = {
+      account: "dev.everything.near",
+      plugins: {
+        auth: { name: "@everything-dev/auth-plugin", manifest: "versions/parent-auth.json" },
+        apps: { name: "apps", manifest: "versions/parent-apps.json" },
+      },
+    };
+    const child = {
+      account: "v1.citynode.near",
+      plugins: {
+        auth: { extends: "auth", production: "https://cdn.everything.dev/auth/" },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    expect(merged.plugins?.auth?.manifest).toBeUndefined();
+    expect(merged.plugins?.apps).toBeUndefined();
   });
 });
