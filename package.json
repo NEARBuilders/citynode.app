@@ -22,7 +22,7 @@
       "@tanstack/react-form": "^1.29.1",
       "@tanstack/react-table": "^9.2.4",
       "near-kit": "^0.20.2",
-      "@fastnear/near-connect": "^0.14.1",
+      "@hot-labs/near-connect": "elliotBraem/near-connect#v0.12.0-fork.2",
       "@lingui/core": "5.9.0",
       "@lingui/message-utils": "5.9.0",
       "@lingui/react": "5.9.0",
@@ -178,8 +178,5 @@
     "everything-dev": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"
-  },
-  "patchedDependencies": {
-    "@fastnear/near-connect@0.14.1": "patches/@fastnear%2Fnear-connect@0.14.1.patch"
   }
 }
