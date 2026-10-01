@@ -27,9 +27,9 @@ import { testDestinations } from "./support/grant-destinations";
 import { nearOwnerFixture } from "./support/intent-signers";
 import { closeServer, startNearRpc } from "./support/near-rpc-double";
 
-const adminUrl = "postgres://near_intents_agent_api:near_intents_agent_api@localhost:5434/postgres";
+const adminUrl = process.env.AGENTS_RACE_DATABASE_URL;
 const raceDb = "agents_race_test";
-const raceUrl = `postgres://near_intents_agent_api:near_intents_agent_api@localhost:5434/${raceDb}`;
+const raceUrl = adminUrl?.replace(/\/[^/]+$/, `/${raceDb}`) ?? "";
 
 async function resetRaceDatabase() {
   const admin = new pg.Pool({ connectionString: adminUrl });
@@ -78,7 +78,7 @@ afterAll(async () => {
   }
 });
 
-describe("concurrent admission against postgres (ticket 12)", () => {
+describe.skipIf(!adminUrl)("concurrent admission against postgres (ticket 12)", () => {
   it("concurrent grant dispatches of one request commit the provider write exactly once", async () => {
     await resetRaceDatabase();
     const rpc = await startNearRpc();

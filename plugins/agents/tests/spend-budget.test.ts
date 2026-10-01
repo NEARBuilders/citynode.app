@@ -118,6 +118,27 @@ describe("USD budget charges at dispatch (ticket 11 tail)", () => {
         await expect(
           runExecution(actor, agentId, transfer(tokens(0.6), "budget-over-0001"), credential.token),
         ).rejects.toMatchObject({ code: "spend_budget_exceeded", status: 403 });
+
+        // The grant layer binds before the budget layer: a request that violates both names the
+        // grant, and no spend is charged either way.
+        await expect(
+          runExecution(
+            actor,
+            agentId,
+            transferExecution(
+              {
+                asset: "nep141:wrap.near",
+                amount: "5",
+                recipient: "untrusted.near",
+                confidential: false,
+              },
+              "budget-order-0001",
+            ),
+            credential.token,
+          ),
+        ).rejects.toMatchObject({ code: "grant_recipient_denied", status: 403 });
+        expect(env.provider.state.submissions).toBe(before);
+        expect(views.budgetView(await readBudget(actor, agentId)).daily?.spentUsd).toBe("1.500000");
         expect(env.provider.state.submissions).toBe(before);
         expect(views.budgetView(await readBudget(actor, agentId)).daily?.spentUsd).toBe("1.500000");
 
