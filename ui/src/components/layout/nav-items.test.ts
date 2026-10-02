@@ -4,10 +4,13 @@ import {
   buildNavItems,
   filterSidebarByArea,
   filterSidebarByRole,
+  filterSidebarByRoutes,
   groupSidebarItems,
   isNavItemActive,
+  type ManifestRoute,
   NAV_ITEMS,
   navSlug,
+  routePathsFromManifest,
   type SidebarItem,
 } from "./nav-items";
 
@@ -23,7 +26,7 @@ function flattenSlugs(items: SidebarItem[]): string[] {
 }
 
 describe("sidebar navigation", () => {
-  it("orders the sidebar as Home, Explore, Stake, Build, My community, Organization, Things, Directory, Admin", () => {
+  it("orders the sidebar as Home, Explore, Stake, Build, About, My community, Organization, Things, Directory, Admin", () => {
     const labels = filterSidebarByRole(buildNavItems({ isAdmin: true }), "admin").map(
       (item) => item.label,
     );
@@ -32,6 +35,7 @@ describe("sidebar navigation", () => {
       "Explore",
       "Stake",
       "Build",
+      "About",
       "My community",
       "Organization",
       "Things",
@@ -48,6 +52,7 @@ describe("sidebar navigation", () => {
         "explore",
         "stake",
         "build",
+        "about",
         "my-node",
         "orgs",
         "things",
@@ -89,6 +94,113 @@ describe("sidebar navigation", () => {
   it("groups items into labelled sections", () => {
     const sections = groupSidebarItems(filterSidebarByRole(NAV_ITEMS, "admin"));
     expect(sections.map((section) => section.label)).toEqual([null, "Workspace", "Manage"]);
+  });
+});
+
+describe("route-aware filtering", () => {
+  const manifestRoute = (route: Partial<ManifestRoute> & { id: string }): ManifestRoute => route;
+
+  it("derives absolute paths from the generated manifest", () => {
+    const routes: ManifestRoute[] = [
+      manifestRoute({ id: "_public", isLayout: true, parentId: "__root" }),
+      manifestRoute({ id: "_public/about", path: "/about", parentId: "_public" }),
+      manifestRoute({ id: "_admin", isLayout: true }),
+      manifestRoute({ id: "_admin/_dashboard", isLayout: true, parentId: "_admin" }),
+      manifestRoute({
+        id: "_admin/_dashboard/admin",
+        path: "/admin",
+        parentId: "_admin/_dashboard",
+      }),
+      manifestRoute({
+        id: "_admin/_dashboard/admin/system",
+        path: "/system",
+        parentId: "_admin/_dashboard/admin",
+      }),
+      manifestRoute({
+        id: "_authenticated/_dashboard/things/",
+        path: "/things/",
+        parentId: "_authenticated/_dashboard",
+      }),
+      manifestRoute({ id: "_public/", path: "/", isIndex: true, parentId: "_public" }),
+    ];
+    expect(routePathsFromManifest(routes)).toEqual(
+      new Set(["/about", "/admin", "/admin/system", "/things"]),
+    );
+  });
+
+  it("keeps every item when all routes shipped", () => {
+    const full = new Set(
+      flattenPaths(buildNavItems({ isAdmin: true, canCurate: true })).map((to) => to),
+    );
+    full.add("/admin/system");
+    const filtered = filterSidebarByRoutes(buildNavItems({ isAdmin: true, canCurate: true }), full);
+    expect(filtered.map((item) => item.to)).toEqual(
+      buildNavItems({ isAdmin: true, canCurate: true }).map((item) => item.to),
+    );
+  });
+
+  it("reduces to the public shell for a simple-level child", () => {
+    const simpleChildPaths = new Set(["/", "/about", "/build", "/login", "/skill"]);
+    const filtered = filterSidebarByRoutes(
+      buildNavItems({ isAdmin: true, canCurate: true }),
+      simpleChildPaths,
+    );
+    expect(filtered.map((item) => item.to)).toEqual(["/build", "/about"]);
+  });
+
+  it("drops product routes and their admin children for an advanced-level child", () => {
+    const advancedChildPaths = new Set([
+      "/dashboard",
+      "/about",
+      "/build",
+      "/orgs",
+      "/things",
+      "/admin",
+      "/admin/system",
+    ]);
+    const filtered = filterSidebarByRoutes(
+      buildNavItems({ isAdmin: true, canCurate: true }),
+      advancedChildPaths,
+    );
+    expect(filtered.map((item) => item.to)).toEqual([
+      "/dashboard",
+      "/build",
+      "/about",
+      "/orgs",
+      "/things",
+      "/admin",
+    ]);
+    const admin = filtered.find((item) => item.to === "/admin");
+    expect(admin?.children?.map((child) => child.to)).toEqual(["/admin", "/admin/system"]);
+  });
+
+  it("matches the organization item through its activePrefix when the link is org-scoped", () => {
+    const paths = new Set(["/dashboard", "/orgs", "/about", "/build"]);
+    const items = buildNavItems({ activeOrgSlug: "acme" });
+    expect(filterSidebarByRoutes(items, paths).map((item) => item.to)).toContain("/orgs/acme");
+  });
+
+  it("drops parents whose children are all pruned", () => {
+    const items: SidebarItem[] = [
+      {
+        icon: () => null,
+        label: "Admin",
+        to: "/admin",
+        roleRequired: "admin",
+        section: "manage",
+        children: [
+          { icon: () => null, label: "Sites", to: "/admin/tenants", roleRequired: "admin" },
+        ],
+      },
+      { icon: () => null, label: "Build", to: "/build", roleRequired: "anon" },
+    ];
+    const filtered = filterSidebarByRoutes(items, new Set(["/build"]));
+    expect(filtered.map((item) => item.to)).toEqual(["/build"]);
+  });
+
+  it("returns items unfiltered when the path set is empty", () => {
+    const items = buildNavItems({ isAdmin: true });
+    expect(filterSidebarByRoutes(items, new Set())).toEqual(items);
   });
 });
 
