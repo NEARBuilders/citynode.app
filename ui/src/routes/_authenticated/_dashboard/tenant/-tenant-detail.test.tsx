@@ -484,11 +484,12 @@ describe("tenant detail mutations", () => {
     expect(screen.getByDisplayValue("Unavailable update")).toBeTruthy();
   });
 
-  it("does not expose owner edit or delete controls to a member", async () => {
+  it("does not expose community settings to a member even when tenant data is cached", async () => {
     const current = createHarness({ role: "member" });
     renderTenant(current);
 
-    await screen.findByText("Original tenant");
+    await screen.findByText("Community not found");
+    expect(screen.queryByText("Original tenant")).toBeNull();
     await waitFor(() => expect(current.auth.organization.listMembers).toHaveBeenCalledOnce());
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();

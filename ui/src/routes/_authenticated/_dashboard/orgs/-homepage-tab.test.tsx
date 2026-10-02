@@ -27,6 +27,10 @@ vi.mock("@/app", async () => {
     ...actual,
     useApiClient: () => ({
       resolveTenantByOrgId: harness.resolveTenantByOrgId,
+      listTenants: async () => {
+        const tenant = await harness.resolveTenantByOrgId();
+        return tenant ? [{ ...tenant, orgId: "org-1" }] : [];
+      },
       listTenantBindingsForTenant: harness.listTenantBindingsForTenant,
       registry: { getRegistryApp: harness.getRegistryApp },
       updateTenant: harness.updateTenant,

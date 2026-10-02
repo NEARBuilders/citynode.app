@@ -98,6 +98,7 @@ export function TenantDetailContent({
     staleTime: 60 * 1000,
   });
 
+  const isPlatformAdmin = session?.user?.role === "admin";
   const isOwner = members.some((m) => m.userId === session?.user?.id && m.role === "owner");
   const isAdmin = members.some(
     (m) => m.userId === session?.user?.id && (m.role === "admin" || m.role === "owner"),
@@ -249,7 +250,12 @@ export function TenantDetailContent({
       </PageContainer>
     );
   }
-  if (!tenant || !gatewayId) return <TenantUnavailable gatewayId={gatewayId} />;
+  const isPersonalOwner =
+    (tenant?.ownerKind === "user" && tenant.ownerUserId === session?.user?.id) ||
+    (!!tenant && !tenant.orgId && !!nearAccountId && tenant.accountId === nearAccountId);
+  if (!tenant || !gatewayId || (!isAdmin && !isPlatformAdmin && !isPersonalOwner)) {
+    return <TenantUnavailable gatewayId={gatewayId} />;
+  }
   return (
     <PageContainer variant="wide">
       {header}
