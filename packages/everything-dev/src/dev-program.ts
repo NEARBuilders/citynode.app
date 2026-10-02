@@ -348,21 +348,22 @@ export const devBootstrap = (
         dockerAvailable: yield* Effect.promise(isDockerAvailable),
       })
     ) {
-      yield* Effect.log(
-        "[preflight] local services are down — starting them with docker compose up -d --wait",
+      const compose = yield* step(timings, "docker compose up", () =>
+        runDockerComposeUp(deps.configDir),
       );
-      const started = yield* step(timings, "docker compose up", () =>
-        runDockerComposeUp(deps.configDir).then(
-          () => true,
-          () => false,
-        ),
-      );
-      if (started) {
+      if (compose.ok) {
         preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
       } else {
-        yield* Effect.logWarning(
-          "[preflight] docker compose failed — falling back to the original preflight errors",
-        );
+        preflightFailures = [
+          ...preflightFailures,
+          {
+            secret: "docker-compose",
+            host: "localhost",
+            port: 0,
+            error: `docker compose up -d --wait failed${compose.tail ? `:\n${compose.tail}` : ""}`,
+            tcpReachable: false,
+          },
+        ];
       }
     }
     if (preflightFailures.length > 0) {

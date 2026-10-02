@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDockerTestMode, shouldAutoStartDocker } from "../../src/infra/docker";
+import { isDockerTestMode, shouldAutoStartDocker, takeTail } from "../../src/infra/docker";
 import type { PreflightFailure } from "../../src/infra/preflight";
 
 const unreachable = (secret: string): PreflightFailure => ({
@@ -77,5 +77,16 @@ describe("isDockerTestMode", () => {
     expect(isDockerTestMode({ BOS_NO_PERSIST_PORTS: "1" })).toBe(true);
     expect(isDockerTestMode({ BOS_TEST: "0", NODE_ENV: "development" })).toBe(false);
     expect(isDockerTestMode({})).toBe(false);
+  });
+});
+
+describe("takeTail", () => {
+  it("keeps the last N lines, joined and trimmed", () => {
+    expect(takeTail(["a", "b", "c"], 2)).toBe("b\nc");
+    expect(takeTail(["a", "b", "c"])).toBe("a\nb\nc");
+  });
+
+  it("returns an empty string for no output", () => {
+    expect(takeTail([], 5)).toBe("");
   });
 });

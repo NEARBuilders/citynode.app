@@ -4,7 +4,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import * as p from "@clack/prompts";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, References } from "effect";
 import { buildScoped, buildScopedContext } from "every-plugin";
 import { type KeyPair, parseKey } from "near-kit";
 import { buildRuntimeConfig, probePortBindable } from "./app";
@@ -68,6 +68,7 @@ import {
   makeDatabaseBindings,
   makeDrizzleKitLive,
 } from "./db";
+import { type LogLevelEnv, resolveLogLevel, toEffectLogLevel } from "./dev-log-pipeline";
 import { readDevLatestLog, resolveDevLatestFile } from "./dev-logs";
 import {
   bootstrapLayers,
@@ -695,6 +696,10 @@ export default createPlugin({
 
       const outcome = await Effect.runPromise(
         devBootstrap(deps, input, devTimings, { resolveProxyUrl }).pipe(
+          Effect.provideService(
+            References.MinimumLogLevel,
+            toEffectLogLevel(resolveLogLevel(process.env as LogLevelEnv, input.logLevel)),
+          ),
           Effect.provide(bootstrapLayers),
           Effect.catchTags({
             DevConfigMissing: () => Effect.succeed({ failed: "No bos.config.json found" }),

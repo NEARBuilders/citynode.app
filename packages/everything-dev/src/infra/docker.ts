@@ -2,12 +2,24 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { execa } from "execa";
+import { stripAnsi } from "../dev-log-pipeline";
 import type { PreflightFailure } from "./preflight";
 
 export interface DockerAutostartGuards {
   composeFileExists: boolean;
   dockerAvailable: boolean;
   testMode: boolean;
+}
+
+export interface DockerComposeResult {
+  ok: boolean;
+  tail: string;
+}
+
+const TAIL_LINES = 15;
+
+export function takeTail(lines: string[], count: number = TAIL_LINES): string {
+  return lines.slice(-count).join("\n").trim();
 }
 
 export function composeFilePath(configDir: string): string {
@@ -36,12 +48,22 @@ export async function isDockerAvailable(): Promise<boolean> {
   }
 }
 
-export async function runDockerComposeUp(configDir: string): Promise<void> {
-  await execa("docker", ["compose", "up", "-d", "--wait"], {
-    cwd: configDir,
-    stdio: "inherit",
-    timeout: 5 * 60_000,
-  });
+export async function runDockerComposeUp(configDir: string): Promise<DockerComposeResult> {
+  try {
+    const result = await execa("docker", ["compose", "up", "-d", "--wait"], {
+      cwd: configDir,
+      stdio: "pipe",
+      reject: false,
+      timeout: 5 * 60_000,
+    });
+    const lines = [...(result.stdout ?? ""), ...(result.stderr ?? "")]
+      .split("\n")
+      .map((line) => stripAnsi(line).trim())
+      .filter((line) => line.length > 0);
+    return { ok: (result.exitCode ?? 1) === 0, tail: takeTail(lines) };
+  } catch (error) {
+    return { ok: false, tail: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export function detectAutoStartContext(configDir: string): DockerAutostartGuards {

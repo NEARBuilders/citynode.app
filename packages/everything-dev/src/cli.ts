@@ -282,6 +282,7 @@ async function main() {
         build: "Building...",
         "resolve config": "Resolving config...",
         ports: "Finding available ports...",
+        "docker compose up": "Starting local Postgres...",
         "generate artifacts": "Generating code artifacts...",
       };
 
@@ -516,13 +517,13 @@ async function main() {
         if (shouldStartDocker === true) {
           const dockerSpinner = p.spinner();
           dockerSpinner.start("Starting Docker services");
-          try {
-            await runDockerComposeUp(result.targetDir);
+          const compose = await runDockerComposeUp(result.targetDir);
+          if (compose.ok) {
             dockerSpinner.stop("Docker services ready");
-          } catch (error) {
+          } else {
             dockerSpinner.stop("Docker services not started");
             p.log.warn(
-              `docker compose up -d --wait failed: ${error instanceof Error ? error.message : error}`,
+              `docker compose up -d --wait failed${compose.tail ? `:\n${compose.tail}` : ""}`,
             );
           }
         }
