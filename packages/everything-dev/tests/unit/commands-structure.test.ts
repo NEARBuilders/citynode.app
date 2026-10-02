@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { registerBuildDeploy } from "../../src/commands/build-deploy";
+import { registerBuild } from "../../src/commands/build";
 import { registerConfig } from "../../src/commands/config";
 import { registerDb } from "../../src/commands/db";
+import { registerDeploy } from "../../src/commands/deploy";
 import { registerDev } from "../../src/commands/dev";
 import { registerInit } from "../../src/commands/init";
 import { registerKeys } from "../../src/commands/keys";
 import { registerOps } from "../../src/commands/ops";
 import { registerPlugins } from "../../src/commands/plugins";
 import type { BosBuilder } from "../../src/commands/shared";
-import { registerSync } from "../../src/commands/sync";
+import { registerUpgrade } from "../../src/commands/upgrade";
 import { bosContract } from "../../src/contract";
 import bosPlugin from "../../src/plugin";
 
@@ -16,10 +17,11 @@ const registerFns = [
   registerConfig,
   registerPlugins,
   registerDev,
-  registerBuildDeploy,
+  registerBuild,
+  registerDeploy,
   registerKeys,
   registerInit,
-  registerSync,
+  registerUpgrade,
   registerDb,
   registerOps,
 ];

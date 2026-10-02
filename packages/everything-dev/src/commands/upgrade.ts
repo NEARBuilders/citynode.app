@@ -13,7 +13,7 @@ import type { BosConfig } from "../types";
 import { colors } from "../utils/theme";
 import type { BosBuilder } from "./shared";
 
-export function registerSync(builder: BosBuilder) {
+export function registerUpgrade(builder: BosBuilder) {
   return {
     sync: builder.sync.handler(async ({ input }) => {
       try {
