@@ -1,5 +1,5 @@
-import { Effect, Layer } from "effect";
 import { ORPCError } from "@orpc/server";
+import { Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
 import { z } from "zod";
 import { contract } from "./contract";
@@ -13,9 +13,7 @@ export default createPlugin({
     API_DATABASE_URL: z
       .string()
       .default("pglite:.bos/api/:memory:")
-      .describe(
-        "Database connection string. Use pglite: for local, postgres:// for production.",
-      ),
+      .describe("Database connection string. Use pglite: for local, postgres:// for production."),
   }),
 
   context: ContextSchema,
