@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import {
   buildInitPatterns,
   buildPluginRouteExclusions,
+  buildStarterRouteExclusions,
   convertChildConfigToAppForm,
   copyFilteredFiles,
   detectGitRemoteUrl,
@@ -17,6 +18,7 @@ import {
   runTypesGen,
   scaffoldMinimalProject,
   stripOrphanedWorkspacesFromLockfile,
+  writeDevOverlayTemplate,
   writeInitSnapshot,
 } from "../cli/init";
 import { pruneUnusedUiFiles } from "../cli/prune";
@@ -28,7 +30,7 @@ import { materializeViaLayer } from "../infra/materializer";
 import { timePhase } from "../progress";
 import { openResolution } from "../resolution/session";
 import { syncResolvedSharedDeps } from "../shared-deps";
-import type { BosConfig, BosConfigInput } from "../types";
+import type { BosConfig, BosConfigInput, StarterLevel } from "../types";
 import type { BosBuilder } from "./shared";
 
 export async function fetchInitParent(
@@ -109,6 +111,7 @@ export function registerInit(builder: BosBuilder) {
         }
 
         overrides = overrides?.length ? overrides : (["ui", "api"] as OverrideSection[]);
+        const level: StarterLevel = input.level ?? "simple";
         if (overrides.includes("plugins") && plugins === undefined) {
           plugins = parentPluginKeys;
         }
@@ -164,6 +167,7 @@ export function registerInit(builder: BosBuilder) {
                 repository,
                 title: parentConfig?.title,
                 description: parentConfig?.description,
+                starter: level,
               }),
             );
 
@@ -181,23 +185,32 @@ export function registerInit(builder: BosBuilder) {
                 description: parentConfig?.description,
                 testnet: parentConfig?.testnet,
                 staging: parentConfig?.staging,
+                starter: level,
               }),
             );
 
             childBosConfig = await timePhase(timings, "authored config form", () =>
               convertChildConfigToAppForm(targetDir),
             );
+
+            writeDevOverlayTemplate(targetDir, {
+              extendsRef: `bos://${extendsAccount}/${extendsGateway}`,
+            });
           } else {
             const patterns = buildInitPatterns(overrides, plugins, pluginDirMap);
             const routeExclusions = overrides.includes("ui")
               ? buildPluginRouteExclusions(parentConfig, plugins)
               : [];
+            const starterExclusions = overrides.includes("ui")
+              ? buildStarterRouteExclusions(level, parentConfig)
+              : [];
+            const copyIgnore = [...routeExclusions, ...starterExclusions];
 
             filesCopied = await timePhase(timings, "copy files", () =>
               copyFilteredFiles(sourceDir, targetDir, patterns, {
                 overrides,
                 plugins,
-                ignore: routeExclusions,
+                ignore: copyIgnore,
               }),
             );
 
@@ -215,12 +228,17 @@ export function registerInit(builder: BosBuilder) {
                 description: parentConfig?.description,
                 testnet: parentConfig?.testnet,
                 staging: parentConfig?.staging,
+                starter: level,
               }),
             );
 
             childBosConfig = await timePhase(timings, "authored config form", () =>
               convertChildConfigToAppForm(targetDir),
             );
+
+            writeDevOverlayTemplate(targetDir, {
+              extendsRef: `bos://${extendsAccount}/${extendsGateway}`,
+            });
 
             if (overrides.includes("ui")) {
               await timePhase(timings, "prune unused ui files", async () =>
@@ -232,7 +250,8 @@ export function registerInit(builder: BosBuilder) {
               writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
                 overrides,
                 plugins,
-                ignore: routeExclusions,
+                ignore: copyIgnore,
+                starter: level,
               }),
             );
 

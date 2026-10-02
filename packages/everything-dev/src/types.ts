@@ -280,6 +280,31 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
   }),
 );
 
+export type StarterLevel = "simple" | "advanced";
+
+export const StarterLevelSchema = z.enum(["simple", "advanced"]);
+
+export interface StarterLevelConfig {
+  include?: string[];
+  exclude?: string[];
+}
+
+export const StarterLevelConfigSchema = z.object({
+  include: z.array(z.string()).optional(),
+  exclude: z.array(z.string()).optional(),
+});
+
+/** Authoring metadata a parent publishes so `bos init` can prune its starter. */
+export interface ParentStarterConfig {
+  levels?: Record<string, StarterLevelConfig>;
+  exclude?: string[];
+}
+
+export const ParentStarterConfigSchema = z.object({
+  levels: z.record(z.string(), StarterLevelConfigSchema).optional(),
+  exclude: z.array(z.string()).optional(),
+});
+
 export interface BosConfigInput {
   extends?: string | ExtendsConfig;
   account?: string;
@@ -310,6 +335,7 @@ export interface BosConfigInput {
   ci?: CiConfig;
   cdn?: CdnConfig;
   rolledBackFrom?: string;
+  starter?: ParentStarterConfig;
 }
 
 export const RailwayCiSchema = z.object({
@@ -357,6 +383,7 @@ export const BosConfigSchema = z.object({
   ci: CiConfigSchema.optional(),
   cdn: CdnConfigSchema.optional(),
   rolledBackFrom: z.string().optional(),
+  starter: ParentStarterConfigSchema.optional(),
   plugins: z.record(PluginKeySchema, z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
     host: HostConfigSchema,

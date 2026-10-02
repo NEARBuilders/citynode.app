@@ -32,7 +32,7 @@ describe("bos init — structure", () => {
     expect(patterns.length).toBeGreaterThan(0);
     expect(patterns).toContain("bos.config.json");
     expect(patterns).toContain("ui/**");
-    expect(patterns).toContain("api/**");
+    expect(patterns).toContain(".github/templates/api/**");
     expect(patterns).toContain("plugins/registry/**");
   });
 

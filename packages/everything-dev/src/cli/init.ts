@@ -29,7 +29,7 @@ import {
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
 import { walkExtendsChain } from "../resolution/session";
-import type { BosConfig, BosConfigInput } from "../types";
+import type { BosConfig, BosConfigInput, ParentStarterConfig, StarterLevel } from "../types";
 import { saveBosConfig } from "../utils/save-config";
 import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
 import { writeSnapshot } from "./snapshot";
@@ -42,7 +42,6 @@ export const INIT_ROOT_PATTERNS = [
   ".gitignore",
   "biome.json",
   "bunfig.toml",
-  "docker-compose.yml",
   "Dockerfile",
   "railway.json",
   "railway.toml",
@@ -178,7 +177,8 @@ export function buildInitPatterns(
   const patterns: string[] = [...INIT_ROOT_PATTERNS];
 
   if (has("ui")) patterns.push("ui/**");
-  if (has("api")) patterns.push("api/**");
+  if (has("api")) patterns.push(API_TEMPLATE_PATTERN);
+  if (has("api") || has("host")) patterns.push(COMPOSE_TEMPLATE_PATTERN);
   if (has("host")) patterns.push("host/**");
   if (has("plugins")) {
     for (const plugin of plugins ?? []) {
@@ -188,6 +188,20 @@ export function buildInitPatterns(
   }
 
   return patterns;
+}
+
+/** api-override children get the slim generic shell, never the parent's domain API. */
+const API_TEMPLATE_PATTERN = ".github/templates/api/**";
+
+/** Child-sized compose (api + api-test databases) for local compute overrides. */
+const COMPOSE_TEMPLATE_PATTERN = ".github/templates/docker-compose.yml";
+
+export function isApiTemplatePath(filePath: string): boolean {
+  return filePath.startsWith(".github/templates/api/");
+}
+
+export function isComposeTemplatePath(filePath: string): boolean {
+  return filePath === COMPOSE_TEMPLATE_PATTERN;
 }
 
 export function buildPluginRouteExclusions(
@@ -214,6 +228,64 @@ export function buildPluginRouteExclusions(
   return claimedByUnselected.filter((route) => !claimedBySelected.has(route));
 }
 
+const STARTER_PRODUCT_EXCLUSIONS = [
+  "_public/explore.tsx",
+  "_public/stake.tsx",
+  "_public/n/**",
+  "_public/$accountId.tsx",
+  "_public/$accountId/**",
+  "_public/activity/**",
+  "_public/-stake-*",
+  "_authenticated/_dashboard/dashboard/node/**",
+  "_authenticated/_dashboard/nodes/**",
+  "_authenticated/_dashboard/tenant.*",
+  "_authenticated/_dashboard/discover.tsx",
+  "_authenticated/_dashboard/apply.tsx",
+  "_authenticated/_dashboard/prototype-staking-poc.tsx",
+  "_authenticated/onboarding/**",
+  "_admin/_dashboard/_dashboard/admin/nodes/**",
+  "_admin/_dashboard/_dashboard/admin/proposals/**",
+  "_admin/_dashboard/_dashboard/admin/tenants/**",
+  "_admin/_dashboard/_dashboard/admin/relayer.tsx",
+  "_admin/_dashboard/_dashboard/admin/organizations.tsx",
+] as const;
+
+const STARTER_SIMPLE_EXCLUSIONS = [
+  "_authenticated.tsx",
+  "_authenticated/**",
+  "_admin.tsx",
+  "_admin/**",
+] as const;
+
+/**
+ * Route-file globs (relative to the child's `ui/src/routes/`) that a starter
+ * of the given level must not receive. Parent `starter` config can add
+ * exclusions (`exclude`, `levels[level].exclude`) or reclaim routes for a
+ * level (`levels[level].include`). Entries are prefixed with
+ * `ui/src/routes/` so they compose with `copyFilteredFiles`'s ignore list.
+ */
+export function buildStarterRouteExclusions(
+  level: StarterLevel,
+  parentConfig: { starter?: ParentStarterConfig } | null | undefined,
+): string[] {
+  const excluded = new Set<string>([...STARTER_PRODUCT_EXCLUSIONS]);
+  if (level === "simple") {
+    for (const entry of STARTER_SIMPLE_EXCLUSIONS) excluded.add(entry);
+  }
+
+  const starter = parentConfig?.starter;
+  if (starter) {
+    for (const entry of starter.exclude ?? []) excluded.add(entry);
+    const levelConfig = starter.levels?.[level];
+    if (levelConfig) {
+      for (const entry of levelConfig.exclude ?? []) excluded.add(entry);
+      for (const entry of levelConfig.include ?? []) excluded.delete(entry);
+    }
+  }
+
+  return [...excluded].map((entry) => `ui/src/routes/${entry}`);
+}
+
 function extractPluginRoutes(entry: unknown): string[] | undefined {
   if (typeof entry !== "object" || entry === null) return undefined;
   const routes = (entry as { routes?: unknown }).routes;
@@ -222,6 +294,12 @@ function extractPluginRoutes(entry: unknown): string[] | undefined {
 }
 
 export function sourcePathToDestinationPath(filePath: string): string {
+  if (isApiTemplatePath(filePath)) {
+    return filePath.replace(/^\.github\/templates\/api\//, "api/");
+  }
+  if (isComposeTemplatePath(filePath)) {
+    return "docker-compose.yml";
+  }
   return filePath.startsWith(".github/templates/")
     ? filePath.replace(/^\.github\/templates\//, ".github/")
     : filePath;
@@ -403,6 +481,16 @@ export async function copyFilteredFiles(
       allFiles.add(match);
     }
   }
+  if (!options.overrides.includes("api")) {
+    for (const match of allFiles) {
+      if (isApiTemplatePath(match)) allFiles.delete(match);
+    }
+  }
+  if (!options.overrides.includes("api") && !options.overrides.includes("host")) {
+    for (const match of allFiles) {
+      if (isComposeTemplatePath(match)) allFiles.delete(match);
+    }
+  }
 
   mkdirSync(destination, { recursive: true });
 
@@ -448,6 +536,35 @@ export async function convertChildConfigToAppForm(
   writeFileSync(join(destination, "bos.app.ts"), serializeAppDescriptorSource(config));
   rmSync(configPath);
   return config;
+}
+
+/**
+ * Scaffold the root dev-overlay starter (`bos.dev.ts`). Idempotent — never
+ * overwrites an existing overlay. Dev overlays are merged child-wins over
+ * the resolved config in development and are never published.
+ */
+export function writeDevOverlayTemplate(
+  destination: string,
+  opts: { extendsRef?: string } = {},
+): void {
+  const overlayPath = join(destination, "bos.dev.ts");
+  if (existsSync(overlayPath)) return;
+  const extendsLine = opts.extendsRef ? `\n// Inherited base: ${opts.extendsRef}\n` : "";
+  writeFileSync(
+    overlayPath,
+    `import type { AppDescriptor } from "everything-dev/descriptor";
+${extendsLine}
+/**
+ * Development-only overlay for bos.app.ts — merged child-wins over the
+ * resolved config when the environment is development. Never published.
+ * Example: pin the auth attachment to a running dev server instead of
+ * letting the dev harness spawn it.
+ */
+export default {
+  // auth: { development: "http://localhost:3006" },
+} satisfies Partial<AppDescriptor>;
+`,
+  );
 }
 
 function buildRootTypecheckScript(sections: {
@@ -585,6 +702,7 @@ export async function personalizeConfig(
     description?: string;
     testnet?: string;
     staging?: unknown;
+    starter?: StarterLevel;
   },
 ): Promise<void> {
   const has = (section: OverrideSection) => opts.overrides.includes(section);
@@ -593,6 +711,13 @@ export async function personalizeConfig(
       ? (opts.existingConfig.app as Record<string, unknown>)
       : undefined;
   const preservedAuth = existingApp?.auth;
+  const applyStarter = (config: Record<string, unknown>): void => {
+    if (opts.starter) {
+      config.starter = opts.starter;
+    } else if (opts.mode !== "sync") {
+      delete config.starter;
+    }
+  };
 
   const explicitRootKeys = new Set(
     Object.entries(opts)
@@ -640,6 +765,8 @@ export async function personalizeConfig(
         delete config[field];
       }
     }
+
+    applyStarter(config);
 
     if (config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
@@ -736,6 +863,8 @@ export async function personalizeConfig(
         delete config[field];
       }
     }
+
+    applyStarter(config);
 
     if (config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
@@ -1217,6 +1346,9 @@ export async function scaffoldMinimalProject(
     repository?: string;
     title?: string;
     description?: string;
+    starter?: StarterLevel;
+    /** local parent source dir — resolves the catalog offline (tests, --source) */
+    catalogSourceDir?: string;
   },
 ): Promise<number> {
   mkdirSync(destination, { recursive: true });
@@ -1230,6 +1362,7 @@ export async function scaffoldMinimalProject(
     ...(opts.repository ? { repository: opts.repository } : {}),
     ...(opts.title ? { title: opts.title } : {}),
     ...(opts.description ? { description: opts.description } : {}),
+    ...(opts.starter ? { starter: opts.starter } : {}),
   };
 
   if (parentConfig.app && typeof parentConfig.app === "object") {
@@ -1289,6 +1422,7 @@ export async function scaffoldMinimalProject(
     await resolveCatalogChainSource({
       extendsAccount: opts.extendsAccount,
       extendsGateway: opts.extendsGateway,
+      sourceDir: opts.catalogSourceDir,
     })
   ).catalog;
 
@@ -1342,6 +1476,7 @@ export async function writeInitSnapshot(
     overrides: OverrideSection[];
     plugins?: string[];
     ignore?: string[];
+    starter?: StarterLevel;
   },
 ): Promise<void> {
   const baseIgnore = ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/.bos/**"];
@@ -1358,6 +1493,16 @@ export async function writeInitSnapshot(
     });
     for (const match of matches) {
       allFiles.add(match);
+    }
+  }
+  if (!options.overrides.includes("api")) {
+    for (const match of allFiles) {
+      if (isApiTemplatePath(match)) allFiles.delete(match);
+    }
+  }
+  if (!options.overrides.includes("api") && !options.overrides.includes("host")) {
+    for (const match of allFiles) {
+      if (isComposeTemplatePath(match)) allFiles.delete(match);
     }
   }
 
@@ -1377,6 +1522,7 @@ export async function writeInitSnapshot(
   await writeSnapshot(destination, {
     parentRef: `bos://${extendsAccount}/${extendsGateway}`,
     files: fileHashes,
+    starter: options.starter,
   });
 }
 

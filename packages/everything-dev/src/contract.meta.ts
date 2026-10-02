@@ -223,6 +223,10 @@ export const cliCommandMeta = {
       overrides: {
         description: "Comma-separated sections to customize locally: ui,api,host,plugins",
       },
+      level: {
+        description:
+          "Starter complexity: simple (public shell) or advanced (adds dashboard, orgs, admin)",
+      },
       noInteractive: { description: "Skip prompts, use flags only" },
       noInstall: { description: "Skip bun install" },
     },

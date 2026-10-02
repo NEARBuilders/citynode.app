@@ -253,6 +253,7 @@ export function configInputToDescriptor(input: BosConfigInput): AppDescriptor {
     "repository",
     "testnet",
     "staging",
+    "starter",
     "ci",
     "cdn",
     "publish",

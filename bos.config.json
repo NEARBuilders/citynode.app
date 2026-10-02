@@ -152,6 +152,28 @@
       }
     }
   },
+  "starter": {
+    "exclude": [
+      "_public/explore.tsx",
+      "_public/stake.tsx",
+      "_public/n/**",
+      "_public/$accountId.tsx",
+      "_public/$accountId/**",
+      "_public/activity/**",
+      "_authenticated/_dashboard/dashboard/node/**",
+      "_authenticated/_dashboard/nodes/**",
+      "_authenticated/_dashboard/tenant.*",
+      "_authenticated/_dashboard/discover.tsx",
+      "_authenticated/_dashboard/apply.tsx",
+      "_authenticated/_dashboard/prototype-staking-poc.tsx",
+      "_authenticated/onboarding/**",
+      "_admin/_dashboard/_dashboard/admin/nodes/**",
+      "_admin/_dashboard/_dashboard/admin/proposals/**",
+      "_admin/_dashboard/_dashboard/admin/tenants/**",
+      "_admin/_dashboard/_dashboard/admin/relayer.tsx",
+      "_admin/_dashboard/_dashboard/admin/organizations.tsx"
+    ]
+  },
   "plugins": {
     "template": {
       "development": "local:plugins/_template",
