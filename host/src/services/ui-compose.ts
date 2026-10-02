@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { Clock, Context, Data, Effect, Layer } from "effect";
+import { Clock, Data, Effect } from "effect";
 import {
   CORE_UI_PLUGIN_KEY as CORE_UI_KEY,
   type ComposePayload,

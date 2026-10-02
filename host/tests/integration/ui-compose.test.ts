@@ -379,7 +379,6 @@ describe("composeUi", () => {
         key: "auth",
         name: "auth-ui",
         entry: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
-        manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
       },
     ]);
 
