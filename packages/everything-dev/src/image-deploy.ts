@@ -61,7 +61,10 @@ export async function buildAndPushImage(input: {
   });
   const shortSha = shaResult?.stdout.trim();
   if (!shaResult || shaResult.exitCode !== 0 || !shortSha) {
-    throw new Error("Failed to resolve the current git SHA — is this a git repository?");
+    const detail = shaResult?.stderr.trim();
+    throw new Error(
+      `Failed to resolve the current git SHA in ${input.configDir} (exit code ${shaResult?.exitCode ?? "unknown"}${detail ? `: ${detail}` : ""})`,
+    );
   }
   const tag = `sha-${shortSha}`;
 
