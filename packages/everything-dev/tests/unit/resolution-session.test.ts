@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CircularExtendsError, ConfigLoadError } from "../../src/config";
+import { CircularExtendsError, ConfigLoadError, DevOverlayError } from "../../src/config";
 import {
   openResolution,
   type ResolutionIo,
@@ -219,6 +219,150 @@ describe("openResolution", () => {
 
     expect(session).not.toBeNull();
     expect(session?.runtime?.env).toBe("production");
+  });
+});
+
+describe("openResolution × dev overlay (bos.dev.ts)", () => {
+  const overlayParent: BosConfigInput = {
+    account: "parent.near",
+    app: {
+      api: { development: "local:api-parent", variables: { SLOT: "parent" } },
+    },
+  };
+
+  const overlayLeaf: BosConfigInput = {
+    extends: "/parent/bos.config.json",
+    account: "local.near",
+    app: {
+      host: { development: "local:host", production: "" },
+      ui: { development: "local:ui" },
+      api: { development: "local:api", variables: { SLOT: "leaf" } },
+    },
+  };
+
+  const overlayModule = {
+    default: { api: { path: "api-dev", variables: { SLOT: "overlay" } } },
+  };
+
+  const chainFiles = (extra: Record<string, string> = {}): Record<string, string> => ({
+    "/project/bos.config.json": JSON.stringify(overlayLeaf),
+    "/parent/bos.config.json": JSON.stringify(overlayParent),
+    ...extra,
+  });
+
+  const overlayIo = (
+    files: Record<string, string>,
+    modules: Record<string, Record<string, unknown>>,
+  ): ResolutionIo => ({
+    ...memoryIo(files, {}),
+    importModule: async (path) => {
+      const mod = modules[path];
+      if (!mod) throw new Error(`no module fixture registered for ${path}`);
+      return mod;
+    },
+  });
+
+  it("merges the overlay child-wins over the leaf, which wins over the parent chain, in development", async () => {
+    const session = await openResolution(
+      { path: "/project/bos.config.json", env: "development" },
+      overlayIo(chainFiles({ "/project/bos.dev.ts": "export default {}" }), {
+        "/project/bos.dev.ts": overlayModule,
+      }),
+    );
+
+    expect(session?.config.app.api).toMatchObject({
+      development: "local:api-dev",
+      variables: { SLOT: "overlay" },
+    });
+    expect(session?.config.app.host).toMatchObject({ development: "local:host" });
+    expect(session?.chain).toEqual(["/project/bos.config.json", "/parent/bos.config.json"]);
+  });
+
+  it("golden: without a bos.dev.ts the resolution is unchanged and no module import happens", async () => {
+    const session = await openResolution(
+      { path: "/project/bos.config.json", env: "development" },
+      overlayIo(chainFiles(), {}),
+    );
+
+    expect(session?.config.app.api).toEqual({
+      development: "local:api",
+      variables: { SLOT: "leaf" },
+    });
+    expect(session?.rawConfig).toEqual(overlayLeaf);
+  });
+
+  it("never reads the overlay in production or staging", async () => {
+    const hostEntry = "remoteEntry.overlay-host.js";
+    const hostManifest = {
+      version: "8f3ac1d2feedbeef",
+      builtAt: "2026-09-30T12:00:00.000Z",
+      entry: hostEntry,
+      entryIntegrity: "sha384-entry",
+    };
+    const pinnedLeaf: BosConfigInput = {
+      ...overlayLeaf,
+      app: {
+        ...overlayLeaf.app,
+        host: {
+          development: "local:host",
+          production: "https://stage.test/host",
+          pin: {
+            manifest: `versions/${hostEntry}.json`,
+            integrity: `sha384-${createHash("sha384").update(JSON.stringify(hostManifest)).digest("base64")}`,
+          },
+        },
+      },
+    };
+    vi.stubGlobal("fetch", async (input: string | URL) => {
+      if (String(input) === `https://stage.test/host/versions/${hostEntry}.json`) {
+        return new Response(JSON.stringify(hostManifest), { status: 200 });
+      }
+      return new Response("nope", { status: 404 });
+    });
+
+    for (const env of ["production", "staging"] as const) {
+      const session = await openResolution(
+        { path: "/project/bos.config.json", env },
+        overlayIo(
+          {
+            "/project/bos.config.json": JSON.stringify(pinnedLeaf),
+            "/parent/bos.config.json": JSON.stringify(overlayParent),
+            "/project/bos.dev.ts": "export default {}",
+          },
+          { "/project/bos.dev.ts": overlayModule },
+        ),
+      );
+
+      expect(session?.config.app.api?.variables).toEqual({ SLOT: "leaf" });
+    }
+  });
+
+  it("throws a loud DevOverlayError naming the file for a malformed overlay", async () => {
+    const error = await openedOrError(
+      openResolution(
+        { path: "/project/bos.config.json", env: "development" },
+        overlayIo(chainFiles({ "/project/bos.dev.ts": "export default 42" }), {
+          "/project/bos.dev.ts": { default: 42 },
+        }),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(DevOverlayError);
+    expect((error as DevOverlayError).message).toContain("/project/bos.dev.ts");
+  });
+
+  it("throws a DevOverlayError when the overlay module has no default export", async () => {
+    const error = await openedOrError(
+      openResolution(
+        { path: "/project/bos.config.json", env: "development" },
+        overlayIo(chainFiles({ "/project/bos.dev.ts": "export const overlay = {}" }), {
+          "/project/bos.dev.ts": { overlay: {} },
+        }),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(DevOverlayError);
+    expect((error as DevOverlayError).path).toBe("/project/bos.dev.ts");
   });
 });
 
