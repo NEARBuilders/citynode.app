@@ -22,6 +22,7 @@ import { buildCiInfraPlan, type CiInfraPlan } from "./cli/infra";
 import {
   buildInitPatterns,
   buildPluginRouteExclusions,
+  buildStarterRouteExclusions,
   convertChildConfigToAppForm,
   copyFilteredFiles,
   detectGitRemoteUrl,
@@ -115,7 +116,13 @@ import { applyRegistrySections } from "./registry-use";
 import { buildRollbackPayload, summarizeSlotPins, verifyRollbackSnapshot } from "./rollback";
 import { createPlugin, z } from "./sdk";
 import { syncResolvedSharedDeps } from "./shared-deps";
-import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig } from "./types";
+import type {
+  BosConfig,
+  BosConfigInput,
+  ExtendsConfig,
+  RuntimeConfig,
+  StarterLevel,
+} from "./types";
 import { BosConfigSchema } from "./types";
 import { saveBosConfig } from "./utils/save-config";
 import { colors, icons } from "./utils/theme";
@@ -1541,6 +1548,7 @@ export default createPlugin({
         }
 
         overrides = overrides?.length ? overrides : (["ui", "api"] as OverrideSection[]);
+        const level: StarterLevel = input.level ?? "simple";
         if (overrides.includes("plugins") && plugins === undefined) {
           plugins = parentPluginKeys;
         }
@@ -1622,6 +1630,7 @@ export default createPlugin({
                 repository,
                 title: parentConfig?.title,
                 description: parentConfig?.description,
+                starter: level,
               }),
             );
 
@@ -1639,6 +1648,7 @@ export default createPlugin({
                 description: parentConfig?.description,
                 testnet: parentConfig?.testnet,
                 staging: parentConfig?.staging,
+                starter: level,
               }),
             );
 
@@ -1650,12 +1660,16 @@ export default createPlugin({
             const routeExclusions = overrides.includes("ui")
               ? buildPluginRouteExclusions(parentConfig, plugins)
               : [];
+            const starterExclusions = overrides.includes("ui")
+              ? buildStarterRouteExclusions(level, parentConfig)
+              : [];
+            const copyIgnore = [...routeExclusions, ...starterExclusions];
 
             filesCopied = await timePhase(timings, "copy files", () =>
               copyFilteredFiles(sourceDir, targetDir, patterns, {
                 overrides,
                 plugins,
-                ignore: routeExclusions,
+                ignore: copyIgnore,
               }),
             );
 
@@ -1673,6 +1687,7 @@ export default createPlugin({
                 description: parentConfig?.description,
                 testnet: parentConfig?.testnet,
                 staging: parentConfig?.staging,
+                starter: level,
               }),
             );
 
@@ -1690,7 +1705,8 @@ export default createPlugin({
               writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
                 overrides,
                 plugins,
-                ignore: routeExclusions,
+                ignore: copyIgnore,
+                starter: level,
               }),
             );
 

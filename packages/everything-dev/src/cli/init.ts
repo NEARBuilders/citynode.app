@@ -28,7 +28,7 @@ import {
   loadManifestNormalizationSpec,
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
-import type { BosConfig, BosConfigInput } from "../types";
+import type { BosConfig, BosConfigInput, ParentStarterConfig, StarterLevel } from "../types";
 import { saveBosConfig } from "../utils/save-config";
 import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
 import { writeSnapshot } from "./snapshot";
@@ -256,6 +256,64 @@ export function buildPluginRouteExclusions(
   }
 
   return claimedByUnselected.filter((route) => !claimedBySelected.has(route));
+}
+
+const STARTER_PRODUCT_EXCLUSIONS = [
+  "_public/explore.tsx",
+  "_public/stake.tsx",
+  "_public/n/**",
+  "_public/$accountId.tsx",
+  "_public/$accountId/**",
+  "_public/activity/**",
+  "_public/-stake-*",
+  "_authenticated/_dashboard/dashboard/node/**",
+  "_authenticated/_dashboard/nodes/**",
+  "_authenticated/_dashboard/tenant.*",
+  "_authenticated/_dashboard/discover.tsx",
+  "_authenticated/_dashboard/apply.tsx",
+  "_authenticated/_dashboard/prototype-staking-poc.tsx",
+  "_authenticated/onboarding/**",
+  "_admin/_dashboard/_dashboard/admin/nodes/**",
+  "_admin/_dashboard/_dashboard/admin/proposals/**",
+  "_admin/_dashboard/_dashboard/admin/tenants/**",
+  "_admin/_dashboard/_dashboard/admin/relayer.tsx",
+  "_admin/_dashboard/_dashboard/admin/organizations.tsx",
+] as const;
+
+const STARTER_SIMPLE_EXCLUSIONS = [
+  "_authenticated.tsx",
+  "_authenticated/**",
+  "_admin.tsx",
+  "_admin/**",
+] as const;
+
+/**
+ * Route-file globs (relative to the child's `ui/src/routes/`) that a starter
+ * of the given level must not receive. Parent `starter` config can add
+ * exclusions (`exclude`, `levels[level].exclude`) or reclaim routes for a
+ * level (`levels[level].include`). Entries are prefixed with
+ * `ui/src/routes/` so they compose with `copyFilteredFiles`'s ignore list.
+ */
+export function buildStarterRouteExclusions(
+  level: StarterLevel,
+  parentConfig: { starter?: ParentStarterConfig } | null | undefined,
+): string[] {
+  const excluded = new Set<string>([...STARTER_PRODUCT_EXCLUSIONS]);
+  if (level === "simple") {
+    for (const entry of STARTER_SIMPLE_EXCLUSIONS) excluded.add(entry);
+  }
+
+  const starter = parentConfig?.starter;
+  if (starter) {
+    for (const entry of starter.exclude ?? []) excluded.add(entry);
+    const levelConfig = starter.levels?.[level];
+    if (levelConfig) {
+      for (const entry of levelConfig.exclude ?? []) excluded.add(entry);
+      for (const entry of levelConfig.include ?? []) excluded.delete(entry);
+    }
+  }
+
+  return [...excluded].map((entry) => `ui/src/routes/${entry}`);
 }
 
 function extractPluginRoutes(entry: unknown): string[] | undefined {
@@ -629,6 +687,7 @@ export async function personalizeConfig(
     description?: string;
     testnet?: string;
     staging?: unknown;
+    starter?: StarterLevel;
   },
 ): Promise<void> {
   const has = (section: OverrideSection) => opts.overrides.includes(section);
@@ -637,6 +696,13 @@ export async function personalizeConfig(
       ? (opts.existingConfig.app as Record<string, unknown>)
       : undefined;
   const preservedAuth = existingApp?.auth;
+  const applyStarter = (config: Record<string, unknown>): void => {
+    if (opts.starter) {
+      config.starter = opts.starter;
+    } else if (opts.mode !== "sync") {
+      delete config.starter;
+    }
+  };
 
   const explicitRootKeys = new Set(
     Object.entries(opts)
@@ -684,6 +750,8 @@ export async function personalizeConfig(
         delete config[field];
       }
     }
+
+    applyStarter(config);
 
     if (config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
@@ -780,6 +848,8 @@ export async function personalizeConfig(
         delete config[field];
       }
     }
+
+    applyStarter(config);
 
     if (config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
@@ -1255,6 +1325,7 @@ export async function scaffoldMinimalProject(
     repository?: string;
     title?: string;
     description?: string;
+    starter?: StarterLevel;
   },
 ): Promise<number> {
   mkdirSync(destination, { recursive: true });
@@ -1268,6 +1339,7 @@ export async function scaffoldMinimalProject(
     ...(opts.repository ? { repository: opts.repository } : {}),
     ...(opts.title ? { title: opts.title } : {}),
     ...(opts.description ? { description: opts.description } : {}),
+    ...(opts.starter ? { starter: opts.starter } : {}),
   };
 
   if (parentConfig.app && typeof parentConfig.app === "object") {
@@ -1380,6 +1452,7 @@ export async function writeInitSnapshot(
     overrides: OverrideSection[];
     plugins?: string[];
     ignore?: string[];
+    starter?: StarterLevel;
   },
 ): Promise<void> {
   const baseIgnore = ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/.bos/**"];
@@ -1415,6 +1488,7 @@ export async function writeInitSnapshot(
   await writeSnapshot(destination, {
     parentRef: `bos://${extendsAccount}/${extendsGateway}`,
     files: fileHashes,
+    starter: options.starter,
   });
 }
 

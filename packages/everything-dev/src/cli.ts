@@ -429,6 +429,7 @@ async function main() {
           parentPluginKeys,
           plugins: initInput.plugins,
           overrides: initInput.overrides as OverrideSection[] | undefined,
+          level: initInput.level,
         });
 
         const directory = initInput.directory || basic.domain || basic.extendsGateway;
@@ -441,6 +442,7 @@ async function main() {
           domain: basic.domain || undefined,
           plugins: overrides.plugins,
           overrides: overrides.overrides,
+          level: overrides.level ?? initInput.level,
           noInteractive: true,
         };
       }
