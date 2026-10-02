@@ -124,46 +124,6 @@ export function findConfigPath(cwd?: string): string | null {
   return null;
 }
 
-const devOverlayPathCache = new Map<string, string | null>();
-
-/**
- * @internal — clears the findDevOverlayPath memo. Plumbing for tests and the
- * resolution session; not part of the public config surface.
- */
-export function resetDevOverlayPathCache(): void {
-  devOverlayPathCache.clear();
-}
-
-/**
- * Locates the dev-only `bos.dev.ts` overlay beside the entry config
- * `findConfigPath` would discover from `cwd` — the walk stops at the first
- * directory carrying an entry config (`bos.config.json` / `bos.app.ts`), and
- * the overlay is honored only in that same directory. Returns the absolute
- * overlay path or null.
- */
-export function findDevOverlayPath(cwd?: string): string | null {
-  const cacheKey = resolve(cwd ?? process.cwd());
-  const cached = devOverlayPathCache.get(cacheKey);
-  if (cached !== undefined) return cached;
-
-  let dir = cacheKey;
-  while (true) {
-    const hasEntryConfig =
-      existsSync(join(dir, "bos.config.json")) || existsSync(join(dir, "bos.app.ts"));
-    if (hasEntryConfig) {
-      const overlayPath = join(dir, DEV_OVERLAY_FILENAME);
-      const result = existsSync(overlayPath) ? overlayPath : null;
-      devOverlayPathCache.set(cacheKey, result);
-      return result;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  devOverlayPathCache.set(cacheKey, null);
-  return null;
-}
-
 export function isAppDescriptorPath(configPath: string): boolean {
   return configPath.endsWith(".app.ts") || configPath.endsWith(".app.js");
 }

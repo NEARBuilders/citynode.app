@@ -147,11 +147,6 @@ export function registerPlugins(builder: BosBuilder) {
         };
       }
 
-      // Full deploy-train parity for one plugin (ADR 0020, as amended): the
-      // preflight (storage/CDN creds + signing) fails fast before the build,
-      // then build → upload → version-manifest pin → config write-back →
-      // FastKV publish + read-back. A single-plugin redeploy ships real bytes
-      // to the storage origin — same as the train, nothing image-native left.
       const result = await publishToFastKv({
         bosConfig: session.config,
         runtimeConfig: session.runtime,

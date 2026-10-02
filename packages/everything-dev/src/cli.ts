@@ -11,7 +11,7 @@ import { parseCommandInput } from "./cli/parse";
 import { promptInitBasic, promptInitOverrides } from "./cli/prompts";
 import { formatDuration, sumPhaseDurations } from "./cli/timing";
 import { fetchInitParent } from "./commands/init";
-import { findConfigPath } from "./config";
+import { findConfigPath, readAuthoredConfigInput } from "./config";
 import type {
   DevOptions,
   DevResult,
@@ -29,6 +29,9 @@ import type {
   TypecheckWorkspaceResult,
 } from "./contract";
 import type { StartSummary } from "./dev-program";
+import { getRegistryNamespaceForAccount } from "./fastkv";
+import { listPublishKeys } from "./near-cli";
+import { getNetworkIdForAccount } from "./network";
 import bosPlugin from "./plugin";
 import { type ProgressEvent, pluginEvents } from "./progress";
 import { createPluginRuntime } from "./sdk";
@@ -278,14 +281,33 @@ async function main() {
       const keyPublishInput = input as KeyPublishOptions;
       if (keyPublishInput.removeOldKeys === undefined) {
         if (process.stdin.isTTY) {
-          const removeOldKeys = await p.confirm({
-            message: "Remove old key(s) if any exist?",
-            initialValue: true,
-          });
-          if (p.isCancel(removeOldKeys)) {
-            return;
+          const authored = configPath ? await readAuthoredConfigInput(dirname(configPath)) : null;
+          const account =
+            keyPublishInput.env === "staging"
+              ? (authored?.staging?.account ?? authored?.account)
+              : authored?.account;
+          let listed: string[] | null = null;
+          if (account) {
+            const network = getNetworkIdForAccount(account);
+            const contract = getRegistryNamespaceForAccount(account, keyPublishInput.registry);
+            try {
+              listed = await listPublishKeys({ account, contract, network });
+            } catch {
+              listed = null;
+            }
           }
-          keyPublishInput.removeOldKeys = removeOldKeys;
+          if (listed?.length) {
+            const removeOldKeys = await p.confirm({
+              message: `Remove ${listed.length} existing publish key${listed.length > 1 ? "s" : ""}?`,
+              initialValue: true,
+            });
+            if (p.isCancel(removeOldKeys)) {
+              return;
+            }
+            keyPublishInput.removeOldKeys = removeOldKeys;
+          } else {
+            keyPublishInput.removeOldKeys = true;
+          }
         } else {
           keyPublishInput.removeOldKeys = true;
         }

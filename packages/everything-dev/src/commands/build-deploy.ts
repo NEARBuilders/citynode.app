@@ -391,9 +391,6 @@ export function registerBuildDeploy(builder: BosBuilder) {
       let imageDigest: string | undefined;
       let service: string | undefined;
 
-      // IMAGE LEG (ADR 0021): build the runtime stage, push by SHA + latest.
-      // Skips with a notice when no image is configured (child repos get
-      // build+upload+publish only).
       const imageRef = resolveImageRef({
         ciImage: nextSession.config?.ci?.image,
         repository: nextSession.config?.repository,
@@ -439,8 +436,6 @@ export function registerBuildDeploy(builder: BosBuilder) {
         }
       }
 
-      // RAILWAY LEG: pull-only deploy of the pushed image digest (thin
-      // FROM Dockerfile, ADR 0021 — Railway never rebuilds).
       if (process.env.RAILWAY_TOKEN) {
         const railwayService = input.service ?? nextSession.config?.ci?.railway?.service;
         if (!railwayService) {

@@ -352,9 +352,7 @@ export function registerSync(builder: BosBuilder) {
               if (pkg.scripts?.typecheck) {
                 args = ["run", "typecheck"];
               }
-            } catch {
-              // ignore unreadable package.json
-            }
+            } catch {}
           }
 
           console.log(`\n  ${colors.dim("Checking")} ${colors.cyan(entry.label)}`);
