@@ -1,0 +1,57 @@
+import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
+
+const LABELS: Record<string, AppMessageId> = {
+  you: "lifecycle.youLower",
+  For: "label.voteFor",
+  Against: "label.voteAgainst",
+  Abstain: "label.voteAbstain",
+  team: "org.team",
+  completed: "label.completed",
+  removed: "dashboard.removed",
+  all: "label.all",
+  official: "tenant.official",
+  community: "tenant.communityType",
+  done: "label.done",
+  skipped: "label.skipped",
+  blocked: "label.blocked",
+  not_started: "label.notStarted",
+  applying: "label.applying",
+  approve_reject: "label.approveReject",
+  accepted: "label.accepted",
+  declined: "label.declined",
+  revoked: "label.revoked",
+  expired: "label.expired",
+  active: "label.active",
+  pending: "label.pending",
+  suspended: "label.suspended",
+  approved: "label.approved",
+  rejected: "label.rejected",
+  applied: "label.applied",
+  failed: "label.failed",
+  review: "label.review",
+  approve: "label.approve",
+  reject: "label.reject",
+  owner: "label.owner",
+  admin: "label.admin",
+  member: "label.member",
+  operator: "label.operator",
+  primary: "label.primary",
+  secondary: "label.secondary",
+  endowment: "label.endowment",
+  country: "label.country",
+  state: "label.state",
+  city: "label.city",
+  thing: "label.thing",
+  node: "label.node",
+  pending_deletion: "label.pendingDeletion",
+  apply_failed: "label.applyFailed",
+  not_applied: "label.notApplied",
+  mark_applied: "label.markApplied",
+  mark_apply_failed: "label.markApplyFailed",
+};
+export function presentationLabel(value: string, t: AppTranslator) {
+  const id = LABELS[value];
+  if (id) return t(id);
+  const text = value.replaceAll("_", " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

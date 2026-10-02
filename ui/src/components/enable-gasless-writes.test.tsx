@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import { EnableGaslessWrites } from "./enable-gasless-writes";
 
 const wallet = vi.hoisted(() => ({

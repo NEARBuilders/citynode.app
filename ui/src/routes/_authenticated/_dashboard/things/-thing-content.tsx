@@ -2,6 +2,7 @@ import { TrashIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { useApiClient } from "@/app";
 import { Button, ConfirmDialog, InfoRow, LocalDate, SectionHeader } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Thing = NonNullable<Awaited<ReturnType<ApiClient["template"]["getThing"]>>>;
@@ -17,12 +18,13 @@ export function ThingContent({
   isDeletePending: boolean;
   onDelete: () => void;
 }) {
+  const translate = useAppTranslation();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
     <>
       <section className="flex flex-col gap-6">
-        <SectionHeader title="Payload" />
+        <SectionHeader title={translate("things.payload")} />
         <pre
           className="overflow-x-auto rounded-2xl bg-muted p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap break-all text-foreground"
           data-testid="thing-payload"
@@ -32,14 +34,14 @@ export function ThingContent({
       </section>
 
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Details" />
+        <SectionHeader title={translate("things.details")} />
         <div>
           <InfoRow
-            label="Created"
+            label={translate("things.created")}
             value={<LocalDate value={thing.createdAt} format="datetime" />}
           />
           <InfoRow
-            label="Updated"
+            label={translate("things.updated")}
             value={<LocalDate value={thing.updatedAt} format="datetime" />}
           />
         </div>
@@ -47,12 +49,14 @@ export function ThingContent({
 
       {isAdmin && (
         <section className="flex flex-col gap-6" data-testid="thing-danger-zone">
-          <SectionHeader title="Danger zone" />
+          <SectionHeader title={translate("things.danger")} />
           <div className="flex flex-col gap-4 rounded-2xl border border-destructive/30 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-foreground">Delete this thing</span>
+              <span className="text-sm font-medium text-foreground">
+                {translate("things.deleteSection")}
+              </span>
               <span className="text-sm text-muted-foreground">
-                Removes it from the registry for everyone.
+                {translate("things.deleteDescription")}
               </span>
             </div>
             <Button
@@ -62,7 +66,7 @@ export function ThingContent({
               disabled={isDeletePending}
             >
               <TrashIcon />
-              {isDeletePending ? "Deleting…" : "Delete thing"}
+              {isDeletePending ? translate("things.deleting") : translate("things.delete")}
             </Button>
           </div>
         </section>
@@ -71,10 +75,10 @@ export function ThingContent({
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Delete this thing?"
-        description={`${thing.thingId} will be removed permanently.`}
+        title={translate("things.deleteTitle")}
+        description={translate("things.removeNamed", { id: thing.thingId ?? "" })}
         confirmLabel="Delete"
-        cancelLabel="Cancel"
+        cancelLabel={translate("common.cancel")}
         variant="destructive"
         isPending={isDeletePending}
         onConfirm={() => {

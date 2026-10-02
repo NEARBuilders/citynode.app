@@ -81,7 +81,7 @@ describe("login message catalogs", () => {
 });
 
 describe("login language selector", () => {
-  it("updates the page language and persists the selection", () => {
+  it("updates the page language and persists the selection", async () => {
     const previousLanguage = document.documentElement.lang;
     const view = render(
       <LoginI18nProvider initialLocale="en">
@@ -92,9 +92,10 @@ describe("login language selector", () => {
     expect(screen.getByRole("heading").textContent).toBe("Sign in to CityNode");
     expect(document.documentElement.lang).toBe("en");
 
-    fireEvent.change(screen.getByTestId("login.language-select"), {
-      target: { value: "es" },
-    });
+    fireEvent.click(screen.getByTestId("login.language-select"));
+    const spanish = await screen.findByRole("option", { name: "Español" });
+    fireEvent.pointerDown(spanish, { pointerType: "mouse" });
+    fireEvent.click(spanish);
 
     expect(screen.getByRole("heading").textContent).toBe("Inicia sesión en CityNode");
     expect(screen.getByText("Continuar como maaz.near")).toBeTruthy();
@@ -116,21 +117,22 @@ describe("login language selector", () => {
     expect(screen.getByRole("heading").textContent).toBe("Inicia sesión en CityNode");
   });
 
-  it("switches to French and Chinese catalogs", () => {
+  it("switches to French and Chinese catalogs", async () => {
     render(
       <LoginI18nProvider initialLocale="en">
         <TranslationProbe />
       </LoginI18nProvider>,
     );
 
-    fireEvent.change(screen.getByTestId("login.language-select"), {
-      target: { value: "fr" },
-    });
+    fireEvent.click(screen.getByTestId("login.language-select"));
+    const french = await screen.findByRole("option", { name: "Français" });
+    fireEvent.keyDown(french, { key: "Enter" });
     expect(screen.getByRole("heading").textContent).toBe("Se connecter à CityNode");
 
-    fireEvent.change(screen.getByTestId("login.language-select"), {
-      target: { value: "zh" },
-    });
+    fireEvent.click(screen.getByTestId("login.language-select"));
+    const chinese = await screen.findByRole("option", { name: "中文" });
+    fireEvent.pointerDown(chinese, { pointerType: "mouse" });
+    fireEvent.click(chinese);
     expect(screen.getByRole("heading").textContent).toBe("登录 CityNode");
   });
 });

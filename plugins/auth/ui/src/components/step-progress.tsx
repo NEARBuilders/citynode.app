@@ -1,3 +1,4 @@
+import { useLoginTranslation } from "@/i18n/runtime";
 import { cn } from "@/lib/utils";
 
 interface StepProgressProps {
@@ -7,9 +8,10 @@ interface StepProgressProps {
 }
 
 export function StepProgress({ steps, current, testId }: StepProgressProps) {
+  const translate = useLoginTranslation();
   return (
     <div className="flex flex-col gap-2" data-testid={testId} data-step={current + 1}>
-      <ol className="flex gap-2" aria-label="Progress">
+      <ol className="flex gap-2" aria-label={translate("auth.progress.label")}>
         {steps.map((step, index) => (
           <li
             key={step}
@@ -26,7 +28,7 @@ export function StepProgress({ steps, current, testId }: StepProgressProps) {
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="font-medium text-foreground">{steps[current]}</span>
         <span className="text-muted-foreground">
-          Step {current + 1} of {steps.length}
+          {translate("auth.progress.step", { step: current + 1, total: steps.length })}
         </span>
       </div>
     </div>

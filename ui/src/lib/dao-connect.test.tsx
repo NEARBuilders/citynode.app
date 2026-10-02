@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import {
   connectDaoAccount,
   disconnectDaoAccount,

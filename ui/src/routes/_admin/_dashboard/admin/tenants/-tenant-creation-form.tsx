@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useAppTranslation } from "@/i18n/runtime";
 import { humanize } from "../-admin-ui";
 import type { TenantWizardForm } from "./-tenant-form";
 import { deriveTenantWizardNameFields, type NodeKind, nodeKinds } from "./-tenant-wizard";
@@ -48,13 +49,14 @@ export function TenantDetailsFields({
   canContinue: boolean;
   onContinue: () => void;
 }) {
+  const translate = useAppTranslation();
   return (
     <div className="flex max-w-xl flex-col gap-6">
       <FieldGroup>
         <form.Field name="kind">
           {(field) => (
             <Field>
-              <FieldLabel id="tenant-kind-label">Kind</FieldLabel>
+              <FieldLabel id="tenant-kind-label">{translate("common.kind")}</FieldLabel>
               <ToggleGroup
                 aria-labelledby="tenant-kind-label"
                 variant="outline"
@@ -72,7 +74,7 @@ export function TenantDetailsFields({
               >
                 {nodeKinds.map((nodeKind) => (
                   <ToggleGroupItem key={nodeKind} value={nodeKind}>
-                    {humanize(nodeKind)}
+                    {humanize(nodeKind, translate)}
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
@@ -88,7 +90,7 @@ export function TenantDetailsFields({
               return (
                 <div className="flex flex-col gap-4 sm:flex-row">
                   <Field className="sm:flex-1" data-invalid={errors.length > 0 || undefined}>
-                    <FieldLabel htmlFor="parent-root">Country</FieldLabel>
+                    <FieldLabel htmlFor="parent-root">{translate("common.country")}</FieldLabel>
                     <Select
                       value={countryValue}
                       items={rootNodes.map((node) => ({ label: node.name, value: node.id }))}
@@ -104,7 +106,7 @@ export function TenantDetailsFields({
                         className="w-full"
                         aria-invalid={errors.length > 0 || undefined}
                       >
-                        <SelectValue placeholder="Choose a country" />
+                        <SelectValue placeholder={translate("admin.site.chooseCountry")} />
                       </SelectTrigger>
                       <SelectContent>
                         {rootNodes.map((node) => (
@@ -119,7 +121,7 @@ export function TenantDetailsFields({
 
                   {kind === "city" && rootParentId && stateNodes.length > 0 && (
                     <Field className="sm:flex-1">
-                      <FieldLabel htmlFor="parent-state">State</FieldLabel>
+                      <FieldLabel htmlFor="parent-state">{translate("common.state")}</FieldLabel>
                       <Select
                         value={
                           field.state.value === rootParentId
@@ -127,7 +129,7 @@ export function TenantDetailsFields({
                             : field.state.value
                         }
                         items={[
-                          { label: "None", value: DIRECT_COUNTRY_PARENT },
+                          { label: translate("common.none"), value: DIRECT_COUNTRY_PARENT },
                           ...stateNodes.map((node) => ({ label: node.name, value: node.id })),
                         ]}
                         onValueChange={(value) => {
@@ -141,7 +143,9 @@ export function TenantDetailsFields({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={DIRECT_COUNTRY_PARENT}>None</SelectItem>
+                          <SelectItem value={DIRECT_COUNTRY_PARENT}>
+                            {translate("common.none")}
+                          </SelectItem>
                           {stateNodes.map((node) => (
                             <SelectItem key={node.id} value={node.id}>
                               {node.name}
@@ -162,7 +166,7 @@ export function TenantDetailsFields({
             const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
             return (
               <Field data-invalid={errors.length > 0 || undefined}>
-                <FieldLabel htmlFor="node-name">Name</FieldLabel>
+                <FieldLabel htmlFor="node-name">{translate("common.name")}</FieldLabel>
                 <Input
                   id="node-name"
                   name={field.name}
@@ -207,7 +211,7 @@ export function TenantDetailsFields({
             const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
             return (
               <Field data-invalid={errors.length > 0 || undefined}>
-                <FieldLabel htmlFor="node-slug">Address</FieldLabel>
+                <FieldLabel htmlFor="node-slug">{translate("common.address")}</FieldLabel>
                 <Input
                   id="node-slug"
                   name={field.name}
@@ -231,10 +235,10 @@ export function TenantDetailsFields({
                   <GlobeIcon className="size-4 shrink-0" />
                   <span className="min-w-0 font-mono break-all">{hostname || "—"}</span>
                   {preflight?.hostname.available === true && (
-                    <Badge variant="success">Available</Badge>
+                    <Badge variant="success">{translate("common.available")}</Badge>
                   )}
                   {preflight?.hostname.available === false && (
-                    <Badge variant="destructive">Taken</Badge>
+                    <Badge variant="destructive">{translate("admin.site.taken")}</Badge>
                   )}
                 </div>
                 <FieldError errors={errors} />
@@ -248,12 +252,12 @@ export function TenantDetailsFields({
             const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
             return (
               <Field data-invalid={errors.length > 0 || undefined}>
-                <FieldLabel htmlFor="tenant-name">Site name</FieldLabel>
+                <FieldLabel htmlFor="tenant-name">{translate("admin.site.name")}</FieldLabel>
                 <Input
                   id="tenant-name"
                   name={field.name}
                   value={field.state.value}
-                  placeholder="Chicago City Node"
+                  placeholder={translate("admin.site.nameExample")}
                   onBlur={field.handleBlur}
                   onChange={(event) => {
                     tenantNameManuallyEdited.current = true;
@@ -263,7 +267,7 @@ export function TenantDetailsFields({
                   aria-invalid={errors.length > 0 || undefined}
                   required
                 />
-                <FieldDescription>Shown as the site title. Defaults to the name.</FieldDescription>
+                <FieldDescription>{translate("admin.site.nameHint")}</FieldDescription>
                 <FieldError errors={errors} />
               </Field>
             );
@@ -278,7 +282,7 @@ export function TenantDetailsFields({
         onClick={onContinue}
         data-testid="admin-tenant-details-continue"
       >
-        Continue
+        {translate("common.continue")}
       </Button>
     </div>
   );
@@ -308,25 +312,36 @@ export function TenantReview({
   blockedReason: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const translate = useAppTranslation();
   return (
     <form onSubmit={onSubmit} className="flex max-w-xl flex-col gap-6">
       <div className="flex flex-col">
         <InfoRow
-          label="Community"
-          value={`${summary.name} · ${humanize(summary.kind)}${summary.parentName ? ` in ${summary.parentName}` : ""}`}
+          label={translate("common.community")}
+          value={
+            summary.parentName
+              ? translate("admin.communitySummary", {
+                  name: summary.name,
+                  kind: humanize(summary.kind, translate),
+                  parent: summary.parentName,
+                })
+              : `${summary.name} · ${humanize(summary.kind, translate)}`
+          }
         />
-        <InfoRow label="Site" value={summary.tenantName} />
-        <InfoRow label="Address" value={summary.hostname} mono />
-        <InfoRow label="Owning DAO" value={summary.daoAccountId ?? "—"} mono />
+        <InfoRow label={translate("common.site")} value={summary.tenantName} />
+        <InfoRow label={translate("common.address")} value={summary.hostname} mono />
         <InfoRow
-          label="Extends"
+          label={translate("admin.proposal.owningDao")}
+          value={summary.daoAccountId ?? "—"}
+          mono
+        />
+        <InfoRow
+          label={translate("admin.site.extends")}
           value={gatewayId ? `bos://${baseAccount}/${gatewayId}` : "—"}
           mono
         />
       </div>
-      <p className="text-sm text-muted-foreground">
-        Creates the tenant, its node and domain; you'll publish its settings through the DAO next.
-      </p>
+      <p className="text-sm text-muted-foreground">{translate("admin.site.createHint")}</p>
       {blockedReason && (
         <p role="alert" className="text-sm text-destructive">
           {blockedReason}
@@ -338,10 +353,10 @@ export function TenantReview({
           disabled={submitPending || !canSubmit}
           data-testid="admin-tenant-create"
         >
-          {submitPending ? "Creating…" : "Create site"}
+          {submitPending ? translate("common.creating") : translate("admin.site.create")}
         </Button>
         <Button variant="ghost" nativeButton={false} render={<Link to="/admin/tenants" />}>
-          Cancel
+          {translate("common.cancel")}
         </Button>
       </div>
     </form>

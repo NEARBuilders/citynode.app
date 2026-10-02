@@ -21,6 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { geoNodeKinds, nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -38,11 +40,6 @@ type AdminNodeSearch = {
 };
 
 const NODE_KIND_VALUES = ["all", ...geoNodeKinds] as const satisfies readonly AdminNodeListKind[];
-
-const NODE_KIND_LABELS = {
-  all: "All kinds",
-  ...Object.fromEntries(geoNodeKinds.map((kind) => [kind, nodeKindLabel(kind)])),
-} as Record<AdminNodeListKind, string>;
 
 function parseScope(value: unknown): AdminNodeListScope | undefined {
   return value === "roots" || value === "all" ? value : undefined;
@@ -68,12 +65,30 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/")({
       adminNodeListQueryOptions(context.apiClient, deps.scope, deps.kind),
     ),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Communities · Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.communitiesAdmin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: AdminNodes,
 });
 
 function AdminNodes() {
+  const translate = useAppTranslation();
+  const NODE_KIND_LABELS = {
+    all: translate("admin.allKinds"),
+    ...Object.fromEntries(
+      geoNodeKinds.map((kind) => [kind, nodeKindLabel(kind, undefined, translate)]),
+    ),
+  } as Record<AdminNodeListKind, string>;
   const apiClient = useApiClient();
   const navigate = Route.useNavigate();
   const search = Route.useSearch();
@@ -87,7 +102,7 @@ function AdminNodes() {
       {
         id: "name",
         accessorFn: (row) => row.node.name,
-        header: "Name",
+        header: translate("common.name"),
         cell: ({ row }) => (
           <div className="flex min-w-0 flex-col gap-0.5">
             <Link
@@ -106,17 +121,17 @@ function AdminNodes() {
       {
         id: "kind",
         accessorFn: (row) => row.node.kind,
-        header: "Kind",
+        header: translate("common.kind"),
         cell: ({ row }) => (
           <span className="text-muted-foreground">
-            {nodeKindLabel(row.original.node.kind, "—")}
+            {nodeKindLabel(row.original.node.kind, "—", translate)}
           </span>
         ),
       },
       {
         id: "parent",
         accessorFn: (row) => row.parent?.name ?? "",
-        header: "Parent",
+        header: translate("common.parent"),
         meta: { className: "hidden lg:table-cell" },
 
         cell: ({ row }) =>
@@ -134,27 +149,27 @@ function AdminNodes() {
       },
       {
         accessorKey: "status",
-        header: "Tenant",
+        header: translate("common.tenant"),
         cell: ({ row }) => (
           <Badge variant={tenantStatusTone(row.original.status)}>
-            {humanize(row.original.status)}
+            {humanize(row.original.status, translate)}
           </Badge>
         ),
       },
       {
         accessorKey: "validatorCount",
-        header: "Validators",
+        header: translate("common.validators"),
         cell: ({ row }) => <span className="tabular-nums">{row.original.validatorCount}</span>,
       },
       {
         accessorKey: "childrenCount",
-        header: "Children",
+        header: translate("admin.community.children"),
         meta: { className: "hidden lg:table-cell" },
 
         cell: ({ row }) => <span className="tabular-nums">{row.original.childrenCount}</span>,
       },
     ],
-    [],
+    [translate],
   );
 
   const visibleNodes = useMemo(
@@ -165,8 +180,8 @@ function AdminNodes() {
   return (
     <>
       <PageHeader
-        title="Communities"
-        description="Countries, states and cities in the community tree."
+        title={translate("common.communities")}
+        description={translate("admin.community.treeDescription")}
         headerTestId="admin-nodes.heading"
       />
 
@@ -185,10 +200,10 @@ function AdminNodes() {
           >
             <TabsList>
               <TabsTrigger value="roots" data-testid="admin-nodes-scope-roots">
-                Top level
+                {translate("admin.community.topLevel")}
               </TabsTrigger>
               <TabsTrigger value="all" data-testid="admin-nodes-scope-all">
-                All nodes
+                {translate("admin.community.allNodes")}
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -207,7 +222,7 @@ function AdminNodes() {
             }}
           >
             <SelectTrigger
-              aria-label="Filter communities by kind"
+              aria-label={translate("admin.community.filterKind")}
               className="w-full sm:w-auto"
               data-testid="admin-nodes-kind"
             >
@@ -228,8 +243,8 @@ function AdminNodes() {
             <InputGroupInput
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by name or slug"
-              aria-label="Search communities"
+              placeholder={translate("admin.community.search")}
+              aria-label={translate("directory.search")}
               data-testid="admin-nodes-search"
             />
           </InputGroup>
@@ -240,19 +255,23 @@ function AdminNodes() {
         ) : nodesQuery.isError ? (
           <EmptyState
             icon={TreeStructureIcon}
-            title="Couldn't load communities"
-            description={nodesQuery.error.message || "Something went wrong while loading nodes."}
+            title={translate("admin.community.loadListError")}
+            description={appErrorMessage(
+              nodesQuery.error,
+              translate,
+              "admin.community.loadListHint",
+            )}
             action={
               <Button variant="outline" onClick={() => nodesQuery.refetch()}>
-                Retry
+                {translate("org.retry")}
               </Button>
             }
           />
         ) : !visibleNodes.length ? (
           <EmptyState
             icon={TreeStructureIcon}
-            title="No matching communities"
-            description="Try all communities, another kind or a different search."
+            title={translate("admin.community.noMatches")}
+            description={translate("admin.community.noMatchesHint")}
           />
         ) : (
           <>
@@ -271,13 +290,19 @@ function AdminNodes() {
                       <span className="min-w-0 truncate">{row.node.name}</span>
                     </ItemTitle>
                     <ItemDescription>
-                      {nodeKindLabel(row.node.kind, "Node")}
-                      {row.parent ? ` in ${row.parent.name}` : ""} · {row.validatorCount}{" "}
-                      {row.validatorCount === 1 ? "validator" : "validators"}
+                      {row.parent
+                        ? translate("admin.nodeLocationNamed", {
+                            kind: nodeKindLabel(row.node.kind, translate("label.node"), translate),
+                            name: row.parent.name,
+                          })
+                        : nodeKindLabel(row.node.kind, translate("label.node"), translate)}{" "}
+                      · {translate("admin.validator.count", { count: row.validatorCount })}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
-                    <Badge variant={tenantStatusTone(row.status)}>{humanize(row.status)}</Badge>
+                    <Badge variant={tenantStatusTone(row.status)}>
+                      {humanize(row.status, translate)}
+                    </Badge>
                     <CaretRightIcon className="size-4 text-muted-foreground" />
                   </ItemActions>
                 </Item>

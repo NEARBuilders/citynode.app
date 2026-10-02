@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { pluginPath, type SessionData } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 
 function initials(name: string) {
@@ -19,6 +20,7 @@ function MethodRow({
   value: string | null;
   action?: ReactNode;
 }) {
+  const translate = useAppTranslation();
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
       <span className="text-sm text-muted-foreground">{label}</span>
@@ -30,7 +32,7 @@ function MethodRow({
       ) : action ? (
         action
       ) : (
-        <span className="text-sm text-muted-foreground">Not added</span>
+        <span className="text-sm text-muted-foreground">{translate("dashboard.notAdded")}</span>
       )}
     </div>
   );
@@ -47,7 +49,8 @@ export function IdentityCard({
   passkeyCount: number;
   onAddEmail?: () => void;
 }) {
-  const name = user.name || nearAccountId || "You";
+  const translate = useAppTranslation();
+  const name = user.name || nearAccountId || translate("lifecycle.you");
   const realEmail = isSyntheticEmail(user.email) ? null : (user.email ?? null);
   return (
     <Card className="gap-4 px-6" data-testid="home-identity">
@@ -59,19 +62,26 @@ export function IdentityCard({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="truncate font-medium">{name}</span>
           {user.isAnonymous ? (
-            <Badge variant="warning">Guest account</Badge>
+            <Badge variant="warning">{translate("dashboard.guest")}</Badge>
           ) : (
             <span className="truncate text-sm text-muted-foreground">
-              {nearAccountId ?? realEmail ?? "Signed in"}
+              {nearAccountId ?? realEmail ?? translate("dashboard.signedIn")}
             </span>
           )}
         </div>
       </div>
       <div className="flex flex-col divide-y divide-border">
-        <MethodRow label="Passkey" value={passkeyCount > 0 ? `${passkeyCount} added` : null} />
-        <MethodRow label="NEAR wallet" value={nearAccountId} />
         <MethodRow
-          label="Email"
+          label={translate("dashboard.passkey")}
+          value={
+            passkeyCount > 0
+              ? translate("dashboard.passkeysAdded", { count: passkeyCount ?? "" })
+              : null
+          }
+        />
+        <MethodRow label={translate("dashboard.nearWallet")} value={nearAccountId} />
+        <MethodRow
+          label={translate("common.email")}
           value={realEmail}
           action={
             !user.isAnonymous && onAddEmail ? (
@@ -81,7 +91,7 @@ export function IdentityCard({
                 onClick={onAddEmail}
                 data-testid="home-identity-add-email"
               >
-                Add
+                {translate("common.add")}
               </Button>
             ) : undefined
           }
@@ -96,7 +106,7 @@ export function IdentityCard({
         data-testid="home-settings-link"
       >
         <GearSixIcon />
-        Settings
+        {translate("common.settings")}
       </Button>
     </Card>
   );

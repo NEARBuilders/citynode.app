@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthClient, Organization } from "@/app";
 import { Tabs } from "@/components";
+import { render } from "@/i18n/test-render";
 import { ApiKeysTab, type OrganizationApiKey } from "./-api-keys-tab";
 import { InvitationsTab } from "./-invitations-tab";
 import { MembersTab } from "./-members-tab";
@@ -285,6 +286,6 @@ describe("organization management controls", () => {
     pendingDelete.resolve({ error: { message: "delete denied" } });
     expect(await screen.findByText("Deploy key")).toBeTruthy();
     expect(queryClient.getQueryData(orgApiKeysQueryKey(ORG_ID))).toEqual([apiKey]);
-    expect(mocks.error).toHaveBeenCalledWith("delete denied");
+    expect(mocks.error).toHaveBeenCalledWith("This action could not be completed. Try again.");
   });
 });

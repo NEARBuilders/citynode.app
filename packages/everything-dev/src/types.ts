@@ -250,6 +250,7 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
     domain: z.string().optional(),
     status: z.enum(["active", "suspended", "pending_deletion"]).optional(),
     testnet: z.string().optional(),
+    staging: BosStagingSchema.optional(),
     template: z.string().optional(),
     gateway: z
       .object({
@@ -312,6 +313,7 @@ export interface BosConfigInput {
   title?: string;
   description?: string;
   testnet?: string;
+  staging?: BosStaging;
   template?: string;
   gateway?: {
     development?: string;

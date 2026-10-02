@@ -1,15 +1,11 @@
 import { ArrowRightIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import { Badge, Button, Input, LocalDate, SectionHeader } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 import { SettingsRow } from "./-settings-row";
 import type { TenantRecord } from "./-tenant-types";
-
-const STATUS_LABEL: Record<string, string> = {
-  active: "Active",
-  pending: "Pending",
-  suspended: "Suspended",
-  pending_deletion: "Pending deletion",
-};
 
 const STATUS_BADGE = {
   active: "success",
@@ -38,16 +34,17 @@ export function TenantDetails({
     onNameChange: (name: string) => void;
   };
 }) {
+  const translate = useAppTranslation();
   return (
     <section className="flex flex-col gap-2">
-      <SectionHeader title="General" sectionTestId="tenant.section.general" />
+      <SectionHeader title={translate("tenant.general")} sectionTestId="tenant.section.general" />
       <div className="flex flex-col">
         <SettingsRow
-          label="Name"
+          label={translate("common.name")}
           action={
             isOwner && !editor.editing ? (
               <Button variant="ghost" size="sm" onClick={editor.onEdit}>
-                Rename
+                {translate("tenant.rename")}
               </Button>
             ) : undefined
           }
@@ -62,43 +59,47 @@ export function TenantDetails({
             >
               <Input
                 id="tenant-edit-name"
-                aria-label="Community name"
+                aria-label={translate("tenant.communityName")}
                 value={editor.name}
                 autoFocus
                 onChange={(event) => editor.onNameChange(event.target.value)}
                 className="min-w-0 flex-1"
               />
               <Button type="submit" disabled={editor.isPending || !editor.name.trim()}>
-                {editor.isPending ? "Saving…" : "Save"}
+                {editor.isPending ? translate("common.saving") : translate("common.save")}
               </Button>
               <Button type="button" variant="ghost" onClick={editor.onCancel}>
-                Cancel
+                {translate("common.cancel")}
               </Button>
             </form>
           ) : (
             tenant.name
           )}
         </SettingsRow>
-        <SettingsRow label="Status">
+        <SettingsRow label={translate("common.status")}>
           <span className="flex flex-wrap items-center gap-1.5">
             <Badge
               variant={STATUS_BADGE[tenant.status as keyof typeof STATUS_BADGE] ?? "secondary"}
               data-testid="tenant.status"
             >
-              {STATUS_LABEL[tenant.status] ?? tenant.status}
+              {presentationLabel(tenant.status, translate)}
             </Badge>
-            <Badge variant="outline">{tenant.ownerKind === "dao" ? "DAO-owned" : "Platform"}</Badge>
+            <Badge variant="outline">
+              {tenant.ownerKind === "dao"
+                ? translate("tenant.daoOwned")
+                : translate("tenant.platform")}
+            </Badge>
           </span>
         </SettingsRow>
-        <SettingsRow label="Address">
-          <span className="font-mono break-all">{hostname ?? "Not bound yet"}</span>
+        <SettingsRow label={translate("common.address")}>
+          <span className="font-mono break-all">{hostname ?? translate("tenant.notBound")}</span>
         </SettingsRow>
-        <SettingsRow label="Account">
+        <SettingsRow label={translate("common.account")}>
           <span className="font-mono break-all">{tenant.accountId}</span>
         </SettingsRow>
         <SettingsRow
-          label="Organization"
-          description="Members, roles and invitations."
+          label={translate("common.organization")}
+          description={translate("org.membersDescription")}
           action={
             orgSlug ? (
               <Button
@@ -108,7 +109,7 @@ export function TenantDetails({
                 render={<Link to="/orgs/$slug" params={{ slug: orgSlug }} />}
                 data-testid="tenant.open-organization"
               >
-                Manage
+                {translate("nav.manage")}
                 <ArrowRightIcon />
               </Button>
             ) : undefined
@@ -116,12 +117,16 @@ export function TenantDetails({
         >
           <span className="font-mono break-all">{orgSlug ? `@${orgSlug}` : tenant.orgId}</span>
         </SettingsRow>
-        <SettingsRow label="Created">
+        <SettingsRow label={translate("things.created")}>
           <LocalDate value={tenant.createdAt} fallback="—" />
           {tenant.updatedAt ? (
             <span className="text-muted-foreground">
               {" "}
-              · updated <LocalDate value={tenant.updatedAt} format="relative" />
+              ·{" "}
+              <Trans
+                id="date.updated"
+                components={{ date: <LocalDate value={tenant.updatedAt} format="relative" /> }}
+              />
             </span>
           ) : null}
         </SettingsRow>

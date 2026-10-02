@@ -1,3 +1,5 @@
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 export type NextStepId =
   | "save-account"
   | "add-email"
@@ -29,61 +31,64 @@ export interface NextStepsState {
   isAdmin: boolean;
 }
 
-export function getNextSteps(state: NextStepsState): NextStep[] {
+export function getNextSteps(
+  state: NextStepsState,
+  t: AppTranslator = translateEnglishAppMessage,
+): NextStep[] {
   const steps: NextStep[] = [];
 
   if (state.isAnonymous && !state.hasPasskey && !state.hasNear) {
     steps.push({
       id: "save-account",
-      title: "Save your account",
-      description: "Add a passkey to sign in again later.",
-      actionLabel: "Add passkey",
+      title: t("dashboard.saveAccount"),
+      description: t("dashboard.passkeyHint"),
+      actionLabel: t("common.addPasskey"),
     });
   }
 
   if (!state.isAnonymous && !state.hasRealEmail) {
     steps.push({
       id: "add-email",
-      title: "Add your email",
-      description: "Sign in from another device and recover your account.",
-      actionLabel: "Add email",
+      title: t("dashboard.addEmail"),
+      description: t("dashboard.emailHint"),
+      actionLabel: t("dashboard.addEmailAction"),
     });
   }
 
   if (state.organizationCount === 0) {
     steps.push({
       id: "create-org",
-      title: "Create an organization",
-      description: "Communities are run by organizations.",
-      actionLabel: "Create organization",
+      title: t("dashboard.createOrg"),
+      description: t("dashboard.orgsRunCommunities"),
+      actionLabel: t("org.create"),
     });
   } else if (!state.activeOrganizationName) {
     steps.push({
       id: "choose-org",
-      title: "Choose an organization",
-      description: `You belong to ${state.organizationCount} ${state.organizationCount === 1 ? "organization" : "organizations"}. Pick one to work in.`,
-      actionLabel: "Choose",
+      title: t("dashboard.chooseOrg"),
+      description: t("dashboard.orgCount", { count: state.organizationCount }),
+      actionLabel: t("common.choose"),
     });
   } else if (!state.community) {
     steps.push({
       id: "start-community",
-      title: "Start a community",
-      description: `Propose a City Node for ${state.activeOrganizationName}.`,
-      actionLabel: "Start a community",
+      title: t("dashboard.startCommunity"),
+      description: t("dashboard.proposeNamed", { name: state.activeOrganizationName }),
+      actionLabel: t("dashboard.startCommunity"),
     });
   } else {
     steps.push({
       id: "open-community",
-      title: "Open My community",
-      description: `${state.community.name}: events, onboarding, proposals.`,
-      actionLabel: "Open",
+      title: t("dashboard.openCommunity"),
+      description: t("dashboard.communityTasks", { name: state.community.name }),
+      actionLabel: t("common.open"),
     });
     if (state.canManageCommunity) {
       steps.push({
         id: "community-settings",
-        title: "Community settings",
-        description: "Domain, members and gasless writes.",
-        actionLabel: "Open settings",
+        title: t("dashboard.communitySettings"),
+        description: t("dashboard.settingsHint"),
+        actionLabel: t("common.openSettings"),
       });
     }
   }
@@ -91,25 +96,25 @@ export function getNextSteps(state: NextStepsState): NextStep[] {
   if (state.isAdmin) {
     steps.push({
       id: "admin",
-      title: "Review the admin queue",
-      description: "Pending proposals and tenants.",
-      actionLabel: "Open admin",
+      title: t("dashboard.adminQueue"),
+      description: t("dashboard.adminQueueHint"),
+      actionLabel: t("common.openAdmin"),
     });
   }
 
   steps.push({
     id: "stake",
-    title: "Stake NEAR",
-    description: "Back a community's validator.",
-    actionLabel: "Stake",
+    title: t("dashboard.stake"),
+    description: t("dashboard.stakeHint"),
+    actionLabel: t("common.stake"),
   });
 
   if (!state.community) {
     steps.push({
       id: "explore",
-      title: "Explore communities",
-      description: "See what's happening near you.",
-      actionLabel: "Explore",
+      title: t("dashboard.explore"),
+      description: t("dashboard.exploreHint"),
+      actionLabel: t("common.explore"),
     });
   }
 

@@ -1,14 +1,18 @@
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 export const DEFAULT_THING_PAYLOAD = '{\n  "kind": "demo",\n  "value": "hello"\n}';
 
 export type PayloadParse = { ok: true; value: unknown } | { ok: false; error: string };
 
-export function parseThingPayload(raw: string): PayloadParse {
-  if (!raw.trim()) return { ok: false, error: "Payload is required" };
+export function parseThingPayload(
+  raw: string,
+  t: AppTranslator = translateEnglishAppMessage,
+): PayloadParse {
+  if (!raw.trim()) return { ok: false, error: t("things.payloadRequired") };
   try {
     return { ok: true, value: JSON.parse(raw) };
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "";
-    return { ok: false, error: detail ? `Invalid JSON: ${detail}` : "Invalid JSON" };
+  } catch {
+    return { ok: false, error: t("things.invalidJson") };
   }
 }
 

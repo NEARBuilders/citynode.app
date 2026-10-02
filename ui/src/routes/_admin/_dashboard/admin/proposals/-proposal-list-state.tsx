@@ -10,6 +10,7 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { humanize, ListSkeleton } from "../-admin-ui";
 import type { Proposal } from "./-proposal-columns";
 import {
@@ -25,7 +26,6 @@ interface ProposalListStateProps {
   proposals: Proposal[];
   isLoading: boolean;
   isError: boolean;
-  errorMessage?: string;
   onRetry: () => void;
   hasNextPage?: boolean;
   isFetchingNextPage: boolean;
@@ -38,23 +38,23 @@ export function ProposalListState({
   proposals,
   isLoading,
   isError,
-  errorMessage,
   onRetry,
   hasNextPage,
   isFetchingNextPage,
   onLoadMore,
 }: ProposalListStateProps) {
+  const translate = useAppTranslation();
   if (isLoading) return <ListSkeleton />;
 
   if (isError) {
     return (
       <EmptyState
         icon={GavelIcon}
-        title="Couldn't load proposals"
-        description={errorMessage || "Something went wrong while loading proposals."}
+        title={translate("admin.proposal.loadError")}
+        description={translate("admin.proposal.loadHint")}
         action={
           <Button variant="outline" onClick={onRetry}>
-            Retry
+            {translate("org.retry")}
           </Button>
         }
       />
@@ -65,11 +65,15 @@ export function ProposalListState({
     return (
       <EmptyState
         icon={GavelIcon}
-        title={activeFilter === "pending" ? "Nothing waiting for review" : "No proposals"}
+        title={
+          activeFilter === "pending"
+            ? translate("admin.proposal.nothingWaiting")
+            : translate("admin.proposal.empty")
+        }
         description={
           activeFilter === "all"
-            ? "Community applications and submissions appear here."
-            : `There are no ${activeFilter} proposals.`
+            ? translate("admin.proposal.emptyHint")
+            : translate("admin.noFilteredProposals", { status: activeFilter ?? "" })
         }
       />
     );
@@ -95,16 +99,16 @@ export function ProposalListState({
           >
             <ItemContent className="min-w-0">
               <ItemTitle className="max-w-full">
-                <span className="min-w-0 truncate">{proposalTitle(proposal)}</span>
+                <span className="min-w-0 truncate">{proposalTitle(proposal, translate)}</span>
               </ItemTitle>
               <ItemDescription>
-                {proposalTypeLabel(proposal.pluginId)} ·{" "}
+                {proposalTypeLabel(proposal.pluginId, translate)} ·{" "}
                 <LocalDate value={proposal.createdAt} format="relative" />
               </ItemDescription>
             </ItemContent>
             <ItemActions>
               <Badge variant={proposalReviewStatusVariant(proposal.reviewStatus)}>
-                {humanize(proposal.reviewStatus)}
+                {humanize(proposal.reviewStatus, translate)}
               </Badge>
               <CaretRightIcon className="size-4 text-muted-foreground" />
             </ItemActions>
@@ -118,7 +122,7 @@ export function ProposalListState({
           onClick={onLoadMore}
           disabled={isFetchingNextPage}
         >
-          {isFetchingNextPage ? "Loading…" : "Load more"}
+          {isFetchingNextPage ? translate("common.loadingEllipsis") : translate("common.loadMore")}
         </Button>
       )}
     </div>

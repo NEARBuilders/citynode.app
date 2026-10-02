@@ -1,5 +1,8 @@
 import { toast } from "sonner";
 import type { useApiClient, useAuthClient } from "@/app";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { AppActionError } from "@/i18n/error-message";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
 import { proposeNodeApplication } from "./-node-application";
 import {
@@ -18,6 +21,7 @@ import {
   waitFor,
 } from "./-poc-chain";
 import type { PocFormValues } from "./-poc-form";
+import type { PocLogger } from "./-poc-log-message";
 import type { SignerKind, StationState, StepState } from "./-poc-stations";
 
 type GovProposal = Awaited<ReturnType<typeof fetchActiveGovProposals>>[number];
@@ -32,6 +36,8 @@ export interface StepRunnerContext {
   slug: string;
   team: string;
   endowment: string;
+  t?: AppTranslator;
+  locale?: string;
   pool: string;
   gatewayId: string;
   baseAccount: string;
@@ -43,7 +49,7 @@ export interface StepRunnerContext {
   govProposal: GovProposal | null;
   voteStorageFee: string | undefined;
   accountFor: (signer: SignerKind) => string | null;
-  log: (label: string, detail?: string) => void;
+  log: PocLogger;
   fetchPublishedNow: () => Promise<unknown>;
   precheckPlan: (station: StationState, step: StepState) => Promise<DaoPlan | null>;
   viaSessionProposal: (signer: SignerKind) => boolean;
@@ -52,6 +58,8 @@ export interface StepRunnerContext {
 /** Executes one step of a station as its declared signer. */
 export function createStepRunner(ctx: StepRunnerContext) {
   const {
+    t = translateEnglishAppMessage,
+    locale = "en",
     apiClient,
     auth,
     activeOrgId,
@@ -79,12 +87,11 @@ export function createStepRunner(ctx: StepRunnerContext) {
   } = ctx;
   return async (station: StationState, stepId: string) => {
     const step = station.steps.find((entry) => entry.id === stepId);
-    if (!step) throw new Error(`unknown step ${stepId}`);
+    if (!step) throw new AppActionError("error.action");
     const signerId = accountFor(station.def.signer);
 
     if (stepId === "propose") {
-      if (!activeOrgId || !sessionAccount)
-        throw new Error("Organization and NEAR account required");
+      if (!activeOrgId || !sessionAccount) throw new AppActionError("poc.organizationRequired");
       const result = await proposeNodeApplication(
         apiClient,
         {
@@ -92,17 +99,20 @@ export function createStepRunner(ctx: StepRunnerContext) {
           parentId: null,
           name: values.name.trim(),
           slug,
-          motivation: `Prototype application for ${values.name.trim()}`,
+          motivation: t("lifecycle.prototypeMotivation", { name: values.name.trim() }),
         },
         { orgId: activeOrgId, daoAccountId: team, submitterAccountId: sessionAccount },
       );
-      log(`applied for ${slug} as ${sessionAccount}`, `proposal ${result.data.entityId}`);
+      log(
+        { messageId: "poc.applied", values: { slug: slug ?? "", account: sessionAccount ?? "" } },
+        { messageId: "poc.proposalLog", values: { proposal: result.data.entityId ?? "" } },
+      );
       return;
     }
 
     if (stepId === "approve") {
       if (!isAdmin) {
-        throw new Error("admin access required — sign in as an admin");
+        throw new AppActionError("poc.adminRequired");
       }
       const current = await apiClient.proposals.getProposals({
         pluginId: "node",
@@ -110,7 +120,7 @@ export function createStepRunner(ctx: StepRunnerContext) {
         limit: 1,
       });
       const proposal = current.data[0];
-      if (!proposal) throw new Error("No application to approve");
+      if (!proposal) throw new AppActionError("poc.noApplication");
       let updatedAt = proposal.updatedAt;
       if (proposal.reviewStatus !== "approved") {
         const approved = await apiClient.proposals.approve({
@@ -119,10 +129,10 @@ export function createStepRunner(ctx: StepRunnerContext) {
           expectedUpdatedAt: proposal.updatedAt,
         });
         updatedAt = approved.data.updatedAt;
-        log(`approved the application for ${slug}`);
+        log({ messageId: "poc.applicationApproved", values: { slug: slug ?? "" } });
       }
       if (tenantBinding || orgTenant) {
-        log("application already approved and node created — skipping");
+        log({ messageId: "poc.applicationCreated" });
         return;
       }
       try {
@@ -131,7 +141,7 @@ export function createStepRunner(ctx: StepRunnerContext) {
           parentId: null,
           name: values.name.trim(),
           slug,
-          motivation: `Prototype application for ${values.name.trim()}`,
+          motivation: t("lifecycle.prototypeMotivation", { name: values.name.trim() }),
           orgId: activeOrgId ?? "",
           accountId: team,
           submitterAccountId: sessionAccount ?? "",
@@ -139,8 +149,13 @@ export function createStepRunner(ctx: StepRunnerContext) {
           ...(pool ? { poolAccountId: pool } : {}),
         });
         log(
-          `created tenant, node and binding for ${slug}${pool ? `, assigned pool ${pool}` : ""}`,
-          `node ${node.nodeId}`,
+          pool
+            ? { messageId: "poc.nodeCreatedPool", values: { slug, pool } }
+            : { messageId: "poc.nodeCreated", values: { slug } },
+          {
+            messageId: "poc.nodeLog",
+            values: { node: node.nodeId ?? "" },
+          },
         );
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
@@ -152,22 +167,29 @@ export function createStepRunner(ctx: StepRunnerContext) {
             error: detail.slice(0, 4000),
           })
           .catch(() => {});
-        throw new Error(detail);
+        throw error;
       }
       return;
     }
 
     if (stepId === "fund-treasury") {
-      if (!team) throw new Error("Connect the team DAO first");
-      if (!sessionAccount) throw new Error("Sign in with your NEAR wallet first");
-      if (!isAdmin) throw new Error("admin access required — the admin's wallet does the funding");
+      if (!team) throw new AppActionError("poc.teamConnectFirst");
+      if (!sessionAccount) throw new AppActionError("poc.nearSignInFirst");
+      if (!isAdmin) throw new AppActionError("poc.adminFunding");
       if (treasuryFunded) {
-        log("treasury already funded — skipping");
+        log({ messageId: "poc.treasuryFunded" });
         return;
       }
       const result = await transferFromSessionWallet(auth.near, team, fundYocto);
       log(
-        `funded ${team} with ${formatNear(fundYocto.toString())} from ${sessionAccount}`,
+        {
+          messageId: "poc.funded",
+          values: {
+            team: team ?? "",
+            amount: formatNear(fundYocto.toString(), locale) ?? "",
+            account: sessionAccount ?? "",
+          },
+        },
         txHash(result),
       );
       return;
@@ -183,30 +205,34 @@ export function createStepRunner(ctx: StepRunnerContext) {
       });
       const immediate = await waitFor(async () => !!(await fetchPublishedNow()), 30_000, 3_000);
       if (immediate) {
-        log(`published the tenant config as ${team}`, txHash(result));
-        toast.success(`tenant config is live — ${tenantUrl ?? `${slug}.${gatewayId}`}`);
+        log({ messageId: "poc.published", values: { team: team ?? "" } }, txHash(result));
+        toast.success(
+          t("lifecycle.configLiveNamed", {
+            url: tenantUrl ?? `${slug}.${gatewayId}`,
+          }),
+        );
       } else {
         const latest = await fetchDaoProposals(team).catch(() => []);
         const detail =
-          [txHash(result), latest[0] ? `latest proposal #${latest[0].id}` : null]
+          [txHash(result), latest[0] ? t("poc.proposalLog", { proposal: latest[0].id }) : null]
             .filter(Boolean)
             .join(" · ") || undefined;
-        log(`publish proposal signed as ${team} — config goes live when it passes`, detail);
-        toast.info("publish proposal awaiting votes — the config goes live once it passes");
+        log({ messageId: "poc.publishSigned", values: { team: team ?? "" } }, detail);
+        toast.info(t("poc.publishAwaiting"));
       }
       return;
     }
 
     if (stepId === "mark-applied") {
       if (!isAdmin) {
-        log("mark-applied needs an admin session — deferred");
-        toast.info("mark-applied needs an admin session — run this again signed in as an admin");
+        log({ messageId: "poc.markAdminDeferred" });
+        toast.info(t("poc.markAdminHint"));
         return;
       }
       const published = await fetchPublishedNow();
       if (!published) {
-        log("tenant config not live yet — mark-applied deferred");
-        toast.info("the publish proposal is still awaiting votes — run this again once it passes");
+        log({ messageId: "poc.markConfigDeferred" });
+        toast.info(t("poc.markVotesHint"));
         return;
       }
       const current = await apiClient.proposals.getProposals({
@@ -215,22 +241,22 @@ export function createStepRunner(ctx: StepRunnerContext) {
         limit: 1,
       });
       const proposal = current.data[0];
-      if (!proposal) throw new Error("Application disappeared");
+      if (!proposal) throw new AppActionError("poc.applicationMissing");
       await apiClient.proposals.markApplied({
         pluginId: "node",
         entityId: slug,
         expectedUpdatedAt: proposal.updatedAt,
         appliedResourceId: slug,
       });
-      log(`marked ${slug} applied`);
+      log({ messageId: "poc.markedApplied", values: { slug: slug ?? "" } });
       return;
     }
 
     if (stepId === "vote") {
-      if (!govProposal) throw new Error("No active proposal selected");
-      if (!signerId) throw new Error("Team wallet not set");
+      if (!govProposal) throw new AppActionError("poc.noProposal");
+      if (!signerId) throw new AppActionError("poc.teamWalletMissing");
       const proof = await fetchGovProof(signerId);
-      if (!proof) throw new Error(`${signerId} has no veNEAR account — register it first`);
+      if (!proof) throw new AppActionError("poc.venearMissing", { account: signerId ?? "" });
       const result = await signPlanAsDao(signerId, {
         kind: "call",
         receiverId: VOTING_ACCOUNT,
@@ -245,28 +271,45 @@ export function createStepRunner(ctx: StepRunnerContext) {
         attachedDeposit: voteStorageFee ?? VOTE_STORAGE_FEE_FALLBACK,
       });
       log(
-        `voted ${values.voteOption} on proposal ${govProposal.id} as ${signerId}`,
+        {
+          messageId: "poc.voted",
+          values: {
+            option: values.voteOption ?? "",
+            proposal: govProposal.id ?? "",
+            account: signerId ?? "",
+          },
+        },
         txHash(result),
       );
       return;
     }
 
-    if (!step.plan) throw new Error(`step ${stepId} has no plan`);
-    if (!signerId) throw new Error("Signer account not set");
+    if (!step.plan) throw new AppActionError("error.action");
+    if (!signerId) throw new AppActionError("poc.signerMissing");
     const plan = await precheckPlan(station, step);
     if (!plan) return;
     if (viaSessionProposal(station.def.signer)) {
-      const description = `* Title: ${step.label} <br>* Summary: staged from the node lifecycle — ${describePlan(plan)}`;
+      const description = `* Title: ${step.label} <br>* Summary: ${t("lifecycle.stagedSummary", { plan: describePlan(plan, t, locale) })}`;
       const result = await proposeAsSession(auth.near, endowment, plan, description);
-      log(`staged a proposal on ${endowment} — ${describePlan(plan)}`, txHash(result));
+      log(
+        {
+          messageId: "poc.staged",
+          values: { account: endowment ?? "", plan: describePlan(plan, t, locale) ?? "" },
+        },
+        txHash(result),
+      );
       return;
     }
     if (station.def.signer === "endowment") {
-      throw new Error(
-        "connect the endowment in Trezu, or hold AddProposal rights on its policy, to stage this step",
-      );
+      throw new AppActionError("poc.endowmentPermission");
     }
     const result = await signPlanAsDao(signerId, plan);
-    log(`${describePlan(plan)} as ${signerId}`, txHash(result));
+    log(
+      {
+        messageId: "poc.signedPlan",
+        values: { plan: describePlan(plan, t, locale) ?? "", account: signerId ?? "" },
+      },
+      txHash(result),
+    );
   };
 }

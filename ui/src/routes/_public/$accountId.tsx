@@ -4,6 +4,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { getSocialImageMeta } from "everything-dev/ui/metadata";
 import { useAuthClient } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage, Button, PageContainer } from "@/components";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
 
 export const Route = createFileRoute("/_public/$accountId")({
@@ -22,12 +23,16 @@ export const Route = createFileRoute("/_public/$accountId")({
 
     return { accountId, hostUrl: runtimeConfig?.hostUrl ?? "" };
   },
-  head: ({ loaderData, params }) => {
+  head: ({ loaderData, params, match }) => {
     const accountId = params.accountId;
     const hostUrl = (loaderData?.hostUrl ?? "").replace(/\/$/, "");
     const siteUrl = hostUrl ? `${hostUrl}/${accountId}` : "";
     const title = `${accountId} | CityNode`;
-    const description = `${accountId}'s public profile on CityNode.`;
+    const description = translateAppMessage(
+      "meta.profileDescriptionNamed",
+      { account: accountId },
+      resolveAppLocale(undefined, match.context.locale),
+    );
 
     return {
       meta: [
@@ -48,6 +53,7 @@ export const Route = createFileRoute("/_public/$accountId")({
 });
 
 function AccountProfileLayout() {
+  const translate = useAppTranslation();
   const { accountId } = Route.useLoaderData();
   const authClient = useAuthClient();
 
@@ -122,15 +128,13 @@ function AccountProfileLayout() {
           className="flex flex-col items-start gap-4 rounded-3xl bg-muted p-6 sm:p-8"
         >
           <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-medium text-foreground">No profile yet</h2>
-            <p className="text-sm text-muted-foreground">
-              This account hasn’t set up a NEAR profile.
-            </p>
+            <h2 className="text-lg font-medium text-foreground">{translate("profile.empty")}</h2>
+            <p className="text-sm text-muted-foreground">{translate("profile.notConfigured")}</p>
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>
               <CompassIcon />
-              Explore communities
+              {translate("common.exploreCommunities")}
             </Button>
             <Button
               variant="ghost"
@@ -144,7 +148,7 @@ function AccountProfileLayout() {
                 />
               )}
             >
-              View on NearBlocks
+              {translate("profile.nearblocks")}
               <ArrowUpRightIcon />
             </Button>
           </div>

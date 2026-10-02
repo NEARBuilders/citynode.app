@@ -12,10 +12,13 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Badge, Button, InfoPopover } from "@/components";
 import { Spinner } from "@/components/ui/spinner";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage, useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 import { approvalThreshold, describePlan, type SputnikProposal } from "./-poc-chain";
 import {
+  createSignerLabel,
   type LensId,
-  SIGNER_LABEL,
   type StationState,
   type StepStatus,
   signerLens,
@@ -26,31 +29,34 @@ type BadgeVariant = "success" | "warning" | "destructive" | "secondary" | "outli
 export function stationStatusMeta(
   status: StationState["status"],
   hasPendingSteps: boolean,
+  t: AppTranslator = translateEnglishAppMessage,
 ): { label: string; variant: BadgeVariant; id: string } {
   switch (status) {
     case "done":
-      return { label: "Done", variant: "success", id: "done" };
+      return { label: t("lifecycle.done"), variant: "success", id: "done" };
     case "staged":
       return hasPendingSteps
-        ? { label: "Pending", variant: "warning", id: "pending" }
-        : { label: "Awaiting votes", variant: "warning", id: "awaiting-votes" };
+        ? { label: t("lifecycle.pending"), variant: "warning", id: "pending" }
+        : { label: t("lifecycle.awaitingVotes"), variant: "warning", id: "awaiting-votes" };
     case "failed":
-      return { label: "Failed", variant: "destructive", id: "failed" };
+      return { label: t("lifecycle.failed"), variant: "destructive", id: "failed" };
     case "blocked":
-      return { label: "Blocked", variant: "secondary", id: "blocked" };
+      return { label: t("lifecycle.blocked"), variant: "secondary", id: "blocked" };
     case "running":
-      return { label: "Running", variant: "secondary", id: "running" };
+      return { label: t("lifecycle.running"), variant: "secondary", id: "running" };
     case "skipped":
-      return { label: "Skipped", variant: "outline", id: "skipped" };
+      return { label: t("lifecycle.skipped"), variant: "outline", id: "skipped" };
     default:
-      return { label: "Ready", variant: "outline", id: "ready" };
+      return { label: t("lifecycle.ready"), variant: "outline", id: "ready" };
   }
 }
 
 export function StationStatusBadge({ station }: { station: StationState }) {
+  const translate = useAppTranslation();
   const meta = stationStatusMeta(
     station.status,
     station.steps.some((step) => step.status === "pending"),
+    translate,
   );
   return (
     <Badge variant={meta.variant} data-testid={`poc-status-${meta.id}`}>
@@ -89,8 +95,8 @@ function StepIcon({ status }: { status: StepStatus }) {
   }
 }
 
-export const signerName = (station: StationState) =>
-  station.def.signer === "session" ? "you" : SIGNER_LABEL[station.def.signer];
+export const signerName = (station: StationState, t: AppTranslator = translateEnglishAppMessage) =>
+  station.def.signer === "session" ? t("lifecycle.you") : createSignerLabel(t)[station.def.signer];
 
 export function StationListRow({
   station,
@@ -103,6 +109,7 @@ export function StationListRow({
   dimmed: boolean;
   onSelect: () => void;
 }) {
+  const translate = useAppTranslation();
   const { def, status } = station;
   return (
     <Button
@@ -119,7 +126,8 @@ export function StationListRow({
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate">{def.title}</span>
           <span className="truncate text-xs font-normal text-muted-foreground">
-            {signerName(station)} · {stationStatusMeta(status, false).label.toLowerCase()}
+            {signerName(station, translate)} ·{" "}
+            {stationStatusMeta(status, false, translate).label.toLowerCase()}
           </span>
         </span>
       </span>
@@ -134,6 +142,7 @@ export function StationPanel({
   policy,
   warning,
   membersHref,
+  membershipBlocked = false,
   next,
   extra,
   onRun,
@@ -148,6 +157,7 @@ export function StationPanel({
   policy: Parameters<typeof approvalThreshold>[0];
   warning?: string | null;
   membersHref?: string | null;
+  membershipBlocked?: boolean;
   next: StationState | null;
   extra?: ReactNode;
   onRun: () => void;
@@ -156,6 +166,8 @@ export function StationPanel({
   onLens: (lens: LensId) => void;
   onNext: (station: StationState) => void;
 }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
   const { def, status } = station;
   const settled = status === "done" || status === "skipped";
   const stationLens = signerLens(def.signer);
@@ -168,17 +180,22 @@ export function StationPanel({
   const primary = settled ? (
     next ? (
       <Button onClick={() => onNext(next)} data-testid="poc-next-station">
-        Next: {next.def.title}
+        {translate("lifecycle.nextNamed", { station: next.def.title })}
         <ArrowRightIcon />
       </Button>
     ) : null
   ) : otherLens ? (
     <Button variant="outline" onClick={() => onLens(stationLens)} data-testid="poc-switch-lens">
-      Act as {stationLens}
+      {translate("lifecycle.actAsNamed", { signer: presentationLabel(stationLens, translate) })}
     </Button>
   ) : !station.signerConnected ? (
     <Button onClick={onConnect} disabled={busy} data-testid="poc-connect-signer">
-      Connect {def.signer === "endowment" ? "endowment" : "team"}
+      {translate("lifecycle.connectSignerNamed", {
+        signer:
+          def.signer === "endowment"
+            ? translate("lifecycle.endowmentLower")
+            : translate("org.teamFallback"),
+      })}
     </Button>
   ) : (
     <Button
@@ -188,7 +205,7 @@ export function StationPanel({
       data-testid={`poc-run-${def.id}`}
     >
       {status === "running" ? <Spinner /> : <PlayIcon />}
-      {status === "running" ? "Running…" : "Run"}
+      {status === "running" ? translate("lifecycle.runningEllipsis") : translate("lifecycle.run")}
     </Button>
   );
 
@@ -200,14 +217,18 @@ export function StationPanel({
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Station {def.index}</span>
+          <span className="text-sm text-muted-foreground">
+            {translate("lifecycle.stationNumber", { number: def.index })}
+          </span>
           <StationStatusBadge station={station} />
           {warning && (
             <InfoPopover
               icon={<WarningIcon className="text-warning" />}
-              title="Platform audit seat"
+              title={translate("lifecycle.auditSeat")}
               body={warning}
-              links={membersHref ? [{ label: "Add members on Trezu", href: membersHref }] : []}
+              links={
+                membersHref ? [{ label: translate("lifecycle.addMembers"), href: membersHref }] : []
+              }
               testId={`poc-warning-${def.id}`}
             />
           )}
@@ -215,7 +236,7 @@ export function StationPanel({
         <h3 className="text-2xl font-semibold text-foreground">{def.title}</h3>
         <p className="max-w-2xl text-base text-muted-foreground">{def.purpose}</p>
         <p className="text-sm text-muted-foreground">
-          Signed by <span className="font-medium text-foreground">{signerName(station)}</span>
+          {translate("lifecycle.signedByNamed", { signer: signerName(station, translate) })}
           {station.signerAccountId ? (
             <span className="font-mono break-all"> · {station.signerAccountId}</span>
           ) : null}
@@ -231,7 +252,9 @@ export function StationPanel({
             <span className="flex min-w-0 flex-col">
               <span className="text-sm text-foreground">{step.label}</span>
               <span className="font-mono text-xs break-all text-muted-foreground">
-                {step.plan ? describePlan(step.plan) : "off-chain"}
+                {step.plan
+                  ? describePlan(step.plan, translate, locale)
+                  : translate("lifecycle.offChain")}
               </span>
             </span>
           </li>
@@ -242,7 +265,9 @@ export function StationPanel({
 
       {stagedSteps.length > 0 && (
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-foreground">Awaiting votes</span>
+          <span className="text-sm font-medium text-foreground">
+            {translate("lifecycle.awaitingVotes")}
+          </span>
           {stagedSteps.map((step) => {
             const proposal = step.pendingProposal as SputnikProposal;
             const threshold = approvalThreshold(policy, proposal);
@@ -259,8 +284,13 @@ export function StationPanel({
                   <span className="font-mono">#{proposal.id}</span> {step.label}
                   <span className="text-muted-foreground">
                     {" "}
-                    · {threshold.approved}
-                    {threshold.required == null ? "" : `/${threshold.required}`} approvals
+                    ·{" "}
+                    {threshold.required == null
+                      ? translate("lifecycle.approvalsCount", { count: threshold.approved })
+                      : translate("lifecycle.approvalsNamed", {
+                          approved: threshold.approved,
+                          required: threshold.required,
+                        })}
                   </span>
                 </span>
                 {!otherLens && (
@@ -272,10 +302,10 @@ export function StationPanel({
                     data-testid={`poc-approve-${proposal.id}`}
                   >
                     {alreadyVoted
-                      ? "Voted"
+                      ? translate("lifecycle.voted")
                       : station.signerConnected
-                        ? "Approve"
-                        : "Connect to approve"}
+                        ? translate("common.approve")
+                        : translate("lifecycle.connectApprove")}
                   </Button>
                 )}
               </div>
@@ -294,7 +324,7 @@ export function StationPanel({
             data-testid={`poc-reason-${def.id}`}
           >
             {reason}
-            {reason.includes("is not a member of") && membersHref && (
+            {membershipBlocked && membersHref && (
               <>
                 {" · "}
                 <a
@@ -303,7 +333,7 @@ export function StationPanel({
                   rel="noreferrer"
                   className="underline underline-offset-4 hover:text-foreground"
                 >
-                  Add members on Trezu
+                  {translate("lifecycle.addMembers")}
                 </a>
               </>
             )}
@@ -311,7 +341,7 @@ export function StationPanel({
         )}
         {!reason && !settled && otherLens && (
           <p className="text-sm text-muted-foreground">
-            This station is signed by {signerName(station)}.
+            {translate("lifecycle.otherSigner", { signer: signerName(station, translate) })}
           </p>
         )}
         {primary && <div className="flex flex-wrap items-center gap-3">{primary}</div>}

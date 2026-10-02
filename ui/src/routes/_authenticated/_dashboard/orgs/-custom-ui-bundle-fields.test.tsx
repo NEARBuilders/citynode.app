@@ -1,6 +1,7 @@
+import { render } from "@/i18n/test-render";
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emptyTenantConfigDraft, type TenantConfigDraft } from "@/app";

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient, AuthClient } from "@/app";
+import { renderHook } from "@/i18n/test-render";
 import { teamWorkspaceQueryKey } from "@/lib/team-workspace";
 import { WorkspaceRefreshError } from "@/lib/workspace-synchronization";
 import { type InvitationActionInvitation, useInvitationActions } from "./-use-invitation-actions";

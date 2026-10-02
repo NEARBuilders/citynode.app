@@ -12,7 +12,7 @@ export function LanguageSelector() {
       value={locale}
       onValueChange={(value) => {
         if (value && APP_LOCALES.includes(value as AppLocale)) {
-          void selectLocale(value as AppLocale);
+          void selectLocale(value as AppLocale).catch(() => undefined);
         }
       }}
     >

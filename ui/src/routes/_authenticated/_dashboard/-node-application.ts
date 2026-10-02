@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { ApiClient } from "@/app";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { generateSlug } from "@/lib/slug";
 
 export const nodeApplicationKinds = ["country", "state", "city"] as const;
@@ -7,34 +9,43 @@ export const nodeApplicationKinds = ["country", "state", "city"] as const;
 const nearAccountIdPattern =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
 
-const nodeApplicationFields = {
-  kind: z.enum(nodeApplicationKinds),
-  parentId: z.string().nullable(),
-  name: z.string().trim().min(1, "name is required"),
-  slug: z
-    .string()
-    .min(1, "slug is required")
-    .regex(/^[a-z0-9-]+$/, "only lowercase letters, numbers, and hyphens"),
-  motivation: z.string().trim().min(1, "motivation is required"),
-};
+function createNodeApplicationFields(t: AppTranslator) {
+  return {
+    kind: z.enum(nodeApplicationKinds),
+    parentId: z.string().nullable(),
+    name: z.string().trim().min(1, t("application.nameRequired")),
+    slug: z
+      .string()
+      .min(1, t("application.slugRequired"))
+      .regex(/^[a-z0-9-]+$/, t("application.slugInvalid")),
+    motivation: z.string().trim().min(1, t("application.motivationRequired")),
+  };
+}
+const nodeApplicationFields = createNodeApplicationFields(translateEnglishAppMessage);
 
 function validateParent(
   value: { kind: (typeof nodeApplicationKinds)[number]; parentId: string | null },
   context: z.RefinementCtx,
+  t: AppTranslator = translateEnglishAppMessage,
 ) {
   if (value.kind === "country" && value.parentId !== null) {
     context.addIssue({
       code: "custom",
       path: ["parentId"],
-      message: "country cannot have a parent",
+      message: t("application.countryParentError"),
     });
   }
   if (value.kind !== "country" && !value.parentId) {
-    context.addIssue({ code: "custom", path: ["parentId"], message: "parent is required" });
+    context.addIssue({ code: "custom", path: ["parentId"], message: t("application.parentError") });
   }
 }
 
-export const nodeApplicationSchema = z.object(nodeApplicationFields).superRefine(validateParent);
+export function createNodeApplicationSchema(t: AppTranslator) {
+  return z
+    .object(createNodeApplicationFields(t))
+    .superRefine((value, context) => validateParent(value, context, t));
+}
+export const nodeApplicationSchema = createNodeApplicationSchema(translateEnglishAppMessage);
 
 export const nodeProposalPayloadSchema = z
   .object({
@@ -71,11 +82,12 @@ export function parseNodeProposalPayload(payload: unknown): NodeProposalPayload 
 export function resolveActiveOrganizationLabel(
   activeOrgId: string | null,
   organizations: Array<{ id: string; name: string }>,
+  t: AppTranslator = translateEnglishAppMessage,
 ) {
   if (!activeOrgId) return "";
   return (
     organizations.find((organization) => organization.id === activeOrgId)?.name ??
-    "Active organization"
+    t("application.activeOrg")
   );
 }
 

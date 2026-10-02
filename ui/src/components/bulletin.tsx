@@ -3,6 +3,7 @@ import { cn } from "cn";
 import type { ClientRuntimeConfig } from "everything-dev/types";
 import { Markdown } from "@/components/markdown";
 import { UnderConstruction } from "@/components/under-construction";
+import { useAppTranslation } from "@/i18n/runtime";
 
 interface BulletinProps {
   content: string;
@@ -11,12 +12,13 @@ interface BulletinProps {
 }
 
 export function Bulletin({ content, className, runtimeConfig }: BulletinProps) {
+  const translate = useAppTranslation();
   const trimmed = content.trim();
   if (!trimmed) return null;
 
   return (
     <section
-      aria-label="Bulletin"
+      aria-label={translate("bulletin.title")}
       data-testid="bulletin"
       className={cn(
         "flex flex-col gap-3 rounded-2xl bg-info-muted px-5 py-4 text-info-muted-foreground",
@@ -25,7 +27,7 @@ export function Bulletin({ content, className, runtimeConfig }: BulletinProps) {
     >
       <div className="flex items-center gap-2 text-sm font-medium">
         <MegaphoneIcon className="size-4 shrink-0" aria-hidden="true" />
-        Bulletin
+        {translate("bulletin.title")}
       </div>
       <Markdown
         content={trimmed}
@@ -34,8 +36,8 @@ export function Bulletin({ content, className, runtimeConfig }: BulletinProps) {
       />
       <div className="flex justify-end border-t border-info-muted-foreground/15 pt-3">
         <UnderConstruction
-          label="new features"
-          tooltip="See what we're building"
+          label={translate("bulletin.features")}
+          tooltip={translate("bulletin.description")}
           runtimeConfig={runtimeConfig}
         />
       </div>

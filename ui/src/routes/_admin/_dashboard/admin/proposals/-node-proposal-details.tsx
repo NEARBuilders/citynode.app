@@ -1,13 +1,15 @@
 import { InfoRow } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 import { humanize } from "../-admin-ui";
 
 export function NodeProposalDetails({ payload }: { payload: unknown }) {
+  const translate = useAppTranslation();
   const parsed = nodeProposalPayloadSchema.safeParse(payload);
   if (!parsed.success) {
     return (
       <p role="alert" className="text-sm text-destructive">
-        This application's payload is invalid and can't be applied safely.
+        {translate("admin.proposal.invalidPayload")}
       </p>
     );
   }
@@ -19,16 +21,20 @@ export function NodeProposalDetails({ payload }: { payload: unknown }) {
         {proposal.motivation}
       </blockquote>
       <div className="flex flex-col">
-        <InfoRow label="Kind" value={humanize(proposal.kind)} />
-        <InfoRow label="Slug" value={proposal.slug} mono />
+        <InfoRow label={translate("common.kind")} value={humanize(proposal.kind, translate)} />
+        <InfoRow label={translate("common.slug")} value={proposal.slug} mono />
         <InfoRow
-          label="Parent"
+          label={translate("common.parent")}
           value={proposal.parentId ?? "None (country)"}
           mono={!!proposal.parentId}
         />
-        <InfoRow label="Owning DAO" value={proposal.accountId} mono />
-        <InfoRow label="Submitted from" value={proposal.submitterAccountId} mono />
-        <InfoRow label="Organization" value={proposal.orgId} mono />
+        <InfoRow label={translate("admin.proposal.owningDao")} value={proposal.accountId} mono />
+        <InfoRow
+          label={translate("admin.proposal.submittedFrom")}
+          value={proposal.submitterAccountId}
+          mono
+        />
+        <InfoRow label={translate("common.organization")} value={proposal.orgId} mono />
       </div>
     </div>
   );

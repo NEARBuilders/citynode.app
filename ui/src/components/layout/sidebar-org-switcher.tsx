@@ -3,6 +3,7 @@ import type { Organization } from "@/app";
 import { LogoMark } from "@/components/logo";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { useAppTranslation } from "@/i18n/runtime";
 import { OrgMark } from "./org-mark";
 import { OrgSwitcherMenuContent } from "./org-switcher-menu";
 
@@ -17,6 +18,7 @@ export function SidebarOrgSwitcher({
   organizations,
   activeOrgId,
 }: SidebarOrgSwitcherProps) {
+  const translate = useAppTranslation();
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
 
   return (
@@ -28,7 +30,7 @@ export function SidebarOrgSwitcher({
             <div className="grid flex-1 text-left leading-tight">
               <span className="truncate text-sm font-semibold">{activeOrg?.name ?? appName}</span>
               <span className="truncate text-xs text-muted-foreground">
-                {activeOrg ? "Organization" : "Choose an organization"}
+                {activeOrg ? translate("common.organization") : translate("org.choose")}
               </span>
             </div>
             <CaretUpDownIcon className="ml-auto size-4 text-muted-foreground" />

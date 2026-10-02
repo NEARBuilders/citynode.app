@@ -7,6 +7,13 @@ import { z } from "zod";
 import { getGatewayId, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { PageContainer, PageHeader, SectionHeader } from "@/components";
 import { Button } from "@/components/ui/button";
+import type { AppTranslator } from "@/i18n/catalogs";
+import {
+  resolveAppLocale,
+  translateAppMessage,
+  translateEnglishAppMessage,
+  useAppTranslation,
+} from "@/i18n/runtime";
 import { parseNearAmount } from "@/lib/near-amount";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -36,8 +43,24 @@ export const Route = createFileRoute("/_public/stake")({
   },
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Stake", match.context.runtimeConfig) },
-      { name: "description", content: "Stake NEAR to back a CityNode community." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "common.stake",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.stakeDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   component: StakePage,
@@ -63,15 +86,15 @@ function getDirectoryNodes(tenantApps: TenantApp[]) {
   );
 }
 
-function getStakeTitle(node: Node | undefined, slug: string | null, loading: boolean): ReactNode {
-  if (node) return `Stake to ${node.name}`;
-  if (slug && loading)
-    return (
-      <>
-        Stake to <span className="capitalize">{slug}</span>
-      </>
-    );
-  return "Stake";
+function getStakeTitle(
+  node: Node | undefined,
+  slug: string | null,
+  loading: boolean,
+  t: AppTranslator = translateEnglishAppMessage,
+): ReactNode {
+  if (node) return t("stake.toNamed", { name: node.name });
+  if (slug && loading) return <>{t("stake.toNamed", { name: slug })}</>;
+  return t("common.stake");
 }
 
 function hasInheritedValidator(node: Node | undefined, sourceNodeId: string | null | undefined) {
@@ -90,6 +113,7 @@ function getSlugFromHostname(): string | null {
 }
 
 function StakePage() {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -178,8 +202,8 @@ function StakePage() {
       <PageContainer>
         <PageHeader
           headerTestId="stake.heading"
-          title="Stake"
-          description="Back a community by staking NEAR to its validator."
+          title={translate("common.stake")}
+          description={translate("stake.description")}
         />
         <StakeSkeleton />
       </PageContainer>
@@ -191,11 +215,11 @@ function StakePage() {
       <PageContainer>
         <PageHeader
           headerTestId="stake.heading"
-          title="Stake"
-          description="Back a community by staking NEAR to its validator."
+          title={translate("common.stake")}
+          description={translate("stake.description")}
         />
         <section className="flex flex-col gap-6">
-          <SectionHeader title="Pick a community" />
+          <SectionHeader title={translate("stake.pickCommunity")} />
           <StakeDirectory nodes={directoryNodes} gateway={gateway} isLoading={directoryLoading} />
         </section>
         <StakeOnramp />
@@ -216,10 +240,13 @@ function StakePage() {
             render={<Link to="/stake" />}
           >
             <ArrowLeftIcon data-icon="inline-start" />
-            All communities
+            {translate("community.all")}
           </Button>
         )}
-        <PageHeader headerTestId="stake.heading" title={getStakeTitle(node, slug, nodeLoading)} />
+        <PageHeader
+          headerTestId="stake.heading"
+          title={getStakeTitle(node, slug, nodeLoading, translate)}
+        />
       </div>
       <StakeNodeContent
         aside={

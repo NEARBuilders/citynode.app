@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import { thingQueryKeys } from "./-thing-cache";
 import type { ThingProposal } from "./-thing-proposal-status";
 import { Route } from "./$thingId";
@@ -102,7 +103,7 @@ describe("Thing details interactions", () => {
     await act(async () => pending.reject(new Error("Vote rejected")));
 
     await screen.findByRole("button", { name: /4\s*upvote/ }, { timeout: 5000 });
-    expect(harness.error).toHaveBeenCalledWith("Vote rejected");
+    expect(harness.error).toHaveBeenCalledWith("This action could not be completed. Try again.");
     expect(harness.getUserVote.mock.calls.length).toBeGreaterThan(1);
     expect(harness.getUpvoteCount.mock.calls.length).toBeGreaterThan(1);
   });

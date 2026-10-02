@@ -10,6 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useAppTranslation } from "@/i18n/runtime";
 
 interface SignOutMutationLike {
   mutate: () => void;
@@ -40,6 +41,7 @@ export function UserNavMenuContent({
   className = "w-64",
   align = "end",
 }: UserNavMenuContentProps) {
+  const translate = useAppTranslation();
   return (
     <DropdownMenuContent className={className} align={align}>
       <DropdownMenuGroup>
@@ -66,7 +68,7 @@ export function UserNavMenuContent({
             data-testid="account.profile-menuitem"
           >
             <UserCircleIcon />
-            Your profile
+            {translate("identity.profile")}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
@@ -74,7 +76,7 @@ export function UserNavMenuContent({
           data-testid="account.settings-menuitem"
         >
           <GearIcon />
-          Settings
+          {translate("common.settings")}
         </DropdownMenuItem>
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
@@ -86,7 +88,9 @@ export function UserNavMenuContent({
         data-testid="account.signout-menuitem"
       >
         <SignOutIcon />
-        {signOutMutation.isPending ? "Signing out…" : "Sign out"}
+        {signOutMutation.isPending
+          ? translate("identity.signingOut")
+          : translate("identity.signOut")}
       </DropdownMenuItem>
     </DropdownMenuContent>
   );

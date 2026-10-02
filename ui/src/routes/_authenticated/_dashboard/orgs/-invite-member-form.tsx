@@ -7,6 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export type InviteRole = "admin" | "member";
 
@@ -41,15 +43,19 @@ export function detectInviteIdentifier(
   return null;
 }
 
-const ROLE_ITEMS = [
-  { label: "Member", value: "member" },
-  { label: "Admin", value: "admin" },
-];
+export function createRoleItems(t: AppTranslator) {
+  return [
+    { label: t("org.member"), value: "member" },
+    { label: t("org.admin"), value: "admin" },
+  ];
+}
 
-const NETWORK_ITEMS = [
-  { label: "Mainnet", value: "mainnet" },
-  { label: "Testnet", value: "testnet" },
-];
+export function createNetworkItems(t: AppTranslator) {
+  return [
+    { label: t("org.mainnet"), value: "mainnet" },
+    { label: t("org.testnet"), value: "testnet" },
+  ];
+}
 
 const NO_TEAM = "";
 
@@ -62,13 +68,17 @@ export function InviteMemberForm({
   onInvite: (values: InviteMemberValues) => Promise<unknown>;
   teams: Array<{ id: string; name: string }>;
 }) {
+  const translate = useAppTranslation();
+  const NETWORK_ITEMS = createNetworkItems(translate);
+  const ROLE_ITEMS = createRoleItems(translate);
+
   const [identifier, setIdentifier] = useState("");
   const [role, setRole] = useState<InviteRole>("member");
   const [teamId, setTeamId] = useState(NO_TEAM);
   const [nearNetwork, setNearNetwork] = useState<"mainnet" | "testnet">("mainnet");
   const detectedIdentifier = detectInviteIdentifier(identifier);
   const teamItems = [
-    { label: "No team", value: NO_TEAM },
+    { label: translate("org.noTeam"), value: NO_TEAM },
     ...teams.map((team) => ({ label: team.name, value: team.id })),
   ];
 
@@ -94,15 +104,15 @@ export function InviteMemberForm({
       <div className="flex flex-col gap-2 lg:flex-row">
         <Field className="min-w-0 flex-1">
           <FieldLabel htmlFor="invite-identifier" className="sr-only">
-            Email or NEAR account
+            {translate("org.inviteRecipient")}
           </FieldLabel>
           <Input
             id="invite-identifier"
             type="text"
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
-            placeholder="email@example.com or alice.near"
-            aria-label="Email or NEAR account"
+            placeholder={translate("org.inviteExample")}
+            aria-label={translate("org.inviteRecipient")}
             autoComplete="off"
             data-testid="invite-identifier-input"
           />
@@ -117,7 +127,7 @@ export function InviteMemberForm({
           >
             <SelectTrigger
               id="invite-role"
-              aria-label="Role"
+              aria-label={translate("org.role")}
               className="min-w-32 flex-1 lg:flex-none"
               data-testid="invite-role-select"
             >
@@ -139,7 +149,7 @@ export function InviteMemberForm({
             >
               <SelectTrigger
                 id="invite-team"
-                aria-label="Team"
+                aria-label={translate("org.team")}
                 className="min-w-36 flex-1 lg:flex-none"
                 data-testid="invite-team-select"
               >
@@ -164,7 +174,7 @@ export function InviteMemberForm({
             >
               <SelectTrigger
                 id="invite-network"
-                aria-label="NEAR network"
+                aria-label={translate("org.network")}
                 className="min-w-32 flex-1 lg:flex-none"
                 data-testid="invite-network-select"
               >
@@ -185,7 +195,7 @@ export function InviteMemberForm({
             className="flex-1 lg:flex-none"
             data-testid="invite-submit-button"
           >
-            {isPending ? "Inviting…" : "Invite"}
+            {isPending ? translate("org.inviting") : translate("org.invite")}
           </Button>
         </div>
       </div>
@@ -195,12 +205,15 @@ export function InviteMemberForm({
         data-testid="invite-identifier-feedback"
       >
         {detectedIdentifier?.kind === "email"
-          ? "We'll email an invitation link to this address."
+          ? translate("org.emailInviteHint")
           : detectedIdentifier?.kind === "near"
-            ? `NEAR invitation: ${detectedIdentifier.value} on ${nearNetwork} claims it by signing in with that wallet.`
+            ? translate("invitation.nearHint", {
+                account: detectedIdentifier.value,
+                network: nearNetwork,
+              })
             : identifier.trim()
-              ? "Enter a valid email address or NEAR account ID."
-              : "Invite by email or NEAR account."}
+              ? translate("org.invalidRecipient")
+              : translate("org.inviteHint")}
       </p>
     </form>
   );

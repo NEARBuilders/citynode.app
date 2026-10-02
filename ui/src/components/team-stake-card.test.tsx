@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Near } from "near-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import { TeamStakeCard } from "./team-stake-card";
 
 const target = {
@@ -87,8 +88,8 @@ describe("TeamStakeCard", () => {
     expect(await screen.findByText("2.5 NEAR")).toBeTruthy();
     expect(screen.getByTestId("dashboard-node.team-stake-amount").textContent).toBe("2.5 NEAR");
     expect(screen.queryByText("999 NEAR")).toBeNull();
-    expect(screen.getByText("india.sputnik-dao.near")).toBeTruthy();
-    expect(screen.getByText("india.poolv1.near")).toBeTruthy();
+    expect(screen.getByText(/india\.sputnik-dao\.near/)).toBeTruthy();
+    expect(screen.getByText(/india\.poolv1\.near/)).toBeTruthy();
   });
 
   it("explains when the team account or staking pool is missing", () => {

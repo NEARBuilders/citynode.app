@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { AuthClient } from "@/app";
 import type { ApiKeyFormValues } from "@/components";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { CreatedOrganizationApiKey, OrganizationApiKey } from "./-api-keys-tab";
 import { orgApiKeysQueryKey } from "./-organization-query-keys";
 
@@ -10,6 +12,7 @@ export function useOrganizationApiKeyActions(
   orgId: string,
   onCreated: (apiKey: CreatedOrganizationApiKey) => void,
 ) {
+  const translate = useAppTranslation();
   const queryClient = useQueryClient();
   const queryKey = orgApiKeysQueryKey(orgId);
   const createApiKeyMutation = useMutation({
@@ -25,10 +28,10 @@ export function useOrganizationApiKeyActions(
     },
     onSuccess: async (data) => {
       if (data) onCreated(data as CreatedOrganizationApiKey);
-      toast.success("API key created");
+      toast.success(translate("org.keyCreated"));
       await queryClient.invalidateQueries({ queryKey });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to create API key"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   const deleteApiKeyMutation = useMutation({
     mutationFn: async (keyId: string) => {
@@ -44,12 +47,12 @@ export function useOrganizationApiKeyActions(
       return { previousKeys };
     },
     onSuccess: async () => {
-      toast.success("API key deleted");
+      toast.success(translate("org.keyDeleted"));
       await queryClient.invalidateQueries({ queryKey });
     },
     onError: (error: Error, _keyId, context) => {
       if (context?.previousKeys) queryClient.setQueryData(queryKey, context.previousKeys);
-      toast.error(error.message || "Failed to delete API key");
+      toast.error(appErrorMessage(error, translate));
     },
   });
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { Button } from "@/components";
 import { useClientValue } from "@/hooks";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { returnPath } from "@/lib/return-path";
 import { OnboardingStation } from "./-onboarding-station";
@@ -15,11 +16,22 @@ export const Route = createFileRoute("/_authenticated/onboarding/station/$codeId
     org: typeof search.org === "string" && search.org ? search.org : undefined,
     from: returnPath(search.from),
   }),
-  head: () => ({ meta: [{ title: "Onboarding station" }] }),
+  head: ({ match }) => ({
+    meta: [
+      {
+        title: translateAppMessage(
+          "nav.onboardingStation",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
+    ],
+  }),
   component: OnboardingStationPage,
 });
 
 function OnboardingStationPage() {
+  const translate = useAppTranslation();
   const { codeId } = Route.useParams();
   const { org, from } = Route.useSearch();
   const navigate = useNavigate();
@@ -55,7 +67,7 @@ function OnboardingStationPage() {
           data-testid="station.exit"
         >
           <ArrowLeftIcon data-icon="inline-start" />
-          Exit station
+          {translate("station.exit")}
         </Button>
         {canFullscreen && (
           <Button
@@ -70,7 +82,7 @@ function OnboardingStationPage() {
             ) : (
               <ArrowsOutIcon data-icon="inline-start" />
             )}
-            {fullscreen ? "Exit full screen" : "Full screen"}
+            {fullscreen ? translate("station.exitFullscreen") : translate("station.fullscreen")}
           </Button>
         )}
       </header>

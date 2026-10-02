@@ -115,6 +115,34 @@ const runHydrate = async (config: Record<string, unknown>) => {
 };
 
 describe("client bootstrap", () => {
+  it("forwards application boundaries and the SSR document language into the composed router", async () => {
+    const { hydrate } = await import("../../src/ui/hydrate");
+    const errorBoundary = () => null;
+    const pendingBoundary = () => null;
+    const notFoundBoundary = () => null;
+    const previousLocale = document.documentElement.lang;
+    document.documentElement.lang = "fr";
+    document.documentElement.setAttribute("data-everything-ssr", "");
+    try {
+      await hydrate({
+        config: bootstrap.config,
+        routeConfig: async () => bootstrap.coreRouteConfig,
+        defaultErrorComponent: errorBoundary,
+        defaultPendingComponent: pendingBoundary,
+        defaultNotFoundComponent: notFoundBoundary,
+      });
+      expect(bootstrap.createRouter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaultErrorComponent: errorBoundary,
+          defaultPendingComponent: pendingBoundary,
+          defaultNotFoundComponent: notFoundBoundary,
+          context: expect.objectContaining({ locale: "fr" }),
+        }),
+      );
+    } finally {
+      document.documentElement.lang = previousLocale;
+    }
+  });
   it("rejects missing config before loading the router and can retry", async () => {
     bootstrap.config.hostUrl = "";
     await expect(runHydrate(bootstrap.config)).rejects.toThrow("Missing hostUrl or rpcBase");

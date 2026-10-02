@@ -3,6 +3,7 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export interface InfoPopoverLink {
   label: string;
@@ -29,6 +30,7 @@ export function InfoPopover({
   label,
   icon,
 }: InfoPopoverProps) {
+  const translate = useAppTranslation();
   return (
     <Popover>
       <PopoverTrigger
@@ -39,7 +41,7 @@ export function InfoPopover({
             className={cn("shrink-0", className)}
           />
         }
-        aria-label={label ?? `about ${title}`}
+        aria-label={label ?? translate("common.aboutNamed", { name: title ?? "" })}
         data-testid={testId}
       >
         {icon ?? <InfoIcon className="h-3.5 w-3.5" />}
