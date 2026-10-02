@@ -309,9 +309,7 @@ async function exportPublishKey(
     if (statSync(credentialPath).mode & 0o077) {
       chmodSync(credentialPath, 0o600);
     }
-  } catch {
-    // best-effort tightening; near-kit owns the write path
-  }
+  } catch {}
 
   return {
     publicKey: keyPair.publicKey,
@@ -320,7 +318,6 @@ async function exportPublishKey(
     exportedTo: nearCredentialsPath(network, account),
   };
 }
-
 function parseNearPrivateKey(privateKey: string): KeyPair {
   return parseKey(privateKey) as KeyPair;
 }

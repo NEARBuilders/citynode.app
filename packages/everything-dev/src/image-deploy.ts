@@ -8,7 +8,10 @@ export interface ResolvedImageRef {
   source: "ci" | "env" | "repository";
 }
 
-// ci.image in bos.config.json → BOS_IMAGE env → derived from `repository`.
+/**
+ * Image reference resolution precedence (ADR 0021): `ci.image` in
+ * bos.config.json → `BOS_IMAGE` env → derived from `repository`.
+ */
 export function resolveImageRef(input: {
   ciImage?: string;
   repository?: string;
@@ -49,7 +52,11 @@ export interface ImageDeployResult {
   digest?: string;
 }
 
-// Build the runtime stage, tag sha-<short> + latest, push both, capture the digest (ADR 0021).
+/**
+ * Image leg (ADR 0021): build the runtime stage, tag sha-<short> + latest,
+ * push both, and capture the digest. Callers skip the leg with a notice when
+ * no image is configured (child repos get build+upload+publish only).
+ */
 export async function buildAndPushImage(input: {
   image: string;
   configDir: string;
@@ -115,8 +122,11 @@ export async function buildAndPushImage(input: {
   return { image: input.image, tag, digest };
 }
 
-// Pull-only Railway deploy (ADR 0021): a thin FROM pins the pushed digest so
-// Railway never rebuilds; RAILWAY_DOCKERFILE_PATH points at the generated file.
+/**
+ * Railway leg (ADR 0021): pull-only deploy of the pushed image digest — a
+ * thin `FROM image@digest` Dockerfile pins the digest so Railway never
+ * rebuilds; `RAILWAY_DOCKERFILE_PATH` points at the generated file.
+ */
 export async function deployImageToRailway(input: {
   image: string;
   digest: string;

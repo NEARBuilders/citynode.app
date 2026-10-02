@@ -23,6 +23,7 @@ import { pruneUnusedUiFiles } from "../cli/prune";
 import { generateCodeArtifacts } from "../code-artifacts";
 import type { OverrideSection, PhaseTiming } from "../contract";
 import { makeProjectEnv } from "../env/project-env";
+import { parseBosUrl } from "../fastkv";
 import { materializeViaLayer } from "../infra/materializer";
 import { timePhase } from "../progress";
 import { openResolution } from "../resolution/session";
@@ -42,6 +43,11 @@ export async function fetchInitParent(
   return { parentConfig, parentPluginKeys };
 }
 
+function normalizeExtendsRef(extendsInput: string | undefined, fallback: string): string {
+  if (!extendsInput) return fallback;
+  return extendsInput.startsWith("bos://") ? extendsInput : `bos://${extendsInput}`;
+}
+
 export function registerInit(builder: BosBuilder) {
   return {
     init: builder.init.handler(async ({ input }) => {
@@ -56,13 +62,13 @@ export function registerInit(builder: BosBuilder) {
         let plugins = input.plugins;
 
         if (input.extends) {
-          const normalized = input.extends.startsWith("bos://")
-            ? input.extends
-            : `bos://${input.extends}`;
-          const match = normalized.match(/^bos:\/\/([^/]+)\/(.+)$/);
-          if (match) {
-            extendsAccount = match[1];
-            extendsGateway = match[2];
+          try {
+            const { accountId, gatewayId } = parseBosUrl(normalizeExtendsRef(input.extends, ""));
+            extendsAccount = accountId;
+            extendsGateway = gatewayId;
+          } catch {
+            extendsAccount = "";
+            extendsGateway = "";
           }
         }
 
@@ -301,11 +307,10 @@ export function registerInit(builder: BosBuilder) {
           await cleanup();
         }
       } catch (error) {
-        const extendsRef = input.extends
-          ? input.extends.startsWith("bos://")
-            ? input.extends
-            : `bos://${input.extends}`
-          : "bos://dev.everything.near/everything.dev";
+        const extendsRef = normalizeExtendsRef(
+          input.extends,
+          "bos://dev.everything.near/everything.dev",
+        );
         return {
           status: "error" as const,
           directory: input.directory ?? "",

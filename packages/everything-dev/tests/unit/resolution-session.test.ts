@@ -291,6 +291,22 @@ describe("openResolution × dev overlay (bos.dev.ts)", () => {
     expect(session?.rawConfig).toEqual(overlayLeaf);
   });
 
+  it("golden: a present bos.dev.ts defaulting to {} resolves identically to the no-overlay open", async () => {
+    const withEmptyOverlay = await openResolution(
+      { path: "/project/bos.config.json", env: "development" },
+      overlayIo(chainFiles({ "/project/bos.dev.ts": "export default {}" }), {
+        "/project/bos.dev.ts": { default: {} },
+      }),
+    );
+    const withoutOverlay = await openResolution(
+      { path: "/project/bos.config.json", env: "development" },
+      overlayIo(chainFiles(), {}),
+    );
+
+    expect(JSON.stringify(withEmptyOverlay?.config)).toBe(JSON.stringify(withoutOverlay?.config));
+    expect(withEmptyOverlay?.rawConfig).toEqual(withoutOverlay?.rawConfig);
+  });
+
   it("never reads the overlay in production or staging", async () => {
     const hostEntry = "remoteEntry.overlay-host.js";
     const hostManifest = {

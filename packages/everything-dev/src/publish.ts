@@ -333,6 +333,14 @@ export async function preflightPublish(input: PublishToFastKvInput): Promise<Pub
   };
 }
 
+/**
+ * The deploy-train publish core (ADR 0020, as amended): preflight
+ * (storage/CDN creds + signing) fails fast before the build, then build →
+ * upload → version-manifest pin → config write-back → FastKV publish +
+ * read-back. Scoped to one plugin via `packages`, a single-plugin redeploy
+ * ships real bytes to the storage origin — same as the full train, nothing
+ * image-native left.
+ */
 export async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFastKvResult> {
   const preflight = await preflightPublish(input);
   if (preflight.kind === "error") {
