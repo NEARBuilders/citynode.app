@@ -39,10 +39,10 @@ prompt + `--level` flag, persisted in `bos.app.ts` and the sync snapshot.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [003](./v1-current/003-init-starter-levels.md) | `bos init` starter levels — simple vs advanced UI route pruning | P1 | M | — | TODO |
-| [004](./v1-current/004-slim-api-shell.md) | Slim generic API shell for scaffolded children | P1 | M | 003 (vocabulary) | TODO |
-| [005](./v1-current/005-commented-config-form.md) | Commented `bos.app.ts` + `bos.dev.ts` scaffold; retire legacy `plugin.dev.ts` copy | P2 | S | none (after 003 to avoid double-touching `bos.app.ts` generation) | TODO |
-| [006](./v1-current/006-init-test-baseline-hardening.md) | Init test-baseline hardening — hermeticity + prune-vs-real-tree | P3 | S | none | TODO |
+| [003](./v1-current/003-init-starter-levels.md) | `bos init` starter levels — simple vs advanced UI route pruning | P1 | M | — | DONE (`21c752d2a`) |
+| [004](./v1-current/004-slim-api-shell.md) | Slim generic API shell for scaffolded children | P1 | M | 003 (vocabulary) | DONE (`fa02b9eb8`) |
+| [005](./v1-current/005-commented-config-form.md) | Commented `bos.app.ts` + `bos.dev.ts` scaffold; plugin.dev.ts copies kept (load-bearing — corrected during execution) | P2 | S | none (after 003 to avoid double-touching `bos.app.ts` generation) | DONE (`332ce42e3`) |
+| [006](./v1-current/006-init-test-baseline-hardening.md) | Init test-baseline hardening — hermeticity + prune-vs-real-tree | P3 | S | none | DONE (`23b954a59`) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
