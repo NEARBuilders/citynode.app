@@ -28,7 +28,7 @@ vi.mock("@/app", async () => {
     useApiClient: () => ({
       resolveTenantByOrgId: harness.resolveTenantByOrgId,
       listTenantBindingsForTenant: harness.listTenantBindingsForTenant,
-      apps: { getRegistryApp: harness.getRegistryApp },
+      registry: { getRegistryApp: harness.getRegistryApp },
       updateTenant: harness.updateTenant,
     }),
     useAuthClient: () => ({

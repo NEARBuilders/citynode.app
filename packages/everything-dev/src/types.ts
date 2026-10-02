@@ -135,6 +135,9 @@ const PluginRuntimeUiSchema = z.object({
   ssrIntegrity: z.string().optional(),
   entryUrl: z.string().optional(),
   ssrEntryUrl: z.string().optional(),
+  /** pin-derived hashed browser manifest (mf-manifest) — absent for local
+   * slots; registration reads this instead of the overloaded `entry` */
+  browserManifestUrl: z.string().optional(),
   dependsOn: z.array(z.string()).optional(),
 });
 export type PluginRuntimeUi = z.infer<typeof PluginRuntimeUiSchema>;
@@ -415,6 +418,8 @@ export const RuntimeConfigSchema = z.object({
     ssrUrl: z.string().optional(),
     ssrIntegrity: z.string().optional(),
     ssrEntryUrl: z.string().optional(),
+    /** pin-derived hashed browser manifest (mf-manifest) */
+    browserManifestUrl: z.string().optional(),
     dependsOn: z.array(z.string()).optional(),
   }),
   api: FederationEntrySchema.extend({

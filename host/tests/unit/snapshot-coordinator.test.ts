@@ -57,7 +57,7 @@ const derivedConfig = {
   },
 } as unknown as RuntimeConfig;
 
-const snapshotLayer = RuntimeSnapshot.layer.pipe(
+const snapshotLayer = RuntimeSnapshot.layer().pipe(
   Layer.provide(Layer.succeed(ConfigService, bootConfig)),
 );
 
@@ -115,10 +115,12 @@ describe("adoptPublishedPointer", () => {
       "production",
     );
     expect(composeUiMock).toHaveBeenCalledTimes(1);
-    // the pre-warm composes into a FRESH compose state, which the swap adopts
+    // the pre-warm composes into the FRESH serving caches, which the swap
+    // adopts as a whole — the warm state IS the serving state (C7)
     const composeStateArg = composeUiMock.mock.calls[0]![1];
     expect(result.after.composeState).toBe(composeStateArg);
     expect(result.after.composeState).not.toBe(result.before.composeState);
+    expect(result.after.clientConfigState).not.toBe(result.before.clientConfigState);
     expect(result.after.config.ui.integrity).toBe(entrySri);
     expect(result.after.config.ui.entryUrl).toBe("https://cdn.example.test/ui/remoteEntry.cf71.js");
     expect(result.after.fingerprint).toBe(deploymentFingerprint(derivedConfig));

@@ -7,7 +7,7 @@ import {
   copyFilteredFiles,
   writeDevOverlayTemplate,
 } from "../../src/cli/init";
-import { clearConfigCache, loadAppDescriptorConfig } from "../../src/config";
+import { loadAppDescriptorConfig, resetConfigPathCache } from "../../src/config";
 import { serializeAppDescriptorSource } from "../../src/descriptor/serialize";
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
@@ -29,7 +29,7 @@ describe("commented bos.app.ts scaffold", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
-    clearConfigCache();
+    resetConfigPathCache();
     while (tempDirs.length > 0) {
       const dir = tempDirs.pop();
       if (dir) {

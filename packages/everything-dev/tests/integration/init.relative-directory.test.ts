@@ -4,11 +4,23 @@ import { join, resolve } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildInitPatterns, copyFilteredFiles, personalizeConfig } from "../../src/cli/init";
-import { loadResolvedConfig } from "../../src/config";
 import { makeProjectEnv } from "../../src/env/project-env";
 import { InfraMaterializer, InfraMaterializerLive } from "../../src/infra/materializer";
+import { openResolution } from "../../src/resolution/session";
 import type { RuntimeConfig } from "../../src/types";
 
+vi.mock("../../src/fastkv", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/fastkv")>();
+  return {
+    ...actual,
+    fetchBosConfigFromFastKv: async <T>() => {
+      const parentConfig = JSON.parse(
+        readFileSync(join(import.meta.dirname, "../../../../bos.config.json"), "utf-8"),
+      );
+      return parentConfig as T;
+    },
+  };
+});
 vi.mock("../../src/http-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/http-client")>();
   return {
@@ -31,13 +43,6 @@ async function materialize(targetDir: string, runtime: RuntimeConfig): Promise<v
 }
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
-
-const RUNTIME_STUB = {
-  host: { secrets: ["BETTER_AUTH_SECRET", "CORS_ORIGIN"] },
-  api: { secrets: ["API_DATABASE_URL"] },
-  auth: { secrets: ["AUTH_DATABASE_URL", "BETTER_AUTH_SECRET"] },
-  plugins: {},
-} as unknown as RuntimeConfig;
 
 describe("bos init - relative directory", () => {
   let workingDir: string;
@@ -74,19 +79,15 @@ describe("bos init - relative directory", () => {
       workspaceOpts: { sourceDir: REPO_ROOT },
     });
 
-    vi.spyOn(await import("../../src/config"), "loadResolvedConfig").mockResolvedValue({
-      config: { account: "testing.near", domain: "testing.com" },
-      runtime: RUNTIME_STUB,
-      source: { path: join(targetDir, "bos.config.json") },
-    } as never);
+    const session = await openResolution({ cwd: targetDir });
+    expect(session?.config.account).toBe("testing.near");
+    expect(session?.config.domain).toBe("testing.com");
 
-    const loaded = await loadResolvedConfig({ cwd: targetDir });
-
-    if (!loaded?.runtime) {
+    if (!session?.runtime) {
       throw new Error("Expected runtime config to be available");
     }
 
-    await materialize(targetDir, loaded.runtime);
+    await materialize(targetDir, session.runtime);
     await Effect.runPromise(makeProjectEnv().ensureFile(targetDir));
 
     expect(existsSync(join(targetDir, "bos.config.json"))).toBe(true);

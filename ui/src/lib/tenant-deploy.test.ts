@@ -9,7 +9,7 @@ import {
 } from "./tenant-deploy";
 
 const makeClient = (prepareRegistryConfigWrite: ReturnType<typeof vi.fn>) =>
-  ({ apps: { prepareRegistryConfigWrite } }) as unknown as ApiClient;
+  ({ registry: { prepareRegistryConfigWrite } }) as unknown as ApiClient;
 
 describe("publishDaoTenantConfig", () => {
   it("prepares the DAO-owned config and submits it through the Trezu signer", async () => {

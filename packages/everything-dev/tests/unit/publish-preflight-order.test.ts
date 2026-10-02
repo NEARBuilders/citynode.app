@@ -9,7 +9,7 @@ const {
   generateCodeArtifactsMock,
   fetchBosConfigFromFastKvMock,
   resolveSigningStrategyMock,
-  loadResolvedConfigMock,
+  openResolutionMock,
   collectDistFilesMock,
   uploadWorkspaceDistMock,
   uploadBundleMock,
@@ -21,7 +21,7 @@ const {
   generateCodeArtifactsMock: vi.fn(),
   fetchBosConfigFromFastKvMock: vi.fn(),
   resolveSigningStrategyMock: vi.fn(),
-  loadResolvedConfigMock: vi.fn(),
+  openResolutionMock: vi.fn(),
   collectDistFilesMock: vi.fn(),
   uploadWorkspaceDistMock: vi.fn(),
   uploadBundleMock: vi.fn(),
@@ -49,9 +49,9 @@ vi.mock("../../src/near-signer", async (importOriginal) => {
   return { ...actual, resolveSigningStrategy: resolveSigningStrategyMock };
 });
 
-vi.mock("../../src/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/config")>();
-  return { ...actual, loadResolvedConfig: loadResolvedConfigMock };
+vi.mock("../../src/resolution/session", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/resolution/session")>();
+  return { ...actual, openResolution: openResolutionMock };
 });
 
 vi.mock("../../src/storage-upload", () => ({
@@ -129,7 +129,7 @@ describe("publishToFastKv preflight ordering", () => {
       privateKey: "ed25519:test",
       source: "provided",
     });
-    loadResolvedConfigMock.mockResolvedValue({ config: bosConfig });
+    openResolutionMock.mockResolvedValue({ config: bosConfig } as never);
     writeFileSync(join(configDir, "bos.config.json"), JSON.stringify(bosConfig, null, 2));
   });
 

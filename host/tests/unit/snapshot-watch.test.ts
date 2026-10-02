@@ -42,7 +42,7 @@ const loggerMock = vi.hoisted(() => ({
 
 vi.mock("../../src/utils/logger", () => ({ logger: loggerMock }));
 
-const snapshotLayer = RuntimeSnapshot.layer.pipe(
+const snapshotLayer = RuntimeSnapshot.layer().pipe(
   Layer.provide(Layer.succeed(ConfigService, bootConfig)),
 );
 

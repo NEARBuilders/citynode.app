@@ -5,7 +5,6 @@ import {
   type DevProcessState,
   type DevRendererHandle,
 } from "./components/dev-render";
-import { getProjectRoot } from "./config";
 import { createLogPipeline, type LogEvent, resolveLogLevel } from "./dev-log-pipeline";
 import { createDevLogger, formatLogLine } from "./dev-logs";
 import { getProcessEnv } from "./env/process-env";
@@ -97,11 +96,11 @@ export interface DevSessionControls {
 }
 
 export const runDevSession = (
+  configDir: string,
   orchestrator: AppOrchestrator,
   onShutdownReady?: (controls: DevSessionControls) => void,
 ) =>
   Effect.gen(function* () {
-    const configDir = getProjectRoot();
     adoptOrphanedChildren(configDir);
     const services = yield* ServiceDescriptorMap;
     const runtimeConfig = yield* DevRuntimeConfig;
@@ -386,6 +385,7 @@ export const runDevSession = (
   });
 
 const runApp = (
+  configDir: string,
   orchestrator: AppOrchestrator,
   services: Map<string, ServiceDescriptor>,
   runtimeConfig: RuntimeConfig,
@@ -433,7 +433,7 @@ const runApp = (
   const handleSignal = requestShutdownEscalating;
 
   const program = Effect.scoped(
-    runDevSession(orchestrator, (sessionControls) => {
+    runDevSession(configDir, orchestrator, (sessionControls) => {
       controls = sessionControls;
       sessionControls.requestShutdownEscalating = requestShutdownEscalating;
       sessionControls.rearmForceExitTimer = () => {

@@ -105,16 +105,15 @@ interface VerifyTarget {
   url?: string;
   integrity?: string;
   extendsRef?: string;
-  /** true when the URL IS the (hashed) entry — no fixed-name resolution */
-  direct?: boolean;
 }
 
 /**
  * SRI-verify the live slots against their derived pins (the monitor's old
- * job, ported): own pins verify their derived hashed entry URLs directly;
- * extends-ref slots re-read the PARENT config from FastKV and verify against
- * the parent's latest pin — an upstream republish is noticed without a
- * restart (the parent's freshly-resolved `entryIntegrity` no longer matches
+ * job, ported): every production slot is pin-derived, so each target URL IS
+ * the (hashed) entry — verified directly, no fixed-name resolution; an
+ * extends-ref slot re-reads the PARENT config from FastKV and verifies
+ * against the parent's latest pin — an upstream republish is noticed without
+ * a restart (the parent's freshly-resolved `entryIntegrity` no longer matches
  * this snapshot's (older) entry bytes).
  */
 async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
@@ -123,7 +122,6 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
       key: "ui",
       url: config.ui.entryUrl ?? config.ui.url,
       integrity: config.ui.integrity,
-      direct: Boolean(config.ui.entryUrl),
     },
     ...(config.ui.ssrEntryUrl
       ? [
@@ -131,7 +129,6 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
             key: "ui-ssr",
             url: config.ui.ssrEntryUrl,
             integrity: config.ui.ssrIntegrity,
-            direct: true,
           },
         ]
       : []),
@@ -141,7 +138,6 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
             key: "api",
             url: config.api.entryUrl ?? config.api.url,
             integrity: config.api.integrity,
-            direct: Boolean(config.api.entryUrl),
           },
         ]
       : []),
@@ -152,7 +148,6 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
             url: config.auth.entryUrl ?? config.auth.url,
             integrity: config.auth.integrity,
             extendsRef: config.auth.extendsRef,
-            direct: Boolean(config.auth.entryUrl),
           },
         ]
       : []),
@@ -164,7 +159,6 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
         url: plugin.entryUrl ?? plugin.url,
         integrity: plugin.integrity,
         extendsRef: plugin.extendsRef,
-        direct: Boolean(plugin.entryUrl),
       });
     }
     if (plugin?.ui?.url) {
@@ -173,7 +167,6 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
         url: plugin.ui.entryUrl ?? plugin.ui.url,
         integrity: plugin.ui.integrity,
         extendsRef: plugin.extendsRef,
-        direct: Boolean(plugin.ui.entryUrl),
       });
     }
   }
@@ -196,14 +189,12 @@ async function verifyCurrentEntries(config: RuntimeConfig): Promise<void> {
         });
         await verifySriForUrl(target.url, resolved.entryIntegrity, { resolveEntryUrl: false });
       } else if (parentSlot && typeof parentSlot.integrity === "string") {
-        await verifySriForUrl(target.url, parentSlot.integrity, {
-          resolveEntryUrl: !target.direct,
-        });
+        await verifySriForUrl(target.url, parentSlot.integrity, { resolveEntryUrl: false });
       }
       continue;
     }
     if (target.integrity) {
-      await verifySriForUrl(target.url, target.integrity, { resolveEntryUrl: !target.direct });
+      await verifySriForUrl(target.url, target.integrity, { resolveEntryUrl: false });
     }
   }
 }

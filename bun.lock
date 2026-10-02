@@ -319,34 +319,6 @@
         "typescript": "catalog:",
       },
     },
-    "plugins/apps": {
-      "name": "@everything-dev/apps-plugin",
-      "version": "1.4.2",
-      "dependencies": {
-        "@orpc/contract": "catalog:",
-        "@orpc/server": "catalog:",
-        "effect": "catalog:",
-        "near-kit": "catalog:",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@module-federation/node": "catalog:",
-        "@module-federation/runtime-tools": "catalog:",
-        "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
-        "@rspack/cli": "catalog:",
-        "@rspack/core": "catalog:",
-        "@types/node": "catalog:",
-        "dotenv": "^17.2.3",
-        "every-plugin": "catalog:",
-        "everything-dev": "catalog:",
-        "host": "workspace:*",
-        "vite-tsconfig-paths": "^5.1.4",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "typescript": "catalog:",
-      },
-    },
     "plugins/auth": {
       "name": "@everything-dev/auth-plugin",
       "version": "1.2.3",
@@ -445,6 +417,34 @@
         "drizzle-kit": "catalog:",
         "every-plugin": "catalog:",
         "everything-dev": "catalog:",
+        "vite-tsconfig-paths": "^5.1.4",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/registry": {
+      "name": "@everything-dev/registry-plugin",
+      "version": "1.4.2",
+      "dependencies": {
+        "@orpc/contract": "catalog:",
+        "@orpc/server": "catalog:",
+        "effect": "catalog:",
+        "near-kit": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@module-federation/node": "catalog:",
+        "@module-federation/runtime-tools": "catalog:",
+        "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
+        "@rspack/cli": "catalog:",
+        "@rspack/core": "catalog:",
+        "@types/node": "catalog:",
+        "dotenv": "^17.2.3",
+        "every-plugin": "catalog:",
+        "everything-dev": "catalog:",
+        "host": "workspace:*",
         "vite-tsconfig-paths": "^5.1.4",
         "vitest": "catalog:",
       },
@@ -893,11 +893,11 @@
 
     "@every-plugin/template": ["@every-plugin/template@workspace:plugins/_template"],
 
-    "@everything-dev/apps-plugin": ["@everything-dev/apps-plugin@workspace:plugins/apps"],
-
     "@everything-dev/auth-plugin": ["@everything-dev/auth-plugin@workspace:plugins/auth"],
 
     "@everything-dev/proposals-plugin": ["@everything-dev/proposals-plugin@workspace:plugins/proposals"],
+
+    "@everything-dev/registry-plugin": ["@everything-dev/registry-plugin@workspace:plugins/registry"],
 
     "@everything-dev/votes-plugin": ["@everything-dev/votes-plugin@workspace:plugins/votes"],
 
@@ -2909,11 +2909,11 @@
 
     "@every-plugin/template/vite-tsconfig-paths": ["vite-tsconfig-paths@5.1.4", "", { "dependencies": { "debug": "^4.1.1", "globrex": "^0.1.2", "tsconfck": "^3.0.3" }, "peerDependencies": { "vite": "*" }, "optionalPeers": ["vite"] }, "sha512-cYj0LRuLV2c2sMqhqhGpaO3LretdtMn/BVX4cPLanIZuwwrkVl+lK84E/miEXkCHWXuq65rhNN4rXsBcOB3S4w=="],
 
-    "@everything-dev/apps-plugin/vite-tsconfig-paths": ["vite-tsconfig-paths@5.1.4", "", { "dependencies": { "debug": "^4.1.1", "globrex": "^0.1.2", "tsconfck": "^3.0.3" }, "peerDependencies": { "vite": "*" }, "optionalPeers": ["vite"] }, "sha512-cYj0LRuLV2c2sMqhqhGpaO3LretdtMn/BVX4cPLanIZuwwrkVl+lK84E/miEXkCHWXuq65rhNN4rXsBcOB3S4w=="],
-
     "@everything-dev/auth-plugin/vite-tsconfig-paths": ["vite-tsconfig-paths@5.1.4", "", { "dependencies": { "debug": "^4.1.1", "globrex": "^0.1.2", "tsconfck": "^3.0.3" }, "peerDependencies": { "vite": "*" }, "optionalPeers": ["vite"] }, "sha512-cYj0LRuLV2c2sMqhqhGpaO3LretdtMn/BVX4cPLanIZuwwrkVl+lK84E/miEXkCHWXuq65rhNN4rXsBcOB3S4w=="],
 
     "@everything-dev/proposals-plugin/vite-tsconfig-paths": ["vite-tsconfig-paths@5.1.4", "", { "dependencies": { "debug": "^4.1.1", "globrex": "^0.1.2", "tsconfck": "^3.0.3" }, "peerDependencies": { "vite": "*" }, "optionalPeers": ["vite"] }, "sha512-cYj0LRuLV2c2sMqhqhGpaO3LretdtMn/BVX4cPLanIZuwwrkVl+lK84E/miEXkCHWXuq65rhNN4rXsBcOB3S4w=="],
+
+    "@everything-dev/registry-plugin/vite-tsconfig-paths": ["vite-tsconfig-paths@5.1.4", "", { "dependencies": { "debug": "^4.1.1", "globrex": "^0.1.2", "tsconfck": "^3.0.3" }, "peerDependencies": { "vite": "*" }, "optionalPeers": ["vite"] }, "sha512-cYj0LRuLV2c2sMqhqhGpaO3LretdtMn/BVX4cPLanIZuwwrkVl+lK84E/miEXkCHWXuq65rhNN4rXsBcOB3S4w=="],
 
     "@everything-dev/votes-plugin/vite-tsconfig-paths": ["vite-tsconfig-paths@5.1.4", "", { "dependencies": { "debug": "^4.1.1", "globrex": "^0.1.2", "tsconfck": "^3.0.3" }, "peerDependencies": { "vite": "*" }, "optionalPeers": ["vite"] }, "sha512-cYj0LRuLV2c2sMqhqhGpaO3LretdtMn/BVX4cPLanIZuwwrkVl+lK84E/miEXkCHWXuq65rhNN4rXsBcOB3S4w=="],
 

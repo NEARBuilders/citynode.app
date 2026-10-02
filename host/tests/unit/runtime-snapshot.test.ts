@@ -2,7 +2,11 @@ import { Effect, Fiber, Layer } from "effect";
 import type { RuntimeConfig } from "everything-dev/types";
 import { describe, expect, it, vi } from "vitest";
 import { ConfigService } from "../../src/services/config";
-import { deploymentFingerprint, RuntimeSnapshot } from "../../src/services/runtime-snapshot";
+import {
+  createRuntimeSnapshotState,
+  deploymentFingerprint,
+  RuntimeSnapshot,
+} from "../../src/services/runtime-snapshot";
 import { createSsrRender } from "../../src/services/ssr-render";
 
 const baseConfig = {
@@ -26,7 +30,7 @@ const baseConfig = {
   },
 } as unknown as RuntimeConfig;
 
-const snapshotLayer = RuntimeSnapshot.layer.pipe(
+const snapshotLayer = RuntimeSnapshot.layer().pipe(
   Layer.provide(Layer.succeed(ConfigService, baseConfig)),
 );
 
@@ -41,6 +45,40 @@ describe("RuntimeSnapshot service", () => {
     expect(state.config).toBe(baseConfig);
     expect(state.fingerprint).toMatch(/^[0-9a-f]{16}$/);
     expect(state.composeState).toBeDefined();
+    expect(state.clientConfigState).toBeDefined();
+  });
+
+  it("swap releases the abandoned state's serving caches", async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const snapshot = yield* RuntimeSnapshot;
+        const before = yield* snapshot.get;
+        before.composeState.variants.set("stale", {
+          variant: {} as never,
+          staleAfter: Number.POSITIVE_INFINITY,
+        });
+        before.clientConfigState.entries.set("stale", {
+          value: {} as never,
+          expiresAt: Number.POSITIVE_INFINITY,
+        });
+
+        yield* snapshot.swap(
+          createRuntimeSnapshotState({
+            fingerprint: "next",
+            config: {
+              ...baseConfig,
+              ui: { ...baseConfig.ui, integrity: "sha384-ui-entry-v2" },
+            } as RuntimeConfig,
+          }),
+        );
+
+        expect(before.composeState.variants.size).toBe(0);
+        expect(before.composeState.remoteManifests.size).toBe(0);
+        expect(before.clientConfigState.entries.size).toBe(0);
+        const after = yield* snapshot.get;
+        expect(after).not.toBe(before);
+      }).pipe(Effect.provide(snapshotLayer)),
+    );
   });
 
   it("readers during a concurrent swap observe exactly one complete state", async () => {
@@ -65,11 +103,12 @@ describe("RuntimeSnapshot service", () => {
           );
 
           yield* Effect.sleep(1);
-          yield* snapshot.swap({
-            fingerprint: "swapped",
-            config: nextConfig,
-            composeState: (yield* snapshot.get).composeState,
-          });
+          yield* snapshot.swap(
+            createRuntimeSnapshotState({
+              fingerprint: "swapped",
+              config: nextConfig,
+            }),
+          );
           yield* Effect.sleep(1);
           yield* Fiber.join(reader);
           return observed;
@@ -107,18 +146,18 @@ describe("deploymentFingerprint", () => {
 });
 
 describe("ssr render read-through", () => {
-  it("resolves each request against the snapshot's current base config", async () => {
+  it("captures one serving state per request and resolves each against it", async () => {
     lastBase = undefined;
     const nextConfig = {
       ...baseConfig,
       ui: { ...baseConfig.ui, integrity: "sha384-ui-entry-v2" },
     } as RuntimeConfig;
 
-    let current = baseConfig;
-    const getBaseConfig = async () => current;
+    let serving = createRuntimeSnapshotState({ fingerprint: "boot", config: baseConfig });
+    const getServingState = async () => serving;
     const render = createSsrRender({
       config: baseConfig,
-      getBaseConfig,
+      getServingState,
       plugins: {
         api: undefined,
         auth: undefined,
@@ -136,7 +175,7 @@ describe("ssr render read-through", () => {
     await render(request, { session: null, user: null, pluginContext: {} } as never);
     const firstBase = lastBase as RuntimeConfig | undefined;
 
-    current = nextConfig;
+    serving = createRuntimeSnapshotState({ fingerprint: "next", config: nextConfig });
     await render(request, { session: null, user: null, pluginContext: {} } as never);
     const secondBase = lastBase as RuntimeConfig | undefined;
 
