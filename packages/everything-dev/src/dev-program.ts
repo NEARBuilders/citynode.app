@@ -14,6 +14,7 @@ import {
   resolveConfigComposableEntries,
 } from "./config";
 import type { DevOptions, PhaseTiming, StartOptions } from "./contract";
+import type { DevSessionData, StartSummary } from "./dev-session-data";
 import {
   deleteProcessEnv,
   getProcessEnv,
@@ -47,34 +48,17 @@ import {
   buildDescription,
   buildServiceDescriptorMap,
   buildServiceDescriptorMapFromPlan,
-  type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
 import { isRegistryStart, resolveStartConfigSource } from "./start-config-source";
-import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
+import type { BosConfig, SourceMode } from "./types";
 import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
 
-export interface DevSessionData {
-  orchestrator: AppOrchestrator;
-  services: Map<string, ServiceDescriptor>;
-  runtimeConfig: RuntimeConfig;
-  /** The generated infra env tier — required so a start session can never silently run with an empty tier. */
-  envGenerated: Record<string, string>;
-  shellEnv: Record<string, string>;
-}
-
-export interface StartSummary {
-  configSource: string;
-  configSourceHttp?: string;
-  account: string;
-  domain?: string;
-  modules: { host?: string; ui?: string; api?: string; auth?: string };
-  warnings: string[];
-}
+export type { DevSessionData, StartSummary } from "./dev-session-data";
 
 export interface BootstrapDeps {
-  session: ResolutionSession | null;
+  readonly session: ResolutionSession | null;
 }
 
 export interface BootstrapHelpers {
@@ -286,7 +270,6 @@ export const devBootstrap = (
         });
         if (opened) {
           session = opened;
-          deps.session = opened;
           devExtendsChain = [...opened.chain];
         }
       });

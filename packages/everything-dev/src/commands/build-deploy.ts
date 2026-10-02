@@ -121,10 +121,6 @@ export function registerBuildDeploy(builder: BosBuilder) {
         registry: input.registry,
       });
 
-      if (result.publishConfig) {
-        deps.session = (await openResolution({ cwd: session.root })) ?? deps.session;
-      }
-
       return {
         status: result.status,
         registryUrl: result.registryUrl,
@@ -378,7 +374,6 @@ export function registerBuildDeploy(builder: BosBuilder) {
         const opened = await openResolution({ cwd: session.root });
         if (opened) {
           nextSession = opened;
-          deps.session = opened;
         }
       }
 

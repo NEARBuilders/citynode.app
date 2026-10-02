@@ -30,6 +30,18 @@ import { syncResolvedSharedDeps } from "../shared-deps";
 import type { BosConfig, BosConfigInput } from "../types";
 import type { BosBuilder } from "./shared";
 
+export async function fetchInitParent(
+  extendsAccount: string,
+  extendsGateway: string,
+): Promise<{ parentConfig: BosConfig; parentPluginKeys: string[] }> {
+  const parentConfig = await fetchParentConfig(extendsAccount, extendsGateway);
+  const parentPluginKeys =
+    parentConfig?.plugins && typeof parentConfig.plugins === "object"
+      ? Object.keys(parentConfig.plugins)
+      : [];
+  return { parentConfig, parentPluginKeys };
+}
+
 export function registerInit(builder: BosBuilder) {
   return {
     init: builder.init.handler(async ({ input }) => {
@@ -57,21 +69,37 @@ export function registerInit(builder: BosBuilder) {
         extendsAccount = extendsAccount || "dev.everything.near";
         extendsGateway = extendsGateway || "everything.dev";
 
+        directory = directory || domain || extendsGateway;
+        const targetDir = resolve(directory);
+        const extendsRef = `bos://${extendsAccount}/${extendsGateway}`;
+
         let parentPluginKeys: string[] = [];
         let parentConfig: BosConfig | null = null;
         try {
-          parentConfig = await timePhase(timings, "parent config", () =>
-            fetchParentConfig(extendsAccount, extendsGateway),
+          const parent = await timePhase(timings, "parent config", () =>
+            fetchInitParent(extendsAccount, extendsGateway),
           );
-          if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
-            parentPluginKeys = Object.keys(parentConfig.plugins);
-          }
+          parentConfig = parent.parentConfig;
+          parentPluginKeys = parent.parentPluginKeys;
         } catch (e) {
           console.warn(
             `[init] Failed to fetch parent config from ${extendsAccount}/${extendsGateway}: ${
               e instanceof Error ? e.message : e
             }`,
           );
+          return {
+            status: "error" as const,
+            directory,
+            extendsRef,
+            account,
+            domain,
+            extends: extendsRef,
+            plugins,
+            overrides,
+            filesCopied: 0,
+            timings,
+            error: `No config found at ${extendsRef} — are you sure this is the right parent?`,
+          };
         }
 
         overrides = overrides?.length ? overrides : (["ui", "api"] as OverrideSection[]);
@@ -94,35 +122,9 @@ export function registerInit(builder: BosBuilder) {
           }
         }
 
-        directory = directory || domain || extendsGateway;
-        const targetDir = resolve(directory);
-        const extendsRef = `bos://${extendsAccount}/${extendsGateway}`;
-
         const repository =
           (await detectGitRemoteUrl(process.cwd()).catch(() => undefined)) ??
           parentConfig?.repository;
-
-        if (!parentConfig) {
-          try {
-            parentConfig = await timePhase(timings, "parent config", () =>
-              fetchParentConfig(extendsAccount, extendsGateway),
-            );
-          } catch {
-            return {
-              status: "error" as const,
-              directory,
-              extendsRef,
-              account,
-              domain,
-              extends: extendsRef,
-              plugins,
-              overrides,
-              filesCopied: 0,
-              timings,
-              error: `No config found at ${extendsRef} — are you sure this is the right parent?`,
-            };
-          }
-        }
 
         const {
           sourceDir,

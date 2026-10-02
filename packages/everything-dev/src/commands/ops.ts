@@ -184,7 +184,6 @@ export function registerOps(builder: BosBuilder) {
         if (!refreshed?.runtime) {
           throw new Error("No resolved runtime config available for infra export");
         }
-        deps.session = refreshed;
         return buildCiInfraPlan(refreshed.runtime);
       }
       const result: CiInfraPlan & { account: string; gateway: string } = {

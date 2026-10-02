@@ -58,7 +58,6 @@ export function registerPlugins(builder: BosBuilder) {
 
       await saveBosConfig(session.root, nextConfig);
       await generateCodeArtifacts(session.root, nextConfig);
-      deps.session = (await openResolution({ cwd: session.root })) ?? deps.session;
 
       const stored = nextConfig.plugins?.[key];
       const storedObj = stored && typeof stored === "object" ? stored : {};
@@ -101,7 +100,6 @@ export function registerPlugins(builder: BosBuilder) {
 
       await saveBosConfig(session.root, nextConfig);
       await generateCodeArtifacts(session.root, nextConfig);
-      deps.session = (await openResolution({ cwd: session.root })) ?? deps.session;
 
       return {
         status: "removed" as const,
@@ -173,7 +171,6 @@ export function registerPlugins(builder: BosBuilder) {
       }
 
       const nextSession = (await openResolution({ cwd: session.root })) ?? session;
-      deps.session = nextSession;
       const production = (
         nextSession.config?.plugins?.[input.key] as
           | {

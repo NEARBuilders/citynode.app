@@ -19,7 +19,6 @@ import { openResolution } from "./resolution/session";
 import { createPlugin, z } from "./sdk";
 
 export { resolveRemoteConfigChain } from "./commands/config";
-export { consumeDevSession } from "./commands/shared";
 export type { DevSessionData, StartSummary } from "./dev-program";
 export { type ProgressEvent, pluginEvents } from "./progress";
 

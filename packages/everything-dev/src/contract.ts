@@ -1,5 +1,6 @@
 import "@orpc/openapi/extensions/route";
 import * as z from "zod";
+import type { DevSessionData, StartSummary } from "./dev-session-data";
 import { oc } from "./sdk";
 import { BosConfigInputSchema, BosConfigSchema, SourceModeSchema } from "./types";
 
@@ -30,6 +31,7 @@ export const DevResultSchema = z.object({
   description: z.string(),
   processes: z.array(z.string()),
   timings: z.array(PhaseTimingSchema).optional(),
+  session: z.custom<DevSessionData>().optional(),
 });
 
 export const StartOptionsSchema = z.object({
@@ -46,6 +48,8 @@ export const StartResultSchema = z.object({
   status: z.enum(["running", "error"]),
   url: z.string(),
   error: z.string().optional(),
+  session: z.custom<DevSessionData>().optional(),
+  summary: z.custom<StartSummary>().optional(),
 });
 
 export const BuildOptionsSchema = z.object({
@@ -282,6 +286,7 @@ export const KeyPublishOptionsSchema = z.object({
     ),
   env: z.enum(["production", "staging"]).default("production"),
   registry: z.string().optional(),
+  removeOldKeys: z.boolean().optional(),
 });
 
 export const KeyPublishResultSchema = z.object({

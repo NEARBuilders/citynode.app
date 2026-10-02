@@ -6,16 +6,18 @@ import { installBundleFetchFromEnv } from "./bundle-fs-resolve";
 import { findCommandDescriptor } from "./cli/catalog";
 import { resolveFrameworkPackage } from "./cli/framework-version";
 import { printHelp } from "./cli/help";
-import { fetchParentConfig, runDockerComposeUp } from "./cli/init";
+import { runDockerComposeUp } from "./cli/init";
 import { parseCommandInput } from "./cli/parse";
 import { promptInitBasic, promptInitOverrides } from "./cli/prompts";
 import { formatDuration, sumPhaseDurations } from "./cli/timing";
+import { fetchInitParent } from "./commands/init";
 import { findConfigPath } from "./config";
 import type {
   DevOptions,
   DevResult,
   InitOptions,
   InitResult,
+  KeyPublishOptions,
   KillOptions,
   KillResult,
   LogsOptions,
@@ -27,7 +29,7 @@ import type {
   TypecheckWorkspaceResult,
 } from "./contract";
 import type { StartSummary } from "./dev-program";
-import bosPlugin, { consumeDevSession } from "./plugin";
+import bosPlugin from "./plugin";
 import { type ProgressEvent, pluginEvents } from "./progress";
 import { createPluginRuntime } from "./sdk";
 import { printBanner } from "./utils/banner";
@@ -272,6 +274,24 @@ async function main() {
       rollbackInput.version = selection as string;
     }
 
+    if (descriptor.key === "keyPublish") {
+      const keyPublishInput = input as KeyPublishOptions;
+      if (keyPublishInput.removeOldKeys === undefined) {
+        if (process.stdin.isTTY) {
+          const removeOldKeys = await p.confirm({
+            message: "Remove old key(s) if any exist?",
+            initialValue: true,
+          });
+          if (p.isCancel(removeOldKeys)) {
+            return;
+          }
+          keyPublishInput.removeOldKeys = removeOldKeys;
+        } else {
+          keyPublishInput.removeOldKeys = true;
+        }
+      }
+    }
+
     if (descriptor.key === "dev") {
       const devSpinner = p.spinner();
       devSpinner.start("Starting dev environment");
@@ -310,7 +330,7 @@ async function main() {
       devSpinner.stop();
       clearSpinnerStopLine();
 
-      const session = consumeDevSession();
+      const session = result.session;
       void outdatedWarning;
       if (session) {
         const { devApp } = await import("./dev-session");
@@ -358,10 +378,10 @@ async function main() {
 
       startSpinner.stop("Ready");
 
-      const session = consumeDevSession();
+      const session = result.session;
+      const summary = result.summary;
       void outdatedWarning;
       if (session) {
-        const summary = session.summary;
         if (summary) {
           printStartSummary(summary);
         }
@@ -398,10 +418,9 @@ async function main() {
         const fetchSpinner = p.spinner();
         fetchSpinner.start("Fetching parent config");
         try {
-          parentConfig = await fetchParentConfig(basic.extendsAccount, basic.extendsGateway);
-          if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
-            parentPluginKeys = Object.keys(parentConfig.plugins);
-          }
+          const parent = await fetchInitParent(basic.extendsAccount, basic.extendsGateway);
+          parentConfig = parent.parentConfig;
+          parentPluginKeys = parent.parentPluginKeys;
         } catch {
           fetchSpinner.stop("Config not found");
           console.error(
