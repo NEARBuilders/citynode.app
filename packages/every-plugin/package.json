@@ -61,6 +61,19 @@
       "import": "./dist/identity.mjs",
       "require": "./dist/identity.cjs"
     },
+    "./shared-deps-spec": {
+      "bun": {
+        "types": "./src/shared-deps-spec.ts",
+        "import": "./src/shared-deps-spec.ts"
+      },
+      "development": {
+        "types": "./src/shared-deps-spec.ts",
+        "import": "./src/shared-deps-spec.ts"
+      },
+      "types": "./dist/shared-deps-spec.d.mts",
+      "import": "./dist/shared-deps-spec.mjs",
+      "require": "./dist/shared-deps-spec.cjs"
+    },
     "./normalize": {
       "bun": {
         "types": "./src/runtime/services/normalize.ts",
