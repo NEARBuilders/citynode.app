@@ -104,7 +104,9 @@ test.describe("CSR compose", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await expect(page.getByTestId("login.language-select")).toHaveText("Español");
+    await expect(
+      page.getByTestId("login.language-select").locator('[data-slot="select-value"]'),
+    ).toHaveText("Español");
     await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión en CityNode");
   });
 
