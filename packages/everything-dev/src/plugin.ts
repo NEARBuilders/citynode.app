@@ -36,6 +36,7 @@ import {
   runTypesGen,
   scaffoldMinimalProject,
   stripOrphanedWorkspacesFromLockfile,
+  writeDevOverlayTemplate,
   writeInitSnapshot,
 } from "./cli/init";
 import { pruneUnusedUiFiles } from "./cli/prune";
@@ -1655,6 +1656,10 @@ export default createPlugin({
             childBosConfig = await timePhase(timings, "authored config form", () =>
               convertChildConfigToAppForm(targetDir),
             );
+
+            writeDevOverlayTemplate(targetDir, {
+              extendsRef: `bos://${extendsAccount}/${extendsGateway}`,
+            });
           } else {
             const patterns = buildInitPatterns(overrides, plugins, pluginDirMap);
             const routeExclusions = overrides.includes("ui")
@@ -1694,6 +1699,10 @@ export default createPlugin({
             childBosConfig = await timePhase(timings, "authored config form", () =>
               convertChildConfigToAppForm(targetDir),
             );
+
+            writeDevOverlayTemplate(targetDir, {
+              extendsRef: `bos://${extendsAccount}/${extendsGateway}`,
+            });
 
             if (overrides.includes("ui")) {
               await timePhase(timings, "prune unused ui files", async () =>

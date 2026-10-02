@@ -567,6 +567,35 @@ export async function convertChildConfigToAppForm(
   return config;
 }
 
+/**
+ * Scaffold the root dev-overlay starter (`bos.dev.ts`). Idempotent — never
+ * overwrites an existing overlay. Dev overlays are merged child-wins over
+ * the resolved config in development and are never published.
+ */
+export function writeDevOverlayTemplate(
+  destination: string,
+  opts: { extendsRef?: string } = {},
+): void {
+  const overlayPath = join(destination, "bos.dev.ts");
+  if (existsSync(overlayPath)) return;
+  const extendsLine = opts.extendsRef ? `\n// Inherited base: ${opts.extendsRef}\n` : "";
+  writeFileSync(
+    overlayPath,
+    `import type { AppDescriptor } from "everything-dev/descriptor";
+${extendsLine}
+/**
+ * Development-only overlay for bos.app.ts — merged child-wins over the
+ * resolved config when the environment is development. Never published.
+ * Example: pin the auth attachment to a running dev server instead of
+ * letting the dev harness spawn it.
+ */
+export default {
+  // auth: { development: "http://localhost:3006" },
+} satisfies Partial<AppDescriptor>;
+`,
+  );
+}
+
 function buildRootTypecheckScript(sections: {
   ui: boolean;
   api: boolean;
