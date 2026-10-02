@@ -1370,6 +1370,8 @@ export async function scaffoldMinimalProject(
     title?: string;
     description?: string;
     starter?: StarterLevel;
+    /** local parent source dir — resolves the catalog offline (tests, --source) */
+    catalogSourceDir?: string;
   },
 ): Promise<number> {
   mkdirSync(destination, { recursive: true });
@@ -1443,6 +1445,7 @@ export async function scaffoldMinimalProject(
     await resolveCatalogChainSource({
       extendsAccount: opts.extendsAccount,
       extendsGateway: opts.extendsGateway,
+      sourceDir: opts.catalogSourceDir,
     })
   ).catalog;
 
