@@ -2,8 +2,12 @@ import { Context, Effect, Layer, Schema, Semaphore } from "effect";
 import { buildRuntimeConfigEffect } from "everything-dev/config";
 import { verifySriForUrl } from "everything-dev/integrity";
 import type { BosConfig } from "everything-dev/types";
-import { deploymentFingerprint, RuntimeSnapshot } from "./runtime-snapshot";
-import { composeUi, createUiComposeCacheState } from "./ui-compose";
+import {
+  createRuntimeSnapshotState,
+  deploymentFingerprint,
+  RuntimeSnapshot,
+} from "./runtime-snapshot";
+import { composeUi } from "./ui-compose";
 
 export class SnapshotAdoptError extends Schema.TaggedError<SnapshotAdoptError>()(
   "SnapshotAdoptError",
@@ -29,10 +33,11 @@ const adoptFailure = (message: string, cause: unknown) =>
 
 /**
  * The swap transaction (atomic-deploys 07): derive the published pointer into
- * a runtime config (version manifests fetched + SRI-verified), pre-warm a
- * fresh compose state (validates compose + digest parity before anything
- * live changes), then atomically swap the snapshot. Any failure leaves the
- * live snapshot untouched — the previously published version keeps serving.
+ * a runtime config (version manifests fetched + SRI-verified), pre-warm the
+ * NEXT state's own compose cache (validating compose + digest parity), then
+ * atomically swap the snapshot — caches included, so the pre-warmed state IS
+ * the serving state (C7). Any failure leaves the live snapshot untouched —
+ * the previously published version keeps serving.
  *
  * Order constraints (MAP): the pointer-derived config is resolved FIRST
  * (SSR entry URLs derive from it); composeUi validates the digest the client
@@ -67,8 +72,12 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
     return { status: "unchanged" };
   }
 
-  const composeState = createUiComposeCacheState();
-  const composed = yield* composeUi(nextConfig, composeState).pipe(
+  const nextState = createRuntimeSnapshotState({
+    fingerprint: nextFingerprint,
+    config: nextConfig,
+    pointer: publishedConfig,
+  });
+  const composed = yield* composeUi(nextConfig, nextState.composeState).pipe(
     Effect.catch((cause) => adoptFailure("pre-warm compose failed", cause)),
   );
 
@@ -92,15 +101,8 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
     );
   }
 
-  // the fingerprint rides the config so the client config (and the
-  // soft-refresh signal) carries it (atomic-deploys 10)
   nextConfig.deploymentFingerprint = nextFingerprint;
-  yield* snapshot.swap({
-    fingerprint: nextFingerprint,
-    config: nextConfig,
-    pointer: publishedConfig,
-    composeState,
-  });
+  yield* snapshot.swap(nextState);
   return { status: "swapped", fingerprint: nextFingerprint, digest: composed.digest };
 });
 
@@ -108,6 +110,9 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
  * writer wins) and double the transient SSR re-registration flapping. */
 const adoptPermits = Semaphore.makeUnsafe(1);
 
+/** The adopt transaction is wrapped by `adoptPermits`; the adopted config's
+ * `deploymentFingerprint` is stamped before the swap so the client config —
+ * and the soft-refresh signal — carries it (atomic-deploys 10). */
 export const adoptPublishedPointer = Effect.fn("SnapshotCoordinator.adopt")(function* (input: {
   snapshot: RuntimeSnapshot["Service"];
   publishedConfig: BosConfig;

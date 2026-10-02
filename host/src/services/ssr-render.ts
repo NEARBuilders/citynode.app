@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect";
+import { Effect } from "effect";
 import type { ComposePayload } from "everything-dev/ui/manifest";
 import { renderClientShell } from "../routes/html";
 import type { RouterModule } from "../types";
@@ -10,6 +10,7 @@ import {
   resolveActiveRuntime,
 } from "./config";
 import { createPluginsClient, type PluginResult } from "./plugins";
+import { type ClientConfigCacheState, createClientConfigCacheState } from "./serving-caches";
 import { getTenantRuntimeErrorResponse, resolveRequestRuntime } from "./tenant-runtime";
 import { enforceCacheLimit, pruneExpiredEntries } from "./ttl-cache";
 import {
@@ -39,13 +40,20 @@ import {
 
 export interface SsrRenderDeps {
   config: RuntimeConfig;
-  /** per-request base-config override (atomic-deploys 06): when present, the
-   * request resolves against the CURRENT snapshot's config instead of the
-   * boot-frozen one — in-flight requests keep the state they captured */
-  getBaseConfig?: () => Promise<RuntimeConfig>;
+  /** per-request serving capture (atomic-deploys 06, C7): when present, the
+   * request captures ONE snapshot state — config + both serving caches — and
+   * composes through it, so a swap under traffic flips readers atomically;
+   * in-flight requests keep the state they captured (shadow-flip, no drain) */
+  getServingState?: () => Promise<ServingSnapshot>;
   plugins: PluginResult;
-  composeCache?: UiComposeCacheState;
-  clientConfigCache?: ClientConfigCacheState;
+}
+
+/** The serving surface a request composes through — structurally the
+ * RuntimeSnapshotState (config + caches move together). */
+export interface ServingSnapshot {
+  config: RuntimeConfig;
+  composeState: UiComposeCacheState;
+  clientConfigState: ClientConfigCacheState;
 }
 
 export interface SsrRenderRequestContext {
@@ -58,34 +66,8 @@ export interface SsrRenderRequestContext {
 
 export { isSsrAvailable };
 
-interface CachedClientConfig {
-  expiresAt: number;
-  value: ClientRuntimeConfig;
-}
-
 const CLIENT_CONFIG_TTL_MS = 30_000;
 const MAX_CLIENT_CONFIG_CACHE_SIZE = 512;
-
-export interface ClientConfigCacheState {
-  entries: Map<string, CachedClientConfig>;
-}
-
-export class ClientConfigCache extends Context.Service<ClientConfigCache, ClientConfigCacheState>()(
-  "host/ClientConfigCache",
-) {
-  static readonly layer = Layer.effect(
-    ClientConfigCache,
-    Effect.gen(function* () {
-      const state = createClientConfigCacheState();
-      yield* Effect.addFinalizer(() => Effect.sync(() => state.entries.clear()));
-      return ClientConfigCache.of(state);
-    }),
-  );
-}
-
-export function createClientConfigCacheState(): ClientConfigCacheState {
-  return { entries: new Map() };
-}
 
 /**
  * The client runtime payload only varies with tenant identity, request
@@ -133,16 +115,27 @@ function textResponse(message: string, status: number, requestId?: string) {
   });
 }
 
+/**
+ * One capture per request: when `getServingState` is provided, config and both
+ * serving caches ride the same snapshot state, so a swap can never split them
+ * across a request. Loader API calls get a 15s deadline — a wedged plugin
+ * endpoint rejects into the route's error boundary and closes the stream
+ * instead of suspending it forever.
+ */
 export function createSsrRender(deps: SsrRenderDeps) {
-  const composeCache = deps.composeCache ?? createUiComposeCacheState();
-  const clientConfigCache = deps.clientConfigCache ?? createClientConfigCacheState();
+  const fallbackComposeCache = createUiComposeCacheState();
+  const fallbackClientConfigCache = createClientConfigCacheState();
   return async (request: Request, ctx: SsrRenderRequestContext): Promise<Response> => {
     const pathname = new URL(request.url).pathname;
     const requestId = crypto.randomUUID().slice(0, 8);
 
+    const serving = deps.getServingState ? await deps.getServingState() : undefined;
+    const composeCache = serving?.composeState ?? fallbackComposeCache;
+    const clientConfigCache = serving?.clientConfigState ?? fallbackClientConfigCache;
+
     let resolved: Awaited<ReturnType<typeof resolveRequestRuntime>>;
     try {
-      const baseConfig = deps.getBaseConfig ? await deps.getBaseConfig() : deps.config;
+      const baseConfig = serving?.config ?? deps.config;
       resolved = await resolveRequestRuntime(baseConfig, request, {
         verification: "blocking",
       });
@@ -207,9 +200,6 @@ export function createSsrRender(deps: SsrRenderDeps) {
 
     try {
       const ssrApiClient = createPluginsClient(deps.plugins, ctx.pluginContext, {
-        // Loader API calls get a deadline: a wedged plugin endpoint rejects
-        // into the route's error boundary and closes the stream instead of
-        // suspending it forever.
         callTimeoutMs: 15_000,
       });
 
