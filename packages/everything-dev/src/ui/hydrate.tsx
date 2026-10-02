@@ -10,7 +10,7 @@
  */
 
 import type { ClientRuntimeConfig } from "../types";
-import { createApiClient } from "./api";
+import { type ClientServiceConfig, createApiClient } from "./api";
 import { createAuthClient } from "./auth";
 import {
   CORE_UI_PLUGIN_KEY,
@@ -60,6 +60,7 @@ export interface CoreHydrateOptions
   routeConfig: () => Promise<RouteConfigModule | { default: RouteConfigModule }>;
   /** Overrides the runtime config source (tests, embeds). */
   config?: ClientRuntimeConfig;
+  apiConnectionError?: ClientServiceConfig["connectionError"];
 }
 
 interface ComposedTree {
@@ -258,6 +259,7 @@ export async function hydrate(options: CoreHydrateOptions) {
         apiClient: createApiClient({
           hostUrl: runtimeConfig.hostUrl,
           rpcBase: runtimeConfig.rpcBase,
+          connectionError: options.apiConnectionError,
         }),
         authClient: createAuthClient({ runtimeConfig, cspNonce }),
       },
