@@ -278,7 +278,9 @@ describe("walkExtendsChain (catalog mode)", () => {
     });
 
     expect(chain).toEqual([CHILD_REF, PARENT_REF]);
-    expect((config.app?.ui as Record<string, unknown>).production).toBe("https://ui.child.dev");
+    expect(
+      (config.app as Record<string, Record<string, unknown>> | undefined)?.ui?.production,
+    ).toBe("https://ui.child.dev");
     expect(links.map((link) => link.ref)).toEqual([PARENT_REF, CHILD_REF]);
     expect(links.map((link) => link.isLeaf)).toEqual([true, false]);
     expect(links[0]?.sourceDir).toBe("/virtual/parent.near/parent.dev");
