@@ -2,8 +2,9 @@ import { expect, test } from "@playwright/test";
 import { collectErrors, expectNoHydrationFailure } from "../helpers/page-ready";
 import { injectAdminCookies, loadAdminSeedData, verifyAuthenticated } from "../helpers/seeded";
 
+test.use({ trace: "on" });
+
 test.describe("orgSwitcher", () => {
-  test.use({ trace: "on" });
   let pageErrors: string[];
 
   test.beforeEach(async ({ page }) => {
