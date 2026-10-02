@@ -2,6 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Schema } from "effect";
+import { getProcessEnv } from "./env/process-env";
+
+const warnOutsideEffect = (...args: unknown[]): void => {
+  console.warn(...args);
+};
+
 import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
@@ -926,7 +932,7 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
   const hostListeningUrl =
     env === "development"
       ? resolveDevelopmentHostUrl(hostConfig.development)
-      : `http://localhost:${process.env.PORT ?? DEFAULT_HOST_PORT}`;
+      : `http://localhost:${getProcessEnv("PORT") ?? DEFAULT_HOST_PORT}`;
 
   const hostIsRemote = hostRuntime.source === "remote";
   const uiIsRemote = uiRuntime.source === "remote";
@@ -995,7 +1001,7 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
       port:
         env === "development"
           ? parsePort(hostListeningUrl)
-          : Number(process.env.PORT) || DEFAULT_HOST_PORT,
+          : Number(getProcessEnv("PORT")) || DEFAULT_HOST_PORT,
       secrets: hostConfig.secrets,
       integrity: hostIsRemote ? hostConfig.integrity : undefined,
       source: hostRuntime.source,
@@ -1056,8 +1062,8 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
               });
               if (node.secrets) {
                 for (const secretName of node.secrets) {
-                  if (!process.env[secretName]) {
-                    console.warn(
+                  if (!getProcessEnv(secretName)) {
+                    warnOutsideEffect(
                       `[Config] Plugin "${node.key}" (discovered from manifest) expects secret "${secretName}" but it is not set in the environment.`,
                     );
                   }
@@ -1084,7 +1090,7 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[Config] Failed to fetch API plugin manifest for discovery: ${message}`);
+        warnOutsideEffect(`[Config] Failed to fetch API plugin manifest for discovery: ${message}`);
       }
     },
     catch: (cause) => new ConfigExtendsError({ message: String(cause), cause }),

@@ -255,11 +255,7 @@ describe("SSR fallback paths", () => {
         cause: new Error("An error has occurred"),
       });
 
-      loadUiComposeModuleMock.mockReturnValue(
-        Effect.gen(function* () {
-          return yield* Effect.fail(federationError);
-        }),
-      );
+      loadUiComposeModuleMock.mockReturnValue(federationError);
       clearComposeFixtureCache();
 
       const response = await fetch(`${baseUrl}/`);
@@ -276,11 +272,7 @@ describe("SSR fallback paths", () => {
         cause: new Error("Transient network error"),
       });
 
-      loadUiComposeModuleMock.mockReturnValueOnce(
-        Effect.gen(function* () {
-          return yield* Effect.fail(federationError);
-        }),
-      );
+      loadUiComposeModuleMock.mockReturnValueOnce(federationError);
       loadUiComposeModuleMock.mockReturnValueOnce(Effect.succeed(composeEngine()));
       loadCoreUiRouteConfigMock.mockReturnValue(
         Effect.succeed({ routeConfigLoaders: {}, rootMeta: undefined }),

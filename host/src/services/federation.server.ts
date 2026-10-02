@@ -17,6 +17,8 @@ import { ExposeModuleMissing, FederationError } from "./errors";
 import { type LocalDistServer, startLocalDistServer } from "./local-dist-server";
 import { enforceCacheLimit, pruneExpiredEntries as pruneExpiredCacheEntries } from "./ttl-cache";
 
+const runFetch = (url: string, init?: RequestInit): Promise<Response> => fetch(url, init);
+
 export type { RouterModule };
 
 const ROUTER_MODULE_CACHE_TTL_MS = 5 * 60_000;
@@ -212,18 +214,18 @@ export const waitForLocalContainer = Effect.fn("waitForLocalContainer")(function
   let announced = false;
   const check = Effect.tryPromise({
     try: async (signal) => {
-      const res = await fetch(containerUrl, { signal });
+      const res = await runFetch(containerUrl, { signal });
       const body = await res.text();
       return res.ok && !/not found|<(!doctype|html)/i.test(body.slice(0, 64));
     },
     catch: () => false,
   }).pipe(
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.orElseSucceed(() => false),
     Effect.tap((ready) =>
       !ready && !announced
-        ? Effect.sync(() => {
+        ? Effect.gen(function* () {
             announced = true;
-            console.log(`⏳ waiting for ${entry.name} to compile (SSR container not ready)…`);
+            yield* Effect.log(`⏳ waiting for ${entry.name} to compile (SSR container not ready)…`);
           })
         : Effect.void,
     ),
@@ -522,11 +524,10 @@ export const loadUiRouteConfig = (entry: UiRemoteEntry) =>
     unwrapDefault: false,
     timeoutLabel: "Ui routeConfig",
   }).pipe(
-    Effect.flatMap((module) => {
-      if (module?.routeConfigLoaders && typeof module.routeConfigLoaders === "object") {
-        return Effect.succeed(module);
-      }
-      return Effect.fail(
+    Effect.filterOrFail(
+      (module) =>
+        Boolean(module?.routeConfigLoaders && typeof module.routeConfigLoaders === "object"),
+      () =>
         new FederationError({
           remoteName: entry.name,
           remoteUrl: entry.ssrUrl,
@@ -534,8 +535,7 @@ export const loadUiRouteConfig = (entry: UiRemoteEntry) =>
             `routeConfig expose resolved without routeConfigLoaders — the built container name likely does not match the registered remote name "${entry.name}"`,
           ),
         }),
-      );
-    }),
+    ),
   );
 
 export interface ComposeModule {

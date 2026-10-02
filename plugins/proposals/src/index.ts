@@ -1,6 +1,6 @@
 import { MemoryPublisher } from "@orpc/publisher/memory";
 import { ORPCError } from "@orpc/server";
-import { Context, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
 import { z } from "zod";
 import { contract, type ProposalEventSchema } from "./contract";
@@ -45,13 +45,13 @@ export default createPlugin({
   contract,
 
   initialize: (config) =>
-    Effect.sync(() => {
+    Effect.gen(function* () {
       const Database = DatabaseLive(config.secrets.PROPOSALS_DATABASE_URL);
       const publisher = new MemoryPublisher<ProposalEvents>({
         resume: { enabled: true, seconds: 120 },
       });
 
-      console.log("[Proposals] Services Initialized");
+      yield* Effect.log("[Proposals] Services Initialized");
       return Layer.mergeAll(
         ProposalServiceLive.pipe(Layer.provide(Database)),
         Layer.succeed(ProposalPublisher, publisher),
@@ -119,6 +119,7 @@ export default createPlugin({
     const publishProposalEvent = (action: string, proposal: any) =>
       Effect.gen(function* () {
         const publisher = yield* ProposalPublisher;
+        const timestamp = DateTime.formatIso(yield* DateTime.now);
         yield* Effect.promise(() =>
           publisher.publish("proposal", {
             action,
@@ -128,7 +129,7 @@ export default createPlugin({
             applyStatus: proposal.applyStatus,
             removeStatus: proposal.removeStatus,
             submissionCount: proposal.submissionCount,
-            timestamp: new Date().toISOString(),
+            timestamp,
           }),
         );
       });

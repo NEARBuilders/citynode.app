@@ -27,7 +27,7 @@ export const DatabaseLive = (url: string) =>
           }).pipe(Effect.ignore),
       );
 
-      const { migrations, source } = yield* loadMigrations();
+      const { migrations, source } = yield* loadMigrations;
 
       if (migrations.length === 0) {
         yield* Effect.logWarning(

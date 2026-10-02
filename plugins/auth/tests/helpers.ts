@@ -31,7 +31,7 @@ process.env.BETTER_AUTH_SECRET =
 
 export async function createTestServices(configOverrides?: Partial<AuthConfig>) {
   const driver = await createDatabaseDriver(TEST_DB_URL);
-  const { migrations } = await Effect.runPromise(loadMigrations());
+  const { migrations } = await Effect.runPromise(loadMigrations);
   if (migrations.length > 0) {
     await Effect.runPromise(migrate(driver.db, migrations));
   }
