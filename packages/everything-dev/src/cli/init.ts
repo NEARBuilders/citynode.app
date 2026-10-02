@@ -75,7 +75,7 @@ export interface CatalogChainSource {
   extendsChain: string[];
 }
 
-function readWorkspaceCatalog(sourceDir: string): Record<string, string> {
+export function readWorkspaceCatalog(sourceDir: string): Record<string, string> {
   const pkgPath = join(sourceDir, "package.json");
   if (!existsSync(pkgPath)) {
     return {};
@@ -405,12 +405,12 @@ export async function downloadTarball(
 
 function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
   const httpsMatch = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/.*)?$/);
-  if (httpsMatch) {
+  if (httpsMatch?.[1] && httpsMatch[2]) {
     return { owner: httpsMatch[1], repo: httpsMatch[2] };
   }
 
   const sshMatch = url.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
-  if (sshMatch) {
+  if (sshMatch?.[1] && sshMatch[2]) {
     return { owner: sshMatch[1], repo: sshMatch[2] };
   }
 
@@ -970,8 +970,14 @@ export async function personalizeConfig(
       ? loadManifestNormalizationSpec(opts.workspaceOpts.sourceDir)
       : null;
     if (spec) {
-      workspaces.catalog["everything-dev"] = spec.rootCatalog["everything-dev"];
-      workspaces.catalog["every-plugin"] = spec.rootCatalog["every-plugin"];
+      const rootCatalogEverythingDev = spec.rootCatalog["everything-dev"];
+      const rootCatalogEveryPlugin = spec.rootCatalog["every-plugin"];
+      if (rootCatalogEverythingDev) {
+        workspaces.catalog["everything-dev"] = rootCatalogEverythingDev;
+      }
+      if (rootCatalogEveryPlugin) {
+        workspaces.catalog["every-plugin"] = rootCatalogEveryPlugin;
+      }
     }
     const frameworkCatalog = (
       await resolveCatalogChainSource({

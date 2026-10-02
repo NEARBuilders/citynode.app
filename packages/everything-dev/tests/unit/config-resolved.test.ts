@@ -3,13 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  clearConfigCache,
   findConfigPath,
   getResolvedConfigPath,
   loadGeneratedResolvedConfig,
   loadLocalConfig,
   loadResolvedConfig,
   readBosConfigForBuild,
+  resetConfigPathCache,
   resolveBosConfigPath,
   writeResolvedConfig,
 } from "../../src/config";
@@ -57,7 +57,7 @@ vi.mock("../../src/http-client", async (importOriginal) => {
 
 describe("findConfigPath cache", () => {
   afterEach(() => {
-    clearConfigCache();
+    resetConfigPathCache();
   });
 
   it("normalizes a relative working directory before walking parents", () => {
@@ -72,7 +72,7 @@ describe("findConfigPath cache", () => {
       writeFileSync(join(testDir, "bos.config.json"), "{}");
       expect(findConfigPath(testDir)).toBeNull();
 
-      clearConfigCache();
+      resetConfigPathCache();
 
       expect(findConfigPath(testDir)).toBe(join(testDir, "bos.config.json"));
     } finally {

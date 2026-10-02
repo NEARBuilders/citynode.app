@@ -3,14 +3,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { convertChildConfigToAppForm } from "../../src/cli/init";
-import { clearConfigCache, loadAppDescriptorConfig, loadResolvedConfig } from "../../src/config";
+import {
+  loadAppDescriptorConfig,
+  loadResolvedConfig,
+  resetConfigPathCache,
+} from "../../src/config";
 import { App } from "../../src/descriptor/constructors";
 import { configInputToDescriptor, toConfigInput } from "../../src/descriptor/resolve";
 
 const fixtures = join(import.meta.dirname, "..", "fixtures", "bos-app-loader");
 
 afterEach(() => {
-  clearConfigCache();
+  resetConfigPathCache();
   rmSync(join(fixtures, "convert-scratch"), { recursive: true, force: true });
 });
 
