@@ -105,8 +105,8 @@ test.describe("CSR compose", () => {
     await waitForApp(page);
 
     await expect(
-      page.getByTestId("login.language-select").locator('[data-slot="select-value"]'),
-    ).toHaveText("Español");
+      page.getByTestId("login.language-select").getByText("Español", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión en CityNode");
   });
 
