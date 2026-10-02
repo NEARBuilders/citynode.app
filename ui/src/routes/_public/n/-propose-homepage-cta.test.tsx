@@ -19,10 +19,12 @@ const harness = vi.hoisted(() => ({
 
 vi.mock("@/app", async () => ({
   ...(await vi.importActual<object>("@/app")),
-  useApiClient: () => ({ resolveTenantByOrgId: harness.resolveTenantByOrgId }),
+  useApiClient: () => ({
+    resolveTenantByOrgId: harness.resolveTenantByOrgId,
+    auth: { listOrganizations: harness.listOrganizations },
+  }),
   useAuthClient: () => ({
     getSession: async () => ({ data: harness.session }),
-    organization: { list: harness.listOrganizations },
   }),
 }));
 
@@ -51,7 +53,7 @@ function setup(options: {
   tenants?: Record<string, TenantResult>;
 }) {
   harness.session = options.signedIn ? { user: { id: "u1", isAnonymous: false } } : null;
-  harness.listOrganizations.mockResolvedValue({ data: options.orgs ?? [] });
+  harness.listOrganizations.mockResolvedValue(options.orgs ?? []);
   harness.resolveTenantByOrgId.mockImplementation(async ({ orgId }: { orgId: string }) => {
     const result = options.tenants?.[orgId] ?? null;
     if (result instanceof Error) throw result;

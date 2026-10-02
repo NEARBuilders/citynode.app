@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { pluginPath, pluginSearch, useApiClient } from "@/app";
+import { pluginHref, useApiClient } from "@/app";
 import {
   Button,
   Field,
@@ -144,13 +144,12 @@ function CreateThingPage() {
                 : submitError.message || "Unable to submit this proposal."}
             </p>
             {needsSignIn && (
-              <Link
-                to={pluginPath("/login")}
-                search={pluginSearch({ redirect: "/things/new" })}
+              <a
+                href={pluginHref("/login", { redirect: "/things/new" })}
                 className="text-sm font-medium text-foreground underline underline-offset-4"
               >
                 Sign in again
-              </Link>
+              </a>
             )}
           </div>
         )}

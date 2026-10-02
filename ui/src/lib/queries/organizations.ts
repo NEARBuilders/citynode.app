@@ -24,5 +24,9 @@ export function organizationsQueryOptions(apiClient: ApiClient) {
     queryKey: organizationQueryKeys.all,
     queryFn: () => apiClient.auth.listOrganizations(),
     staleTime: ORGANIZATION_STALE_TIME,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 2000),
   });
 }

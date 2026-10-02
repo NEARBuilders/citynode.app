@@ -8,6 +8,7 @@ const bootstrap = vi.hoisted(() => ({
   createRouter: vi.fn(() => ({ router: {} })),
   render: vi.fn(),
   hydrateRoot: vi.fn(),
+  toastError: vi.fn(),
   coreRouteConfig: {
     routeConfigLoaders: {},
     rootMeta: { head: () => ({ meta: [{ name: "core", content: "1" }] }) },
@@ -33,6 +34,8 @@ vi.mock("react-dom/client", () => ({
   createRoot: () => ({ render: bootstrap.render }),
   hydrateRoot: bootstrap.hydrateRoot,
 }));
+
+vi.mock("sonner", () => ({ toast: { error: bootstrap.toastError } }));
 
 const composeMocks = vi.hoisted(() => ({
   loadRemote: vi.fn(),
@@ -120,6 +123,9 @@ describe("client bootstrap", () => {
     await expect(runHydrate(bootstrap.config)).rejects.toThrow("Missing hostUrl or rpcBase");
     expect(bootstrap.routerLoads).toBe(0);
     expect(bootstrap.createRouter).not.toHaveBeenCalled();
+    expect(
+      document.querySelector('[data-testid="application-startup-error"]')?.textContent,
+    ).toContain("Reload");
     expect(window.__EVERYTHING_DEV_HYDRATE_PROMISE__).toBeUndefined();
 
     bootstrap.config.hostUrl = "https://example.test";
@@ -221,6 +227,13 @@ describe("client bootstrap", () => {
     // Degraded compose must never hydrate over SSR'd HTML — client-render.
     expect(bootstrap.hydrateRoot).not.toHaveBeenCalled();
     expect(bootstrap.render).toHaveBeenCalledOnce();
+    expect(bootstrap.toastError).toHaveBeenCalledWith(
+      "Some application features couldn't load",
+      expect.objectContaining({
+        duration: Number.POSITIVE_INFINITY,
+        action: expect.objectContaining({ label: "Reload" }),
+      }),
+    );
   });
 
   it("falls back to the core-only tree on compose digest mismatch", async () => {
@@ -242,5 +255,13 @@ describe("client bootstrap", () => {
     );
     expect(bootstrap.hydrateRoot).not.toHaveBeenCalled();
     expect(bootstrap.render).toHaveBeenCalledOnce();
+    expect(bootstrap.toastError).toHaveBeenCalledOnce();
+  });
+
+  it("does not expose client progress diagnostics in production", async () => {
+    vi.stubEnv("DEV", false);
+    await runHydrate(bootstrap.config);
+    expect(window.__CLIENT_PROGRESS__).toBeUndefined();
+    vi.unstubAllEnvs();
   });
 });

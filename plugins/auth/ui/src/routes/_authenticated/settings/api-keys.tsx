@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
+import { getAppName } from "everything-dev/ui/runtime";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -37,9 +38,9 @@ import { ApiKeyCreateDialog, type ApiKeyFormValues } from "./-api-key-create-dia
 import { ApiKeyRevealDialog, type CreatedApiKey } from "./-api-key-reveal-dialog";
 
 export const Route = createFileRoute("/_authenticated/settings/api-keys")({
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "API keys · Settings" },
+      { title: `API keys · ${getAppName(match.context.runtimeConfig)}` },
       { name: "description", content: "Create and manage API keys for programmatic access." },
     ],
   }),

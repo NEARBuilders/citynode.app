@@ -1,15 +1,16 @@
 import { KeyIcon, ShieldCheckIcon, UserCircleIcon, UserIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { sessionQueryOptions } from "everything-dev/ui/auth";
+import { getAppName } from "everything-dev/ui/runtime";
 import { useEffect, useRef } from "react";
 import { PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import "../../styles.css";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "Settings" },
+      { title: `Settings · ${getAppName(match.context.runtimeConfig)}` },
       { name: "description", content: "Manage your profile, sign-in methods and API keys." },
     ],
   }),

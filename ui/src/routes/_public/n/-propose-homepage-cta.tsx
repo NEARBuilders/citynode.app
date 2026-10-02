@@ -1,9 +1,9 @@
 import { HouseIcon } from "@phosphor-icons/react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { Organization } from "@/app";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { Button } from "@/components";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 
 export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
@@ -14,12 +14,7 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
   const enabled = signedIn && !!tenantId;
 
   const { data: organizations = [] } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data } = await auth.organization.list();
-      return (data || []) as Organization[];
-    },
-    staleTime: 30 * 1000,
+    ...organizationsQueryOptions(apiClient),
     enabled,
   });
 

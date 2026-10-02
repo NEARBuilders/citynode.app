@@ -24,11 +24,6 @@ export function pluginHref(path: string, search?: Record<string, string | undefi
   return `${pluginPath(path)}${query ? `?${query}` : ""}`;
 }
 
-/**
- * Search params for a plugin-owned route used through the typed `search`
- * option — the core cannot type-check them, so they widen to the router's
- * full search schema union.
- */
-export function pluginSearch(search: Record<string, unknown>): never {
-  return search as never;
+export function pluginSearch<TSearch extends Record<string, unknown>>(search: TSearch): TSearch {
+  return search;
 }

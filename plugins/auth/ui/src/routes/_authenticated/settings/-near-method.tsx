@@ -77,7 +77,6 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: nearAccountsQueryKey });
     void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
-    void queryClient.invalidateQueries({ queryKey: ["user-invitations"] });
   };
   const onError = (err: Error) => toast.error(err.message);
 
