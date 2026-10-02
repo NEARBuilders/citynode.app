@@ -137,8 +137,8 @@ function NodeOverview() {
             summary.stakingValidators.validators.length === 0
               ? "—"
               : stakingIsInherited
-                ? "Inherited"
-                : "Own"
+                ? translate("dashboard.stakingInherited")
+                : translate("dashboard.stakingOwn")
           }
           testId="dashboard-node.stat-staking"
         />

@@ -271,12 +271,12 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
           <InfoRow label={translate("admin.community.id")} value={node.id} mono />
           <InfoRow
             label={translate("admin.community.siteId")}
-            value={node.tenantId ?? "None"}
+            value={node.tenantId ?? translate("common.none")}
             mono={!!node.tenantId}
           />
           <InfoRow
             label={translate("admin.community.parentId")}
-            value={node.parentId ?? "None"}
+            value={node.parentId ?? translate("common.none")}
             mono={!!node.parentId}
           />
         </div>

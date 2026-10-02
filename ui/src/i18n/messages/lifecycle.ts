@@ -685,6 +685,12 @@ export const lifecycleMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
   ],
   "lifecycle.ready": ["Ready", "Listo", "Prêt", "就绪"],
   "lifecycle.record": ["Record", "Registro", "Enregistrement", "记录"],
+  "lifecycle.progress": [
+    "{done}/{total} done",
+    "{done}/{total} completado",
+    "{done}/{total} terminé",
+    "已完成 {done}/{total}",
+  ],
   "lifecycle.refresh": ["Refresh", "Actualizar", "Actualiser", "刷新"],
   "lifecycle.refreshChain": [
     "Refresh chain state",

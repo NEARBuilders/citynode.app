@@ -328,7 +328,14 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
         ? translate("community.hasJoinLink")
         : translate("community.noJoinLink"),
     },
-    { ready: node.active, label: node.activityReason },
+    {
+      ready: node.active,
+      label: node.upcoming
+        ? translate("directory.upcomingEvent")
+        : node.active
+          ? translate("directory.recentlyActive")
+          : translate("directory.quiet"),
+    },
   ];
   return (
     <>

@@ -518,6 +518,13 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Communauté renommée",
     "社区已重命名",
   ],
+  "tenant.republish": ["Republish", "Volver a publicar", "Republier", "重新发布"],
+  "tenant.republishing": [
+    "Republishing…",
+    "Publicando de nuevo…",
+    "Republication…",
+    "正在重新发布…",
+  ],
   "tenant.republishAddress": [
     "Add an address before republishing.",
     "Añade una dirección antes de volver a publicar.",

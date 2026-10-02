@@ -2,6 +2,18 @@ import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "about.build": ["Build on it", "Desarrollar sobre él", "Développer dessus", "基于它开发"],
+  "error.apiConnection": [
+    "Unable to connect to API",
+    "No se pudo conectar con la API",
+    "Impossible de se connecter à l’API",
+    "无法连接到 API",
+  ],
+  "error.apiUnavailable": [
+    "The API is currently unavailable. Please try again later.",
+    "La API no está disponible en este momento. Inténtalo de nuevo más tarde.",
+    "L’API est actuellement indisponible. Réessayez plus tard.",
+    "API 当前不可用，请稍后重试。",
+  ],
   "about.description": [
     "What this runtime is, how it's built, and how to build on it.",
     "Qué es este entorno de ejecución, cómo se construye y cómo desarrollar sobre él.",
@@ -268,6 +280,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.docs": ["Docs", "Documentación", "Documentation", "文档"],
   "common.done": ["Done", "Listo", "Terminé", "完成"],
   "common.edit": ["Edit", "Editar", "Modifier", "编辑"],
+  "common.hide": ["Hide", "Ocultar", "Masquer", "隐藏"],
   "common.editNamed": ["Edit {name}", "Editar {name}", "Modifier {name}", "编辑{name}"],
   "common.email": ["Email", "Correo electrónico", "Adresse e-mail", "邮箱"],
   "common.emailExample": [
@@ -653,6 +666,8 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "dashboard.motivation": ["Motivation", "Motivación", "Motivation", "申请理由"],
   "dashboard.nearWallet": ["NEAR wallet", "Cartera NEAR", "Portefeuille NEAR", "NEAR 钱包"],
   "dashboard.nextSteps": ["Next steps", "Próximos pasos", "Prochaines étapes", "后续步骤"],
+  "dashboard.stakingInherited": ["Inherited", "Heredado", "Hérité", "继承"],
+  "dashboard.stakingOwn": ["Own", "Propio", "Propre", "自身"],
   "dashboard.noCommunity": [
     "Your organization has no community yet",
     "Tu organización aún no tiene comunidad",
@@ -679,9 +694,9 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "打开我的社区",
   ],
   "dashboard.orgCount": [
-    "You belong to {count} organizations. Pick one to work in.",
-    "Perteneces a {count} organizaciones. Elige una para trabajar.",
-    "Vous faites partie de {count} organisations. Choisissez-en une pour travailler.",
+    "You belong to {count, plural, one {# organization} other {# organizations}}. Pick one to work in.",
+    "Perteneces a {count, plural, one {# organización} other {# organizaciones}}. Elige una para trabajar.",
+    "Vous faites partie de {count, plural, one {# organisation} other {# organisations}}. Choisissez-en une pour travailler.",
     "你属于 {count} 个组织，请选择一个进行操作。",
   ],
   "dashboard.orgFallback": ["an organization", "una organización", "une organisation", "一个组织"],
@@ -706,8 +721,8 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "dashboard.passkeysAdded": [
     "{count} added",
-    "{count} añadidas",
-    "{count} ajoutées",
+    "{count, plural, one {# añadida} other {# añadidas}}",
+    "{count, plural, one {# ajoutée} other {# ajoutées}}",
     "已添加 {count} 个",
   ],
   "dashboard.proposalLoadError": [
@@ -1185,9 +1200,9 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "nav.live": ["Live", "En directo", "En direct", "实时"],
   "nav.liveThings": [
     "Live stream · Things",
-    "En directo · Elementos",
-    "Flux en direct · Éléments",
-    "实时动态 · 事项",
+    "En directo · Recursos",
+    "Flux en direct · Ressources",
+    "实时动态 · 资源",
   ],
   "nav.manage": ["Manage", "Gestionar", "Gérer", "管理"],
   "nav.methods": [
@@ -1209,7 +1224,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "nav.newRelayer": ["New relayer", "Nuevo relayer", "Nouveau relais", "新建中继服务"],
   "nav.newSite": ["New site", "Nuevo sitio", "Nouveau site", "新建站点"],
   "nav.newSystem": ["New system", "Nuevo sistema", "Nouveau système", "新建系统"],
-  "nav.newThing": ["New thing", "Nuevo elemento", "Nouvel élément", "新建事项"],
+  "nav.newThing": ["New thing", "Nuevo recurso", "Nouvelle ressource", "新建资源"],
   "nav.onboarding": ["Onboarding", "Incorporación", "Inscription", "加入引导"],
   "nav.onboardingStation": [
     "Onboarding station",
@@ -1233,8 +1248,8 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "nav.site": ["Site", "Sitio", "Site", "站点"],
   "nav.sites": ["Sites", "Sitios", "Sites", "站点"],
   "nav.system": ["System", "Sistema", "Système", "系统"],
-  "nav.thing": ["Thing", "Elemento", "Élément", "事项"],
-  "nav.things": ["Things", "Elementos", "Éléments", "事项"],
+  "nav.thing": ["Thing", "Recurso", "Ressource", "资源"],
+  "nav.things": ["Things", "Recursos", "Ressources", "资源"],
   "nav.toggle": [
     "Toggle {name}",
     "Expandir o contraer {name}",

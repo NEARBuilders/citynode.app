@@ -56,7 +56,9 @@ export function TenantLiveSite({
               disabled={republish.isPending || !!blockedReason}
               data-testid="tenant.republish"
             >
-              {republish.isPending ? "Republishing…" : "Republish"}
+              {republish.isPending
+                ? translate("tenant.republishing")
+                : translate("tenant.republish")}
             </Button>
           }
         >

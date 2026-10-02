@@ -122,6 +122,8 @@ export function crumbsFor(
       return [page(t("common.stake"))];
     case "apply":
       return [page(t("dashboard.startCommunity"))];
+    case "build":
+      return [page(t("nav.build"))];
     case "discover":
       return [page(t("nav.directory"))];
     case "orgs": {
@@ -137,6 +139,7 @@ export function crumbsFor(
       return [THINGS, page(t("nav.thing"))];
     }
     case "admin": {
+      if (second === "organizations") return [ADMIN, page(ORGS.label)];
       const section = second ? ADMIN_SECTIONS[second] : undefined;
       if (!section) return [page(ADMIN.label)];
       if (!third) return [ADMIN, page(section.label)];

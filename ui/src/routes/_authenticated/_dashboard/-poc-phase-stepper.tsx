@@ -53,8 +53,7 @@ export function PocPhaseStepper({
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="leading-tight whitespace-normal">{entry.phase.title}</span>
                     <span className="text-xs font-normal text-muted-foreground">
-                      {entry.done}/{entry.total}
-                      {translate("lifecycle.doneLower")}
+                      {translate("lifecycle.progress", { done: entry.done, total: entry.total })}
                     </span>
                   </span>
                 </span>

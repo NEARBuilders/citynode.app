@@ -104,7 +104,7 @@ function NodeLifecyclePocPage() {
   const setupComplete = !!team && !!values.name.trim() && !!values.pool.trim();
   const showSetup = setupOpen ?? !setupComplete;
   const activePhase = resolvePhase(stations, selectedPhase);
-  const progress = phaseProgress(stations, activePhase);
+  const progress = phaseProgress(stations, activePhase, PHASES);
   const phaseStations = stations.filter((station) => station.def.phase === activePhase);
   const focused = resolveFocus(stations, activePhase, selectedStation);
   const phase = PHASES.find((entry) => entry.id === activePhase);
@@ -191,7 +191,7 @@ function NodeLifecyclePocPage() {
                 data-testid="poc-setup-toggle"
               >
                 {showSetup ? <CaretUpIcon /> : <CaretDownIcon />}
-                {showSetup ? "Hide" : "Edit"}
+                {showSetup ? translate("common.hide") : translate("common.edit")}
               </Button>
             </div>
           }

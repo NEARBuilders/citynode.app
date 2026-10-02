@@ -190,12 +190,12 @@ export function ActivityForm({
           <FieldGroup>
             {(
               [
-                ["startsAt", "Starts"],
-                ["endsAt", "Ends"],
+                ["startsAt", "events.starts"],
+                ["endsAt", "events.ends"],
               ] as const
             ).map(([key, label]) => (
               <Field key={key}>
-                <FieldLabel htmlFor={`activity-${key}`}>{label}</FieldLabel>
+                <FieldLabel htmlFor={`activity-${key}`}>{translate(label)}</FieldLabel>
                 <Input
                   id={`activity-${key}`}
                   readOnly={locked}

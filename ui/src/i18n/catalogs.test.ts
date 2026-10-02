@@ -10,6 +10,33 @@ import {
 } from "./catalogs";
 
 describe("app message catalogs", () => {
+  it("uses singular and plural organization and passkey counts on the dashboard", () => {
+    const en = setupI18n({ locale: "en", messages: { en: getAppMessages("en") } });
+    const es = setupI18n({ locale: "es", messages: { es: getAppMessages("es") } });
+    const fr = setupI18n({ locale: "fr", messages: { fr: getAppMessages("fr") } });
+    expect(en._("dashboard.orgCount", { count: 1 })).toBe(
+      "You belong to 1 organization. Pick one to work in.",
+    );
+    expect(en._("dashboard.orgCount", { count: 2 })).toBe(
+      "You belong to 2 organizations. Pick one to work in.",
+    );
+    expect(es._("dashboard.orgCount", { count: 1 })).toBe(
+      "Perteneces a 1 organización. Elige una para trabajar.",
+    );
+    expect(es._("dashboard.orgCount", { count: 2 })).toBe(
+      "Perteneces a 2 organizaciones. Elige una para trabajar.",
+    );
+    expect(fr._("dashboard.orgCount", { count: 1 })).toBe(
+      "Vous faites partie de 1 organisation. Choisissez-en une pour travailler.",
+    );
+    expect(fr._("dashboard.orgCount", { count: 2 })).toBe(
+      "Vous faites partie de 2 organisations. Choisissez-en une pour travailler.",
+    );
+    expect(es._("dashboard.passkeysAdded", { count: 1 })).toBe("1 añadida");
+    expect(es._("dashboard.passkeysAdded", { count: 2 })).toBe("2 añadidas");
+    expect(fr._("dashboard.passkeysAdded", { count: 1 })).toBe("1 ajoutée");
+    expect(fr._("dashboard.passkeysAdded", { count: 2 })).toBe("2 ajoutées");
+  });
   it("uses singular table summaries for one row and plural summaries for several", () => {
     const en = setupI18n({ locale: "en", messages: { en: getAppMessages("en") } });
     const fr = setupI18n({ locale: "fr", messages: { fr: getAppMessages("fr") } });

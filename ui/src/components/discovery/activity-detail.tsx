@@ -12,7 +12,7 @@ import { cn } from "cn";
 import { useApiClient } from "@/app";
 import { Badge, Button, EmptyState } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAppTranslation } from "@/i18n/runtime";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, activityTimeRange, DateTile } from "./event-list";
 import { ReportContent } from "./report-content";
@@ -27,6 +27,7 @@ export function ActivityDetail({
   campaign?: string;
 }) {
   const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const api = useApiClient();
   const measurement = useDiscoveryMeasurement(api, campaign);
   const activity = useQuery({
@@ -101,8 +102,8 @@ export function ActivityDetail({
   const data = activity.data;
   const isEvent = data.kind === "event";
   const cancelled = data.status === "cancelled";
-  const tile = activityDateTile(data);
-  const time = activityTimeRange(data);
+  const tile = activityDateTile(data, locale);
+  const time = activityTimeRange(data, locale);
   const track = () => {
     if (isEvent && selectedNode) measurement.track("event", selectedNode, data.id);
   };

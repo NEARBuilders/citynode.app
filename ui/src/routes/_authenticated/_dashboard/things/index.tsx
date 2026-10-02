@@ -8,6 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import { useMemo, useState } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, PageContainer, PageHeader } from "@/components";
@@ -190,8 +191,12 @@ function ThingsIndexPage() {
                       <span className="truncate font-mono">{thing.thingId}</span>
                     </ItemTitle>
                     <ItemDescription>
-                      {translate("things.updated")}
-                      <LocalDate value={thing.updatedAt} format="relative" />
+                      <Trans
+                        id="date.updated"
+                        components={{
+                          date: <LocalDate value={thing.updatedAt} format="relative" />,
+                        }}
+                      />
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>

@@ -92,7 +92,7 @@ export function ThingDetailsView({
               >
                 <ArrowUpIcon />
                 <span className="tabular-nums">{upvoteCount?.totalCount ?? 0}</span>
-                <span>{hasUpvote ? "upvoted" : "upvote"}</span>
+                <span>{translate(hasUpvote ? "things.voteAdded" : "things.upvote")}</span>
               </Button>
             ) : undefined
           }
