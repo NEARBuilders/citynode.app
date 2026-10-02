@@ -98,6 +98,10 @@ export const AppDescriptorSchema = z
       })
       .strict()
       .optional(),
+    /** Authoring-only: the starter level this child was scaffolded with.
+     * Stripped from resolved configs — publish canonicalization never
+     * carries it. */
+    starter: z.enum(["simple", "advanced"]).optional(),
     ci: z
       .object({
         image: z.string().optional(),

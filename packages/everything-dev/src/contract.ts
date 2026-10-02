@@ -2,7 +2,12 @@ import "@orpc/openapi/extensions/route";
 import * as z from "zod";
 import type { DevSessionData, StartSummary } from "./dev-session-data";
 import { oc } from "./sdk";
-import { BosConfigInputSchema, BosConfigSchema, SourceModeSchema } from "./types";
+import {
+  BosConfigInputSchema,
+  BosConfigSchema,
+  SourceModeSchema,
+  StarterLevelSchema,
+} from "./types";
 
 export const PhaseTimingSchema = z.object({
   name: z.string(),
@@ -360,6 +365,7 @@ export const InitOptionsSchema = z.object({
   source: z.string().optional(),
   plugins: z.array(z.string()).optional(),
   overrides: z.array(OverrideSectionSchema).optional(),
+  level: StarterLevelSchema.optional(),
   noInteractive: z.boolean().default(false),
   noInstall: z.boolean().default(false),
 });

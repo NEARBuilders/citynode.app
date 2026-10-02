@@ -28,6 +28,24 @@ Written against commit `21855f79b` (branch `chore/consolidate-deploy`, PR
 | [001](./v1-current/dev-entry-contract.md) | Dev entry contract — rspack builds adopt the entry-filename decision; dev serves pin their build children to development | P1 | S | — | TODO |
 | [002](./v1-current/regression-image-slot-pins.md) | Regression image becomes a production-shaped consumer — slot pins + staged version manifests replace the retired localhost-rewrite helper | P1 | M | 001 (soft) | TODO |
 
+### v1-current — init-flow advisor session (2026-10-01, commit `a56e1da34`)
+
+Scope: `bos init` starter-app improvement — complexity levels, product-vs-
+starter separation, config authoring form. Decisions settled with the
+maintainer: prune from the live tree (no template dirs); CityNode product
+routes are parent-only at every level; both levels get the same slim generic
+API shell; `bos.app.ts` ships commented + `bos.dev.ts` scaffolded; level =
+prompt + `--level` flag, persisted in `bos.app.ts` and the sync snapshot.
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| [003](./v1-current/003-init-starter-levels.md) | `bos init` starter levels — simple vs advanced UI route pruning | P1 | M | — | DONE (`21c752d2a`) |
+| [004](./v1-current/004-slim-api-shell.md) | Slim generic API shell for scaffolded children | P1 | M | 003 (vocabulary) | DONE (`fa02b9eb8`) |
+| [005](./v1-current/005-commented-config-form.md) | Commented `bos.app.ts` + `bos.dev.ts` scaffold; plugin.dev.ts copies kept (load-bearing — corrected during execution) | P2 | S | none (after 003 to avoid double-touching `bos.app.ts` generation) | DONE (`332ce42e3`) |
+| [006](./v1-current/006-init-test-baseline-hardening.md) | Init test-baseline hardening — hermeticity + prune-vs-real-tree | P3 | S | none | DONE (`23b954a59`) |
+| 007 | Route-aware sidebar nav — `filterSidebarByRoutes` + `routePathsFromManifest` from `manifest.gen.json`; About entry | P1 | M | 003 (levels motivate it) | DONE (`eab254242`) |
+| 008 | Child-sized conditional docker-compose — api + api-test only, delivered when api/host override | P1 | S | 004 (template mechanism) | DONE (`2f48091a2`) |
+
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
 ### Dependency notes
@@ -40,6 +58,18 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 - 001 → 002 is a soft ordering only (shared vocabulary
   `every-plugin/build/artifact-names`; 002's executor imports it — execute
   001 first so the suite is green before the docker-gated verification).
+
+Init-flow session (003–006):
+- 004 reuses 003's exclusion plumbing and touches the same init files —
+  execute 003 first. 005 and 006 are independent; run 005 after 003 so
+  `bos.app.ts` generation is only rewritten once.
+- Findings considered and rejected for this session: separate template
+  directories for simple/advanced starters (drift risk; prune-from-live-tree
+  chosen); pruning now-unused child deps like leaflet/onramp-sdk (harmless
+  while unused, deferred); shipping the parent's 4-postgres docker-compose
+  unchanged (noted, revisit with 004); making the CLI read the parent's
+  `starter` block as its only exclusion source (CLI can't read the parent
+  config before fetching it — defaults must stay hardcoded until a follow-up).
 
 ### Findings considered and deferred
 
