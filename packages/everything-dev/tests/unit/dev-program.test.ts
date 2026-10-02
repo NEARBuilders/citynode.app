@@ -29,9 +29,7 @@ vi.mock("../../src/build", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/build")>();
   return {
     ...actual,
-    buildEverythingDevQuietly: vi.fn(async () => false),
-    buildBetterNearAuthQuietly: vi.fn(async () => false),
-    buildEveryPluginQuietly: vi.fn(async () => false),
+    buildPackageQuietly: vi.fn(async () => false),
   };
 });
 

@@ -18,15 +18,9 @@ export interface EveryPluginBuildOptions {
   dts?: boolean;
 }
 
-export interface AdditionalExport {
-  srcPath: string;
-  exportNames: string[];
-}
-
 export interface PluginManifestEmitterOptions {
   manifestFileName?: string;
   contractFileName?: string;
-  additionalExports?: AdditionalExport[];
 }
 
 export class EmitPluginManifest implements RspackPluginInstance {
@@ -110,37 +104,6 @@ export class EmitPluginManifest implements RspackPluginInstance {
             },
           },
         };
-
-        const additionalExportsEntries: Array<{ path: string; exports: string[]; sha256: string }> =
-          [];
-
-        if (this.options.additionalExports?.length) {
-          for (const additional of this.options.additionalExports) {
-            const sourcePath = path.join(context, "types", additional.srcPath);
-            const content = await tryReadFile(sourcePath);
-            if (!content) {
-              console.warn(
-                `[EmitPluginManifest] Additional export file not found at ${sourcePath}. Skipping.`,
-              );
-              continue;
-            }
-            const sha256 = crypto.createHash("sha256").update(content).digest("hex");
-            const distPath = `./types/${additional.srcPath}`;
-            additionalExportsEntries.push({
-              path: distPath,
-              exports: additional.exportNames,
-              sha256,
-            });
-
-            if (rawSource) {
-              compilation.emitAsset(`types/${additional.srcPath}`, new rawSource(content));
-            }
-          }
-
-          if (additionalExportsEntries.length > 0) {
-            manifest.additionalExports = additionalExportsEntries;
-          }
-        }
 
         if (rawSource) {
           compilation.emitAsset(

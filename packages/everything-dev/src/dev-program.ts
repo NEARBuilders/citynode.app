@@ -1,10 +1,6 @@
 import { Clock, Data, Effect, Layer } from "effect";
 import { detectLocalPackages, PortAllocatorLive } from "./app";
-import {
-  buildBetterNearAuthQuietly,
-  buildEveryPluginQuietly,
-  buildEverythingDevQuietly,
-} from "./build";
+import { buildPackageQuietly } from "./build";
 import { generateCodeArtifacts } from "./code-artifacts";
 import {
   buildRuntimeConfig,
@@ -240,11 +236,11 @@ export const devBootstrap = (
 
     yield* step(timings, "build", async () => {
       const [everythingDevRebuilt] = await Promise.all([
-        buildEverythingDevQuietly(session.root),
-        buildBetterNearAuthQuietly(session.root),
+        buildPackageQuietly(session.root, "everything-dev"),
+        buildPackageQuietly(session.root, "better-near-auth"),
       ]);
       if (shouldBuildPlugin) {
-        await buildEveryPluginQuietly(session.root);
+        await buildPackageQuietly(session.root, "every-plugin");
       }
       if (everythingDevRebuilt === true) {
         // Only the bos process itself runs the everything-dev dist (plugin
