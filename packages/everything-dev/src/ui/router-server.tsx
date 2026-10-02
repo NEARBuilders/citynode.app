@@ -39,9 +39,9 @@ export interface ServerRouterModuleOptions<TRouteTree extends AnyRoute = AnyRout
   defaultRouteTree?: TRouteTree;
 }
 
-type ServerRouterOptions<TRouteTree extends AnyRoute> = CreateRouterOptions & {
+type ServerRouterOptions = CreateRouterOptions & {
   context?: Partial<RouterContextWithApi> & { pluginNav?: unknown };
-  routeTree?: TRouteTree;
+  routeTree?: AnyRoute;
 };
 
 export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>(
@@ -50,7 +50,7 @@ export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>
   const defaultRouteTree = options.defaultRouteTree;
 
   const createRouter = (
-    opts?: ServerRouterOptions<TRouteTree>,
+    opts?: ServerRouterOptions,
   ): { router: AnyRouter; queryClient: QueryClient } => {
     const context = opts?.context;
     const queryClient = context?.queryClient ?? defaultQueryClient();
@@ -58,11 +58,10 @@ export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>
     const history = opts?.history ?? createMemoryHistory();
 
     const cspNonce = context?.cspNonce;
-    // RouterCore's `in out` type parameters reject the framework's loose
-    // AnyRouter contract when the tree is typed as the wide AnyRoute — the
-    // runtime instance genuinely satisfies it, so the boundary casts once.
+    const routeTree = opts?.routeTree ?? defaultRouteTree;
+    if (!routeTree) throw new Error("createRouter: no route tree available");
     const router = createTanStackRouter({
-      routeTree: (opts?.routeTree ?? defaultRouteTree) as TRouteTree,
+      routeTree,
       history,
       basepath: opts?.basepath,
       context: {
@@ -153,7 +152,7 @@ export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>
         const localQueryClient = queryClientRef ?? defaultQueryClient();
         const { router } = createRouter({
           history,
-          routeTree: renderOptions.routeTree as TRouteTree,
+          routeTree: renderOptions.routeTree,
           basepath: renderOptions.basepath,
           context: {
             queryClient: localQueryClient,

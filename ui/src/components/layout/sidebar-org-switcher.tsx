@@ -10,12 +10,18 @@ interface SidebarOrgSwitcherProps {
   appName: string;
   organizations: Organization[];
   activeOrgId?: string | null;
+  isLoading?: boolean;
+  error?: Error | null;
+  onRetry?: () => void;
 }
 
 export function SidebarOrgSwitcher({
   appName,
   organizations,
   activeOrgId,
+  isLoading,
+  error,
+  onRetry,
 }: SidebarOrgSwitcherProps) {
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
 
@@ -28,7 +34,13 @@ export function SidebarOrgSwitcher({
             <div className="grid flex-1 text-left leading-tight">
               <span className="truncate text-sm font-semibold">{activeOrg?.name ?? appName}</span>
               <span className="truncate text-xs text-muted-foreground">
-                {activeOrg ? "Organization" : "Choose an organization"}
+                {isLoading
+                  ? "Loading organizations…"
+                  : error
+                    ? "Couldn't load organizations"
+                    : activeOrg
+                      ? "Organization"
+                      : "Choose an organization"}
               </span>
             </div>
             <CaretUpDownIcon className="ml-auto size-4 text-muted-foreground" />
@@ -36,6 +48,9 @@ export function SidebarOrgSwitcher({
           <OrgSwitcherMenuContent
             organizations={organizations}
             activeOrgId={activeOrgId}
+            isLoading={isLoading}
+            error={error}
+            onRetry={onRetry}
             className="w-(--anchor-width) min-w-60"
             align="start"
             side="bottom"

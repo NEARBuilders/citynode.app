@@ -24,7 +24,7 @@ export interface CreateRouterOptions<TApiClient = unknown, TSession = unknown> {
   context?: Partial<RouterContextWithApi<TApiClient, TSession>>;
   basepath?: string;
   /** composed route tree — manifest construction passes it here; the bundled tree stays the core-only fallback. */
-  routeTree?: unknown;
+  routeTree?: AnyRoute;
 }
 
 export type HeadMeta = NonNullable<AnyRouteMatch["meta"]>[number];

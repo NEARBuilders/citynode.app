@@ -34,7 +34,14 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
-  const { user, organizations, activeOrgId } = useIdentity();
+  const {
+    user,
+    organizations,
+    activeOrgId,
+    isOrganizationsLoading,
+    organizationsError,
+    retryOrganizations,
+  } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
   const switchTeam = useSwitchTeam();
   const tab = useRouterState({
@@ -60,6 +67,9 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
           appName={appName}
           organizations={organizations}
           activeOrgId={activeOrgId}
+          isLoading={isOrganizationsLoading}
+          error={organizationsError}
+          onRetry={() => void retryOrganizations()}
         />
         <SidebarTeamSwitcher
           teams={teams}

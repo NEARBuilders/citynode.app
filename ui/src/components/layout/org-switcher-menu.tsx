@@ -14,6 +14,9 @@ import { useSwitchOrganization } from "./use-switch-organization";
 interface OrgSwitcherMenuContentProps {
   organizations: Organization[];
   activeOrgId?: string | null;
+  isLoading?: boolean;
+  error?: Error | null;
+  onRetry?: () => void;
   className?: string;
   align?: "start" | "end" | "center";
   side?: "top" | "right" | "bottom" | "left";
@@ -24,6 +27,9 @@ interface OrgSwitcherMenuContentProps {
 export function OrgSwitcherMenuContent({
   organizations,
   activeOrgId,
+  isLoading,
+  error,
+  onRetry,
   className = "w-60",
   align = "end",
   side,
@@ -56,7 +62,17 @@ export function OrgSwitcherMenuContent({
             {org.id === activeOrgId && <CheckIcon className="text-muted-foreground" />}
           </DropdownMenuItem>
         ))}
-        {organizations.length === 0 && (
+        {isLoading && organizations.length === 0 && (
+          <DropdownMenuItem disabled data-testid="org-switcher-loading">
+            Loading organizations…
+          </DropdownMenuItem>
+        )}
+        {error && (
+          <DropdownMenuItem onClick={onRetry} data-testid="org-switcher-retry">
+            Couldn't load organizations. Try again
+          </DropdownMenuItem>
+        )}
+        {!isLoading && !error && organizations.length === 0 && (
           <DropdownMenuItem disabled>No organizations yet</DropdownMenuItem>
         )}
       </DropdownMenuGroup>
