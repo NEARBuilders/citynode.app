@@ -43,6 +43,8 @@ prompt + `--level` flag, persisted in `bos.app.ts` and the sync snapshot.
 | [004](./v1-current/004-slim-api-shell.md) | Slim generic API shell for scaffolded children | P1 | M | 003 (vocabulary) | DONE (`fa02b9eb8`) |
 | [005](./v1-current/005-commented-config-form.md) | Commented `bos.app.ts` + `bos.dev.ts` scaffold; plugin.dev.ts copies kept (load-bearing — corrected during execution) | P2 | S | none (after 003 to avoid double-touching `bos.app.ts` generation) | DONE (`332ce42e3`) |
 | [006](./v1-current/006-init-test-baseline-hardening.md) | Init test-baseline hardening — hermeticity + prune-vs-real-tree | P3 | S | none | DONE (`23b954a59`) |
+| 007 | Route-aware sidebar nav — `filterSidebarByRoutes` + `routePathsFromManifest` from `manifest.gen.json`; About entry | P1 | M | 003 (levels motivate it) | DONE (`eab254242`) |
+| 008 | Child-sized conditional docker-compose — api + api-test only, delivered when api/host override | P1 | S | 004 (template mechanism) | DONE (`2f48091a2`) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
