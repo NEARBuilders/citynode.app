@@ -265,7 +265,7 @@ bun run deploy         # bos deploy — the full deploy train (also runs on merg
 
 Two resolution rules keep this safe (ADR 0018): **bundler-configuration code resolves from source** — `every-plugin/build/ui` and `every-plugin/build/rspack` (the generated plugin configs' factories) resolve `src` in every condition, so the config chain cannot go stale; **shipped code resolves from dist** — runtime subpaths (`everything-dev/ui/auth`, `db`, …) resolve built dists, whose freshness the prerequisite train guarantees.
 
-**Dev overlays (`bos.dev.ts`):** authored config lives in `bos.app.ts` (published); dev-only overrides live in `bos.dev.ts` (optional, child-wins merged over the resolved config when the environment is development, **never published** — same role as `.env` vs `.env.example` at the config level). Each unit gets the pair; `plugin.dev.ts` is the legacy name being retired (see `.scratch/quiet-dev-session/issues/15` and `16`).
+**Dev overlays (`bos.dev.ts`):** authored config lives in `bos.app.ts` (published); dev-only overrides live in `bos.dev.ts` (optional, child-wins merged over the resolved config when the environment is development, **never published** — same role as `.env` vs `.env.example` at the config level). Each unit gets the pair; `plugin.dev.ts` is the legacy name being retired (see `.scratch/app-model` — SPEC decision 3's strict layout and the strict cut in closed/02; dev-overlay consumption in issues/06-07).
 
 **Sync and Publish:**
 ```bash

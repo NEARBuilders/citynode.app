@@ -13,7 +13,7 @@ import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
 import { resolveApp, toConfigInput } from "./descriptor/resolve";
-import { AppDescriptorSchema } from "./descriptor/schema";
+import { type AppDescriptor, AppDescriptorSchema } from "./descriptor/schema";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import { fetchJsonOrNull } from "./http-client";
 import {
@@ -41,6 +41,8 @@ import { type ResolvedSlotVersion, resolveSlotVersion } from "./version-manifest
 const LOCAL_PREFIX = "local:";
 const DEFAULT_HOST_PORT = 3000;
 const RESOLVED_CONFIG_FILENAME = "bos.resolved-config.json";
+
+export const DEV_OVERLAY_FILENAME = "bos.dev.ts";
 
 type RuntimeOverrideTarget = "ui" | "api" | "plugins" | `plugins.${string}`;
 
@@ -122,6 +124,46 @@ export function findConfigPath(cwd?: string): string | null {
   return null;
 }
 
+const devOverlayPathCache = new Map<string, string | null>();
+
+/**
+ * @internal — clears the findDevOverlayPath memo. Plumbing for tests and the
+ * resolution session; not part of the public config surface.
+ */
+export function resetDevOverlayPathCache(): void {
+  devOverlayPathCache.clear();
+}
+
+/**
+ * Locates the dev-only `bos.dev.ts` overlay beside the entry config
+ * `findConfigPath` would discover from `cwd` — the walk stops at the first
+ * directory carrying an entry config (`bos.config.json` / `bos.app.ts`), and
+ * the overlay is honored only in that same directory. Returns the absolute
+ * overlay path or null.
+ */
+export function findDevOverlayPath(cwd?: string): string | null {
+  const cacheKey = resolve(cwd ?? process.cwd());
+  const cached = devOverlayPathCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  let dir = cacheKey;
+  while (true) {
+    const hasEntryConfig =
+      existsSync(join(dir, "bos.config.json")) || existsSync(join(dir, "bos.app.ts"));
+    if (hasEntryConfig) {
+      const overlayPath = join(dir, DEV_OVERLAY_FILENAME);
+      const result = existsSync(overlayPath) ? overlayPath : null;
+      devOverlayPathCache.set(cacheKey, result);
+      return result;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  devOverlayPathCache.set(cacheKey, null);
+  return null;
+}
+
 export function isAppDescriptorPath(configPath: string): boolean {
   return configPath.endsWith(".app.ts") || configPath.endsWith(".app.js");
 }
@@ -183,6 +225,33 @@ export function parseAppDescriptorModule(
   return input;
 }
 
+/**
+ * @internal — validates an already-imported `bos.dev.ts` module as a
+ * `Partial<AppDescriptor>` dev overlay. Plumbing for the resolution session's
+ * injectable module loader; not part of the public config surface.
+ */
+export function parseDevOverlayModule(
+  mod: Record<string, unknown>,
+  sourcePath?: string,
+): Partial<AppDescriptor> {
+  const source = sourcePath ?? DEV_OVERLAY_FILENAME;
+  if (!mod?.default) {
+    throw new DevOverlayError({
+      path: source,
+      message: `${source} must default-export a dev overlay (Partial<AppDescriptor>)`,
+    });
+  }
+  const parsed = AppDescriptorSchema.partial().safeParse(mod.default);
+  if (!parsed.success) {
+    throw new DevOverlayError({
+      path: source,
+      message: `${source} is not a valid dev overlay: ${parsed.error.message}`,
+      cause: parsed.error,
+    });
+  }
+  return parsed.data;
+}
+
 export interface ResolvedComposableReference {
   entry: BosPluginRef;
   providerBaseDir: string;
@@ -226,6 +295,12 @@ export class ConfigVersionManifestError extends Schema.TaggedError<ConfigVersion
     cause: Schema.optional(Schema.Unknown),
   },
 ) {}
+
+export class DevOverlayError extends Schema.TaggedError<DevOverlayError>()("DevOverlayError", {
+  path: Schema.String,
+  message: Schema.String,
+  cause: Schema.optional(Schema.Unknown),
+}) {}
 
 export function defaultConfigEnv(): BosEnv {
   return process.env.NODE_ENV === "production" ? "production" : "development";

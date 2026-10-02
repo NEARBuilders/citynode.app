@@ -12,16 +12,19 @@ import {
   ConfigExtendsError,
   ConfigLoadError,
   ConfigNotfoundError,
+  DEV_OVERLAY_FILENAME,
   defaultConfigEnv,
   findConfigPath,
   getConfigBaseDir,
   isAppDescriptorPath,
   loadAppDescriptorConfig,
   parseAppDescriptorModule,
+  parseDevOverlayModule,
   parseExtendsTarget,
   resolveConfigComposableEntries,
   runWithConfigWarningSink,
 } from "../config";
+import { applyDevOverlay } from "../descriptor/resolve";
 import { fetchBosConfigFromFastKv } from "../fastkv";
 import { mergeBosConfigWithExtends, resolveExtendsRef } from "../merge";
 import type {
@@ -352,6 +355,12 @@ export class ResolutionSession {
   }
 }
 
+/**
+ * Opens a resolution session for the requested config source. In development,
+ * a local leaf's `bos.dev.ts` overlay (beside the discovered entry config) is
+ * merged child-wins over the extended input before parsing; overlays are never
+ * read for `bos://` entries or in production/staging.
+ */
 export async function openResolution(
   request?: ResolutionRequest,
   io?: ResolutionIo,
@@ -376,7 +385,7 @@ export async function openResolution(
       let rawConfig: BosConfigInput | undefined;
 
       try {
-        const merged = await walkExtends(dispatch.entry, dispatch.baseDir, new Set(), chain, {
+        const mergedRaw = await walkExtends(dispatch.entry, dispatch.baseDir, new Set(), chain, {
           env,
           registry: request?.registry,
           io: resolvedIo,
@@ -395,8 +404,20 @@ export async function openResolution(
           },
         });
 
+        let overlayMerged = mergedRaw;
+        if (env === "development" && !dispatch.remote) {
+          const overlayPath = join(dirname(dispatch.entry), DEV_OVERLAY_FILENAME);
+          if ((await resolvedIo.readFileOrNull(overlayPath)) !== null) {
+            const overlay = parseDevOverlayModule(
+              await resolvedIo.importModule(overlayPath),
+              overlayPath,
+            );
+            overlayMerged = applyDevOverlay(mergedRaw, overlay);
+          }
+        }
+
         const config = await resolveConfigComposableEntries(
-          BosConfigSchema.parse(merged),
+          BosConfigSchema.parse(overlayMerged),
           dispatch.baseDir,
           runtimeEnv,
         );
