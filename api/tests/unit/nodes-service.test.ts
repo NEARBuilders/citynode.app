@@ -308,7 +308,7 @@ describe("NodesService", () => {
       }),
     );
 
-    const roots = await runService(layer, ({ nodes }) => nodes.listRootNodes());
+    const roots = await runService(layer, ({ nodes }) => nodes.listRootNodes);
     expect(roots.map((n) => n.slug)).toEqual(["usa"]);
   });
 

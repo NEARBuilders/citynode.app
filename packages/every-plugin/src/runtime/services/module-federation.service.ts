@@ -194,7 +194,7 @@ export const ModuleFederationServiceDefault = Layer.effect(
                   : String(identityError.cause ?? "shared identity mismatch")
               }`,
             );
-            return yield* Effect.fail(identityError);
+            return yield* identityError;
           }
 
           const modulePath = `${remoteName}/plugin`;

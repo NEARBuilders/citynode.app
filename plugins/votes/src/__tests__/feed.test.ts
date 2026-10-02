@@ -23,8 +23,7 @@ it("walks tied timestamps without duplicates and stops on unknown cursors", asyn
       ]);
     const votes = await Effect.runPromise(
       VoteService.pipe(
-        Effect.provide(VoteServiceLive),
-        Effect.provide(Layer.succeed(DatabaseTag, db)),
+        Effect.provide(VoteServiceLive.pipe(Layer.provide(Layer.succeed(DatabaseTag, db)))),
       ),
     );
     const first = await votes.getUpvoteFeed(2);

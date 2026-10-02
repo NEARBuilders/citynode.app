@@ -1,5 +1,5 @@
 import { getConnInfo } from "@hono/node-server/conninfo";
-import { Context, Effect, Layer } from "effect";
+import { Config, Context, Effect, Layer } from "effect";
 import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { NONCE, secureHeaders } from "hono/secure-headers";
@@ -53,8 +53,9 @@ export class SecurityMiddleware extends Context.Service<
     SecurityMiddleware,
     Effect.gen(function* () {
       const config = yield* ConfigService;
-      const isDev = process.env.NODE_ENV !== "production";
-      const corsOrigins = yield* readCorsOrigins();
+      const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("development"));
+      const isDev = nodeEnv !== "production";
+      const corsOrigins = yield* readCorsOrigins;
       const uiConfig = config.ui!;
 
       if (corsOrigins.length === 0 && !isDev) {

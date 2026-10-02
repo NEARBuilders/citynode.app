@@ -15,17 +15,17 @@ export class ConfigService extends Context.Service<ConfigService, RuntimeConfig>
   "host/ConfigService",
 ) {}
 
-export function readCorsOrigins(): Effect.Effect<string[], Config.ConfigError> {
-  return Config.String("CORS_ORIGIN").pipe(
-    Config.withDefault(""),
-    Config.map((value) =>
-      value
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0),
-    ),
-  );
-}
+export const readCorsOrigins: Effect.Effect<string[], Config.ConfigError> = Config.String(
+  "CORS_ORIGIN",
+).pipe(
+  Config.withDefault(""),
+  Config.map((value) =>
+    value
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+  ),
+);
 
 export type ActiveRuntimeState = NonNullable<ClientRuntimeConfig["runtime"]>;
 

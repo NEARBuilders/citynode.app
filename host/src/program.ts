@@ -1,5 +1,16 @@
 import { serve } from "@hono/node-server";
-import { Cause, Effect, Exit, Fiber, FiberHandle, Layer, ManagedRuntime, Option } from "effect";
+import {
+  Cause,
+  Clock,
+  Config,
+  Effect,
+  Exit,
+  Fiber,
+  FiberHandle,
+  Layer,
+  ManagedRuntime,
+  Option,
+} from "effect";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { slotPins } from "everything-dev/fingerprint";
 import { type Context, Hono } from "hono";
@@ -41,8 +52,9 @@ interface CompositionHealth {
 
 export const createStartServer = (onReady?: () => void) =>
   Effect.gen(function* () {
-    const port = Number(process.env.PORT) || 3000;
-    const isDev = process.env.NODE_ENV !== "production";
+    const port = yield* Config.Number("PORT").pipe(Config.withDefault(3000));
+    const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("development"));
+    const isDev = nodeEnv !== "production";
     const CSP_STRICT = getCspStrict(isDev);
 
     const config = yield* ConfigService;
@@ -59,7 +71,9 @@ export const createStartServer = (onReady?: () => void) =>
       : { status: "disabled" };
 
     const snapshot = yield* RuntimeSnapshot;
-    const getBaseConfig = async () => (await Effect.runPromise(snapshot.get)).config;
+    const effectContext = yield* Effect.context();
+    const getBaseConfig = async () =>
+      (await Effect.runPromiseWith(effectContext)(snapshot.get)).config;
     const app = new Hono<HonoEnv>();
 
     app.onError((err: unknown, c: Context<HonoEnv>) => {
@@ -123,7 +137,7 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.get("/.well-known/version", (c: Context<HonoEnv>) =>
       c.json(
-        Effect.runPromise(
+        Effect.runPromiseWith(effectContext)(
           Effect.gen(function* () {
             const state = yield* snapshot.get;
             const watch = yield* Effect.serviceOption(SnapshotWatch);
@@ -158,7 +172,7 @@ export const createStartServer = (onReady?: () => void) =>
 
     const loadingState: HealthLoadingState = {
       status: "ready",
-      startTime: Date.now(),
+      startTime: yield* Clock.currentTimeMillis,
       milestones: [],
       error: null,
       ssrEnabled,

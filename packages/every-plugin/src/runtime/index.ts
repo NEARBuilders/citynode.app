@@ -243,7 +243,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
   async shutdown(): Promise<void> {
     const effect = Effect.gen(function* () {
       const pluginService = yield* PluginService;
-      yield* pluginService.cleanup();
+      yield* pluginService.cleanup;
     });
     try {
       await this.runPromise(effect);
@@ -272,21 +272,13 @@ export class PluginRuntime<R = RegisteredPlugins> {
         const pluginResult = yield* Effect.tryPromise({
           try: () => cachedPlugin,
           catch: (error) => error,
-        }).pipe(Effect.catch(() => Effect.succeed(null)));
+        }).pipe(Effect.orElseSucceed(() => null));
 
         if (pluginResult) {
-          yield* pluginService
-            .shutdownPlugin(pluginResult)
-            .pipe(
-              Effect.catch((error) =>
-                Effect.logWarning(`Failed to shutdown evicted plugin ${pluginId}`, error),
-              ),
-            );
+          yield* pluginService.shutdownPlugin(pluginResult);
         }
       }
-    }).pipe(
-      Effect.catch((error) => Effect.logWarning(`Plugin eviction failed for ${pluginId}`, error)),
-    );
+    });
 
     return this.runPromise(effect);
   }

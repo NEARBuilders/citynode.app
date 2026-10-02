@@ -69,11 +69,7 @@ const makeDeps = (overrides?: Partial<Parameters<typeof runWatchTick>[0]>) => {
 
 describe("runWatchTick", () => {
   beforeEach(async () => {
-    snapshot = await Effect.runPromise(
-      Effect.gen(function* () {
-        return yield* RuntimeSnapshot;
-      }).pipe(Effect.provide(snapshotLayer)),
-    );
+    snapshot = await Effect.runPromise(RuntimeSnapshot.pipe(Effect.provide(snapshotLayer)));
   });
 
   it("adopts when the published pointer's fingerprint changes", async () => {

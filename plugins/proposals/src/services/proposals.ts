@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { and, count, desc, eq, ilike, inArray, lte, notInArray, or } from "drizzle-orm";
-import { Context, Effect, Layer } from "effect";
+import { Clock, Context, DateTime, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import { proposalAuditLog, proposalSubmissions, proposals } from "../db/schema";
 
@@ -948,7 +948,9 @@ export const ProposalServiceLive = Layer.effect(
           if (input.entityId) conditions.push(eq(proposals.entityId, input.entityId));
           if (input.reviewStatus) conditions.push(eq(proposals.reviewStatus, input.reviewStatus));
           if (input.lifecycleStatus === "actionable") {
-            const lifecycleCutoff = new Date(Date.now() - LIFECYCLE_TIMEOUT_MS);
+            const lifecycleCutoff = DateTime.toDateUtc(
+              DateTime.makeUnsafe((yield* Clock.currentTimeMillis) - LIFECYCLE_TIMEOUT_MS),
+            );
             conditions.push(
               or(
                 eq(proposals.reviewStatus, "pending"),

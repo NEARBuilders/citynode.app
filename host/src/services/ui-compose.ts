@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { Context, Data, Effect, Layer } from "effect";
+import { Clock, Context, Data, Effect, Layer } from "effect";
 import {
   CORE_UI_PLUGIN_KEY as CORE_UI_KEY,
   type ComposePayload,
@@ -218,6 +218,8 @@ export function createUiComposeCacheState(): UiComposeCacheState {
   return { remoteManifests: new Map(), variants: new Map() };
 }
 
+const runFetch = (url: string, init?: RequestInit): Promise<Response> => fetch(url, init);
+
 const loadRemoteManifestCached = (
   source: UiSource,
   manifestUrl: string,
@@ -225,12 +227,12 @@ const loadRemoteManifestCached = (
 ): Effect.Effect<PluginManifest, Error> =>
   Effect.gen(function* () {
     const cached = cache.remoteManifests.get(source.key);
-    const now = Date.now();
+    const now = yield* Clock.currentTimeMillis;
     if (cached && now - cached.fetchedAt < MANIFEST_TTL_MS) {
       return cached.manifest;
     }
     const fresh = yield* Effect.tryPromise(async () => {
-      const response = await fetch(manifestUrl);
+      const response = await runFetch(manifestUrl);
       if (!response.ok) {
         throw new Error(`manifest fetch ${response.status} for ${manifestUrl}`);
       }
@@ -244,7 +246,7 @@ const loadRemoteManifestCached = (
             );
             return cached.manifest;
           }
-          return yield* Effect.fail(error);
+          return yield* error;
         }),
       ),
     );
@@ -353,7 +355,7 @@ export const composeUi = (
 
     const variantKey = `${digest}::${variantFingerprint(sources)}`;
     const isDev = sources.some((source) => source.localRoot);
-    const now = Date.now();
+    const now = yield* Clock.currentTimeMillis;
     const cached = cache.variants.get(variantKey);
     if (cached && (isDev ? cached.staleAfter > now : true)) {
       return cached.variant;

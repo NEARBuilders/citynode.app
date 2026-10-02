@@ -128,6 +128,9 @@ export async function buildRuntimeConfig(
   });
 }
 
+const scheduleTimeout = (ms: number, fn: () => void): ReturnType<typeof setTimeout> =>
+  setTimeout(fn, ms);
+
 export function probePortBindable(port: number): Effect.Effect<boolean> {
   return Effect.callback<boolean>((resume) => {
     const server = createServer();
@@ -146,7 +149,7 @@ export function probePortBindable(port: number): Effect.Effect<boolean> {
 
     server.listen(port, "127.0.0.1");
 
-    const timer = setTimeout(() => {
+    const timer = scheduleTimeout(PROBE_TIMEOUT_MS, () => {
       server.removeAllListeners();
       try {
         server.close();
@@ -154,7 +157,7 @@ export function probePortBindable(port: number): Effect.Effect<boolean> {
         // ignore
       }
       resume(Effect.succeed(false));
-    }, PROBE_TIMEOUT_MS);
+    });
 
     server.once("listening", () => clearTimeout(timer));
     server.once("error", () => clearTimeout(timer));

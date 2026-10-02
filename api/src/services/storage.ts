@@ -299,7 +299,7 @@ export const StorageLive = Layer.effect(
   Effect.gen(function* () {
     const config = storageConfigFromEnv();
     if (!config) {
-      console.warn(
+      yield* Effect.logWarning(
         "[storage] BOS_STORAGE_* not configured — using in-memory storage (dev only; bundle bytes are lost on restart)",
       );
       const memory = new MemoryStorageClient();
