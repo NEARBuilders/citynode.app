@@ -545,6 +545,20 @@ describe("upgrade bos config migration", () => {
 
   it("preserves an existing child auth override during upgrade sync", async () => {
     const projectDir = makeProjectDir();
+    const sourceDir = makeProjectDir();
+    writeFileSync(join(sourceDir, "bos.config.json"), '{"account":"dev.everything.near"}\n');
+    writeFileSync(
+      join(sourceDir, "package.json"),
+      JSON.stringify({
+        workspaces: {
+          catalog: {
+            effect: "3.21.0",
+            "everything-dev": "^1.28.11",
+            "every-plugin": "^2.5.11",
+          },
+        },
+      }),
+    );
     mkdirSync(join(projectDir, "ui"), { recursive: true });
     writeFileSync(join(projectDir, "ui", "package.json"), '{"name":"ui"}\n');
 
@@ -626,6 +640,7 @@ describe("upgrade bos config migration", () => {
         overrides: ["ui"],
         mode: "sync",
         existingConfig: JSON.parse(readFileSync(join(dir, "bos.config.json"), "utf-8")),
+        workspaceOpts: { sourceDir },
       });
 
       return {

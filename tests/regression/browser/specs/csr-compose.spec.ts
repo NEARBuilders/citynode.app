@@ -89,7 +89,8 @@ test.describe("CSR compose", () => {
 
     const selector = page.getByTestId("login.language-select");
     await expect(selector).toBeVisible({ timeout: 15000 });
-    await selector.selectOption("es");
+    await selector.click();
+    await page.getByRole("option", { name: "Español", exact: true }).click();
 
     await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión en CityNode");
     await expect(page.getByTestId("login.device-button")).toHaveText(
@@ -103,7 +104,7 @@ test.describe("CSR compose", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await expect(page.getByTestId("login.language-select")).toHaveValue("es");
+    await expect(page.getByTestId("login.language-select")).toHaveText("Español");
     await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión en CityNode");
   });
 
