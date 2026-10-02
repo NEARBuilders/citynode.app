@@ -7,7 +7,7 @@ import { buildWorkspaceTargets, resolveWorkspaceTarget, selectWorkspaceTargets }
 import { type CdnDeployInputs, probeStorageOrigin, resolveCdnDeployInputs } from "./cdn-deploy";
 import { formatDuration } from "./cli/timing";
 import { generateCodeArtifacts } from "./code-artifacts";
-import { loadResolvedConfig, resolveUiRuntimeName } from "./config";
+import { resolveUiRuntimeName } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
 import { ensureDelegateKey, submitRegistryWriteDelegated } from "./delegate-signer";
 import {
@@ -26,6 +26,7 @@ import {
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
 import { platformUrlDeployEntries, pluginUiUrlDeployEntries } from "./platform-deploy";
+import { openResolution } from "./resolution/session";
 import { collectDistFiles, uploadBundle, uploadWorkspaceDist } from "./storage-upload";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
@@ -361,6 +362,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   let built: string[] | undefined;
   let skipped: string[] | undefined;
   let deployResults: WorkspaceDeployResult[] | undefined;
+  let refreshedRawConfig: BosConfigInput | null = null;
 
   if (input.build) {
     await generateCodeArtifacts(configDir, bosConfig, {
@@ -411,7 +413,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       }
     }
 
-    const refreshed = await loadResolvedConfig({ cwd: configDir });
+    const refreshed = await openResolution({ cwd: configDir });
     if (!refreshed?.config) {
       return {
         status: "error",
@@ -424,10 +426,12 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     }
 
     bosConfig = refreshed.config;
+    refreshedRawConfig = refreshed.rawConfig;
   }
 
   const rawConfigPath = join(configDir, "bos.config.json");
-  const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
+  const rawConfig =
+    refreshedRawConfig ?? (JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput);
   let publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
 
   const urlOrigin = plan.cdnOrigin ?? `https://${gateway}`;

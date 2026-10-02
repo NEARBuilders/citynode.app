@@ -26,7 +26,7 @@ import {
 } from "../../src/cli/init";
 import { readSnapshot } from "../../src/cli/snapshot";
 import { syncTemplate } from "../../src/cli/sync";
-import * as configModule from "../../src/config";
+import * as sessionModule from "../../src/resolution/session";
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
 const ROOT_CONFIG = JSON.parse(readFileSync(join(REPO_ROOT, "bos.config.json"), "utf-8")) as {
@@ -102,7 +102,7 @@ describe("syncTemplate", () => {
       parentConfig: ROOT_CONFIG as never,
       cleanup: async () => {},
     });
-    vi.spyOn(configModule, "loadResolvedConfig").mockImplementation(async ({ cwd }) => {
+    vi.spyOn(sessionModule, "openResolution").mockImplementation(async ({ cwd }) => {
       if (cwd === REPO_ROOT) {
         return { runtime: { plugins: runtimePluginsFromRoot() } } as never;
       }

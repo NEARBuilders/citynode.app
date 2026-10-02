@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -19,7 +20,6 @@ import {
   type BosEnv,
   bosConfigMerger,
   isPlainObject,
-  mergeBosConfigWithExtends,
   type ResolvedConfigMeta,
   rebuildOrderedConfig,
   resolveExtendsRef,
@@ -29,7 +29,6 @@ import type {
   BosConfig,
   BosConfigInput,
   BosPluginRef,
-  ExtendsConfig,
   JsonObject,
   JsonValue,
   PluginEntryValue,
@@ -52,41 +51,40 @@ interface RuntimeTarget {
   port?: number;
 }
 
-let cachedConfig: BosConfig | null = null;
-let projectRoot: string | null = null;
-let configWarnings: string[] = [];
-let suppressConfigWarnings = false;
-
-export function clearConfigCache(): void {
-  cachedConfig = null;
-  projectRoot = null;
-  configWarnings = [];
-  configPathCache.clear();
+interface ConfigWarningCapture {
+  sink: string[];
+  previous: ConfigWarningCapture | undefined;
 }
 
-export function suppressWarnings(): void {
-  suppressConfigWarnings = true;
-}
+const warningCapture = new AsyncLocalStorage<ConfigWarningCapture | undefined>();
 
-export function resumeWarnings(): void {
-  suppressConfigWarnings = false;
-}
-
-export function drainConfigWarnings(): string[] {
-  const warnings = [...configWarnings];
-  configWarnings = [];
-  return warnings;
+/**
+ * @internal — runs `fn` with config warnings captured into `sink` instead of
+ * the console. Plumbing for the resolution session; not part of the public
+ * config surface.
+ */
+export function runWithConfigWarningSink<T>(sink: string[], fn: () => T): T {
+  return warningCapture.run({ sink, previous: warningCapture.getStore() }, fn);
 }
 
 function emitConfigWarning(message: string): void {
-  if (suppressConfigWarnings) {
-    configWarnings.push(message);
+  const capture = warningCapture.getStore();
+  if (capture) {
+    capture.sink.push(message);
   } else {
     console.warn(message);
   }
 }
 
 const configPathCache = new Map<string, string | null>();
+
+/**
+ * @internal — clears the findConfigPath memo. Plumbing for tests and the
+ * resolution session; not part of the public config surface.
+ */
+export function resetConfigPathCache(): void {
+  configPathCache.clear();
+}
 
 /**
  * Reads the local authored config without resolving the extends chain or
@@ -96,7 +94,7 @@ const configPathCache = new Map<string, string | null>();
 export async function readAuthoredConfigInput(cwd?: string): Promise<BosConfigInput | null> {
   const configPath = findConfigPath(cwd);
   if (!configPath || configPath.startsWith("bos://")) return null;
-  return loadConfigFile(configPath, dirname(configPath));
+  return readConfigInput(configPath, dirname(configPath));
 }
 
 export function findConfigPath(cwd?: string): string | null {
@@ -144,8 +142,22 @@ export async function loadAppDescriptorConfig(resolvedPath: string): Promise<Bos
     string,
     unknown
   >;
+  return parseAppDescriptorModule(mod, resolvedPath);
+}
+
+/**
+ * @internal — parses an already-imported app descriptor module into the
+ * authoring-shape `BosConfigInput`. Plumbing for the resolution session's
+ * injectable module loader; not part of the public config surface.
+ */
+export function parseAppDescriptorModule(
+  mod: Record<string, unknown>,
+  sourcePath?: string,
+): BosConfigInput {
   if (!mod.default) {
-    throw new Error(`${resolvedPath} must default-export an App() descriptor`);
+    throw new Error(
+      `${sourcePath ?? "App descriptor module"} must default-export an App() descriptor`,
+    );
   }
   const descriptor = AppDescriptorSchema.parse(mod.default);
 
@@ -171,44 +183,6 @@ export async function loadAppDescriptorConfig(resolvedPath: string): Promise<Bos
   return input;
 }
 
-export function getConfig(): BosConfig | null {
-  return cachedConfig;
-}
-
-export function getProjectRoot(): string {
-  if (!projectRoot) {
-    throw new ConfigNotLoadedError({
-      message: "Config not loaded. Call loadResolvedConfig() first.",
-    });
-  }
-  return projectRoot;
-}
-
-export interface ConfigResult {
-  config: BosConfig;
-  runtime: RuntimeConfig;
-  source: {
-    path: string;
-    extended?: string[];
-    remote?: boolean;
-  };
-  warnings?: string[];
-}
-
-export interface LocalConfigResult {
-  config: BosConfigInput;
-  source: {
-    path: string;
-  };
-}
-
-export interface RemoteConfigResult {
-  rawConfig: BosConfigInput;
-  config: BosConfig;
-  source: string;
-  extendsChain: string[];
-}
-
 export interface ResolvedComposableReference {
   entry: BosPluginRef;
   providerBaseDir: string;
@@ -220,34 +194,6 @@ interface ParsedExtendsTarget {
   configPath: string;
   targetPath?: string;
 }
-
-export async function loadLocalConfig(options?: {
-  cwd?: string;
-  path?: string;
-}): Promise<LocalConfigResult | null> {
-  const configPath = options?.path ?? findConfigPath(options?.cwd);
-  if (!configPath) {
-    projectRoot = options?.cwd ?? process.cwd();
-    return null;
-  }
-
-  const baseDir = dirname(configPath);
-  const config = await loadConfigFile(configPath, baseDir);
-
-  projectRoot = baseDir;
-
-  return {
-    config,
-    source: {
-      path: configPath,
-    },
-  };
-}
-
-export class ConfigNotLoadedError extends Schema.TaggedError<ConfigNotLoadedError>()(
-  "ConfigNotLoadedError",
-  { message: Schema.String },
-) {}
 
 export class ConfigLoadError extends Schema.TaggedError<ConfigLoadError>()("ConfigLoadError", {
   path: Schema.String,
@@ -283,134 +229,6 @@ export class ConfigVersionManifestError extends Schema.TaggedError<ConfigVersion
 
 export function defaultConfigEnv(): BosEnv {
   return process.env.NODE_ENV === "production" ? "production" : "development";
-}
-
-export const loadResolvedConfigEffect = Effect.fn("loadResolvedConfig")(function* (options?: {
-  cwd?: string;
-  path?: string;
-  env?: BosEnv;
-  remotePlugins?: string[];
-}): Effect.fn.Return<ConfigResult | null, ConfigLoadError> {
-  const configPath = options?.path ?? findConfigPath(options?.cwd);
-  if (!configPath) {
-    projectRoot = options?.cwd ?? process.cwd();
-    return null;
-  }
-
-  const baseDir = dirname(configPath);
-  const env = options?.env ?? defaultConfigEnv();
-  const runtimeEnv: BosEnv = env === "staging" ? "production" : env;
-
-  const result = yield* Effect.tryPromise({
-    try: async () => {
-      suppressWarnings();
-      try {
-        const extendedChain: string[] = [];
-        const parsed = await resolveConfigWithExtends(
-          configPath,
-          baseDir,
-          new Set(),
-          extendedChain,
-          env,
-        );
-        const config = await resolveConfigComposableEntries(
-          BosConfigSchema.parse(parsed),
-          baseDir,
-          runtimeEnv,
-        );
-
-        cachedConfig = config;
-        projectRoot = baseDir;
-
-        const pluginRuntime = await resolveRuntimePlugins(
-          config.plugins ?? {},
-          baseDir,
-          runtimeEnv,
-          options?.remotePlugins,
-        );
-        const runtime = await buildRuntimeConfig(config, baseDir, runtimeEnv, {
-          plugins: pluginRuntime,
-        });
-        const warnings = drainConfigWarnings();
-        resumeWarnings();
-
-        return {
-          config,
-          runtime,
-          source: {
-            path: configPath,
-            extended: extendedChain.length > 0 ? extendedChain : undefined,
-            remote: extendedChain.some((entry) => entry.startsWith("bos://")),
-          },
-          warnings: warnings.length > 0 ? warnings : undefined,
-        } satisfies ConfigResult;
-      } catch (error) {
-        resumeWarnings();
-        throw error;
-      }
-    },
-    catch: (error): ConfigLoadError => {
-      const detail = error instanceof Error ? error.message : String(error);
-      return new ConfigLoadError({
-        path: configPath,
-        message: `Failed to load config from ${configPath}: ${detail}`,
-        cause: error,
-      });
-    },
-  });
-
-  return result;
-});
-
-export async function loadResolvedConfig(options?: {
-  cwd?: string;
-  path?: string;
-  env?: BosEnv;
-  remotePlugins?: string[];
-}): Promise<ConfigResult | null> {
-  return Effect.runPromise(loadResolvedConfigEffect(options));
-}
-
-export async function loadBosConfig(options?: {
-  cwd?: string;
-  path?: string;
-  env?: BosEnv;
-}): Promise<RuntimeConfig> {
-  const result = await loadResolvedConfig(options);
-  if (!result) {
-    throw new ConfigNotfoundError({
-      message: "No bos.config.json or bos.app.ts found",
-    });
-  }
-
-  return result.runtime;
-}
-
-export async function loadRemoteConfig(
-  bosUrl: string,
-  env: BosEnv = "production",
-): Promise<RemoteConfigResult> {
-  const runtimeEnv: BosEnv = env === "staging" ? "production" : env;
-  const extendedChain: string[] = [];
-  const parsed = await resolveConfigWithExtends(
-    bosUrl,
-    process.cwd(),
-    new Set(),
-    extendedChain,
-    env,
-  );
-  const config = await resolveConfigComposableEntries(
-    BosConfigSchema.parse(parsed),
-    process.cwd(),
-    runtimeEnv,
-  );
-
-  return {
-    rawConfig: await loadConfigFile(bosUrl, process.cwd()),
-    config,
-    source: bosUrl,
-    extendsChain: extendedChain,
-  };
 }
 
 export function parseRuntimeOverrideTargets(value?: string | null): RuntimeOverrideTarget[] {
@@ -457,8 +275,9 @@ export async function buildRuntimePluginsForConfig(
   config: BosConfig,
   baseDir: string,
   env: BosEnv,
+  remotePlugins?: string[],
 ): Promise<Record<string, RuntimePluginConfig> | undefined> {
-  const plugins = await resolveRuntimePlugins(config.plugins ?? {}, baseDir, env);
+  const plugins = await resolveRuntimePlugins(config.plugins ?? {}, baseDir, env, remotePlugins);
   return Object.keys(plugins).length > 0 ? plugins : undefined;
 }
 
@@ -635,7 +454,12 @@ export function readBosConfigForBuild(configDir: string): Record<string, unknown
   return JSON.parse(readFileSync(bosConfigPath, "utf-8")) as Record<string, unknown>;
 }
 
-function parseExtendsTarget(ref: string): ParsedExtendsTarget {
+/**
+ * @internal — splits an extends ref into its config path and optional
+ * `#target` suffix. Plumbing for the resolution session; not part of the
+ * public config surface.
+ */
+export function parseExtendsTarget(ref: string): ParsedExtendsTarget {
   const hashIndex = ref.indexOf("#");
   if (hashIndex === -1) {
     return { configPath: ref };
@@ -649,7 +473,11 @@ function parseExtendsTarget(ref: string): ParsedExtendsTarget {
   };
 }
 
-function getConfigBaseDir(configPath: string, baseDir: string): string {
+/**
+ * @internal — resolves the base directory a config path extends from.
+ * Plumbing for the resolution session; not part of the public config surface.
+ */
+export function getConfigBaseDir(configPath: string, baseDir: string): string {
   if (configPath.startsWith("bos://")) return baseDir;
   return dirname(isAbsolute(configPath) ? configPath : resolve(baseDir, configPath));
 }
@@ -758,17 +586,15 @@ export async function resolveComposableReference(
 
   const extendsRef = source.extends ? resolveExtendsRef(source.extends, env) : undefined;
   if (extendsRef) {
+    const { resolveMergedConfigInput } = await import("./resolution/session");
     const parsed = parseExtendsTarget(extendsRef);
     targetPath = parsed.targetPath ?? defaultTargetPath;
     const extendsBaseDir = getConfigBaseDir(parsed.configPath, baseDir);
     try {
-      const extendedConfig = await resolveConfigWithExtends(
-        parsed.configPath,
-        extendsBaseDir,
-        new Set(),
-        [],
+      const extendedConfig = await resolveMergedConfigInput(parsed.configPath, {
+        baseDir: extendsBaseDir,
         env,
-      );
+      });
       resolvedEntry = mergeComposableEntries(
         resolvedEntry,
         getTargetedEntry(extendedConfig, targetPath),
@@ -792,16 +618,14 @@ export async function resolveComposableReference(
   );
 
   if (localDevelopmentPath) {
+    const { resolveMergedConfigInput } = await import("./resolution/session");
     const localPath = localDevelopmentPath;
     const localConfigPath = join(localPath, "bos.config.json");
     if (existsSync(localConfigPath)) {
-      const localConfig = await resolveConfigWithExtends(
-        localConfigPath,
-        localPath,
-        new Set(),
-        [],
+      const localConfig = await resolveMergedConfigInput(localConfigPath, {
+        baseDir: localPath,
         env,
-      );
+      });
       resolvedEntry = mergeComposableEntries(
         resolvedEntry,
         getTargetedEntry(localConfig, targetPath),
@@ -1216,7 +1040,7 @@ export async function buildRuntimeConfig(
   return Effect.runPromise(buildRuntimeConfigEffect(config, baseDir, env, options));
 }
 
-async function loadConfigFile(configPath: string, baseDir: string): Promise<BosConfigInput> {
+async function readConfigInput(configPath: string, baseDir: string): Promise<BosConfigInput> {
   if (configPath.startsWith("bos://")) {
     return fetchBosConfigFromFastKv<BosConfigInput>(configPath);
   }
@@ -1226,48 +1050,6 @@ async function loadConfigFile(configPath: string, baseDir: string): Promise<BosC
     return loadAppDescriptorConfig(resolvedPath);
   }
   return JSON.parse(readFileSync(resolvedPath, "utf-8")) as BosConfigInput;
-}
-
-async function resolveConfigWithExtends(
-  configPath: string,
-  baseDir: string,
-  visited: Set<string>,
-  chain: string[],
-  env: BosEnv = "development",
-): Promise<BosConfigInput> {
-  if (visited.has(configPath)) {
-    throw new CircularExtendsError({
-      chain: [...visited, configPath],
-      message: `Circular extends detected: ${[...visited, configPath].join(" -> ")}`,
-    });
-  }
-
-  const config = await loadConfigFile(configPath, baseDir);
-  chain.push(configPath);
-
-  if (!config.extends) {
-    return config;
-  }
-
-  const extendsRef = resolveExtendsRef(config.extends as string | ExtendsConfig, env);
-  if (!extendsRef) {
-    return config;
-  }
-
-  const parsedParentRef = parseExtendsTarget(extendsRef);
-
-  const nextVisited = new Set(visited);
-  nextVisited.add(configPath);
-  const parentBaseDir = getConfigBaseDir(parsedParentRef.configPath, baseDir);
-  const parent = await resolveConfigWithExtends(
-    parsedParentRef.configPath,
-    parentBaseDir,
-    nextVisited,
-    chain,
-    env,
-  );
-
-  return mergeBosConfigWithExtends(parent, config);
 }
 
 type PluginOverrideValue = PluginEntryValue | null | false;
@@ -1672,6 +1454,7 @@ export function parsePort(url: string): number {
   }
 }
 
+export type { BosEnv } from "./merge";
 export {
   BOS_CONFIG_ORDER,
   mergeBosConfigWithExtends,

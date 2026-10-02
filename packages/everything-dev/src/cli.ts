@@ -315,6 +315,7 @@ async function main() {
       if (session) {
         const { devApp } = await import("./dev-session");
         devApp(
+          projectDir ?? process.cwd(),
           session.orchestrator,
           session.services,
           session.runtimeConfig,
@@ -366,6 +367,7 @@ async function main() {
         }
         const { startApp } = await import("./dev-session");
         startApp(
+          projectDir ?? process.cwd(),
           session.orchestrator,
           session.services,
           session.runtimeConfig,

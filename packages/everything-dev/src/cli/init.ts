@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { execa } from "execa";
 import { glob } from "glob";
@@ -28,6 +28,7 @@ import {
   loadManifestNormalizationSpec,
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
+import { walkExtendsChain } from "../resolution/session";
 import type { BosConfig, BosConfigInput } from "../types";
 import { saveBosConfig } from "../utils/save-config";
 import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
@@ -75,7 +76,7 @@ export interface CatalogChainSource {
   extendsChain: string[];
 }
 
-function readWorkspaceCatalog(sourceDir: string): Record<string, string> {
+export function readWorkspaceCatalog(sourceDir: string): Record<string, string> {
   const pkgPath = join(sourceDir, "package.json");
   if (!existsSync(pkgPath)) {
     return {};
@@ -90,87 +91,42 @@ export async function resolveCatalogChainSource(opts: {
   extendsGateway: string;
   sourceDir?: string;
 }): Promise<CatalogChainSource> {
+  const entry = opts.sourceDir
+    ? join(resolve(opts.sourceDir), "bos.config.json")
+    : `bos://${opts.extendsAccount}/${opts.extendsGateway}`;
   const catalogs: Record<string, string>[] = [];
   const cleanups: Array<() => Promise<void>> = [];
-  const extendsChain: string[] = [];
-  const visited = new Set<string>();
+  const resolvedRefs: string[] = [];
   let repository: string | undefined;
-  let currentRef = `bos://${opts.extendsAccount}/${opts.extendsGateway}`;
-  let sourceDir = opts.sourceDir ? resolve(opts.sourceDir) : undefined;
-  let configPath = sourceDir ? join(sourceDir, "bos.config.json") : undefined;
 
   try {
-    while (true) {
-      if (visited.has(currentRef)) {
-        throw new Error(`Circular extends detected while resolving catalog source: ${currentRef}`);
-      }
-
-      visited.add(currentRef);
-      extendsChain.push(currentRef);
-
-      let config: Record<string, unknown>;
-      let currentSourceDir = sourceDir;
-      let cleanup: () => Promise<void> = async () => {};
-
-      if (configPath) {
-        config = readJsonFile<Record<string, unknown>>(configPath);
-        currentSourceDir = dirname(configPath);
-      } else {
-        const parsed = parseBosRef(currentRef);
-        if (!parsed) {
-          break;
+    await walkExtendsChain(entry, {
+      env: "production",
+      collectCatalogs: true,
+      registerCleanup: (fn) => cleanups.push(fn),
+      visit: async (link) => {
+        resolvedRefs.unshift(
+          link.ref.startsWith("bos://") ? link.ref : join(link.baseDir, basename(link.ref)),
+        );
+        catalogs.push(readWorkspaceCatalog(link.sourceDir ?? link.baseDir));
+        const repositoryValue = (link.config as Record<string, unknown>).repository;
+        if (typeof repositoryValue === "string" && repository === undefined) {
+          repository = repositoryValue;
         }
-        const sourceResult = await resolveSourceDir({
-          extendsAccount: parsed.account,
-          extendsGateway: parsed.gateway,
-        });
-        config = sourceResult.parentConfig as Record<string, unknown>;
-        currentSourceDir = sourceResult.sourceDir || undefined;
-        cleanup = sourceResult.cleanup;
-      }
-
-      cleanups.push(cleanup);
-      catalogs.push(currentSourceDir ? readWorkspaceCatalog(currentSourceDir) : {});
-
-      if (typeof config.repository === "string") {
-        repository = config.repository;
-      }
-
-      const nextExtendsRef = getExtendsRef(config);
-      if (!nextExtendsRef) {
-        break;
-      }
-
-      if (nextExtendsRef.startsWith("bos://")) {
-        currentRef = nextExtendsRef;
-        sourceDir = undefined;
-        configPath = undefined;
-        continue;
-      }
-
-      if (!currentSourceDir) {
-        break;
-      }
-
-      const nextConfigPath = resolve(currentSourceDir, nextExtendsRef);
-      if (!existsSync(nextConfigPath)) {
-        break;
-      }
-
-      currentRef = nextConfigPath;
-      sourceDir = dirname(nextConfigPath);
-      configPath = nextConfigPath;
-    }
+      },
+    });
   } finally {
-    for (const cleanup of cleanups.reverse()) {
+    for (const cleanup of [...cleanups].reverse()) {
       await cleanup();
     }
   }
 
   return {
-    catalog: Object.assign({}, ...catalogs.reverse()),
+    catalog: Object.assign({}, ...catalogs),
     repository,
-    extendsChain,
+    extendsChain: opts.sourceDir
+      ? [`bos://${opts.extendsAccount}/${opts.extendsGateway}`, ...resolvedRefs.slice(1)]
+      : resolvedRefs,
   };
 }
 
@@ -405,12 +361,12 @@ export async function downloadTarball(
 
 function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
   const httpsMatch = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/.*)?$/);
-  if (httpsMatch) {
+  if (httpsMatch?.[1] && httpsMatch[2]) {
     return { owner: httpsMatch[1], repo: httpsMatch[2] };
   }
 
   const sshMatch = url.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
-  if (sshMatch) {
+  if (sshMatch?.[1] && sshMatch[2]) {
     return { owner: sshMatch[1], repo: sshMatch[2] };
   }
 
@@ -970,8 +926,14 @@ export async function personalizeConfig(
       ? loadManifestNormalizationSpec(opts.workspaceOpts.sourceDir)
       : null;
     if (spec) {
-      workspaces.catalog["everything-dev"] = spec.rootCatalog["everything-dev"];
-      workspaces.catalog["every-plugin"] = spec.rootCatalog["every-plugin"];
+      const rootCatalogEverythingDev = spec.rootCatalog["everything-dev"];
+      const rootCatalogEveryPlugin = spec.rootCatalog["every-plugin"];
+      if (rootCatalogEverythingDev) {
+        workspaces.catalog["everything-dev"] = rootCatalogEverythingDev;
+      }
+      if (rootCatalogEveryPlugin) {
+        workspaces.catalog["every-plugin"] = rootCatalogEveryPlugin;
+      }
     }
     const frameworkCatalog = (
       await resolveCatalogChainSource({

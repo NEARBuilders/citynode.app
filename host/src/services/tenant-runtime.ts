@@ -1,5 +1,12 @@
-import { buildRuntimeConfig, loadRemoteConfig, type RuntimeConfig } from "everything-dev/config";
+import {
+  BosConfigSchema,
+  buildRuntimeConfig,
+  type RuntimeConfig,
+  resolveConfigComposableEntries,
+} from "everything-dev/config";
 import { verifySriForUrl } from "everything-dev/integrity";
+import { type ResolutionIo, walkExtendsChain } from "everything-dev/resolution";
+import type { BosConfig, BosConfigInput } from "everything-dev/types";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
 import { resolveDomain } from "../utils/normalize";
@@ -14,17 +21,24 @@ const VERIFICATION_TTL_MS = 5 * 60_000;
 const MAX_REMOTE_CONFIG_CACHE_SIZE = 256;
 const MAX_VERIFICATION_CACHE_SIZE = 512;
 
-type BosEnv = "development" | "production" | "staging";
 type IntegrityVerificationMode = "blocking" | "stale-while-revalidate";
 
 interface ResolveRequestRuntimeOptions {
   verification?: IntegrityVerificationMode;
   bindingResolver?: BindingResolver;
+  io?: ResolutionIo;
+}
+
+interface RemoteTenantConfig {
+  rawConfig: BosConfigInput;
+  config: BosConfig;
+  source: string;
+  extendsChain: string[];
 }
 
 interface CachedRemoteConfig {
   expiresAt: number;
-  value: Promise<Awaited<ReturnType<typeof loadRemoteConfig>>>;
+  value: Promise<RemoteTenantConfig>;
 }
 
 interface CachedVerification {
@@ -93,7 +107,34 @@ export function clearTenantRuntimeCaches() {
   clearBindingResolverCache();
 }
 
-function getRemoteConfigCached(bosUrl: string, env: BosEnv) {
+async function loadRemoteTenantConfig(
+  bosUrl: string,
+  io?: ResolutionIo,
+): Promise<RemoteTenantConfig> {
+  let rawConfig: BosConfigInput | undefined;
+  const { chain, config: merged } = await walkExtendsChain(bosUrl, {
+    env: "production",
+    io,
+    visit: async (link) => {
+      if (!rawConfig) {
+        rawConfig = link.config;
+      }
+    },
+  });
+  const config = await resolveConfigComposableEntries(
+    BosConfigSchema.parse(merged),
+    process.cwd(),
+    "production",
+  );
+  return {
+    rawConfig: rawConfig ?? merged,
+    config,
+    source: bosUrl,
+    extendsChain: chain,
+  };
+}
+
+function getRemoteConfigCached(bosUrl: string, io?: ResolutionIo) {
   const now = Date.now();
   pruneExpiredCacheEntries(remoteConfigCache, now);
   const cached = remoteConfigCache.get(bosUrl);
@@ -102,7 +143,7 @@ function getRemoteConfigCached(bosUrl: string, env: BosEnv) {
     return cached.value;
   }
 
-  const value = loadRemoteConfig(bosUrl, env).catch((error) => {
+  const value = loadRemoteTenantConfig(bosUrl, io).catch((error) => {
     remoteConfigCache.delete(bosUrl);
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes(`No config found for ${bosUrl}`)) {
@@ -367,7 +408,7 @@ export async function resolveRequestRuntime(
   }
 
   const bosUrl = `bos://${tenantAccountId}/${gatewayId}`;
-  const remoteConfig = await getRemoteConfigCached(bosUrl, "production");
+  const remoteConfig = await getRemoteConfigCached(bosUrl, options?.io);
   const baseBosUrl = `bos://${baseConfig.account}/${gatewayId}`;
 
   if (!remoteConfig.extendsChain.includes(baseBosUrl)) {
