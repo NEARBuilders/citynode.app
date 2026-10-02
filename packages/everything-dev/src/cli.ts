@@ -174,8 +174,6 @@ async function main() {
 
   const invocationArgs = args.length > 0 ? args : ["dev"];
   const command = invocationArgs[0] ?? "dev";
-  const configPath = findConfigPath();
-  installBundleFetchFromEnv({ configPath });
 
   const commandMatch = findCommandDescriptor(invocationArgs);
   if (!commandMatch) {
@@ -186,7 +184,23 @@ async function main() {
   const { descriptor, consumed } = commandMatch;
   const commandArgs = invocationArgs.slice(consumed);
 
-  const projectDir = configPath ? dirname(configPath) : undefined;
+  // Parse before the plugin boot: `start --config-path` steers the whole CLI,
+  // not just the stack — the plugin initialize resolves and pin-validates the
+  // boot config, so it must be the config the command will actually run.
+  let parsedInput: unknown;
+  try {
+    parsedInput = parseCommandInput(descriptor, commandArgs);
+  } catch (error) {
+    console.error(`[CLI] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+  const bootInput = parsedInput as { configPath?: string };
+
+  const cwdConfigPath = findConfigPath();
+  const configPath = bootInput.configPath ?? cwdConfigPath;
+  installBundleFetchFromEnv({ configPath });
+
+  const projectDir = cwdConfigPath ? dirname(cwdConfigPath) : undefined;
   const edResolved = projectDir ? resolveFrameworkPackage(projectDir, "everything-dev") : undefined;
   const displayVersion = edResolved?.installedVersion
     ? `${edResolved.installedVersion}${edResolved.isLinked ? " (linked)" : ""}`
@@ -207,6 +221,7 @@ async function main() {
   const plugin = await loadPlugin("bos", {
     variables: {
       configPath: configPath ?? undefined,
+      configDir: cwdConfigPath ? dirname(cwdConfigPath) : undefined,
     },
     secrets: {},
   });
@@ -216,7 +231,7 @@ async function main() {
   const outdatedWarning = warnIfOutdated(client, command);
 
   try {
-    const input = parseCommandInput(descriptor, commandArgs);
+    const input = parsedInput;
 
     const rollbackInput = input as {
       listOnly?: boolean;

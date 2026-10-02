@@ -407,6 +407,10 @@ async function revokeApiKey(credential: SessionCredential): Promise<boolean> {
 export default createPlugin({
   variables: z.object({
     configPath: z.string().optional(),
+    // The artifact root (cwd-derived) — decoupled from configPath so an
+    // explicit boot config (--config-path fixture) validates and loads
+    // without redirecting where the CLI writes generated artifacts.
+    configDir: z.string().optional(),
   }),
   secrets: z.object({}),
   contract: bosContract,
@@ -419,7 +423,7 @@ export default createPlugin({
         return {
           bosConfig: configResult?.config ?? null,
           runtimeConfig: configResult?.runtime ?? null,
-          configDir: getProjectRoot(),
+          configDir: config.variables.configDir ?? getProjectRoot(),
         };
       });
 
