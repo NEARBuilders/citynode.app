@@ -2,16 +2,17 @@ import process from "node:process";
 import * as p from "@clack/prompts";
 import { Context, Effect, Layer } from "effect";
 import { buildScoped, buildScopedContext } from "every-plugin";
-import { registerBuildDeploy } from "./commands/build-deploy";
+import { registerBuild } from "./commands/build";
 import { registerConfig } from "./commands/config";
 import { registerDb } from "./commands/db";
+import { registerDeploy } from "./commands/deploy";
 import { registerDev } from "./commands/dev";
 import { registerInit } from "./commands/init";
 import { registerKeys } from "./commands/keys";
 import { registerOps } from "./commands/ops";
 import { registerPlugins } from "./commands/plugins";
 import { type BosDeps, BosDepsTag } from "./commands/shared";
-import { registerSync } from "./commands/sync";
+import { registerUpgrade } from "./commands/upgrade";
 import { bosContract } from "./contract";
 import { DatabaseBindings, DrizzleKit, makeDatabaseBindings, makeDrizzleKitLive } from "./db";
 import { ProjectEnv, ProjectEnvLive } from "./env/project-env";
@@ -76,10 +77,11 @@ export default createPlugin({
     ...registerConfig(builder),
     ...registerPlugins(builder),
     ...registerDev(builder),
-    ...registerBuildDeploy(builder),
+    ...registerBuild(builder),
+    ...registerDeploy(builder),
     ...registerKeys(builder),
     ...registerInit(builder),
-    ...registerSync(builder),
+    ...registerUpgrade(builder),
     ...registerDb(builder),
     ...registerOps(builder),
   }),
