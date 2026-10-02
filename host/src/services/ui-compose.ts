@@ -157,42 +157,6 @@ export interface UiComposeCacheState {
   variants: Map<string, CachedComposeVariant>;
 }
 
-export class UiComposeCache extends Context.Service<UiComposeCache, UiComposeCacheState>()(
-  "host/UiComposeCache",
-) {
-  static layerFrom(state: UiComposeCacheState) {
-    return Layer.effect(
-      UiComposeCache,
-      Effect.gen(function* () {
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            state.remoteManifests.clear();
-            state.variants.clear();
-          }),
-        );
-        return UiComposeCache.of(state);
-      }),
-    );
-  }
-
-  static readonly layer = Layer.effect(
-    UiComposeCache,
-    Effect.gen(function* () {
-      const state: UiComposeCacheState = {
-        remoteManifests: new Map(),
-        variants: new Map(),
-      };
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          state.remoteManifests.clear();
-          state.variants.clear();
-        }),
-      );
-      return UiComposeCache.of(state);
-    }),
-  );
-}
-
 export function createUiComposeCacheState(): UiComposeCacheState {
   return { remoteManifests: new Map(), variants: new Map() };
 }

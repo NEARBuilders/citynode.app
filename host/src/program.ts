@@ -28,13 +28,7 @@ import { PluginsService } from "./services/plugins";
 import { deploymentFingerprint, RuntimeSnapshot } from "./services/runtime-snapshot";
 import { SnapshotCoordinator } from "./services/snapshot-coordinator";
 import { SnapshotWatch, watchIntervalMs } from "./services/snapshot-watch";
-import { ClientConfigCache } from "./services/ssr-render";
-import {
-  composeUi,
-  isSsrAvailable,
-  UiComposeCache,
-  type UiComposeCacheState,
-} from "./services/ui-compose";
+import { composeUi, isSsrAvailable, type UiComposeCacheState } from "./services/ui-compose";
 import { extractErrorDetails } from "./utils/errors";
 import { logger } from "./utils/logger";
 
@@ -60,8 +54,6 @@ export const createStartServer = (onReady?: () => void) =>
     const config = yield* ConfigService;
     const plugins = yield* PluginsService;
     const security = yield* SecurityMiddleware;
-    const composeCache = yield* UiComposeCache;
-    const clientConfigCache = yield* ClientConfigCache;
     yield* FederationLifecycle;
     const apiProxyMode = Boolean(config.api?.proxy);
 
@@ -74,6 +66,9 @@ export const createStartServer = (onReady?: () => void) =>
     const effectContext = yield* Effect.context();
     const getBaseConfig = async () =>
       (await Effect.runPromiseWith(effectContext)(snapshot.get)).config;
+    // the serving indirection: requests capture ONE snapshot state (config +
+    // both serving caches) — a swap flips readers atomically (C7)
+    const getServingState = () => Effect.runPromiseWith(effectContext)(snapshot.get);
     const app = new Hono<HonoEnv>();
 
     app.onError((err: unknown, c: Context<HonoEnv>) => {
@@ -95,7 +90,10 @@ export const createStartServer = (onReady?: () => void) =>
     app.use("*", security.csp);
 
     if (ssrEnabled) {
-      const boot = yield* Effect.exit(composeUi(config, composeCache));
+      // boot composition warms the SNAPSHOT'S serving cache — the same cache
+      // requests read through, so the boot work is never re-done
+      const bootState = yield* snapshot.get;
+      const boot = yield* Effect.exit(composeUi(config, bootState.composeState));
       if (Exit.isFailure(boot)) {
         const cause = Cause.squash(boot.cause);
         compositionHealth.status = "failed";
@@ -199,17 +197,7 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.use("/*", sessionMiddleware);
 
-    app.get(
-      "*",
-      createSsrFallbackHandler(
-        config,
-        plugins,
-        CSP_STRICT,
-        composeCache,
-        clientConfigCache,
-        getBaseConfig,
-      ),
-    );
+    app.get("*", createSsrFallbackHandler(config, plugins, CSP_STRICT, getServingState));
 
     const startHttpServer = () => {
       const hostname = process.env.HOST || "0.0.0.0";
@@ -313,7 +301,9 @@ export const runServer = (input: ServerInput): ServerHandle => {
   input.config.deploymentFingerprint = deploymentFingerprint(input.config);
   const ConfigLive = Layer.succeed(ConfigService, input.config);
   const AppLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
-  const SnapshotLive = RuntimeSnapshot.layer.pipe(Layer.provide(ConfigLive));
+  const SnapshotLive = RuntimeSnapshot.layer(
+    input.composeCache ? { composeState: input.composeCache } : undefined,
+  ).pipe(Layer.provide(ConfigLive));
   const CoordinatorLive = SnapshotCoordinator.layer.pipe(Layer.provide(SnapshotLive));
   const WatchLive = SnapshotWatch.layer(watchIntervalMs()).pipe(
     Layer.provide(CoordinatorLive),
@@ -322,8 +312,6 @@ export const runServer = (input: ServerInput): ServerHandle => {
   );
   const ServerLive = Layer.mergeAll(
     Layer.provideMerge(SecurityMiddleware.Live, AppLive),
-    input.composeCache ? UiComposeCache.layerFrom(input.composeCache) : UiComposeCache.layer,
-    ClientConfigCache.layer,
     FederationLifecycle.layer,
     Layer.provideMerge(CoordinatorLive, SnapshotLive),
     WatchLive,
