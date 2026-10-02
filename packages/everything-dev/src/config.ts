@@ -1178,7 +1178,15 @@ async function deriveVersionManifestFields(
     );
   }
   for (const [key, plugin] of Object.entries(result.plugins ?? {})) {
-    const pluginConfig = config.plugins?.[key];
+    let pluginConfig = config.plugins?.[key];
+    // The auth mirror (config.ts adds plugins.auth when the authored config
+    // has no plugins.auth entry) derives from the app.auth slot — it is the
+    // only compose surface for the auth ui, and its pins live on app.auth.
+    const isAuthMirror =
+      key === "auth" && result.auth && (plugin === result.auth || plugin.url === result.auth.url);
+    if ((!pluginConfig || typeof pluginConfig === "string") && isAuthMirror) {
+      pluginConfig = config.app.auth;
+    }
     if (!pluginConfig || typeof pluginConfig === "string") continue;
     await derive(`plugins.${key}`, pluginConfig, plugin, (r) => {
       plugin.entryUrl = r.entryUrl;

@@ -707,6 +707,66 @@ describe("loadConfig plugin runtime filtering", () => {
       rmSync(testDir, { recursive: true, force: true });
     }
   });
+
+  it("derives the auth mirror (plugins.auth) from app.auth when the authored config has no plugins.auth", async () => {
+    const testDir = mkdtempSync(join(tmpdir(), "bos-config-auth-mirror-"));
+
+    try {
+      writeFileSync(
+        join(testDir, "bos.config.json"),
+        `${JSON.stringify(
+          {
+            account: "test.near",
+            domain: "test.dev",
+            app: {
+              host: {
+                development: "local:host",
+                production: "https://host.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
+              },
+              ui: {
+                name: "ui",
+                development: "local:ui",
+                production: "https://ui.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
+              },
+              api: {
+                name: "api",
+                development: "local:api",
+                production: "https://api.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
+              },
+              auth: {
+                name: "auth",
+                development: "local:plugins/auth",
+                production: "https://auth.example.com",
+                pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
+                ui: {
+                  name: "_everything_dev_auth_plugin",
+                  development: "local:plugins/auth/ui",
+                  production: "https://auth-ui.example.com",
+                  pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
+                },
+              },
+            },
+            plugins: {},
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const loaded = await loadResolvedConfig({ cwd: testDir, env: "production" });
+
+      expect(loaded?.runtime.auth?.entryUrl).toBe("https://cdn.example.test/remoteEntry.aaa.js");
+      expect(loaded?.runtime.plugins?.auth?.ui?.entryUrl).toBe(
+        "https://cdn.example.test/remoteEntry.aaa.js",
+      );
+      expect(loaded?.runtime.plugins?.auth?.ui?.source).toBe("remote");
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("local vs resolved config loading", () => {

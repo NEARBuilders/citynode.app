@@ -352,7 +352,9 @@ const stage = () => {
     ...(authWorkspace
       ? {
           auth: pinDist(path.join(authWorkspace, "dist")),
-          authUi: pinDist("plugins/auth/ui/dist"),
+          // The auth ui ships an SSR entry (the ssr fixture variant composes
+          // it) — pin it like the core ui so ssrEntryUrl derives.
+          authUi: pinDist("plugins/auth/ui/dist", "plugins/auth/ui/dist/ssr"),
         }
       : {}),
     ...Object.fromEntries(

@@ -9,7 +9,7 @@ import { loadRemoteWithRetry } from "every-plugin/remote-entry";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
-import type { RuntimeConfig, SharedConfig } from "everything-dev/types";
+import type { RuntimeConfig, RuntimePluginConfig, SharedConfig } from "everything-dev/types";
 import { resolveEntryUrlForEnv } from "everything-dev/ui/manifest";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
@@ -61,6 +61,22 @@ function dbUrlSummary(url: string | undefined): string {
   } catch {
     return maskDbUrl(url);
   }
+}
+
+/**
+ * The URL the federation runtime registers and loads a remote from: a
+ * pin-derived (content-hashed) entry when the slot has one, the fixed dev
+ * name in development. Registration must resolve through this too — the
+ * runtime's own URL normalization appends the dev-only fixed name otherwise,
+ * 404ing against hashed-only dists.
+ */
+export function remoteEntryUrlOf(config: RuntimePluginConfig, env: string, slot: string): string {
+  return resolveEntryUrlForEnv({
+    entryUrl: config.entryUrl,
+    env,
+    devFixed: `${config.url.replace(/\/$/, "")}/${DEV_ENTRY_FILENAME}`,
+    slot,
+  });
 }
 
 export interface InitializedPluginResult {
@@ -466,12 +482,7 @@ function loadPluginEntryEffect(
     const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
-    const remoteUrl = resolveEntryUrlForEnv({
-      entryUrl: entry.config.entryUrl,
-      env,
-      devFixed: `${entry.config.url.replace(/\/$/, "")}/${DEV_ENTRY_FILENAME}`,
-      slot: entry.key,
-    });
+    const remoteUrl = remoteEntryUrlOf(entry.config, env, entry.key);
     const result = yield* loadRemoteWithRetry<Omit<HostPluginEntry, "key" | "name">>({
       label: entry.key,
       remoteUrl,
@@ -603,7 +614,10 @@ export const initializePlugins = Effect.gen(function* () {
 
       const runtime = createPluginRuntime({
         registry: Object.fromEntries(
-          allEntries.map((entry) => [entry.runtimeId, { remote: entry.config.url }]),
+          allEntries.map((entry) => {
+            const remoteUrl = remoteEntryUrlOf(entry.config, config.env, entry.key);
+            return [entry.runtimeId, { remote: remoteUrl }];
+          }),
         ),
         secrets: {},
       });
