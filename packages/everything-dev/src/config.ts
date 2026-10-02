@@ -81,38 +81,6 @@ export function resetConfigPathCache(): void {
 }
 
 /**
- * @deprecated — global suppress/resume protocol kept only so the stage-1
- * shims keep plugin.ts/dev-program.ts compiling; stage 2 migrates those call
- * sites to resolution sessions and removes these.
- */
-export function suppressWarnings(): void {
-  warningCapture.enterWith({ sink: [], previous: warningCapture.getStore() });
-}
-
-/**
- * @deprecated — global suppress/resume protocol kept only so the stage-1
- * shims keep plugin.ts/dev-program.ts compiling; stage 2 migrates those call
- * sites to resolution sessions and removes these.
- */
-export function resumeWarnings(): void {
-  const capture = warningCapture.getStore();
-  warningCapture.enterWith(capture?.previous);
-}
-
-/**
- * @deprecated — global suppress/resume protocol kept only so the stage-1
- * shims keep plugin.ts/dev-program.ts compiling; stage 2 migrates those call
- * sites to resolution sessions and removes these.
- */
-export function drainConfigWarnings(): string[] {
-  const capture = warningCapture.getStore();
-  if (!capture) return [];
-  const drained = [...capture.sink];
-  capture.sink.length = 0;
-  return drained;
-}
-
-/**
  * Reads the local authored config without resolving the extends chain or
  * touching the network — the build-surface factories (generated rsbuild
  * configs) consume it for their APP_NAME/APP_ACCOUNT defines.
@@ -209,52 +177,6 @@ export function parseAppDescriptorModule(
   return input;
 }
 
-/**
- * @deprecated — ambient getter kept only so stage-1 consumers keep compiling;
- * stage 2 migrates callers to resolution sessions (`getProjectRoot()` now
- * returns the cwd instead of the last-opened config dir).
- */
-export function getProjectRoot(): string {
-  return process.cwd();
-}
-
-/**
- * @internal — result shape of the deprecated `loadResolvedConfig` shim;
- * stage 2 migrates callers to resolution sessions and removes it.
- */
-export interface ConfigResult {
-  config: BosConfig;
-  runtime: RuntimeConfig;
-  source: {
-    path: string;
-    extended?: string[];
-    remote?: boolean;
-  };
-  warnings?: string[];
-}
-
-/**
- * @internal — result shape of the deprecated `loadLocalConfig` shim;
- * stage 2 migrates callers to resolution sessions and removes it.
- */
-export interface LocalConfigResult {
-  config: BosConfigInput;
-  source: {
-    path: string;
-  };
-}
-
-/**
- * @internal — result shape of the deprecated `loadRemoteConfig` shim;
- * stage 2 migrates callers to resolution sessions and removes it.
- */
-export interface RemoteConfigResult {
-  rawConfig: BosConfigInput;
-  config: BosConfig;
-  source: string;
-  extendsChain: string[];
-}
-
 export interface ResolvedComposableReference {
   entry: BosPluginRef;
   providerBaseDir: string;
@@ -265,30 +187,6 @@ export interface ResolvedComposableReference {
 interface ParsedExtendsTarget {
   configPath: string;
   targetPath?: string;
-}
-
-/**
- * @deprecated — kept only so stage-1 consumers keep compiling; stage 2
- * migrates callers to `openResolution` and removes this shim.
- */
-export async function loadLocalConfig(options?: {
-  cwd?: string;
-  path?: string;
-}): Promise<LocalConfigResult | null> {
-  const configPath = options?.path ?? findConfigPath(options?.cwd);
-  if (!configPath) {
-    return null;
-  }
-
-  const baseDir = dirname(configPath);
-  const config = await readConfigInput(configPath, baseDir);
-
-  return {
-    config,
-    source: {
-      path: configPath,
-    },
-  };
 }
 
 export class ConfigLoadError extends Schema.TaggedError<ConfigLoadError>()("ConfigLoadError", {
@@ -325,96 +223,6 @@ export class ConfigVersionManifestError extends Schema.TaggedError<ConfigVersion
 
 export function defaultConfigEnv(): BosEnv {
   return process.env.NODE_ENV === "production" ? "production" : "development";
-}
-
-/**
- * @deprecated — shim over the resolution session kept only so stage-1
- * consumers keep compiling; stage 2 migrates callers to `openResolution` and
- * removes this.
- */
-export async function loadResolvedConfig(options?: {
-  cwd?: string;
-  path?: string;
-  env?: BosEnv;
-  remotePlugins?: string[];
-}): Promise<ConfigResult | null> {
-  const { openResolution } = await import("./resolution/session");
-  const configPath = options?.path ?? findConfigPath(options?.cwd);
-  try {
-    const session = await openResolution({
-      cwd: options?.cwd,
-      path: options?.path,
-      env: options?.env,
-      remotePlugins: options?.remotePlugins,
-    });
-    if (!session?.config || !session.runtime) return null;
-
-    const chain = [...session.chain];
-    const warnings = [...session.warnings];
-    return {
-      config: session.config,
-      runtime: session.runtime,
-      source: {
-        path: session.path ?? configPath ?? "",
-        extended: chain.length > 0 ? chain : undefined,
-        remote: chain.some((entry) => entry.startsWith("bos://")),
-      },
-      warnings: warnings.length > 0 ? warnings : undefined,
-    } satisfies ConfigResult;
-  } catch (error) {
-    if (!configPath) return null;
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new ConfigLoadError({
-      path: configPath,
-      message: `Failed to load config from ${configPath}: ${detail}`,
-      cause: error,
-    });
-  }
-}
-
-/**
- * @deprecated — shim over the resolution session kept only so stage-1
- * consumers keep compiling; stage 2 migrates callers to `openResolution` and
- * removes this.
- */
-export async function loadBosConfig(options?: {
-  cwd?: string;
-  path?: string;
-  env?: BosEnv;
-}): Promise<RuntimeConfig> {
-  const result = await loadResolvedConfig(options);
-  if (!result) {
-    throw new ConfigNotfoundError({
-      message: "No bos.config.json or bos.app.ts found",
-    });
-  }
-
-  return result.runtime;
-}
-
-/**
- * @deprecated — shim over the resolution session kept only so stage-1
- * consumers keep compiling; stage 2 migrates callers to `openResolution` and
- * removes this.
- */
-export async function loadRemoteConfig(
-  bosUrl: string,
-  env: BosEnv = "production",
-): Promise<RemoteConfigResult> {
-  const { openResolution } = await import("./resolution/session");
-  const session = await openResolution({ path: bosUrl, env });
-  if (!session?.config || !session.rawConfig) {
-    throw new ConfigNotfoundError({
-      message: `Failed to load remote config from ${bosUrl}`,
-    });
-  }
-
-  return {
-    rawConfig: session.rawConfig,
-    config: session.config,
-    source: bosUrl,
-    extendsChain: [...session.chain],
-  };
 }
 
 export function parseRuntimeOverrideTargets(value?: string | null): RuntimeOverrideTarget[] {

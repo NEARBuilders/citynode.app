@@ -7,7 +7,7 @@ import * as p from "@clack/prompts";
 import { Context, Effect, Layer, References } from "effect";
 import { buildScoped, buildScopedContext } from "every-plugin";
 import { type KeyPair, parseKey } from "near-kit";
-import { buildRuntimeConfig, probePortBindable } from "./app";
+import { probePortBindable } from "./app";
 import { openInBrowser, startDeviceLogin } from "./auth-login";
 import {
   deleteSessionHandle,
@@ -42,16 +42,7 @@ import { getStatus } from "./cli/status";
 import { syncTemplate } from "./cli/sync";
 import { upgradeTemplate } from "./cli/upgrade";
 import { generateCodeArtifacts } from "./code-artifacts";
-import {
-  drainConfigWarnings,
-  findConfigPath,
-  getProjectRoot,
-  loadLocalConfig,
-  loadResolvedConfig,
-  resolveConfigComposableEntries,
-  resumeWarnings,
-  suppressWarnings,
-} from "./config";
+import { findConfigPath, readAuthoredConfigInput, resolveConfigComposableEntries } from "./config";
 import type { LoginResult } from "./contract";
 import {
   type BosConfigResult,
@@ -86,7 +77,6 @@ import {
   fetchDeployManifests,
   fetchRemotePluginManifest,
   getRegistryNamespaceForAccount,
-  parseBosUrl,
 } from "./fastkv";
 import { pointerFingerprint } from "./fingerprint";
 import {
@@ -97,7 +87,7 @@ import {
 } from "./image-deploy";
 import { materializeViaLayer } from "./infra/materializer";
 import { ownerOfPort } from "./infra/port-ownership";
-import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
+import type { BosEnv } from "./merge";
 import { checkFederationCompat } from "./mf";
 import {
   addFunctionCallAccessKey,
@@ -112,10 +102,11 @@ import { isPidAlive, pruneDeadEffect, readRegistry, unregisterPid } from "./proc
 import { timePhase } from "./progress";
 import { publishToFastKv } from "./publish";
 import { applyRegistrySections } from "./registry-use";
+import { openResolution, type ResolutionSession, walkExtendsChain } from "./resolution/session";
 import { buildRollbackPayload, summarizeSlotPins, verifyRollbackSnapshot } from "./rollback";
 import { createPlugin, z } from "./sdk";
 import { syncResolvedSharedDeps } from "./shared-deps";
-import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig } from "./types";
+import type { BosConfig, BosConfigInput } from "./types";
 import { BosConfigSchema } from "./types";
 import { saveBosConfig } from "./utils/save-config";
 import { colors, icons } from "./utils/theme";
@@ -139,9 +130,7 @@ export function consumeDevSession(): (DevSessionData & { summary?: StartSummary 
 const PUBLISH_FUNCTION_NAMES = ["__fastdata_kv"];
 
 type BosDeps = {
-  bosConfig: BosConfig | null;
-  runtimeConfig: RuntimeConfig | null;
-  configDir: string;
+  session: ResolutionSession | null;
   databaseBindings: DatabaseBindingsService;
   drizzleKit: DrizzleKitService;
 };
@@ -149,8 +138,9 @@ type BosDeps = {
 class BosDepsTag extends Context.Service<BosDepsTag, BosDeps>()("bos/BosDeps") {}
 
 async function deployedVersionStatus(deps: BosDeps): Promise<DeployedVersionStatus | undefined> {
-  if (!deps.bosConfig?.account || !deps.bosConfig.domain) return undefined;
-  const { account, domain } = deps.bosConfig;
+  const config = deps.session?.config;
+  if (!config?.account || !config.domain) return undefined;
+  const { account, domain } = config;
   let publishedFingerprint: string | undefined;
   try {
     const published = await fetchBosConfigFromFastKv<Record<string, unknown>>(
@@ -161,7 +151,7 @@ async function deployedVersionStatus(deps: BosDeps): Promise<DeployedVersionStat
     return undefined;
   }
 
-  const hostUrl = deps.runtimeConfig?.host?.url;
+  const hostUrl = deps.session?.runtime?.host?.url;
   if (!hostUrl) {
     return computeDeployedVersionStatus({ publishedFingerprint, servedFingerprint: null });
   }
@@ -264,71 +254,34 @@ function listPluginAttachments(config: BosConfig | null) {
 export async function resolveRemoteConfigChain(
   accountId: string,
   gatewayId: string,
-  visited: Set<string>,
   registry?: string,
 ): Promise<BosConfig> {
-  const selfRef = `bos://${accountId}/${gatewayId}`;
-  if (visited.has(selfRef)) {
-    throw new Error(`Circular extends detected: ${selfRef}`);
-  }
-
-  const nextVisited = new Set(visited);
-  nextVisited.add(selfRef);
-
-  const config = await fetchBosConfigFromFastKv<BosConfigInput>(selfRef, registry);
-  const parentRef = config.extends
-    ? resolveExtendsRef(config.extends as string | ExtendsConfig, "production")
-    : undefined;
-
-  let merged: BosConfigInput;
-  if (!parentRef) {
-    merged = config;
-  } else {
-    const { accountId: parentAccountId, gatewayId: parentGatewayId } = parseBosUrl(parentRef);
-    const parentResolved = await resolveRemoteConfigChain(
-      parentAccountId,
-      parentGatewayId,
-      nextVisited,
-      registry,
-    );
-    merged = mergeBosConfigWithExtends(parentResolved as BosConfigInput, config);
-  }
+  const { config: merged } = await walkExtendsChain(`bos://${accountId}/${gatewayId}`, {
+    env: "production",
+    registry,
+    visit: async () => {},
+  });
 
   return resolveConfigComposableEntries(BosConfigSchema.parse(merged), process.cwd(), "production");
 }
 
-async function fetchPublishedConfig(
-  accountId: string,
-  gatewayId: string,
-  registry?: string,
-): Promise<BosConfig | null> {
-  try {
-    return await resolveRemoteConfigChain(accountId, gatewayId, new Set(), registry);
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("No config found")) {
-      return null;
-    }
-    throw error;
-  }
-}
-
 function resolveLoginSiteUrl(
   siteInput: string | undefined,
-  deps: { bosConfig: BosConfig | null; runtimeConfig: RuntimeConfig | null },
+  session: ResolutionSession | null,
   staging: boolean,
 ): string {
   if (siteInput) {
     return siteInput.replace(/\/+$/, "");
   }
   if (staging) {
-    const stagingDomain = deps.bosConfig?.staging?.domain ?? deps.bosConfig?.domain;
-    return stagingDomain ? `https://${stagingDomain}` : (deps.runtimeConfig?.ui?.url ?? "");
+    const stagingDomain = session?.config?.staging?.domain ?? session?.config?.domain;
+    return stagingDomain ? `https://${stagingDomain}` : (session?.runtime?.ui?.url ?? "");
   }
-  const devUiUrl = deps.runtimeConfig?.ui?.url;
+  const devUiUrl = session?.runtime?.ui?.url;
   if (devUiUrl && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(devUiUrl)) {
     return devUiUrl.replace(/\/+$/, "");
   }
-  const domain = deps.bosConfig?.domain;
+  const domain = session?.config?.domain;
   return domain ? `https://${domain}` : "";
 }
 
@@ -417,27 +370,21 @@ export default createPlugin({
   contract: bosContract,
   initialize: (config, _plugins) =>
     Effect.gen(function* () {
-      const base = yield* Effect.promise(async () => {
-        const configResult = await loadResolvedConfig({
-          path: config.variables.configPath,
-        });
-        return {
-          bosConfig: configResult?.config ?? null,
-          runtimeConfig: configResult?.runtime ?? null,
-          configDir: config.variables.configDir ?? getProjectRoot(),
-        };
-      });
+      const session = yield* Effect.promise(() =>
+        openResolution({ path: config.variables.configPath }),
+      );
 
       const projectEnv = yield* buildScoped(ProjectEnv, ProjectEnvLive);
+
+      const configDir = config.variables.configDir ?? session?.root ?? process.cwd();
 
       const services = yield* buildScopedContext(
         Layer.mergeAll(
           makeDatabaseBindings({
-            projectDir: base.configDir,
-            loadRuntimeConfig: async () =>
-              (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
+            projectDir: configDir,
+            loadRuntimeConfig: async () => (await session?.buildRuntime()) ?? null,
             loadEnv: () =>
-              projectEnv.load(base.configDir).pipe(
+              projectEnv.load(configDir).pipe(
                 Effect.catchTag("EnvLoadError", (error) =>
                   Effect.fail(
                     new Error(
@@ -449,14 +396,14 @@ export default createPlugin({
               ),
           }),
           makeDrizzleKitLive({
-            projectDir: base.configDir,
+            projectDir: configDir,
             onLog: (message) => p.log.info(message),
           }),
         ),
       );
 
       return Layer.succeed(BosDepsTag, {
-        ...base,
+        session,
         databaseBindings: Context.get(services, DatabaseBindings),
         drizzleKit: Context.get(services, DrizzleKit),
       } satisfies BosDeps);
@@ -465,16 +412,16 @@ export default createPlugin({
     config: builder.config.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
       if (input.full) {
-        return buildConfigResult(deps.bosConfig, true);
+        return buildConfigResult(deps.session?.config ?? null, true);
       }
 
-      const localConfig = await loadLocalConfig({ cwd: deps.configDir });
-      return buildConfigResult(localConfig?.config ?? null, false);
+      const localConfig = await readAuthoredConfigInput(deps.session?.root);
+      return buildConfigResult(localConfig, false);
     }),
 
     registryUse: builder.registryUse.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      const configPath = join(deps.configDir, "bos.config.json");
+      const configPath = join(deps.session?.root ?? process.cwd(), "bos.config.json");
       const normalizedFrom = input.from.startsWith("bos://") ? input.from : `bos://${input.from}`;
 
       try {
@@ -515,7 +462,8 @@ export default createPlugin({
 
     pluginAdd: builder.pluginAdd.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      if (!deps.bosConfig) {
+      const session = deps.session;
+      if (!session?.config) {
         return {
           status: "error" as const,
           key: "",
@@ -529,9 +477,9 @@ export default createPlugin({
         input.as ??
           (isBosRef ? (input.source.split("/").pop() ?? "plugin") : defaultPluginKey(input.source)),
       );
-      const existing = deps.bosConfig.plugins?.[key];
+      const existing = session.config.plugins?.[key];
       const existingEntry = existing && typeof existing === "object" ? existing : {};
-      const nextPlugins = { ...deps.bosConfig.plugins };
+      const nextPlugins = { ...session.config.plugins };
 
       if (isBosRef) {
         nextPlugins[key] = {
@@ -551,15 +499,16 @@ export default createPlugin({
         };
       }
 
-      deps.bosConfig = {
-        ...deps.bosConfig,
+      const nextConfig: BosConfig = {
+        ...session.config,
         plugins: nextPlugins,
       };
 
-      await saveBosConfig(deps.configDir, deps.bosConfig);
-      await generateCodeArtifacts(deps.configDir, deps.bosConfig);
+      await saveBosConfig(session.root, nextConfig);
+      await generateCodeArtifacts(session.root, nextConfig);
+      deps.session = (await openResolution({ cwd: session.root })) ?? deps.session;
 
-      const stored = deps.bosConfig.plugins?.[key];
+      const stored = nextConfig.plugins?.[key];
       const storedObj = stored && typeof stored === "object" ? stored : {};
 
       return {
@@ -574,7 +523,8 @@ export default createPlugin({
 
     pluginRemove: builder.pluginRemove.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      if (!deps.bosConfig) {
+      const session = deps.session;
+      if (!session?.config) {
         return {
           status: "error" as const,
           key: input.key,
@@ -582,7 +532,7 @@ export default createPlugin({
         };
       }
 
-      if (!deps.bosConfig.plugins?.[input.key]) {
+      if (!session.config.plugins?.[input.key]) {
         return {
           status: "error" as const,
           key: input.key,
@@ -590,15 +540,16 @@ export default createPlugin({
         };
       }
 
-      const nextPlugins = { ...deps.bosConfig.plugins };
+      const nextPlugins = { ...session.config.plugins };
       delete nextPlugins[input.key];
-      deps.bosConfig = {
-        ...deps.bosConfig,
+      const nextConfig: BosConfig = {
+        ...session.config,
         plugins: Object.keys(nextPlugins).length > 0 ? nextPlugins : undefined,
       };
 
-      await saveBosConfig(deps.configDir, deps.bosConfig);
-      await generateCodeArtifacts(deps.configDir, deps.bosConfig);
+      await saveBosConfig(session.root, nextConfig);
+      await generateCodeArtifacts(session.root, nextConfig);
+      deps.session = (await openResolution({ cwd: session.root })) ?? deps.session;
 
       return {
         status: "removed" as const,
@@ -608,7 +559,9 @@ export default createPlugin({
 
     pluginList: builder.pluginList.handler(async ({ context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      const plugins: PluginListResult["plugins"] = listPluginAttachments(deps.bosConfig);
+      const plugins: PluginListResult["plugins"] = listPluginAttachments(
+        deps.session?.config ?? null,
+      );
       return {
         status: "listed" as const,
         plugins,
@@ -617,7 +570,8 @@ export default createPlugin({
 
     pluginPublish: builder.pluginPublish.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      if (!deps.bosConfig) {
+      const session = deps.session;
+      if (!session?.config) {
         return {
           status: "error" as const,
           key: input.key,
@@ -625,7 +579,7 @@ export default createPlugin({
         };
       }
 
-      const attachment = deps.bosConfig.plugins?.[input.key];
+      const attachment = session.config?.plugins?.[input.key];
       if (!attachment) {
         return {
           status: "error" as const,
@@ -634,7 +588,7 @@ export default createPlugin({
         };
       }
 
-      const localPath = pluginLocalPath(deps.configDir, attachment);
+      const localPath = pluginLocalPath(session.root, attachment);
       if (!localPath) {
         return {
           status: "error" as const,
@@ -649,9 +603,9 @@ export default createPlugin({
       // FastKV publish + read-back. A single-plugin redeploy ships real bytes
       // to the storage origin — same as the train, nothing image-native left.
       const result = await publishToFastKv({
-        bosConfig: deps.bosConfig,
-        runtimeConfig: deps.runtimeConfig,
-        configDir: deps.configDir,
+        bosConfig: session.config,
+        runtimeConfig: session.runtime,
+        configDir: session.root,
         env: "production",
         build: true,
         dryRun: false,
@@ -666,18 +620,19 @@ export default createPlugin({
         };
       }
 
-      const refreshed = await loadResolvedConfig({ cwd: deps.configDir });
-      const bosConfig = refreshed?.config ?? deps.bosConfig;
-      if (refreshed?.config) {
-        deps.bosConfig = refreshed.config;
-        deps.runtimeConfig = refreshed.runtime;
-      }
-      const production = (bosConfig?.plugins?.[input.key] as { production?: string } | undefined)
-        ?.production;
+      const nextSession = (await openResolution({ cwd: session.root })) ?? session;
+      deps.session = nextSession;
+      const production = (
+        nextSession.config?.plugins?.[input.key] as
+          | {
+              production?: string;
+            }
+          | undefined
+      )?.production;
 
       const manifest = production ? await fetchRemotePluginManifest(production) : null;
-      if (production) {
-        await generateCodeArtifacts(deps.configDir, bosConfig);
+      if (production && nextSession.config) {
+        await generateCodeArtifacts(session.root, nextSession.config);
       }
 
       return {
@@ -734,19 +689,19 @@ export default createPlugin({
       const baseDeps = Context.get(context["effect/context"], BosDepsTag);
       let deps = baseDeps;
       if (input.configPath) {
-        const override = await loadResolvedConfig({ path: input.configPath });
-        if (!override?.config) {
+        const override = await openResolution({ path: input.configPath });
+        if (!override) {
           return {
             status: "error" as const,
             url: "",
             error: `No config found at ${input.configPath}`,
           };
         }
-        deps = { ...baseDeps, bosConfig: override.config };
+        deps = { ...baseDeps, session: override };
       }
 
       const outcome = await Effect.runPromise(
-        startBootstrap(deps, input, { resolveProxyUrl, fetchPublishedConfig }).pipe(
+        startBootstrap(deps, input, { resolveProxyUrl }).pipe(
           Effect.provide(bootstrapLayers),
           Effect.catchTags({
             StartRemoteConfigMissing: (error) => Effect.succeed({ failed: error.message }),
@@ -786,7 +741,8 @@ export default createPlugin({
 
     build: builder.build.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      if (!deps.bosConfig) {
+      const session = deps.session;
+      if (!session?.config) {
         return {
           status: "error" as const,
           error: "No bos.config.json found",
@@ -794,14 +750,15 @@ export default createPlugin({
           skipped: [],
         };
       }
+      const bosConfig = session.config;
 
       const buildEnv: BosEnv = "development";
 
-      const targets = selectWorkspaceTargets(input.packages, deps.bosConfig);
+      const targets = selectWorkspaceTargets(input.packages, bosConfig);
       if (targets.length === 0) {
         const allPackages = [
-          ...Object.keys(deps.bosConfig.app ?? {}),
-          ...Object.keys(deps.bosConfig.plugins ?? {}),
+          ...Object.keys(bosConfig.app ?? {}),
+          ...Object.keys(bosConfig.plugins ?? {}),
         ];
         return {
           status: "error" as const,
@@ -811,26 +768,26 @@ export default createPlugin({
         };
       }
 
-      suppressWarnings();
-      const runtimeConfig = await buildRuntimeConfig(deps.bosConfig, {
-        uiSource: deps.bosConfig.app.ui?.development ? "local" : "remote",
-        apiSource: deps.bosConfig.app.api?.development ? "local" : "remote",
-        authSource: deps.bosConfig.app.auth?.development ? "local" : "remote",
-        hostSource: deps.bosConfig.app.host?.development ? "local" : "remote",
+      const runtimeConfig = await session.buildRuntime({
+        uiSource: bosConfig.app.ui?.development ? "local" : "remote",
+        apiSource: bosConfig.app.api?.development ? "local" : "remote",
+        authSource: bosConfig.app.auth?.development ? "local" : "remote",
+        hostSource: bosConfig.app.host?.development ? "local" : "remote",
         env: buildEnv,
-        plugins: deps.runtimeConfig?.plugins,
+        plugins: session.runtime?.plugins,
       });
-      drainConfigWarnings();
-      resumeWarnings();
+      for (const message of session.warnings) {
+        console.warn(message);
+      }
 
-      await generateCodeArtifacts(deps.configDir, deps.bosConfig, {
+      await generateCodeArtifacts(session.root, bosConfig, {
         env: buildEnv,
         runtimeConfig,
       });
 
       const { built, skipped } = await buildWorkspaceTargets({
-        configDir: deps.configDir,
-        bosConfig: deps.bosConfig,
+        configDir: session.root,
+        bosConfig,
         runtimeConfig: runtimeConfig,
         targets,
         deploy: false,
@@ -854,7 +811,8 @@ export default createPlugin({
 
     publish: builder.publish.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      if (!deps.bosConfig) {
+      const session = deps.session;
+      if (!session?.config) {
         return {
           status: "error" as const,
           registryUrl: "",
@@ -863,9 +821,9 @@ export default createPlugin({
       }
 
       const result = await publishToFastKv({
-        bosConfig: deps.bosConfig,
-        runtimeConfig: deps.runtimeConfig,
-        configDir: deps.configDir,
+        bosConfig: session.config,
+        runtimeConfig: session.runtime,
+        configDir: session.root,
         env: input.env,
         build: false,
         dryRun: input.dryRun,
@@ -878,11 +836,7 @@ export default createPlugin({
       });
 
       if (result.publishConfig) {
-        const refreshed = await loadResolvedConfig({ cwd: deps.configDir });
-        if (refreshed?.config) {
-          deps.bosConfig = refreshed.config;
-          deps.runtimeConfig = refreshed.runtime;
-        }
+        deps.session = (await openResolution({ cwd: session.root })) ?? deps.session;
       }
 
       return {
@@ -898,7 +852,8 @@ export default createPlugin({
 
     rollback: builder.rollback.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      if (!deps.bosConfig) {
+      const session = deps.session;
+      if (!session) {
         return {
           status: "error" as const,
           registryUrl: "",
@@ -906,7 +861,7 @@ export default createPlugin({
         };
       }
 
-      const { account, domain } = deps.bosConfig;
+      const { account, domain } = session.config ?? {};
       if (!account || !domain) {
         return {
           status: "error" as const,
@@ -1025,8 +980,8 @@ export default createPlugin({
 
       const result = await publishToFastKv({
         bosConfig: payload,
-        runtimeConfig: deps.runtimeConfig,
-        configDir: deps.configDir,
+        runtimeConfig: session.runtime,
+        configDir: session.root,
         env: input.env,
         build: false,
         dryRun: input.dryRun,
@@ -1050,7 +1005,8 @@ export default createPlugin({
 
     deploy: builder.deploy.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      if (!deps.bosConfig) {
+      const session = deps.session;
+      if (!session?.config) {
         return {
           status: "error" as const,
           registryUrl: "",
@@ -1059,7 +1015,7 @@ export default createPlugin({
       }
 
       if (input.statusList) {
-        if (!deps.bosConfig.account || !deps.bosConfig.domain) {
+        if (!session.config?.account || !session.config.domain) {
           return {
             status: "error" as const,
             registryUrl: "",
@@ -1068,8 +1024,8 @@ export default createPlugin({
         }
         try {
           const manifests = await fetchDeployManifests({
-            accountId: deps.bosConfig.account,
-            gatewayId: deps.bosConfig.domain,
+            accountId: session.config.account,
+            gatewayId: session.config.domain,
             registry: input.registry,
           });
           return {
@@ -1097,9 +1053,9 @@ export default createPlugin({
       }
 
       const result = await publishToFastKv({
-        bosConfig: deps.bosConfig,
-        runtimeConfig: deps.runtimeConfig,
-        configDir: deps.configDir,
+        bosConfig: session.config,
+        runtimeConfig: session.runtime,
+        configDir: session.root,
         env: input.env,
         build: input.build,
         dryRun: input.dryRun,
@@ -1131,11 +1087,12 @@ export default createPlugin({
         };
       }
 
+      let nextSession = session;
       if (result.publishConfig) {
-        const refreshed = await loadResolvedConfig({ cwd: deps.configDir });
-        if (refreshed?.config) {
-          deps.bosConfig = refreshed.config;
-          deps.runtimeConfig = refreshed.runtime;
+        const opened = await openResolution({ cwd: session.root });
+        if (opened) {
+          nextSession = opened;
+          deps.session = opened;
         }
       }
 
@@ -1157,8 +1114,8 @@ export default createPlugin({
       // Skips with a notice when no image is configured (child repos get
       // build+upload+publish only).
       const imageRef = resolveImageRef({
-        ciImage: deps.bosConfig.ci?.image,
-        repository: deps.bosConfig.repository,
+        ciImage: nextSession.config?.ci?.image,
+        repository: nextSession.config?.repository,
         env: process.env,
       });
       if (!imageRef) {
@@ -1176,7 +1133,7 @@ export default createPlugin({
         try {
           const imageResult = await buildAndPushImage({
             image: imageRef.image,
-            configDir: deps.configDir,
+            configDir: session.root,
             verbose: input.verbose,
           });
           image = imageResult.image;
@@ -1204,7 +1161,7 @@ export default createPlugin({
       // RAILWAY LEG: pull-only deploy of the pushed image digest (thin
       // FROM Dockerfile, ADR 0021 — Railway never rebuilds).
       if (process.env.RAILWAY_TOKEN) {
-        const railwayService = input.service ?? deps.bosConfig.ci?.railway?.service;
+        const railwayService = input.service ?? nextSession.config?.ci?.railway?.service;
         if (!railwayService) {
           console.log();
           console.log(
@@ -1243,7 +1200,7 @@ export default createPlugin({
             image,
             digest: imageDigest,
             service: railwayService,
-            configDir: deps.configDir,
+            configDir: session.root,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -1275,7 +1232,8 @@ export default createPlugin({
 
     keyPublish: builder.keyPublish.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      if (!deps.bosConfig) {
+      const session = deps.session;
+      if (!session?.config) {
         return {
           status: "error" as const,
           account: "",
@@ -1290,8 +1248,8 @@ export default createPlugin({
 
       const account =
         input.env === "staging"
-          ? (deps.bosConfig.staging?.account ?? deps.bosConfig.account)
-          : deps.bosConfig.account;
+          ? (session.config.staging?.account ?? session.config.account)
+          : session.config.account;
       const network = getNetworkIdForAccount(account);
       const contract = getRegistryNamespaceForAccount(account, input.registry);
       try {
@@ -1372,11 +1330,11 @@ export default createPlugin({
       const deps = Context.get(context["effect/context"], BosDepsTag);
       const staging = input.env === "staging";
       const account = staging
-        ? (deps.bosConfig?.staging?.account ?? deps.bosConfig?.account ?? "")
-        : (deps.bosConfig?.account ?? "");
+        ? (deps.session?.config?.staging?.account ?? deps.session?.config?.account ?? "")
+        : (deps.session?.config?.account ?? "");
 
       try {
-        const siteUrl = resolveLoginSiteUrl(input.site, deps, staging);
+        const siteUrl = resolveLoginSiteUrl(input.site, deps.session, staging);
         const login = await startDeviceLogin({
           siteUrl,
           device: input.device,
@@ -1404,7 +1362,7 @@ export default createPlugin({
         }
 
         const expiresAt = new Date(Date.now() + input.expiresIn * 1000).toISOString();
-        writeSessionHandle(deps.configDir, {
+        writeSessionHandle(deps.session?.root ?? process.cwd(), {
           version: 1,
           credential: {
             kind: "session",
@@ -1456,7 +1414,7 @@ export default createPlugin({
 
     logout: builder.logout.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      const configDir = input.configDir ?? deps.configDir;
+      const configDir = input.configDir ?? deps.session?.root ?? process.cwd();
 
       try {
         const session = readSessionHandle(configDir);
@@ -1473,7 +1431,7 @@ export default createPlugin({
         }
 
         if (session?.publishKey) {
-          const account = session.credential?.accountId ?? deps.bosConfig?.account ?? "";
+          const account = session.credential?.accountId ?? deps.session?.config?.account ?? "";
           removePublishedKeyFile(session.publishKey.network, account, session.publishKey.publicKey);
           removedPublishKey = true;
           warning = warning
@@ -1715,7 +1673,7 @@ export default createPlugin({
           removeInitLockfile(lockfilePath);
 
           const initConfig = await timePhase(timings, "resolve config", () =>
-            loadResolvedConfig({ cwd: targetDir }).catch((error) => {
+            openResolution({ cwd: targetDir }).catch((error: unknown) => {
               console.warn(
                 "[init] Skipping config resolution — the child has no node_modules yet; `bos dev` resolves after `bun install`.",
                 error instanceof Error ? error.message : error,
@@ -1723,9 +1681,10 @@ export default createPlugin({
               return null;
             }),
           );
-          if (initConfig?.runtime) {
+          const initRuntime = initConfig?.runtime;
+          if (initRuntime) {
             await timePhase(timings, "generate env/docker", async () => {
-              await materializeViaLayer(targetDir, initConfig.runtime);
+              await materializeViaLayer(targetDir, initRuntime);
             });
           }
           await timePhase(timings, "create env file", async () => {
@@ -1740,9 +1699,10 @@ export default createPlugin({
             );
           }
 
-          if (input.noInstall && initConfig?.config) {
+          const initArtifactsConfig = initConfig?.config;
+          if (input.noInstall && initArtifactsConfig) {
             await timePhase(timings, "generate code artifacts", () =>
-              generateCodeArtifacts(targetDir, initConfig.config),
+              generateCodeArtifacts(targetDir, initArtifactsConfig),
             );
           }
 
@@ -1801,7 +1761,7 @@ export default createPlugin({
         const result = await syncTemplate(projectDir, input);
 
         if (result.status === "synced" || result.status === "dry-run") {
-          const syncedConfig = await loadResolvedConfig({ cwd: projectDir });
+          const syncedConfig = await openResolution({ cwd: projectDir });
           if (syncedConfig?.config) {
             await generateCodeArtifacts(projectDir, syncedConfig.config);
           }
@@ -1859,12 +1819,12 @@ export default createPlugin({
         const env =
           input.env ?? (process.env.NODE_ENV === "production" ? "production" : "development");
 
-        const refreshed = await loadResolvedConfig({
+        const refreshed = await openResolution({
           cwd: projectDir,
           env,
           remotePlugins: input.remotePlugins,
         });
-        if (!refreshed) {
+        if (!refreshed?.config || !refreshed.runtime) {
           return {
             status: "error" as const,
             generated: [],
@@ -1875,27 +1835,30 @@ export default createPlugin({
           };
         }
 
+        const runtime = refreshed.runtime;
+        const resolvedConfig = refreshed.config;
+
         if (input.dryRun) {
-          const pluginEntries = Object.entries(refreshed.runtime.plugins ?? {});
+          const pluginEntries = Object.entries(runtime.plugins ?? {});
           const fetched: string[] = [];
           const skipped: string[] = [];
           const hasLocalApiWorkspace = existsSync(join(projectDir, "api", "src"));
 
-          if (refreshed.runtime.api.source !== "local") {
-            fetched.push(`api remote (${refreshed.runtime.api.url})`);
+          if (runtime.api.source !== "local") {
+            fetched.push(`api remote (${runtime.api.url})`);
           } else {
-            const path = refreshed.runtime.api.localPath
-              ? ` (${relative(projectDir, refreshed.runtime.api.localPath)})`
+            const path = runtime.api.localPath
+              ? ` (${relative(projectDir, runtime.api.localPath)})`
               : "";
             skipped.push(`api local${path}`);
           }
 
-          if (refreshed.runtime.auth) {
-            if (refreshed.runtime.auth.source !== "local") {
-              fetched.push(`auth remote (${refreshed.runtime.auth.url})`);
+          if (runtime.auth) {
+            if (runtime.auth.source !== "local") {
+              fetched.push(`auth remote (${runtime.auth.url})`);
             } else {
-              const path = refreshed.runtime.auth.localPath
-                ? ` (${relative(projectDir, refreshed.runtime.auth.localPath)})`
+              const path = runtime.auth.localPath
+                ? ` (${relative(projectDir, runtime.auth.localPath)})`
                 : "";
               skipped.push(`auth local${path}`);
             }
@@ -1926,13 +1889,8 @@ export default createPlugin({
               generated.push(relative(projectDir, pluginSrc));
             }
           }
-          if (refreshed.runtime.auth?.localPath) {
-            const authSrc = join(
-              refreshed.runtime.auth.localPath,
-              "src",
-              "lib",
-              "plugins-client.gen.ts",
-            );
+          if (runtime.auth?.localPath) {
+            const authSrc = join(runtime.auth.localPath, "src", "lib", "plugins-client.gen.ts");
             if (existsSync(authSrc)) {
               generated.push(relative(projectDir, authSrc));
             }
@@ -1947,8 +1905,8 @@ export default createPlugin({
           };
         }
 
-        const artifacts = await generateCodeArtifacts(projectDir, refreshed.config, {
-          runtimeConfig: refreshed.runtime,
+        const artifacts = await generateCodeArtifacts(projectDir, resolvedConfig, {
+          runtimeConfig: runtime,
         });
 
         const hasLocalApiWorkspace = existsSync(join(projectDir, "api", "src"));
@@ -1956,16 +1914,13 @@ export default createPlugin({
         if (hasLocalApiWorkspace) {
           generated.push("api/src/lib/plugins-types.gen.ts", "api/src/lib/auth-types.gen.ts");
         }
-        if (
-          refreshed.runtime.auth &&
-          (refreshed.runtime.auth.source !== "local" || refreshed.runtime.auth.localPath)
-        ) {
+        if (runtime.auth && (runtime.auth.source !== "local" || runtime.auth.localPath)) {
           generated.push("ui/src/lib/auth-types.gen.ts");
         }
         if (existsSync(join(projectDir, "host", "src"))) {
           generated.push("host/src/lib/auth-types.gen.ts");
         }
-        for (const [_key, plugin] of Object.entries(refreshed.runtime.plugins ?? {})) {
+        for (const [_key, plugin] of Object.entries(runtime.plugins ?? {})) {
           const localPath = plugin.localPath;
           if (!localPath) continue;
           const pluginSrc = join(localPath, "src", "lib", "plugins-client.gen.ts");
@@ -1973,13 +1928,8 @@ export default createPlugin({
             generated.push(relative(projectDir, pluginSrc));
           }
         }
-        if (refreshed.runtime.auth?.localPath) {
-          const authSrc = join(
-            refreshed.runtime.auth.localPath,
-            "src",
-            "lib",
-            "plugins-client.gen.ts",
-          );
+        if (runtime.auth?.localPath) {
+          const authSrc = join(runtime.auth.localPath, "src", "lib", "plugins-client.gen.ts");
           if (existsSync(authSrc)) {
             generated.push(relative(projectDir, authSrc));
           }
@@ -2036,8 +1986,8 @@ export default createPlugin({
         }
 
         const projectDir = resolve(dirname(configPath));
-        const refreshed = await loadResolvedConfig({ cwd: projectDir });
-        if (!refreshed) {
+        const refreshed = await openResolution({ cwd: projectDir });
+        if (!refreshed?.config || !refreshed.runtime) {
           return {
             status: "error" as const,
             checked: [],
@@ -2047,11 +1997,12 @@ export default createPlugin({
           };
         }
 
-        await generateCodeArtifacts(projectDir, refreshed.config, {
-          runtimeConfig: refreshed.runtime,
-        });
-
         const runtime = refreshed.runtime;
+        const resolvedConfig = refreshed.config;
+
+        await generateCodeArtifacts(projectDir, resolvedConfig, {
+          runtimeConfig: runtime,
+        });
         type AppTarget = { source?: string; localPath?: string };
         const workspaceEntries: Array<{
           key: string;
@@ -2102,7 +2053,7 @@ export default createPlugin({
           }
         }
 
-        const selected = selectWorkspaceTargets(input.packages, refreshed.config);
+        const selected = selectWorkspaceTargets(input.packages, resolvedConfig);
         const targets =
           input.packages === "all"
             ? workspaceEntries
@@ -2347,9 +2298,10 @@ export default createPlugin({
       }
     }),
 
-    logs: builder.logs.handler(async ({ input }) => {
+    logs: builder.logs.handler(async ({ input, context }) => {
       try {
-        const configDir = getProjectRoot();
+        const deps = Context.get(context["effect/context"], BosDepsTag);
+        const configDir = deps.session?.root ?? process.cwd();
         const text = await readDevLatestLog(configDir, { tail: input.tail });
         const service = input.service;
         const lines = text
@@ -2477,20 +2429,21 @@ export default createPlugin({
 
     infraExport: builder.infraExport.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      const configDir = input.configDir ?? deps.configDir;
-      const ci = deps.runtimeConfig ? buildCiInfraPlan(deps.runtimeConfig) : null;
+      const configDir = input.configDir ?? deps.session?.root ?? process.cwd();
+      const ci = deps.session?.runtime ? buildCiInfraPlan(deps.session.runtime) : null;
       if (!ci) {
-        const refreshed = await loadResolvedConfig({ cwd: configDir });
+        const refreshed = await openResolution({ cwd: configDir });
         if (!refreshed?.runtime) {
           throw new Error("No resolved runtime config available for infra export");
         }
-        deps.runtimeConfig = refreshed.runtime;
+        deps.session = refreshed;
         return buildCiInfraPlan(refreshed.runtime);
       }
       const result: CiInfraPlan & { account: string; gateway: string } = {
         ...ci,
-        account: deps.bosConfig?.account ?? ci.account,
-        gateway: ci.gateway ?? deps.bosConfig?.domain ?? deps.bosConfig?.account ?? ci.account,
+        account: deps.session?.config?.account ?? ci.account,
+        gateway:
+          ci.gateway ?? deps.session?.config?.domain ?? deps.session?.config?.account ?? ci.account,
       };
       return result;
     }),

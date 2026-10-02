@@ -3,8 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resolveCatalogChainSource } from "../../src/cli/init";
-import { loadResolvedConfig, resetConfigPathCache } from "../../src/config";
+import { resetConfigPathCache } from "../../src/config";
 import { mergeBosConfigWithExtends, rebuildOrderedConfig } from "../../src/merge";
+import { openResolution } from "../../src/resolution/session";
 
 const BASE_CONFIG = {
   account: "parent.near",
@@ -248,16 +249,16 @@ describe("extends chain", () => {
 
   it("resolved config does not inherit parent plugins through extends", async () => {
     resetConfigPathCache();
-    const loaded = await loadResolvedConfig({ cwd: childDir });
-    expect(loaded?.config.plugins).toEqual({
+    const session = await openResolution({ cwd: childDir });
+    expect(session?.config.plugins).toEqual({
       apps: { variables: { namespace: "child.near" } },
     });
   });
 
   it("resolved config inherits parent plugins when child does not declare plugins", async () => {
     resetConfigPathCache();
-    const loaded = await loadResolvedConfig({ cwd: childInheritDir });
-    expect(loaded?.config.plugins).toEqual({
+    const session = await openResolution({ cwd: childInheritDir });
+    expect(session?.config.plugins).toEqual({
       apps: { development: "local:plugins/apps" },
       example: { development: "local:plugins/example" },
     });
@@ -376,7 +377,7 @@ describe("circular extends detection", () => {
       );
 
       resetConfigPathCache();
-      await expect(loadResolvedConfig({ cwd: testDir })).rejects.toThrow(/Circular extends/);
+      await expect(openResolution({ cwd: testDir })).rejects.toThrow(/Circular extends/);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }

@@ -36,6 +36,15 @@
       "import": "./dist/descriptor/index.mjs",
       "require": "./dist/descriptor/index.cjs"
     },
+    "./resolution": {
+      "development": {
+        "types": "./src/resolution/session.ts",
+        "import": "./src/resolution/session.ts"
+      },
+      "types": "./dist/resolution/session.d.mts",
+      "import": "./dist/resolution/session.mjs",
+      "require": "./dist/resolution/session.cjs"
+    },
     "./config": {
       "development": {
         "types": "./src/config.ts",

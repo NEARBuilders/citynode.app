@@ -1,6 +1,6 @@
 import process from "node:process";
 import { Data, Effect, Layer } from "effect";
-import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
+import { detectLocalPackages, PortAllocatorLive } from "./app";
 import {
   buildBetterNearAuthQuietly,
   buildEveryPluginQuietly,
@@ -8,13 +8,11 @@ import {
 } from "./build";
 import { generateCodeArtifacts } from "./code-artifacts";
 import {
+  buildRuntimeConfig,
   buildRuntimePluginsForConfig,
-  drainConfigWarnings,
   findConfigPath,
   getHostDevelopmentPort,
-  loadResolvedConfig,
-  resumeWarnings,
-  suppressWarnings,
+  resolveConfigComposableEntries,
 } from "./config";
 import type { DevOptions, PhaseTiming, StartOptions } from "./contract";
 import {
@@ -38,6 +36,7 @@ import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
 import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { type ProgressEvent, pluginEvents, timePhase } from "./progress";
+import { openResolution, type ResolutionSession, walkExtendsChain } from "./resolution/session";
 import {
   type AppOrchestrator,
   buildDescription,
@@ -48,6 +47,7 @@ import {
 import { syncResolvedSharedDeps } from "./shared-deps";
 import { isRegistryStart, resolveStartConfigSource } from "./start-config-source";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
+import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
 
 export interface DevSessionData {
@@ -69,18 +69,11 @@ export interface StartSummary {
 }
 
 export interface BootstrapDeps {
-  configDir: string;
-  bosConfig: BosConfig | null;
-  runtimeConfig: RuntimeConfig | null;
+  session: ResolutionSession | null;
 }
 
 export interface BootstrapHelpers {
   resolveProxyUrl: (bosConfig: BosConfig | null) => string | null;
-  fetchPublishedConfig: (
-    account: string,
-    domain: string,
-    registry?: string,
-  ) => Promise<BosConfig | null>;
 }
 
 export class DevStepError extends Data.TaggedError("DevStepError")<{
@@ -109,6 +102,30 @@ export class StartConfigMissing extends Data.TaggedError("StartConfigMissing")<
 function parseSourceMode(value: string | undefined, defaultValue: SourceMode): SourceMode {
   if (value === "local" || value === "remote") return value;
   return defaultValue;
+}
+
+async function resolvePublishedConfig(
+  account: string,
+  gateway: string,
+  registry?: string,
+): Promise<BosConfig | null> {
+  try {
+    const { config: merged } = await walkExtendsChain(`bos://${account}/${gateway}`, {
+      env: "production",
+      registry,
+      visit: async () => {},
+    });
+    return resolveConfigComposableEntries(
+      BosConfigSchema.parse(merged),
+      process.cwd(),
+      "production",
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("No config found")) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function isValidProxyUrl(url: string): boolean {
@@ -174,12 +191,18 @@ export const devBootstrap = (
     const shell = yield* captureShellEnv;
     const projectEnv = yield* ProjectEnv;
 
-    yield* ensureEnvStep(projectEnv, deps.configDir);
-    yield* loadEnvStep(projectEnv, deps.configDir);
+    if (!deps.session) {
+      return yield* new DevConfigMissing({});
+    }
+    let session: ResolutionSession = deps.session;
+
+    yield* ensureEnvStep(projectEnv, session.root);
+    yield* loadEnvStep(projectEnv, session.root);
 
     const localPackages = detectLocalPackages(
-      deps.bosConfig ?? undefined,
-      deps.runtimeConfig ?? undefined,
+      session.config ?? undefined,
+      session.runtime ?? undefined,
+      session.root,
     );
 
     const hostSource: SourceMode = localPackages.includes("host")
@@ -211,15 +234,15 @@ export const devBootstrap = (
 
     const sharedSync = yield* step(timings, "shared deps", () =>
       syncResolvedSharedDeps({
-        configDir: deps.configDir,
+        configDir: session.root,
         hostMode: hostSource,
-        bosConfig: deps.bosConfig ?? undefined,
+        bosConfig: session.config ?? undefined,
         extendsChain: [],
       }),
     );
     let configMayHaveChanged = false;
     if (sharedSync.catalogChanged) {
-      yield* step(timings, "install", () => run("bun", ["install"], { cwd: deps.configDir }));
+      yield* step(timings, "install", () => run("bun", ["install"], { cwd: session.root }));
       configMayHaveChanged = true;
     }
     const shouldBuildPlugin =
@@ -227,11 +250,11 @@ export const devBootstrap = (
 
     yield* step(timings, "build", async () => {
       const [everythingDevRebuilt] = await Promise.all([
-        buildEverythingDevQuietly(deps.configDir),
-        buildBetterNearAuthQuietly(deps.configDir),
+        buildEverythingDevQuietly(session.root),
+        buildBetterNearAuthQuietly(session.root),
       ]);
       if (shouldBuildPlugin) {
-        await buildEveryPluginQuietly(deps.configDir);
+        await buildEveryPluginQuietly(session.root);
       }
       if (everythingDevRebuilt === true) {
         // Only the bos process itself runs the everything-dev dist (plugin
@@ -250,55 +273,51 @@ export const devBootstrap = (
 
     let devExtendsChain: string[] | undefined;
     if (configMayHaveChanged || input.remotePlugins !== undefined) {
-      const refreshed = yield* step(timings, "resolve config", () =>
-        loadResolvedConfig({
-          cwd: deps.configDir,
+      yield* step(timings, "resolve config", async () => {
+        const opened = await openResolution({
+          cwd: session.root,
           remotePlugins: input.remotePlugins,
-        }),
-      );
-      deps.bosConfig = refreshed?.config ?? deps.bosConfig;
-      deps.runtimeConfig = refreshed?.runtime ?? deps.runtimeConfig;
-      devExtendsChain = refreshed?.source.extended;
+        });
+        if (opened) {
+          session = opened;
+          deps.session = opened;
+          devExtendsChain = [...opened.chain];
+        }
+      });
     }
 
-    if (!deps.bosConfig) {
+    if (!session.config) {
       return yield* new DevConfigMissing({});
     }
+    const bosConfig: BosConfig = session.config;
 
-    if (proxy && !helpers.resolveProxyUrl(deps.bosConfig)) {
+    if (proxy && !helpers.resolveProxyUrl(bosConfig)) {
       return yield* new DevProxyMissing({});
     }
-    const bosConfig: BosConfig = deps.bosConfig;
 
-    // Failure-safe warning suppression: the release runs even when the build
-    // fails, so warnings can never stay suppressed process-wide.
-    const developmentRuntime = yield* Effect.acquireUseRelease(
-      Effect.sync(() => suppressWarnings()),
-      () =>
-        Effect.tryPromise({
-          try: () =>
-            buildRuntimeConfig(bosConfig, {
-              uiSource,
-              apiSource,
-              authSource,
-              hostSource,
-              env: "development",
-              plugins: deps.runtimeConfig?.plugins,
-            }),
-          catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
-        }),
-      () =>
-        Effect.sync(() => {
-          drainConfigWarnings();
-          resumeWarnings();
-        }),
-    );
+    const developmentRuntime = yield* Effect.tryPromise({
+      try: async () => {
+        const runtime = await session.buildRuntime({
+          uiSource,
+          apiSource,
+          authSource,
+          hostSource,
+          env: "development",
+          plugins: session.runtime?.plugins,
+        });
+        for (const message of session.warnings) {
+          console.warn(message);
+        }
+        return runtime;
+      },
+      catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
+    });
 
     const plan: InfraPlan = yield* timedEffect(
       timings,
       "ports",
       planInfra({
-        configDir: deps.configDir,
+        configDir: session.root,
         bosConfig: developmentRuntime,
         cli: {
           port: input.port,
@@ -318,14 +337,14 @@ export const devBootstrap = (
     );
 
     yield* Effect.tryPromise({
-      try: () => materializeViaLayer(deps.configDir, plan.runtimeConfig),
+      try: () => materializeViaLayer(session.root, plan.runtimeConfig),
       catch: (cause) => new DevStepError({ phase: "materialize infra", cause }),
     });
-    yield* ensureEnvStep(projectEnv, deps.configDir);
-    yield* loadEnvStep(projectEnv, deps.configDir);
+    yield* ensureEnvStep(projectEnv, session.root);
+    yield* loadEnvStep(projectEnv, session.root);
 
     yield* projectEnv
-      .sync(deps.configDir, plan.envGenerated, shell)
+      .sync(session.root, plan.envGenerated, shell)
       .pipe(
         Effect.catchTag("EnvSyncError", (error) =>
           Effect.logWarning(`[env] failed to refresh .env from resolved ports: ${error.cause}`),
@@ -344,12 +363,12 @@ export const devBootstrap = (
     if (
       preflightFailures.length > 0 &&
       shouldAutoStartDocker(preflightFailures, {
-        ...detectAutoStartContext(deps.configDir),
+        ...detectAutoStartContext(session.root),
         dockerAvailable: yield* Effect.promise(isDockerAvailable),
       })
     ) {
       const compose = yield* step(timings, "docker compose up", () =>
-        runDockerComposeUp(deps.configDir),
+        runDockerComposeUp(session.root),
       );
       if (compose.ok) {
         preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
@@ -383,7 +402,7 @@ export const devBootstrap = (
     }
 
     yield* step(timings, "generate artifacts", () =>
-      generateCodeArtifacts(deps.configDir, bosConfig, {
+      generateCodeArtifacts(session.root, bosConfig, {
         env: "development",
         extendsChain: devExtendsChain,
         runtimeConfig: plan.runtimeConfig,
@@ -406,14 +425,16 @@ export const devBootstrap = (
 export const startBootstrap = (
   deps: BootstrapDeps,
   input: StartOptions,
-  helpers: BootstrapHelpers,
+  _helpers: BootstrapHelpers,
 ) =>
   Effect.gen(function* () {
     const shell = yield* captureShellEnv;
     const projectEnv = yield* ProjectEnv;
 
-    yield* ensureEnvStep(projectEnv, deps.configDir);
-    yield* loadEnvStep(projectEnv, deps.configDir);
+    const sessionRoot = deps.session?.root ?? process.cwd();
+
+    yield* ensureEnvStep(projectEnv, sessionRoot);
+    yield* loadEnvStep(projectEnv, sessionRoot);
 
     yield* emitProgress({ phase: "config", status: "running" });
 
@@ -427,12 +448,12 @@ export const startBootstrap = (
     let remoteConfig: BosConfig | null = null;
 
     if (explicitConfig.configPath) {
-      config = deps.bosConfig;
+      config = deps.session?.config ?? null;
     } else if (explicitConfig.registry) {
       const { account, domain } = explicitConfig.registry;
       const expectedUrl = buildRegistryConfigUrl(account, domain, input.registry);
       remoteConfig = yield* Effect.tryPromise({
-        try: () => helpers.fetchPublishedConfig(account, domain, input.registry),
+        try: () => resolvePublishedConfig(account, domain, input.registry),
         catch: (error) =>
           new StartFetchFailed({
             message: `Failed to fetch config for bos://${account}/${domain}: ${
@@ -448,7 +469,7 @@ export const startBootstrap = (
         });
       }
     } else {
-      config = deps.bosConfig;
+      config = deps.session?.config ?? null;
     }
 
     if (!config) {
@@ -468,32 +489,20 @@ export const startBootstrap = (
     const port = input.port ?? getHostDevelopmentPort(baseConfig.app.host.development);
     const isStaging = bosEnv === "staging";
     const runtimePlugins = yield* Effect.tryPromise({
-      try: () => buildRuntimePluginsForConfig(baseConfig, deps.configDir, "production"),
+      try: () => buildRuntimePluginsForConfig(baseConfig, sessionRoot, "production"),
       catch: (cause) => new DevStepError({ phase: "resolve runtime plugins", cause }),
     });
-    // Failure-safe warning suppression (same finalizer discipline as the
-    // development path above).
-    const runtimeConfig = yield* Effect.acquireUseRelease(
-      Effect.sync(() => suppressWarnings()),
-      () =>
-        Effect.tryPromise({
-          try: () =>
-            buildRuntimeConfig(baseConfig, {
-              uiSource: "remote",
-              apiSource: "remote",
-              authSource: "remote",
-              hostSource: "remote",
-              env: "production",
-              plugins: runtimePlugins,
-            }),
-          catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
+    const runtimeConfig = yield* Effect.tryPromise({
+      try: () =>
+        buildRuntimeConfig(baseConfig, sessionRoot, "production", {
+          uiSource: "remote",
+          apiSource: "remote",
+          authSource: "remote",
+          hostSource: "remote",
+          plugins: runtimePlugins,
         }),
-      () =>
-        Effect.sync(() => {
-          drainConfigWarnings();
-          resumeWarnings();
-        }),
-    );
+      catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
+    });
 
     if (isStaging && baseConfig.staging?.domain) {
       runtimeConfig.domain = baseConfig.staging.domain;
@@ -504,16 +513,16 @@ export const startBootstrap = (
     }
 
     yield* Effect.tryPromise({
-      try: () => materializeViaLayer(deps.configDir, runtimeConfig),
+      try: () => materializeViaLayer(sessionRoot, runtimeConfig),
       catch: (cause) => new DevStepError({ phase: "materialize infra", cause }),
     });
-    yield* ensureEnvStep(projectEnv, deps.configDir);
-    yield* loadEnvStep(projectEnv, deps.configDir);
+    yield* ensureEnvStep(projectEnv, sessionRoot);
+    yield* loadEnvStep(projectEnv, sessionRoot);
 
     yield* emitProgress({ phase: "generate artifacts", status: "running" });
     yield* Effect.tryPromise({
       try: () =>
-        generateCodeArtifacts(deps.configDir, baseConfig, {
+        generateCodeArtifacts(sessionRoot, baseConfig, {
           env: "production",
           runtimeConfig,
         }),
@@ -580,7 +589,7 @@ export const startBootstrap = (
       : {};
 
     const plan: InfraPlan = yield* planInfra({
-      configDir: deps.configDir,
+      configDir: sessionRoot,
       bosConfig: runtimeConfig,
       cli: {
         port: input.port,

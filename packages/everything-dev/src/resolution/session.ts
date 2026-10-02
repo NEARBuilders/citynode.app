@@ -200,7 +200,10 @@ async function walkExtends(
   const parsedParentRef = parseExtendsTarget(extendsRef);
   const parentBaseDir = getConfigBaseDir(parsedParentRef.configPath, nodeBaseDir);
 
-  if (options.collectCatalogs && !canResolveExtendsRef(parsedParentRef.configPath, sourceDir)) {
+  if (
+    options.collectCatalogs &&
+    !canResolveExtendsRef(parsedParentRef.configPath, sourceDir ?? nodeBaseDir)
+  ) {
     await options.visit?.({ ref, config, baseDir: nodeBaseDir, sourceDir, isLeaf: true });
     return config;
   }
@@ -219,14 +222,14 @@ async function walkExtends(
   return mergeBosConfigWithExtends(parent, config);
 }
 
-function canResolveExtendsRef(parentRef: string, sourceDir: string | undefined): boolean {
+function canResolveExtendsRef(parentRef: string, baseDir: string | undefined): boolean {
   if (parentRef.startsWith("bos://")) {
     return parseBosRef(parentRef) !== null;
   }
-  if (!sourceDir) {
+  if (!baseDir) {
     return false;
   }
-  return existsSync(resolve(sourceDir, parentRef));
+  return existsSync(resolve(baseDir, parentRef));
 }
 
 function dispatchEntry(request: ResolutionRequest | undefined, cwd: string): EntryDispatch | null {
@@ -445,20 +448,23 @@ export async function walkExtendsChain(
   options: {
     env?: BosEnv;
     io?: ResolutionIo;
+    registry?: string;
+    collectCatalogs?: boolean;
     visit(link: WalkLink): Promise<void>;
     registerCleanup?(fn: () => Promise<void>): void;
   },
-): Promise<{ chain: string[] }> {
+): Promise<{ chain: string[]; config: BosConfigInput }> {
   const baseDir = entry.startsWith("bos://") ? process.cwd() : dirname(entry);
   const chain: string[] = [];
-  await walkExtends(entry, baseDir, new Set(), chain, {
+  const config = await walkExtends(entry, baseDir, new Set(), chain, {
     env: options.env ?? "development",
+    registry: options.registry,
     io: resolveIo(options.io),
-    collectCatalogs: false,
+    collectCatalogs: options.collectCatalogs === true,
     visit: options.visit,
     registerCleanup: options.registerCleanup,
   });
-  return { chain };
+  return { chain, config };
 }
 
 /**

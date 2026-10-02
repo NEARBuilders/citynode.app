@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { loadResolvedConfig, resetConfigPathCache } from "../../src/config";
+import { resetConfigPathCache } from "../../src/config";
+import { openResolution } from "../../src/resolution/session";
 
 vi.mock("../../src/fastkv", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/fastkv")>();
@@ -120,15 +121,15 @@ describe("asComposableEntry handles undefined parent entries", () => {
 
   it("does not throw when extends targets a plugin missing from parent config", async () => {
     resetConfigPathCache();
-    const loaded = await loadResolvedConfig({ cwd: childDir });
-    expect(loaded).not.toBeNull();
+    const session = await openResolution({ cwd: childDir });
+    expect(session).not.toBeNull();
   });
 
   it("resolves plugin to child-only values when parent lacks the plugin", async () => {
     resetConfigPathCache();
-    const loaded = await loadResolvedConfig({ cwd: childDir });
-    expect(loaded?.runtime.plugins?.myplugin).toBeDefined();
-    expect(loaded?.runtime.plugins?.myplugin?.url).toBe("https://myplugin.child.dev");
+    const session = await openResolution({ cwd: childDir });
+    expect(session?.runtime.plugins?.myplugin).toBeDefined();
+    expect(session?.runtime.plugins?.myplugin?.url).toBe("https://myplugin.child.dev");
   });
 
   it("does not throw when extends targets app.auth missing from parent config", async () => {
@@ -171,9 +172,9 @@ describe("asComposableEntry handles undefined parent entries", () => {
     );
 
     resetConfigPathCache();
-    const loaded = await loadResolvedConfig({ cwd: authChildDir });
-    expect(loaded).not.toBeNull();
-    expect(loaded?.config.app?.auth?.name).toBe("auth-plugin");
-    expect(loaded?.config.app?.auth?.production).toBe("https://auth.authchild.dev");
+    const session = await openResolution({ cwd: authChildDir });
+    expect(session).not.toBeNull();
+    expect(session?.config.app?.auth?.name).toBe("auth-plugin");
+    expect(session?.config.app?.auth?.production).toBe("https://auth.authchild.dev");
   });
 });

@@ -4,9 +4,9 @@ import { join, resolve } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildInitPatterns, copyFilteredFiles, personalizeConfig } from "../../src/cli/init";
-import { loadResolvedConfig } from "../../src/config";
 import { makeProjectEnv } from "../../src/env/project-env";
 import { InfraMaterializer, InfraMaterializerLive } from "../../src/infra/materializer";
+import { openResolution } from "../../src/resolution/session";
 import type { RuntimeConfig } from "../../src/types";
 
 async function materialize(targetDir: string, runtime: RuntimeConfig): Promise<void> {
@@ -55,15 +55,15 @@ describe("bos init - relative directory", () => {
       workspaceOpts: { sourceDir: REPO_ROOT },
     });
 
-    const loaded = await loadResolvedConfig({ cwd: targetDir });
-    expect(loaded?.config.account).toBe("testing.near");
-    expect(loaded?.config.domain).toBe("testing.com");
+    const session = await openResolution({ cwd: targetDir });
+    expect(session?.config.account).toBe("testing.near");
+    expect(session?.config.domain).toBe("testing.com");
 
-    if (!loaded?.runtime) {
+    if (!session?.runtime) {
       throw new Error("Expected runtime config to be available");
     }
 
-    await materialize(targetDir, loaded.runtime);
+    await materialize(targetDir, session.runtime);
     await Effect.runPromise(makeProjectEnv().ensureFile(targetDir));
 
     expect(existsSync(join(targetDir, "bos.config.json"))).toBe(true);
