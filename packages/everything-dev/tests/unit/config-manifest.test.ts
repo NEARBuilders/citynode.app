@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildRuntimeConfig } from "../../src/config";
 import { configInputToDescriptor, toConfigInput } from "../../src/descriptor/resolve";
 import { mergeBosConfigWithExtends } from "../../src/merge";
 import { BosConfigSchema } from "../../src/types";
+import { clearSlotVersionCache } from "../../src/version-manifest-resolve";
 
 const configWithPins = {
   account: "v1.citynode.near",
@@ -130,5 +133,117 @@ describe("config slot `pin`", () => {
     const merged = mergeBosConfigWithExtends(parent, child);
     expect(merged.plugins?.auth?.pin).toBeUndefined();
     expect(merged.plugins?.apps).toBeUndefined();
+  });
+});
+
+describe("auth mirror version-manifest derivation", () => {
+  const sri = (content: string) =>
+    `sha384-${createHash("sha384").update(content).digest("base64")}`;
+
+  const makeManifest = (entry: string) => ({
+    version: "8f3ac1d2feedbeef",
+    builtAt: "2026-09-30T12:00:00.000Z",
+    entry,
+    entryIntegrity: "sha384-entry",
+    ssr: { entry: `remoteEntry.server.${entry}`, integrity: "sha384-ssr" },
+  });
+
+  const slots = {
+    host: { base: "https://cdn.mirror.test/host", entry: "remoteEntry.host.js" },
+    ui: { base: "https://cdn.mirror.test/ui", entry: "remoteEntry.ui.js" },
+    api: { base: "https://cdn.mirror.test/api", entry: "remoteEntry.api.js" },
+    auth: { base: "https://cdn.mirror.test/auth", entry: "remoteEntry.auth.js" },
+    authUi: { base: "https://cdn.mirror.test/auth-ui", entry: "remoteEntry.auth-ui.js" },
+  };
+
+  const bodies = new Map<string, string>(
+    Object.values(slots).map((slot) => [
+      `${slot.base}/versions/${slot.entry}.json`,
+      JSON.stringify(makeManifest(slot.entry)),
+    ]),
+  );
+
+  const authMirrorConfig = BosConfigSchema.parse({
+    account: "mirror.near",
+    domain: "mirror.dev",
+    app: {
+      host: {
+        development: "local:host",
+        production: `${slots.host.base}/`,
+        pin: {
+          manifest: `versions/${slots.host.entry}.json`,
+          integrity: sri(bodies.get(`${slots.host.base}/versions/${slots.host.entry}.json`)!),
+        },
+      },
+      ui: {
+        development: "local:ui",
+        production: `${slots.ui.base}/`,
+        pin: {
+          manifest: `versions/${slots.ui.entry}.json`,
+          integrity: sri(bodies.get(`${slots.ui.base}/versions/${slots.ui.entry}.json`)!),
+        },
+      },
+      api: {
+        development: "local:api",
+        production: `${slots.api.base}/`,
+        pin: {
+          manifest: `versions/${slots.api.entry}.json`,
+          integrity: sri(bodies.get(`${slots.api.base}/versions/${slots.api.entry}.json`)!),
+        },
+      },
+      auth: {
+        name: "@everything-dev/auth-plugin",
+        development: "local:plugins/auth",
+        production: `${slots.auth.base}/`,
+        pin: {
+          manifest: `versions/${slots.auth.entry}.json`,
+          integrity: sri(bodies.get(`${slots.auth.base}/versions/${slots.auth.entry}.json`)!),
+        },
+        ui: {
+          name: "auth-ui",
+          development: "local:plugins/auth/ui",
+          production: `${slots.authUi.base}/`,
+          pin: {
+            manifest: `versions/${slots.authUi.entry}.json`,
+            integrity: sri(bodies.get(`${slots.authUi.base}/versions/${slots.authUi.entry}.json`)!),
+          },
+        },
+      },
+    },
+  });
+
+  beforeEach(() => {
+    clearSlotVersionCache();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        const body = bodies.get(String(input));
+        if (body === undefined) return new Response("nope", { status: 404 });
+        return new Response(body, { status: 200 });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("stamps the synthesized plugins.auth mirror and its ui from the same version manifests as app.auth", async () => {
+    const runtime = await buildRuntimeConfig(authMirrorConfig, process.cwd(), "production");
+
+    expect(runtime.plugins?.auth).toBeDefined();
+    expect(runtime.auth).toBeDefined();
+    expect(runtime.plugins?.auth?.entryUrl).toBe(runtime.auth?.entryUrl);
+    expect(runtime.plugins?.auth?.entryUrl).toBe(`${slots.auth.base}/${slots.auth.entry}`);
+    expect(runtime.plugins?.auth?.integrity).toBe(runtime.auth?.integrity);
+    expect(runtime.plugins?.auth?.integrity).toBe("sha384-entry");
+
+    expect(runtime.plugins?.auth?.ui?.entryUrl).toBe(runtime.auth?.ui?.entryUrl);
+    expect(runtime.plugins?.auth?.ui?.entryUrl).toBe(`${slots.authUi.base}/${slots.authUi.entry}`);
+    expect(runtime.plugins?.auth?.ui?.ssrEntryUrl).toBe(runtime.auth?.ui?.ssrEntryUrl);
+    expect(runtime.plugins?.auth?.ui?.ssrEntryUrl).toBe(
+      `${slots.authUi.base}/remoteEntry.server.${slots.authUi.entry}`,
+    );
+    expect(runtime.plugins?.auth?.ui?.ssrIntegrity).toBe(runtime.auth?.ui?.ssrIntegrity);
   });
 });

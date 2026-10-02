@@ -383,7 +383,7 @@ export async function openResolution(
           collectCatalogs,
           registerCleanup: (fn) => cleanups.push(fn),
           visit: async (link) => {
-            if (rawConfig === undefined) {
+            if (link.ref === dispatch.entry) {
               rawConfig = link.config;
             }
             if (!collectCatalogs) return;
@@ -456,15 +456,22 @@ export async function walkExtendsChain(
 ): Promise<{ chain: string[]; config: BosConfigInput }> {
   const baseDir = entry.startsWith("bos://") ? process.cwd() : dirname(entry);
   const chain: string[] = [];
-  const config = await walkExtends(entry, baseDir, new Set(), chain, {
-    env: options.env ?? "development",
-    registry: options.registry,
-    io: resolveIo(options.io),
-    collectCatalogs: options.collectCatalogs === true,
-    visit: options.visit,
-    registerCleanup: options.registerCleanup,
-  });
-  return { chain, config };
+  const ownedCleanups: Array<() => Promise<void>> = [];
+  try {
+    const config = await walkExtends(entry, baseDir, new Set(), chain, {
+      env: options.env ?? "development",
+      registry: options.registry,
+      io: resolveIo(options.io),
+      collectCatalogs: options.collectCatalogs === true,
+      visit: options.visit,
+      registerCleanup: options.registerCleanup ?? ((fn) => ownedCleanups.push(fn)),
+    });
+    return { chain, config };
+  } finally {
+    for (const cleanup of [...ownedCleanups].reverse()) {
+      await cleanup();
+    }
+  }
 }
 
 /**
