@@ -60,7 +60,6 @@ describe("bos init — structure", () => {
 
     expect(existsSync(join(testDir, "plugins/registry"))).toBe(true);
     expect(existsSync(join(testDir, "plugins/example"))).toBe(false);
-    expect(existsSync(join(testDir, "plugins/example"))).toBe(false);
 
     expect(existsSync(join(testDir, "host"))).toBe(false);
     expect(existsSync(join(testDir, "packages"))).toBe(false);
@@ -80,7 +79,6 @@ describe("bos init — structure", () => {
       });
 
       expect(existsSync(join(selectedDir, "plugins", "registry"))).toBe(true);
-      expect(existsSync(join(selectedDir, "plugins", "example"))).toBe(false);
       expect(existsSync(join(selectedDir, "plugins", "example"))).toBe(false);
     } finally {
       rmSync(selectedDir, { recursive: true, force: true });

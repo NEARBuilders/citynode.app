@@ -6,8 +6,9 @@ import { verifySriForUrl } from "everything-dev/integrity";
 import {
   type ConstructedTree,
   type ConstructInput,
+  type EntrySlot,
+  entryUrls,
   type RouteConfigModule,
-  resolveEntryUrlForEnv,
   UI_EXPOSES,
   UI_REMOTE_SERVER_ENTRY_FILENAME,
 } from "everything-dev/ui/manifest";
@@ -188,7 +189,7 @@ const LOCAL_CONTAINER_READY_TIMEOUT_MS = 120_000;
 export async function localUiRemoteEntry(source: {
   name: string;
   localRoot: string;
-}): Promise<UiRemoteEntry> {
+}): Promise<EntrySlot> {
   let server = localDistServers.get(source.localRoot);
   if (!server) {
     server = await startLocalDistServer(path.join(source.localRoot, "dist"));
@@ -200,7 +201,6 @@ export async function localUiRemoteEntry(source: {
     : "pending";
   return {
     name: source.name,
-    env: "development",
     localPath: source.localRoot,
     ssrUrl: `${server.baseUrl}/ssr`,
     containerVersion,
@@ -208,9 +208,15 @@ export async function localUiRemoteEntry(source: {
 }
 
 export const waitForLocalContainer = Effect.fn("waitForLocalContainer")(function* (
-  entry: UiRemoteEntry,
+  entry: EntrySlot,
+  env: string,
 ): Effect.fn.Return<void, Error> {
-  const containerUrl = ssrEntryUrlOf(entry);
+  const containerUrl = entryUrls(entry, env).ssr;
+  if (!containerUrl) {
+    return yield* Effect.fail(
+      new Error(`${entry.name} SSR container has no entry URL — no local dist server`),
+    );
+  }
   let announced = false;
   const check = Effect.tryPromise({
     try: async (signal) => {
@@ -275,34 +281,6 @@ async function verifySsrEntryIntegrity(entryUrl: string, expectedIntegrity: stri
   });
   enforceCacheLimit(verifiedSsrEntryCache, MAX_SSR_INTEGRITY_CACHE_SIZE);
   return verification;
-}
-
-function getSsrEntryUrl(config: RuntimeConfig) {
-  if (config.ui.ssrEntryUrl) {
-    // derived (content-hashed, no cache-buster) — the pinned path
-    return config.ui.ssrEntryUrl;
-  }
-  const ssrUrl = config.ui.ssrUrl;
-  if (!ssrUrl) {
-    throw new FederationError({
-      remoteName: config.ui.name,
-      cause: new Error(
-        "SSR URL not configured in production. Set app.ui.ssr in bos.config.json to enable SSR.",
-      ),
-    });
-  }
-
-  const entryUrl = resolveEntryUrlForEnv({
-    env: config.env,
-    devFixed: `${ssrUrl.replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`,
-    slot: config.ui.name,
-  });
-  if (config.env === "development") {
-    return config.ui.ssrIntegrity
-      ? `${entryUrl}?v=${encodeURIComponent(config.ui.ssrIntegrity)}`
-      : entryUrl;
-  }
-  return entryUrl;
 }
 
 const retrySchedule = Schedule.addDelay(Schedule.recurs(5), () => Effect.succeed(500));
@@ -405,53 +383,6 @@ function loadRemoteExpose<T>(params: RemoteModuleLoad<T>): Promise<T> {
   return value;
 }
 
-/**
- * A ui source's deployment identity on the SSR side: the MF container name
- * plus its server entry. Local dev sources import from disk instead.
- */
-export interface UiRemoteEntry {
-  name: string;
-  /** the config's environment — gates the fixed-name dev fallback */
-  env?: string;
-  ssrUrl?: string;
-  ssrIntegrity?: string;
-  /** the content-hashed SSR entry URL (version-manifest derived) — preferred
-   * over appending the fixed dev name to `ssrUrl` */
-  ssrEntryUrl?: string;
-  /** Source workspace of the ui surface (local dev target only). */
-  localPath?: string;
-  /** Dev-only freshness token — the built container's mtime. Cache-busts rebuilds. */
-  containerVersion?: string;
-}
-
-function ssrEntryUrlOf(entry: UiRemoteEntry): string {
-  if (!entry.ssrUrl && !entry.ssrEntryUrl) {
-    throw new FederationError({
-      remoteName: entry.name,
-      remoteUrl: entry.localPath,
-      cause: new Error(
-        `Ui source "${entry.name}" has no SSR entry URL — set the ui ssr field in production, or run the dev stack with --ssr`,
-      ),
-    });
-  }
-  // a manifest-derived ssrEntryUrl is content-hashed — no cache-buster; the
-  // fixed name is the dev contract (dev servers serve exactly that name)
-  const entryUrl = resolveEntryUrlForEnv({
-    entryUrl: entry.ssrEntryUrl,
-    env: entry.env,
-    devFixed: `${(entry.ssrUrl ?? "").replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`,
-    slot: entry.name,
-  });
-  if (entry.ssrEntryUrl) return entryUrl;
-  if (entry.ssrIntegrity) {
-    return `${entryUrl}?v=${encodeURIComponent(entry.ssrIntegrity)}`;
-  }
-  if (entry.containerVersion) {
-    return `${entryUrl}?v=${encodeURIComponent(entry.containerVersion)}`;
-  }
-  return entryUrl;
-}
-
 function verifyEntryIntegrity(params: {
   remoteName: string;
   remoteUrl?: string;
@@ -472,7 +403,7 @@ function verifyEntryIntegrity(params: {
   });
 }
 
-function verifyUiEntry(entry: UiRemoteEntry, entryUrl: string) {
+function verifyUiEntry(entry: EntrySlot, entryUrl: string) {
   return verifyEntryIntegrity({
     remoteName: entry.name,
     remoteUrl: entry.ssrUrl,
@@ -481,15 +412,30 @@ function verifyUiEntry(entry: UiRemoteEntry, entryUrl: string) {
   });
 }
 
+function requireSsrEntryUrl(entry: EntrySlot, env: string): string {
+  const ssr = entryUrls(entry, env).ssr;
+  if (!ssr) {
+    throw new FederationError({
+      remoteName: entry.name,
+      remoteUrl: entry.localPath ?? entry.ssrUrl,
+      cause: new Error(
+        `Ui source "${entry.name}" has no SSR entry URL — set the ui ssr field in production, or run the dev stack with --ssr`,
+      ),
+    });
+  }
+  return ssr;
+}
+
 function loadUiExpose<T>(params: {
-  entry: UiRemoteEntry;
+  entry: EntrySlot;
+  env: string;
   expose: string;
   unwrapDefault: boolean;
   timeoutLabel: string;
 }) {
-  const { entry, expose, unwrapDefault, timeoutLabel } = params;
+  const { entry, env, expose, unwrapDefault, timeoutLabel } = params;
   return Effect.gen(function* () {
-    const entryUrl = ssrEntryUrlOf(entry);
+    const entryUrl = requireSsrEntryUrl(entry, env);
     yield* verifyUiEntry(entry, entryUrl);
     const cacheKey = `${entry.name}::${entryUrl}::${entry.ssrIntegrity ?? "no-integrity"}::${expose}`;
     return yield* Effect.tryPromise({
@@ -517,9 +463,10 @@ function loadUiExpose<T>(params: {
 }
 
 /** A plugin ui's generated import map (`./routeConfig` expose) for host construction. */
-export const loadUiRouteConfig = (entry: UiRemoteEntry) =>
+export const loadUiRouteConfig = (entry: EntrySlot, env: string) =>
   loadUiExpose<RouteConfigModule>({
     entry,
+    env,
     expose: UI_EXPOSES.routeConfig,
     unwrapDefault: false,
     timeoutLabel: "Ui routeConfig",
@@ -543,27 +490,29 @@ export interface ComposeModule {
 }
 
 /** The core ui's construction engine (`./compose` expose) — executes inside the core's module graph. */
-export const loadUiComposeModule = (entry: UiRemoteEntry) =>
+export const loadUiComposeModule = (entry: EntrySlot, env: string) =>
   loadUiExpose<ComposeModule>({
     entry,
+    env,
     expose: UI_EXPOSES.compose,
     unwrapDefault: false,
     timeoutLabel: "Ui compose",
   });
 
 /** The core ui's generated import map (`./routeConfig` expose). */
-export const loadCoreUiRouteConfig = (entry: UiRemoteEntry) =>
+export const loadCoreUiRouteConfig = (entry: EntrySlot, env: string) =>
   loadUiExpose<RouteConfigModule>({
     entry,
+    env,
     expose: UI_EXPOSES.routeConfig,
     unwrapDefault: false,
     timeoutLabel: "Ui routeConfig",
   });
 
-export const loadRouterModule = (config: RuntimeConfig, localEntry?: UiRemoteEntry) =>
+export const loadRouterModule = (config: RuntimeConfig, localEntry?: EntrySlot) =>
   Effect.gen(function* () {
     const useCache = shouldCacheRouterModule(config) && !localEntry;
-    const ssrEntryUrl = localEntry ? ssrEntryUrlOf(localEntry) : getSsrEntryUrl(config);
+    const ssrEntryUrl = requireSsrEntryUrl(localEntry ?? config.ui, config.env);
     const ssrIntegrity = localEntry ? localEntry.ssrIntegrity : config.ui.ssrIntegrity;
 
     if (ssrIntegrity) {

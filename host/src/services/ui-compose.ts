@@ -21,13 +21,13 @@ import {
   type ComposePayload,
   type ConstructedTree,
   digestOf,
+  type EntrySlot,
+  entryUrls,
   MANIFEST_FILENAME,
   type NavManifest,
   type PluginManifest,
   PluginManifestSchema,
   type RouteConfigModule,
-  resolveEntryUrlForEnv,
-  UI_REMOTE_ENTRY_FILENAME,
 } from "everything-dev/ui/manifest";
 import type { RouterModule } from "../types";
 import { logger } from "../utils/logger";
@@ -40,7 +40,6 @@ import {
   loadUiRouteConfig,
   localUiRemoteEntry,
   resolveLocalRoot,
-  type UiRemoteEntry,
   waitForLocalContainer,
 } from "./federation.server";
 
@@ -65,23 +64,16 @@ export interface ComposedUi {
 interface UiSource {
   key: string;
   mfName: string;
-  remote?: UiRemoteEntry;
+  remote?: EntrySlot;
   localRoot?: string;
   manifestUrl?: string;
   /** the MF browser manifest URL (mf-manifest.json — hashed when the slot
    * pins a version manifest); rides the compose payload for hydrate-time
    * remote registration */
   browserManifestUrl?: string;
-  /** client-side web entry (browser remoteEntry.js) — the publicUrl base
-   * when the runtime declares one (image-native /bundles), else the url */
+  /** client-side web entry (browser remoteEntry.js) */
   webEntry?: string;
 }
-
-/** Browser-facing base for a ui surface: publicUrl declares the
- * browser-reachable base (image-native /bundles slots); url is the
- * server-side loading base and the fallback. */
-const browserUiBase = (ui: { url: string; publicUrl?: string | undefined }): string =>
-  (ui.publicUrl ?? ui.url).replace(/\/$/, "");
 
 /**
  * SSR availability: a production SSR entry, or a local core ui with SSR
@@ -94,13 +86,13 @@ export function isSsrAvailable(config: RuntimeConfig): boolean {
 }
 
 export function uiSources(config: RuntimeConfig): UiSource[] {
+  const coreUrls = entryUrls(config.ui, config.env);
   const sources: UiSource[] = [
     {
       key: CORE_UI_KEY,
       mfName: config.ui.name,
       remote: {
         name: config.ui.name,
-        env: config.env,
         ssrUrl: config.ui.ssrUrl,
         ssrIntegrity: config.ui.ssrIntegrity,
         ssrEntryUrl: config.ui.ssrEntryUrl,
@@ -114,13 +106,8 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
         config.ui.source === "local"
           ? undefined
           : `${config.ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      browserManifestUrl: config.ui.source === "local" ? undefined : config.ui.entry,
-      webEntry: resolveEntryUrlForEnv({
-        entryUrl: config.ui.entryUrl,
-        env: config.env,
-        devFixed: `${browserUiBase(config.ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
-        slot: CORE_UI_KEY,
-      }),
+      browserManifestUrl: coreUrls.browserManifest,
+      webEntry: coreUrls.web,
     },
   ];
   for (const [id, plugin] of Object.entries(config.plugins ?? {})) {
@@ -132,12 +119,12 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       );
       continue;
     }
+    const urls = entryUrls(ui, config.env);
     sources.push({
       key: id,
       mfName: ui.name,
       remote: {
         name: ui.name,
-        env: config.env,
         ssrUrl: ui.ssrUrl,
         ssrIntegrity: ui.ssrIntegrity,
         ssrEntryUrl: ui.ssrEntryUrl,
@@ -145,16 +132,8 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       },
       localRoot: ui.localPath ? resolveLocalRoot(ui.localPath) : undefined,
       manifestUrl: `${ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      // a local slot's `entry` is the relative client convention ("/mf-manifest.json") —
-      // resolving it as a registration manifest fetches the WRONG container (the page
-      // origin's) and breaks the compose; dev derives from webEntry instead (atomic-deploys 08)
-      browserManifestUrl: ui.source === "local" ? undefined : ui.entry,
-      webEntry: resolveEntryUrlForEnv({
-        entryUrl: ui.entryUrl,
-        env: config.env,
-        devFixed: `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
-        slot: id,
-      }),
+      browserManifestUrl: urls.browserManifest,
+      webEntry: urls.web,
     });
   }
   return sources.sort((a, b) => a.key.localeCompare(b.key));
@@ -370,11 +349,11 @@ export const composeUi = (
         )
       : core.remote!;
     if (core.localRoot) {
-      yield* waitForLocalContainer(coreEntry);
+      yield* waitForLocalContainer(coreEntry, config.env);
     }
     const [composeModule, routeConfig, routerModule] = yield* Effect.all([
-      loadUiComposeModule(coreEntry),
-      loadCoreUiRouteConfig(coreEntry),
+      loadUiComposeModule(coreEntry, config.env),
+      loadCoreUiRouteConfig(coreEntry, config.env),
       loadRouterModule(config, core.localRoot ? coreEntry : undefined),
     ]);
     compose = composeModule.constructTree;
@@ -389,10 +368,10 @@ export const composeUi = (
         const localEntry = yield* Effect.tryPromise(() =>
           localUiRemoteEntry({ name: source.mfName, localRoot: source.localRoot! }),
         );
-        yield* waitForLocalContainer(localEntry);
-        routeConfigBySource.set(source.key, yield* loadUiRouteConfig(localEntry));
+        yield* waitForLocalContainer(localEntry, config.env);
+        routeConfigBySource.set(source.key, yield* loadUiRouteConfig(localEntry, config.env));
       } else if (source.remote) {
-        routeConfigBySource.set(source.key, yield* loadUiRouteConfig(source.remote));
+        routeConfigBySource.set(source.key, yield* loadUiRouteConfig(source.remote, config.env));
       }
     }
 

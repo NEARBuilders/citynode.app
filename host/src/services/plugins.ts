@@ -2,7 +2,6 @@ import { createInstance, getInstance } from "@module-federation/enhanced/runtime
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
-import { DEV_ENTRY_FILENAME } from "every-plugin/build/artifact-names";
 import type { PluginLoadFailureInfo } from "every-plugin/errors";
 import { classifyPluginFailure, PluginRuntimeError } from "every-plugin/errors";
 import { loadRemoteWithRetry } from "every-plugin/remote-entry";
@@ -16,7 +15,7 @@ import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "eve
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
 import type { RuntimeConfig, RuntimePluginConfig, SharedConfig } from "everything-dev/types";
-import { resolveEntryUrlForEnv } from "everything-dev/ui/manifest";
+import { type EntrySlot, entryUrls } from "everything-dev/ui/manifest";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
 import { maskDbUrl } from "../utils/mask-db-url";
@@ -70,20 +69,14 @@ function dbUrlSummary(url: string | undefined): string {
 }
 
 /**
- * The URL the federation runtime registers and loads a remote from: a
- * pin-derived (content-hashed) entry when the slot has one, the fixed dev
- * name in development. Registration must resolve through this too — the
- * runtime's own URL normalization appends the dev-only fixed name otherwise,
- * 404ing against hashed-only dists.
+ * The slot the federation runtime registers and loads a remote from —
+ * resolution errors name the CONFIG KEY (e.g. "plugins.apps"), not the MF
+ * container name.
  */
-export function remoteEntryUrlOf(config: RuntimePluginConfig, env: string, slot: string): string {
-  return resolveEntryUrlForEnv({
-    entryUrl: config.entryUrl,
-    env,
-    devFixed: `${config.url.replace(/\/$/, "")}/${DEV_ENTRY_FILENAME}`,
-    slot,
-  });
-}
+const pluginSlot = (config: RuntimePluginConfig, key: string): EntrySlot => ({
+  ...config,
+  name: key,
+});
 
 export interface InitializedPluginResult {
   effectContext: unknown;
@@ -423,7 +416,7 @@ function loadPluginEntryEffect(
     const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
-    const remoteUrl = remoteEntryUrlOf(entry.config, env, entry.key);
+    const remoteUrl = entryUrls(pluginSlot(entry.config, entry.key), env).web;
     const result = yield* loadRemoteWithRetry<Omit<HostPluginEntry, "key" | "name">>({
       label: entry.key,
       remoteUrl,
@@ -563,7 +556,7 @@ export const initializePlugins = Effect.gen(function* () {
       const runtime = createPluginRuntime({
         registry: Object.fromEntries(
           allEntries.map((entry) => {
-            const remoteUrl = remoteEntryUrlOf(entry.config, config.env, entry.key);
+            const remoteUrl = entryUrls(pluginSlot(entry.config, entry.key), config.env).web;
             return [entry.runtimeId, { remote: remoteUrl }];
           }),
         ),

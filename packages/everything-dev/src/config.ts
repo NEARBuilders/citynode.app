@@ -1016,6 +1016,7 @@ async function deriveVersionManifestFields(
     if (!ui) return;
     ui.entryUrl = r.entryUrl;
     ui.entry = r.browserManifestUrl ?? ui.entry;
+    ui.browserManifestUrl = r.browserManifestUrl;
     ui.integrity = r.entryIntegrity;
     ui.ssrEntryUrl = r.ssrEntryUrl;
     ui.ssrIntegrity = r.ssrIntegrity ?? ui.ssrIntegrity;
