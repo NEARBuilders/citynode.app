@@ -116,7 +116,12 @@ export const TenantSchema = z.object({
 
 export type Tenant = z.infer<typeof TenantSchema>;
 
-export const PublicTenantSchema = TenantSchema.omit({ ownerUserId: true });
+export const PublicTenantSchema = TenantSchema.omit({
+  ownerUserId: true,
+  allowUiOverrides: true,
+  allowBackendOverrides: true,
+  allowSsr: true,
+});
 
 export type PublicTenant = z.infer<typeof PublicTenantSchema>;
 

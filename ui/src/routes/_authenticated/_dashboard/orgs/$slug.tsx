@@ -155,6 +155,7 @@ function OrganizationDetail() {
     }).data ?? [];
   const myMembership = members.find((member) => member.userId === session?.user?.id);
   const canManageMembers = myMembership?.role === "owner" || myMembership?.role === "admin";
+  const canViewSettings = canManageMembers || session?.user?.role === "admin";
   const isOwner = myMembership?.role === "owner";
   const workspace = useTeamWorkspace(isActive).data;
   const canOrganize =
@@ -200,7 +201,11 @@ function OrganizationDetail() {
     },
     onError: (error: Error) => toast.error(error.message || "Failed to export emails"),
   });
-  const activeTab = requestedTab === "onboard" && !canOrganize ? "members" : requestedTab;
+  const activeTab =
+    (requestedTab === "onboard" && !canOrganize) ||
+    (["node-config", "homepage"].includes(requestedTab) && !canViewSettings)
+      ? "members"
+      : requestedTab;
   const setActiveTab = (value: unknown) => {
     if (!isOrganizationTab(value) || value === activeTab) return;
     void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
@@ -319,12 +324,16 @@ function OrganizationDetail() {
             <TabsTrigger value="apikeys" data-testid="orgs-tab-apikeys">
               API keys <TabCount value={apiKeys.length} />
             </TabsTrigger>
-            <TabsTrigger value="node-config" data-testid="orgs-tab-node-config">
-              Community
-            </TabsTrigger>
-            <TabsTrigger value="homepage" data-testid="orgs-tab-homepage">
-              Homepage
-            </TabsTrigger>
+            {canViewSettings && (
+              <TabsTrigger value="node-config" data-testid="orgs-tab-node-config">
+                Community
+              </TabsTrigger>
+            )}
+            {canViewSettings && (
+              <TabsTrigger value="homepage" data-testid="orgs-tab-homepage">
+                Homepage
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
         <MembersTab
@@ -394,24 +403,28 @@ function OrganizationDetail() {
           onDelete={(keyId) => deleteApiKeyMutation.mutate(keyId)}
           onDismiss={() => setCreatedApiKey(null)}
         />
-        <TabsContent value="node-config" className="flex flex-col gap-6 pt-6">
-          <NodeConfigTab
-            orgId={orgId}
-            gatewayId={gatewayId}
-            baseAccount={baseAccount}
-            canManage={canManageMembers}
-            isPlatformAdmin={session?.user?.role === "admin"}
-          />
-        </TabsContent>
-        <TabsContent value="homepage" className="flex flex-col gap-6 pt-6">
-          <HomepageTab
-            orgId={orgId}
-            gatewayId={gatewayId}
-            baseAccount={baseAccount}
-            canManage={canManageMembers}
-            isActive={isActive}
-          />
-        </TabsContent>
+        {canViewSettings && (
+          <TabsContent value="node-config" className="flex flex-col gap-6 pt-6">
+            <NodeConfigTab
+              orgId={orgId}
+              gatewayId={gatewayId}
+              baseAccount={baseAccount}
+              canManage={canViewSettings}
+              isPlatformAdmin={session?.user?.role === "admin"}
+            />
+          </TabsContent>
+        )}
+        {canViewSettings && (
+          <TabsContent value="homepage" className="flex flex-col gap-6 pt-6">
+            <HomepageTab
+              orgId={orgId}
+              gatewayId={gatewayId}
+              baseAccount={baseAccount}
+              canManage={canViewSettings}
+              isActive={isActive}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </PageContainer>
   );

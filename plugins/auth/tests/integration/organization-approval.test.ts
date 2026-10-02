@@ -1,6 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema";
+import { DEFAULT_TEAMS } from "../../src/default-teams";
+import { parseTeamAreas } from "../../src/utils";
 import { createTestHandlers, createTestOrg, createTestServices, createTestUser } from "../helpers";
 
 let setup: Awaited<ReturnType<typeof createTestServices>>;
@@ -152,6 +154,26 @@ describe("organization approval gate", () => {
       context: { reqHeaders: admin.reqHeaders },
     });
     expect(approved).toMatchObject({ status: "active", rejectionReason: null });
+    const teams = await setup.services.db.query.team.findMany({
+      where: eq(schema.team.organizationId, organization.id),
+    });
+    expect(
+      teams.map((team) => ({ name: team.name, areas: parseTeamAreas(team.metadata) })),
+    ).toEqual(
+      expect.arrayContaining(
+        DEFAULT_TEAMS.map((team) => ({ name: team.name, areas: [...team.areas] })),
+      ),
+    );
+    expect(teams).toHaveLength(3);
+    expect(
+      await setup.services.db.query.teamMember.findMany({
+        where: (member, { inArray }) =>
+          inArray(
+            member.teamId,
+            teams.map((team) => team.id),
+          ),
+      }),
+    ).toHaveLength(0);
     expect(
       await setup.services.db.query.member.findFirst({
         where: and(

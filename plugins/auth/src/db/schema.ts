@@ -138,6 +138,10 @@ export const organization = pgTable(
     status: text("status").$type<"active" | "pending" | "rejected">().default("active").notNull(),
     requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
     rejectionReason: text("rejection_reason"),
+    defaultTeamsProvisionedAt: timestamp("default_teams_provisioned_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
   },
   (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
 );
