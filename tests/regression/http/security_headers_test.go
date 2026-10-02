@@ -124,10 +124,10 @@ func TestRateLimiting(t *testing.T) {
 	const perWorker = 15
 
 	var (
-		mu                 sync.Mutex
-		got200, got429     bool
-		lastRateLimitBody  string
-		wg                 sync.WaitGroup
+		mu                sync.Mutex
+		got200, got429    bool
+		lastRateLimitBody string
+		wg                sync.WaitGroup
 	)
 
 	// Use a plain client (no cookie jar) per worker; http.Client is safe for
@@ -138,7 +138,7 @@ func TestRateLimiting(t *testing.T) {
 			defer wg.Done()
 			plain := &http.Client{}
 			for i := 0; i < perWorker; i++ {
-				resp, err := plain.Get(baseURL + "/health")
+				resp, err := plain.Get(baseURL + "/api/ping")
 				if err != nil {
 					continue
 				}
@@ -167,9 +167,11 @@ func TestRateLimiting(t *testing.T) {
 	if !strings.Contains(lastRateLimitBody, "Too many requests") {
 		t.Fatalf("expected rate-limit JSON body, got: %q", lastRateLimitBody)
 	}
+	status, _, body := regtest.GetRaw(t, client, baseURL+"/health")
+	regtest.MustStatus(t, status, 200, body)
 
 	// After the sliding window passes the server must recover.
 	time.Sleep(1200 * time.Millisecond)
-	status, _, body := regtest.GetRaw(t, client, baseURL+"/health")
+	status, _, body = regtest.GetRaw(t, client, baseURL+"/api/ping")
 	regtest.MustStatus(t, status, 200, body)
 }
