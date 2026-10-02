@@ -7,7 +7,7 @@ import sirv from "sirv";
 import { DEV_ENTRY_FILENAME } from "../build/artifact-names";
 import { ensureGeneratedRspackConfig } from "../build/rspack/generated-config";
 import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
-import { ensureGeneratedUiRsbuildConfig } from "../build/ui/generated-config";
+import { ensureGeneratedUiRsbuildConfig, pluginLayoutKey } from "../build/ui/generated-config";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
 import { loadRemoteWithRetry } from "../remote-entry";
 import { killChildEscalating, watchParentDeath } from "./watch-kill";
@@ -104,6 +104,14 @@ export interface PluginDevServerHandle {
   close: () => Promise<void>;
 }
 
+/**
+ * The dev server's plugin id — derived from the workspace package.json
+ * through the canonical identity normalizers. plugin.dev.ts no longer
+ * carries a pluginId field: the MF registry key must normalize to exactly
+ * the remote name the built container declares.
+ */
+export const resolveDevPluginId = (cwd: string): string => getPluginInfo(cwd).normalizedName;
+
 export async function startPluginDevServer(
   options: PluginDevServeOptions = {},
 ): Promise<PluginDevServerHandle> {
@@ -111,7 +119,8 @@ export async function startPluginDevServer(
   const cwd = options.cwd ?? process.cwd();
   const pluginInfo = getPluginInfo(cwd);
   const devConfig = loadDevConfig(path.join(cwd, "plugin.dev.ts"));
-  const pluginId = devConfig?.pluginId || pluginInfo.normalizedName;
+  const pluginId = resolveDevPluginId(cwd);
+  const compositionKey = pluginLayoutKey(cwd) ?? pluginId;
   const port = options.port ?? (Number(process.env.PORT) || devConfig?.port || 3999);
   const rpcPrefix = normalizePrefix(devConfig?.prefix);
   const rpcBase = `/api/rpc${rpcPrefix}`;
@@ -341,7 +350,7 @@ export async function startPluginDevServer(
       const { formatORPCError } = await import("../errors");
 
       const runtimeConfig = readRuntimeConfigFromEnv();
-      const { siblings, dependsOn } = collectSiblingRemotes(runtimeConfig, pluginId);
+      const { siblings, dependsOn } = collectSiblingRemotes(runtimeConfig, compositionKey);
 
       if (dependsOn.length > 0) {
         console.log(`🔗 Loading sibling plugin(s): ${dependsOn.join(", ")}`);

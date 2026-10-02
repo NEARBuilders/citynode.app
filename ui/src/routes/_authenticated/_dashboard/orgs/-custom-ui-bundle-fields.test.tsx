@@ -16,7 +16,7 @@ vi.mock("@/app", async () => {
   const actual = await vi.importActual<typeof import("@/app")>("@/app");
   return {
     ...actual,
-    useApiClient: () => ({ apps: { getRegistryApp: harness.getRegistryApp } }),
+    useApiClient: () => ({ registry: { getRegistryApp: harness.getRegistryApp } }),
   };
 });
 

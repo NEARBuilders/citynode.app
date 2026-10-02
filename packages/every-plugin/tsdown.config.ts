@@ -8,6 +8,7 @@ const SHEBANG = "#!/usr/bin/env bun\n";
 export default defineConfig({
   entry: [
     "src/index.ts",
+    "src/identity.ts",
     "src/types.ts",
     "src/errors.ts",
     "src/remote-entry.ts",

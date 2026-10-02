@@ -39,7 +39,7 @@ Visit http://localhost:3003 (UI), http://localhost:3001 (API), and http://localh
 
 Business logic lives in independent plugins. A plugin entry in `bos.config.json` can be **remote-only** (no `development: local:…` key) — the host/API consume it via `pluginsClient` and HTTP, and types resolve from the deployed manifest. Plugin source does not need to live in this repo.
 
-- **`plugins/apps/`** — Registry/discovery, FastKV app metadata (local in dev)
+- **`plugins/registry/`** — Registry/discovery, FastKV app metadata (local in dev)
 - **`plugins/_template/`** — Scaffold for new plugins
 - **Auth** — Extended remote plugin from `bos://auth.everything.near` (Better-Auth, NEAR SIWN, organizations, API keys)
 - **Proposals** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`

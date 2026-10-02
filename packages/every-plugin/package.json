@@ -48,6 +48,19 @@
       "import": "./dist/testing/index.mjs",
       "require": "./dist/testing/index.cjs"
     },
+    "./identity": {
+      "bun": {
+        "types": "./src/identity.ts",
+        "import": "./src/identity.ts"
+      },
+      "development": {
+        "types": "./src/identity.ts",
+        "import": "./src/identity.ts"
+      },
+      "types": "./dist/identity.d.mts",
+      "import": "./dist/identity.mjs",
+      "require": "./dist/identity.cjs"
+    },
     "./normalize": {
       "bun": {
         "types": "./src/runtime/services/normalize.ts",
