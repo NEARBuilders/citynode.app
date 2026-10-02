@@ -6,6 +6,12 @@ import { DEV_ENTRY_FILENAME } from "every-plugin/build/artifact-names";
 import type { PluginLoadFailureInfo } from "every-plugin/errors";
 import { classifyPluginFailure, PluginRuntimeError } from "every-plugin/errors";
 import { loadRemoteWithRetry } from "every-plugin/remote-entry";
+import {
+  type HostSharedEntry,
+  mergeSharedMaps,
+  type SharedDependencyConfig,
+  toHostSharedEntry,
+} from "every-plugin/shared-deps-spec";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
@@ -179,61 +185,19 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
-function mergeSharedMaps(
-  ...maps: Array<Record<string, SharedConfig> | undefined>
-): Record<string, SharedConfig> {
-  const merged: Record<string, SharedConfig> = {};
-  for (const map of maps) {
-    if (!map) continue;
-    for (const [name, config] of Object.entries(map)) {
-      const existing = merged[name];
-      if (existing && !isSameSharedConfig(existing, config)) {
-        throw new Error(`Conflicting shared dependency "${name}" in runtime config`);
-      }
-      merged[name] = config;
-    }
-  }
-  return merged;
-}
-
-function normalizeSharedConfig(config: SharedConfig): Record<string, unknown> {
-  return {
-    version: config.version,
-    requiredVersion: config.requiredVersion ?? false,
-    singleton: config.singleton ?? false,
-    strictVersion: config.strictVersion ?? false,
-    eager: config.eager ?? false,
-    shareScope: config.shareScope ?? "default",
-  };
-}
-
-function isSameSharedConfig(a: SharedConfig, b: SharedConfig): boolean {
-  const left = normalizeSharedConfig(a);
-  const right = normalizeSharedConfig(b);
-  return (
-    left.version === right.version &&
-    left.requiredVersion === right.requiredVersion &&
-    left.singleton === right.singleton &&
-    left.strictVersion === right.strictVersion &&
-    left.eager === right.eager &&
-    left.shareScope === right.shareScope
+/**
+ * Normalized, version-validated registration entries (minus `get`) for the
+ * Module Federation runtime — derived from the SharedDependencySpec's
+ * normalization policy, so config-declared shared deps cannot enter the
+ * runtime with an unresolved version ("*"/"latest") or drifted defaults.
+ */
+export function buildSharedRegistrationEntries(
+  appShared: Record<string, SharedDependencyConfig> | undefined,
+): Record<string, HostSharedEntry> {
+  if (!appShared || Object.keys(appShared).length === 0) return {};
+  return Object.fromEntries(
+    Object.entries(appShared).map(([name, config]) => [name, toHostSharedEntry(name, config)]),
   );
-}
-
-function collectPluginSharedDeps(config: RuntimeConfig): Record<string, SharedConfig> {
-  const shared: Record<string, SharedConfig> = {};
-  for (const plugin of Object.values(config.plugins ?? {})) {
-    if (plugin.shared && Object.keys(plugin.shared).length > 0) {
-      for (const [name, sharedConfig] of Object.entries(plugin.shared)) {
-        const existing = shared[name];
-        if (existing && !isSameSharedConfig(existing, sharedConfig)) {
-          throw new Error(`Conflicting shared dependency "${name}" across plugins at runtime`);
-        }
-        shared[name] = sharedConfig;
-      }
-    }
-  }
-  return shared;
 }
 
 /**
@@ -241,40 +205,18 @@ function collectPluginSharedDeps(config: RuntimeConfig): Record<string, SharedCo
  * This runs in the host scope before every-plugin initializes its own core-only MF instance.
  */
 async function registerAppSharedDeps(
-  appShared: Record<string, SharedConfig> | undefined,
+  appShared: Record<string, SharedDependencyConfig> | undefined,
 ): Promise<void> {
-  if (!appShared || Object.keys(appShared).length === 0) return;
+  const normalizedEntries = buildSharedRegistrationEntries(appShared);
+  if (Object.keys(normalizedEntries).length === 0) return;
 
-  const sharedEntries: Record<
-    string,
-    {
-      version: string;
-      shareScope: string;
-      get: () => Promise<() => unknown>;
-      shareConfig: {
-        singleton: boolean;
-        requiredVersion: string | false;
-        strictVersion: boolean;
-        eager: boolean;
-      };
-    }
-  > = {};
+  const sharedEntries: Record<string, HostSharedEntry & { get: () => Promise<() => unknown> }> = {};
 
-  for (const [name, config] of Object.entries(appShared)) {
+  for (const [name, entry] of Object.entries(normalizedEntries)) {
     try {
       // Import from host scope — this is where app-specific deps are installed
       const mod = await import(/* webpackIgnore: true */ name);
-      sharedEntries[name] = {
-        version: config.version,
-        shareScope: config.shareScope ?? "default",
-        get: () => Promise.resolve(() => mod),
-        shareConfig: {
-          singleton: config.singleton ?? false,
-          requiredVersion: config.requiredVersion ?? false,
-          strictVersion: config.strictVersion ?? false,
-          eager: config.eager ?? false,
-        },
-      };
+      sharedEntries[name] = { ...entry, get: () => Promise.resolve(() => mod) };
     } catch (error) {
       logger.error(`[Plugins] Failed to preload shared dependency ${name}: ${formatError(error)}`);
       throw new Error(
@@ -608,8 +550,14 @@ export const initializePlugins = Effect.gen(function* () {
         `[Plugins] Registry entries: ${allEntries.map((e) => `${e.key}=${e.config.url}`).join(", ") || "none"}`,
       );
 
+      const pluginSharedMaps = Object.values(config.plugins ?? {})
+        .map((plugin) => plugin.shared)
+        .filter((shared): shared is Record<string, SharedConfig> =>
+          Boolean(shared && Object.keys(shared).length > 0),
+        );
+
       await registerAppSharedDeps(
-        mergeSharedMaps(config.api.shared, config.auth?.shared, collectPluginSharedDeps(config)),
+        mergeSharedMaps(config.api.shared, config.auth?.shared, ...pluginSharedMaps),
       );
 
       const runtime = createPluginRuntime({

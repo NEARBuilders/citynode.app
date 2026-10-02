@@ -1,7 +1,6 @@
 import "dotenv/config";
 import type { PluginConfigInput } from "every-plugin";
 import bosConfig from "../../bos.config.json" with { type: "json" };
-import packageJson from "./package.json" with { type: "json" };
 import type Plugin from "./src/index";
 
 function splitList(value?: string) {
@@ -18,7 +17,6 @@ const testnetRecipient =
   process.env.TESTNET_ACCOUNT || configuredSiwn?.recipients?.testnet || bosConfig.staging?.account;
 
 export default {
-  pluginId: packageJson.name,
   port: Number(process.env.PORT) || 3002,
   config: {
     variables: {

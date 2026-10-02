@@ -3,7 +3,7 @@ export {
   isEffectCriticalSharedDep,
   type SharedDependencies,
   type SharedDependencyConfig,
-} from "../shared-deps";
+} from "../../shared-deps-spec";
 export { BuildReportPlugin } from "./build-report-plugin";
 export {
   createPluginBaseConfig,

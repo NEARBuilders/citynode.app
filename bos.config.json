@@ -165,8 +165,8 @@
         "manifest": "versions/f723bd3fa7b1d731.json"
       }
     },
-    "apps": {
-      "development": "local:plugins/apps",
+    "registry": {
+      "development": "local:plugins/registry",
       "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/apps/",
       "pin": {
         "integrity": "sha384-O9I+jdyvMoSKOdcemwodL6XeaNOhraA83G/s2Yk+ImNkuPOswxpb/jULQKmZqQ7C",

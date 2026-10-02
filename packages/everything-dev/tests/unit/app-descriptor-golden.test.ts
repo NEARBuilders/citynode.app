@@ -104,6 +104,6 @@ describe("descriptor golden fixture — bos.app.ts ↔ bos.config.json", () => {
     const child = exampleChildApp();
     delete (child as Record<string, unknown>).plugins;
     const resolved = resolveApp("example.app", { "example.app": child });
-    expect(resolved.plugins?.apps).toMatchObject({ development: "local:plugins/apps" });
+    expect(resolved.plugins?.registry).toMatchObject({ development: "local:plugins/registry" });
   });
 });
