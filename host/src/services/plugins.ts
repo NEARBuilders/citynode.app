@@ -11,6 +11,7 @@ import {
   type SharedDependencyConfig,
   toHostSharedEntry,
 } from "every-plugin/shared-deps-spec";
+import type { BosEnv } from "everything-dev/config";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
@@ -391,7 +392,7 @@ function loadPluginEntryEffect(
   runtime: any,
   entry: RuntimePluginEntry,
   integrityRegistry: IntegrityRegistry,
-  env: string,
+  env: BosEnv,
   pluginsClient?: Record<string, unknown>,
   baseVariables?: Record<string, unknown>,
 ): Effect.Effect<HostPluginEntry, PluginBootstrapError | Config.ConfigError> {

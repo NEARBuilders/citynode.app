@@ -108,6 +108,14 @@ describe("entryUrls — local slot (atomic-deploys 08)", () => {
   it("browserManifest is structurally absent — local slots have no pin-derived manifest", () => {
     expect(entryUrls(localSlot(), "development").browserManifest).toBeUndefined();
   });
+
+  it("a stamped browserManifestUrl never survives a local slot", () => {
+    const urls = entryUrls(
+      localSlot({ browserManifestUrl: "https://cdn.example.com/apps/mf-manifest.aaa.json" }),
+      "development",
+    );
+    expect(urls.browserManifest).toBeUndefined();
+  });
 });
 
 describe("entryUrls — base selection (publicUrl ?? url, ADR 0011)", () => {

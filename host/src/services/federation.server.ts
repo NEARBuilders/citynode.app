@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { createInstance } from "@module-federation/enhanced/runtime";
 import { Context, Effect, Layer, Schedule, Semaphore } from "effect";
+import type { BosEnv } from "everything-dev/config";
 import { verifySriForUrl } from "everything-dev/integrity";
 import {
   type ConstructedTree,
@@ -209,7 +210,7 @@ export async function localUiRemoteEntry(source: {
 
 export const waitForLocalContainer = Effect.fn("waitForLocalContainer")(function* (
   entry: EntrySlot,
-  env: string,
+  env: BosEnv,
 ): Effect.fn.Return<void, Error> {
   const containerUrl = entryUrls(entry, env).ssr;
   if (!containerUrl) {
@@ -412,7 +413,7 @@ function verifyUiEntry(entry: EntrySlot, entryUrl: string) {
   });
 }
 
-function requireSsrEntryUrl(entry: EntrySlot, env: string): string {
+function requireSsrEntryUrl(entry: EntrySlot, env: BosEnv): string {
   const ssr = entryUrls(entry, env).ssr;
   if (!ssr) {
     throw new FederationError({
@@ -428,7 +429,7 @@ function requireSsrEntryUrl(entry: EntrySlot, env: string): string {
 
 function loadUiExpose<T>(params: {
   entry: EntrySlot;
-  env: string;
+  env: BosEnv;
   expose: string;
   unwrapDefault: boolean;
   timeoutLabel: string;
@@ -463,7 +464,7 @@ function loadUiExpose<T>(params: {
 }
 
 /** A plugin ui's generated import map (`./routeConfig` expose) for host construction. */
-export const loadUiRouteConfig = (entry: EntrySlot, env: string) =>
+export const loadUiRouteConfig = (entry: EntrySlot, env: BosEnv) =>
   loadUiExpose<RouteConfigModule>({
     entry,
     env,
@@ -490,7 +491,7 @@ export interface ComposeModule {
 }
 
 /** The core ui's construction engine (`./compose` expose) — executes inside the core's module graph. */
-export const loadUiComposeModule = (entry: EntrySlot, env: string) =>
+export const loadUiComposeModule = (entry: EntrySlot, env: BosEnv) =>
   loadUiExpose<ComposeModule>({
     entry,
     env,
@@ -500,7 +501,7 @@ export const loadUiComposeModule = (entry: EntrySlot, env: string) =>
   });
 
 /** The core ui's generated import map (`./routeConfig` expose). */
-export const loadCoreUiRouteConfig = (entry: EntrySlot, env: string) =>
+export const loadCoreUiRouteConfig = (entry: EntrySlot, env: BosEnv) =>
   loadUiExpose<RouteConfigModule>({
     entry,
     env,

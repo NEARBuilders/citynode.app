@@ -75,7 +75,7 @@ export function getRemoteScripts(options: RemoteScriptsOptions): HeadScript[] {
     entryUrl: runtimeConfig?.ui?.entryUrl,
     integrity,
   };
-  const entrySrc = entryUrls(slot, runtimeConfig?.env ?? "").web;
+  const entrySrc = entryUrls(slot, runtimeConfig?.env ?? "production").web;
   const entryScript: HeadScript = {
     src: entrySrc,
     crossOrigin: "anonymous",

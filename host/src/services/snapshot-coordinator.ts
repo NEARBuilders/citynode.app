@@ -72,9 +72,6 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
     return { status: "unchanged" };
   }
 
-  // the next state OWNS its serving caches: the pre-warm composes into the
-  // compose cache the swap will install, so the warm state IS the serving
-  // state — adopt re-does no compose work (C7)
   const nextState = createRuntimeSnapshotState({
     fingerprint: nextFingerprint,
     config: nextConfig,
@@ -104,8 +101,6 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
     );
   }
 
-  // the fingerprint rides the config so the client config (and the
-  // soft-refresh signal) carries it (atomic-deploys 10)
   nextConfig.deploymentFingerprint = nextFingerprint;
   yield* snapshot.swap(nextState);
   return { status: "swapped", fingerprint: nextFingerprint, digest: composed.digest };
@@ -115,6 +110,9 @@ const adoptTransaction = Effect.fn("SnapshotCoordinator.adoptTransaction")(funct
  * writer wins) and double the transient SSR re-registration flapping. */
 const adoptPermits = Semaphore.makeUnsafe(1);
 
+/** The adopt transaction is wrapped by `adoptPermits`; the adopted config's
+ * `deploymentFingerprint` is stamped before the swap so the client config —
+ * and the soft-refresh signal — carries it (atomic-deploys 10). */
 export const adoptPublishedPointer = Effect.fn("SnapshotCoordinator.adopt")(function* (input: {
   snapshot: RuntimeSnapshot["Service"];
   publishedConfig: BosConfig;

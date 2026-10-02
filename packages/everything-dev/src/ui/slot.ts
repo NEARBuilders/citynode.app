@@ -2,6 +2,7 @@ import {
   UI_REMOTE_ENTRY_FILENAME,
   UI_REMOTE_SERVER_ENTRY_FILENAME,
 } from "every-plugin/ui/manifest";
+import type { BosEnv } from "../merge";
 
 /**
  * The host's entry-URL SlotResolver: one pure derivation from a stamped
@@ -27,7 +28,8 @@ export interface EntrySlot {
   /** dev-only freshness token (localUiRemoteEntry's container mtime) */
   containerVersion?: string;
   /** pin-derived hashed browser manifest — absent for local slots, which no
-   * pin derivation ever stamps (atomic-deploys 08) */
+   * pin derivation ever stamps (atomic-deploys 08) and the resolver drops
+   * even if one were stamped */
   browserManifestUrl?: string;
   localPath?: string;
 }
@@ -48,7 +50,7 @@ const withBuster = (url: string, buster: string | undefined): string =>
 
 function requireEntry(
   entryUrl: string | undefined,
-  env: string,
+  env: BosEnv,
   slot: string,
   surface: string,
   devFixed: string,
@@ -61,7 +63,7 @@ function requireEntry(
   );
 }
 
-function ssrEntryUrl(slot: EntrySlot, env: string): string | undefined {
+function ssrEntryUrl(slot: EntrySlot, env: BosEnv): string | undefined {
   if (slot.ssrEntryUrl) return slot.ssrEntryUrl;
   if (env === "development") {
     return slot.ssrUrl
@@ -78,7 +80,7 @@ function ssrEntryUrl(slot: EntrySlot, env: string): string | undefined {
   );
 }
 
-export function entryUrls(slot: EntrySlot, env: string): EntryUrls {
+export function entryUrls(slot: EntrySlot, env: BosEnv): EntryUrls {
   const base = trimBase(slot.publicUrl ?? slot.url);
   return {
     get web() {
@@ -94,7 +96,7 @@ export function entryUrls(slot: EntrySlot, env: string): EntryUrls {
       return ssrEntryUrl(slot, env);
     },
     get browserManifest() {
-      return slot.browserManifestUrl;
+      return slot.localPath ? undefined : slot.browserManifestUrl;
     },
   };
 }

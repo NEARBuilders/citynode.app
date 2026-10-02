@@ -43,20 +43,6 @@ export class SharedDependencyResolutionError extends Error {
   }
 }
 
-export const EFFECT_CRITICAL_SHARED_DEPS = [
-  "every-plugin",
-  "effect",
-  "@orpc/contract",
-  "@orpc/client",
-  "@orpc/server",
-  "@orpc/experimental-effect",
-] as const;
-
-export type EffectCriticalSharedDepName = (typeof EFFECT_CRITICAL_SHARED_DEPS)[number];
-
-export const isEffectCriticalSharedDep = (name: string): boolean =>
-  (EFFECT_CRITICAL_SHARED_DEPS as readonly string[]).includes(name);
-
 export type SharedDependencyResolution = "self" | "package" | "subpath";
 
 export interface SharedDependencySpec {
@@ -85,6 +71,21 @@ export const CORE_SHARED_DEPS = [
 ] as const satisfies readonly SharedDependencySpec[];
 
 export type CoreSharedDepName = (typeof CORE_SHARED_DEPS)[number]["name"];
+
+const coreCriticalNames = CORE_SHARED_DEPS.flatMap((spec) => (spec.critical ? [spec.name] : []));
+
+/**
+ * Effect-critical shared names, derived from the core list's `critical: true`
+ * entries — the one source of criticality (`strictVersion` pinning in the
+ * runtime's version-check machinery keys off this list).
+ */
+export const EFFECT_CRITICAL_SHARED_DEPS: readonly EffectCriticalSharedDepName[] =
+  coreCriticalNames;
+
+export type EffectCriticalSharedDepName = (typeof coreCriticalNames)[number];
+
+export const isEffectCriticalSharedDep = (name: string): boolean =>
+  (EFFECT_CRITICAL_SHARED_DEPS as readonly string[]).includes(name);
 
 export const UI_SHARED_DEPS = [
   { name: "react", singleton: true, critical: true, resolution: "package" },
@@ -166,9 +167,7 @@ function findPackageJsonVersion(startDir: string, searched: string[]): string | 
         const version = (JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: string })
           .version;
         if (version) return version;
-      } catch {
-        // unreadable candidate — keep walking
-      }
+      } catch {}
     }
     const parent = dirname(currentDir);
     if (parent === currentDir) break;
@@ -182,6 +181,12 @@ function resolveSubpathVersion(
   workspaceRoot: string | undefined,
   searched: string[],
 ): string | null {
+  if (request.startsWith("@")) {
+    throw new Error(
+      `Scoped-package subpath "${request}" is not supported — subpath version resolution ` +
+        `handles unscoped specifiers only (the known subpath specs, everything-dev/ui/*, are unscoped).`,
+    );
+  }
   const packageName = request.split("/")[0] ?? request;
   const subpath = request.split("/").slice(1).join("/");
   const candidates: string[] = [];
@@ -215,9 +220,7 @@ function resolveSubpathVersion(
     try {
       const version = (JSON.parse(readFileSync(candidate, "utf8")) as { version?: string }).version;
       if (version) return version;
-    } catch {
-      // try the next candidate
-    }
+    } catch {}
   }
   return null;
 }
@@ -257,9 +260,7 @@ function resolveOwnVersion(searched: string[]): string {
       const version = (JSON.parse(readFileSync(localPackageJson, "utf8")) as { version?: string })
         .version;
       if (version) return version;
-    } catch {
-      // fall through to package resolution
-    }
+    } catch {}
   }
   try {
     const resolved = require.resolve("every-plugin/package.json");
@@ -318,7 +319,7 @@ export function getPluginSharedDependencies(
   );
 }
 
-export interface MfCoreSharedEntry {
+export interface HostSharedEntry {
   version: string;
   shareScope: string;
   shareConfig: {
@@ -329,27 +330,33 @@ export interface MfCoreSharedEntry {
   };
 }
 
+export function toHostSharedEntry(name: string, config: SharedConfigInput): HostSharedEntry {
+  const normalized = normalizeSharedConfig(config, name);
+  return {
+    version: normalized.version,
+    shareScope: normalized.shareScope,
+    shareConfig: {
+      singleton: normalized.singleton,
+      requiredVersion: normalized.requiredVersion,
+      strictVersion: normalized.strictVersion,
+      eager: normalized.eager,
+    },
+  };
+}
+
+/**
+ * The runtime mf-config's core shared map: the same entries
+ * `getPluginSharedDependencies` assembles, shaped through the one host mapper
+ * (`toHostSharedEntry`) so both consumers derive from a single entry type.
+ */
 export function buildMfCoreSharedDependencies(
   options: SharedDepsBuildOptions = {},
-): Record<string, MfCoreSharedEntry> {
+): Record<string, HostSharedEntry> {
   return Object.fromEntries(
-    CORE_SHARED_DEPS.map((spec) => {
-      const version = specVersion(spec, options);
-      const config = shareConfigFor(spec, version);
-      return [
-        spec.name,
-        {
-          version,
-          shareScope: config.shareScope,
-          shareConfig: {
-            singleton: config.singleton,
-            requiredVersion: config.requiredVersion,
-            strictVersion: config.strictVersion,
-            eager: config.eager,
-          },
-        },
-      ];
-    }),
+    Object.entries(getPluginSharedDependencies(options)).map(([name, config]) => [
+      name,
+      toHostSharedEntry(name, config),
+    ]),
   );
 }
 
@@ -462,29 +469,4 @@ export function mergeSharedMaps(
     }
   }
   return merged;
-}
-
-export interface HostSharedEntry {
-  version: string;
-  shareScope: string;
-  shareConfig: {
-    singleton: boolean;
-    requiredVersion: string | false;
-    strictVersion: boolean;
-    eager: boolean;
-  };
-}
-
-export function toHostSharedEntry(name: string, config: SharedConfigInput): HostSharedEntry {
-  const normalized = normalizeSharedConfig(config, name);
-  return {
-    version: normalized.version,
-    shareScope: normalized.shareScope,
-    shareConfig: {
-      singleton: normalized.singleton,
-      requiredVersion: normalized.requiredVersion,
-      strictVersion: normalized.strictVersion,
-      eager: normalized.eager,
-    },
-  };
 }

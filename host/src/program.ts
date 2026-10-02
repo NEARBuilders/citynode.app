@@ -44,6 +44,14 @@ interface CompositionHealth {
   selfProbe?: { status: "pending" | "passed" | "failed"; error?: string };
 }
 
+/**
+ * One serving state for boot and requests: requests capture ONE snapshot
+ * state (config + both serving caches) and a swap flips readers atomically
+ * (C7); boot composition warms the snapshot's own compose cache, so the boot
+ * work is never re-done. Boot composition is awaited before /health
+ * registers, so "composing" never reaches a response — and if it somehow
+ * could, the honest answer is degraded, not ready.
+ */
 export const createStartServer = (onReady?: () => void) =>
   Effect.gen(function* () {
     const port = yield* Config.Number("PORT").pipe(Config.withDefault(3000));
@@ -66,8 +74,6 @@ export const createStartServer = (onReady?: () => void) =>
     const effectContext = yield* Effect.context();
     const getBaseConfig = async () =>
       (await Effect.runPromiseWith(effectContext)(snapshot.get)).config;
-    // the serving indirection: requests capture ONE snapshot state (config +
-    // both serving caches) — a swap flips readers atomically (C7)
     const getServingState = () => Effect.runPromiseWith(effectContext)(snapshot.get);
     const app = new Hono<HonoEnv>();
 
@@ -90,8 +96,6 @@ export const createStartServer = (onReady?: () => void) =>
     app.use("*", security.csp);
 
     if (ssrEnabled) {
-      // boot composition warms the SNAPSHOT'S serving cache — the same cache
-      // requests read through, so the boot work is never re-done
       const bootState = yield* snapshot.get;
       const boot = yield* Effect.exit(composeUi(config, bootState.composeState));
       if (Exit.isFailure(boot)) {
@@ -112,9 +116,6 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.get("/health", (c: Context<HonoEnv>) => {
       const apiReady = apiProxyMode || Boolean(plugins.api?.router && plugins.status.available);
-      // composeUi is awaited before /health registers, so "composing" never
-      // reaches a response — and if it somehow could, the honest answer is
-      // degraded, not ready.
       const composeOk = !ssrEnabled || compositionHealth.status === "ready";
       const probeFailed = compositionHealth.selfProbe?.status === "failed";
       return c.json(

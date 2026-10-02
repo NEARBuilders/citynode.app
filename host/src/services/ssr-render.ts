@@ -115,6 +115,13 @@ function textResponse(message: string, status: number, requestId?: string) {
   });
 }
 
+/**
+ * One capture per request: when `getServingState` is provided, config and both
+ * serving caches ride the same snapshot state, so a swap can never split them
+ * across a request. Loader API calls get a 15s deadline — a wedged plugin
+ * endpoint rejects into the route's error boundary and closes the stream
+ * instead of suspending it forever.
+ */
 export function createSsrRender(deps: SsrRenderDeps) {
   const fallbackComposeCache = createUiComposeCacheState();
   const fallbackClientConfigCache = createClientConfigCacheState();
@@ -122,8 +129,6 @@ export function createSsrRender(deps: SsrRenderDeps) {
     const pathname = new URL(request.url).pathname;
     const requestId = crypto.randomUUID().slice(0, 8);
 
-    // one capture per request: config and both serving caches ride the same
-    // snapshot state, so a swap can never split them across a request
     const serving = deps.getServingState ? await deps.getServingState() : undefined;
     const composeCache = serving?.composeState ?? fallbackComposeCache;
     const clientConfigCache = serving?.clientConfigState ?? fallbackClientConfigCache;
@@ -195,9 +200,6 @@ export function createSsrRender(deps: SsrRenderDeps) {
 
     try {
       const ssrApiClient = createPluginsClient(deps.plugins, ctx.pluginContext, {
-        // Loader API calls get a deadline: a wedged plugin endpoint rejects
-        // into the route's error boundary and closes the stream instead of
-        // suspending it forever.
         callTimeoutMs: 15_000,
       });
 
