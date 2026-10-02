@@ -105,6 +105,7 @@ function configWithPlugin(): RuntimeConfig {
         name: "auth-ui",
         url: "https://cdn.example.com/auth-ui",
         entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
+        browserManifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
         entryUrl: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
         source: "remote",
         ssrUrl: "https://cdn.example.com/auth-ui-ssr",
@@ -351,6 +352,7 @@ describe("composeUi", () => {
 
     const config = {
       ...configWithPlugin(),
+      env: "development",
       ui: { ...createBaseRuntimeConfig().ui, source: "local", localPath: coreFixture },
     } as RuntimeConfig;
     config.plugins!.auth!.ui!.localPath = authFixture;
@@ -377,7 +379,6 @@ describe("composeUi", () => {
         key: "auth",
         name: "auth-ui",
         entry: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
-        manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
       },
     ]);
 

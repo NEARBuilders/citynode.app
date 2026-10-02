@@ -10,6 +10,7 @@ export default defineConfig({
     "src/types.ts",
     "src/descriptor/index.ts",
     "src/config.ts",
+    "src/resolution/session.ts",
     "src/dag.ts",
     "src/bundle-cache.ts",
     "src/bundle-fs-resolve.ts",

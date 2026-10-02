@@ -23,7 +23,7 @@ export default App({
   api: API({ path: "api", variables: { gatewayDomains: "everything.dev,dev.everything.dev" } }),
   auth: Plugin("auth").path("plugins/auth", { name: "@everything-dev/auth-plugin" }),
   plugins: {
-    apps: Plugin("apps").path("plugins/apps", {
+    registry: Plugin("registry").path("plugins/registry", {
       variables: { registryNamespace: "dev.everything.near" },
     }),
   },

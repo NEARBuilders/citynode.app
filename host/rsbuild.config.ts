@@ -5,8 +5,12 @@ import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { isBuildInvocation, uiEntryFilename } from "every-plugin/build/artifact-names";
-import { getPluginSharedDependencies } from "every-plugin/build/rspack";
 import { hashArtifactsPlugin } from "every-plugin/build/ui";
+import {
+  getPluginSharedDependencies,
+  mergeSharedMaps,
+  type SharedConfigInput,
+} from "every-plugin/shared-deps-spec";
 
 const __dirname = import.meta.dirname;
 const require = createRequire(import.meta.url);
@@ -25,61 +29,16 @@ const bosConfig = bosConfigRaw._resolved
     })()
   : bosConfigRaw;
 
-function mergeSharedMaps(
-  ...maps: Array<Record<string, Record<string, unknown>> | undefined>
-): Record<string, Record<string, unknown>> {
-  const merged: Record<string, Record<string, unknown>> = {};
-  for (const map of maps) {
-    if (!map) continue;
-    for (const [name, config] of Object.entries(map)) {
-      const existing = merged[name];
-      if (existing && !isSameSharedConfig(existing, config)) {
-        throw new Error(`Conflicting shared dependency "${name}" in host build config`);
-      }
-      merged[name] = config;
-    }
-  }
-  return merged;
-}
-
-function normalizeSharedConfig(config: Record<string, unknown>): Record<string, unknown> {
-  return {
-    version: config.version,
-    requiredVersion: config.requiredVersion ?? false,
-    singleton: config.singleton ?? false,
-    strictVersion: config.strictVersion ?? false,
-    eager: config.eager ?? false,
-    shareScope: config.shareScope ?? "default",
-  };
-}
-
-function isSameSharedConfig(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  const left = normalizeSharedConfig(a);
-  const right = normalizeSharedConfig(b);
-  return (
-    left.version === right.version &&
-    left.requiredVersion === right.requiredVersion &&
-    left.singleton === right.singleton &&
-    left.strictVersion === right.strictVersion &&
-    left.eager === right.eager &&
-    left.shareScope === right.shareScope
-  );
-}
-
-function collectPluginShared(): Record<string, Record<string, unknown>> {
+function collectPluginShared(): Record<string, SharedConfigInput> {
   const plugins =
     bosConfig.plugins && typeof bosConfig.plugins === "object" ? bosConfig.plugins : {};
-  const shared: Record<string, Record<string, unknown>> = {};
+  const shared: Record<string, SharedConfigInput> = {};
 
   for (const plugin of Object.values(plugins as Record<string, unknown>)) {
     if (!plugin || typeof plugin !== "object") continue;
-    const sharedDeps = (plugin as { shared?: Record<string, Record<string, unknown>> }).shared;
+    const sharedDeps = (plugin as { shared?: Record<string, SharedConfigInput> }).shared;
     if (sharedDeps && typeof sharedDeps === "object") {
       for (const [name, config] of Object.entries(sharedDeps)) {
-        const existing = shared[name];
-        if (existing && !isSameSharedConfig(existing, config)) {
-          throw new Error(`Conflicting shared dependency "${name}" across plugins in host build`);
-        }
         shared[name] = config;
       }
     }
@@ -89,12 +48,12 @@ function collectPluginShared(): Record<string, Record<string, unknown>> {
 }
 
 const everyPluginShared = getPluginSharedDependencies();
-const pluginShared: Record<string, Record<string, unknown>> = Object.fromEntries(
+const pluginShared = Object.fromEntries(
   Object.entries(everyPluginShared).map(([name, config]) => [name, { ...config }]),
 );
 const shared = mergeSharedMaps(
-  (bosConfig.app?.api as { shared?: Record<string, Record<string, unknown>> } | undefined)?.shared,
-  (bosConfig.app?.auth as { shared?: Record<string, Record<string, unknown>> } | undefined)?.shared,
+  (bosConfig.app?.api as { shared?: Record<string, SharedConfigInput> } | undefined)?.shared,
+  (bosConfig.app?.auth as { shared?: Record<string, SharedConfigInput> } | undefined)?.shared,
   collectPluginShared(),
   pluginShared,
 );

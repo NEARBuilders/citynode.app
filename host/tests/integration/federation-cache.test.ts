@@ -159,7 +159,7 @@ describe("loadRouterModule cache", () => {
     const localConfig = createRuntimeConfig({ source: "local" });
     (localConfig.ui as { ssrUrl?: string }).ssrUrl = undefined;
     await expect(Effect.runPromise(loadRouterModule(localConfig))).rejects.toThrow(
-      /SSR URL not configured/,
+      /no SSR entry URL/,
     );
     expect(createInstanceMock).not.toHaveBeenCalled();
   });
@@ -246,7 +246,6 @@ describe("ui expose loads (routeConfig / compose)", () => {
   function uiEntry(options?: { ssrUrl?: string; localPath?: string }) {
     return {
       name: "auth-ui",
-      env: "development",
       ssrUrl: options?.ssrUrl,
       ssrIntegrity: undefined,
       localPath: options?.localPath,
@@ -258,7 +257,7 @@ describe("ui expose loads (routeConfig / compose)", () => {
     loadRemoteMock.mockResolvedValue(routeConfig);
 
     const loaded = await Effect.runPromise(
-      loadUiRouteConfig(uiEntry({ ssrUrl: "http://localhost:4113" })),
+      loadUiRouteConfig(uiEntry({ ssrUrl: "http://localhost:4113" }), "development"),
     );
 
     expect(loaded).toBe(routeConfig);
@@ -277,7 +276,7 @@ describe("ui expose loads (routeConfig / compose)", () => {
     loadRemoteMock.mockResolvedValue(composeModule);
 
     const loaded = await Effect.runPromise(
-      loadUiComposeModule(uiEntry({ ssrUrl: "http://localhost:4113" })),
+      loadUiComposeModule(uiEntry({ ssrUrl: "http://localhost:4113" }), "development"),
     );
 
     expect(loaded).toBe(composeModule);
@@ -286,7 +285,7 @@ describe("ui expose loads (routeConfig / compose)", () => {
 
   it("rejects a ui surface without an SSR entry URL with an actionable error", async () => {
     await expect(
-      Effect.runPromise(loadUiRouteConfig(uiEntry({ localPath: "/x/plugins/y" }))),
+      Effect.runPromise(loadUiRouteConfig(uiEntry({ localPath: "/x/plugins/y" }), "development")),
     ).rejects.toThrow(/no SSR entry URL/);
     expect(createInstanceMock).not.toHaveBeenCalled();
   });

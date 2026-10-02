@@ -57,8 +57,7 @@ export async function runDockerComposeUp(configDir: string): Promise<DockerCompo
       timeout: 5 * 60_000,
     });
     const lines = [result.stdout ?? "", result.stderr ?? ""]
-      .join("\n")
-      .split("\n")
+      .flatMap((output) => output.split("\n"))
       .map((line) => stripAnsi(line).trim())
       .filter((line) => line.length > 0);
     return { ok: (result.exitCode ?? 1) === 0, tail: takeTail(lines) };

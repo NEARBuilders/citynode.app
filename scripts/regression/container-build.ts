@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { containerName } from "every-plugin/identity";
 import { composeVersionManifest } from "every-plugin/version-manifest";
 
 /**
@@ -257,8 +258,6 @@ const ports = {
   authUi: basePort + 4,
 };
 
-const sanitizeContainerName = (pkgName: string): string => pkgName.replace(/[^A-Za-z0-9_]/g, "_");
-
 const sri384 = (bytes: string | Uint8Array): string =>
   `sha384-${createHash("sha384").update(bytes).digest("base64")}`;
 
@@ -421,7 +420,7 @@ const stage = () => {
     authPin: pins.auth,
     authUi: {
       production: slotUrl(ports.authUi, "auth-ui"),
-      name: sanitizeContainerName(authPkgName),
+      name: containerName(authPkgName),
       pin: pins.authUi,
     },
     plugins: Object.fromEntries(

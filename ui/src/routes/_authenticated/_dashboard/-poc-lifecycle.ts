@@ -309,7 +309,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
       async () => {
         if (!team || !gatewayId) return null;
         try {
-          const result = await apiClient.apps.getRegistryApp({
+          const result = await apiClient.registry.getRegistryApp({
             accountId: team,
             gatewayId,
           });
@@ -547,7 +547,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
   /** Fresh read of the published tenant config — the truth for publish/mark-applied. */
   const fetchPublishedNow = () =>
     team && gatewayId
-      ? apiClient.apps
+      ? apiClient.registry
           .getRegistryApp({ accountId: team, gatewayId })
           .then((result) => result.data ?? null)
           .catch(() => null)

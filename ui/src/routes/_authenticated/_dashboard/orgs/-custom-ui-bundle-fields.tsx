@@ -55,7 +55,7 @@ export function CustomUiBundleFields({
     }
     setFetchingSource(true);
     try {
-      const result = await apiClient.apps.getRegistryApp({ accountId: account, gatewayId });
+      const result = await apiClient.registry.getRegistryApp({ accountId: account, gatewayId });
       const resolved = result.data?.resolvedConfig ?? null;
       const ui =
         (

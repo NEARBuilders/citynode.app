@@ -7,7 +7,6 @@
       "every-plugin": ["../every-plugin/src/index.ts"],
       "every-plugin/runtime": ["../every-plugin/src/runtime/index.ts"],
       "every-plugin/normalize": ["../every-plugin/src/runtime/services/normalize.ts"],
-      "every-plugin/testing": ["../every-plugin/src/testing/index.ts"],
       "every-plugin/errors": ["../every-plugin/src/errors.ts"],
       "every-plugin/types": ["../every-plugin/src/types.ts"],
       "every-plugin/build/rspack": ["../every-plugin/src/build/rspack/index.ts"],

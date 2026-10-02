@@ -39,13 +39,13 @@ vi.mock("../../src/build", async (importOriginal) => {
     }),
   };
 });
-vi.mock("../../src/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/config")>();
-  return { ...actual, loadResolvedConfig: vi.fn() };
+vi.mock("../../src/resolution/session", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/resolution/session")>();
+  return { ...actual, openResolution: vi.fn() };
 });
 
-import { loadResolvedConfig } from "../../src/config";
 import { publishToFastKv } from "../../src/publish";
+import { openResolution } from "../../src/resolution/session";
 
 const sriOf = (content: Buffer | string) =>
   `sha384-${createHash("sha384").update(content).digest("base64")}`;
@@ -224,7 +224,7 @@ describe("an aborted deploy train is a no-op (ticket 05)", () => {
       privateKey: "ed25519:test",
       source: "provided",
     });
-    vi.mocked(loadResolvedConfig).mockResolvedValue({ config: bosConfig } as never);
+    vi.mocked(openResolution).mockResolvedValue({ config: bosConfig } as never);
     submitRegistryWriteMock.mockImplementation(async (tx: { args: Record<string, string> }) => {
       publishedPayloads.push(JSON.parse(Object.values(tx.args)[0]!));
       return { success: true, txHash: "tx_test" };

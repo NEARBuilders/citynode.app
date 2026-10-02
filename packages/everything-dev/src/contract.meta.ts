@@ -192,6 +192,10 @@ export const cliCommandMeta = {
     fields: {
       env: { description: "Environment: production or staging" },
       allowance: { description: "NEAR allowance for the key (default: 1NEAR, min: 0.3NEAR)" },
+      removeOldKeys: {
+        description:
+          "Remove existing publish key(s) without prompting (default: ask on a TTY, yes when non-interactive)",
+      },
       registry: {
         description:
           "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",

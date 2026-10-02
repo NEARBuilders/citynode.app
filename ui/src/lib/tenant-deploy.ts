@@ -28,7 +28,7 @@ export async function prepareTenantConfigWrite(
   input: TenantConfigWriteInput,
 ) {
   const config = buildTenantPublishConfig(input);
-  return apiClient.apps.prepareRegistryConfigWrite({
+  return apiClient.registry.prepareRegistryConfigWrite({
     accountId: input.daoAccountId,
     gatewayId: input.gatewayId,
     config: config as unknown as Record<string, unknown>,

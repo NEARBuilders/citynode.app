@@ -1,20 +1,7 @@
 import path from "node:path";
+import { createUiSharedDeps } from "every-plugin/shared-deps-spec";
 import { describe, expect, it } from "vitest";
-import { CORE_UI_DEPLOY_FIELDS, createUiSharedDeps } from "../../src/build/ui";
-
-const pkg = {
-  dependencies: {
-    react: "catalog:",
-    "react-dom": "catalog:",
-    "@orpc/client": "catalog:",
-    "@orpc/contract": "catalog:",
-    "@tanstack/react-query": "catalog:",
-    "@tanstack/react-router": "catalog:",
-    "@lingui/core": "catalog:",
-    "@lingui/react": "catalog:",
-    "everything-dev": "catalog:",
-  },
-};
+import { CORE_UI_DEPLOY_FIELDS } from "../../src/build/ui";
 
 const expectedSharedKeys = [
   "@lingui/core",
@@ -31,7 +18,7 @@ const expectedSharedKeys = [
 
 describe("createUiSharedDeps", () => {
   it("resolves requiredVersion from the installed package version", () => {
-    const deps = createUiSharedDeps(pkg);
+    const deps = createUiSharedDeps();
     expect(Object.keys(deps).sort()).toEqual(expectedSharedKeys);
     expect(deps.react?.singleton).toBe(true);
     expect(deps.react?.eager).toBe(false);
@@ -40,8 +27,8 @@ describe("createUiSharedDeps", () => {
   });
 
   it("shares the session read path module as a strict singleton", () => {
-    const provider = createUiSharedDeps(pkg, { role: "provider" });
-    const consumer = createUiSharedDeps(pkg, { role: "consumer" });
+    const provider = createUiSharedDeps({ role: "provider" });
+    const consumer = createUiSharedDeps({ role: "consumer" });
 
     expect(provider["everything-dev/ui/auth"]).toMatchObject({
       singleton: true,
@@ -57,37 +44,42 @@ describe("createUiSharedDeps", () => {
     expect(consumer["everything-dev/ui/i18n"]?.import).toBe(false);
   });
 
+  it("resolves the session module version from the building workspace root", () => {
+    const deps = createUiSharedDeps({ workspaceRoot: path.resolve(process.cwd(), "../..") });
+    expect(deps["everything-dev/ui/auth"]?.requiredVersion).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
   it("connects plugin notifications to the provider's toast store when declared", () => {
-    const notificationPkg = { dependencies: { ...pkg.dependencies, sonner: "^2.0.7" } };
-    const provider = createUiSharedDeps(notificationPkg, { role: "provider" });
-    const consumer = createUiSharedDeps(notificationPkg, { role: "consumer" });
+    const dependencies = { sonner: "^2.0.7" };
+    const provider = createUiSharedDeps({ dependencies, role: "provider" });
+    const consumer = createUiSharedDeps({ dependencies, role: "consumer" });
     expect(provider.sonner).toMatchObject({ singleton: true, strictVersion: true });
     expect(consumer.sonner).toMatchObject({
       import: false,
       requiredVersion: provider.sonner?.version,
     });
-    expect(createUiSharedDeps(pkg).sonner).toBeUndefined();
-  });
-
-  it("resolves the session module version from the building workspace root", () => {
-    const deps = createUiSharedDeps(pkg, { workspaceRoot: path.resolve(process.cwd(), "../..") });
-    expect(deps["everything-dev/ui/auth"]?.requiredVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(provider.sonner?.version).toMatch(/^\d+\.\d+\.\d+/);
+    expect(createUiSharedDeps().sonner).toBeUndefined();
   });
 
   it("can relax strictVersion (core-shell parity mode)", () => {
-    const deps = createUiSharedDeps(pkg, { strictVersion: false });
+    const deps = createUiSharedDeps({ strictVersion: false });
     expect(deps.react?.requiredVersion).toBe(false);
     expect(deps.react?.strictVersion).toBe(false);
   });
 
-  it("prefers the installed version over the declared range", () => {
-    const deps = createUiSharedDeps({ dependencies: { react: "19.1.0" } });
-    expect(deps.react?.requiredVersion).toBe("19.2.4");
+  it("resolves the installed version, never a declared range or wildcard", () => {
+    const deps = createUiSharedDeps();
+    expect(deps.react?.requiredVersion).toMatch(/^\d+\.\d+\.\d+/);
+    for (const entry of Object.values(deps)) {
+      expect(entry.version).not.toBe("*");
+      expect(entry.version).not.toBe("latest");
+    }
   });
 
   it("consumer role sets import: false — no bundled fallback copy", () => {
-    const provider = createUiSharedDeps(pkg, { role: "provider" });
-    const consumer = createUiSharedDeps(pkg, { role: "consumer" });
+    const provider = createUiSharedDeps({ role: "provider" });
+    const consumer = createUiSharedDeps({ role: "consumer" });
     expect(provider.react?.import).toBeUndefined();
     expect(consumer.react?.import).toBe(false);
     expect(consumer.react).toMatchObject({ singleton: true, eager: false, strictVersion: true });

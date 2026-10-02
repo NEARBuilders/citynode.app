@@ -4,10 +4,11 @@ import { defineConfig, type EnvironmentConfig, type RsbuildConfig, rspack } from
 import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
 import { FixMfDataUriPlugin } from "../../build/rspack";
+import { createUiSharedDeps } from "../../shared-deps-spec";
 import { sanitizeContainerName } from "../../ui/manifest/contract";
 import { isBuildInvocation, uiEntryFilename } from "../artifact-names";
 import { hashArtifactsPlugin } from "./hash-artifacts-plugin";
-import { createUiSharedDeps, MANIFEST_FILENAME, restoreManifestPublicPath } from "./index";
+import { MANIFEST_FILENAME, restoreManifestPublicPath } from "./index";
 import { uiManifestGenPlugin } from "./manifest-plugin";
 
 /**
@@ -73,7 +74,11 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
   const normalizedName = sanitizeContainerName(pkg.name);
   const manifestGen = () =>
     uiManifestGenPlugin({ workspaceRoot: workspaceRootAbsolute, pluginName: manifestName });
-  const uiSharedDeps = createUiSharedDeps(pkg, { role, workspaceRoot: workspaceRootAbsolute });
+  const uiSharedDeps = createUiSharedDeps({
+    role,
+    workspaceRoot: workspaceRootAbsolute,
+    dependencies: { ...pkg.dependencies, ...pkg.devDependencies },
+  });
 
   const isBuild = isBuildInvocation();
 

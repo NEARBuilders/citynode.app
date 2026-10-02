@@ -36,10 +36,6 @@ const mocks = vi.hoisted(() => {
   return state;
 });
 
-vi.mock("../../src/config", () => ({
-  getProjectRoot: () => mocks.tmpRoot,
-}));
-
 vi.mock("../../src/components/dev-render", () => ({
   createDevRenderer: () => mocks.view,
 }));
@@ -102,7 +98,7 @@ const orchestrator = {
 const runSession = () => {
   let controls: Record<string, () => void> | null = null;
   const program = Effect.scoped(
-    runDevSession(orchestrator as never, (c) => {
+    runDevSession(mocks.tmpRoot, orchestrator as never, (c) => {
       controls = c as never;
     }),
   ).pipe(

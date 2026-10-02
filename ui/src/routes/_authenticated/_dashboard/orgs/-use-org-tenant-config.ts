@@ -7,7 +7,7 @@ export const TENANT_CONFIG_REFETCH_MS = 15_000;
 
 export type OrgTenant = NonNullable<Awaited<ReturnType<ApiClient["resolveTenantByOrgId"]>>>;
 
-type RegistryAppResult = Awaited<ReturnType<ApiClient["apps"]["getRegistryApp"]>>["data"];
+type RegistryAppResult = Awaited<ReturnType<ApiClient["registry"]["getRegistryApp"]>>["data"];
 
 export interface OrgTenantConfig {
   tenant: OrgTenant | null | undefined;
@@ -30,7 +30,7 @@ function useRegistryAppQuery(
     queryKey: ["node-config", "registry-app", tenantAccount, gatewayId],
     queryFn: async () => {
       try {
-        const result = await apiClient.apps.getRegistryApp({
+        const result = await apiClient.registry.getRegistryApp({
           accountId: tenantAccount,
           gatewayId,
         });
@@ -64,7 +64,7 @@ export function useOrgTenantConfig(orgId: string, gatewayId: string): OrgTenantC
   const configPublished = !!registryApp;
 
   const fetchPublishedNow = () =>
-    apiClient.apps
+    apiClient.registry
       .getRegistryApp({ accountId: tenantAccount, gatewayId })
       .then((result) => result.data ?? null)
       .catch(() => null);
