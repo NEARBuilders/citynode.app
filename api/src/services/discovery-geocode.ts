@@ -1,4 +1,4 @@
-import { Context, Duration, Effect, Layer, Ref, Semaphore } from "effect";
+import { Clock, Context, Duration, Effect, Layer, Ref, Semaphore } from "effect";
 
 export type GeocodeResult =
   | { ok: true; latitude: number; longitude: number }
@@ -37,8 +37,10 @@ export function nominatimUserAgent(identity: GeocodeIdentity) {
 
 export type GeocodeService = {
   geocode: (location: string) => Effect.Effect<GeocodeResult>;
-  resetForTests: () => Effect.Effect<void>;
+  resetForTests: Effect.Effect<void>;
 };
+
+const runFetch = (url: string | URL, init?: RequestInit): Promise<Response> => fetch(url, init);
 
 export class GeocodeTag extends Context.Service<GeocodeTag, GeocodeService>()("api/Geocode") {}
 
@@ -67,9 +69,10 @@ export const GeocodeLive = (identity: GeocodeIdentity) =>
       const lookupNominatim = (location: string, key: string) =>
         Effect.gen(function* () {
           const last = yield* Ref.get(lastRequestAt);
-          const waitMs = Math.max(0, Duration.toMillis(MIN_INTERVAL) - (Date.now() - last));
+          const now = yield* Clock.currentTimeMillis;
+          const waitMs = Math.max(0, Duration.toMillis(MIN_INTERVAL) - (now - last));
           if (waitMs > 0) yield* Effect.sleep(Duration.millis(waitMs));
-          yield* Ref.set(lastRequestAt, Date.now());
+          yield* Ref.set(lastRequestAt, yield* Clock.currentTimeMillis);
 
           const url = new URL(NOMINATIM_URL);
           url.searchParams.set("q", location.trim());
@@ -78,7 +81,7 @@ export const GeocodeLive = (identity: GeocodeIdentity) =>
 
           const result = yield* Effect.tryPromise({
             try: async (): Promise<GeocodeResult> => {
-              const response = await fetch(url, {
+              const response = await runFetch(url, {
                 headers: {
                   Accept: "application/json",
                   "User-Agent": userAgent,
@@ -134,11 +137,10 @@ export const GeocodeLive = (identity: GeocodeIdentity) =>
 
       return GeocodeTag.of({
         geocode,
-        resetForTests: () =>
-          Effect.gen(function* () {
-            yield* Ref.set(cache, new Map());
-            yield* Ref.set(lastRequestAt, 0);
-          }),
+        resetForTests: Effect.gen(function* () {
+          yield* Ref.set(cache, new Map());
+          yield* Ref.set(lastRequestAt, 0);
+        }),
       });
     }),
   );

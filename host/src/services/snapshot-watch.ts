@@ -267,13 +267,15 @@ export class SnapshotWatch extends Context.Service<
         const snapshot = yield* RuntimeSnapshot;
         const coordinator = yield* SnapshotCoordinator;
         const config = yield* ConfigService;
+        const effectContext = yield* Effect.context();
 
         let lastSeen: string | undefined;
         let lastOutcome: WatchTickOutcome | undefined;
         const tick = Effect.gen(function* () {
           const result = yield* runWatchTick({
             snapshot,
-            adopt: (published) => Effect.runPromise(coordinator.adopt(published)),
+            adopt: (published) =>
+              Effect.runPromiseWith(effectContext)(coordinator.adopt(published)),
             fetchPointer: () =>
               fetchBosConfigFromFastKv<BosConfig>(
                 `bos://${config.account}/${config.domain ?? "everything.dev"}`,

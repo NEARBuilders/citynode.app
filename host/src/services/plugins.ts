@@ -367,8 +367,7 @@ export function buildAuthBaseVariables(
     const envRaw = yield* Config.String("BASE_URL").pipe(
       Config.withDefault(""),
       Config.map((value) => value.trim() || undefined),
-      // a broken config provider must not block auth boot — treat as unset
-      Effect.catch(() => Effect.succeed(undefined)),
+      Effect.orElseSucceed(() => undefined),
     );
     const envBaseUrl = asOrigin(envRaw);
     if (envRaw && !envBaseUrl) {
@@ -578,9 +577,10 @@ export const initializePlugins = Effect.gen(function* () {
     // attestation used to float outside any fiber's lifetime.
     yield* Effect.forkScoped(
       Effect.gen(function* () {
-        const { verified, mismatches } = yield* Effect.promise(() =>
-          verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl),
-        );
+        const { verified, mismatches } = yield* Effect.tryPromise({
+          try: () => verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl),
+          catch: (error) => error,
+        });
         if (!verified) {
           logger.error(
             `[Attestation] Config integrity does not match on-chain anchor. Mismatches: ${mismatches.join(", ")}`,
@@ -596,7 +596,7 @@ export const initializePlugins = Effect.gen(function* () {
     );
   }
 
-  const corsOrigins = yield* readCorsOrigins();
+  const corsOrigins = yield* readCorsOrigins;
 
   const { runtime, integrityRegistry } = yield* Effect.tryPromise({
     try: async () => {

@@ -1,6 +1,6 @@
 import type { ContractedRouter } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
-import { Cause, Context, Effect, Exit, Layer } from "effect";
+import { Cause, Context, DateTime, Effect, Exit, Layer } from "effect";
 import { buildScopedContext, createPlugin } from "every-plugin";
 import { createAuthMiddleware } from "everything-dev/api";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
@@ -290,7 +290,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
-      console.log("[API] Services Initialized");
+      yield* Effect.log("[API] Services Initialized");
 
       return Layer.mergeAll(
         Layer.succeed(ApiServices, {
@@ -456,6 +456,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const auth = authPlugin.client({
           reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
         });
+        const expiresAt = input.expiresAt
+          ? DateTime.toDateUtc(DateTime.makeUnsafe(input.expiresAt))
+          : DateTime.toDateUtc(DateTime.makeUnsafe(Date.parse(endsAt) + ONBOARDING_GRACE_MS));
         return yield* Effect.tryPromise<
           z.infer<typeof EventOnboardingCodeSchema>,
           ORPCError<string, unknown>
@@ -466,9 +469,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               eventId: event.id,
               eventName: event.title,
               ...(input.maxUses ? { maxUses: input.maxUses } : {}),
-              expiresAt: input.expiresAt
-                ? new Date(input.expiresAt)
-                : new Date(Date.parse(endsAt) + ONBOARDING_GRACE_MS),
+              expiresAt,
             }),
           catch: (error) =>
             error instanceof ORPCError
@@ -502,7 +503,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listTenants: builder.listTenants.use(requireAuth).effect(function* ({ context }) {
         const services = yield* ApiServices;
         if (context.user?.role === "admin") {
-          return yield* services.tenants.listAllTenants();
+          return yield* services.tenants.listAllTenants;
         }
         const ownerTenants = yield* services.tenants.listTenantsByOwnerUserId(context.user.id);
         const orgId = context.organization?.activeOrganizationId;
@@ -679,7 +680,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listTenantBindings: builder.listTenantBindings.effect(function* () {
         const services = yield* ApiServices;
-        return yield* services.tenants.listBindings();
+        return yield* services.tenants.listBindings;
       }),
 
       listTenantApps: builder.listTenantApps.effect(function* () {
@@ -941,7 +942,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listRootNodes: builder.listRootNodes.effect(function* () {
         const services = yield* ApiServices;
-        return yield* services.nodes.listRootNodes();
+        return yield* services.nodes.listRootNodes;
       }),
 
       listChildren: builder.listChildren.effect(function* ({ input }) {
