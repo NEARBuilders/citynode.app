@@ -1,0 +1,336 @@
+import { join, resolve } from "node:path";
+import process from "node:process";
+import { Effect } from "effect";
+import {
+  buildInitPatterns,
+  buildPluginRouteExclusions,
+  convertChildConfigToAppForm,
+  copyFilteredFiles,
+  detectGitRemoteUrl,
+  fetchParentConfig,
+  generateDatabaseMigrations,
+  personalizeAgentsMd,
+  personalizeConfig,
+  removeInitLockfile,
+  resolveSourceDir,
+  runBunInstall,
+  runTypesGen,
+  scaffoldMinimalProject,
+  stripOrphanedWorkspacesFromLockfile,
+  writeInitSnapshot,
+} from "../cli/init";
+import { pruneUnusedUiFiles } from "../cli/prune";
+import { generateCodeArtifacts } from "../code-artifacts";
+import type { OverrideSection, PhaseTiming } from "../contract";
+import { makeProjectEnv } from "../env/project-env";
+import { materializeViaLayer } from "../infra/materializer";
+import { timePhase } from "../progress";
+import { openResolution } from "../resolution/session";
+import { syncResolvedSharedDeps } from "../shared-deps";
+import type { BosConfig, BosConfigInput } from "../types";
+import type { BosBuilder } from "./shared";
+
+export function registerInit(builder: BosBuilder) {
+  return {
+    init: builder.init.handler(async ({ input }) => {
+      try {
+        const timings: PhaseTiming[] = [];
+        let extendsAccount = "";
+        let extendsGateway = "";
+        let directory = input.directory;
+        const account = input.account;
+        const domain = input.domain;
+        let overrides = input.overrides as OverrideSection[] | undefined;
+        let plugins = input.plugins;
+
+        if (input.extends) {
+          const normalized = input.extends.startsWith("bos://")
+            ? input.extends
+            : `bos://${input.extends}`;
+          const match = normalized.match(/^bos:\/\/([^/]+)\/(.+)$/);
+          if (match) {
+            extendsAccount = match[1];
+            extendsGateway = match[2];
+          }
+        }
+
+        extendsAccount = extendsAccount || "dev.everything.near";
+        extendsGateway = extendsGateway || "everything.dev";
+
+        let parentPluginKeys: string[] = [];
+        let parentConfig: BosConfig | null = null;
+        try {
+          parentConfig = await timePhase(timings, "parent config", () =>
+            fetchParentConfig(extendsAccount, extendsGateway),
+          );
+          if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
+            parentPluginKeys = Object.keys(parentConfig.plugins);
+          }
+        } catch (e) {
+          console.warn(
+            `[init] Failed to fetch parent config from ${extendsAccount}/${extendsGateway}: ${
+              e instanceof Error ? e.message : e
+            }`,
+          );
+        }
+
+        overrides = overrides?.length ? overrides : (["ui", "api"] as OverrideSection[]);
+        if (overrides.includes("plugins") && plugins === undefined) {
+          plugins = parentPluginKeys;
+        }
+        plugins = plugins ?? [];
+
+        const pluginDirMap: Record<string, string> = {};
+        if (parentConfig?.plugins) {
+          for (const plugin of plugins) {
+            const entry = (parentConfig.plugins as Record<string, unknown>)?.[plugin];
+            if (entry && typeof entry === "object") {
+              const dev = (entry as Record<string, unknown>).development;
+              if (typeof dev === "string") {
+                const match = dev.match(/^local:plugins\/(.+)$/);
+                if (match?.[1] && match[1] !== plugin) pluginDirMap[plugin] = match[1];
+              }
+            }
+          }
+        }
+
+        directory = directory || domain || extendsGateway;
+        const targetDir = resolve(directory);
+        const extendsRef = `bos://${extendsAccount}/${extendsGateway}`;
+
+        const repository =
+          (await detectGitRemoteUrl(process.cwd()).catch(() => undefined)) ??
+          parentConfig?.repository;
+
+        if (!parentConfig) {
+          try {
+            parentConfig = await timePhase(timings, "parent config", () =>
+              fetchParentConfig(extendsAccount, extendsGateway),
+            );
+          } catch {
+            return {
+              status: "error" as const,
+              directory,
+              extendsRef,
+              account,
+              domain,
+              extends: extendsRef,
+              plugins,
+              overrides,
+              filesCopied: 0,
+              timings,
+              error: `No config found at ${extendsRef} — are you sure this is the right parent?`,
+            };
+          }
+        }
+
+        const {
+          sourceDir,
+          parentConfig: resolvedParentConfig,
+          cleanup,
+        } = await timePhase(timings, "template source", () =>
+          resolveSourceDir({
+            extendsAccount,
+            extendsGateway,
+            source: input.source,
+          }),
+        );
+
+        parentConfig = resolvedParentConfig;
+
+        const isMinimalScaffold = sourceDir === "";
+
+        try {
+          let filesCopied: number;
+          let childBosConfig: BosConfigInput | null = null;
+
+          if (isMinimalScaffold) {
+            filesCopied = await timePhase(timings, "scaffold project", () =>
+              scaffoldMinimalProject(targetDir, parentConfig as unknown as BosConfigInput, {
+                extendsAccount,
+                extendsGateway,
+                account: account || extendsAccount,
+                domain,
+                plugins,
+                overrides,
+                repository,
+                title: parentConfig?.title,
+                description: parentConfig?.description,
+              }),
+            );
+
+            await timePhase(timings, "personalize config", () =>
+              personalizeConfig(targetDir, {
+                extendsAccount,
+                extendsGateway,
+                account: account || extendsAccount,
+                domain: domain || extendsGateway,
+                plugins,
+                overrides,
+                mode: "init",
+                repository,
+                title: parentConfig?.title,
+                description: parentConfig?.description,
+                testnet: parentConfig?.testnet,
+                staging: parentConfig?.staging,
+              }),
+            );
+
+            childBosConfig = await timePhase(timings, "authored config form", () =>
+              convertChildConfigToAppForm(targetDir),
+            );
+          } else {
+            const patterns = buildInitPatterns(overrides, plugins, pluginDirMap);
+            const routeExclusions = overrides.includes("ui")
+              ? buildPluginRouteExclusions(parentConfig, plugins)
+              : [];
+
+            filesCopied = await timePhase(timings, "copy files", () =>
+              copyFilteredFiles(sourceDir, targetDir, patterns, {
+                overrides,
+                plugins,
+                ignore: routeExclusions,
+              }),
+            );
+
+            await timePhase(timings, "personalize config", () =>
+              personalizeConfig(targetDir, {
+                extendsAccount,
+                extendsGateway,
+                account: account || extendsAccount,
+                domain: domain || extendsGateway,
+                plugins,
+                overrides,
+                workspaceOpts: { sourceDir },
+                repository,
+                title: parentConfig?.title,
+                description: parentConfig?.description,
+                testnet: parentConfig?.testnet,
+                staging: parentConfig?.staging,
+              }),
+            );
+
+            childBosConfig = await timePhase(timings, "authored config form", () =>
+              convertChildConfigToAppForm(targetDir),
+            );
+
+            if (overrides.includes("ui")) {
+              await timePhase(timings, "prune unused ui files", async () =>
+                pruneUnusedUiFiles(targetDir, { log: console.log }),
+              );
+            }
+
+            await timePhase(timings, "write snapshot", () =>
+              writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
+                overrides,
+                plugins,
+                ignore: routeExclusions,
+              }),
+            );
+
+            await timePhase(timings, "personalize agents", () =>
+              personalizeAgentsMd(targetDir, { overrides, plugins }),
+            );
+          }
+
+          await timePhase(timings, "sync shared deps", () =>
+            syncResolvedSharedDeps({
+              configDir: targetDir,
+              hostMode: "local",
+              bosConfig: childBosConfig
+                ? (childBosConfig as unknown as Record<string, unknown>)
+                : undefined,
+            }),
+          );
+
+          const lockfilePath = join(targetDir, "bun.lock");
+          const allowedWorkspaces = computeAllowedWorkspaces(overrides, plugins);
+          stripOrphanedWorkspacesFromLockfile(lockfilePath, allowedWorkspaces);
+          removeInitLockfile(lockfilePath);
+
+          const initConfig = await timePhase(timings, "resolve config", () =>
+            openResolution({ cwd: targetDir }).catch((error: unknown) => {
+              console.warn(
+                "[init] Skipping config resolution — the child has no node_modules yet; `bos dev` resolves after `bun install`.",
+                error instanceof Error ? error.message : error,
+              );
+              return null;
+            }),
+          );
+          const initRuntime = initConfig?.runtime;
+          if (initRuntime) {
+            await timePhase(timings, "generate env/docker", async () => {
+              await materializeViaLayer(targetDir, initRuntime);
+            });
+          }
+          await timePhase(timings, "create env file", async () => {
+            await Effect.runPromise(makeProjectEnv().ensureFile(targetDir));
+          });
+
+          if (!input.noInstall) {
+            await timePhase(timings, "install dependencies", () => runBunInstall(targetDir));
+            await timePhase(timings, "generate types", () => runTypesGen(targetDir));
+            await timePhase(timings, "generate migrations", () =>
+              generateDatabaseMigrations(targetDir),
+            );
+          }
+
+          const initArtifactsConfig = initConfig?.config;
+          if (input.noInstall && initArtifactsConfig) {
+            await timePhase(timings, "generate code artifacts", () =>
+              generateCodeArtifacts(targetDir, initArtifactsConfig),
+            );
+          }
+
+          return {
+            status: "initialized" as const,
+            directory,
+            extendsRef,
+            account,
+            domain,
+            extends: extendsRef,
+            plugins,
+            overrides,
+            filesCopied,
+            timings,
+            targetDir,
+          };
+        } finally {
+          await cleanup();
+        }
+      } catch (error) {
+        const extendsRef = input.extends
+          ? input.extends.startsWith("bos://")
+            ? input.extends
+            : `bos://${input.extends}`
+          : "bos://dev.everything.near/everything.dev";
+        return {
+          status: "error" as const,
+          directory: input.directory ?? "",
+          extendsRef,
+          account: input.account,
+          domain: input.domain,
+          extends: extendsRef,
+          plugins: input.plugins ?? [],
+          overrides: input.overrides,
+          filesCopied: 0,
+          timings: [],
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+  };
+}
+
+function computeAllowedWorkspaces(overrides: string[], plugins?: string[]): string[] {
+  const workspaces: string[] = [];
+  for (const section of overrides) {
+    if (section === "host") workspaces.push("host");
+    if (section === "ui") workspaces.push("ui");
+    if (section === "api") workspaces.push("api");
+  }
+  if (plugins && plugins.length > 0) {
+    workspaces.push("plugins/*");
+  }
+  return workspaces;
+}
