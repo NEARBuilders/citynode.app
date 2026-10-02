@@ -230,11 +230,11 @@ This document provides operational guidance for AI agents working in the parent 
 
 **Start Development:**
 ```bash
-cp .env.example .env   # First time only
 bun install
-docker compose up -d --wait   # Start local Postgres (api_db:5432, auth_db:5433)
 bun run dev
 
+# bos dev creates .env from .env.example on first run (with a generated BETTER_AUTH_SECRET)
+# and auto-starts docker compose when the DB preflight finds local Postgres down.
 # Or combined: bun run dev:postgres  ==  docker compose up -d --wait && bun run dev
 
 # Pin individual service ports (explicitly-passed flags are pinned; unset services derive from the base; only explicit choices persist in .bos/infra-state.json — see ADR 0012)
@@ -249,7 +249,7 @@ bos dev --port 3100 --api-port 3101 --ui-port 3103 --auth-port 3102 --plugin-por
 
 **Dev/test isolation:** a committed `.env.test` (generated alongside `.env.example` and `docker-compose.yml` by `bos dev`) maps every `*_DATABASE_URL` and `BETTER_AUTH_SECRET` to the test databases. Test suites load `.env.test` instead of `.env`: the regression stack (`tests/regression/lib/start-stack.mjs`) injects it into spawned stacks, `tests/regression/lib/regression-env.mjs` resolves it with fail-fast guards that refuse to run against dev URLs or the dev auth secret (override deliberately with `REGRESSION_ALLOW_DEV_DB=1`), and api unit/integration tests pin to in-memory pglite unless `TEST_DATABASE=postgres` opts into `.env.test`. Start the test databases with `bun run test:db:up` (or `bun run test:db:reset` for a clean slate).
 
-The API and plugins auto-apply migrations on boot, so `bun db:migrate` is optional (use it to migrate without starting the dev server). `bun run dev` runs `bos dev`'s preflight, which probes the localhost DB ports and exits with a clear `docker compose up -d --wait` hint if Postgres isn't up.
+The API and plugins auto-apply migrations on boot, so `bun db:migrate` is optional (use it to migrate without starting the dev server). `bun run dev` runs `bos dev`'s preflight, which probes the localhost DB ports and — when every failure is a down local service, `docker-compose.yml` exists, docker is reachable, and it is not a test-mode stack — starts the compose services itself (`docker compose up -d --wait`) and re-probes once before failing. Test-mode stacks (`NODE_ENV=test` / `BOS_TEST=1` / `BOS_NO_PERSIST_PORTS=1`) never auto-start compose.
 
 Port allocation is atomic block allocation (ADR 0012): the layout derives deterministically from one base port (`--port N` → api N+1, auth N+2, ui N+3, plugins N+10+), the whole block is validated before anything spawns, and only explicitly-passed port flags persist to `.bos/infra-state.json` under `devPorts` (drift is never persisted — a busy block moves +100 with a prominent notice naming the holders, and restarts re-try the preferred base). Explicitly-passed flags are pinned: if that exact port is occupied, allocation fails loudly instead of silently moving. `bos kill` escalates SIGTERM → 5s → SIGKILL, reaps orphaned children of dead sessions, and verifies ports actually freed; new sessions adopt-and-reap orphaned children from dead same-project sessions at boot. Test-spawned stacks never persist ports (`BOS_NO_PERSIST_PORTS=1`, plus `NODE_ENV=test` / `BOS_TEST=1` are honored), so test runs can never repin your dev ports.
 `CORS_ORIGIN` in `.env.example` is derived from the actual resolved host port in development.

@@ -1165,9 +1165,7 @@ export async function runTypesGen(
   throw new Error("Unable to locate bos CLI for types generation");
 }
 
-export async function runDockerComposeUp(destination: string): Promise<void> {
-  await execCommand("docker", ["compose", "up", "-d", "--wait"], destination, { stdio: "inherit" });
-}
+export { runDockerComposeUp } from "../infra/docker";
 
 async function runWithProgress(
   command: string,
@@ -1484,7 +1482,6 @@ This document provides operational guidance for AI agents working in this everyt
 
 **Start Development:**
 \`\`\`bash
-cp .env.example .env   # First time only
 bun install
 bun run dev
 \`\`\`
@@ -1559,9 +1556,9 @@ You don't need to wait for a PR to merge and run through CI/CD. Publish your own
   parts.push(`## Development Workflow
 
 ### Starting Development
-1. \`cp .env.example .env\` (first time)
-2. \`bun install\`
-3. \`bun run dev\``);
+1. \`bun install\`
+2. \`bun run dev\`
+3. \`bos dev\` creates \`.env\` on first run and starts local Postgres via docker compose when it is down`);
 
   parts.push(`### Debugging Issues
 
@@ -1884,9 +1881,7 @@ Remotes in \`bos.config.json\` are **not hosted APIs** — they are code bundles
 ### Run locally
 
 \`\`\`bash
-cp .env.example .env
 bun install
-docker compose up -d --wait
 bos dev
 \`\`\`
 

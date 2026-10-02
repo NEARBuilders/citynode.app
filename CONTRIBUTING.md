@@ -14,13 +14,13 @@ New here? Get onboarded and plugged in:
 ## Quick Setup
 
 ```bash
-cp .env.example .env      # First time only
 bun install               # Install dependencies
-docker compose up -d --wait   # Start local Postgres (api_db:5432, auth_db:5433)
 bun run dev               # Start development (host mode auto-detected)
 ```
 
-`bun db:migrate` is optional — the API and plugins auto-apply migrations on boot. Run it only to migrate without starting the dev server.
+That's it — on first run `bos dev` creates `.env` from `.env.example` (with a generated `BETTER_AUTH_SECRET`), and if local Postgres is down it starts it for you via `docker compose up -d --wait`. Docker must be installed and running.
+
+`bun run dev:postgres` starts the databases explicitly; `dev:postgres:down` / `dev:postgres:reset` manage them. `bun db:migrate` is optional — the API and plugins auto-apply migrations on boot.
 
 Visit http://localhost:3003 (UI), http://localhost:3001 (API), and http://localhost:3002 (Auth).
 

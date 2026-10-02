@@ -14,6 +14,8 @@ export interface PreflightFailure {
   host: string;
   port: number;
   error: string;
+  /** True when the target port accepted a TCP connection (so docker compose cannot fix this failure). */
+  tcpReachable: boolean;
 }
 
 function parseLocalUrl(url: string): { host: string; port: number } | null {
@@ -132,6 +134,7 @@ export function preflightLocalInfra(
               host: target.host,
               port: target.port,
               error: `${target.secret} at ${target.host}:${target.port} is reachable but Postgres connection failed. Check credentials and database name.${pluginContext}`,
+              tcpReachable: true,
             } satisfies PreflightFailure;
           }
           return {
@@ -139,6 +142,7 @@ export function preflightLocalInfra(
             host: target.host,
             port: target.port,
             error: `${target.secret} points to ${target.host}:${target.port} but nothing is listening.${pluginContext}`,
+            tcpReachable: false,
           } satisfies PreflightFailure;
         }
 
@@ -149,6 +153,7 @@ export function preflightLocalInfra(
           host: target.host,
           port: target.port,
           error: `${target.secret} points to ${target.host}:${target.port} but nothing is listening`,
+          tcpReachable: false,
         } satisfies PreflightFailure;
       }),
     { concurrency: "unbounded" },
