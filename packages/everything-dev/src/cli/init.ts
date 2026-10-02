@@ -222,7 +222,7 @@ export function buildInitPatterns(
   const patterns: string[] = [...INIT_ROOT_PATTERNS];
 
   if (has("ui")) patterns.push("ui/**");
-  if (has("api")) patterns.push("api/**");
+  if (has("api")) patterns.push(API_TEMPLATE_PATTERN);
   if (has("host")) patterns.push("host/**");
   if (has("plugins")) {
     for (const plugin of plugins ?? []) {
@@ -232,6 +232,13 @@ export function buildInitPatterns(
   }
 
   return patterns;
+}
+
+/** api-override children get the slim generic shell, never the parent's domain API. */
+const API_TEMPLATE_PATTERN = ".github/templates/api/**";
+
+export function isApiTemplatePath(filePath: string): boolean {
+  return filePath.startsWith(".github/templates/api/");
 }
 
 export function buildPluginRouteExclusions(
@@ -324,6 +331,9 @@ function extractPluginRoutes(entry: unknown): string[] | undefined {
 }
 
 export function sourcePathToDestinationPath(filePath: string): string {
+  if (isApiTemplatePath(filePath)) {
+    return filePath.replace(/^\.github\/templates\/api\//, "api/");
+  }
   return filePath.startsWith(".github/templates/")
     ? filePath.replace(/^\.github\/templates\//, ".github/")
     : filePath;
@@ -503,6 +513,11 @@ export async function copyFilteredFiles(
     });
     for (const match of matches) {
       allFiles.add(match);
+    }
+  }
+  if (!options.overrides.includes("api")) {
+    for (const match of allFiles) {
+      if (isApiTemplatePath(match)) allFiles.delete(match);
     }
   }
 
@@ -1469,6 +1484,11 @@ export async function writeInitSnapshot(
     });
     for (const match of matches) {
       allFiles.add(match);
+    }
+  }
+  if (!options.overrides.includes("api")) {
+    for (const match of allFiles) {
+      if (isApiTemplatePath(match)) allFiles.delete(match);
     }
   }
 
