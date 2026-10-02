@@ -171,6 +171,9 @@ const requireTenantOwnedByOrg = (
     return tenant;
   });
 
+const isCommunitySettingsRole = (role: string | null | undefined): boolean =>
+  role === "owner" || role === "admin";
+
 const authorizedTenant = (
   services: { tenants: TenantsService },
   input: { tenantId: string },
@@ -221,7 +224,7 @@ const authorizedTenant = (
         }),
       );
     }
-    if (!["owner", "admin"].includes(context.organization?.member?.role ?? "")) {
+    if (!isCommunitySettingsRole(context.organization?.member?.role)) {
       return yield* Effect.fail(
         new ORPCError("FORBIDDEN", {
           message: "Community settings require an organization owner or admin",
@@ -514,7 +517,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
         const ownerTenants = yield* services.tenants.listTenantsByOwnerUserId(context.user.id);
         const orgId = context.organization?.activeOrganizationId;
-        if (!orgId || !["owner", "admin"].includes(context.organization?.member?.role ?? "")) {
+        if (!orgId || !isCommunitySettingsRole(context.organization?.member?.role)) {
           return ownerTenants;
         }
         const orgTenants = yield* services.tenants.listTenantsByOrgIds([orgId]);
