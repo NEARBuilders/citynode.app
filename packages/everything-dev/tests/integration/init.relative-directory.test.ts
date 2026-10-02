@@ -107,7 +107,8 @@ describe("bos init - relative directory", () => {
     expect(envExample).not.toContain("PROJECTS_DATABASE_URL=");
 
     expect(dockerCompose).toContain("postgres-api:");
-    expect(dockerCompose).toContain("postgres-auth:");
+    expect(dockerCompose).toContain("postgres-api-test:");
+    expect(dockerCompose).not.toContain("postgres-auth:");
     expect(dockerCompose).not.toContain("postgres-example:");
   }, 60_000);
 });
