@@ -108,7 +108,10 @@ describe("profile settings", () => {
     );
 
     const selector = await screen.findByTestId("settings.language-select");
-    fireEvent.change(selector, { target: { value: "fr" } });
+    fireEvent.click(selector);
+    const french = await screen.findByRole("option", { name: "Français" });
+    fireEvent.pointerDown(french, { pointerType: "mouse" });
+    fireEvent.click(french);
 
     await waitFor(() => expect(harness.updateUser).toHaveBeenCalledWith({ locale: "fr" }));
     await waitFor(() => expect(harness.success).toHaveBeenCalledWith("Langue mise à jour"));

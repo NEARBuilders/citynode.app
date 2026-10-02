@@ -114,7 +114,12 @@ function LanguageSettings() {
       <div className="max-w-md">
         <Field>
           <FieldLabel htmlFor="settings-language">{translate("auth.locale.display")}</FieldLabel>
-          <LoginLanguageSelector id="settings-language" testId="settings.language-select" />
+          <LoginLanguageSelector
+            id="settings-language"
+            testId="settings.language-select"
+            size="default"
+            className="w-full"
+          />
           <FieldDescription>{translate("auth.locale.saved")}</FieldDescription>
         </Field>
       </div>
