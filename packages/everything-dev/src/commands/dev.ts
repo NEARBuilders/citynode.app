@@ -4,7 +4,7 @@ import type { PhaseTiming } from "../contract";
 import { type LogLevelEnv, resolveLogLevel, toEffectLogLevel } from "../dev-log-pipeline";
 import { bootstrapLayers, devBootstrap, resolveProxyUrl, startBootstrap } from "../dev-program";
 import { openResolution } from "../resolution/session";
-import { type BosBuilder, BosDepsTag, setPendingDevSession } from "./shared";
+import { type BosBuilder, BosDepsTag } from "./shared";
 
 export function registerDev(builder: BosBuilder) {
   return {
@@ -38,13 +38,12 @@ export function registerDev(builder: BosBuilder) {
         };
       }
 
-      setPendingDevSession(outcome.session);
-
       return {
         status: "started" as const,
         description: outcome.description,
         processes: outcome.processes,
         timings: devTimings,
+        session: outcome.session,
       };
     }),
 
@@ -93,11 +92,11 @@ export function registerDev(builder: BosBuilder) {
         };
       }
 
-      setPendingDevSession(outcome.session, outcome.summary);
-
       return {
         status: "running" as const,
         url: outcome.url,
+        session: outcome.session,
+        summary: outcome.summary,
       };
     }),
   };

@@ -1,6 +1,5 @@
 import { join } from "node:path";
 import process from "node:process";
-import { createInterface } from "node:readline/promises";
 import { Context, Effect } from "effect";
 import { type KeyPair, parseKey } from "near-kit";
 import { openInBrowser, startDeviceLogin } from "../auth-login";
@@ -74,14 +73,7 @@ export function registerKeys(builder: BosBuilder) {
             console.log(`    ${colors.dim(k)}`);
           }
 
-          const rl = createInterface({
-            input: process.stdin,
-            output: process.stdout,
-          });
-          const answer = await rl.question("  Remove old key(s)? [Y/n] ");
-          rl.close();
-
-          if (answer.toLowerCase() !== "n" && answer.toLowerCase() !== "no") {
+          if (input.removeOldKeys !== false) {
             try {
               await deleteAccessKeys(account, oldKeys, network);
               console.log(
