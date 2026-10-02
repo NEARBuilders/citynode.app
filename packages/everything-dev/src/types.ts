@@ -50,10 +50,28 @@ export const FederationEntrySchema = z.object({
   name: z.string(),
   url: z.string(),
   entry: z.string(),
+  /** the content-hashed container entry URL (derived from the version
+   * manifest when the slot pins one) — consumers load this instead of
+   * appending the legacy fixed name */
+  entryUrl: z.string().optional(),
   source: SourceModeSchema,
   integrity: z.string().optional(),
 });
 export type FederationEntry = z.infer<typeof FederationEntrySchema>;
+
+/**
+ * Slot pin (atomic-deploys): an explicit pointer to the slot's immutable
+ * per-deploy WorkspaceVersionManifest — `manifest` is the versioned manifest
+ * filename relative to the slot's production base, `integrity` is that
+ * document's SRI. Resolving the pin derives the slot's entry-level fields
+ * (`entryUrl`, entry integrity, ssr entry). A slot without a `pin` uses its
+ * top-level `integrity` as a direct entry SRI (fixed-name slots only).
+ */
+export const SlotPinSchema = z.object({
+  manifest: z.string().min(1),
+  integrity: z.string().min(1),
+});
+export type SlotPin = z.infer<typeof SlotPinSchema>;
 
 export const PluginUiConfigSchema = z.object({
   name: z.string(),
@@ -66,6 +84,7 @@ export const PluginUiConfigSchema = z.object({
   integrity: z.string().optional(),
   ssr: z.string().optional(),
   ssrIntegrity: z.string().optional(),
+  pin: SlotPinSchema.optional(),
 });
 export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
 
@@ -82,6 +101,7 @@ export const ComposableAppEntrySchema = z.object({
   shared: SharedDepMapSchema.optional(),
   connectSrc: z.array(z.string()).optional(),
   ui: PluginUiConfigSchema.optional(),
+  pin: SlotPinSchema.optional(),
 });
 export type ComposableAppEntry = z.infer<typeof ComposableAppEntrySchema>;
 
@@ -113,6 +133,9 @@ const PluginRuntimeUiSchema = z.object({
   integrity: z.string().optional(),
   ssrUrl: z.string().optional(),
   ssrIntegrity: z.string().optional(),
+  entryUrl: z.string().optional(),
+  ssrEntryUrl: z.string().optional(),
+  dependsOn: z.array(z.string()).optional(),
 });
 export type PluginRuntimeUi = z.infer<typeof PluginRuntimeUiSchema>;
 
@@ -128,6 +151,7 @@ export const RuntimePluginConfigSchema = z.object({
   variables: JsonObjectSchema.optional(),
   secrets: z.array(z.string()).optional(),
   integrity: z.string().optional(),
+  entryUrl: z.string().optional(),
   shared: SharedDepMapSchema.optional(),
   connectSrc: z.array(z.string()).optional(),
   ui: PluginRuntimeUiSchema.optional(),
@@ -170,9 +194,11 @@ export const UiConfigSchema = z
     production: z.string().optional(),
     /** browser-facing base overriding `production` (see PluginUiConfigSchema) */
     publicUrl: z.string().optional(),
+    /** direct entry SRI — only for slots without a `pin` */
     integrity: z.string().optional(),
     ssr: z.string().optional(),
     ssrIntegrity: z.string().optional(),
+    pin: SlotPinSchema.optional(),
   })
   .strict();
 export type UiConfig = z.infer<typeof UiConfigSchema>;
@@ -180,8 +206,10 @@ export type UiConfig = z.infer<typeof UiConfigSchema>;
 export const HostConfigSchema = z.object({
   development: z.string(),
   production: z.string(),
+  /** direct entry SRI — only for slots without a `pin` */
   integrity: z.string().optional(),
   secrets: z.array(z.string()).optional(),
+  pin: SlotPinSchema.optional(),
 });
 export type HostConfig = z.infer<typeof HostConfigSchema>;
 
@@ -244,6 +272,7 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
       })
       .optional(),
     ci: CiConfigSchema.optional(),
+    cdn: CdnConfigSchema.optional(),
   }),
 );
 
@@ -274,6 +303,8 @@ export interface BosConfigInput {
   plugins?: Record<string, string | BosConfigInput>;
   publish?: PublishConfig;
   ci?: CiConfig;
+  cdn?: CdnConfig;
+  rolledBackFrom?: string;
 }
 
 export const RailwayCiSchema = z.object({
@@ -282,9 +313,16 @@ export const RailwayCiSchema = z.object({
 export type RailwayCi = z.infer<typeof RailwayCiSchema>;
 
 export const CiConfigSchema = z.object({
+  image: z.string().optional(),
   railway: RailwayCiSchema.optional(),
 });
 export type CiConfig = z.infer<typeof CiConfigSchema>;
+
+/** Where this runtime's built bundles are served from. Inherited via extends. */
+export const CdnConfigSchema = z.object({
+  origin: z.string().optional(),
+});
+export type CdnConfig = z.infer<typeof CdnConfigSchema>;
 
 export const PublishAuthSchema = z.enum(["session", "key", "custody"]);
 export type PublishAuth = z.infer<typeof PublishAuthSchema>;
@@ -312,6 +350,8 @@ export const BosConfigSchema = z.object({
   repository: z.string().optional(),
   publish: PublishConfigSchema.optional(),
   ci: CiConfigSchema.optional(),
+  cdn: CdnConfigSchema.optional(),
+  rolledBackFrom: z.string().optional(),
   plugins: z.record(PluginKeySchema, z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
     host: HostConfigSchema,
@@ -327,6 +367,9 @@ export const RuntimeConfigSchema = z.object({
   account: z.string(),
   domain: z.string().optional(),
   networkId: z.enum(["mainnet", "testnet"]),
+  /** the deploy fingerprint of the snapshot this config came from
+   * (atomic-deploys 10) — rides the client config for the soft-refresh signal */
+  deploymentFingerprint: z.string().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
   repository: z.string().optional(),
@@ -344,6 +387,7 @@ export const RuntimeConfigSchema = z.object({
     publicUrl: z.string().optional(),
     ssrUrl: z.string().optional(),
     ssrIntegrity: z.string().optional(),
+    ssrEntryUrl: z.string().optional(),
     dependsOn: z.array(z.string()).optional(),
   }),
   api: FederationEntrySchema.extend({
@@ -364,6 +408,7 @@ export const RuntimeConfigSchema = z.object({
     secrets: z.array(z.string()).optional(),
     shared: SharedDepMapSchema.optional(),
     dependsOn: z.array(z.string()).optional(),
+    ui: PluginRuntimeUiSchema.optional(),
   }).optional(),
   plugins: z.record(PluginKeySchema, RuntimePluginConfigSchema).optional(),
   nodes: z.record(z.string(), RuntimeDependencyNodeSchema).optional(),
@@ -374,6 +419,8 @@ export const ClientRuntimeConfigSchema = z.object({
   env: z.enum(["development", "production", "staging"]),
   account: z.string(),
   networkId: z.enum(["mainnet", "testnet"]),
+  /** the deploy fingerprint this document was rendered from (soft refresh) */
+  deploymentFingerprint: z.string().optional(),
   hostUrl: z.string().optional(),
   assetsUrl: z.string(),
   apiBase: z.string(),
@@ -387,6 +434,8 @@ export const ClientRuntimeConfigSchema = z.object({
       url: z.string(),
       entry: z.string(),
       integrity: z.string().optional(),
+      /** the content-hashed container entry URL when the slot pins a version manifest */
+      entryUrl: z.string().optional(),
       /** composition payload — the server sets it; the client reconstructs the same tree from it before hydrate */
       compose: ComposePayloadSchema.optional(),
     })
@@ -427,6 +476,7 @@ export const ClientRuntimeConfigSchema = z.object({
             integrity: z.string().optional(),
             ssrUrl: z.string().optional(),
             ssrIntegrity: z.string().optional(),
+            entryUrl: z.string().optional(),
           })
           .optional(),
       }),

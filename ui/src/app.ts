@@ -120,6 +120,7 @@ export {
   tenantLabel,
   verifySsrIntegrity,
   verifyUiIntegrity,
+  verifyUiPin,
 } from "everything-dev/ui/tenant";
 export type { ApiClient } from "./lib/api";
 export { createApiClient, useApiClient, useOrpc } from "./lib/api";

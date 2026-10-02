@@ -28,6 +28,7 @@ import { RootError } from "@/components/root-error";
 import { RootNotFound } from "@/components/root-not-found";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { VersionRefreshBanner } from "@/components/version-refresh-banner";
 import { useMediaQuery } from "@/hooks";
 import { AccountLocaleProvider } from "@/i18n/account-locale-provider";
 import { resolveAppLocale, useAppLocale } from "@/i18n/runtime";
@@ -157,7 +158,7 @@ function RootComponent() {
 function RootDocument() {
   const { locale } = useAppLocale();
   const router = useRouter();
-  const { cspNonce } = Route.useRouteContext();
+  const { cspNonce, runtimeConfig } = Route.useRouteContext();
   const isDesktop = useMediaQuery("(min-width: 640px)");
   const isSsr = typeof window === "undefined";
   useEffect(() => {
@@ -183,6 +184,9 @@ function RootDocument() {
               <GlobalChrome />
             </div>
             <Toaster position={isDesktop ? "bottom-right" : "top-center"} closeButton />
+            <ClientOnly>
+              <VersionRefreshBanner runtimeConfig={runtimeConfig} />
+            </ClientOnly>
           </ThemeProvider>
         </MotionConfig>
         <Scripts />

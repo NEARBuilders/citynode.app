@@ -4,7 +4,9 @@ import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
+import { isBuildInvocation, uiEntryFilename } from "every-plugin/build/artifact-names";
 import { getPluginSharedDependencies } from "every-plugin/build/rspack";
+import { hashArtifactsPlugin } from "every-plugin/build/ui";
 
 const __dirname = import.meta.dirname;
 const require = createRequire(import.meta.url);
@@ -97,7 +99,12 @@ const shared = mergeSharedMaps(
   pluginShared,
 );
 
-const plugins = [pluginReact()];
+const plugins = [
+  pluginReact(),
+  ...(isBuildInvocation()
+    ? [hashArtifactsPlugin({ entryBase: "remoteEntry", distRoot: path.join(__dirname, "dist") })]
+    : []),
+];
 
 export default defineConfig({
   plugins,
@@ -141,7 +148,7 @@ export default defineConfig({
       plugins: [
         new ModuleFederationPlugin({
           name: "host",
-          filename: "remoteEntry.js",
+          filename: uiEntryFilename({ isBuild: isBuildInvocation() }),
           dts: false,
           runtimePlugins: [require.resolve("@module-federation/node/runtimePlugin")],
           library: { type: "commonjs-module" },

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getGatewayId, type Organization, useApiClient, useAuthClient } from "@/app";
+import { getGatewayId, useApiClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { FieldGroup } from "@/components/ui/field";
@@ -12,6 +12,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -66,7 +67,6 @@ export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
 function ApplyPage() {
   const t = useAppTranslation();
   const apiClient = useApiClient();
-  const authClient = useAuthClient();
   const queryClient = useQueryClient();
   const initialRootNodes = Route.useLoaderData();
   const { auth, runtimeConfig } = Route.useRouteContext();
@@ -120,14 +120,7 @@ function ApplyPage() {
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
   const rootNodes = queriedRootNodes ?? initialRootNodes;
-  const { data: organizations = [] } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data } = await authClient.organization.list();
-      return (data ?? []) as Organization[];
-    },
-    staleTime: 30 * 1000,
-  });
+  const { data: organizations = [] } = useQuery(organizationsQueryOptions(apiClient));
   const defaultOrgId = getDefaultOrganizationId(activeOrgId, organizations);
   const switchOrganization = useSwitchOrganization();
   const displayedOrgId =

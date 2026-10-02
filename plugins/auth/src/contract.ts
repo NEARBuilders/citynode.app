@@ -46,6 +46,9 @@ const organizationInfoSchema = z.object({
   slug: z.string(),
   logo: z.string().nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  status: z.enum(["active", "pending", "rejected"]).default("active"),
+  requestedBy: z.string().nullable().optional(),
+  rejectionReason: z.string().nullable().optional(),
 });
 
 const teamContextSchema = z.object({
@@ -333,18 +336,7 @@ export const contract = oc.router({
 
   listOrganizations: oc
     .route({ method: "GET", path: "/v1/auth/organizations" })
-    .output(
-      z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          slug: z.string(),
-          logo: z.string().nullable().optional(),
-          metadata: z.unknown().nullable(),
-          createdAt: z.date(),
-        }),
-      ),
-    )
+    .output(z.array(organizationInfoSchema.extend({ createdAt: z.date() })))
     .errors(Errors),
 
   getFullOrganization: oc
@@ -357,13 +349,8 @@ export const contract = oc.router({
       }),
     )
     .output(
-      z
-        .object({
-          id: z.string(),
-          name: z.string(),
-          slug: z.string(),
-          logo: z.string().nullable().optional(),
-          metadata: z.unknown().nullable(),
+      organizationInfoSchema
+        .extend({
           createdAt: z.date(),
           members: z.array(memberSchema),
           invitations: z.array(invitationSchema),
@@ -377,6 +364,26 @@ export const contract = oc.router({
     .route({ method: "GET", path: "/v1/auth/admin/organizations/{organizationId}" })
     .input(z.object({ organizationId: z.string() }))
     .output(organizationInfoSchema.nullable())
+    .errors(Errors),
+
+  listOrganizationRequests: oc
+    .route({ method: "GET", path: "/v1/auth/admin/organization-requests" })
+    .output(z.array(organizationInfoSchema.extend({ createdAt: z.date() })))
+    .errors(Errors),
+
+  reviewOrganization: oc
+    .route({ method: "POST", path: "/v1/auth/admin/organization-requests/{organizationId}/review" })
+    .input(
+      z.discriminatedUnion("decision", [
+        z.object({ organizationId: z.string(), decision: z.literal("approve") }),
+        z.object({
+          organizationId: z.string(),
+          decision: z.literal("reject"),
+          reason: z.string().trim().min(1).max(2000),
+        }),
+      ]),
+    )
+    .output(organizationInfoSchema)
     .errors(Errors),
 
   createOrganization: oc

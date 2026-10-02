@@ -41,9 +41,14 @@ test.describe("CSR compose", () => {
     expect(authRemote, "auth ui remote must be in the payload").toBeTruthy();
 
     // The runtime registers the remote via its mf-manifest.json (the entry
-    // URL's remoteEntry.js is rewritten to it in hydrate) — that manifest
-    // fetch is the exact point the client compose previously failed.
-    const manifestUrl = authRemote!.entry.replace(/\/?remoteEntry\.js$/, "/mf-manifest.json");
+    // URL's remoteEntry[.hash].js is rewritten to it in hydrate) — that
+    // manifest fetch is the exact point the client compose previously failed.
+    // The hash segment is optional: dev stacks serve the fixed dev entry,
+    // pinned (start) stacks serve the content-hashed entry.
+    const manifestUrl = authRemote!.entry.replace(
+      /\/?remoteEntry(\.[a-f0-9]+)?\.js$/,
+      "/mf-manifest.json",
+    );
     const entryStatus = await page.evaluate(async (url: string) => {
       const response = await fetch(url, { method: "GET" });
       return response.status;

@@ -15,6 +15,7 @@ import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -76,15 +77,7 @@ export function TenantDetailContent({
     enabled: !!tenantId,
   });
 
-  const { data: organizations } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const { data, error } = await auth.organization.list();
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
-    staleTime: 60 * 1000,
-  });
+  const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
 
   const { data: members = [] } = useQuery({
     queryKey: ["org-members", tenant?.orgId],

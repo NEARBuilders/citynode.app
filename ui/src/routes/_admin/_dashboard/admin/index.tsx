@@ -24,6 +24,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { VersionCard } from "@/components/version-card";
 import {
   resolveAppLocale,
   translateAppMessage,
@@ -125,6 +126,8 @@ function AdminOverview() {
           testId="admin.stat.relayer"
         />
       </StatGrid>
+
+      <VersionCard />
 
       <section className="flex flex-col gap-6">
         <SectionHeader
@@ -233,11 +236,11 @@ function AdminOverview() {
             description={translate("admin.sitesDescription")}
           />
           <ManageRow
-            to="/orgs"
+            to="/admin/organizations"
             icon={UsersIcon}
             title={translate("common.organizations")}
             testId="admin.heading.organizations"
-            description={translate("admin.orgsDescription")}
+            description={translate("orgApproval.reviewDescription")}
           />
           <ManageRow
             to="/admin/relayer"

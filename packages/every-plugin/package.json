@@ -87,6 +87,19 @@
       "import": "./dist/remote-entry.mjs",
       "require": "./dist/remote-entry.cjs"
     },
+    "./version-manifest": {
+      "bun": {
+        "types": "./src/version-manifest.ts",
+        "import": "./src/version-manifest.ts"
+      },
+      "development": {
+        "types": "./src/version-manifest.ts",
+        "import": "./src/version-manifest.ts"
+      },
+      "types": "./dist/version-manifest.d.mts",
+      "import": "./dist/version-manifest.mjs",
+      "require": "./dist/version-manifest.cjs"
+    },
     "./types": {
       "bun": {
         "types": "./src/types.ts",
@@ -112,6 +125,19 @@
       "types": "./dist/build/rspack/index.d.mts",
       "import": "./dist/build/rspack/index.mjs",
       "require": "./dist/build/rspack/index.cjs"
+    },
+    "./build/artifact-names": {
+      "bun": {
+        "types": "./src/build/artifact-names.ts",
+        "import": "./src/build/artifact-names.ts"
+      },
+      "development": {
+        "types": "./src/build/artifact-names.ts",
+        "import": "./src/build/artifact-names.ts"
+      },
+      "types": "./dist/build/artifact-names.d.mts",
+      "import": "./dist/build/artifact-names.mjs",
+      "require": "./dist/build/artifact-names.cjs"
     },
     "./ui/manifest": {
       "bun": {

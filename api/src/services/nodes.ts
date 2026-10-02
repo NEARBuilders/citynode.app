@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
-import { Context, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
   type NodeMetadata,
@@ -83,7 +83,7 @@ export interface NodesService {
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
   setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
   delete(id: string): NodeEffect<boolean>;
-  listRootNodes(): NodeEffect<NodeRecord[]>;
+  listRootNodes: NodeEffect<NodeRecord[]>;
   listChildren(parentId: string): NodeEffect<NodeRecord[]>;
   resolveBySlug(slug: string, parentId?: string | null): NodeEffect<NodeRecord | null>;
   subtreeWithValidators(nodeId: string): NodeEffect<SubtreeNode[]>;
@@ -118,7 +118,7 @@ function mergeKindMetadata(
   metadata: Record<string, unknown> | undefined,
 ): NodeMetadata {
   return {
-    ...(metadata ?? {}),
+    ...metadata,
     ...(kind !== undefined && { kind }),
   } as NodeMetadata;
 }
@@ -288,7 +288,7 @@ export const NodesLive = Layer.effect(
       update: (id, input) =>
         Effect.gen(function* () {
           yield* input.slug !== undefined ? validateSlug(input.slug) : Effect.void;
-          const patch: Record<string, unknown> = { updatedAt: new Date() };
+          const patch: Record<string, unknown> = { updatedAt: yield* DateTime.nowAsDate };
           if (input.kind !== undefined || input.metadata !== undefined) {
             const [current] = yield* query(() =>
               db
@@ -426,13 +426,9 @@ export const NodesLive = Layer.effect(
           return rows.length > 0;
         }),
 
-      listRootNodes: () =>
-        Effect.gen(function* () {
-          const rows = yield* query(() =>
-            db.select().from(nodesTable).where(isNull(nodesTable.parentId)),
-          );
-          return rows.map(toNodeRecord);
-        }),
+      listRootNodes: query(() =>
+        db.select().from(nodesTable).where(isNull(nodesTable.parentId)),
+      ).pipe(Effect.map((rows) => rows.map(toNodeRecord))),
 
       listChildren: (parentId) =>
         Effect.gen(function* () {

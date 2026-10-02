@@ -243,6 +243,11 @@ export const StorageUploadResultSchema = z.object({
   stored: z.number().int(),
   totalBytes: z.number().int(),
   integrity: z.record(z.string(), z.string()),
+  storage: z
+    .enum(["s3", "memory"])
+    .describe(
+      "Resolved bundle-storage backend: `s3` (R2/MinIO, persistent) or `memory` (ephemeral — bytes are lost on restart)",
+    ),
 });
 
 export const contract = oc.router({

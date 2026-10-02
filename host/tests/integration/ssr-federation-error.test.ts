@@ -22,7 +22,11 @@ const { FederationLifecycle, loadRouterModule } = await import(
 
 const { FederationError } = await import("../../src/services/errors");
 
-function createRemoteConfig(options?: { ssrUrl?: string; ssrIntegrity?: string }): RuntimeConfig {
+function createRemoteConfig(options?: {
+  ssrUrl?: string;
+  ssrIntegrity?: string;
+  ssrEntryUrl?: string;
+}): RuntimeConfig {
   return {
     env: "production",
     account: "linktree.near",
@@ -41,6 +45,8 @@ function createRemoteConfig(options?: { ssrUrl?: string; ssrIntegrity?: string }
       integrity: "sha384-ui",
       ssrUrl: options?.ssrUrl ?? "https://cdn.example.com/ui-ssr",
       ssrIntegrity: options?.ssrIntegrity ?? "sha384-ssr-a",
+      ssrEntryUrl:
+        options?.ssrEntryUrl ?? "https://cdn.example.com/ui-ssr/remoteEntry.server.aaa.js",
     },
     api: {
       name: "api",

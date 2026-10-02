@@ -72,7 +72,7 @@ function NewOrganization() {
       return data;
     },
     onSuccess: async (data) => {
-      toast.success(translate("org.createdNamed", { name: data?.name ?? "" }));
+      toast.success(translate("orgApproval.submittedNamed", { name: data?.name ?? "" }));
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await queryClient.refetchQueries({ queryKey: ["organizations"] });
       if (data?.slug) {
@@ -137,7 +137,7 @@ function NewOrganization() {
     <PageContainer variant="narrow">
       <PageHeader
         title={translate("org.new")}
-        description={translate("org.ownerHint")}
+        description={translate("orgApproval.ownerHint")}
         headerTestId="orgs.new.heading"
       />
 
@@ -269,7 +269,9 @@ function NewOrganization() {
                 disabled={createMutation.isPending || !canSubmit}
                 data-testid="orgs.new.submit"
               >
-                {createMutation.isPending ? translate("common.creating") : translate("org.create")}
+                {createMutation.isPending
+                  ? translate("apply.submit.pending")
+                  : translate("orgApproval.request")}
               </Button>
             )}
           </form.Subscribe>

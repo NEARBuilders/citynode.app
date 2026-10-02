@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { Context, Data, Effect, Layer } from "effect";
+import { Clock, Context, Data, Effect, Layer } from "effect";
 import {
   CORE_UI_PLUGIN_KEY as CORE_UI_KEY,
   type ComposePayload,
@@ -26,6 +26,7 @@ import {
   type PluginManifest,
   PluginManifestSchema,
   type RouteConfigModule,
+  resolveEntryUrlForEnv,
   UI_REMOTE_ENTRY_FILENAME,
 } from "everything-dev/ui/manifest";
 import type { RouterModule } from "../types";
@@ -67,6 +68,10 @@ interface UiSource {
   remote?: UiRemoteEntry;
   localRoot?: string;
   manifestUrl?: string;
+  /** the MF browser manifest URL (mf-manifest.json — hashed when the slot
+   * pins a version manifest); rides the compose payload for hydrate-time
+   * remote registration */
+  browserManifestUrl?: string;
   /** client-side web entry (browser remoteEntry.js) — the publicUrl base
    * when the runtime declares one (image-native /bundles), else the url */
   webEntry?: string;
@@ -95,8 +100,10 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       mfName: config.ui.name,
       remote: {
         name: config.ui.name,
+        env: config.env,
         ssrUrl: config.ui.ssrUrl,
         ssrIntegrity: config.ui.ssrIntegrity,
+        ssrEntryUrl: config.ui.ssrEntryUrl,
         localPath: config.ui.localPath,
       },
       localRoot:
@@ -107,7 +114,13 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
         config.ui.source === "local"
           ? undefined
           : `${config.ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      webEntry: `${browserUiBase(config.ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+      browserManifestUrl: config.ui.source === "local" ? undefined : config.ui.entry,
+      webEntry: resolveEntryUrlForEnv({
+        entryUrl: config.ui.entryUrl,
+        env: config.env,
+        devFixed: `${browserUiBase(config.ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+        slot: CORE_UI_KEY,
+      }),
     },
   ];
   for (const [id, plugin] of Object.entries(config.plugins ?? {})) {
@@ -124,13 +137,24 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       mfName: ui.name,
       remote: {
         name: ui.name,
+        env: config.env,
         ssrUrl: ui.ssrUrl,
         ssrIntegrity: ui.ssrIntegrity,
+        ssrEntryUrl: ui.ssrEntryUrl,
         localPath: ui.localPath,
       },
       localRoot: ui.localPath ? resolveLocalRoot(ui.localPath) : undefined,
       manifestUrl: `${ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      webEntry: `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+      // a local slot's `entry` is the relative client convention ("/mf-manifest.json") —
+      // resolving it as a registration manifest fetches the WRONG container (the page
+      // origin's) and breaks the compose; dev derives from webEntry instead (atomic-deploys 08)
+      browserManifestUrl: ui.source === "local" ? undefined : ui.entry,
+      webEntry: resolveEntryUrlForEnv({
+        entryUrl: ui.entryUrl,
+        env: config.env,
+        devFixed: `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
+        slot: id,
+      }),
     });
   }
   return sources.sort((a, b) => a.key.localeCompare(b.key));
@@ -194,6 +218,8 @@ export function createUiComposeCacheState(): UiComposeCacheState {
   return { remoteManifests: new Map(), variants: new Map() };
 }
 
+const runFetch = (url: string, init?: RequestInit): Promise<Response> => fetch(url, init);
+
 const loadRemoteManifestCached = (
   source: UiSource,
   manifestUrl: string,
@@ -201,12 +227,12 @@ const loadRemoteManifestCached = (
 ): Effect.Effect<PluginManifest, Error> =>
   Effect.gen(function* () {
     const cached = cache.remoteManifests.get(source.key);
-    const now = Date.now();
+    const now = yield* Clock.currentTimeMillis;
     if (cached && now - cached.fetchedAt < MANIFEST_TTL_MS) {
       return cached.manifest;
     }
     const fresh = yield* Effect.tryPromise(async () => {
-      const response = await fetch(manifestUrl);
+      const response = await runFetch(manifestUrl);
       if (!response.ok) {
         throw new Error(`manifest fetch ${response.status} for ${manifestUrl}`);
       }
@@ -220,7 +246,7 @@ const loadRemoteManifestCached = (
             );
             return cached.manifest;
           }
-          return yield* Effect.fail(error);
+          return yield* error;
         }),
       ),
     );
@@ -278,7 +304,12 @@ const clientPayloadOf = (
   digest,
   remotes: sources
     .filter((source) => source.key !== CORE_UI_KEY && source.webEntry)
-    .map((source) => ({ key: source.key, name: source.mfName, entry: source.webEntry! })),
+    .map((source) => ({
+      key: source.key,
+      name: source.mfName,
+      entry: source.webEntry!,
+      ...(source.browserManifestUrl ? { manifestUrl: source.browserManifestUrl } : {}),
+    })),
   manifests,
 });
 
@@ -324,7 +355,7 @@ export const composeUi = (
 
     const variantKey = `${digest}::${variantFingerprint(sources)}`;
     const isDev = sources.some((source) => source.localRoot);
-    const now = Date.now();
+    const now = yield* Clock.currentTimeMillis;
     const cached = cache.variants.get(variantKey);
     if (cached && (isDev ? cached.staleAfter > now : true)) {
       return cached.variant;

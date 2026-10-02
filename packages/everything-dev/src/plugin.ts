@@ -4,7 +4,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import * as p from "@clack/prompts";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, References } from "effect";
 import { buildScoped, buildScopedContext } from "every-plugin";
 import { type KeyPair, parseKey } from "near-kit";
 import { buildRuntimeConfig, probePortBindable } from "./app";
@@ -17,13 +17,7 @@ import {
   type SessionCredential,
   writeSessionHandle,
 } from "./auth-session";
-import {
-  buildWorkspaceTargets,
-  fileExists,
-  getPluginRef,
-  readJsonFile,
-  selectWorkspaceTargets,
-} from "./build";
+import { buildWorkspaceTargets, getPluginRef, selectWorkspaceTargets } from "./build";
 import { buildCiInfraPlan, type CiInfraPlan } from "./cli/infra";
 import {
   buildInitPatterns,
@@ -74,6 +68,7 @@ import {
   makeDatabaseBindings,
   makeDrizzleKitLive,
 } from "./db";
+import { type LogLevelEnv, resolveLogLevel, toEffectLogLevel } from "./dev-log-pipeline";
 import { readDevLatestLog, resolveDevLatestFile } from "./dev-logs";
 import {
   bootstrapLayers,
@@ -85,12 +80,21 @@ import {
 } from "./dev-program";
 import { makeProjectEnv, ProjectEnv, ProjectEnvLive } from "./env/project-env";
 import {
+  type ConfigHistoryEntry,
   fetchBosConfigFromFastKv,
+  fetchConfigHistory,
+  fetchDeployManifests,
   fetchRemotePluginManifest,
   getRegistryNamespaceForAccount,
-  type PluginManifest,
   parseBosUrl,
 } from "./fastkv";
+import { pointerFingerprint } from "./fingerprint";
+import {
+  buildAndPushImage,
+  deployImageToRailway,
+  hasDocker,
+  resolveImageRef,
+} from "./image-deploy";
 import { materializeViaLayer } from "./infra/materializer";
 import { ownerOfPort } from "./infra/port-ownership";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
@@ -103,19 +107,19 @@ import {
   listPublishKeys,
 } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
-import { applyPluginPublishUrl } from "./platform-deploy";
 import { killProcessGroupEscalating, reapGroup } from "./process-kill";
 import { isPidAlive, pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
 import { timePhase } from "./progress";
 import { publishToFastKv } from "./publish";
 import { applyRegistrySections } from "./registry-use";
+import { buildRollbackPayload, summarizeSlotPins, verifyRollbackSnapshot } from "./rollback";
 import { createPlugin, z } from "./sdk";
 import { syncResolvedSharedDeps } from "./shared-deps";
 import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig } from "./types";
 import { BosConfigSchema } from "./types";
-import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
-import { colors } from "./utils/theme";
+import { colors, icons } from "./utils/theme";
+import { computeDeployedVersionStatus, type DeployedVersionStatus } from "./version-status";
 
 export type { DevSessionData, StartSummary } from "./dev-program";
 export { type ProgressEvent, pluginEvents } from "./progress";
@@ -143,6 +147,46 @@ type BosDeps = {
 };
 
 class BosDepsTag extends Context.Service<BosDepsTag, BosDeps>()("bos/BosDeps") {}
+
+async function deployedVersionStatus(deps: BosDeps): Promise<DeployedVersionStatus | undefined> {
+  if (!deps.bosConfig?.account || !deps.bosConfig.domain) return undefined;
+  const { account, domain } = deps.bosConfig;
+  let publishedFingerprint: string | undefined;
+  try {
+    const published = await fetchBosConfigFromFastKv<Record<string, unknown>>(
+      `bos://${account}/${domain}`,
+    );
+    publishedFingerprint = pointerFingerprint(published as never);
+  } catch {
+    return undefined;
+  }
+
+  const hostUrl = deps.runtimeConfig?.host?.url;
+  if (!hostUrl) {
+    return computeDeployedVersionStatus({ publishedFingerprint, servedFingerprint: null });
+  }
+  try {
+    const response = await fetch(new URL("/.well-known/version", hostUrl));
+    if (!response.ok) {
+      return computeDeployedVersionStatus({
+        publishedFingerprint,
+        servedFingerprint: null,
+        servedError: `version endpoint returned ${response.status}`,
+      });
+    }
+    const body = (await response.json()) as { fingerprint?: string };
+    return computeDeployedVersionStatus({
+      publishedFingerprint,
+      servedFingerprint: body.fingerprint ?? null,
+    });
+  } catch (error) {
+    return computeDeployedVersionStatus({
+      publishedFingerprint,
+      servedFingerprint: null,
+      servedError: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 type PluginAttachmentConfig = NonNullable<BosConfig["plugins"]>[string];
 
@@ -364,6 +408,10 @@ async function revokeApiKey(credential: SessionCredential): Promise<boolean> {
 export default createPlugin({
   variables: z.object({
     configPath: z.string().optional(),
+    // The artifact root (cwd-derived) — decoupled from configPath so an
+    // explicit boot config (--config-path fixture) validates and loads
+    // without redirecting where the CLI writes generated artifacts.
+    configDir: z.string().optional(),
   }),
   secrets: z.object({}),
   contract: bosContract,
@@ -376,7 +424,7 @@ export default createPlugin({
         return {
           bosConfig: configResult?.config ?? null,
           runtimeConfig: configResult?.runtime ?? null,
-          configDir: getProjectRoot(),
+          configDir: config.variables.configDir ?? getProjectRoot(),
         };
       });
 
@@ -586,8 +634,6 @@ export default createPlugin({
         };
       }
 
-      const attachmentRef = getPluginRef(attachment);
-
       const localPath = pluginLocalPath(deps.configDir, attachment);
       if (!localPath) {
         return {
@@ -597,93 +643,50 @@ export default createPlugin({
         };
       }
 
-      const pkgPath = join(localPath, "package.json");
-      if (!(await fileExists(pkgPath))) {
+      // Full deploy-train parity for one plugin (ADR 0020, as amended): the
+      // preflight (storage/CDN creds + signing) fails fast before the build,
+      // then build → upload → version-manifest pin → config write-back →
+      // FastKV publish + read-back. A single-plugin redeploy ships real bytes
+      // to the storage origin — same as the train, nothing image-native left.
+      const result = await publishToFastKv({
+        bosConfig: deps.bosConfig,
+        runtimeConfig: deps.runtimeConfig,
+        configDir: deps.configDir,
+        env: "production",
+        build: true,
+        dryRun: false,
+        verbose: false,
+        packages: input.key,
+      });
+      if (result.status === "error") {
         return {
           status: "error" as const,
           key: input.key,
-          error: `Missing package.json at ${localPath}`,
+          error: result.error,
         };
       }
 
-      const pkgJson = await readJsonFile<{
-        scripts?: Record<string, string>;
-        name?: string;
-        version?: string;
-      }>(pkgPath);
-
-      const { stdout, stderr, exitCode } = (await run("bun", ["run", "build"], {
-        cwd: localPath,
-        capture: true,
-      })) as { stdout: string; stderr: string; exitCode: number };
-
-      if (exitCode !== 0) {
-        if (stdout.trim()) process.stdout.write(stdout);
-        if (stderr.trim()) process.stderr.write(stderr);
-        return {
-          status: "error" as const,
-          key: input.key,
-          error: `Build failed with exit code ${exitCode}`,
-        };
+      const refreshed = await loadResolvedConfig({ cwd: deps.configDir });
+      const bosConfig = refreshed?.config ?? deps.bosConfig;
+      if (refreshed?.config) {
+        deps.bosConfig = refreshed.config;
+        deps.runtimeConfig = refreshed.runtime;
       }
+      const production = (bosConfig?.plugins?.[input.key] as { production?: string } | undefined)
+        ?.production;
 
-      const account = deps.bosConfig.account;
-      const gateway = deps.bosConfig.domain;
-      if (!account || !gateway) {
-        return {
-          status: "error" as const,
-          key: input.key,
-          error: "bos.config.json must define account and domain to publish a plugin",
-        };
-      }
-
-      const rootConfigPath = join(deps.configDir, "bos.config.json");
-      let publishedUrl: string | undefined;
-      try {
-        const rootConfig = JSON.parse(readFileSync(rootConfigPath, "utf-8")) as Record<
-          string,
-          unknown
-        >;
-        const merged = applyPluginPublishUrl(rootConfig, {
-          origin: `https://${gateway}`,
-          account,
-          gateway,
-          key: input.key,
-        });
-        writeFileSync(rootConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
-        const plugins = merged.plugins as Record<string, Record<string, unknown>> | undefined;
-        publishedUrl = plugins?.[input.key]?.production as string | undefined;
-        console.log(`   ✅ Updated bos.config.json: plugins.${input.key}.production`);
-      } catch (err) {
-        console.error(
-          `   ❌ Failed to update bos.config.json:`,
-          err instanceof Error ? err.message : err,
-        );
-      }
-
-      let manifest: PluginManifest | null = null;
-      if (publishedUrl) {
-        manifest = await fetchRemotePluginManifest(publishedUrl);
-      } else if (attachmentRef?.production) {
-        manifest = await fetchRemotePluginManifest(attachmentRef.production);
-        if (manifest) {
-          publishedUrl = attachmentRef.production;
-        }
-      }
-
-      const version = manifest?.plugin.version ?? pkgJson.version;
-
-      if (publishedUrl) {
-        await generateCodeArtifacts(deps.configDir, deps.bosConfig);
+      const manifest = production ? await fetchRemotePluginManifest(production) : null;
+      if (production) {
+        await generateCodeArtifacts(deps.configDir, bosConfig);
       }
 
       return {
         status: "published" as const,
         key: input.key,
         path: localPath,
-        script: "build",
-        production: publishedUrl ?? attachmentRef?.production,
-        version: version ?? undefined,
+        production,
+        fingerprint: result.fingerprint,
+        version: manifest?.plugin.version,
       };
     }),
 
@@ -693,6 +696,10 @@ export default createPlugin({
 
       const outcome = await Effect.runPromise(
         devBootstrap(deps, input, devTimings, { resolveProxyUrl }).pipe(
+          Effect.provideService(
+            References.MinimumLogLevel,
+            toEffectLogLevel(resolveLogLevel(process.env as LogLevelEnv, input.logLevel)),
+          ),
           Effect.provide(bootstrapLayers),
           Effect.catchTags({
             DevConfigMissing: () => Effect.succeed({ failed: "No bos.config.json found" }),
@@ -788,7 +795,7 @@ export default createPlugin({
         };
       }
 
-      const buildEnv: BosEnv = input.deploy ? "production" : "development";
+      const buildEnv: BosEnv = "development";
 
       const targets = selectWorkspaceTargets(input.packages, deps.bosConfig);
       if (targets.length === 0) {
@@ -826,7 +833,7 @@ export default createPlugin({
         bosConfig: deps.bosConfig,
         runtimeConfig: runtimeConfig,
         targets,
-        deploy: input.deploy,
+        deploy: false,
       });
 
       if (built.length === 0) {
@@ -842,7 +849,6 @@ export default createPlugin({
         status: "success" as const,
         built,
         skipped,
-        deployed: input.deploy,
       };
     }),
 
@@ -861,10 +867,10 @@ export default createPlugin({
         runtimeConfig: deps.runtimeConfig,
         configDir: deps.configDir,
         env: input.env,
-        build: input.deploy,
+        build: false,
         dryRun: input.dryRun,
         verbose: input.verbose,
-        packages: input.packages,
+        packages: "all",
         network: input.network,
         privateKey: input.privateKey,
         wallet: input.wallet,
@@ -890,15 +896,204 @@ export default createPlugin({
       };
     }),
 
+    rollback: builder.rollback.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
+      if (!deps.bosConfig) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: "No bos.config.json found",
+        };
+      }
+
+      const { account, domain } = deps.bosConfig;
+      if (!account || !domain) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: "bos.config.json must define account and domain to roll back",
+        };
+      }
+
+      let history: ConfigHistoryEntry[];
+      try {
+        history = await fetchConfigHistory({
+          accountId: account,
+          gatewayId: domain,
+          registry: input.registry,
+          limit: input.limit,
+        });
+      } catch (error) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: `Failed to fetch publish history: ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+
+      if (history.length === 0) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: `No publish history for ${account}/${domain} — nothing to roll back to`,
+        };
+      }
+
+      const historyEntries = history.map((entry) => ({
+        blockHeight: entry.blockHeight,
+        blockTimestamp: new Date(Number(entry.blockTimestampNs.slice(0, 13))).toISOString(),
+        ...(entry.txHash ? { txHash: entry.txHash } : {}),
+        summary: summarizeSlotPins(entry.value as BosConfigInput),
+      }));
+
+      if (input.listOnly) {
+        return {
+          status: "list" as const,
+          registryUrl: "",
+          history: historyEntries,
+        };
+      }
+
+      const target =
+        input.version !== undefined
+          ? history.find((entry) => {
+              const iso = new Date(Number(entry.blockTimestampNs.slice(0, 13))).toISOString();
+              return (
+                String(entry.blockHeight) === input.version ||
+                iso.startsWith(input.version as string)
+              );
+            })
+          : input.previous
+            ? history[1]
+            : undefined;
+
+      if (!target) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          history: historyEntries,
+          error: input.version
+            ? `No history entry matches "${input.version}" — pick a block height from the listing`
+            : "Specify --version <block-height> or --previous (interactive selection happens CLI-side)",
+        };
+      }
+
+      let liveValue: unknown;
+      try {
+        liveValue = await fetchBosConfigFromFastKv<unknown>(
+          `bos://${account}/${domain}`,
+          input.registry,
+        );
+      } catch {
+        liveValue = undefined;
+      }
+      if (liveValue && JSON.stringify(liveValue) === JSON.stringify(target.value)) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error: "The selected snapshot is identical to the live config — nothing to do",
+        };
+      }
+
+      const verification = await verifyRollbackSnapshot(target.value as BosConfigInput);
+      const slotChecks = verification.slots.map((check) => ({
+        slot: check.slot,
+        ok: check.ok,
+        ...(check.reason ? { reason: check.reason } : {}),
+      }));
+      if (!verification.ok && verification.verifiable) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          verification: slotChecks,
+          error:
+            "Refusing to roll back — a pinned slot's bytes are gone or no longer match their SRI",
+        };
+      }
+
+      if (!verification.verifiable && !input.force) {
+        return {
+          status: "error" as const,
+          registryUrl: "",
+          error:
+            "Snapshot predates version manifests and cannot be verified — its bytes were overwritten in place. Re-run with --force to publish it anyway.",
+        };
+      }
+
+      const parsedTarget = BosConfigSchema.parse(target.value);
+      const payload = buildRollbackPayload(parsedTarget, new Date().toISOString());
+
+      const result = await publishToFastKv({
+        bosConfig: payload,
+        runtimeConfig: deps.runtimeConfig,
+        configDir: deps.configDir,
+        env: input.env,
+        build: false,
+        dryRun: input.dryRun,
+        verbose: input.verbose,
+        packages: "all",
+        network: input.network,
+        privateKey: input.privateKey,
+        wallet: input.wallet,
+        registry: input.registry,
+      });
+
+      return {
+        status: result.status,
+        registryUrl: result.registryUrl,
+        txHash: result.txHash,
+        error: result.error,
+        history: historyEntries,
+        ...(slotChecks.length > 0 ? { verification: slotChecks } : {}),
+      };
+    }),
+
     deploy: builder.deploy.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
           registryUrl: "",
-          redeployed: false,
           error: "No bos.config.json found",
         };
+      }
+
+      if (input.statusList) {
+        if (!deps.bosConfig.account || !deps.bosConfig.domain) {
+          return {
+            status: "error" as const,
+            registryUrl: "",
+            error: "bos.config.json must define account and domain to list deploy manifests",
+          };
+        }
+        try {
+          const manifests = await fetchDeployManifests({
+            accountId: deps.bosConfig.account,
+            gatewayId: deps.bosConfig.domain,
+            registry: input.registry,
+          });
+          return {
+            status: "list" as const,
+            registryUrl: "",
+            history: manifests.map((entry) => ({
+              key: entry.key,
+              blockHeight: entry.blockHeight,
+              blockTimestamp: new Date(Number(entry.blockTimestampNs.slice(0, 13))).toISOString(),
+              ...((entry.value as { txHash?: string } | undefined)?.txHash
+                ? { txHash: (entry.value as { txHash?: string }).txHash }
+                : {}),
+              ...((entry.value as { publishedAt?: string } | undefined)?.publishedAt
+                ? { publishedAt: (entry.value as { publishedAt?: string }).publishedAt }
+                : {}),
+            })),
+          };
+        } catch (error) {
+          return {
+            status: "error" as const,
+            registryUrl: "",
+            error: `Failed to list deploy manifests: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        }
       }
 
       const result = await publishToFastKv({
@@ -922,7 +1117,6 @@ export default createPlugin({
           txHash: result.txHash,
           built: result.built,
           skipped: result.skipped,
-          redeployed: false,
           error: result.error,
           deployResults: result.deployResults,
         };
@@ -934,7 +1128,6 @@ export default createPlugin({
           registryUrl: result.registryUrl,
           built: result.built,
           skipped: result.skipped,
-          redeployed: false,
         };
       }
 
@@ -946,82 +1139,137 @@ export default createPlugin({
         }
       }
 
-      let redeployed = false;
+      const configPublished = {
+        registryUrl: result.registryUrl,
+        txHash: result.txHash,
+        fingerprint: result.fingerprint,
+        slotPins: result.slotPins,
+        built: result.built,
+        skipped: result.skipped,
+        deployResults: result.deployResults,
+      } as const;
+
+      let image: string | undefined;
+      let imageDigest: string | undefined;
       let service: string | undefined;
 
+      // IMAGE LEG (ADR 0021): build the runtime stage, push by SHA + latest.
+      // Skips with a notice when no image is configured (child repos get
+      // build+upload+publish only).
+      const imageRef = resolveImageRef({
+        ciImage: deps.bosConfig.ci?.image,
+        repository: deps.bosConfig.repository,
+        env: process.env,
+      });
+      if (!imageRef) {
+        console.log();
+        console.log(
+          colors.yellow(
+            "  Image skipped: set ci.image in bos.config.json (or BOS_IMAGE) to build and push the runtime image",
+          ),
+        );
+      } else if (!(await hasDocker())) {
+        console.log();
+        console.log(colors.yellow("  Image skipped: docker is not available"));
+      } else {
+        console.log();
+        try {
+          const imageResult = await buildAndPushImage({
+            image: imageRef.image,
+            configDir: deps.configDir,
+            verbose: input.verbose,
+          });
+          image = imageResult.image;
+          imageDigest = imageResult.digest;
+          console.log(
+            colors.green(
+              `  ${icons.ok} Image pushed ${imageResult.image}:${imageResult.tag}${imageResult.digest ? ` (${imageResult.digest.slice(0, 19)}…)` : ""}`,
+            ),
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const imageError =
+            message.includes("not found") || message.includes("ENOENT")
+              ? "Docker not found — install Docker to build the runtime image"
+              : `Image build/push failed: ${message}`;
+          console.log(colors.yellow(`  ${imageError}`));
+          return {
+            status: "published" as const,
+            ...configPublished,
+            error: `Config published but ${imageError}`,
+          };
+        }
+      }
+
+      // RAILWAY LEG: pull-only deploy of the pushed image digest (thin
+      // FROM Dockerfile, ADR 0021 — Railway never rebuilds).
       if (process.env.RAILWAY_TOKEN) {
         const railwayService = input.service ?? deps.bosConfig.ci?.railway?.service;
         if (!railwayService) {
           console.log();
           console.log(
             colors.yellow(
-              "  Railway redeploy skipped: ci.railway.service is not configured in bos.config.json",
+              "  Railway deploy skipped: ci.railway.service is not configured in bos.config.json",
             ),
           );
           return {
             status: "published" as const,
-            registryUrl: result.registryUrl,
-            txHash: result.txHash,
-            built: result.built,
-            skipped: result.skipped,
-            redeployed: false,
-            deployResults: result.deployResults,
+            ...configPublished,
+            image,
             error:
-              "Config published but Railway redeploy failed: ci.railway.service is not configured in bos.config.json",
+              "Config published but Railway deploy failed: ci.railway.service is not configured in bos.config.json",
+          };
+        }
+        if (!image || !imageDigest) {
+          console.log();
+          console.log(
+            colors.yellow(
+              "  Railway deploy skipped: no pushed image digest — set ci.image and install docker",
+            ),
+          );
+          return {
+            status: "published" as const,
+            ...configPublished,
+            image,
+            service: railwayService,
+            error:
+              "Config published but Railway deploy requires a pushed image (set ci.image and install docker)",
           };
         }
 
         service = railwayService;
-        console.log();
-        console.log(`  Redeploying Railway service ${colors.cyan(railwayService)}...`);
         try {
-          const railResult = await run(
-            "railway",
-            ["redeploy", "--service", railwayService, "--yes"],
-            {
-              capture: true,
-            },
-          );
-          if (railResult?.stdout) {
-            for (const line of railResult.stdout.split("\n")) {
-              if (line.trim()) console.log(`  ${colors.dim(line.trim())}`);
-            }
-          }
-          redeployed = true;
-          console.log(colors.green(`  Railway redeploy complete`));
+          await deployImageToRailway({
+            image,
+            digest: imageDigest,
+            service: railwayService,
+            configDir: deps.configDir,
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           const railError =
             message.includes("not found") || message.includes("ENOENT")
               ? "Railway CLI not found. Install it: npm i -g @railway/cli"
-              : `Railway redeploy failed: ${message}`;
+              : `Railway deploy failed: ${message}`;
           console.log(colors.yellow(`  ${railError}`));
           return {
             status: "published" as const,
-            registryUrl: result.registryUrl,
-            txHash: result.txHash,
-            built: result.built,
-            skipped: result.skipped,
-            redeployed: false,
+            ...configPublished,
+            image,
             service,
-            deployResults: result.deployResults,
             error: `Config published but ${railError}`,
           };
         }
       } else {
         console.log();
-        console.log(colors.yellow("  Railway redeploy skipped (RAILWAY_TOKEN not set)"));
+        console.log(colors.yellow("  Railway deploy skipped (RAILWAY_TOKEN not set)"));
       }
 
       return {
         status: "deployed" as const,
-        registryUrl: result.registryUrl,
-        txHash: result.txHash,
-        built: result.built,
-        skipped: result.skipped,
-        redeployed,
+        ...configPublished,
+        image,
         service,
-        deployResults: result.deployResults,
       };
     }),
 
@@ -2070,8 +2318,9 @@ export default createPlugin({
       }
     }),
 
-    status: builder.status.handler(async () => {
+    status: builder.status.handler(async ({ context }) => {
       try {
+        const deps = Context.get(context["effect/context"], BosDepsTag);
         const configPath = findConfigPath();
         if (!configPath) {
           return {
@@ -2083,7 +2332,11 @@ export default createPlugin({
         }
 
         const projectDir = resolve(dirname(configPath));
-        return await getStatus(projectDir);
+        const status = await getStatus(projectDir);
+        return {
+          ...status,
+          deployedVersion: await deployedVersionStatus(deps),
+        };
       } catch (error) {
         return {
           status: "error" as const,

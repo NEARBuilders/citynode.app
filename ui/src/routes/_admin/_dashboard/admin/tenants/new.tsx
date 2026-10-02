@@ -148,7 +148,8 @@ function NewTenantPage() {
       queryClient.setQueryData(sessionQueryKey, session);
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await router.invalidate();
-      toast.success(translate("admin.site.orgCreated"));
+      toast.success(translate("orgApproval.submitted"));
+      await router.navigate({ to: "/orgs" });
     },
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });

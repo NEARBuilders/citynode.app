@@ -49,6 +49,12 @@ async function requireOrganizerContext(
   if (!userId || !organizationId) {
     throw new ORPCError("BAD_REQUEST", { message: "No organization selected" });
   }
+  const organization = await services.db.query.organization.findFirst({
+    where: eq(schema.organization.id, organizationId),
+  });
+  if (organization?.status !== "active") {
+    throw new ORPCError("FORBIDDEN", { message: "Organization requires platform-admin approval" });
+  }
   const result = await safeAuthApi(() =>
     services.auth.api.getActiveMemberRole({
       headers,
@@ -375,6 +381,11 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           where: eq(schema.organization.id, codeRow.organizationId),
         });
         const organizationName = organization?.name ?? "";
+        if (organization?.status !== "active") {
+          throw new ORPCError("FORBIDDEN", {
+            message: "Organization requires platform-admin approval",
+          });
+        }
 
         if (codeRow.revokedAt) {
           throw new ORPCError("FORBIDDEN", { message: "This onboarding code was revoked" });

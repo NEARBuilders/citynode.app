@@ -17,6 +17,8 @@ export default defineConfig({
     "src/runtime/services/normalize.ts",
     "src/build/shared-deps.ts",
     "src/build/rspack/index.ts",
+    "src/build/artifact-names.ts",
+    "src/version-manifest.ts",
     "src/ui/manifest/index.ts",
     "src/ui/manifest/generator.ts",
     "src/build/ui/index.ts",

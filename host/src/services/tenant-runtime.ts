@@ -126,8 +126,9 @@ function createVerificationPromise(
   url: string,
   integrity: string,
   label: string,
+  options?: { resolveEntryUrl?: boolean },
 ) {
-  const verification = verifySriForUrl(url, integrity).catch((error) => {
+  const verification = verifySriForUrl(url, integrity, options).catch((error) => {
     const cached = verifiedUiCache.get(cacheKey);
     if (cached?.value === verification || cached?.refreshing === verification) {
       verifiedUiCache.delete(cacheKey);
@@ -144,12 +145,13 @@ function scheduleVerificationRefresh(
   url: string,
   integrity: string,
   label: string,
+  options?: { resolveEntryUrl?: boolean },
 ) {
   if (cached.refreshing) {
     return cached.refreshing;
   }
 
-  const refresh = createVerificationPromise(cacheKey, url, integrity, label);
+  const refresh = createVerificationPromise(cacheKey, url, integrity, label, options);
 
   cached.refreshing = refresh;
   void refresh
@@ -176,6 +178,7 @@ async function verifyIntegrity(
   integrity: string,
   label: string,
   mode: IntegrityVerificationMode,
+  options?: { resolveEntryUrl?: boolean },
 ) {
   const cacheKey = `${url}::${integrity}`;
   const now = Date.now();
@@ -186,7 +189,7 @@ async function verifyIntegrity(
   }
 
   if (!cached) {
-    const value = createVerificationPromise(cacheKey, url, integrity, label);
+    const value = createVerificationPromise(cacheKey, url, integrity, label, options);
     verifiedUiCache.set(cacheKey, {
       value,
       expiresAt: now + VERIFICATION_TTL_MS,
@@ -203,11 +206,13 @@ async function verifyIntegrity(
   }
 
   if (mode === "stale-while-revalidate") {
-    void scheduleVerificationRefresh(cacheKey, cached, url, integrity, label).catch(() => {});
+    void scheduleVerificationRefresh(cacheKey, cached, url, integrity, label, options).catch(
+      () => {},
+    );
     return cached.value;
   }
 
-  const refresh = scheduleVerificationRefresh(cacheKey, cached, url, integrity, label);
+  const refresh = scheduleVerificationRefresh(cacheKey, cached, url, integrity, label, options);
   await refresh;
 
   const entry = verifiedUiCache.get(cacheKey);
@@ -224,6 +229,19 @@ async function verifyUiIntegrity(config: RuntimeConfig, mode: IntegrityVerificat
       "Tenant UI overrides must define app.ui.production and app.ui.integrity",
       404,
     );
+  }
+
+  if (config.ui.entryUrl) {
+    // pin-derived: the runtime integrity IS the entry SRI — verify the hashed
+    // entry bytes directly (fixed-name resolution would 404 on hashed dists)
+    await verifyIntegrity(
+      config.ui.entryUrl,
+      config.ui.integrity,
+      `tenant UI ${config.ui.entryUrl}`,
+      mode,
+      { resolveEntryUrl: false },
+    );
+    return;
   }
 
   await verifyIntegrity(config.ui.url, config.ui.integrity, `tenant UI ${config.ui.url}`, mode);
@@ -246,6 +264,17 @@ async function verifyPluginUiIntegrity(
       `Tenant plugin override for ${pluginKey} must define plugins.${pluginKey}.ui.integrity`,
       404,
     );
+  }
+
+  if (plugin.ui.entryUrl) {
+    await verifyIntegrity(
+      plugin.ui.entryUrl,
+      plugin.ui.integrity,
+      `tenant plugin UI ${pluginKey} ${plugin.ui.entryUrl}`,
+      mode,
+      { resolveEntryUrl: false },
+    );
+    return;
   }
 
   await verifyIntegrity(
@@ -387,7 +416,7 @@ export async function resolveRequestRuntime(
   }
 
   const ssrAllowed =
-    Boolean(effectiveConfig.ui.ssrUrl) &&
+    (Boolean(effectiveConfig.ui.ssrEntryUrl) || Boolean(effectiveConfig.ui.ssrUrl)) &&
     Boolean(effectiveConfig.ui.ssrIntegrity) &&
     binding.allowSsr;
 
@@ -400,6 +429,7 @@ export async function resolveRequestRuntime(
             ...effectiveConfig.ui,
             ssrUrl: undefined,
             ssrIntegrity: undefined,
+            ssrEntryUrl: undefined,
           },
         },
     tenantAccountId,

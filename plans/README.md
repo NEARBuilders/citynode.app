@@ -18,6 +18,47 @@ plans/
 └── wayfinder/        # decision maps + open question tickets
 ```
 
+## v1-current — active plans (advisor session 2026-10-01)
+
+Written against commit `21855f79b` (branch `chore/consolidate-deploy`, PR
+#296) after its CI run failed 8 jobs. Two root causes, two plans:
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| [001](./v1-current/dev-entry-contract.md) | Dev entry contract — rspack builds adopt the entry-filename decision; dev serves pin their build children to development | P1 | S | — | TODO |
+| [002](./v1-current/regression-image-slot-pins.md) | Regression image becomes a production-shaped consumer — slot pins + staged version manifests replace the retired localhost-rewrite helper | P1 | M | 001 (soft) | TODO |
+
+Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
+
+### Dependency notes
+
+- 001 fixes the five dev-mode jobs ("Plugin runtime tests", "Regression
+  HTTP (dev)", "Regression Browser (dev:ssr|dev:csr)", "Regression framework
+  (process death)"); 002 fixes the three start-mode jobs ("Regression HTTP
+  (start)", "Regression Browser (start:ssr|start:csr)"). Both are needed for
+  a green PR run.
+- 001 → 002 is a soft ordering only (shared vocabulary
+  `every-plugin/build/artifact-names`; 002's executor imports it — execute
+  001 first so the suite is green before the docker-gated verification).
+
+### Findings considered and deferred
+
+- **DEPLOY signal hygiene**: `plugin.ts:230`'s comment claims
+  "publish/deploy set DEPLOY=true" but nothing in the repo sets it — the
+  deploy train relies on `NODE_ENV=production`
+  (`everything-dev/src/build.ts:223-225`). Today this leaves deploy builds
+  source-first (`sourceFirst = DEPLOY !== "true"`, plugin.ts:236) with
+  `devtool: "source-map"` (compose.ts:67). Harmless while deploys build from
+  full source, but the comment is false and the gate is unowned. Deferred:
+  fixing it changes deploy-train resolution semantics mid-sprint and needs a
+  staging deploy verification — belongs to the atomic-deploys sprint
+  (`.scratch/atomic-deploys/`), not to the CI-repair plans.
+- **Authored `entryUrl` escape hatch** (would let the regression image write
+  entry URLs directly instead of pins): rejected — it would weaken the
+  loud-failure pin contract (`deriveVersionManifestFields`) and give the
+  regression stack a fixture-only resolution path that production never
+  exercises.
+
 ## wayfinder — active maps
 
 Two wayfinder maps exist:

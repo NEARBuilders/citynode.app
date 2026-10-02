@@ -70,6 +70,7 @@ function createBaseConfig() {
       name: "ui",
       url: "http://127.0.0.1:0/ui",
       entry: "http://127.0.0.1:0/ui/mf-manifest.json",
+      entryUrl: "http://127.0.0.1:0/ui/remoteEntry.aaa.js",
       source: "remote",
       integrity: "sha384-base",
     },
@@ -147,6 +148,7 @@ describe("tenant host nested integration", () => {
           ...config.ui,
           url: `${assetServer.baseUrl}/ui`,
           entry: `${assetServer.baseUrl}/ui/mf-manifest.json`,
+          entryUrl: `${assetServer.baseUrl}/ui/remoteEntry.aaa.js`,
         },
         api: { ...config.api, proxy: assetServer.baseUrl },
         plugins: {
@@ -215,6 +217,7 @@ describe("tenant host nested integration", () => {
         ...baseConfig.ui,
         url: `${assetServer.baseUrl}/chicago-ui`,
         entry: `${assetServer.baseUrl}/chicago-ui/mf-manifest.json`,
+        entryUrl: `${assetServer.baseUrl}/chicago-ui/remoteEntry.aaa.js`,
         integrity: "sha384-chicago-ui",
       },
       api: {
@@ -241,6 +244,6 @@ describe("tenant host nested integration", () => {
       "bos://chicago.alice.linktree.near/linktree.com",
       "production",
     );
-    expect(html).toContain(`${assetServer.baseUrl}/chicago-ui/remoteEntry.js`);
+    expect(html).toContain(`${assetServer.baseUrl}/chicago-ui/remoteEntry.aaa.js`);
   });
 });

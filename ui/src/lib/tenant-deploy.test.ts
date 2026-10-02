@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { Near } from "near-kit";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient, useAuthClient } from "@/app";
 import {
+  proposeTenantConfigAsMember,
   publishDaoTenantConfig,
   publishTenantConfigForMode,
   type TenantConfigPublishInput,
@@ -377,5 +379,99 @@ describe("publishTenantConfigForMode", () => {
       values: { network: "mainnet" },
     });
     expect(prepareRegistryConfigWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe("proposeTenantConfigAsMember", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const input = {
+    daoAccountId: "chicago.sputnik-dao.near",
+    gatewayId: "citynode.app",
+    baseAccount: "everything.near",
+    hostname: "chicago.citynode.app",
+    title: "Chicago",
+    app: { ui: { production: "https://cdn.example.com/ui.js", integrity: "sha384-abc" } },
+  };
+
+  const setup = (accountId: string | null, connected = true) => {
+    const send = vi.fn().mockResolvedValue({ transaction: { hash: "h" } });
+    const functionCall = vi.fn().mockReturnValue({ send });
+    const transaction = vi.fn().mockReturnValue({ functionCall });
+    const wallet = {
+      ensureConnected: vi.fn().mockResolvedValue(connected),
+      getAccountId: () => accountId,
+      getNearClient: () => ({ transaction }) as unknown as Near,
+    };
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: { k: "v" },
+        gas: "300 Tgas",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const view = vi.spyOn(Near.prototype, "view").mockResolvedValue({
+      proposal_bond: "100000000000000000000000",
+      roles: [{ name: "council", kind: { Group: ["alice.near"] }, permissions: ["*:AddProposal"] }],
+    } as never);
+    return { wallet, transaction, functionCall, send, prepareRegistryConfigWrite, view };
+  };
+
+  it("stages an add_proposal carrying the bond for the prepared config write", async () => {
+    const t = setup("alice.near");
+
+    await proposeTenantConfigAsMember(makeClient(t.prepareRegistryConfigWrite), t.wallet, input);
+
+    expect(t.transaction).toHaveBeenCalledWith("alice.near");
+    expect(t.functionCall).toHaveBeenCalledTimes(1);
+    const [receiver, method, args, options] = t.functionCall.mock.calls[0];
+    expect(receiver).toBe("chicago.sputnik-dao.near");
+    expect(method).toBe("add_proposal");
+    expect(args).toEqual({
+      proposal: {
+        description: "Set homepage for chicago.citynode.app — title 'Chicago', custom UI bundle",
+        kind: {
+          FunctionCall: {
+            receiver_id: "dev.everything.near",
+            actions: [
+              {
+                method_name: "__fastdata_kv",
+                args: "eyJrIjoidiJ9",
+                deposit: "0",
+                gas: "300000000000000",
+              },
+            ],
+          },
+        },
+      },
+    });
+    expect(options.gas).toBe("100 Tgas");
+    expect(String(options.attachedDeposit)).toBe("100000000000000000000000 yocto");
+    expect(t.send).toHaveBeenCalledWith({ waitUntil: "EXECUTED" });
+  });
+
+  it("refuses an account whose policy grants no AddProposal permission", async () => {
+    const t = setup("bob.near");
+
+    await expect(
+      proposeTenantConfigAsMember(makeClient(t.prepareRegistryConfigWrite), t.wallet, input),
+    ).rejects.toThrow(/chicago\.sputnik-dao\.near.*AddProposal/);
+
+    expect(t.prepareRegistryConfigWrite).not.toHaveBeenCalled();
+    expect(t.transaction).not.toHaveBeenCalled();
+  });
+
+  it("asks for a wallet connection before reading the policy", async () => {
+    const t = setup("alice.near", false);
+
+    await expect(
+      proposeTenantConfigAsMember(makeClient(t.prepareRegistryConfigWrite), t.wallet, input),
+    ).rejects.toThrow("Connect your NEAR wallet first");
+
+    expect(t.view).not.toHaveBeenCalled();
   });
 });

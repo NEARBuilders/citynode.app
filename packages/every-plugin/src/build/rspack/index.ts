@@ -4,6 +4,7 @@ export {
   type SharedDependencies,
   type SharedDependencyConfig,
 } from "../shared-deps";
+export { BuildReportPlugin } from "./build-report-plugin";
 export {
   createPluginBaseConfig,
   EveryPluginComposedBuild,

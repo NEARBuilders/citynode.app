@@ -1,3 +1,4 @@
+import { resolveEntryUrlForEnv } from "every-plugin/ui/manifest";
 import type { ClientRuntimeConfig } from "../types";
 import type { HeadScript } from "./types";
 
@@ -68,8 +69,14 @@ export function getHydrateScript(
 export function getRemoteScripts(options: RemoteScriptsOptions): HeadScript[] {
   const { runtimeConfig, containerName, hydratePath, integrity, cspNonce } = options;
   const assetsUrl = runtimeConfig?.assetsUrl?.replace(/\/$/, "");
+  const entrySrc = resolveEntryUrlForEnv({
+    entryUrl: runtimeConfig?.ui?.entryUrl,
+    env: runtimeConfig?.env,
+    devFixed: `${assetsUrl ?? ""}/remoteEntry.js${integrity ? `?v=${encodeURIComponent(integrity)}` : ""}`,
+    slot: "ui",
+  });
   const entryScript: HeadScript = {
-    src: `${assetsUrl ?? ""}/remoteEntry.js${integrity ? `?v=${encodeURIComponent(integrity)}` : ""}`,
+    src: entrySrc,
     crossOrigin: "anonymous",
   };
   if (integrity) {

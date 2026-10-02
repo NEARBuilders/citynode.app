@@ -12,6 +12,27 @@ export const UI_REMOTE_SERVER_ENTRY_FILENAME = "remoteEntry.server.js";
 export const MANIFEST_FILENAME = "manifest.gen.json";
 export const ROUTE_CONFIG_FILENAME = "routeConfig.gen.ts";
 
+/**
+ * Consumer-side entry-URL resolution: a pin-derived `entryUrl` always wins;
+ * the fixed dev name applies only in development (dev servers serve exactly
+ * that name and dev consumers append it). Outside development a slot without
+ * a derived entryUrl is a resolution bug — fail loudly instead of silently
+ * loading a fixed name that hashed-only dists no longer serve.
+ */
+export function resolveEntryUrlForEnv(input: {
+  entryUrl?: string;
+  env?: string;
+  devFixed: string;
+  slot: string;
+}): string {
+  if (input.entryUrl) return input.entryUrl;
+  if (input.env === "development") return input.devFixed;
+  throw new Error(
+    `slot "${input.slot}" has no derived entryUrl — pins resolve it from the version manifest ` +
+      `(the fixed dev name is development-only)`,
+  );
+}
+
 /** Canonical MF exposes every manifest-composed ui source ships. */
 export const UI_EXPOSES = {
   routeConfig: "./routeConfig",

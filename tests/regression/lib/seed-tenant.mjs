@@ -29,6 +29,7 @@ export async function seedTenant(input) {
     allowUiOverrides = true,
     allowBackendOverrides = false,
     allowSsr = false,
+    ownerKind = "platform",
   } = input;
 
   const root = findRepoRoot();
@@ -83,7 +84,7 @@ export async function seedTenant(input) {
         orgId,
         name,
         "active",
-        "platform",
+        ownerKind,
         allowUiOverrides,
         allowBackendOverrides,
         allowSsr,

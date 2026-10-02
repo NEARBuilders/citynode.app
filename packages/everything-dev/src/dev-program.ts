@@ -1,5 +1,4 @@
-import process from "node:process";
-import { Data, Effect, Layer } from "effect";
+import { Clock, Data, Effect, Layer } from "effect";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
 import {
   buildBetterNearAuthQuietly,
@@ -18,6 +17,12 @@ import {
 } from "./config";
 import type { DevOptions, PhaseTiming, StartOptions } from "./contract";
 import {
+  deleteProcessEnv,
+  getProcessEnv,
+  processEnvRecord,
+  setProcessEnv,
+} from "./env/process-env";
+import {
   captureShellEnv,
   type EnvEnsureError,
   type EnvLoadError,
@@ -26,11 +31,16 @@ import {
   type ProjectEnvService,
 } from "./env/project-env";
 import { buildRegistryConfigUrl } from "./fastkv";
+import {
+  detectAutoStartContext,
+  isDockerAvailable,
+  runDockerComposeUp,
+  shouldAutoStartDocker,
+} from "./infra/docker";
 import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
-import { isRegistryStart, resolveStartConfigSource } from "./local-prod-config";
 import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { type ProgressEvent, pluginEvents, timePhase } from "./progress";
 import {
@@ -41,6 +51,7 @@ import {
   type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
+import { isRegistryStart, resolveStartConfigSource } from "./start-config-source";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
 
@@ -139,10 +150,11 @@ const timedEffect = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     yield* emitProgress({ phase: name, status: "running" });
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     const result = yield* effect;
-    timings.push({ name, durationMs: Date.now() - startedAt });
-    yield* emitProgress({ phase: name, status: "done", durationMs: Date.now() - startedAt });
+    const endedAt = yield* Clock.currentTimeMillis;
+    timings.push({ name, durationMs: endedAt - startedAt });
+    yield* emitProgress({ phase: name, status: "done", durationMs: endedAt - startedAt });
     return result;
   }).pipe(Effect.onError(() => emitProgress({ phase: name, status: "error" })));
 
@@ -193,13 +205,13 @@ export const devBootstrap = (
 
     if (input.logLevel) {
       yield* Effect.sync(() => {
-        process.env.BOS_LOG_LEVEL = input.logLevel;
+        setProcessEnv("BOS_LOG_LEVEL", input.logLevel!);
       });
     }
 
     if (ssr) {
       yield* Effect.sync(() => {
-        process.env.BOS_SSR = "1";
+        setProcessEnv("BOS_SSR", "1");
       });
     }
 
@@ -327,14 +339,43 @@ export const devBootstrap = (
       );
 
     const mergedEnv = yield* Effect.sync(() =>
-      mergeGeneratedOverFileEnv(plan.envGenerated, process.env as Record<string, string>, shell),
+      mergeGeneratedOverFileEnv(
+        plan.envGenerated,
+        processEnvRecord() as Record<string, string>,
+        shell,
+      ),
     );
     yield* Effect.sync(() => {
       for (const [key, value] of Object.entries(mergedEnv)) {
-        if (key === "BASE_URL" || key === "CORS_ORIGIN") process.env[key] = value;
+        if (key === "BASE_URL" || key === "CORS_ORIGIN") setProcessEnv(key, value);
       }
     });
-    const preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
+    let preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
+    if (
+      preflightFailures.length > 0 &&
+      shouldAutoStartDocker(preflightFailures, {
+        ...detectAutoStartContext(deps.configDir),
+        dockerAvailable: yield* Effect.promise(isDockerAvailable),
+      })
+    ) {
+      const compose = yield* step(timings, "docker compose up", () =>
+        runDockerComposeUp(deps.configDir),
+      );
+      if (compose.ok) {
+        preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
+      } else {
+        preflightFailures = [
+          ...preflightFailures,
+          {
+            secret: "docker-compose",
+            host: "localhost",
+            port: 0,
+            error: `docker compose up -d --wait failed${compose.tail ? `:\n${compose.tail}` : ""}`,
+            tcpReachable: false,
+          },
+        ];
+      }
+    }
     if (preflightFailures.length > 0) {
       return yield* new DevPreflightFailed({ messages: preflightFailures.map((f) => f.error) });
     }
@@ -342,8 +383,8 @@ export const devBootstrap = (
     const services = buildServiceDescriptorMapFromPlan(plan, { ssr, proxy });
 
     const packages = [...plan.serviceDescriptors.keys()];
-    if (process.env.DEBUG === "true" || process.env.DEBUG === "1") {
-      yield* Effect.sync(() => console.error("[DEBUG dev] services keys:", packages.join(", ")));
+    if (getProcessEnv("DEBUG") === "true" || getProcessEnv("DEBUG") === "1") {
+      yield* Effect.logError(`[DEBUG dev] services keys: ${packages.join(", ")}`);
     }
     const apiSvc = services.get("api");
     if (apiSvc?.proxy) {
@@ -386,10 +427,10 @@ export const startBootstrap = (
 
     yield* emitProgress({ phase: "config", status: "running" });
 
-    const bosEnv = input.env ?? (process.env.BOS_ENV === "staging" ? "staging" : "production");
+    const bosEnv = input.env ?? (getProcessEnv("BOS_ENV") === "staging" ? "staging" : "production");
     const explicitConfig = resolveStartConfigSource(input, {
-      BOS_ACCOUNT: process.env.BOS_ACCOUNT,
-      BOS_GATEWAY: process.env.BOS_GATEWAY,
+      BOS_ACCOUNT: getProcessEnv("BOS_ACCOUNT"),
+      BOS_GATEWAY: getProcessEnv("BOS_GATEWAY"),
     });
 
     let config: BosConfig | null = null;
@@ -494,18 +535,18 @@ export const startBootstrap = (
     const warnings: string[] = [];
 
     const localhostOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
-    const corsOrigin = process.env.CORS_ORIGIN;
+    const corsOrigin = getProcessEnv("CORS_ORIGIN");
     const isLocalhostProductionOrigin =
       corsOrigin !== undefined && localhostOrigin.test(corsOrigin);
     if (isLocalhostProductionOrigin && isRegistryStart(explicitConfig)) {
       warnings.push(
         `CORS_ORIGIN is a localhost origin (${corsOrigin}) in a registry production start — overriding with the configured domain`,
       );
-      delete process.env.CORS_ORIGIN;
-      delete process.env.BASE_URL;
+      deleteProcessEnv("CORS_ORIGIN");
+      deleteProcessEnv("BASE_URL");
     }
 
-    if (!process.env.CORS_ORIGIN && baseConfig.domain) {
+    if (!getProcessEnv("CORS_ORIGIN") && baseConfig.domain) {
       const effectiveDomain = isStaging
         ? (baseConfig.staging?.domain ?? baseConfig.domain)
         : baseConfig.domain;
@@ -534,7 +575,7 @@ export const startBootstrap = (
     }
 
     for (const secret of requiredSecrets) {
-      const value = process.env[secret];
+      const value = getProcessEnv(secret);
       if (!value || value.length === 0) {
         missingSecrets.push(secret);
       }

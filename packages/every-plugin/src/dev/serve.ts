@@ -4,6 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { Effect } from "effect";
 import sirv from "sirv";
+import { DEV_ENTRY_FILENAME } from "../build/artifact-names";
 import { ensureGeneratedRspackConfig } from "../build/rspack/generated-config";
 import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
 import { ensureGeneratedUiRsbuildConfig } from "../build/ui/generated-config";
@@ -57,7 +58,7 @@ const collectSiblingRemotes = (runtimeConfig: any, pluginId: string) => {
     if (!dep || dep.source !== "local" || !dep.url) continue;
     if (depId === pluginId) continue;
     const base = dep.url.replace(/\/$/, "");
-    siblings[depId] = { remote: `${base}/remoteEntry.js` };
+    siblings[depId] = { remote: `${base}/${DEV_ENTRY_FILENAME}` };
   }
 
   return { siblings, dependsOn };
@@ -106,6 +107,7 @@ export interface PluginDevServerHandle {
 export async function startPluginDevServer(
   options: PluginDevServeOptions = {},
 ): Promise<PluginDevServerHandle> {
+  process.env.BOS_DEV_SERVER = "1";
   const cwd = options.cwd ?? process.cwd();
   const pluginInfo = getPluginInfo(cwd);
   const devConfig = loadDevConfig(path.join(cwd, "plugin.dev.ts"));
@@ -163,7 +165,7 @@ export async function startPluginDevServer(
     await runOnce("rsbuild", ["build", "--config", uiConfig]);
     const uiDistDir =
       path.basename(cwd) === "ui" ? path.join(cwd, "dist") : path.join(cwd, "ui", "dist");
-    if (!fs.existsSync(path.join(uiDistDir, "remoteEntry.js"))) {
+    if (!fs.existsSync(path.join(uiDistDir, DEV_ENTRY_FILENAME))) {
       console.error(
         `❌ UI dist is missing at ${uiDistDir} — the ui static server would serve 404s for every asset (build output layout mismatch?)`,
       );
@@ -347,7 +349,7 @@ export async function startPluginDevServer(
 
       const registry: Record<string, { remote: string }> = {
         [pluginId]: {
-          remote: `http://localhost:${port}/remoteEntry.js`,
+          remote: `http://localhost:${port}/${DEV_ENTRY_FILENAME}`,
         },
         ...siblings,
       };

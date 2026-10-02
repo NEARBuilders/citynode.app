@@ -12,6 +12,12 @@ import {
 } from "./service-descriptor";
 import type { RuntimeConfig } from "./types";
 
+const warnOutsideEffect = (...args: unknown[]): void => {
+  console.warn(...args);
+};
+
+const runFetch = (url: string, init?: RequestInit): Promise<Response> => fetch(url, init);
+
 process.on("unhandledRejection", (reason) => {
   console.error("[Orchestrator] Unhandled rejection:", reason);
 });
@@ -47,15 +53,11 @@ export interface ProcessState {
 const probeHttpOk = (url: string, timeoutMs = 400) =>
   Effect.tryPromise({
     try: async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await runFetch(url, { signal: AbortSignal.timeout(timeoutMs) });
         return res.ok;
       } catch {
         return false;
-      } finally {
-        clearTimeout(timer);
       }
     },
     catch: () => false,
@@ -205,13 +207,11 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     const entryUrl = yield* Effect.tryPromise({
       try: async () => {
         try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 10_000);
           let res: Response;
           try {
-            res = await fetch(manifestUrl, { signal: controller.signal });
-          } finally {
-            clearTimeout(timer);
+            res = await runFetch(manifestUrl, { signal: AbortSignal.timeout(10_000) });
+          } catch {
+            throw new Error("manifest fetch failed");
           }
           if (!res.ok) return remoteEntryUrl;
           const json = (await res.json()) as Record<string, unknown>;
@@ -225,7 +225,7 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
             return manifestUrl;
           }
         } catch (e) {
-          console.warn(
+          warnOutsideEffect(
             `[Orchestrator] Failed to fetch or parse manifest from ${manifestUrl}, falling back to remoteEntryUrl: ${e}`,
           );
         }

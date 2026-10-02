@@ -341,6 +341,7 @@ describe("resolveRequestRuntime", () => {
     expect(verifySriForUrlMock).toHaveBeenCalledWith(
       "https://cdn.example.com/alice-ui",
       "sha384-alice",
+      undefined,
     );
   });
 
@@ -639,6 +640,7 @@ describe("resolveRequestRuntime", () => {
     expect(verifySriForUrlMock).toHaveBeenCalledWith(
       "https://plugins.example.com/alice-apps-ui",
       "sha384-apps-alice",
+      undefined,
     );
   });
 

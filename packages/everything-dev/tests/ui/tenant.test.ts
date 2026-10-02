@@ -6,6 +6,7 @@ import {
   computeSsrEntryIntegrity,
   computeSubresourceIntegrity,
   computeUiEntryIntegrity,
+  createTenantConfigDraftSchema,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,
@@ -18,6 +19,7 @@ import {
   tenantLabel,
   verifySsrIntegrity,
   verifyUiIntegrity,
+  verifyUiPin,
 } from "../../src/ui/tenant";
 
 afterEach(() => {
@@ -159,6 +161,40 @@ describe("gatewayForAccount", () => {
 });
 
 describe("tenantConfigDraftSchema", () => {
+  it("uses localized pin validation while preserving bundle constraints", () => {
+    const schema = createTenantConfigDraftSchema({
+      manifest: "Formato de manifiesto no válido",
+      pinPair: "Falta la integridad del manifiesto",
+      integrityMode: "Elige un modo de integridad",
+    });
+    const draft = {
+      ...emptyTenantConfigDraft,
+      title: "Chicago",
+      description: "Chicago",
+      uiProduction: "https://cdn.example.com/ui",
+      uiManifest: "versions/8f3ac1d2feedbeef.json",
+    };
+    const pin = schema.safeParse(draft);
+    expect(pin.error?.issues).toContainEqual(
+      expect.objectContaining({
+        path: ["uiPinIntegrity"],
+        message: "Falta la integridad del manifiesto",
+      }),
+    );
+    const malformed = schema.safeParse({ ...draft, uiManifest: "versions/invalid.json" });
+    expect(malformed.error?.issues).toContainEqual(
+      expect.objectContaining({ path: ["uiManifest"], message: "Formato de manifiesto no válido" }),
+    );
+    const mixed = schema.safeParse({
+      ...draft,
+      uiPinIntegrity: "sha384-pin",
+      uiIntegrity: "sha384-direct",
+    });
+    expect(mixed.error?.issues).toContainEqual(
+      expect.objectContaining({ path: ["uiManifest"], message: "Elige un modo de integridad" }),
+    );
+  });
+
   it("accepts a metadata-only draft", () => {
     const result = tenantConfigDraftSchema.safeParse({
       ...emptyTenantConfigDraft,
@@ -185,6 +221,42 @@ describe("tenantConfigDraftSchema", () => {
       description: "Chicago",
       uiProduction: "https://cdn.example.com/ui.js",
       uiIntegrity: "md5-abc",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a pin-mode draft (manifest + pin integrity, no direct hash)", () => {
+    const result = tenantConfigDraftSchema.safeParse({
+      ...emptyTenantConfigDraft,
+      title: "Chicago",
+      description: "Chicago",
+      uiProduction: "https://cdn.example.com/ui",
+      uiManifest: "versions/8f3ac1d2feedbeef.json",
+      uiPinIntegrity: "sha384-pin",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a pin without its integrity", () => {
+    const result = tenantConfigDraftSchema.safeParse({
+      ...emptyTenantConfigDraft,
+      title: "Chicago",
+      description: "Chicago",
+      uiProduction: "https://cdn.example.com/ui",
+      uiManifest: "versions/8f3ac1d2feedbeef.json",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a draft carrying both a direct hash and a pin", () => {
+    const result = tenantConfigDraftSchema.safeParse({
+      ...emptyTenantConfigDraft,
+      title: "Chicago",
+      description: "Chicago",
+      uiProduction: "https://cdn.example.com/ui",
+      uiIntegrity: "sha384-abc",
+      uiManifest: "versions/8f3ac1d2feedbeef.json",
+      uiPinIntegrity: "sha384-pin",
     });
     expect(result.success).toBe(false);
   });
@@ -224,6 +296,8 @@ describe("buildDraftFromResolvedConfig", () => {
       repository: "https://github.com/example/chicago",
       uiProduction: "https://cdn.example.com/ui.js",
       uiIntegrity: "sha384-abc",
+      uiManifest: "",
+      uiPinIntegrity: "",
       ssrUrl: "https://cdn.example.com/ssr.js",
       ssrIntegrity: "sha384-def",
     });
@@ -300,6 +374,24 @@ describe("draftUiOverride", () => {
         integrity: "sha384-abc",
         ssr: "https://cdn.example.com/ssr",
         ssrIntegrity: "sha384-def",
+      },
+    } satisfies { ui: TenantUiOverride });
+  });
+
+  it("emits the pin (no direct integrity) when the draft pins a version manifest", () => {
+    expect(
+      draftUiOverride({
+        ...emptyTenantConfigDraft,
+        title: "Chicago",
+        description: "Chicago",
+        uiProduction: "https://cdn.example.com/ui",
+        uiManifest: "versions/8f3ac1d2feedbeef.json",
+        uiPinIntegrity: "sha384-pin",
+      }),
+    ).toEqual({
+      ui: {
+        production: "https://cdn.example.com/ui",
+        pin: { manifest: "versions/8f3ac1d2feedbeef.json", integrity: "sha384-pin" },
       },
     } satisfies { ui: TenantUiOverride });
   });
@@ -411,6 +503,28 @@ describe("integrity preflight", () => {
     stubBundle("console.log('hi')");
     const expected = await computeUiEntryIntegrity(bundleUrl);
     expect(await verifyUiIntegrity(bundleUrl, expected)).toEqual({ status: "match" });
+  });
+
+  it("verifies a pinned slot by SRI-comparing the manifest document", async () => {
+    const manifestBody = JSON.stringify({ entry: "remoteEntry.aaa.js" });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("versions/8f3ac1d2feedbeef.json")) {
+        return new Response(manifestBody);
+      }
+      return new Response("nope", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const expected = await computeSubresourceIntegrity(
+      "https://cdn.example.com/ui/versions/8f3ac1d2feedbeef.json",
+    );
+    expect(
+      await verifyUiPin("https://cdn.example.com/ui", {
+        manifest: "versions/8f3ac1d2feedbeef.json",
+        integrity: expected,
+      }),
+    ).toEqual({ status: "match" });
   });
 
   it("mismatches when the bundle hashes differently", async () => {

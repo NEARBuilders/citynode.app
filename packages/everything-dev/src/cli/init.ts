@@ -472,6 +472,7 @@ function stripProductionFields(entry: Record<string, unknown>): void {
   delete entry.integrity;
   delete entry.ssr;
   delete entry.ssrIntegrity;
+  delete entry.pin;
 }
 
 /**
@@ -548,7 +549,7 @@ export function buildChildRootScripts(sections: {
     dev: "bos dev",
     "dev:proxy": "bos dev --proxy",
     build: "bos build",
-    deploy: "bos build --deploy",
+    deploy: "bos deploy",
     publish: "bos publish",
     start: "bos start",
     typecheck: buildRootTypecheckScript(sections),
@@ -1164,9 +1165,7 @@ export async function runTypesGen(
   throw new Error("Unable to locate bos CLI for types generation");
 }
 
-export async function runDockerComposeUp(destination: string): Promise<void> {
-  await execCommand("docker", ["compose", "up", "-d", "--wait"], destination, { stdio: "inherit" });
-}
+export { runDockerComposeUp } from "../infra/docker";
 
 async function runWithProgress(
   command: string,
@@ -1483,7 +1482,6 @@ This document provides operational guidance for AI agents working in this everyt
 
 **Start Development:**
 \`\`\`bash
-cp .env.example .env   # First time only
 bun install
 bun run dev
 \`\`\`
@@ -1529,10 +1527,10 @@ You don't need to wait for a PR to merge and run through CI/CD. Publish your own
    \`\`\`json
    { "extends": "bos://<parent-account>/<parent-gateway>", "account": "<your-account>.near", "domain": "<parent-gateway>" }
    \`\`\`
-5. **Publish and deploy:**
-   \`\`\`bash
-   bos publish --deploy    # builds → writes deterministic bundle URLs → publishes config to FastKV at bos://<your-account>/<gateway>
-   \`\`\`
+ 5. **Publish and deploy:**
+    \`\`\`bash
+    bos deploy           # preflight → build → upload bundles → publish config to FastKV at bos://<your-account>/<gateway> → image/Railway when configured
+    \`\`\`
 6. **Deploy to Railway** (one-click template or \`railway up\`), set \`BOS_ACCOUNT\`, \`BOS_GATEWAY\` (same gateway as parent), and \`BETTER_AUTH_SECRET\`. Your Railway host fetches your config from FastKV and serves live.
 
 \`BOS_GATEWAY\` is the **FastKV lookup key**, not the DNS domain your Railway instance serves on. By keeping the same gateway while using your own \`BOS_ACCOUNT\`, your config lives at a separate FastKV path that \`extends\` the base runtime — you inherit the full platform and override only what you change.
@@ -1558,9 +1556,9 @@ You don't need to wait for a PR to merge and run through CI/CD. Publish your own
   parts.push(`## Development Workflow
 
 ### Starting Development
-1. \`cp .env.example .env\` (first time)
-2. \`bun install\`
-3. \`bun run dev\``);
+1. \`bun install\`
+2. \`bun run dev\`
+3. \`bos dev\` creates \`.env\` on first run and starts local Postgres via docker compose when it is down`);
 
   parts.push(`### Debugging Issues
 
@@ -1883,17 +1881,14 @@ Remotes in \`bos.config.json\` are **not hosted APIs** — they are code bundles
 ### Run locally
 
 \`\`\`bash
-cp .env.example .env
 bun install
-docker compose up -d --wait
 bos dev
 \`\`\`
 
 ### Publish
 
 \`\`\`bash
-bos build
-bos publish --deploy
+bos deploy
 \`\`\`
 
 ## Source

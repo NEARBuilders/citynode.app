@@ -89,7 +89,7 @@ describe("createRequireTeamArea", () => {
       },
       organization: {
         activeOrganizationId: "org-1",
-        organization: { id: "org-1", name: "Org", slug: "org" },
+        organization: { id: "org-1", name: "Org", slug: "org", status: "active" },
         member: { id: "m1", role: orgRole },
         isPersonal: false,
         hasOrganization: true,

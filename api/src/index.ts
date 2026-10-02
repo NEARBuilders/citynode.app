@@ -1,6 +1,6 @@
 import type { ContractedRouter } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
-import { Cause, Context, Effect, Exit, Layer } from "effect";
+import { Cause, Context, DateTime, Effect, Exit, Layer } from "effect";
 import { buildScopedContext, createPlugin } from "every-plugin";
 import { createAuthMiddleware } from "everything-dev/api";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
@@ -290,7 +290,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
-      console.log("[API] Services Initialized");
+      yield* Effect.log("[API] Services Initialized");
 
       return Layer.mergeAll(
         Layer.succeed(ApiServices, {
@@ -307,6 +307,33 @@ export default createPlugin.withPlugins<PluginsClient>()({
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
       createAuthMiddleware<AuthContext>(builder);
     const requireNodeOperations = createRequireTeamArea(builder)("node-operations");
+    const resolveProposalOrganization = builder.middleware(
+      async ({ context, next }, input: { orgId: string }) => {
+        const authPlugin = plugins.auth;
+        if (!authPlugin) {
+          throw new ORPCError("INTERNAL_SERVER_ERROR", {
+            message: "The auth plugin is not available",
+          });
+        }
+        const organization = await authPlugin
+          .client({ reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()) })
+          .getOrganizationForAdmin({ organizationId: input.orgId });
+        const organizationContext: NonNullable<AuthContext["organization"]> = {
+          activeOrganizationId: organization?.id ?? null,
+          organization,
+          member: null,
+          isPersonal: false,
+          hasOrganization: !!organization,
+          teams: [],
+          activeTeamId: null,
+        };
+        return next({
+          context: {
+            organization: organizationContext,
+          },
+        });
+      },
+    );
 
     const router = {
       trackDiscovery: builder.trackDiscovery.effect(function* ({ input, context }) {
@@ -429,6 +456,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const auth = authPlugin.client({
           reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
         });
+        const expiresAt = input.expiresAt
+          ? DateTime.toDateUtc(DateTime.makeUnsafe(input.expiresAt))
+          : DateTime.toDateUtc(DateTime.makeUnsafe(Date.parse(endsAt) + ONBOARDING_GRACE_MS));
         return yield* Effect.tryPromise<
           z.infer<typeof EventOnboardingCodeSchema>,
           ORPCError<string, unknown>
@@ -439,9 +469,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               eventId: event.id,
               eventName: event.title,
               ...(input.maxUses ? { maxUses: input.maxUses } : {}),
-              expiresAt: input.expiresAt
-                ? new Date(input.expiresAt)
-                : new Date(Date.parse(endsAt) + ONBOARDING_GRACE_MS),
+              expiresAt,
             }),
           catch: (error) =>
             error instanceof ORPCError
@@ -475,7 +503,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listTenants: builder.listTenants.use(requireAuth).effect(function* ({ context }) {
         const services = yield* ApiServices;
         if (context.user?.role === "admin") {
-          return yield* services.tenants.listAllTenants();
+          return yield* services.tenants.listAllTenants;
         }
         const ownerTenants = yield* services.tenants.listTenantsByOwnerUserId(context.user.id);
         const orgId = context.organization?.activeOrganizationId;
@@ -652,7 +680,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listTenantBindings: builder.listTenantBindings.effect(function* () {
         const services = yield* ApiServices;
-        return yield* services.tenants.listBindings();
+        return yield* services.tenants.listBindings;
       }),
 
       listTenantApps: builder.listTenantApps.effect(function* () {
@@ -738,38 +766,42 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
-      applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).effect(function* ({ input }) {
-        const services = yield* ApiServices;
-        yield* validateAccountId(input.accountId);
-        yield* validateAccountId(input.submitterAccountId);
-        if (input.poolAccountId) yield* validateAccountId(input.poolAccountId);
-        yield* validateHostname(input.hostname);
-        const result = yield* verifyDaoMembership({
-          daoAccountId: input.accountId,
-          memberAccountId: input.submitterAccountId,
-        });
-        if (!result.isMember) {
-          return yield* Effect.fail(
-            new ORPCError("FORBIDDEN", {
-              message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
-              data: {
-                daoAccountId: input.accountId,
-                submitterAccountId: input.submitterAccountId,
-              },
-            }),
-          );
-        }
-        return yield* services.tenants.applyNodeProposal({
-          kind: input.kind,
-          name: input.name,
-          slug: input.slug,
-          parentId: input.parentId,
-          orgId: input.orgId,
-          accountId: input.accountId,
-          hostname: input.hostname.toLowerCase(),
-          ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
-        });
-      }),
+      applyNodeProposal: builder.applyNodeProposal
+        .use(requireAdmin)
+        .use(resolveProposalOrganization)
+        .use(requireOrganization)
+        .effect(function* ({ input }) {
+          const services = yield* ApiServices;
+          yield* validateAccountId(input.accountId);
+          yield* validateAccountId(input.submitterAccountId);
+          if (input.poolAccountId) yield* validateAccountId(input.poolAccountId);
+          yield* validateHostname(input.hostname);
+          const result = yield* verifyDaoMembership({
+            daoAccountId: input.accountId,
+            memberAccountId: input.submitterAccountId,
+          });
+          if (!result.isMember) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
+                data: {
+                  daoAccountId: input.accountId,
+                  submitterAccountId: input.submitterAccountId,
+                },
+              }),
+            );
+          }
+          return yield* services.tenants.applyNodeProposal({
+            kind: input.kind,
+            name: input.name,
+            slug: input.slug,
+            parentId: input.parentId,
+            orgId: input.orgId,
+            accountId: input.accountId,
+            hostname: input.hostname.toLowerCase(),
+            ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
+          });
+        }),
 
       listNodes: builder.listNodes.effect(function* ({ input }) {
         const services = yield* ApiServices;
@@ -910,7 +942,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listRootNodes: builder.listRootNodes.effect(function* () {
         const services = yield* ApiServices;
-        return yield* services.nodes.listRootNodes();
+        return yield* services.nodes.listRootNodes;
       }),
 
       listChildren: builder.listChildren.effect(function* ({ input }) {
@@ -1249,7 +1281,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         );
         const integrity = Object.fromEntries(integrityEntries);
 
-        return { stored: decoded.length, totalBytes, integrity };
+        return { stored: decoded.length, totalBytes, integrity, storage: services.storage.backend };
       }),
     };
 

@@ -3,6 +3,7 @@ import { compileMessageOrThrow } from "@lingui/message-utils/compileMessage";
 import { administrationMessages } from "./messages/administration";
 import { commonMessages } from "./messages/common";
 import { configurationMessages } from "./messages/configuration";
+import { deploymentMessages } from "./messages/deployment";
 import { discoveryMessages } from "./messages/discovery";
 import { lifecycleMessages } from "./messages/lifecycle";
 import { metadataMessages } from "./messages/metadata";
@@ -12,6 +13,7 @@ import { thingsMessages } from "./messages/things";
 
 export const appFeatureCatalogs = [
   commonMessages,
+  deploymentMessages,
   publicMessages,
   discoveryMessages,
   organizationsMessages,
@@ -173,6 +175,7 @@ const englishApplyMessages = {
 
 export const englishAppMessages = {
   ...commonMessages.en,
+  ...deploymentMessages.en,
   ...publicMessages.en,
   ...discoveryMessages.en,
   ...organizationsMessages.en,
@@ -215,6 +218,7 @@ export type AppTranslator = (id: AppMessageId, values?: Record<string, string | 
 
 const spanishAppMessages = {
   ...commonMessages.es,
+  ...deploymentMessages.es,
   ...publicMessages.es,
   ...discoveryMessages.es,
   ...organizationsMessages.es,
@@ -385,6 +389,7 @@ const spanishAppMessages = {
 
 const frenchAppMessages = {
   ...commonMessages.fr,
+  ...deploymentMessages.fr,
   ...publicMessages.fr,
   ...discoveryMessages.fr,
   ...organizationsMessages.fr,
@@ -556,6 +561,7 @@ const frenchAppMessages = {
 
 const chineseAppMessages = {
   ...commonMessages.zh,
+  ...deploymentMessages.zh,
   ...publicMessages.zh,
   ...discoveryMessages.zh,
   ...organizationsMessages.zh,

@@ -1,4 +1,6 @@
+import { DEV_ENTRY_FILENAME } from "every-plugin/build/artifact-names";
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
+import { resolveEntryUrlForEnv } from "everything-dev/ui/manifest";
 import type { ClientRuntimeConfig, RuntimeConfig } from "../services/config";
 
 const escapeHtml = (value: string): string =>
@@ -21,6 +23,12 @@ export function renderClientShellHtml(
   const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
   const sriAttr = ` crossorigin="anonymous"${uiIntegrity ? ` integrity="${uiIntegrity}"` : ""}`;
   const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
+  const coreEntrySrc = resolveEntryUrlForEnv({
+    entryUrl: runtimeSourceConfig.ui.entryUrl,
+    env: runtimeSourceConfig.env,
+    devFixed: `${assetsUrl}/${DEV_ENTRY_FILENAME}${uiVersion}`,
+    slot: "ui",
+  });
 
   const pluginUiScripts = (
     runtimeConfig.ui?.compose
@@ -29,8 +37,14 @@ export function renderClientShellHtml(
           if (!ui?.url) return [];
           const pluginVersion = ui.integrity ? `?v=${encodeURIComponent(ui.integrity)}` : "";
           const pluginSri = ui.integrity ? ` integrity="${ui.integrity}"` : "";
+          const pluginSrc = resolveEntryUrlForEnv({
+            entryUrl: ui.entryUrl,
+            env: runtimeSourceConfig.env,
+            devFixed: `${ui.url.replace(/\/$/, "")}/${DEV_ENTRY_FILENAME}`,
+            slot: plugin.name,
+          });
           return [
-            `<script${nonceAttr} src="${ui.url.replace(/\/$/, "")}/remoteEntry.js${pluginVersion}" crossorigin="anonymous"${pluginSri}></script>`,
+            `<script${nonceAttr} src="${pluginSrc}${ui.entryUrl ? "" : pluginVersion}" crossorigin="anonymous"${pluginSri}></script>`,
           ];
         })
       : []
@@ -74,7 +88,7 @@ export function renderClientShellHtml(
           <link rel="stylesheet" href="${assetsUrl}/static/css/style.css${uiVersion}" />
           <style>${baseStyles}</style>
           ${themeScript}
-          <script${nonceAttr} src="${assetsUrl}/remoteEntry.js${uiVersion}"${sriAttr}></script>
+          <script${nonceAttr} src="${coreEntrySrc}"${sriAttr}></script>
           ${pluginUiScripts}
           <script${nonceAttr}>${hydrateScript}</script>
         </head>

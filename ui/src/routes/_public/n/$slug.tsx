@@ -24,6 +24,7 @@ import {
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
+import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
 function discoveryProfileQueryOptions(apiClient: ApiClient, nodeId: string) {
   return queryOptions({
@@ -218,6 +219,7 @@ function NodePage() {
                 <ArrowUpRightIcon />
               </Button>
             )}
+            <ProposeHomepageCta tenantId={node.tenantId} />
           </div>
         </div>
         {profile && profile.channels.length > 0 && (

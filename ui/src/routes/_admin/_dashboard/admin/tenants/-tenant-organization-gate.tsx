@@ -31,7 +31,9 @@ export function TenantOrganizationGate({
       className="flex max-w-xl flex-col gap-6"
       data-testid="admin-tenant-org-gate"
     >
-      <p className="text-sm text-muted-foreground">{translate("admin.site.orgRequired")}</p>
+      <p className="text-sm text-muted-foreground">
+        {translate("orgApproval.siteRequiresApproval")}
+      </p>
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="org-name">{translate("org.name")}</FieldLabel>
@@ -69,7 +71,7 @@ export function TenantOrganizationGate({
         className="w-full sm:w-auto sm:self-start"
         disabled={isPending || !orgName || !orgSlug}
       >
-        {isPending ? translate("common.creating") : translate("org.create")}
+        {isPending ? translate("apply.submit.pending") : translate("orgApproval.request")}
       </Button>
     </form>
   );

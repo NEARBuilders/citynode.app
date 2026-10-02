@@ -83,10 +83,12 @@ function createBaseRuntimeConfig(): RuntimeConfig {
       name: "ui",
       url: "https://cdn.example.com/base-ui",
       entry: "https://cdn.example.com/base-ui/mf-manifest.json",
+      entryUrl: "https://cdn.example.com/base-ui/remoteEntry.aaa.js",
       source: "remote",
       integrity: "sha384-base",
       ssrUrl: "https://cdn.example.com/base-ui-ssr",
       ssrIntegrity: "sha384-base-ssr",
+      ssrEntryUrl: "https://cdn.example.com/base-ui-ssr/remoteEntry.server.aaa.js",
     },
   } as RuntimeConfig;
 }
@@ -103,9 +105,11 @@ function configWithPlugin(): RuntimeConfig {
         name: "auth-ui",
         url: "https://cdn.example.com/auth-ui",
         entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
+        entryUrl: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
         source: "remote",
         ssrUrl: "https://cdn.example.com/auth-ui-ssr",
         ssrIntegrity: "sha384-a",
+        ssrEntryUrl: "https://cdn.example.com/auth-ui-ssr/remoteEntry.server.aaa.js",
       },
     } as never,
   };
@@ -186,7 +190,7 @@ describe("uiSources", () => {
     expect(sources.map((source) => source.key)).toEqual(["auth", "ui"]);
     expect(sources.map((source) => source.mfName)).toEqual(["auth-ui", "ui"]);
     expect(sources.find((source) => source.key === "auth")?.webEntry).toBe(
-      "https://cdn.example.com/auth-ui/remoteEntry.js",
+      "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
     );
     expect(sources.find((source) => source.key === "ui")?.manifestUrl).toBe(
       "https://cdn.example.com/base-ui/manifest.gen.json",
@@ -282,9 +286,47 @@ describe("composeUi", () => {
 
     expect(variant.clientPayload.digest).toBe(variant.digest);
     expect(variant.clientPayload.remotes).toEqual([
-      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+      {
+        key: "auth",
+        name: "auth-ui",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
+        manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
+      },
     ]);
     expect(variant.clientPayload.manifests).toEqual([AUTH_MANIFEST, CORE_MANIFEST]);
+  });
+
+  it("local plugin ui slots carry no manifestUrl — a relative entry resolves against the page origin and registers the wrong container", async () => {
+    const config = configWithPlugin();
+    // a local plugin ui slot only exists in development (dev targets resolve
+    // only there) — and the fixed-name fallback is the dev contract
+    config.env = "development";
+    config.plugins!.auth!.ui = {
+      name: "auth-ui",
+      url: "http://localhost:4111",
+      entry: "/mf-manifest.json",
+      source: "local",
+      ssrUrl: "http://localhost:4111/ssr",
+    } as never;
+
+    fetchMock.mockImplementation(async (url: unknown) => {
+      const target = String(url);
+      if (target === "http://localhost:4111/manifest.gen.json") {
+        return { ok: true, status: 200, json: async () => AUTH_MANIFEST };
+      }
+      return { ok: true, status: 200, json: async () => CORE_MANIFEST };
+    });
+    cache.remoteManifests.clear();
+
+    const client = await composeClient(config);
+
+    expect(client?.clientPayload.remotes).toEqual([
+      {
+        key: "auth",
+        name: "auth-ui",
+        entry: "http://localhost:4111/remoteEntry.js",
+      },
+    ]);
   });
 
   it("local dev composes through the same MF loaders via the local dist container", async () => {
@@ -331,7 +373,12 @@ describe("composeUi", () => {
 
     expect(variant.routerModule).toBe(ROUTER_MODULE);
     expect(variant.clientPayload.remotes).toEqual([
-      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+      {
+        key: "auth",
+        name: "auth-ui",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
+        manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
+      },
     ]);
 
     await rm(localRoot, { recursive: true, force: true });
@@ -367,7 +414,12 @@ describe("composeClientPayload", () => {
 
     expect(client).toEqual({ digest: variant.digest, clientPayload: variant.clientPayload });
     expect(client?.clientPayload.remotes).toEqual([
-      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+      {
+        key: "auth",
+        name: "auth-ui",
+        entry: "https://cdn.example.com/auth-ui/remoteEntry.aaa.js",
+        manifestUrl: "https://cdn.example.com/auth-ui/mf-manifest.json",
+      },
     ]);
     expect(client?.clientPayload.manifests).toEqual([AUTH_MANIFEST, CORE_MANIFEST]);
   });

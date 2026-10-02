@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { AwsClient } from "aws4fetch";
 import { Context, Effect, Layer } from "effect";
+import { cacheControlOf } from "every-plugin/build/artifact-names";
 
 export interface StoragePutInput {
   key: string;
@@ -57,8 +58,6 @@ const BUNDLE_MIME_TYPES: Record<string, string> = {
   ".xml": "application/xml",
 };
 
-const ENTRYPOINT_PATTERN = /^(remoteEntry|remoteEntry\.server|mf-manifest|index|manifest\.gen)\./;
-
 export { BUNDLE_MIME_TYPES };
 
 export function bundleContentType(name: string): string {
@@ -67,10 +66,7 @@ export function bundleContentType(name: string): string {
   );
 }
 
-export function bundleCacheControl(name: string): string {
-  const entrypoint = ENTRYPOINT_PATTERN.test(name) || !/\.[a-f0-9]{8,}\./.test(name);
-  return entrypoint ? "public, max-age=0, must-revalidate" : "public, max-age=31536000, immutable";
-}
+export const bundleCacheControl = cacheControlOf;
 
 const NAMESPACE_LABEL = "[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?";
 const PART_PATTERNS: Record<"account" | "gateway" | "workspace", RegExp> = {
@@ -303,7 +299,7 @@ export const StorageLive = Layer.effect(
   Effect.gen(function* () {
     const config = storageConfigFromEnv();
     if (!config) {
-      console.warn(
+      yield* Effect.logWarning(
         "[storage] BOS_STORAGE_* not configured — using in-memory storage (dev only; bundle bytes are lost on restart)",
       );
       const memory = new MemoryStorageClient();

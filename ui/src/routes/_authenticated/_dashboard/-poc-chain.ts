@@ -11,12 +11,13 @@ import { Amount, type FinalExecutionOutcome, Near } from "near-kit";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { getDaoConnector, toNearKitWallet } from "@/lib/dao-connect";
-import { type DaoPlan, getNear } from "@/lib/sputnik-proposals";
+import { type DaoPlan, getNear, type SessionWallet, trezuDaoUrl } from "@/lib/sputnik-proposals";
 
 export { parseNearAmount } from "@/lib/near-amount";
 export type {
   ApprovalThreshold,
   DaoPlan,
+  SessionWallet,
   SputnikFunctionCallAction,
   SputnikPolicy,
   SputnikProposal,
@@ -26,14 +27,17 @@ export {
   ANY_RECEIVER,
   approvalThreshold,
   approverRoles,
+  buildAddProposalArgs,
   canAccountApprove,
   canAccountPropose,
   fetchDaoProposals,
+  fetchProposalBond,
   fetchSputnikPolicy,
   findPendingProposalForPlan,
   getNear,
   isPendingProposal,
   proposalMatchesPlan,
+  proposeAsSession,
   roleMembers,
   waitFor,
 } from "@/lib/sputnik-proposals";
@@ -148,7 +152,7 @@ export function nearblocksAccount(accountId: string): string {
 /** Sputnik treasuries read best on trezu.app; everything else on nearblocks. */
 export function accountExplorerUrl(accountId: string): string {
   return accountId.endsWith(".sputnik-dao.near")
-    ? `https://trezu.app/${accountId}`
+    ? trezuDaoUrl(accountId)
     : nearblocksAccount(accountId);
 }
 
@@ -374,80 +378,9 @@ export async function signPlanAsDao(
 
 /* ------------------------------------------------- proposal staging (no connect) */
 
-function gasToRaw(gas: string): string {
-  const match = gas.match(/([\d.]+)\s*Tgas/);
-  if (!match) return gas.replace(/\D/g, "") || "0";
-  return BigInt(Math.round(Number(match[1]) * 1e12)).toString();
-}
-
-/**
- * Sputnik `add_proposal` args carrying the plan as a proposal — the session
- * wallet can stage treasury actions on a DAO it may propose to, without the
- * DAO's own wallet connection.
- */
-export function buildAddProposalArgs(plan: DaoPlan, description: string) {
-  const kind =
-    plan.kind === "transfer"
-      ? { Transfer: { token_id: "", receiver_id: plan.receiverId, amount: plan.amountYocto } }
-      : {
-          FunctionCall: {
-            receiver_id: plan.receiverId,
-            actions: [
-              {
-                method_name: plan.methodName,
-                args: btoa(JSON.stringify(plan.args)),
-                deposit: plan.attachedDeposit ?? "0",
-                gas: gasToRaw(plan.gas),
-              },
-            ],
-          },
-        };
-  return { proposal: { description, kind } };
-}
-
-async function fetchProposalBond(daoAccountId: string): Promise<string> {
-  const policy = await getNear()
-    .view<{ proposal_bond?: string }>(daoAccountId, "get_policy", {})
-    .catch(() => null);
-  return policy?.proposal_bond ?? "0";
-}
-
-/** Stages the plan as a proposal on the DAO, signed by the session wallet. */
-export async function proposeAsSession(
-  wallet: SessionWallet,
-  daoAccountId: string,
-  plan: DaoPlan,
-  description: string,
-): Promise<FinalExecutionOutcome> {
-  const connected = await wallet.ensureConnected();
-  const accountId = wallet.getAccountId();
-  if (!connected || !accountId) throw new Error("Connect your NEAR wallet first");
-  const bond = await fetchProposalBond(daoAccountId);
-  return wallet
-    .getNearClient()
-    .transaction(accountId)
-    .functionCall(
-      daoAccountId,
-      "add_proposal",
-      buildAddProposalArgs(plan, description) as unknown as Record<string, never>,
-      {
-        gas: "100 Tgas",
-        attachedDeposit: bond ? Amount.yocto(BigInt(bond)) : Amount.ZERO,
-      },
-    )
-    .send({ waitUntil: "EXECUTED" });
-}
-
 export interface SessionSigner {
   accountId: string;
   send(plan: Extract<DaoPlan, { kind: "call" }>): Promise<FinalExecutionOutcome>;
-}
-
-/** The wallet surface the session-account actions need, satisfied by the auth client. */
-export interface SessionWallet {
-  ensureConnected(): Promise<boolean>;
-  getAccountId(): string | null;
-  getNearClient(): Near;
 }
 
 /** Sends NEAR straight from the session wallet — the admin funding the treasury. */

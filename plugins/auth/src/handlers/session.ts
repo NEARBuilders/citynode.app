@@ -248,6 +248,7 @@ export function createSessionHandlers(builder: any) {
           name: string;
           slug: string;
           logo: string | null | undefined;
+          status: string;
           metadata?: Record<string, unknown>;
         } | null,
         member: null as { id: string; role: string } | null,
@@ -269,7 +270,7 @@ export function createSessionHandlers(builder: any) {
           where: eq(schema.organization.id, resolvedOrganizationId),
         });
 
-        if (org) {
+        if (org?.status === "active") {
           organizationContext = {
             activeOrganizationId: resolvedOrganizationId,
             organization: {
@@ -277,6 +278,7 @@ export function createSessionHandlers(builder: any) {
               name: org.name,
               slug: org.slug,
               logo: org.logo,
+              status: org.status,
               metadata: tryJsonParse<Record<string, unknown>>(org.metadata),
             },
             member: null,
@@ -293,7 +295,7 @@ export function createSessionHandlers(builder: any) {
         });
 
         for (const m of memberships) {
-          if (m.organization) {
+          if (m.organization?.status === "active") {
             organizations.push({
               id: m.organization.id,
               role: m.role,
@@ -308,7 +310,7 @@ export function createSessionHandlers(builder: any) {
         if (activeOrgId) {
           const activeMembership = memberships.find((m) => m.organization?.id === activeOrgId);
 
-          if (activeMembership?.organization) {
+          if (activeMembership?.organization?.status === "active") {
             const org = activeMembership.organization;
             const teams = await listMemberTeams(services.db, user.id, org.id);
             const sessionTeamId = getActiveTeamId(session?.session);
@@ -319,6 +321,7 @@ export function createSessionHandlers(builder: any) {
                 name: org.name,
                 slug: org.slug,
                 logo: org.logo,
+                status: org.status,
                 metadata: tryJsonParse<Record<string, unknown>>(org.metadata),
               },
               member: {

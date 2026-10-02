@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Deferred, Effect, Exit } from "effect";
+import { Deferred, Effect, Exit, Layer } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runDevSession } from "../../src/dev-session";
 import { ShellEnvLive } from "../../src/env/project-env";
@@ -107,16 +107,18 @@ const runSession = () => {
     }),
   ).pipe(
     Effect.provide(
-      ServiceDescriptorMapLive(
-        new Map([
-          ["host", makeDescriptor("host")],
-          ["api", makeDescriptor("api")],
-        ]),
+      Layer.mergeAll(
+        ServiceDescriptorMapLive(
+          new Map([
+            ["host", makeDescriptor("host")],
+            ["api", makeDescriptor("api")],
+          ]),
+        ),
+        DevRuntimeConfigLive(fakeRuntimeConfig),
+        DevGeneratedEnvLive({}),
+        ShellEnvLive({}),
       ),
     ),
-    Effect.provide(DevRuntimeConfigLive(fakeRuntimeConfig)),
-    Effect.provide(DevGeneratedEnvLive({})),
-    Effect.provide(ShellEnvLive({})),
   );
   return {
     program,

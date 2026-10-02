@@ -2,13 +2,15 @@ import { createInstance, getInstance } from "@module-federation/enhanced/runtime
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
+import { DEV_ENTRY_FILENAME } from "every-plugin/build/artifact-names";
 import type { PluginLoadFailureInfo } from "every-plugin/errors";
 import { classifyPluginFailure, PluginRuntimeError } from "every-plugin/errors";
 import { loadRemoteWithRetry } from "every-plugin/remote-entry";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
-import type { RuntimeConfig, SharedConfig } from "everything-dev/types";
+import type { RuntimeConfig, RuntimePluginConfig, SharedConfig } from "everything-dev/types";
+import { resolveEntryUrlForEnv } from "everything-dev/ui/manifest";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
 import { maskDbUrl } from "../utils/mask-db-url";
@@ -59,6 +61,22 @@ function dbUrlSummary(url: string | undefined): string {
   } catch {
     return maskDbUrl(url);
   }
+}
+
+/**
+ * The URL the federation runtime registers and loads a remote from: a
+ * pin-derived (content-hashed) entry when the slot has one, the fixed dev
+ * name in development. Registration must resolve through this too — the
+ * runtime's own URL normalization appends the dev-only fixed name otherwise,
+ * 404ing against hashed-only dists.
+ */
+export function remoteEntryUrlOf(config: RuntimePluginConfig, env: string, slot: string): string {
+  return resolveEntryUrlForEnv({
+    entryUrl: config.entryUrl,
+    env,
+    devFixed: `${config.url.replace(/\/$/, "")}/${DEV_ENTRY_FILENAME}`,
+    slot,
+  });
 }
 
 export interface InitializedPluginResult {
@@ -349,8 +367,7 @@ export function buildAuthBaseVariables(
     const envRaw = yield* Config.String("BASE_URL").pipe(
       Config.withDefault(""),
       Config.map((value) => value.trim() || undefined),
-      // a broken config provider must not block auth boot — treat as unset
-      Effect.catch(() => Effect.succeed(undefined)),
+      Effect.orElseSucceed(() => undefined),
     );
     const envBaseUrl = asOrigin(envRaw);
     if (envRaw && !envBaseUrl) {
@@ -358,10 +375,9 @@ export function buildAuthBaseVariables(
         `[Auth] Ignoring BASE_URL="${envRaw}" — not an http(s) origin; using the derived origin.`,
       );
     }
+    const authVariables = config.auth?.variables;
     const authoredBaseUrl = asOrigin(
-      typeof (config.auth?.variables as { baseUrl?: unknown } | undefined)?.baseUrl === "string"
-        ? (config.auth?.variables as { baseUrl: string }).baseUrl
-        : undefined,
+      typeof authVariables?.baseUrl === "string" ? authVariables.baseUrl : undefined,
     );
     const baseUrl = envBaseUrl ?? authoredBaseUrl ?? hostUrl;
 
@@ -440,6 +456,7 @@ function loadPluginEntryEffect(
   runtime: any,
   entry: RuntimePluginEntry,
   integrityRegistry: IntegrityRegistry,
+  env: string,
   pluginsClient?: Record<string, unknown>,
   baseVariables?: Record<string, unknown>,
 ): Effect.Effect<HostPluginEntry, PluginBootstrapError | Config.ConfigError> {
@@ -464,7 +481,7 @@ function loadPluginEntryEffect(
     const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
-    const remoteUrl = `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`;
+    const remoteUrl = remoteEntryUrlOf(entry.config, env, entry.key);
     const result = yield* loadRemoteWithRetry<Omit<HostPluginEntry, "key" | "name">>({
       label: entry.key,
       remoteUrl,
@@ -560,9 +577,10 @@ export const initializePlugins = Effect.gen(function* () {
     // attestation used to float outside any fiber's lifetime.
     yield* Effect.forkScoped(
       Effect.gen(function* () {
-        const { verified, mismatches } = yield* Effect.promise(() =>
-          verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl),
-        );
+        const { verified, mismatches } = yield* Effect.tryPromise({
+          try: () => verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl),
+          catch: (error) => error,
+        });
         if (!verified) {
           logger.error(
             `[Attestation] Config integrity does not match on-chain anchor. Mismatches: ${mismatches.join(", ")}`,
@@ -578,7 +596,7 @@ export const initializePlugins = Effect.gen(function* () {
     );
   }
 
-  const corsOrigins = yield* readCorsOrigins();
+  const corsOrigins = yield* readCorsOrigins;
 
   const { runtime, integrityRegistry } = yield* Effect.tryPromise({
     try: async () => {
@@ -596,7 +614,10 @@ export const initializePlugins = Effect.gen(function* () {
 
       const runtime = createPluginRuntime({
         registry: Object.fromEntries(
-          allEntries.map((entry) => [entry.runtimeId, { remote: entry.config.url }]),
+          allEntries.map((entry) => {
+            const remoteUrl = remoteEntryUrlOf(entry.config, config.env, entry.key);
+            return [entry.runtimeId, { remote: remoteUrl }];
+          }),
         ),
         secrets: {},
       });
@@ -666,6 +687,7 @@ export const initializePlugins = Effect.gen(function* () {
       runtime,
       entry,
       integrityRegistry,
+      config.env,
       Object.keys(nodePluginsClient).length > 0 ? nodePluginsClient : undefined,
       baseVariables,
     ).pipe(

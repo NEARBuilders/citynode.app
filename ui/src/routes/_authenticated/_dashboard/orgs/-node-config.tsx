@@ -7,7 +7,7 @@ import {
   ShieldCheckIcon,
   StackIcon,
 } from "@phosphor-icons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { useEffect, useMemo, useState } from "react";
@@ -15,57 +15,38 @@ import { toast } from "sonner";
 import {
   buildDraftFromResolvedConfig,
   buildTenantUrl,
-  computeSsrEntryIntegrity,
-  computeUiEntryIntegrity,
   createTenantConfigDraftSchema,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,
-  type IntegrityCheckResult,
-  normalizeBundleBaseUrl,
   type TenantConfigDraft,
   useApiClient,
   useAuthClient,
-  verifySsrIntegrity,
-  verifyUiIntegrity,
 } from "@/app";
 import {
   Badge,
   Button,
   ConfirmDialog,
   EmptyState,
-  Field,
-  FieldLabel,
   InfoPopover,
   InfoRow,
-  Input,
   SectionHeader,
 } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 import { FieldGroup } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
-import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { describeDaoError, useDaoConnection } from "@/lib/dao-connect";
 import { presentationLabel } from "@/lib/presentation-label";
-import {
-  invalidateTenantQueries,
-  tenantBindingsQueryOptions,
-  tenantByOrgQueryOptions,
-} from "@/lib/queries/tenants";
-import {
-  approvalThreshold,
-  CONFIG_WRITE_PLAN,
-  fetchDaoProposals,
-  fetchSputnikPolicy,
-  findPendingProposalForPlan,
-} from "@/lib/sputnik-proposals";
+import { invalidateTenantQueries } from "@/lib/queries/tenants";
+import { waitFor } from "@/lib/sputnik-proposals";
 import { publishTenantConfigForMode } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
-import { resolvePrimaryHostname } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
-import { waitFor } from "../-poc-chain";
-
-const REFETCH_MS = 15_000;
+import { ConfigField } from "./-config-field";
+import { CustomUiBundleFields } from "./-custom-ui-bundle-fields";
+import { runIntegrityPreflight } from "./-integrity-preflight";
+import { useOrgTenantConfig } from "./-use-org-tenant-config";
+import { usePendingConfigProposal } from "./-use-pending-config-proposal";
 
 export interface NodeConfigTabProps {
   orgId: string;
@@ -90,54 +71,21 @@ export function NodeConfigTab({
   const nearAccountId = useNearAccount();
   const activeNetwork = auth.useActiveNetwork();
 
-  const { data: tenant } = useQuery(tenantByOrgQueryOptions(apiClient, orgId));
+  const {
+    tenant,
+    daoOwned,
+    tenantAccount,
+    hostname,
+    registryQuery,
+    resolvedConfig,
+    configPublished,
+    fetchPublishedNow,
+  } = useOrgTenantConfig(orgId, gatewayId);
 
-  const daoOwned = tenant?.ownerKind === "dao";
-  const tenantAccount = tenant?.accountId ?? "";
-
-  const { data: bindings } = useQuery({
-    ...tenantBindingsQueryOptions(apiClient, tenant?.id ?? ""),
-    enabled: !!tenant,
-  });
-  const hostname = resolvePrimaryHostname(bindings);
-
-  const registryQuery = useQuery({
-    queryKey: ["node-config", "registry-app", tenantAccount, gatewayId],
-    queryFn: async () => {
-      try {
-        const result = await apiClient.apps.getRegistryApp({
-          accountId: tenantAccount,
-          gatewayId,
-        });
-        return result.data ?? null;
-      } catch {
-        return null;
-      }
-    },
-    enabled: !!tenant && !!gatewayId,
-    refetchInterval: REFETCH_MS,
-  });
-  const registryApp = registryQuery.data;
-  const resolvedConfig = registryApp?.resolvedConfig ?? null;
-  const configPublished = !!registryApp;
-
-  const { data: daoProposals = [] } = useQuery({
-    queryKey: ["node-config", "dao-proposals", tenantAccount],
-    queryFn: () => fetchDaoProposals(tenantAccount),
-    enabled: daoOwned && !!tenantAccount,
-    refetchInterval: REFETCH_MS,
-  });
-  const { data: daoPolicy } = useQuery({
-    queryKey: ["node-config", "dao-policy", tenantAccount],
-    queryFn: () => fetchSputnikPolicy(tenantAccount),
-    enabled: daoOwned && !!tenantAccount,
-    refetchInterval: REFETCH_MS,
-  });
-
-  const pendingConfigProposal = daoOwned
-    ? findPendingProposalForPlan(daoProposals, CONFIG_WRITE_PLAN)
-    : null;
-  const pendingThreshold = approvalThreshold(daoPolicy, pendingConfigProposal);
+  const { proposal: pendingConfigProposal, threshold: pendingThreshold } = usePendingConfigProposal(
+    tenantAccount,
+    daoOwned,
+  );
 
   const [draft, setDraft] = useState<TenantConfigDraft>(emptyTenantConfigDraft);
   const [prefilled, setPrefilled] = useState(false);
@@ -150,9 +98,12 @@ export function NodeConfigTab({
   const draftSchema = createTenantConfigDraftSchema({
     url: translate("nodeConfig.urlInvalid"),
     integrity: translate("nodeConfig.integrityInvalid"),
+    manifest: translate("bundle.manifestInvalid"),
     title: translate("nodeConfig.titleRequired"),
     description: translate("nodeConfig.descriptionRequired"),
-    uiPair: translate("nodeConfig.uiPairRequired"),
+    uiPair: translate("bundle.uiPairRequired"),
+    integrityMode: translate("bundle.integrityMode"),
+    pinPair: translate("bundle.pinPair"),
     ssrPair: translate("nodeConfig.ssrPairRequired"),
   });
   const parsedDraft = draftSchema.safeParse(draft);
@@ -171,50 +122,6 @@ export function NodeConfigTab({
   const [computing, setComputing] = useState(false);
   const [unverified, setUnverified] = useState<string | null>(null);
   const [showBundle, setShowBundle] = useState(false);
-  const [sourceAccount, setSourceAccount] = useState("");
-  const [fetchingSource, setFetchingSource] = useState(false);
-
-  const onFillFromDeployedApp = async () => {
-    const account = sourceAccount.trim();
-    if (!account) {
-      toast.error(translate("tenant.deployedAccountRequired"));
-      return;
-    }
-    setFetchingSource(true);
-    try {
-      const result = await apiClient.apps.getRegistryApp({ accountId: account, gatewayId });
-      const resolved = result.data?.resolvedConfig ?? null;
-      const ui =
-        (resolved?.app as { ui?: { production?: unknown; integrity?: unknown } } | null)?.ui ?? {};
-      const production = typeof ui.production === "string" ? ui.production : "";
-      const integrity = typeof ui.integrity === "string" ? ui.integrity : "";
-      if (!production || !integrity) {
-        toast.error(translate("tenant.noCustomBundle", { account: account ?? "" }));
-        return;
-      }
-      const ssr =
-        (resolved?.app as { ui?: { ssr?: unknown; ssrIntegrity?: unknown } } | null)?.ui ?? {};
-      const ssrUrl = typeof ssr.ssr === "string" ? ssr.ssr : "";
-      const ssrIntegrity = typeof ssr.ssrIntegrity === "string" ? ssr.ssrIntegrity : "";
-      setDraft((prev) => ({
-        ...prev,
-        uiProduction: production,
-        uiIntegrity: integrity,
-        ...(tenant?.allowSsr && ssrUrl && ssrIntegrity ? { ssrUrl, ssrIntegrity } : {}),
-      }));
-      toast.success(translate("tenant.bundleFilled", { account: account ?? "" }));
-    } catch {
-      toast.error(translate("tenant.noPublishedConfig", { account: account ?? "" }));
-    } finally {
-      setFetchingSource(false);
-    }
-  };
-
-  const fetchPublishedNow = () =>
-    apiClient.apps
-      .getRegistryApp({ accountId: tenantAccount, gatewayId })
-      .then((result) => result.data ?? null)
-      .catch(() => null);
 
   const configMatchesDraft = (resolved: Record<string, unknown> | null | undefined) =>
     !!resolved &&
@@ -278,103 +185,25 @@ export function NodeConfigTab({
       ),
   });
 
-  const onVerifyBundle = async (
-    url: string,
-    currentIntegrity: string,
-    compute: (url: string) => Promise<string>,
-    apply: (computed: string) => void,
-    label: string,
-  ) => {
-    setComputing(true);
-    try {
-      const computed = await compute(url);
-      if (!currentIntegrity) {
-        apply(computed);
-        toast.success(translate("tenant.integrityFilled", { label: label ?? "" }));
-        return;
-      }
-      if (computed === currentIntegrity) {
-        toast.success(translate("tenant.integrityMatches", { label: label ?? "" }));
-      } else {
-        toast.error(
-          translate("tenant.integrityMismatch", { label: label ?? "", hash: computed ?? "" }),
-        );
-      }
-    } catch (error) {
-      toast.error(appErrorMessage(error, translate));
-    } finally {
-      setComputing(false);
-    }
-  };
-
-  const onVerifyUiBundle = () => {
-    if (!draft.uiProduction) {
-      toast.error(translate("tenant.uiUrlRequired"));
-      return;
-    }
-    return onVerifyBundle(
-      draft.uiProduction,
-      draft.uiIntegrity,
-      computeUiEntryIntegrity,
-      (computed) => setDraft((prev) => ({ ...prev, uiIntegrity: computed })),
-      "UI",
-    );
-  };
-
-  const onVerifySsrBundle = () => {
-    if (!draft.ssrUrl) {
-      toast.error(translate("tenant.ssrUrlRequired"));
-      return;
-    }
-    return onVerifyBundle(
-      draft.ssrUrl,
-      draft.ssrIntegrity,
-      computeSsrEntryIntegrity,
-      (computed) => setDraft((prev) => ({ ...prev, ssrIntegrity: computed })),
-      "SSR",
-    );
-  };
-
   const onPropose = async () => {
     if (!parsedDraft.success) {
       toast.error(parsedDraft.error.issues[0]?.message ?? translate("nodeConfig.fixForm"));
       return;
     }
-    const value = parsedDraft.data;
-    const checks: { label: string; check: IntegrityCheckResult }[] = [];
-    if (value.uiProduction && value.uiIntegrity) {
-      setVerifying(true);
-      try {
-        checks.push({
-          label: "UI",
-          check: await verifyUiIntegrity(value.uiProduction, value.uiIntegrity),
-        });
-      } finally {
-        setVerifying(false);
-      }
+    setVerifying(true);
+    let preflight: Awaited<ReturnType<typeof runIntegrityPreflight>>;
+    try {
+      preflight = await runIntegrityPreflight(parsedDraft.data, translate);
+    } finally {
+      setVerifying(false);
     }
-    if (value.ssrUrl && value.ssrIntegrity) {
-      setVerifying(true);
-      try {
-        checks.push({
-          label: "SSR",
-          check: await verifySsrIntegrity(value.ssrUrl, value.ssrIntegrity),
-        });
-      } finally {
-        setVerifying(false);
-      }
+    if (preflight.status === "mismatch") {
+      toast.error(preflight.message);
+      return;
     }
-    for (const { label, check } of checks) {
-      if (check.status === "mismatch") {
-        toast.error(
-          translate("tenant.integrityMismatch", { label: label ?? "", hash: check.computed ?? "" }),
-        );
-        return;
-      }
-      if (check.status === "unverified") {
-        setUnverified(label);
-        return;
-      }
+    if (preflight.status === "unverified") {
+      setUnverified(preflight.message);
+      return;
     }
     proposeMutation.mutate();
   };
@@ -611,118 +440,16 @@ export function NodeConfigTab({
                 body={translate("tenant.integrityDescription")}
               />
             </div>
-            {bundleOpen && (
-              <FieldGroup>
-                <div className="flex flex-col gap-1">
-                  <FieldLabel htmlFor="orgs-node-config-source-account">
-                    {translate("tenant.fillDeployed")}
-                  </FieldLabel>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="orgs-node-config-source-account"
-                      type="text"
-                      value={sourceAccount}
-                      placeholder={translate("tenant.accountExample")}
-                      onChange={(event) => setSourceAccount(event.target.value)}
-                      disabled={!editable}
-                      className="font-mono"
-                      data-testid="orgs-node-config-source-account"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => void onFillFromDeployedApp()}
-                      disabled={!editable || fetchingSource}
-                      data-testid="orgs-node-config-autofill"
-                    >
-                      {fetchingSource ? <Spinner /> : null}
-                      {translate("tenant.fetchBundle")}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{translate("tenant.fetchHint")}</p>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <ConfigField
-                    id="orgs-node-config-ui-url"
-                    label={translate("tenant.uiUrl")}
-                    value={draft.uiProduction}
-                    onChange={(value) => setDraft((prev) => ({ ...prev, uiProduction: value }))}
-                    onBlur={() =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        uiProduction: normalizeBundleBaseUrl(prev.uiProduction),
-                      }))
-                    }
-                    placeholder="https://example.com/bundles/<account>/<gateway>/plugin/"
-                    mono
-                    disabled={!editable}
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => void onVerifyUiBundle()}
-                    disabled={!editable || computing || !draft.uiProduction}
-                    variant="link"
-                    size="xs"
-                    className="self-start"
-                    data-testid="orgs-node-config-verify"
-                  >
-                    {computing ? translate("tenant.hashing") : translate("tenant.verifyIntegrity")}
-                  </Button>
-                </div>
-                <ConfigField
-                  id="orgs-node-config-ui-integrity"
-                  label={translate("tenant.uiIntegrity")}
-                  value={draft.uiIntegrity}
-                  onChange={(value) => setDraft((prev) => ({ ...prev, uiIntegrity: value }))}
-                  placeholder="sha384-…"
-                  mono
-                  disabled={!editable}
-                />
-                {tenant.allowSsr && (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <ConfigField
-                        id="orgs-node-config-ssr-url"
-                        label={translate("tenant.ssrUrl")}
-                        value={draft.ssrUrl}
-                        onChange={(value) => setDraft((prev) => ({ ...prev, ssrUrl: value }))}
-                        onBlur={() =>
-                          setDraft((prev) => ({
-                            ...prev,
-                            ssrUrl: normalizeBundleBaseUrl(prev.ssrUrl),
-                          }))
-                        }
-                        placeholder="https://example.com/bundles/<account>/<gateway>/plugin/"
-                        mono
-                        disabled={!editable}
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => void onVerifySsrBundle()}
-                        disabled={!editable || computing || !draft.ssrUrl}
-                        variant="link"
-                        size="xs"
-                        className="self-start"
-                        data-testid="orgs-node-config-verify-ssr"
-                      >
-                        {computing
-                          ? translate("tenant.hashing")
-                          : translate("tenant.verifyIntegrity")}
-                      </Button>
-                    </div>
-                    <ConfigField
-                      id="orgs-node-config-ssr-integrity"
-                      label={translate("tenant.ssrIntegrity")}
-                      value={draft.ssrIntegrity}
-                      onChange={(value) => setDraft((prev) => ({ ...prev, ssrIntegrity: value }))}
-                      placeholder="sha384-…"
-                      mono
-                      disabled={!editable}
-                    />
-                  </>
-                )}
-              </FieldGroup>
-            )}
+            <CustomUiBundleFields
+              idPrefix="orgs-node-config"
+              draft={draft}
+              setDraft={setDraft}
+              allowSsr={tenant.allowSsr}
+              disabled={!editable}
+              gatewayId={gatewayId}
+              collapsed={!bundleOpen}
+              onComputingChange={setComputing}
+            />
           </div>
         )}
 
@@ -762,9 +489,7 @@ export function NodeConfigTab({
         title={
           daoOwned ? translate("tenant.proposeUnverified") : translate("tenant.publishUnverified")
         }
-        description={
-          unverified ? translate("nodeConfig.bundleUnverified", { bundle: unverified }) : ""
-        }
+        description={unverified ?? ""}
         confirmLabel={
           daoOwned ? translate("nodeConfig.proposeAnyway") : translate("nodeConfig.publishAnyway")
         }
@@ -774,42 +499,5 @@ export function NodeConfigTab({
         }}
       />
     </div>
-  );
-}
-
-function ConfigField({
-  id,
-  label,
-  value,
-  onChange,
-  onBlur,
-  placeholder,
-  disabled,
-  mono,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  onBlur?: () => void;
-  placeholder?: string;
-  disabled?: boolean;
-  mono?: boolean;
-}) {
-  return (
-    <Field>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Input
-        id={id}
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        onBlur={onBlur}
-        className={mono ? "font-mono" : undefined}
-        data-testid={id}
-      />
-    </Field>
   );
 }

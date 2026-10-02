@@ -2,6 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Schema } from "effect";
+import { getProcessEnv } from "./env/process-env";
+
+const warnOutsideEffect = (...args: unknown[]): void => {
+  console.warn(...args);
+};
+
 import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
@@ -31,6 +37,7 @@ import type {
   RuntimePluginConfig,
 } from "./types";
 import { BosConfigSchema } from "./types";
+import { type ResolvedSlotVersion, resolveSlotVersion } from "./version-manifest-resolve";
 
 const LOCAL_PREFIX = "local:";
 const DEFAULT_HOST_PORT = 3000;
@@ -260,6 +267,14 @@ export class ConfigNotfoundError extends Schema.TaggedError<ConfigNotfoundError>
 
 export class ConfigExtendsError extends Schema.TaggedError<ConfigExtendsError>()(
   "ConfigExtendsError",
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
+
+export class ConfigVersionManifestError extends Schema.TaggedError<ConfigVersionManifestError>()(
+  "ConfigVersionManifestError",
   {
     message: Schema.String,
     cause: Schema.optional(Schema.Unknown),
@@ -862,7 +877,7 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
   baseDir: string,
   env: BosEnv,
   options?: BuildRuntimeConfigOptions,
-): Effect.fn.Return<RuntimeConfig, ConfigExtendsError> {
+): Effect.fn.Return<RuntimeConfig, ConfigExtendsError | ConfigVersionManifestError> {
   const uiConfig = config.app.ui;
   const apiConfig = config.app.api;
   const authConfig = config.app.auth;
@@ -917,7 +932,7 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
   const hostListeningUrl =
     env === "development"
       ? resolveDevelopmentHostUrl(hostConfig.development)
-      : `http://localhost:${process.env.PORT ?? DEFAULT_HOST_PORT}`;
+      : `http://localhost:${getProcessEnv("PORT") ?? DEFAULT_HOST_PORT}`;
 
   const hostIsRemote = hostRuntime.source === "remote";
   const uiIsRemote = uiRuntime.source === "remote";
@@ -986,7 +1001,7 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
       port:
         env === "development"
           ? parsePort(hostListeningUrl)
-          : Number(process.env.PORT) || DEFAULT_HOST_PORT,
+          : Number(getProcessEnv("PORT")) || DEFAULT_HOST_PORT,
       secrets: hostConfig.secrets,
       integrity: hostIsRemote ? hostConfig.integrity : undefined,
       source: hostRuntime.source,
@@ -1047,8 +1062,8 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
               });
               if (node.secrets) {
                 for (const secretName of node.secrets) {
-                  if (!process.env[secretName]) {
-                    console.warn(
+                  if (!getProcessEnv(secretName)) {
+                    warnOutsideEffect(
                       `[Config] Plugin "${node.key}" (discovered from manifest) expects secret "${secretName}" but it is not set in the environment.`,
                     );
                   }
@@ -1075,14 +1090,122 @@ export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[Config] Failed to fetch API plugin manifest for discovery: ${message}`);
+        warnOutsideEffect(`[Config] Failed to fetch API plugin manifest for discovery: ${message}`);
       }
     },
     catch: (cause) => new ConfigExtendsError({ message: String(cause), cause }),
   });
 
+  yield* Effect.tryPromise({
+    try: () => deriveVersionManifestFields(result, config, env),
+    catch: (cause) => new ConfigVersionManifestError({ message: String(cause), cause }),
+  });
+
   return result;
 });
+
+/**
+ * Version-manifest derivation (atomic-deploys 04): for every remote slot,
+ * resolve its `pin` (fetch + SRI-verify the pinned manifest, process-cached
+ * per pin) and stamp the derived entry-level fields — `entryUrl` (hashed
+ * container entry), the browser-manifest `entry`, and entry-level
+ * `integrity`/`ssrIntegrity`/`ssrEntryUrl` — so consumers load immutable
+ * hashed bytes without knowing the pointer indirection.
+ *
+ * Hard break: outside development every remote slot MUST pin a version
+ * manifest — an unpinned remote slot fails resolution loudly (the deploy
+ * train pins every workspace it uploads; a manifest-less slot means a
+ * pre-atomic-deploy config).
+ */
+async function deriveVersionManifestFields(
+  result: RuntimeConfig,
+  config: BosConfig,
+  env: BosEnv,
+): Promise<void> {
+  if (env === "development") return;
+
+  const derive = async (
+    label: string,
+    slotConfig: { pin?: unknown } | undefined,
+    slot: { url?: string; remoteUrl?: string; source?: string } | undefined,
+    apply: (resolved: ResolvedSlotVersion) => void,
+  ): Promise<void> => {
+    if (!slot || slot.source !== "remote" || !slot.url) return;
+    const rawPin = slotConfig?.pin as { manifest?: unknown; integrity?: unknown } | undefined;
+    const pin =
+      rawPin &&
+      typeof rawPin.manifest === "string" &&
+      rawPin.manifest &&
+      typeof rawPin.integrity === "string" &&
+      rawPin.integrity
+        ? { manifest: rawPin.manifest, integrity: rawPin.integrity }
+        : undefined;
+    if (!pin) {
+      throw new Error(
+        `slot "${label}" (${slot.url}) pins no version manifest — remote slots must pin ` +
+          `a version manifest outside development (pre-atomic-deploy config; redeploy required)`,
+      );
+    }
+    // The pin resolves against the slot's REMOTE base — the host slot's `url`
+    // is its own listening origin (the bytes it would serve don't exist
+    // there); its `remoteUrl` carries the deployment bundle base.
+    const resolved = await resolveSlotVersion({ base: slot.remoteUrl ?? slot.url, pin });
+    apply(resolved);
+  };
+
+  const applyUi = (ui: RuntimePluginConfig["ui"], r: ResolvedSlotVersion): void => {
+    if (!ui) return;
+    ui.entryUrl = r.entryUrl;
+    ui.entry = r.browserManifestUrl ?? ui.entry;
+    ui.integrity = r.entryIntegrity;
+    ui.ssrEntryUrl = r.ssrEntryUrl;
+    ui.ssrIntegrity = r.ssrIntegrity ?? ui.ssrIntegrity;
+  };
+
+  await derive("app.host", config.app.host, result.host, (r) => {
+    result.host.entryUrl = r.entryUrl;
+    result.host.integrity = r.entryIntegrity;
+  });
+  await derive("app.ui", config.app.ui, result.ui, (r) => applyUi(result.ui, r));
+  await derive("app.api", config.app.api, result.api, (r) => {
+    result.api.entryUrl = r.entryUrl;
+    result.api.integrity = r.entryIntegrity;
+  });
+  if (result.auth) {
+    await derive("app.auth", config.app.auth, result.auth, (r) => {
+      result.auth!.entryUrl = r.entryUrl;
+      result.auth!.integrity = r.entryIntegrity;
+    });
+    await derive(
+      "app.auth.ui",
+      getEntryAssociatedUi(config.app.auth as Partial<BosPluginRef>),
+      result.auth.ui,
+      (r) => applyUi(result.auth!.ui, r),
+    );
+  }
+  for (const [key, plugin] of Object.entries(result.plugins ?? {})) {
+    let pluginConfig = config.plugins?.[key];
+    // The auth mirror (config.ts adds plugins.auth when the authored config
+    // has no plugins.auth entry) derives from the app.auth slot — it is the
+    // only compose surface for the auth ui, and its pins live on app.auth.
+    const isAuthMirror =
+      key === "auth" && result.auth && (plugin === result.auth || plugin.url === result.auth.url);
+    if ((!pluginConfig || typeof pluginConfig === "string") && isAuthMirror) {
+      pluginConfig = config.app.auth;
+    }
+    if (!pluginConfig || typeof pluginConfig === "string") continue;
+    await derive(`plugins.${key}`, pluginConfig, plugin, (r) => {
+      plugin.entryUrl = r.entryUrl;
+      plugin.integrity = r.entryIntegrity;
+    });
+    await derive(
+      `plugins.${key}.ui`,
+      getEntryAssociatedUi(pluginConfig as Partial<BosPluginRef>),
+      plugin.ui,
+      (r) => applyUi(plugin.ui, r),
+    );
+  }
+}
 
 export async function buildRuntimeConfig(
   config: BosConfig,
