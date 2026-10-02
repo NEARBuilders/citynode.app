@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { type ApiClient, useApiClient } from "@/app";
-import { tenantBindingsQueryOptions, tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { tenantBindingsQueryOptions, tenantQueryKeys } from "@/lib/queries/tenants";
 import { resolvePrimaryHostname } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
 
 export const TENANT_CONFIG_REFETCH_MS = 15_000;
 
-export type OrgTenant = NonNullable<Awaited<ReturnType<ApiClient["resolveTenantByOrgId"]>>>;
+export type OrgTenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
 
 type RegistryAppResult = Awaited<ReturnType<ApiClient["registry"]["getRegistryApp"]>>["data"];
 
@@ -47,7 +47,12 @@ function useRegistryAppQuery(
 export function useOrgTenantConfig(orgId: string, gatewayId: string): OrgTenantConfig {
   const apiClient = useApiClient();
 
-  const { data: tenant } = useQuery(tenantByOrgQueryOptions(apiClient, orgId));
+  const { data: tenant } = useQuery({
+    queryKey: [...tenantQueryKeys.details(), "settings", "org", orgId],
+    queryFn: async () =>
+      (await apiClient.listTenants()).find((tenant) => tenant.orgId === orgId) ?? null,
+    enabled: !!orgId,
+  });
 
   const daoOwned = tenant?.ownerKind === "dao";
   const tenantAccount = tenant?.accountId ?? "";
