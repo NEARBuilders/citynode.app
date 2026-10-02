@@ -29,15 +29,22 @@ function makePluginWorkspace(name: string, devConfigPluginId?: string): string {
 }
 
 describe("resolveDevPluginId", () => {
-  it("derives the dev server plugin id from the workspace identity, not plugin.dev.ts", () => {
+  it("derives the dev server plugin id from the npm package name, not plugin.dev.ts", () => {
     const workspace = makePluginWorkspace(
       "@everything-dev/registry-plugin",
       "stale-from-plugin-dev-ts",
     );
-    expect(resolveDevPluginId(workspace)).toBe("everything-dev_registry-plugin");
+    expect(resolveDevPluginId(workspace)).toBe("@everything-dev/registry-plugin");
   });
 
-  it("falls back to the remote name for workspaces without a bos config layout", () => {
+  it("keeps the scoped slug the host derives from the same name", () => {
+    const workspace = makePluginWorkspace("@every-plugin/template");
+    const id = resolveDevPluginId(workspace);
+    expect(id).toBe("@every-plugin/template");
+    expect(id.split("/").pop()!.replace("-plugin", "")).toBe("template");
+  });
+
+  it("falls back to the package name for workspaces without a bos config layout", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "every-plugin-dev-id-orphan-"));
     tempDirs.push(root);
     fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "test-plugin" }));

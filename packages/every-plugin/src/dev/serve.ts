@@ -105,12 +105,14 @@ export interface PluginDevServerHandle {
 }
 
 /**
- * The dev server's plugin id — derived from the workspace package.json
- * through the canonical identity normalizers. plugin.dev.ts no longer
- * carries a pluginId field: the MF registry key must normalize to exactly
- * the remote name the built container declares.
+ * The dev server's plugin id — the workspace's npm package name, the same
+ * value the host passes as `runtimeId`. Both initialize sites must agree:
+ * `registerRemote` derives the MF remote name from it, and the plugin's
+ * database layer derives its migration slug from it, so a pre-normalized
+ * remote name here would migrate into a different schema than the host
+ * expects. plugin.dev.ts no longer carries a pluginId field.
  */
-export const resolveDevPluginId = (cwd: string): string => getPluginInfo(cwd).normalizedName;
+export const resolveDevPluginId = (cwd: string): string => getPluginInfo(cwd).name;
 
 export async function startPluginDevServer(
   options: PluginDevServeOptions = {},
