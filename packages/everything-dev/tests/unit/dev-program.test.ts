@@ -126,7 +126,7 @@ describe("devBootstrap adopt-if-found re-load", () => {
     expect(deps.session).toBe(previous);
   });
 
-  it("adopts and continues with the fresh session when openResolution finds one", async () => {
+  it("adopts the fresh session for the bootstrap continuation without mutating deps", async () => {
     const previous = makeSession("/fixture-root/previous");
     const adopted = makeSession("/fixture-root/adopted", "adopted.near");
     vi.spyOn(adopted, "buildRuntime").mockRejectedValue(new Error("adopted-session-build"));
@@ -141,6 +141,6 @@ describe("devBootstrap adopt-if-found re-load", () => {
     expect((exit as DevStepError).phase).toBe("build runtime config");
     expect((exit as DevStepError).cause).toBeInstanceOf(Error);
     expect(((exit as DevStepError).cause as Error).message).toBe("adopted-session-build");
-    expect(deps.session).toBe(adopted);
+    expect(deps.session).toBe(previous);
   });
 });
