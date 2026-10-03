@@ -389,6 +389,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.discovery.importLuma(input, context);
       }),
+      setDiscoveryLumaVisibility: builder.setDiscoveryLumaVisibility.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.setLumaVisibility(input, context);
+      }),
       saveDiscoveryActivity: builder.saveDiscoveryActivity.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         return yield* services.discovery.saveActivity(input, context);

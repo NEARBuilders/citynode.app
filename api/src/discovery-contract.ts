@@ -166,6 +166,10 @@ export const discoveryContract = {
       }),
     )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  setDiscoveryLumaVisibility: oc
+    .input(z.object({ nodeId: z.uuid(), activityId: z.uuid(), show: z.boolean() }))
+    .output(activitySchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
   trackDiscovery: oc
     .input(measurementInput)
     .output(z.object({ accepted: z.boolean() }))

@@ -8,10 +8,11 @@ import {
   MapPinIcon,
   QrCodeIcon,
 } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import { useState } from "react";
+import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
@@ -50,6 +51,7 @@ import { ReportContent } from "./report-content";
 
 export function ActivityEditor({ nodeId }: { nodeId: string }) {
   const api = useApiClient();
+  const client = useQueryClient();
   const [lumaOpen, setLumaOpen] = useState(false);
   const list = useQuery({ ...activitiesQueryOptions(api, nodeId), refetchInterval: 30_000 });
   const luma = useQuery({
@@ -64,6 +66,17 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     "UTC",
   );
   const startOnboarding = useStartOnboarding();
+  const visibility = useMutation({
+    mutationFn: ({ activityId, show }: { activityId: string; show: boolean }) =>
+      api.setDiscoveryLumaVisibility({ nodeId, activityId, show }),
+    onSuccess: async (activity) => {
+      toast.success(activity.luma?.hidden ? "Hidden from the calendar" : "Shown on the calendar");
+      await client.invalidateQueries({
+        predicate: (query) => String(query.queryKey[0]).startsWith("discovery"),
+      });
+    },
+    onError: (error) => toast.error(error.message),
+  });
   if (list.isError)
     return (
       <EmptyState
@@ -85,6 +98,17 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       : null;
   const rowActions = (a: Activity) => (
     <div className="flex items-center gap-1">
+      {a.luma && (
+        <Button
+          size="sm"
+          variant={a.luma.hidden || a.status === "draft" ? "default" : "outline"}
+          data-testid={`activity-editor.luma-visibility-${a.id}`}
+          disabled={visibility.isPending || (!a.luma.available && a.status === "draft")}
+          onClick={() => visibility.mutate({ activityId: a.id, show: a.status === "draft" })}
+        >
+          {a.luma.hidden || a.status === "draft" ? "Show" : "Hide"}
+        </Button>
+      )}
       {a.luma ? (
         <Button
           size="sm"
@@ -257,7 +281,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           <DialogHeader>
             <DialogTitle>Import from Luma</DialogTitle>
             <DialogDescription>
-              Public events from a Luma calendar appear here and stay in sync.
+              Public events from a Luma calendar appear here hidden. Show each event when it is
+              ready for the community calendar.
             </DialogDescription>
           </DialogHeader>
           <LumaImport nodeId={nodeId} />
@@ -272,6 +297,7 @@ function statusVariant(activity: Activity) {
   return "secondary" as const;
 }
 function statusLabel(activity: Activity) {
+  if (activity.luma && activity.status === "draft") return "Hidden";
   if (activity.status === "draft") return "Draft";
   if (activity.status === "cancelled") return "Cancelled";
   return "Published";
