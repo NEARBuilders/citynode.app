@@ -1,5 +1,6 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { useRouter } from "@tanstack/react-router";
+import { Data } from "effect";
 import { toast } from "sonner";
 import { type AuthClient, sessionQueryKey } from "@/app";
 import { translateAppMessage } from "@/i18n/runtime";
@@ -7,16 +8,18 @@ import { teamWorkspaceQueryKey } from "./team-workspace";
 
 export type WorkspaceRefreshStage = "session" | "management" | "workspace" | "router";
 
-export class WorkspaceRefreshError extends Error {
+export class WorkspaceRefreshError extends Data.TaggedError("WorkspaceRefreshError")<{
+  readonly detail: string;
   readonly cause: unknown;
   readonly stage: WorkspaceRefreshStage;
-
+}> {
   constructor(stage: WorkspaceRefreshStage, cause: unknown) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    super(`Workspace refresh failed: ${message}`, { cause });
-    this.name = "WorkspaceRefreshError";
-    this.cause = cause;
-    this.stage = stage;
+    super({ detail: `Workspace refresh failed: ${message}`, cause, stage });
+  }
+
+  get message() {
+    return this.detail;
   }
 }
 

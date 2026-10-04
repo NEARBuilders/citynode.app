@@ -1,5 +1,5 @@
 import "@orpc/experimental-effect/extensions/effect";
-import { call, implement } from "@orpc/server";
+import { call, implement, type ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { Context, Effect } from "effect";
 import { type AuthConfig, createAuthInstance } from "../src/auth-instance";
@@ -212,7 +212,9 @@ type HandlerFn<R = unknown> = (opts: {
 }) => Promise<R> | R;
 
 type MockRoute = {
-  effect: (fn: (opts: any) => Generator<any, any, any>) => HandlerFn;
+  effect: (
+    fn: (opts: any) => Generator<Effect.Effect<any, ORPCError<string, unknown>, never>, any, any>,
+  ) => HandlerFn;
   use: (mw: MiddlewareFn) => { handler: <R>(h: HandlerFn<R>) => HandlerFn<R> };
   handler: <R>(h: HandlerFn<R>) => HandlerFn<R>;
 };
