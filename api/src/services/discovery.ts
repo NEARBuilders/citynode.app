@@ -138,6 +138,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         !activity ||
         activity.status === "draft" ||
         activity.luma?.available === false ||
+        activity.luma?.hidden === true ||
         Date.parse(activity.publishedAt) > (yield* Clock.currentTimeMillis) ||
         !(yield* eligibleProfile(activity.ownerNodeId))
       ) {
@@ -173,6 +174,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               eq(tenants.status, "active"),
               sql`${discoveryProfiles.data}->>'published' = 'true'`,
               sql`${discoveryActivities.data}->>'status' = 'published'`,
+              sql`${discoveryActivities.data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
               sql`(${discoveryActivities.data}->>'publishedAt')::timestamptz <= ${new Date(Date.now()).toISOString()}`,
               input.nodeId
                 ? sql`${discoveryActivities.data}->'nodeIds' ? ${input.nodeId}`
@@ -402,13 +404,13 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
                 ? event.geo_address_json?.full_address || event.geo_address_json?.city_state
                 : null
               )?.slice(0, 240) || "See Luma for location details",
-            status: previous?.data.luma?.hidden ? "draft" : "published",
+            status: (previous?.data.luma?.hidden ?? true) ? "draft" : "published",
             luma: {
               calendarId: input.calendarId,
               eventId: event.id,
               syncedAt,
               available: true,
-              hidden: previous?.data.luma?.hidden,
+              hidden: previous?.data.luma?.hidden ?? true,
             },
           };
           const [duplicate] = await tx
@@ -882,6 +884,50 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         }));
       }),
     saveActivity,
+    setLumaVisibility: (
+      input: { nodeId: string; activityId: string; show: boolean },
+      context: AuthContext,
+    ) =>
+      Effect.gen(function* () {
+        yield* authorize(input.nodeId, context);
+        return yield* query(() =>
+          db.transaction(async (tx) => {
+            await tx.select().from(nodes).where(eq(nodes.id, input.nodeId)).for("update");
+            const [row] = await tx
+              .select()
+              .from(discoveryActivities)
+              .where(
+                and(
+                  eq(discoveryActivities.id, input.activityId),
+                  eq(discoveryActivities.ownerNodeId, input.nodeId),
+                ),
+              )
+              .for("update");
+            if (!row) throw new ORPCError("NOT_FOUND");
+            if (!row.data.luma) throw new ORPCError("BAD_REQUEST", { message: "Not a Luma event" });
+            if (input.show && !row.data.luma.available)
+              throw new ORPCError("BAD_REQUEST", {
+                message: "This event is no longer public on its Luma calendar.",
+              });
+            const data: DiscoveryActivity = {
+              ...row.data,
+              status: input.show ? "published" : "draft",
+              luma: { ...row.data.luma, hidden: !input.show },
+            };
+            await tx
+              .update(discoveryActivities)
+              .set({ data })
+              .where(eq(discoveryActivities.id, row.id));
+            await tx.insert(discoveryHistory).values({
+              nodeId: input.nodeId,
+              targetId: row.id,
+              actorId: context.userId!,
+              action: input.show ? "Luma event shown" : "Luma event hidden",
+            });
+            return data;
+          }),
+        );
+      }),
     activities: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
         yield* authorize(nodeId, context);

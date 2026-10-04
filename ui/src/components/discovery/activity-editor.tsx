@@ -8,10 +8,11 @@ import {
   MapPinIcon,
   QrCodeIcon,
 } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import { useState } from "react";
+import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
@@ -54,6 +55,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const api = useApiClient();
+  const client = useQueryClient();
   const [lumaOpen, setLumaOpen] = useState(false);
   const list = useQuery({ ...activitiesQueryOptions(api, nodeId), refetchInterval: 30_000 });
   const luma = useQuery({
@@ -68,6 +70,19 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     "UTC",
   );
   const startOnboarding = useStartOnboarding();
+  const visibility = useMutation({
+    mutationFn: ({ activityId, show }: { activityId: string; show: boolean }) =>
+      api.setDiscoveryLumaVisibility({ nodeId, activityId, show }),
+    onSuccess: async (activity) => {
+      toast.success(
+        activity.luma?.hidden ? translate("events.hiddenToast") : translate("events.shownToast"),
+      );
+      await client.invalidateQueries({
+        predicate: (query) => String(query.queryKey[0]).startsWith("discovery"),
+      });
+    },
+    onError: (error) => toast.error(error.message),
+  });
   if (list.isError)
     return (
       <EmptyState
@@ -89,6 +104,19 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       : null;
   const rowActions = (a: Activity) => (
     <div className="flex items-center gap-1">
+      {a.luma && (
+        <Button
+          size="sm"
+          variant={a.luma.hidden || a.status === "draft" ? "default" : "outline"}
+          data-testid={`activity-editor.luma-visibility-${a.id}`}
+          disabled={visibility.isPending || (!a.luma.available && a.status === "draft")}
+          onClick={() => visibility.mutate({ activityId: a.id, show: a.status === "draft" })}
+        >
+          {a.luma.hidden || a.status === "draft"
+            ? translate("events.show")
+            : translate("events.hide")}
+        </Button>
+      )}
       {a.luma ? (
         <Button
           size="sm"
@@ -284,6 +312,7 @@ function statusVariant(activity: Activity) {
   return "secondary" as const;
 }
 function statusLabel(activity: Activity, t: AppTranslator = translateEnglishAppMessage) {
+  if (activity.luma && activity.status === "draft") return t("events.hidden");
   if (activity.status === "draft") return t("events.draft");
   if (activity.status === "cancelled") return t("events.cancelled");
   return t("events.published");

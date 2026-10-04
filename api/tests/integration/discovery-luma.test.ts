@@ -23,7 +23,7 @@ vi.mock("../../plugin.dev", async (importOriginal) => {
 });
 afterEach(() => vi.unstubAllGlobals());
 afterAll(teardown);
-it("connects a Luma calendar and automatically publishes and updates its public events", async () => {
+it("imports Luma events hidden and lets org admins show or hide them across syncs", async () => {
   const realFetch = globalThis.fetch;
   let title = "Luma builders meetup";
   let visibility = "public";
@@ -91,18 +91,38 @@ it("connects a Luma calendar and automatically publishes and updates its public 
   const [first] = await editor.listDiscoveryActivities({ nodeId: node.id });
   expect(first).toMatchObject({
     title,
-    status: "published",
+    status: "draft",
     source: "Luma · Builders",
     venue: "See Luma for location details",
-    luma: { eventId: "evt-fixture", calendarId: "cal-fixture" },
+    luma: { eventId: "evt-fixture", calendarId: "cal-fixture", hidden: true },
   });
   expect(JSON.stringify(first)).not.toContain("Private guest address");
   expect(await editor.listDiscoveryLumaCalendars({ nodeId: node.id })).toMatchObject({
     connection: { calendarId: "cal-fixture" },
   });
+  expect(await publicClient.getDiscoveryActivity({ id: first!.id })).toBeNull();
+  expect((await publicClient.listDiscovery({})).flatMap((node) => node.events)).toEqual([]);
+  await expect(
+    member.setDiscoveryLumaVisibility({ nodeId: node.id, activityId: first!.id, show: true }),
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  const outsider = await getPluginClient(orgContext("outsider", "other-org", "owner"));
+  await expect(
+    outsider.setDiscoveryLumaVisibility({ nodeId: node.id, activityId: first!.id, show: true }),
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  const orgAdmin = await getPluginClient(orgContext("org-admin", "luma-org", "admin"));
+  expect(
+    await orgAdmin.setDiscoveryLumaVisibility({
+      nodeId: node.id,
+      activityId: first!.id,
+      show: true,
+    }),
+  ).toMatchObject({ status: "published", luma: { hidden: false } });
   expect(await publicClient.getDiscoveryActivity({ id: first!.id })).toMatchObject({
     status: "published",
   });
+  expect((await publicClient.listDiscovery({})).flatMap((node) => node.events)).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: first!.id })]),
+  );
   title = "Updated in Luma";
   const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60_000);
   await publicClient.listDiscovery({});
@@ -112,7 +132,22 @@ it("connects a Luma calendar and automatically publishes and updates its public 
   clock.mockRestore();
   const refreshed = await editor.listDiscoveryActivities({ nodeId: node.id });
   expect(refreshed).toHaveLength(1);
-  expect(refreshed[0]).toMatchObject({ id: first!.id, title, status: "published" });
+  expect(refreshed[0]).toMatchObject({
+    id: first!.id,
+    title,
+    status: "published",
+    luma: { hidden: false },
+  });
+  expect(
+    await editor.setDiscoveryLumaVisibility({
+      nodeId: node.id,
+      activityId: first!.id,
+      show: false,
+    }),
+  ).toMatchObject({ status: "draft", luma: { hidden: true } });
+  await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-fixture" });
+  expect(await publicClient.getDiscoveryActivity({ id: first!.id })).toBeNull();
+  await editor.setDiscoveryLumaVisibility({ nodeId: node.id, activityId: first!.id, show: true });
   await expect(
     editor.saveDiscoveryActivity({ ...refreshed[0]!, title: "Local override" }),
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -146,6 +181,9 @@ it("connects a Luma calendar and automatically publishes and updates its public 
   )!;
   expect(withdrawn).toMatchObject({ status: "draft", luma: { available: false } });
   await expect(
+    editor.setDiscoveryLumaVisibility({ nodeId: node.id, activityId: first!.id, show: true }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  await expect(
     editor.saveDiscoveryActivity({ ...withdrawn, status: "published" }),
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   await expect(
@@ -168,7 +206,7 @@ it("connects a Luma calendar and automatically publishes and updates its public 
   });
   await editor.importDiscoveryLuma({ nodeId: otherNode.id, calendarId: "cal-fixture" });
   expect(await editor.listDiscoveryActivities({ nodeId: otherNode.id })).toEqual(
-    expect.arrayContaining([expect.objectContaining({ title, status: "published" })]),
+    expect.arrayContaining([expect.objectContaining({ title, status: "draft" })]),
   );
   const admin = await getPluginClient(authedContext("luma-admin", "admin"));
   await publicClient.reportDiscoveryContent({
