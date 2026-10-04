@@ -65,9 +65,10 @@ describe("stake-endowment precheck", () => {
     // balance 3 NEAR − 2 NEAR storage reserve = 1 NEAR available
     stubChain("0", "3000000000000000000000000");
     const precheck = createPrecheck();
-    await expect(precheck(station, stakeStep("5000000000000000000000000"))).rejects.toThrow(
-      /can stake at most 1\.0000 NEAR/,
-    );
+    await expect(precheck(station, stakeStep("5000000000000000000000000"))).rejects.toMatchObject({
+      messageId: "poc.maxStake",
+      values: { amount: "1.0000 NEAR" },
+    });
   });
 
   it("narrows the stake to the remaining amount within the available balance", async () => {

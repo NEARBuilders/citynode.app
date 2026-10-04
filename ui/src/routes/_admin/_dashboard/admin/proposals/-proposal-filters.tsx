@@ -1,7 +1,8 @@
 import { Tabs, TabsList, TabsTrigger } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import {
   DEFAULT_PROPOSAL_REVIEW_FILTER,
-  PROPOSAL_REVIEW_FILTER_LABELS,
+  PROPOSAL_REVIEW_FILTER_MESSAGE_IDS,
   PROPOSAL_REVIEW_FILTERS,
   type ProposalReviewFilter,
 } from "./-proposal-review";
@@ -13,6 +14,7 @@ export function ProposalReviewFilters({
   value: ProposalReviewFilter;
   onChange: (value: ProposalReviewFilter) => void;
 }) {
+  const translate = useAppTranslation();
   return (
     <div className="-mx-4 max-w-full overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <Tabs
@@ -30,7 +32,7 @@ export function ProposalReviewFilters({
               value={filter}
               data-testid={`admin-proposals-filter-${filter}`}
             >
-              {PROPOSAL_REVIEW_FILTER_LABELS[filter]}
+              {translate(PROPOSAL_REVIEW_FILTER_MESSAGE_IDS[filter])}
             </TabsTrigger>
           ))}
         </TabsList>

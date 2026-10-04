@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useApiClient } from "@/app";
+import { useAppTranslation } from "@/i18n/runtime";
 import { resolveTeamWorkspace } from "@/lib/team-workspace";
 import manifestJson from "@/manifest.gen.json" with { type: "json" };
 import {
@@ -38,18 +39,22 @@ export function useShellNav(
   isAdmin: boolean,
   pluginNav?: { items: Parameters<typeof pluginNavToSidebar>[0] },
 ) {
+  const translate = useAppTranslation();
   const { user, activeOrg } = useIdentity();
   const signedIn = Boolean(user);
   const { data: workspace = resolveTeamWorkspace(null) } = useTeamWorkspace(signedIn);
   const canCurate = useCanCurate(signedIn && !isAdmin);
   const role = getUserRole(signedIn, isAdmin);
 
-  const builtin = buildNavItems({
-    activeOrgSlug: activeOrg?.slug ?? null,
-    canManageOrganization: workspace.canManageOrganization ?? false,
-    canCurate,
-    isAdmin,
-  });
+  const builtin = buildNavItems(
+    {
+      activeOrgSlug: activeOrg?.slug ?? null,
+      canManageOrganization: workspace.canManageOrganization ?? false,
+      canCurate,
+      isAdmin,
+    },
+    translate,
+  );
   const withRoutes = filterSidebarByRoutes(builtin, shippedRoutePaths);
   const withPlugins = pluginNav?.items?.length
     ? appendPluginSidebarItems(withRoutes, pluginNavToSidebar(pluginNav.items))

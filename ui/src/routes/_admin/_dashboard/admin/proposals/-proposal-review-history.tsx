@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ApiClient } from "@/app";
 import { Button, EmptyState, SectionHeader } from "@/components";
 import { ItemGroup } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { ListSkeleton } from "../-admin-ui";
 import { proposalTypeLabel } from "./-proposal-review";
 import { ReviewHistoryCard } from "./-review-history-card";
@@ -19,25 +20,28 @@ export function ProposalReviewHistory({
   pluginId: string;
   query: Pick<UseQueryResult<ReviewHistoryResponse>, "data" | "isLoading" | "isError" | "error">;
 }) {
+  const translate = useAppTranslation();
   const history = query.data?.data ?? [];
   const [showAll, setShowAll] = useState(false);
   return (
     <section className="flex flex-col gap-6">
       <SectionHeader
-        title="Recent decisions"
-        description={`${proposalTypeLabel(pluginId)} proposals`}
+        title={translate("admin.proposal.recentDecisions")}
+        description={translate("admin.proposalsNamed", {
+          type: proposalTypeLabel(pluginId, translate) ?? "",
+        })}
       />
       {query.isLoading ? (
         <ListSkeleton rows={2} />
       ) : query.isError ? (
         <p role="alert" className="text-sm text-destructive">
-          Couldn't load decisions: {query.error?.message}
+          {translate("admin.decisionsFailed")}
         </p>
       ) : history.length === 0 ? (
         <EmptyState
           icon={ClockCounterClockwiseIcon}
-          title="No decisions yet"
-          description="Approvals and rejections show up here."
+          title={translate("admin.proposal.noDecisions")}
+          description={translate("admin.proposal.noDecisionsHint")}
           className="py-10"
         />
       ) : (
@@ -49,7 +53,7 @@ export function ProposalReviewHistory({
           </ItemGroup>
           {!showAll && history.length > HISTORY_PREVIEW && (
             <Button variant="ghost" className="self-center" onClick={() => setShowAll(true)}>
-              Show all {history.length}
+              {translate("common.showAllCount", { count: history.length })}
             </Button>
           )}
         </div>

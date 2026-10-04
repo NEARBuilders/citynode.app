@@ -16,9 +16,12 @@ import {
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { useNearAccount } from "@/lib/use-near-account";
 
 export function StakeOnramp() {
+  const translate = useAppTranslation();
   const nearAccountId = useNearAccount();
   const onrampRef = useRef<PingpayOnramp | null>(null);
   const onrampMutation = useMutation({
@@ -31,11 +34,13 @@ export function StakeOnramp() {
       return onramp.initiateOnramp({ chain: "NEAR", asset: "NEAR" });
     },
     onSuccess: (result) => {
-      toast.success("Purchase complete", { description: `Deposited to ${result.depositAddress}` });
+      toast.success(translate("purchase.complete"), {
+        description: translate("stake.depositAddress", { address: result.depositAddress ?? "" }),
+      });
     },
     onError: (err: Error) => {
-      if (err instanceof PingpayOnrampError) toast.error(err.message || "Onramp failed");
-      else toast.error("Unexpected error during purchase");
+      if (err instanceof PingpayOnrampError) toast.error(appErrorMessage(err, translate));
+      else toast.error(translate("purchase.failed"));
     },
   });
   useEffect(() => () => onrampRef.current?.close(), []);
@@ -50,16 +55,16 @@ export function StakeOnramp() {
       size="sm"
       onClick={onBuy}
       disabled={disabled || pending}
-      aria-label={pending ? "Opening PingPay" : "Buy NEAR with PingPay"}
+      aria-label={pending ? translate("purchase.opening") : translate("purchase.buyNear")}
     >
       {pending ? (
         <>
           <Spinner />
-          Opening…
+          {translate("common.opening")}
         </>
       ) : (
         <>
-          <span>Buy with</span>
+          <span>{translate("stake.buyWith")}</span>
           <span className="relative inline-block h-4 w-13">
             <img
               src={pingpayLogoDark}
@@ -83,15 +88,15 @@ export function StakeOnramp() {
         <WalletIcon />
       </ItemMedia>
       <ItemContent>
-        <ItemTitle>Need NEAR?</ItemTitle>
-        <ItemDescription>Buy it with a card or bank transfer.</ItemDescription>
+        <ItemTitle>{translate("purchase.needNear")}</ItemTitle>
+        <ItemDescription>{translate("purchase.description")}</ItemDescription>
       </ItemContent>
       <ItemActions>
         {disabled ? (
           <Tooltip>
             <TooltipTrigger render={button} />
             <TooltipContent side="top" className="max-w-xs">
-              Connect a NEAR wallet first
+              {translate("wallet.connectFirst")}
             </TooltipContent>
           </Tooltip>
         ) : (

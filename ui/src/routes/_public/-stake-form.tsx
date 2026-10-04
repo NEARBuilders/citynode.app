@@ -10,6 +10,7 @@ import {
   InputGroupText,
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { StakeVariables } from "./-stake-mutations";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -40,17 +41,18 @@ export function StakeForm({
   signInRedirect: string | null;
   validator: Validator | undefined;
 }) {
+  const translate = useAppTranslation();
   if (!validator) return null;
   const acceptsNear = validator.protocol === "near";
   return (
     <Card data-testid="stake.form">
       <CardHeader>
-        <CardTitle>How much?</CardTitle>
+        <CardTitle>{translate("stake.howMuch")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         <Field>
           <FieldLabel htmlFor="amount-input" className="sr-only">
-            Amount
+            {translate("common.amount")}
           </FieldLabel>
           <InputGroup>
             <InputGroupInput
@@ -81,9 +83,7 @@ export function StakeForm({
               </Button>
             ))}
           </div>
-          {!acceptsNear && (
-            <FieldDescription>This pool can&apos;t receive NEAR here.</FieldDescription>
-          )}
+          {!acceptsNear && <FieldDescription>{translate("stake.unavailable")}</FieldDescription>}
         </Field>
 
         <StakeAction
@@ -99,9 +99,7 @@ export function StakeForm({
           validator={validator}
         />
 
-        <p className="text-sm text-muted-foreground">
-          Unstake anytime. It unlocks after about two days.
-        </p>
+        <p className="text-sm text-muted-foreground">{translate("stake.unstakeHint")}</p>
       </CardContent>
     </Card>
   );
@@ -130,6 +128,7 @@ function StakeAction({
   signInRedirect: string | null;
   validator: Validator;
 }) {
+  const translate = useAppTranslation();
   if (signInRedirect !== null) {
     return (
       <div className="flex flex-col gap-3">
@@ -140,7 +139,7 @@ function StakeAction({
           render={<a href={pluginHref("/login", { redirect: signInRedirect })}>Sign in to stake</a>}
         >
           <SignInIcon data-icon="inline-start" />
-          Sign in to stake
+          {translate("stake.signIn")}
         </Button>
       </div>
     );
@@ -156,9 +155,9 @@ function StakeAction({
           data-testid="stake.connect-wallet"
         >
           {connectingWallet ? <Spinner /> : <WalletIcon data-icon="inline-start" />}
-          {connectingWallet ? "Connecting…" : "Connect wallet"}
+          {connectingWallet ? translate("wallet.connecting") : translate("wallet.connect")}
         </Button>
-        <p className="text-sm text-muted-foreground">Connect a NEAR wallet to stake.</p>
+        <p className="text-sm text-muted-foreground">{translate("stake.connectHint")}</p>
       </div>
     );
   }
@@ -180,7 +179,9 @@ function StakeAction({
         disabled={!acceptsNear || !parsedYocto || isPending}
       >
         {isPending && <Spinner />}
-        {isPending ? "Staking…" : `Stake ${amount || "0"} NEAR`}
+        {isPending
+          ? translate("stake.pending")
+          : translate("stake.submitAmount", { amount: amount || "0" })}
       </Button>
       <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
         <WalletIcon className="shrink-0" />

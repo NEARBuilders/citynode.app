@@ -1,6 +1,7 @@
 import { PlusIcon, UsersThreeIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Button, EmptyState, Input, SectionHeader, TabsContent } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { MemberCardMember } from "./-member-card";
 import { TeamCard, type TeamCardTeam, type TeamMembershipStatus } from "./-team-card";
 
@@ -32,15 +33,13 @@ export function TeamsTab({
   orgMembers: MemberCardMember[];
   teams: TeamsTabTeam[];
 }) {
+  const translate = useAppTranslation();
   const [teamName, setTeamName] = useState("");
   const trimmedName = teamName.trim();
 
   return (
     <TabsContent value="teams" className="flex flex-col gap-6 pt-6">
-      <SectionHeader
-        title="Teams"
-        description="Members acting as a team only see the areas it can use."
-      />
+      <SectionHeader title={translate("org.teams")} description={translate("org.teamAreasHint")} />
       {canManage && (
         <form
           className="flex w-full max-w-lg gap-2"
@@ -54,8 +53,8 @@ export function TeamsTab({
           <Input
             value={teamName}
             onChange={(event) => setTeamName(event.target.value)}
-            placeholder="New team, e.g. Finance"
-            aria-label="Team name"
+            placeholder={translate("org.teamNameExample")}
+            aria-label={translate("org.teamName")}
             className="min-w-0 flex-1"
             data-testid="teams-tab-create-input"
           />
@@ -66,7 +65,7 @@ export function TeamsTab({
             data-testid="teams-tab-create-button"
           >
             <PlusIcon />
-            Create team
+            {translate("org.createTeam")}
           </Button>
         </form>
       )}
@@ -92,8 +91,8 @@ export function TeamsTab({
       ) : (
         <EmptyState
           icon={UsersThreeIcon}
-          title="No teams yet"
-          description={canManage ? "Create one above to group people by what they do." : undefined}
+          title={translate("org.noTeams")}
+          description={canManage ? translate("org.noTeamsDescription") : undefined}
         />
       )}
     </TabsContent>

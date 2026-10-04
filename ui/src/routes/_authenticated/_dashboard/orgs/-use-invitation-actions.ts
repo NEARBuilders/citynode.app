@@ -3,6 +3,8 @@ import { useRouter } from "@tanstack/react-router";
 import { useRef } from "react";
 import { toast } from "sonner";
 import type { ApiClient, AuthClient } from "@/app";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import {
   createWorkspaceSynchronization,
   reportWorkspaceRefreshError,
@@ -27,6 +29,7 @@ export function useInvitationActions({
   onAccepted?: (invitation: InvitationActionInvitation) => Promise<void> | void;
   onRejected?: (invitation: InvitationActionInvitation) => Promise<void> | void;
 }) {
+  const translate = useAppTranslation();
   const queryClient = useQueryClient();
   const router = useRouter();
   const synchronization = createWorkspaceSynchronization({ auth, queryClient, router });
@@ -57,19 +60,11 @@ export function useInvitationActions({
     pendingRejection.current = null;
   };
 
-  const reportError = (
-    error: Error,
-    fallback: string,
-    retry: () => Promise<unknown> = refreshWorkspace,
-  ) => {
-    if (
-      reportWorkspaceRefreshError(error, retry, (retryError) =>
-        reportError(retryError, "Failed to refresh workspace", retry),
-      )
-    ) {
+  const reportError = (error: Error, retry: () => Promise<unknown> = refreshWorkspace) => {
+    if (reportWorkspaceRefreshError(error, retry, (retryError) => reportError(retryError, retry))) {
       return;
     }
-    toast.error(error.message || fallback);
+    toast.error(appErrorMessage(error, translate));
   };
 
   const acceptMutation = useMutation({
@@ -88,7 +83,7 @@ export function useInvitationActions({
       await onAccepted?.(invitation);
       pendingAcceptance.current = null;
     },
-    onError: (error: Error) => reportError(error, "Failed to accept invitation"),
+    onError: (error: Error) => reportError(error),
   });
 
   const rejectMutation = useMutation({
@@ -104,7 +99,7 @@ export function useInvitationActions({
       pendingRejection.current = invitation;
       await refreshRejection();
     },
-    onError: (error: Error) => reportError(error, "Failed to decline invitation", refreshRejection),
+    onError: (error: Error) => reportError(error, refreshRejection),
   });
 
   return { acceptMutation, rejectMutation, refreshWorkspace };

@@ -203,7 +203,7 @@ export const createStartServer = (onReady?: () => void) =>
     const startHttpServer = () => {
       const hostname = process.env.HOST || "0.0.0.0";
 
-      const proxiedFetch = (req: Request): Response | Promise<Response> => {
+      const proxiedFetch: typeof app.fetch = (req, env, executionCtx) => {
         const url = new URL(req.url);
         const forwardedProto = req.headers.get("x-forwarded-proto");
         const forwardedHost = req.headers.get("x-forwarded-host");
@@ -219,7 +219,7 @@ export const createStartServer = (onReady?: () => void) =>
           req = new Request(url, req);
         }
 
-        return app.fetch(req);
+        return app.fetch(req, env, executionCtx);
       };
 
       const server = serve({ fetch: proxiedFetch, port, hostname }, () => {

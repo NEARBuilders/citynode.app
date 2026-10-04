@@ -20,6 +20,9 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { AppActionError } from "@/i18n/error-message";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { describeDaoError, useDaoAutoRestore, useDaoConnection } from "@/lib/dao-connect";
 import {
   formatNearBalance,
@@ -45,15 +48,19 @@ const PHASE_METHOD: Record<PoolPhase, PoolMethod> = {
   withdraw: "withdraw",
 };
 
-const BUTTON_LABEL: Record<PoolMethod, string> = {
-  unstake: "Propose unstake",
-  withdraw: "Propose withdraw",
-};
+export function createButtonLabel(t: AppTranslator) {
+  return {
+    unstake: t("stake.proposeUnstake"),
+    withdraw: t("stake.proposeWithdraw"),
+  };
+}
 
-const DIALOG_TITLE: Record<PoolMethod, string> = {
-  unstake: "Propose unstake",
-  withdraw: "Propose withdraw",
-};
+export function createDialogTitle(t: AppTranslator) {
+  return {
+    unstake: t("stake.proposeUnstake"),
+    withdraw: t("stake.proposeWithdraw"),
+  };
+}
 
 function maxBalanceOf(method: PoolMethod, accountView: StakePoolAccountView | undefined) {
   return method === "unstake"
@@ -68,6 +75,10 @@ export function TeamStakeCard({
   target: TeamStakeTarget | null;
   pending?: boolean;
 }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
+  const BUTTON_LABEL = createButtonLabel(translate);
+
   const queryClient = useQueryClient();
   const authClient = useAuthClient();
   const authAccountId = useNearAccount();
@@ -97,19 +108,22 @@ export function TeamStakeCard({
   const method: PoolMethod | null = phase ? PHASE_METHOD[phase] : null;
   const actionReady = !!target && !!phase && phase !== "pending-release";
 
-  const balanceLabel = method === "withdraw" || phase === "pending-release" ? "Unstaked" : "Staked";
+  const balanceLabel =
+    method === "withdraw" || phase === "pending-release"
+      ? translate("stake.unstaked")
+      : translate("stake.staked");
 
   return (
     <section className="flex flex-col gap-4" data-testid="dashboard-node.team-stake">
       <SectionHeader
-        title="Team stake"
+        title={translate("stake.teamStake")}
         description={
-          target ? (
-            <>
-              <span className="font-mono break-all">{target.teamAccountId}</span> in{" "}
-              <span className="font-mono break-all">{target.poolAccountId}</span>
-            </>
-          ) : undefined
+          target
+            ? translate("stake.teamPoolNamed", {
+                team: target.teamAccountId,
+                pool: target.poolAccountId,
+              })
+            : undefined
         }
         action={
           target ? (
@@ -133,12 +147,13 @@ export function TeamStakeCard({
             className="text-3xl font-semibold tabular-nums wrap-anywhere text-foreground sm:text-4xl"
           >
             {loading ? (
-              <Skeleton aria-label="Loading team stake" className="h-10 w-40" />
+              <Skeleton aria-label={translate("stake.loadingTeam")} className="h-10 w-40" />
             ) : accountView ? (
               formatNearBalance(
                 method === "withdraw" || phase === "pending-release"
                   ? accountView.unstakedBalance
                   : accountView.stakedBalance,
+                locale,
               )
             ) : (
               "—"
@@ -149,15 +164,15 @@ export function TeamStakeCard({
               className="text-sm text-muted-foreground"
               data-testid="dashboard-node.team-stake-pending-release"
             >
-              Unlocks for withdrawal after about 2 days.
+              {translate("stake.unlockNotice")}
             </p>
           )}
           {phase === "unstake" && accountView && accountView.unstakedBalance > 0n && (
             <p className="text-sm text-muted-foreground">
-              {accountView.canWithdraw ? "Ready to withdraw: " : "Unlocking: "}
-              <span className="font-mono text-foreground">
-                {formatNearBalance(accountView.unstakedBalance)}
-              </span>
+              {translate(
+                accountView.canWithdraw ? "stake.readyBalance" : "stake.unlockingBalance",
+                { amount: formatNearBalance(accountView.unstakedBalance, locale) },
+              )}
             </p>
           )}
           <PoolActionDialog
@@ -177,24 +192,29 @@ export function TeamStakeCard({
                   authAccountId,
                   connection,
                 });
-                toast.success(selected === "unstake" ? "Unstake proposed" : "Withdraw proposed", {
-                  description:
-                    selected === "unstake"
-                      ? `Withdraw to ${target.teamAccountId} in about 2 days.`
-                      : `Returns the NEAR to ${target.teamAccountId}.`,
-                });
+                toast.success(
+                  translate(
+                    selected === "unstake" ? "stake.unstakeProposed" : "stake.withdrawProposed",
+                  ),
+                  {
+                    description:
+                      selected === "unstake"
+                        ? translate("stake.withdrawDelay", { account: target.teamAccountId ?? "" })
+                        : translate("stake.returnAccount", { account: target.teamAccountId ?? "" }),
+                  },
+                );
                 setDialogOpen(false);
                 await invalidateStakePoolQueries(queryClient, target.poolAccountId, target.network);
               } catch (error) {
-                toast.error(describeDaoError(error, target.teamAccountId));
+                toast.error(describeDaoError(error, target.teamAccountId, translate));
               }
             }}
           />
         </div>
       ) : loading ? (
-        <Skeleton aria-label="Loading team stake" className="h-10 w-40" />
+        <Skeleton aria-label={translate("stake.loadingTeam")} className="h-10 w-40" />
       ) : (
-        <p className="text-sm text-muted-foreground">Link a team treasury to see its stake here.</p>
+        <p className="text-sm text-muted-foreground">{translate("stake.linkTreasury")}</p>
       )}
     </section>
   );
@@ -215,6 +235,10 @@ function PoolActionDialog({
   pending: boolean;
   onPropose: (method: PoolMethod, amountYocto: bigint) => Promise<void>;
 }) {
+  const translate = useAppTranslation();
+  const BUTTON_LABEL = createButtonLabel(translate);
+  const DIALOG_TITLE = createDialogTitle(translate);
+
   const action: PoolMethod = method ?? "unstake";
   const max = maxBalanceOf(action, accountView ?? undefined);
   const [amount, setAmount] = useState("");
@@ -224,7 +248,10 @@ function PoolActionDialog({
   }, [open, max]);
   const propose = useMutation({
     mutationFn: async () => {
-      if (!parsed) throw new Error(`Enter an amount within the available team ${action} balance.`);
+      if (!parsed)
+        throw new AppActionError(
+          action === "unstake" ? "stake.invalidTeamUnstake" : "stake.invalidTeamWithdraw",
+        );
       await onPropose(action, parsed);
     },
   });
@@ -236,12 +263,12 @@ function PoolActionDialog({
           <DialogTitle>{DIALOG_TITLE[action]}</DialogTitle>
           <DialogDescription>
             {action === "withdraw"
-              ? "Creates a treasury proposal to move unstaked NEAR back to the team."
-              : "Creates a treasury proposal. Rewards are already included; the NEAR unlocks after about 2 days."}
+              ? translate("stake.withdrawProposal")
+              : translate("stake.unstakeProposal")}
           </DialogDescription>
         </DialogHeader>
         <Field>
-          <FieldLabel htmlFor="team-pool-action-amount">Amount (NEAR)</FieldLabel>
+          <FieldLabel htmlFor="team-pool-action-amount">{translate("stake.amountNear")}</FieldLabel>
           <InputGroup>
             <InputGroupInput
               id="team-pool-action-amount"
@@ -252,7 +279,7 @@ function PoolActionDialog({
             />
             <InputGroupAddon align="inline-end">
               <InputGroupButton onClick={() => setAmount(yoctoToNearInput(maxMinusOneNear(max)))}>
-                Max
+                {translate("stake.max")}
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
@@ -264,7 +291,7 @@ function PoolActionDialog({
             onClick={() => onOpenChange(false)}
             disabled={pending}
           >
-            Cancel
+            {translate("common.cancel")}
           </Button>
           <Button
             size="sm"
@@ -272,7 +299,7 @@ function PoolActionDialog({
             disabled={!parsed || pending || propose.isPending}
             onClick={() => propose.mutate()}
           >
-            {pending || propose.isPending ? "Proposing…" : BUTTON_LABEL[action]}
+            {pending || propose.isPending ? translate("stake.proposing") : BUTTON_LABEL[action]}
           </Button>
         </DialogFooter>
       </DialogContent>

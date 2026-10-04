@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import { Route } from "./relayer";
 
 const mocks = vi.hoisted(() => ({
@@ -203,7 +204,9 @@ describe("relayer funding flow", () => {
     );
 
     pendingSend.reject(new Error("wallet rejected"));
-    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("wallet rejected"));
+    await waitFor(() =>
+      expect(mocks.error).toHaveBeenCalledWith("This action could not be completed. Try again."),
+    );
     expect(screen.getByRole("button", { name: "Fund relayer" })).toHaveProperty("disabled", false);
     expect(invalidateQueries).not.toHaveBeenCalled();
   });

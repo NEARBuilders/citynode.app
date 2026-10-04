@@ -23,6 +23,9 @@ import {
   ItemSeparator,
   ItemTitle,
 } from "@/components/ui/item";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { translateEnglishAppMessage, useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { formatRemaining, onboardingCodeState } from "@/lib/onboarding-codes";
 
 type OnboardingCodeSummary = Awaited<ReturnType<ApiClient["auth"]["listOnboardingCodes"]>>[number];
@@ -38,14 +41,20 @@ const STATE_BADGE = {
   "used-up": "secondary",
 } as const;
 
-function stateLabel(code: OnboardingCodeSummary): string {
+function stateLabel(
+  code: OnboardingCodeSummary,
+  t: AppTranslator = translateEnglishAppMessage,
+): string {
   const state = onboardingCodeState(code);
-  if (state === "used-up") return "used up";
-  if (state === "active") return `${code.usedCount}/${code.maxUses} joined`;
-  return state;
+  if (state === "used-up") return t("station.usedUp");
+  if (state === "active")
+    return t("station.joinedShort", { used: code.usedCount, max: code.maxUses });
+  return state === "expired" ? t("station.expired") : t("station.revoked");
 }
 
 export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgId: string }) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const queryClient = useQueryClient();
   const location = useLocation();
   const [selectedCodeId, setSelectedCodeId] = useState<string | null>(null);
@@ -78,11 +87,11 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
       return apiClient.auth.revokeOnboardingCode({ codeId, organizationId: orgId });
     },
     onSuccess: () => {
-      toast.success("Onboarding code revoked");
+      toast.success(translate("org.codeRevoked"));
       void queryClient.invalidateQueries({ queryKey: orgOnboardingQueryKey(orgId) });
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to revoke");
+      toast.error(appErrorMessage(error, translate));
     },
   });
 
@@ -92,11 +101,9 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
   return (
     <TabsContent value="onboard" className="flex flex-col gap-6 pt-6">
       <SectionHeader
-        title="Onboarding stations"
+        title={translate("org.stations")}
         description={
-          <span data-testid="onboard.start-from-event">
-            Start one from an event in My community; people who scan it join.
-          </span>
+          <span data-testid="onboard.start-from-event">{translate("org.stationsDescription")}</span>
         }
         action={
           <Button
@@ -106,7 +113,7 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
             render={<Link to="/dashboard/node" />}
             data-testid="onboard.open-my-community"
           >
-            Open My community
+            {translate("org.openCommunity")}
             <ArrowRightIcon />
           </Button>
         }
@@ -119,7 +126,8 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
               <div className="flex min-w-0 flex-col gap-1">
                 <h3 className="text-lg font-medium text-foreground">{selectedCode.eventName}</h3>
                 <span className="text-sm text-muted-foreground">
-                  {formatRemaining(activeStatus.expiresAt)} left
+                  {formatRemaining(activeStatus.expiresAt, Date.now(), translate, locale)}
+                  {translate("station.remaining")}
                 </span>
               </div>
               <div className="flex flex-col items-end" data-testid="onboard.joined-count">
@@ -127,7 +135,7 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
                   {activeStatus.usedCount}
                   <span className="text-xl text-muted-foreground">/{activeStatus.maxUses}</span>
                 </span>
-                <span className="text-sm text-muted-foreground">joined</span>
+                <span className="text-sm text-muted-foreground">{translate("station.joined")}</span>
               </div>
             </div>
             {activeStatus.joined.length > 0 ? (
@@ -138,7 +146,7 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
                 {activeStatus.joined.map((entry) => (
                   <li key={entry.userId} className="flex items-center justify-between gap-3 py-2.5">
                     <span className="min-w-0 truncate text-sm text-foreground">
-                      {entry.userName ?? "New member"}
+                      {entry.userName ?? translate("org.newMember")}
                     </span>
                     <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
                       {entry.accountId ?? ""}
@@ -147,7 +155,7 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">Waiting for the first scan…</p>
+              <p className="text-sm text-muted-foreground">{translate("org.waitingScan")}</p>
             )}
             {onboardingCodeState(selectedCode) === "active" && (
               <div className="flex flex-wrap gap-2">
@@ -162,7 +170,7 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
                     />
                   }
                 >
-                  Open station
+                  {translate("org.openStation")}
                 </Button>
                 <Button
                   type="button"
@@ -172,7 +180,7 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
                   disabled={revokeMutation.isPending}
                   data-testid="onboard.revoke-button"
                 >
-                  Revoke
+                  {translate("org.revoke")}
                 </Button>
               </div>
             )}
@@ -210,7 +218,7 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
                       variant={STATE_BADGE[state]}
                       data-testid={`onboard.code-state-${code.id}`}
                     >
-                      {stateLabel(code)}
+                      {stateLabel(code, translate)}
                     </Badge>
                     {state === "active" && (
                       <Button
@@ -226,7 +234,7 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
                           />
                         }
                       >
-                        Open station
+                        {translate("org.openStation")}
                       </Button>
                     )}
                   </ItemActions>
@@ -238,8 +246,8 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
       ) : (
         <EmptyState
           icon={QrCodeIcon}
-          title="No stations yet"
-          description="Stations you start from events show up here."
+          title={translate("org.noStations")}
+          description={translate("org.noStationsDescription")}
           className="py-10"
         />
       )}
@@ -247,9 +255,9 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
       <ConfirmDialog
         open={revoking !== null}
         onOpenChange={(open) => !open && setRevoking(null)}
-        title="Revoke this station?"
-        description="Its QR code stops working. People who already joined stay."
-        confirmLabel="Revoke"
+        title={translate("org.revokeStationTitle")}
+        description={translate("org.revokeStationDescription")}
+        confirmLabel={translate("org.revoke")}
         variant="destructive"
         isPending={revokeMutation.isPending}
         onConfirm={() => {

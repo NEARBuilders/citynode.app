@@ -3,6 +3,7 @@ import { type useApiClient, useAuthClient } from "@/app";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldContent, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import {
   formatNearBalance,
   formatPoolFee,
@@ -24,9 +25,12 @@ export function StakeValidatorList({
   selectedValidatorId: string | null;
   validators: StakeValidator[];
 }) {
+  const translate = useAppTranslation();
   return (
     <FieldSet data-testid="stake.pool-list">
-      <FieldLegend>{validators.length > 1 ? "Choose a pool" : "Pool"}</FieldLegend>
+      <FieldLegend>
+        {validators.length > 1 ? translate("stake.choosePool") : translate("stake.pool")}
+      </FieldLegend>
       <RadioGroup
         value={selectedValidatorId}
         onValueChange={(value) => {
@@ -41,8 +45,12 @@ export function StakeValidatorList({
                   <span className="max-w-full min-w-0 truncate font-mono text-sm font-medium text-foreground">
                     {validator.accountId}
                   </span>
-                  {validator.isDefault && <Badge variant="success">Recommended</Badge>}
-                  {validator.role === "community" && <Badge variant="outline">Community</Badge>}
+                  {validator.isDefault && (
+                    <Badge variant="success">{translate("stake.recommended")}</Badge>
+                  )}
+                  {validator.role === "community" && (
+                    <Badge variant="outline">{translate("common.community")}</Badge>
+                  )}
                 </div>
                 <PoolSummary validator={validator} />
               </FieldContent>
@@ -56,6 +64,8 @@ export function StakeValidatorList({
 }
 
 function PoolSummary({ validator }: { validator: StakeValidator }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
   const authClient = useAuthClient();
   const network = toNetwork(validator.network || "mainnet");
   const stats = useQuery(
@@ -69,20 +79,27 @@ function PoolSummary({ validator }: { validator: StakeValidator }) {
   if (validator.protocol && validator.protocol !== "near") {
     return (
       <p className="text-sm text-muted-foreground">
-        {`A ${validator.protocol} pool. It can't receive NEAR here.`}
+        {translate("stake.protocolUnavailable", { protocol: validator.protocol })}
       </p>
     );
   }
   if (!stats.data) {
     return (
       <p className="text-sm text-muted-foreground">
-        {stats.isLoading ? "Loading pool stats…" : network === "mainnet" ? "NEAR pool" : network}
+        {stats.isLoading
+          ? translate("stake.loadingStats")
+          : network === "mainnet"
+            ? translate("stake.nearPool")
+            : network}
       </p>
     );
   }
   return (
     <p className="text-sm text-muted-foreground">
-      {`${formatPoolFee(stats.data.feeNumerator, stats.data.feeDenominator)} fee · ${formatNearBalance(stats.data.totalStaked)} staked`}
+      {translate("stake.poolStatsNamed", {
+        fee: formatPoolFee(stats.data.feeNumerator, stats.data.feeDenominator, locale),
+        balance: formatNearBalance(stats.data.totalStaked, locale),
+      })}
     </p>
   );
 }

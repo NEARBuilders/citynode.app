@@ -89,7 +89,7 @@ describe("runIntegrityPreflight", () => {
 
     expect(result).toEqual({
       status: "unverified",
-      message: "Couldn't fetch the UI bundle to verify it (network down).",
+      message: "Couldn't fetch the UI bundle to verify it. Check the URL and try again.",
     });
   });
 });

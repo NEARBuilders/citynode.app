@@ -1,6 +1,7 @@
 import type { ClientRuntimeConfig } from "everything-dev/types";
 import { startVersionWatch, type VersionWatchHandle } from "everything-dev/ui/version-check";
 import { useEffect, useState } from "react";
+import { useAppTranslation } from "@/i18n/runtime";
 import { useAuthClient } from "@/lib/auth";
 
 /**
@@ -17,6 +18,7 @@ export function VersionRefreshBanner({
 }: {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
 }) {
+  const translate = useAppTranslation();
   const authClient = useAuthClient();
   const [show, setShow] = useState(false);
   const [dismissed, setDismissed] = useState(
@@ -61,14 +63,14 @@ export function VersionRefreshBanner({
       role="status"
       className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-2xl bg-background px-5 py-4 text-foreground shadow-lg"
     >
-      <span className="text-sm text-muted-foreground">A new version is available.</span>
+      <span className="text-sm text-muted-foreground">{translate("version.available")}</span>
       <button
         type="button"
         data-testid="version-refresh-button"
         onClick={() => window.location.reload()}
         className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
       >
-        Refresh
+        {translate("common.refresh")}
       </button>
       <button
         type="button"
@@ -79,7 +81,7 @@ export function VersionRefreshBanner({
         }}
         className="rounded-xl px-2 py-2 text-sm text-muted-foreground"
       >
-        Dismiss
+        {translate("version.dismiss")}
       </button>
     </div>
   );

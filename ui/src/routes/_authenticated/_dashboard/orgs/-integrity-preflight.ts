@@ -5,17 +5,22 @@ import {
   verifyUiIntegrity,
   verifyUiPin,
 } from "@/app";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 
 export type IntegrityPreflight =
   | { status: "ok" }
   | { status: "mismatch"; message: string }
   | { status: "unverified"; message: string };
 
-export async function runIntegrityPreflight(value: TenantConfigDraft): Promise<IntegrityPreflight> {
+export async function runIntegrityPreflight(
+  value: TenantConfigDraft,
+  translate: AppTranslator = translateEnglishAppMessage,
+): Promise<IntegrityPreflight> {
   const checks: { label: string; check: IntegrityCheckResult }[] = [];
   if (value.uiProduction && value.uiManifest && value.uiPinIntegrity) {
     checks.push({
-      label: "UI pin",
+      label: translate("bundle.pin"),
       check: await verifyUiPin(value.uiProduction, {
         manifest: value.uiManifest,
         integrity: value.uiPinIntegrity,
@@ -37,13 +42,13 @@ export async function runIntegrityPreflight(value: TenantConfigDraft): Promise<I
     if (check.status === "mismatch") {
       return {
         status: "mismatch",
-        message: `${label} integrity mismatch — the bundle hashes to ${check.computed}`,
+        message: translate("tenant.integrityMismatch", { label, hash: check.computed }),
       };
     }
     if (check.status === "unverified") {
       return {
         status: "unverified",
-        message: `Couldn't fetch the ${label} bundle to verify it (${check.reason}).`,
+        message: translate("nodeConfig.bundleUnverified", { bundle: label }),
       };
     }
   }

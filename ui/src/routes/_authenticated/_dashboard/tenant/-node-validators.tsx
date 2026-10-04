@@ -35,7 +35,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { fetchPoolOwner } from "@/lib/pool-owner";
+import { presentationLabel } from "@/lib/presentation-label";
 import {
   invalidateNodeQueries,
   nodeValidatorsQueryOptions,
@@ -49,10 +53,12 @@ interface TenantNodeValidatorsProps {
   canManage: boolean;
 }
 
-const VALIDATOR_ROLE_ITEMS = [
-  { label: "Official", value: "official" },
-  { label: "Community", value: "community" },
-];
+export function createValidatorRoleItems(t: AppTranslator) {
+  return [
+    { label: t("tenant.official"), value: "official" },
+    { label: t("tenant.communityType"), value: "community" },
+  ];
+}
 
 function toValidatorRole(value: string | null): ValidatorRow["role"] | null {
   return value === "official" || value === "community" ? value : null;
@@ -69,6 +75,8 @@ function ValidatorRoleSelect({
   id?: string;
   ariaLabel: string;
 }) {
+  const translate = useAppTranslation();
+  const VALIDATOR_ROLE_ITEMS = createValidatorRoleItems(translate);
   return (
     <Select
       value={value}
@@ -103,6 +111,7 @@ interface ValidatorRow {
 }
 
 function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; network: string }) {
+  const translate = useAppTranslation();
   const { data: owner, isLoading } = useQuery({
     queryKey: ["pool-owner", network, poolAccountId],
     queryFn: () => fetchPoolOwner(poolAccountId, network),
@@ -111,8 +120,8 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
 
   if (isLoading) {
     return (
-      <span className="text-sm text-muted-foreground" title="reading owner_id() on-chain">
-        Checking pool owner…
+      <span className="text-sm text-muted-foreground" title={translate("tenant.readingOwner")}>
+        {translate("tenant.checkingOwner")}
       </span>
     );
   }
@@ -121,9 +130,9 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
     return (
       <span
         className="text-sm text-muted-foreground"
-        title="account is not a staking pool contract"
+        title={translate("tenant.notPoolDescription")}
       >
-        Not a staking pool
+        {translate("tenant.notPool")}
       </span>
     );
   }
@@ -131,15 +140,16 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
   return (
     <span
       className="inline-flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted-foreground"
-      title="verified via owner_id() on-chain"
+      title={translate("tenant.ownerVerified")}
     >
       <ShieldCheckIcon className="size-3.5 shrink-0 text-success" />
-      Owned by <span className="font-mono break-all">{owner}</span>
+      {translate("tenant.ownedByNamed", { owner })}
     </span>
   );
 }
 
 function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean }) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const [newAccountId, setNewAccountId] = useState("");
@@ -162,29 +172,29 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
       });
     },
     onSuccess: () => {
-      toast.success("Validator added");
+      toast.success(translate("tenant.validatorAdded"));
       setNewAccountId("");
       void invalidate();
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to add validator"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (validatorId: string) => apiClient.deleteValidator({ validatorId }),
     onSuccess: () => {
-      toast.success("Validator removed");
+      toast.success(translate("tenant.validatorRemoved"));
       void invalidate();
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to remove validator"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const setDefaultMutation = useMutation({
     mutationFn: async (validatorId: string) => apiClient.setDefaultValidator({ validatorId }),
     onSuccess: () => {
-      toast.success("Default validator updated");
+      toast.success(translate("tenant.defaultUpdated"));
       void invalidate();
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to set default validator"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const updateRoleMutation = useMutation({
@@ -196,16 +206,16 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
       role: ValidatorRow["role"];
     }) => apiClient.updateValidator({ validatorId, role }),
     onSuccess: () => {
-      toast.success("Validator updated");
+      toast.success(translate("tenant.validatorUpdated"));
       void invalidate();
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to update validator"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return (
     <div className="flex flex-col gap-3">
       {validators.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No validators yet.</p>
+        <p className="text-sm text-muted-foreground">{translate("tenant.noValidators")}</p>
       ) : (
         <ItemGroup>
           {validators.map((validator, index) => (
@@ -215,7 +225,9 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                 <ItemContent className="min-w-0">
                   <ItemTitle className="break-all">
                     <span className="font-mono">{validator.accountId}</span>
-                    {validator.isDefault && <Badge variant="secondary">Default</Badge>}
+                    {validator.isDefault && (
+                      <Badge variant="secondary">{translate("common.default")}</Badge>
+                    )}
                   </ItemTitle>
                   <ItemDescription>
                     <PoolOwnerBadge
@@ -229,19 +241,25 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                     <>
                       <ValidatorRoleSelect
                         value={validator.role}
-                        ariaLabel={`Role for ${validator.accountId}`}
+                        ariaLabel={translate("tenant.validatorRoleNamed", {
+                          account: validator.accountId ?? "",
+                        })}
                         onChange={(role) =>
                           updateRoleMutation.mutate({ validatorId: validator.id, role })
                         }
                       />
-                      <RowMenu label={`Actions for ${validator.accountId}`}>
+                      <RowMenu
+                        label={translate("common.actionsNamed", {
+                          name: validator.accountId ?? "",
+                        })}
+                      >
                         {!validator.isDefault && (
                           <DropdownMenuItem
                             onClick={() => setDefaultMutation.mutate(validator.id)}
                             disabled={setDefaultMutation.isPending}
                           >
                             <StarIcon />
-                            Make default
+                            {translate("tenant.makeDefault")}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
@@ -250,12 +268,12 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                           disabled={deleteMutation.isPending}
                         >
                           <TrashIcon />
-                          Remove validator
+                          {translate("tenant.removeValidator")}
                         </DropdownMenuItem>
                       </RowMenu>
                     </>
                   ) : (
-                    <Badge variant="outline">{roleLabel(validator.role)}</Badge>
+                    <Badge variant="outline">{roleLabel(validator.role, translate)}</Badge>
                   )}
                 </ItemActions>
               </Item>
@@ -275,7 +293,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
         >
           <Field className="min-w-0 flex-1">
             <FieldLabel htmlFor={`new-validator-account-${nodeId}`} className="sr-only">
-              Validator account
+              {translate("tenant.validatorAccount")}
             </FieldLabel>
             <Input
               id={`new-validator-account-${nodeId}`}
@@ -289,7 +307,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
           <div className="flex gap-2">
             <ValidatorRoleSelect
               value={newRole}
-              ariaLabel="New validator role"
+              ariaLabel={translate("tenant.newValidatorRole")}
               onChange={setNewRole}
             />
             <Button
@@ -299,7 +317,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
               disabled={createMutation.isPending || !newAccountId.trim()}
             >
               <PlusIcon />
-              Add validator
+              {translate("tenant.addValidator")}
             </Button>
           </div>
         </form>
@@ -308,9 +326,11 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
-        title={`Remove ${removing?.accountId ?? "validator"}?`}
-        description="Stakers can no longer pick it for this community."
-        confirmLabel="Remove"
+        title={translate("common.removeQuestion", {
+          name: removing?.accountId ?? translate("tenant.validatorFallback"),
+        })}
+        description={translate("tenant.removeValidatorDescription")}
+        confirmLabel={translate("common.remove")}
         variant="destructive"
         isPending={deleteMutation.isPending}
         onConfirm={() => {
@@ -323,6 +343,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
 }
 
 export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidatorsProps) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
@@ -337,18 +358,18 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
     mutationFn: async ({ nodeId, name }: { nodeId: string; name: string }) =>
       apiClient.updateNode({ nodeId, name }),
     onSuccess: () => {
-      toast.success("Node renamed");
+      toast.success(translate("tenant.nodeRenamed"));
       setRenamingNodeId(null);
       void invalidateNodeQueries(queryClient);
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to rename node"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return (
     <section className="flex flex-col gap-6" data-testid="tenant.section.validators">
-      <SectionHeader title="Node and validators" />
+      <SectionHeader title={translate("tenant.nodeValidators")} />
       {nodes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No node is attached to this community yet.</p>
+        <p className="text-sm text-muted-foreground">{translate("tenant.noNode")}</p>
       ) : (
         nodes.map((node) => (
           <div key={node.id} className="flex flex-col gap-3">
@@ -363,23 +384,25 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
               >
                 <Input
                   id={`node-name-${node.id}`}
-                  aria-label="Node name"
+                  aria-label={translate("tenant.nodeName")}
                   value={nodeName}
                   onChange={(e) => setNodeName(e.target.value)}
                   autoFocus
                   className="min-w-0 flex-1"
                 />
                 <Button type="submit" disabled={renameMutation.isPending}>
-                  Save
+                  {translate("common.save")}
                 </Button>
                 <Button type="button" variant="ghost" onClick={() => setRenamingNodeId(null)}>
-                  Cancel
+                  {translate("common.cancel")}
                 </Button>
               </form>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-medium text-foreground">{node.name}</h3>
-                <Badge variant="outline">{node.kind}</Badge>
+                <Badge variant="outline">
+                  {presentationLabel(node.kind ?? "member", translate)}
+                </Badge>
                 <span className="font-mono text-sm break-all text-muted-foreground">
                   {node.slug}
                 </span>
@@ -387,7 +410,7 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`Rename ${node.name}`}
+                    aria-label={translate("common.renameNamed", { name: node.name ?? "" })}
                     onClick={() => {
                       setNodeName(node.name);
                       setRenamingNodeId(node.id);

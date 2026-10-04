@@ -1,7 +1,9 @@
 import builtOnRev from "@/assets/brands/near/build-on-near-dark.png";
 import builtOn from "@/assets/brands/near/build-on-near-light.png";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export function NearBranding() {
+  const translate = useAppTranslation();
   return (
     <a
       href="https://nearbuilders.org"
@@ -11,12 +13,12 @@ export function NearBranding() {
     >
       <img
         src={builtOn}
-        alt="Built on NEAR"
+        alt={translate("footer.builtOn")}
         className="absolute inset-0 h-full w-full object-contain dark:hidden"
       />
       <img
         src={builtOnRev}
-        alt="Built on NEAR"
+        alt={translate("footer.builtOn")}
         className="absolute inset-0 hidden h-full w-full object-contain dark:block"
       />
     </a>

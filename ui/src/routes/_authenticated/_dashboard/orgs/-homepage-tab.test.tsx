@@ -1,7 +1,8 @@
+import { render } from "@/i18n/test-render";
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Near } from "near-kit";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -256,7 +257,7 @@ describe("HomepageTab", () => {
       tenant: { status: "suspended" },
       account: "alice.near",
       members: ["alice.near"],
-      reason: "This community is suspended.",
+      reason: "This community is Suspended.",
     },
     {
       name: "no wallet",

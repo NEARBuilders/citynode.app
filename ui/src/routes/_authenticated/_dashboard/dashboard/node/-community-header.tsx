@@ -10,6 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { CommunityNav, type CommunityNavSection } from "./-community-nav";
 
@@ -62,6 +64,7 @@ export function CommunityHeader({
   replace?: boolean;
   testIds?: Partial<Record<CommunityNavSection, string>>;
 }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const navigate = useNavigate();
   const { auth, runtimeConfig } = useRouteContext({ strict: false });
@@ -113,7 +116,9 @@ export function CommunityHeader({
         description={
           node ? (
             <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-base">
-              <span className="capitalize">{node.kind}</span>
+              <span className="capitalize">
+                {presentationLabel(node.kind ?? "member", translate)}
+              </span>
               {siteUrl && (
                 <a
                   href={siteUrl}
@@ -143,7 +148,7 @@ export function CommunityHeader({
               >
                 <SelectTrigger
                   id="managed-node"
-                  aria-label="Switch community"
+                  aria-label={translate("dashboard.switchCommunity")}
                   className="w-full sm:w-auto"
                 >
                   <SelectValue />
@@ -163,7 +168,7 @@ export function CommunityHeader({
                 nativeButton={false}
                 render={<Link to="/explore" search={{ node: nodeId }} />}
               >
-                View on Explore
+                {translate("dashboard.viewExplore")}
                 <ArrowUpRightIcon />
               </Button>
             )}

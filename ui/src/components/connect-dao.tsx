@@ -11,6 +11,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
 import {
   connectDaoAccount,
@@ -43,13 +44,13 @@ type MembershipState =
   | { kind: "not-sputnik" }
   | { kind: "error"; message: string };
 
-const purposeCopy: Record<ConnectDaoPurpose | "default", string> = {
-  default: "Sign in as the DAO that owns this community, through Trezu.",
-  apply: "Your DAO will own the community. Sign in as the DAO through Trezu.",
-  "tenant-create": "The community's settings are published under this DAO's account.",
-  "tenant-deploy": "Publishing needs the DAO to sign. Keep it connected until deploy finishes.",
-  "proposal-review": "Approving creates the community and asks this DAO to publish its settings.",
-  "community-settings": "Changes to this community are signed by its DAO.",
+const purposeCopy: Record<ConnectDaoPurpose | "default", AppMessageId> = {
+  default: "dao.purposeConnect",
+  apply: "dao.purposeApply",
+  "tenant-create": "dao.purposeCreate",
+  "tenant-deploy": "dao.purposeDeploy",
+  "proposal-review": "dao.purposeReview",
+  "community-settings": "dao.purposeSettings",
 };
 
 async function handleConnect(authAccountId: string | null) {
@@ -127,7 +128,7 @@ export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDao
               <ItemDescription>
                 {purpose === "apply"
                   ? t("dao.apply.description")
-                  : purposeCopy[purpose ?? "default"]}
+                  : t(purposeCopy[purpose ?? "default"])}
               </ItemDescription>
             </>
           )}
@@ -159,7 +160,7 @@ export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDao
       </Item>
       {!connected && connection.status === "error" && connection.error && (
         <p role="alert" className="text-sm text-destructive">
-          {connection.error}
+          {t("wallet.daoUnavailable")}
         </p>
       )}
     </div>
@@ -203,7 +204,7 @@ function MembershipLine({
         })
       : state.kind === "not-sputnik"
         ? t("dao.membership.notSputnik")
-        : t("dao.membership.error", { message: state.message });
+        : t("wallet.membershipError");
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="dao-connect-status">
       <Badge variant="destructive">

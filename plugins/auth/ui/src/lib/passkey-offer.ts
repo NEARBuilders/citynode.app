@@ -1,5 +1,7 @@
 import type { AuthClient } from "everything-dev/ui/auth";
 import { toast } from "sonner";
+import { authErrorMessage } from "@/i18n/error-message";
+import { translateLoginMessage } from "@/i18n/runtime";
 
 const PASSKEY_OFFER_DISMISSED_KEY = "device-link.passkey-offer-dismissed";
 
@@ -20,26 +22,26 @@ function rememberPasskeyOfferDismissed() {
 async function addPasskeyOnThisDevice(auth: AuthClient) {
   const { error } = await auth.passkey.addPasskey();
   if (error) {
-    toast.error(error.message || "Could not add a passkey");
+    toast.error(authErrorMessage(error, translateLoginMessage));
     return;
   }
   rememberPasskeyOfferDismissed();
-  toast.success("Passkey added");
+  toast.success(translateLoginMessage("auth.passkey.added"));
 }
 
 export function offerPasskeyOnThisDevice(auth: AuthClient) {
   if (isPasskeyOfferDismissed()) return;
-  toast("Add a passkey on this device", {
+  toast(translateLoginMessage("auth.passkey.offer"), {
     id: "device-link.passkey-offer",
     testId: "device-link.passkey-offer",
-    description: "Next time you can sign in here without your phone.",
+    description: translateLoginMessage("auth.passkey.nextTime"),
     duration: Number.POSITIVE_INFINITY,
     action: {
-      label: "Add passkey",
+      label: translateLoginMessage("auth.passkey.add"),
       onClick: () => void addPasskeyOnThisDevice(auth),
     },
     cancel: {
-      label: "Not now",
+      label: translateLoginMessage("auth.common.notNow"),
       onClick: rememberPasskeyOfferDismissed,
     },
     onDismiss: rememberPasskeyOfferDismissed,

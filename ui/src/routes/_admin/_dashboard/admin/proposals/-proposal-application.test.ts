@@ -118,7 +118,7 @@ describe("proposal application dispatcher", () => {
         baseAccount: "everything.near",
         publishTenantConfig,
       }),
-    ).rejects.toThrow("creation failed");
+    ).rejects.toMatchObject({ messageId: "proposal.partiallyApplied" });
     expect(api.proposals.markApplyFailed).toHaveBeenCalledWith(
       expect.objectContaining({ error: "creation failed" }),
     );
@@ -136,7 +136,7 @@ describe("proposal application dispatcher", () => {
         baseAccount: "everything.near",
         publishTenantConfig,
       }),
-    ).rejects.toThrow("Trezu rejected the request");
+    ).rejects.toMatchObject({ messageId: "proposal.partiallyApplied" });
 
     expect(api.applyNodeProposal).toHaveBeenCalledOnce();
     expect(api.proposals.markApplied).not.toHaveBeenCalled();

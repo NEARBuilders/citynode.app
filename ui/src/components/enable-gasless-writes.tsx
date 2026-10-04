@@ -4,9 +4,13 @@ import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
 import { Switch } from "@/components/ui/switch";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { useSessionGasKey } from "@/lib/use-gas-key";
 
 export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string | null }) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const auth = useAuthClient();
   const { state } = useSessionGasKey();
   const [enabling, setEnabling] = useState(false);
@@ -33,17 +37,19 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
   if (state) {
     const balance =
       state.balance && /^\d+$/.test(state.balance)
-        ? formatAmount(BigInt(state.balance), { precision: 4, trimZeros: true })
+        ? new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(
+            Number(formatAmount(BigInt(state.balance), { precision: 4, trimZeros: true })),
+          )
         : null;
     return (
       <GaslessRow
         description={
           <span data-testid="gasless-writes-status">
-            On{balance ? ` · gas key balance ${balance}` : ""}
+            {balance ? translate("gasless.onWithBalance", { balance }) : translate("common.on")}
           </span>
         }
       >
-        <Switch checked disabled aria-label="Gasless writes" />
+        <Switch checked disabled aria-label={translate("gasless.title")} />
       </GaslessRow>
     );
   }
@@ -57,12 +63,10 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
     return (
       <GaslessRow
         description={
-          <span data-testid="gasless-writes-unsupported">
-            Your wallet doesn&apos;t support gas keys, so publishing falls back to the relayer.
-          </span>
+          <span data-testid="gasless-writes-unsupported">{translate("gasless.unsupported")}</span>
         }
       >
-        <Switch checked={false} disabled aria-label="Gasless writes" />
+        <Switch checked={false} disabled aria-label={translate("gasless.title")} />
       </GaslessRow>
     );
   }
@@ -71,18 +75,16 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
     setEnabling(true);
     try {
       await auth.near.addSessionGasKey({
-        onError: (error) => toast.error(error.message || "Failed to enable gasless writes"),
+        onError: (error) => toast.error(appErrorMessage(error, translate)),
       });
       const funded = await auth.near.ensureGasKeyFunded();
       if (funded) {
-        toast.success("Gasless writes enabled");
+        toast.success(translate("gasless.enabled"));
       } else {
-        toast.warning(
-          "Session gas key not funded yet — publishing falls back to the relayer until it is funded.",
-        );
+        toast.warning(translate("gasless.unfunded"));
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to enable gasless writes");
+      toast.error(appErrorMessage(error, translate));
     } finally {
       setEnabling(false);
     }
@@ -90,11 +92,7 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
 
   return (
     <GaslessRow
-      description={
-        enabling
-          ? "Approve the gas key in your wallet…"
-          : "The platform pays gas for your publishes. Your wallet approves once."
-      }
+      description={enabling ? translate("gasless.approve") : translate("gasless.description")}
     >
       <Switch
         checked={enabling}
@@ -102,7 +100,7 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
         onCheckedChange={(checked) => {
           if (checked) void enable();
         }}
-        aria-label="Enable gasless writes"
+        aria-label={translate("gasless.enable")}
         data-testid="enable-gasless-writes"
       />
     </GaslessRow>
@@ -110,13 +108,14 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
 }
 
 function GaslessRow({ description, children }: { description: ReactNode; children: ReactNode }) {
+  const translate = useAppTranslation();
   return (
     <div
       className="flex items-center justify-between gap-6 border-b border-border py-4 last:border-b-0"
       data-testid="gasless-writes-row"
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-sm font-medium text-foreground">Gasless writes</span>
+        <span className="text-sm font-medium text-foreground">{translate("gasless.title")}</span>
         <span className="text-sm text-muted-foreground">{description}</span>
       </div>
       {children}

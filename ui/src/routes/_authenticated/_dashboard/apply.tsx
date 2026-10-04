@@ -7,7 +7,8 @@ import { getGatewayId, useApiClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { FieldGroup } from "@/components/ui/field";
-import { useAppTranslation } from "@/i18n/runtime";
+import { AppActionError, appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
@@ -40,8 +41,24 @@ export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
     }),
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Start a community", match.context.runtimeConfig) },
-      { name: "description", content: "Apply to start a CityNode community." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "dashboard.startCommunity",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.applyDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   component: ApplyPage,
@@ -71,12 +88,12 @@ function ApplyPage() {
   const submitMutation = useMutation({
     mutationFn: async (values: NodeApplicationValues) => {
       if (!gatewayId) {
-        throw new Error(t("apply.error.gateway"));
+        throw new AppActionError("apply.error.gateway");
       }
-      if (!activeOrgId) throw new Error(t("apply.error.organization"));
-      if (!nearAccountId) throw new Error(t("apply.error.near"));
+      if (!activeOrgId) throw new AppActionError("apply.error.organization");
+      if (!nearAccountId) throw new AppActionError("apply.error.near");
       if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
-        throw new Error(t("apply.error.dao"));
+        throw new AppActionError("apply.error.dao");
       }
       return proposeNodeApplication(apiClient, values, {
         orgId: activeOrgId,
@@ -95,7 +112,7 @@ function ApplyPage() {
         toast.warning(t("apply.success.refresh"));
       }
     },
-    onError: (error: Error) => toast.error(error.message || t("apply.error.submit")),
+    onError: (error: Error) => toast.error(appErrorMessage(error, t, "apply.error.submit")),
   });
   const form = useApplicationForm((values) => submitMutation.mutateAsync(values));
   const formValues = useSelector(form.store, (state) => state.values);
@@ -108,7 +125,7 @@ function ApplyPage() {
   const switchOrganization = useSwitchOrganization();
   const displayedOrgId =
     activeOrgId ?? (switchOrganization.isError ? null : (defaultOrgId ?? null));
-  const activeOrganizationLabel = resolveActiveOrganizationLabel(displayedOrgId, organizations);
+  const activeOrganizationLabel = resolveActiveOrganizationLabel(displayedOrgId, organizations, t);
 
   useEffect(() => {
     if (!defaultOrgId || attemptedDefaultOrgId.current === defaultOrgId) return;

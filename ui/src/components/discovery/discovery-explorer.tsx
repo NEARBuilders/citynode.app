@@ -37,6 +37,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, EventList } from "./event-list";
@@ -86,7 +87,7 @@ export function DiscoveryExplorer({
     return () => query.removeEventListener("change", update);
   }, []);
   const measurement = useDiscoveryMeasurement(api, search.campaign);
-  const [shareMessage, setShareMessage] = useState("");
+  const [shareMessage, setShareMessage] = useState<AppMessageId | null>(null);
   useEffect(() => {
     if (search.node) measurement.track("open", search.node);
   }, [search.node, measurement.track]);
@@ -402,10 +403,10 @@ export function DiscoveryExplorer({
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(window.location.href);
-                        setShareMessage(t("explore.detail.copied"));
+                        setShareMessage("explore.detail.copied");
                         measurement.track("share", selected.nodeId);
                       } catch {
-                        setShareMessage(t("explore.detail.copyFallback"));
+                        setShareMessage("explore.detail.copyFallback");
                       }
                     }}
                   >
@@ -413,7 +414,7 @@ export function DiscoveryExplorer({
                   </Button>
                 </div>
                 <p role="status" className="text-sm text-muted-foreground empty:hidden">
-                  {shareMessage}
+                  {shareMessage ? t(shareMessage) : null}
                 </p>
               </div>
               {selected.channels.length > 0 && (

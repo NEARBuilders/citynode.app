@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { translateAppMessage } from "@/i18n/runtime";
 import { crumbsFor } from "./breadcrumbs";
 import {
   buildNavItems,
@@ -247,6 +248,16 @@ describe("team area navigation", () => {
 
 describe("breadcrumbs", () => {
   const labels = (pathname: string) => crumbsFor(pathname).map((crumb) => crumb.label);
+
+  it("translates builder and organization review pages instead of using raw route names", () => {
+    const translate = (id: Parameters<typeof translateAppMessage>[0]) =>
+      translateAppMessage(id, undefined, "es");
+    expect(crumbsFor("/build", {}, translate)).toEqual([{ label: "Construir" }]);
+    expect(crumbsFor("/admin/organizations", {}, translate)).toEqual([
+      { label: "Administración", to: "/admin" },
+      { label: "Organizaciones" },
+    ]);
+  });
 
   it("names pages instead of echoing path segments", () => {
     expect(labels("/dashboard")).toEqual(["Home"]);

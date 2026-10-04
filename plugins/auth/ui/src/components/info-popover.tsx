@@ -2,6 +2,7 @@ import { ArrowSquareOutIcon, InfoIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useLoginTranslation } from "@/i18n/runtime";
 import { cn } from "@/lib/utils";
 
 export interface InfoPopoverLink {
@@ -29,6 +30,7 @@ export function InfoPopover({
   label,
   icon,
 }: InfoPopoverProps) {
+  const translate = useLoginTranslation();
   return (
     <Popover>
       <PopoverTrigger
@@ -39,7 +41,7 @@ export function InfoPopover({
             className={cn("shrink-0", className)}
           />
         }
-        aria-label={label ?? `about ${title}`}
+        aria-label={label ?? translate("auth.common.aboutNamed", { name: title ?? "" })}
         data-testid={testId}
       >
         {icon ?? <InfoIcon className="h-3.5 w-3.5" />}

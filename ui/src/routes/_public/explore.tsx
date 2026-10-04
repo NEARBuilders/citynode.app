@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useApiClient } from "@/app";
 import { DiscoveryExplorer } from "@/components/discovery/discovery-explorer";
 import { PageContainer } from "@/components/layout/page-container";
+import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 export const Route = createFileRoute("/_public/explore")({
   validateSearch: z.object({
@@ -21,10 +22,23 @@ export const Route = createFileRoute("/_public/explore")({
   }),
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Explore", match.context.runtimeConfig) },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.explore",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
       {
         name: "description",
-        content: "Find a CityNode community near you and see what's coming up.",
+        content: translateAppMessage(
+          "meta.exploreDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
       },
     ],
   }),

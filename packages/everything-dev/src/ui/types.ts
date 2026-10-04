@@ -1,5 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { AnyRoute, AnyRouteMatch, AnyRouter, RouterHistory } from "@tanstack/react-router";
+import type {
+  AnyRoute,
+  AnyRouteMatch,
+  AnyRouter,
+  ErrorRouteComponent,
+  NotFoundRouteComponent,
+  RouteComponent,
+  RouterHistory,
+} from "@tanstack/react-router";
 import type { NavManifest } from "every-plugin/ui/manifest";
 import type { ClientRuntimeConfig } from "../types";
 
@@ -8,6 +16,7 @@ export interface RouterContext<TSession = unknown> {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
   session?: TSession;
   cspNonce?: string;
+  locale?: string;
   /** nav manifest derived from composed routes' staticData.nav */
   pluginNav?: NavManifest;
 }
@@ -23,6 +32,9 @@ export interface CreateRouterOptions<TApiClient = unknown, TSession = unknown> {
   history?: RouterHistory;
   context?: Partial<RouterContextWithApi<TApiClient, TSession>>;
   basepath?: string;
+  defaultErrorComponent?: ErrorRouteComponent;
+  defaultNotFoundComponent?: NotFoundRouteComponent;
+  defaultPendingComponent?: RouteComponent;
   /** composed route tree — manifest construction passes it here; the bundled tree stays the core-only fallback. */
   routeTree?: AnyRoute;
 }

@@ -1,6 +1,7 @@
 import { BankIcon, EnvelopeSimpleIcon, PlusIcon, WalletIcon } from "@phosphor-icons/react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import { toast } from "sonner";
 import { type SessionData, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import {
@@ -24,6 +25,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
@@ -40,8 +42,24 @@ type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Organizations", match.context.runtimeConfig) },
-      { name: "description", content: "Your organizations, their members and teams." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.organizations",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.organizationsDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   loader: async ({ context }) => {
@@ -63,6 +81,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
 });
 
 function OrganizationsList() {
+  const translate = useAppTranslation();
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const router = useRouter();
@@ -112,7 +131,9 @@ function OrganizationsList() {
     apiClient,
     auth,
     onAccepted: async (invitation) => {
-      toast.success(`Joined ${invitation.organizationName ?? "organization"}`);
+      toast.success(
+        translate("org.joinedNamed", { name: invitation.organizationName ?? "organization" }),
+      );
       if (invitation.organizationSlug) {
         await router.navigate({
           to: "/orgs/$slug",
@@ -121,7 +142,7 @@ function OrganizationsList() {
       }
     },
     onRejected: () => {
-      toast.success("Invitation declined");
+      toast.success(translate("org.inviteDeclined"));
     },
   });
 
@@ -134,8 +155,8 @@ function OrganizationsList() {
   return (
     <PageContainer variant="wide">
       <PageHeader
-        title="Organizations"
-        description="Groups you belong to. The active one decides what you manage."
+        title={translate("common.organizations")}
+        description={translate("org.listDescription")}
         headerTestId="orgs.heading"
         actions={
           orgs.length > 0 ? (
@@ -146,7 +167,7 @@ function OrganizationsList() {
               data-testid="orgs-new-button"
             >
               <PlusIcon />
-              New organization
+              {translate("org.new")}
             </Button>
           ) : null
         }
@@ -154,7 +175,9 @@ function OrganizationsList() {
 
       {hasInvitations && (
         <section className="flex flex-col gap-4" data-testid="orgs-invitations">
-          <SectionHeader title={`Invitations (${pendingInvitations.length})`} />
+          <SectionHeader
+            title={translate("org.invitationsCount", { count: pendingInvitations.length ?? "" })}
+          />
           <div className="flex flex-col gap-2">
             {pendingInvitations.map((invitation) => {
               const orgName = invitation.organizationName ?? invitation.organizationSlug ?? "";
@@ -168,14 +191,19 @@ function OrganizationsList() {
                       <span className="min-w-0 truncate">{orgName}</span>
                     </ItemTitle>
                     <ItemDescription className="wrap-anywhere">
-                      {roleLabel(invitation.role)} ·{" "}
+                      {roleLabel(invitation.role, translate)} ·{" "}
                       {invitation.nearAccountId ? (
                         <WalletIcon className="inline size-3.5" />
                       ) : (
                         <EnvelopeSimpleIcon className="inline size-3.5" />
                       )}{" "}
-                      {invitation.nearAccountId ?? invitation.email} · expires{" "}
-                      <LocalDate value={invitation.expiresAt} format="relative" />
+                      {invitation.nearAccountId ?? invitation.email} ·{" "}
+                      <Trans
+                        id="date.expires"
+                        components={{
+                          date: <LocalDate value={invitation.expiresAt} format="relative" />,
+                        }}
+                      />
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions className="w-full sm:w-auto">
@@ -186,8 +214,8 @@ function OrganizationsList() {
                       disabled={invitationBusy}
                     >
                       {rejectMutation.isPending && rejectMutation.variables?.id === invitation.id
-                        ? "Declining…"
-                        : "Decline"}
+                        ? translate("org.declining")
+                        : translate("org.decline")}
                     </Button>
                     <Button
                       className="flex-1 sm:flex-none"
@@ -195,8 +223,8 @@ function OrganizationsList() {
                       disabled={invitationBusy}
                     >
                       {acceptMutation.isPending && acceptMutation.variables?.id === invitation.id
-                        ? "Joining…"
-                        : "Accept"}
+                        ? translate("org.joining")
+                        : translate("org.accept")}
                     </Button>
                   </ItemActions>
                 </Item>
@@ -231,18 +259,18 @@ function OrganizationsList() {
       ) : organizationsQuery.isError && orgs.length === 0 ? null : orgs.length === 0 ? (
         <EmptyState
           icon={BankIcon}
-          title="No organizations yet"
-          description="Create one to invite people, form teams and start a community."
+          title={translate("org.empty")}
+          description={translate("org.createHint")}
           action={
             <Button nativeButton={false} render={<Link to="/orgs/new" />}>
               <PlusIcon />
-              Create organization
+              {translate("org.create")}
             </Button>
           }
         />
       ) : (
         <section className="flex flex-col gap-4">
-          {hasInvitations && <SectionHeader title="Your organizations" />}
+          {hasInvitations && <SectionHeader title={translate("org.yourOrganizations")} />}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {orgs.map((org, index) => {
               const members = memberQueries[index]?.data;
@@ -270,20 +298,22 @@ function OrganizationsList() {
                       </div>
                     </Link>
                     <div className="flex flex-wrap gap-1.5">
-                      {myRole && <Badge variant="secondary">{roleLabel(myRole)}</Badge>}
+                      {myRole && <Badge variant="secondary">{roleLabel(myRole, translate)}</Badge>}
                       {org.status === "pending" && (
                         <Badge variant="warning" data-testid="orgs-pending">
-                          Pending approval
+                          {translate("orgApproval.pending")}
                         </Badge>
                       )}
                       {org.status === "rejected" && (
                         <Badge variant="destructive" data-testid="orgs-rejected">
-                          Rejected
+                          {translate("label.rejected")}
                         </Badge>
                       )}
-                      {isActive && <Badge variant="success">Active</Badge>}
-                      {isPersonal && <Badge variant="outline">Personal</Badge>}
-                      {tenantOrgIds.has(org.id) && <Badge variant="outline">Community</Badge>}
+                      {isActive && <Badge variant="success">{translate("common.active")}</Badge>}
+                      {isPersonal && <Badge variant="outline">{translate("org.personal")}</Badge>}
+                      {tenantOrgIds.has(org.id) && (
+                        <Badge variant="outline">{translate("common.community")}</Badge>
+                      )}
                     </div>
                     {org.status === "rejected" && (
                       <p
@@ -295,9 +325,7 @@ function OrganizationsList() {
                     )}
                     <div className="mt-auto flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">
-                        {members
-                          ? `${members.length} member${members.length === 1 ? "" : "s"}`
-                          : " "}
+                        {members ? translate("org.memberCount", { count: members.length }) : " "}
                       </span>
                       {org.status !== "active" ? (
                         <Button
@@ -306,7 +334,7 @@ function OrganizationsList() {
                           nativeButton={false}
                           render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
                         >
-                          View request
+                          {translate("orgApproval.view")}
                         </Button>
                       ) : isActive ? (
                         <Button
@@ -315,7 +343,7 @@ function OrganizationsList() {
                           nativeButton={false}
                           render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
                         >
-                          Open
+                          {translate("common.open")}
                         </Button>
                       ) : (
                         <Button
@@ -324,7 +352,7 @@ function OrganizationsList() {
                           onClick={() => switchOrgMutation.mutate(org.id)}
                           disabled={switchOrgMutation.isPending}
                         >
-                          Make active
+                          {translate("org.makeActive")}
                         </Button>
                       )}
                     </div>

@@ -34,9 +34,9 @@ data without discarding the previous successful result.
 The complete root test run exhausted the available memory during API tests.
 Single-worker API runs also stalled, including the Postgres-backed attempt.
 The organization browser regressions cover repeated reloads and failed-list
-recovery, but have not completed locally. The in-app browser reached the local
-City Nodes shell; remote auth/API bundles failed module federation loading, so
-authenticated flows were unavailable. The built preview's client bootstrap also
-reported an unavailable UI container and remained on its loading screen. The PR
-screenshot records that blocked localhost state. Temporary preview configuration
-was restored after these attempts.
+recovery and passed in CI. A complete local Docker image with isolated Postgres
+databases reported ready API, auth, and SSR services. After Meteor Wallet sign-in
+in the in-app browser, the active organization and its member remained visible
+after three reloads and a cache-bypassing reload. The organization list and
+switcher also retained membership after reload. The PR screenshot shows the
+authenticated organization after refresh.

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import type { Proposal } from "./-proposal-columns";
 import { createProposalColumns } from "./-proposal-columns";
 import { normalizeProposalReviewFilter, ProposalReviewFilters } from "./-proposal-filters";
@@ -83,7 +84,6 @@ describe("proposal review UI seams", () => {
         proposals={[]}
         isLoading={false}
         isError
-        errorMessage="proposal API unavailable"
         onRetry={onRetry}
         isFetchingNextPage={false}
         onLoadMore={vi.fn()}
@@ -92,7 +92,8 @@ describe("proposal review UI seams", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    expect(screen.getByText("proposal API unavailable")).toBeTruthy();
+    expect(screen.getByText("Something went wrong while loading proposals.")).toBeTruthy();
+    expect(screen.queryByText("proposal API unavailable")).toBeNull();
     expect(onRetry).toHaveBeenCalledOnce();
   });
 

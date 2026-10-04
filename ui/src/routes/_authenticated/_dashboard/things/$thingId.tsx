@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { Button, EmptyState, PageContainer } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { invalidateThingAfterDelete, thingQueryKeys } from "./-thing-cache";
 import { ThingBackLink, ThingDetailsView } from "./-thing-details-view";
@@ -18,13 +20,21 @@ export const Route = createFileRoute("/_authenticated/_dashboard/things/$thingId
   head: ({ params, match }) => ({
     meta: [
       { title: pageTitle(params.thingId, match.context.runtimeConfig) },
-      { name: "description", content: `Detail view for thing ${params.thingId}.` },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.thingDescriptionNamed",
+          { id: params.thingId },
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   component: ThingDetailsPage,
 });
 
 function ThingDetailsPage() {
+  const translate = useAppTranslation();
   const { thingId } = Route.useParams();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
@@ -109,12 +119,14 @@ function ThingDetailsPage() {
         entityId: thingId,
         hasUpvote: nextHasUpvote,
       });
-      toast.success(nextHasUpvote ? "Thing upvoted" : "Upvote removed");
+      toast.success(
+        nextHasUpvote ? translate("things.upvoted") : translate("things.upvoteRemoved"),
+      );
     },
     onError: (error: Error, _nextHasUpvote, context) => {
       queryClient.setQueryData(upvoteCountQueryKey, context?.previousCount);
       queryClient.setQueryData(userVoteQueryKey, context?.previousUserVote);
-      toast.error(error.message || "Unable to update your vote");
+      toast.error(appErrorMessage(error, translate));
     },
     onSettled: async () => {
       await Promise.all([
@@ -128,15 +140,15 @@ function ThingDetailsPage() {
   const deleteMutation = useMutation({
     mutationFn: () => apiClient.template.deleteThing({ thingId }),
     onSuccess: async () => {
-      toast.success("Thing deleted");
+      toast.success(translate("things.deleted"));
       try {
         await invalidateThingAfterDelete(queryClient, thingId);
       } catch {
-        toast.warning("Thing deleted, but the Things list could not refresh.");
+        toast.warning(translate("things.deleteRefreshFailed"));
       }
       void router.navigate({ to: "/things" });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(appErrorMessage(err, translate)),
   });
 
   const thing = thingQuery.data;
@@ -163,15 +175,15 @@ function ThingDetailsPage() {
         <ThingBackLink canGoBack={canGoBack} onBack={() => router.history.back()} />
         <EmptyState
           icon={CubeIcon}
-          title="Thing not found"
+          title={translate("things.notFound")}
           description={
             proposalQuery.isError
-              ? `Proposal status could not be loaded: ${proposalQuery.error.message}`
-              : `No thing or proposal exists for ${thingId}.`
+              ? translate("proposal.statusUnavailable")
+              : translate("things.missingNamed", { id: thingId ?? "" })
           }
           action={
             <Button nativeButton={false} render={<Link to="/things" />}>
-              Back to things
+              {translate("things.back")}
             </Button>
           }
         />

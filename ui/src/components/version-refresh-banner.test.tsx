@@ -1,6 +1,7 @@
+import { render } from "@/i18n/test-render";
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VersionRefreshBanner } from "./version-refresh-banner";
 

@@ -9,6 +9,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { refreshSessionCache, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
+import { Trans } from "everything-dev/ui/i18n";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AuthPanel } from "@/components/auth-panel";
@@ -23,16 +24,16 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import { useLoginTranslation } from "@/i18n/runtime";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { DisplayNameStep } from "./-display-name-step";
 import { OnboardSignUp } from "./-onboard-sign-up";
 import "../../styles.css";
+import { LoginI18nProvider } from "@/i18n/runtime";
 
 type SearchParams = {
   code?: string;
 };
-
-const JOIN_STEPS = ["Create your account", "Join the organization", "Add your name"] as const;
 
 function sanitizeCode(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -57,6 +58,20 @@ function hasChosenName(accountCreated: boolean, name: string | undefined | null)
 }
 
 function OnboardPage() {
+  return (
+    <LoginI18nProvider>
+      <OnboardContent />
+    </LoginI18nProvider>
+  );
+}
+
+function OnboardContent() {
+  const translate = useLoginTranslation();
+  const JOIN_STEPS = [
+    translate("auth.onboard.stepAccount"),
+    translate("auth.onboard.stepJoin"),
+    translate("auth.onboard.stepName"),
+  ];
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const code = sanitizeCode(Route.useSearch().code);
@@ -74,17 +89,17 @@ function OnboardPage() {
   const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
   const [nameDone, setNameDone] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [redeemError, setRedeemError] = useState(false);
   const redeemingRef = useRef(false);
 
   const copyPairLink = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
-      toast.success("Link copied — open it on your computer");
+      toast.success(translate("auth.onboard.linkCopied"));
       setTimeout(() => setLinkCopied(false), 2000);
     } catch {
-      toast.error("Couldn't copy the link");
+      toast.error(translate("auth.onboard.copyFailed"));
     }
   };
 
@@ -95,20 +110,24 @@ function OnboardPage() {
       .redeemOnboardingCode({ code })
       .then((result: Redeemed) => {
         setRedeemed({ organizationName: result.organizationName, eventName: result.eventName });
-        toast.success(`You've joined ${result.organizationName}`);
+        toast.success(
+          translate("auth.onboard.joinedToast", { organization: result.organizationName }),
+        );
         void refreshSessionCache(auth, queryClient);
       })
-      .catch((error: { message?: string }) => {
-        setRedeemError(error?.message || "Could not join this organization");
+      .catch(() => {
+        setRedeemError(true);
       });
-  }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient]);
+  }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient, translate]);
 
   if (redeemed) {
     const joinedLine = (
       <span data-testid="onboard.success">
-        You've joined{" "}
-        <span className="font-medium text-foreground">{redeemed.organizationName}</span> for{" "}
-        {redeemed.eventName}.
+        <Trans
+          id="auth.onboard.joinedLine"
+          values={{ organization: redeemed.organizationName, event: redeemed.eventName }}
+          components={{ organization: <span className="font-medium text-foreground" /> }}
+        />
       </span>
     );
 
@@ -116,7 +135,7 @@ function OnboardPage() {
       return (
         <AuthPanel
           icon={<CheckCircleIcon />}
-          title="You're in"
+          title={translate("auth.onboard.ready")}
           titleTestId="onboard.heading"
           description={joinedLine}
         >
@@ -135,7 +154,7 @@ function OnboardPage() {
     return (
       <AuthPanel
         icon={<CheckCircleIcon />}
-        title="Ready to start building?"
+        title={translate("auth.onboard.readyBuild")}
         titleTestId="onboard.heading"
         description={joinedLine}
       >
@@ -146,20 +165,27 @@ function OnboardPage() {
           render={<Link to="/build" />}
           data-testid="onboard.build-button"
         >
-          Get build prompts
+          {translate("auth.onboard.buildPrompts")}
         </Button>
         <Item variant="muted" data-testid="onboard.continue-on-computer">
           <ItemMedia variant="icon">
             <DesktopIcon />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Continue on your computer</ItemTitle>
+            <ItemTitle>{translate("auth.onboard.desktop")}</ItemTitle>
             <ItemDescription>
-              On your computer, open{" "}
-              <span className="font-mono text-foreground" data-testid="onboard.gateway-origin">
-                {gatewayHost}/login?method=phone
-              </span>{" "}
-              — a QR code appears. Scan it with this phone's camera and tap Approve.
+              <Trans
+                id="auth.onboard.desktopHelp"
+                values={{ url: `${gatewayHost}/login?method=phone` }}
+                components={{
+                  url: (
+                    <span
+                      className="font-mono text-foreground"
+                      data-testid="onboard.gateway-origin"
+                    />
+                  ),
+                }}
+              />
             </ItemDescription>
           </ItemContent>
           <ItemActions className="w-full sm:w-auto">
@@ -172,7 +198,7 @@ function OnboardPage() {
               data-testid="onboard.continue-copy-link"
             >
               {linkCopied ? <CheckIcon /> : <CopyIcon />}
-              {linkCopied ? "Copied" : "Copy link"}
+              {linkCopied ? translate("auth.common.copied") : translate("auth.common.copyLink")}
             </Button>
           </ItemActions>
         </Item>
@@ -183,7 +209,7 @@ function OnboardPage() {
           render={<Link to="/dashboard" />}
           data-testid="onboard.home-button"
         >
-          Go to Home
+          {translate("auth.onboard.home")}
         </Button>
       </AuthPanel>
     );
@@ -192,8 +218,8 @@ function OnboardPage() {
   if (!code) {
     return (
       <StatusPanel
-        title="Invalid invitation"
-        description="This link is missing its code. Ask the organizer for a new QR code."
+        title={translate("auth.onboard.invalid")}
+        description={translate("auth.onboard.missingCode")}
         testId="onboard.invalid"
       />
     );
@@ -207,7 +233,7 @@ function OnboardPage() {
           data-testid="onboard.loading"
         >
           <Spinner />
-          Loading invitation…
+          {translate("auth.onboard.loading")}
         </p>
       </div>
     );
@@ -216,8 +242,8 @@ function OnboardPage() {
   if (info === null) {
     return (
       <StatusPanel
-        title="Invitation not found"
-        description="This onboarding code is invalid. Ask the organizer for a new QR code."
+        title={translate("auth.onboard.notFound")}
+        description={translate("auth.onboard.invalidCode")}
         testId="onboard.not-found"
       />
     );
@@ -226,13 +252,13 @@ function OnboardPage() {
   if (info.revoked || info.expired || info.usedUp) {
     return (
       <StatusPanel
-        title="Invitation unavailable"
+        title={translate("auth.onboard.unavailable")}
         description={
           info.revoked
-            ? "This onboarding code was revoked by the organizer."
+            ? translate("auth.onboard.revoked")
             : info.expired
-              ? "This onboarding code has expired. Ask the organizer for a new one."
-              : "This onboarding code has reached its limit. Ask the organizer for a new one."
+              ? translate("auth.onboard.expired")
+              : translate("auth.onboard.limit")
         }
         testId="onboard.unavailable"
       />
@@ -240,14 +266,20 @@ function OnboardPage() {
   }
 
   if (redeemError) {
-    return <StatusPanel title="Could not join" description={redeemError} testId="onboard.error" />;
+    return (
+      <StatusPanel
+        title={translate("auth.onboard.joinFailed")}
+        description={translate("auth.onboard.joinError")}
+        testId="onboard.error"
+      />
+    );
   }
 
   if (session?.user) {
     return (
       <AuthPanel
         icon={<TicketIcon />}
-        title={`Joining ${info.organizationName}`}
+        title={translate("auth.onboard.joining", { organization: info.organizationName })}
         titleTestId="onboard.heading"
       >
         <StepProgress steps={JOIN_STEPS} current={1} testId="onboard.progress" />
@@ -256,7 +288,7 @@ function OnboardPage() {
           data-testid="onboard.status"
         >
           <Spinner />
-          Adding you to {info.eventName}…
+          {translate("auth.onboard.adding", { event: info.eventName })}
         </p>
       </AuthPanel>
     );
@@ -265,14 +297,19 @@ function OnboardPage() {
   return (
     <AuthPanel
       icon={<TicketIcon />}
-      eyebrow={info.inviterName ? `${info.inviterName} invited you` : "You're invited"}
-      title={`Join ${info.organizationName}`}
+      eyebrow={
+        info.inviterName
+          ? translate("auth.onboard.invitedBy", { name: info.inviterName })
+          : translate("auth.onboard.invited")
+      }
+      title={translate("auth.onboard.joinTitle", { organization: info.organizationName })}
       titleTestId="onboard.heading"
       description={
-        <>
-          {info.eventName} with{" "}
-          <span className="font-medium text-foreground">{info.organizationName}</span>
-        </>
+        <Trans
+          id="auth.onboard.eventWithOrg"
+          values={{ organization: info.organizationName, event: info.eventName }}
+          components={{ organization: <span className="font-medium text-foreground" /> }}
+        />
       }
       descriptionTestId="onboard.invite"
     >
@@ -294,6 +331,7 @@ function StatusPanel({
   description: string;
   testId: string;
 }) {
+  const translate = useLoginTranslation();
   return (
     <AuthPanel
       icon={<WarningCircleIcon />}
@@ -310,7 +348,7 @@ function StatusPanel({
         render={<Link to="/explore" />}
         data-testid="onboard.explore-button"
       >
-        Explore communities
+        {translate("auth.common.exploreCommunities")}
       </Button>
     </AuthPanel>
   );

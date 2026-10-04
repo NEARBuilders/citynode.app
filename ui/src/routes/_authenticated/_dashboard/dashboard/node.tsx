@@ -1,6 +1,7 @@
 import { NetworkIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Button, EmptyState, PageContainer } from "@/components";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
@@ -91,14 +92,31 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
   },
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("My community", match.context.runtimeConfig) },
-      { name: "description", content: "Run your community." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.myCommunity",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.myCommunityDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   component: NodeDashboardLayout,
 });
 
 function NodeDashboardLayout() {
+  const translate = useAppTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const context = Route.useRouteContext();
   const { selectedNode, summary, emptyReason } = context;
@@ -107,6 +125,7 @@ function NodeDashboardLayout() {
     const emptyState = getNodeEmptyStateContent(
       emptyReason ?? "no-node",
       context.auth.user?.role === "admin",
+      translate,
     );
     return (
       <PageContainer>

@@ -1,6 +1,7 @@
 import { CheckCircleIcon, CopyIcon, PlusIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useAppTranslation } from "@/i18n/runtime";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Field, FieldLabel } from "./ui/field";
@@ -19,16 +20,21 @@ interface ApiKeyFormProps {
 }
 
 const EXPIRATION_PRESETS = [
-  { label: "Never expires", value: "0" },
-  { label: "7 days", value: String(7 * 24 * 60 * 60) },
-  { label: "30 days", value: String(30 * 24 * 60 * 60) },
-  { label: "90 days", value: String(90 * 24 * 60 * 60) },
-  { label: "1 year", value: String(365 * 24 * 60 * 60) },
-];
+  { label: "keys.neverExpires", value: "0" },
+  { label: "keys.sevenDays", value: String(7 * 24 * 60 * 60) },
+  { label: "keys.thirtyDays", value: String(30 * 24 * 60 * 60) },
+  { label: "keys.ninetyDays", value: String(90 * 24 * 60 * 60) },
+  { label: "keys.oneYear", value: String(365 * 24 * 60 * 60) },
+] as const;
 
 export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
+  const translate = useAppTranslation();
   const [name, setName] = useState("");
   const [expiresIn, setExpiresIn] = useState("0");
+  const expirationPresets = EXPIRATION_PRESETS.map((preset) => ({
+    ...preset,
+    label: translate(preset.label),
+  }));
 
   return (
     <form
@@ -44,7 +50,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
     >
       <Field className="min-w-0 flex-1">
         <FieldLabel htmlFor="api-key-name" className="sr-only">
-          Key name
+          {translate("keys.name")}
         </FieldLabel>
         <Input
           id="api-key-name"
@@ -52,25 +58,25 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
           value={name}
           onChange={(event) => setName(event.target.value)}
           maxLength={64}
-          placeholder="Key name, e.g. Deploy bot"
+          placeholder={translate("keys.nameExample")}
           data-testid="api-key-name-input"
         />
       </Field>
       <div className="flex gap-2">
         <Select
           value={expiresIn}
-          items={EXPIRATION_PRESETS}
+          items={expirationPresets}
           onValueChange={(value) => setExpiresIn(value ?? "0")}
         >
           <SelectTrigger
-            aria-label="Expiration"
+            aria-label={translate("keys.expiration")}
             className="min-w-36 flex-1 sm:flex-none"
             data-testid="api-key-expiry-select"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {EXPIRATION_PRESETS.map((preset) => (
+            {expirationPresets.map((preset) => (
               <SelectItem key={preset.value} value={preset.value}>
                 {preset.label}
               </SelectItem>
@@ -84,7 +90,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
           data-testid="api-key-create-button"
         >
           <PlusIcon />
-          {isPending ? "Creating…" : "Create key"}
+          {isPending ? translate("common.creating") : translate("keys.create")}
         </Button>
       </div>
     </form>
@@ -104,12 +110,13 @@ export interface ApiKeyRevealProps {
 }
 
 export function ApiKeyReveal({ apiKey, onDismiss }: ApiKeyRevealProps) {
+  const translate = useAppTranslation();
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(apiKey.key);
-      toast.success("API key copied");
+      toast.success(translate("keys.copied"));
     } catch {
-      toast.error("Failed to copy API key");
+      toast.error(translate("keys.copyFailed"));
     }
   };
 
@@ -119,30 +126,30 @@ export function ApiKeyReveal({ apiKey, onDismiss }: ApiKeyRevealProps) {
         <div className="flex items-start gap-3">
           <CheckCircleIcon className="mt-0.5 size-5 shrink-0 text-success" />
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="font-medium text-foreground">{apiKey.name ?? "New key"} created</span>
-            <span className="text-sm text-muted-foreground">
-              Copy it now. You won't see the full key again.
+            <span className="font-medium text-foreground">
+              {translate("keys.createdNamed", { name: apiKey.name ?? translate("keys.new") })}
             </span>
+            <span className="text-sm text-muted-foreground">{translate("keys.copyNotice")}</span>
           </div>
         </div>
         <InputGroup>
           <InputGroupInput
             readOnly
             value={apiKey.key}
-            aria-label="New API key"
+            aria-label={translate("keys.newApi")}
             className="font-mono"
             onFocus={(event) => event.target.select()}
             onClick={(event) => event.currentTarget.select()}
           />
           <InputGroupAddon align="inline-end">
-            <InputGroupButton onClick={handleCopy} aria-label="Copy API key">
+            <InputGroupButton onClick={handleCopy} aria-label={translate("keys.copy")}>
               <CopyIcon />
-              Copy
+              {translate("common.copy")}
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
         <Button variant="ghost" size="sm" className="self-end" onClick={onDismiss}>
-          Done
+          {translate("common.done")}
         </Button>
       </CardContent>
     </Card>

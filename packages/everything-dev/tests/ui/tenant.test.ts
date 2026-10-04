@@ -6,6 +6,7 @@ import {
   computeSsrEntryIntegrity,
   computeSubresourceIntegrity,
   computeUiEntryIntegrity,
+  createTenantConfigDraftSchema,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,
@@ -160,6 +161,40 @@ describe("gatewayForAccount", () => {
 });
 
 describe("tenantConfigDraftSchema", () => {
+  it("uses localized pin validation while preserving bundle constraints", () => {
+    const schema = createTenantConfigDraftSchema({
+      manifest: "Formato de manifiesto no válido",
+      pinPair: "Falta la integridad del manifiesto",
+      integrityMode: "Elige un modo de integridad",
+    });
+    const draft = {
+      ...emptyTenantConfigDraft,
+      title: "Chicago",
+      description: "Chicago",
+      uiProduction: "https://cdn.example.com/ui",
+      uiManifest: "versions/8f3ac1d2feedbeef.json",
+    };
+    const pin = schema.safeParse(draft);
+    expect(pin.error?.issues).toContainEqual(
+      expect.objectContaining({
+        path: ["uiPinIntegrity"],
+        message: "Falta la integridad del manifiesto",
+      }),
+    );
+    const malformed = schema.safeParse({ ...draft, uiManifest: "versions/invalid.json" });
+    expect(malformed.error?.issues).toContainEqual(
+      expect.objectContaining({ path: ["uiManifest"], message: "Formato de manifiesto no válido" }),
+    );
+    const mixed = schema.safeParse({
+      ...draft,
+      uiPinIntegrity: "sha384-pin",
+      uiIntegrity: "sha384-direct",
+    });
+    expect(mixed.error?.issues).toContainEqual(
+      expect.objectContaining({ path: ["uiManifest"], message: "Elige un modo de integridad" }),
+    );
+  });
+
   it("accepts a metadata-only draft", () => {
     const result = tenantConfigDraftSchema.safeParse({
       ...emptyTenantConfigDraft,

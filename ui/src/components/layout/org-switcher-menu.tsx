@@ -7,6 +7,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { Organization } from "@/lib/queries/organizations";
 import { OrgMark } from "./org-mark";
 import { useSwitchOrganization } from "./use-switch-organization";
@@ -36,6 +37,7 @@ export function OrgSwitcherMenuContent({
   sideOffset,
   itemVariant = "plain",
 }: OrgSwitcherMenuContentProps) {
+  const translate = useAppTranslation();
   const switchOrg = useSwitchOrganization();
 
   const handleSwitch = (orgId: string) => {
@@ -46,7 +48,7 @@ export function OrgSwitcherMenuContent({
   return (
     <DropdownMenuContent className={className} align={align} side={side} sideOffset={sideOffset}>
       <DropdownMenuGroup>
-        <DropdownMenuLabel>Organizations</DropdownMenuLabel>
+        <DropdownMenuLabel>{translate("common.organizations")}</DropdownMenuLabel>
         {organizations.map((org) => (
           <DropdownMenuItem
             key={org.id}
@@ -64,26 +66,26 @@ export function OrgSwitcherMenuContent({
         ))}
         {isLoading && organizations.length === 0 && (
           <DropdownMenuItem disabled data-testid="org-switcher-loading">
-            Loading organizations…
+            {translate("org.loading")}
           </DropdownMenuItem>
         )}
         {error && (
           <DropdownMenuItem onClick={onRetry} data-testid="org-switcher-retry">
-            Couldn't load organizations. Try again
+            {translate("org.loadFailedRetry")}
           </DropdownMenuItem>
         )}
         {!isLoading && !error && organizations.length === 0 && (
-          <DropdownMenuItem disabled>No organizations yet</DropdownMenuItem>
+          <DropdownMenuItem disabled>{translate("org.empty")}</DropdownMenuItem>
         )}
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
       <DropdownMenuItem render={<Link to="/orgs/new" />} data-testid="org-switcher-new">
         <PlusIcon />
-        New organization
+        {translate("org.new")}
       </DropdownMenuItem>
       <DropdownMenuItem render={<Link to="/orgs" />} data-testid="org-switcher-all">
         <BuildingsIcon />
-        All organizations
+        {translate("org.all")}
       </DropdownMenuItem>
     </DropdownMenuContent>
   );

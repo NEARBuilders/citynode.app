@@ -13,7 +13,12 @@ import { getActiveRuntime, getGatewayId, useApiClient } from "@/app";
 import { Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import {
+  resolveAppLocale,
+  translateAppMessage,
+  useAppLocale,
+  useAppTranslation,
+} from "@/i18n/runtime";
 import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
 
 const PREVIEW_COUNT = 6;
@@ -41,15 +46,18 @@ export const Route = createFileRoute("/_public/")({
     await context.queryClient.prefetchQuery(tenantAppsQueryOptions(context.apiClient));
     return { runtimeConfig: context.runtimeConfig };
   },
-  head: ({ loaderData }) => ({
+  head: ({ loaderData, match }) => ({
     meta: [
       {
         title: getActiveRuntime(loaderData?.runtimeConfig)?.title ?? "CityNode",
       },
       {
         name: "description",
-        content:
-          "CityNodes are local communities that each run a NEAR validator. Find yours, join its events, and stake to keep it online.",
+        content: translateAppMessage(
+          "meta.landingDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
       },
     ],
   }),

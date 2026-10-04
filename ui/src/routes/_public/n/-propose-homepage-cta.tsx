@@ -3,10 +3,12 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { Button } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 
 export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
+  const translate = useAppTranslation();
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const { data: session } = useQuery(sessionQueryOptions(auth));
@@ -21,15 +23,15 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
   const tenants = useQueries({
     queries: organizations.map((org) => ({
       ...tenantByOrgQueryOptions(apiClient, org.id),
-      enabled,
+      enabled: enabled && org.status === "active",
     })),
   });
 
   if (!enabled) return null;
 
-  const owningOrg = organizations.find((_, index) => {
+  const owningOrg = organizations.find((org, index) => {
     const tenant = tenants[index]?.data;
-    return tenant?.id === tenantId && tenant.ownerKind === "dao";
+    return org.status === "active" && tenant?.id === tenantId && tenant.ownerKind === "dao";
   });
 
   if (!owningOrg) return null;
@@ -48,7 +50,7 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
       }
     >
       <HouseIcon />
-      Propose homepage change
+      {translate("homepage.change")}
     </Button>
   );
 }

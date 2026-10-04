@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getGatewayId, useApiClient } from "@/app";
 import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from "@/components";
+import { AppActionError, appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
@@ -38,12 +40,24 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/proposals/$propos
     entityId: typeof search.entityId === "string" ? search.entityId : undefined,
   }),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Proposal · Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.proposalAdmin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: ProposalDetailPage,
 });
 
 function ProposalDetailPage() {
+  const translate = useAppTranslation();
   const { proposalId } = Route.useParams();
   const { pluginId, entityId } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -103,7 +117,9 @@ function ProposalDetailPage() {
           daoConnection.daoAccountId !== payload.accountId ||
           verifiedDaoAccountId !== payload.accountId
         ) {
-          throw new Error(`Connect and verify ${payload.accountId} through Trezu before approval`);
+          throw new AppActionError("proposal.verifyDaoBeforeApproval", {
+            account: payload.accountId,
+          });
         }
       }
 
@@ -121,10 +137,10 @@ function ProposalDetailPage() {
     onSuccess: async ({ action, proposal }) => {
       toast.success(
         action === "reject"
-          ? "Proposal rejected"
+          ? translate("admin.proposalRejected")
           : proposal.applyStatus === "applied"
-            ? "Proposal approved and resource created"
-            : "Proposal approved",
+            ? translate("admin.proposalApprovedCreated")
+            : translate("admin.proposalApproved"),
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),
@@ -138,7 +154,7 @@ function ProposalDetailPage() {
       await navigate({ to: "/admin/proposals" });
     },
     onError: async (error: Error) => {
-      toast.error(error.message || "Failed to review proposal");
+      toast.error(appErrorMessage(error, translate));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: proposalQueryKey }),
         queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),
@@ -150,11 +166,11 @@ function ProposalDetailPage() {
     return (
       <EmptyState
         icon={GavelIcon}
-        title="Open this proposal from the list"
-        description="The link is missing the details needed to find it."
+        title={translate("admin.proposal.openList")}
+        description={translate("admin.proposal.missingDetails")}
         action={
           <Button variant="outline" nativeButton={false} render={<Link to="/admin/proposals" />}>
-            Back to proposals
+            {translate("admin.proposal.back")}
           </Button>
         }
       />
@@ -175,11 +191,11 @@ function ProposalDetailPage() {
     return (
       <EmptyState
         icon={GavelIcon}
-        title="Proposal not found"
-        description={proposalQuery.error?.message || "This proposal is no longer available."}
+        title={translate("admin.proposal.notFound")}
+        description={translate("admin.proposal.unavailable")}
         action={
           <Button variant="outline" nativeButton={false} render={<Link to="/admin/proposals" />}>
-            Back to proposals
+            {translate("admin.proposal.back")}
           </Button>
         }
       />
@@ -200,9 +216,9 @@ function ProposalDetailPage() {
   return (
     <>
       <PageHeader
-        label={<BackLink to="/admin/proposals">Proposals</BackLink>}
-        title={proposalTitle(proposal)}
-        description={`${proposalTypeLabel(proposal.pluginId)} · ${proposal.entityId}`}
+        label={<BackLink to="/admin/proposals">{translate("common.proposals")}</BackLink>}
+        title={proposalTitle(proposal, translate)}
+        description={`${proposalTypeLabel(proposal.pluginId, translate)} · ${proposal.entityId}`}
         actions={<ProposalStatusBadges proposal={proposal} />}
         headerTestId="admin-proposal.heading"
       />

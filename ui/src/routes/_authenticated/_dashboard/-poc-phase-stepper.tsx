@@ -1,6 +1,7 @@
 import { CheckIcon } from "@phosphor-icons/react";
 import { cn } from "cn";
 import { Button } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { PhaseId } from "./-poc-stations";
 import type { PhaseProgress } from "./-poc-walkthrough";
 
@@ -13,8 +14,12 @@ export function PocPhaseStepper({
   activePhase: PhaseId;
   onSelect: (phase: PhaseId) => void;
 }) {
+  const translate = useAppTranslation();
   return (
-    <nav aria-label="Lifecycle phases" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+    <nav
+      aria-label={translate("lifecycle.phases")}
+      className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+    >
       <ol
         className="flex min-w-max gap-2 sm:grid sm:min-w-0 sm:grid-cols-5"
         data-testid="poc-phases"
@@ -48,7 +53,7 @@ export function PocPhaseStepper({
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="leading-tight whitespace-normal">{entry.phase.title}</span>
                     <span className="text-xs font-normal text-muted-foreground">
-                      {entry.done}/{entry.total} done
+                      {translate("lifecycle.progress", { done: entry.done, total: entry.total })}
                     </span>
                   </span>
                 </span>

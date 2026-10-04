@@ -1,17 +1,10 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  renderHook,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthClient } from "@/app";
+import { render, renderHook } from "@/i18n/test-render";
 import { stakePoolQueryKeys } from "@/lib/queries/stake-pool";
 import { useStakeMutation } from "./-stake-mutations";
 import { StakeOnramp } from "./-stake-onramp";
@@ -148,7 +141,7 @@ describe("stake transaction behavior", () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(queryClient.getQueryState(poolStats)?.isInvalidated).toBe(false);
-    expect(harness.error).toHaveBeenCalledWith("User rejected the transaction");
+    expect(harness.error).toHaveBeenCalledWith("The wallet request was cancelled.");
   });
 
   it("does not send a transaction when the wallet network differs from the selected pool", async () => {

@@ -7,6 +7,7 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
+import { useAppTranslation } from "@/i18n/runtime";
 
 const PRESETS = ["1", "5", "10"];
 
@@ -29,13 +30,14 @@ export function RelayerTopUp({
   onConnect: () => void;
   onFund: () => void;
 }) {
+  const translate = useAppTranslation();
   return (
     <section className="flex flex-col gap-6">
-      <SectionHeader title="Add funds" />
+      <SectionHeader title={translate("admin.relayer.addFunds")} />
 
       {!nearAccountId ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <p className="text-sm text-muted-foreground">Connect a NEAR wallet to send funds.</p>
+          <p className="text-sm text-muted-foreground">{translate("admin.relayer.connectHint")}</p>
           <Button
             type="button"
             variant="outline"
@@ -44,13 +46,13 @@ export function RelayerTopUp({
             data-testid="admin-relayer-connect"
           >
             <WalletIcon />
-            Connect wallet
+            {translate("wallet.connect")}
           </Button>
         </div>
       ) : (
         <div className="flex max-w-md flex-col gap-4">
           <Field>
-            <FieldLabel htmlFor="fund-amount">Amount</FieldLabel>
+            <FieldLabel htmlFor="fund-amount">{translate("common.amount")}</FieldLabel>
             <InputGroup>
               <InputGroupInput
                 id="fund-amount"
@@ -67,7 +69,8 @@ export function RelayerTopUp({
               </InputGroupAddon>
             </InputGroup>
             <FieldDescription>
-              From <span className="font-mono break-all">{nearAccountId}</span>
+              {translate("engagement.from")}
+              <span className="font-mono break-all">{nearAccountId}</span>
             </FieldDescription>
           </Field>
           <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
@@ -92,7 +95,7 @@ export function RelayerTopUp({
             disabled={sending || parsedAmount === null}
             data-testid="admin-relayer-fund"
           >
-            {sending ? "Sending…" : "Fund relayer"}
+            {sending ? translate("common.sending") : translate("admin.relayer.fund")}
           </Button>
         </div>
       )}

@@ -1,3 +1,5 @@
+import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 export interface Crumb {
   label: string;
   to?: string;
@@ -9,30 +11,6 @@ export interface CrumbContext {
   tab?: string;
 }
 
-const SETTINGS_SECTIONS: Record<string, string> = {
-  profile: "Profile",
-  "auth-methods": "Sign-in methods",
-  "api-keys": "API keys",
-  security: "Security",
-};
-
-const ADMIN_SECTIONS: Record<string, { label: string; detail: string }> = {
-  nodes: { label: "Communities", detail: "Community" },
-  proposals: { label: "Proposals", detail: "Proposal" },
-  tenants: { label: "Sites", detail: "Site" },
-  relayer: { label: "Relayer", detail: "Relayer" },
-  system: { label: "System", detail: "System" },
-};
-
-const HOME: Crumb = { label: "Home", to: "/dashboard" };
-const MY_COMMUNITY: Crumb = { label: "My community", to: "/dashboard/node" };
-const EXPLORE: Crumb = { label: "Explore", to: "/explore" };
-const ORGS: Crumb = { label: "Organizations", to: "/orgs" };
-const THINGS: Crumb = { label: "Things", to: "/things" };
-const ADMIN: Crumb = { label: "Admin", to: "/admin" };
-const SETTINGS: Crumb = { label: "Settings", to: "/settings" };
-const DOCS: Crumb = { label: "Docs", to: "/about" };
-
 function humanize(segment: string) {
   const text = decodeURIComponent(segment).replace(/[-_]+/g, " ");
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -42,7 +20,63 @@ function page(label: string): Crumb {
   return { label };
 }
 
-export function crumbsFor(pathname: string, context: CrumbContext = {}): Crumb[] {
+export function crumbsFor(
+  pathname: string,
+  context: CrumbContext = {},
+  t: AppTranslator = translateEnglishAppMessage,
+): Crumb[] {
+  const SETTINGS_SECTIONS: Record<string, string> = {
+    profile: t("nav.profile"),
+    "auth-methods": t("nav.signinMethods"),
+    "api-keys": t("nav.apiKeys"),
+    security: t("nav.security"),
+  };
+
+  const ADMIN_SECTIONS: Record<
+    string,
+    { label: string; detail: string; edit: AppMessageId; create: AppMessageId }
+  > = {
+    nodes: {
+      label: t("common.communities"),
+      detail: t("nav.community"),
+      edit: "nav.editCommunity",
+      create: "nav.newCommunity",
+    },
+    proposals: {
+      label: t("common.proposals"),
+      detail: t("nav.proposal"),
+      edit: "nav.editProposal",
+      create: "nav.newProposal",
+    },
+    tenants: {
+      label: t("nav.sites"),
+      detail: t("nav.site"),
+      edit: "nav.editSite",
+      create: "nav.newSite",
+    },
+    relayer: {
+      label: t("nav.relayer"),
+      detail: t("nav.relayer"),
+      edit: "nav.editRelayer",
+      create: "nav.newRelayer",
+    },
+    system: {
+      label: t("nav.system"),
+      detail: t("nav.system"),
+      edit: "nav.editSystem",
+      create: "nav.newSystem",
+    },
+  };
+
+  const HOME: Crumb = { label: t("common.home"), to: "/dashboard" };
+  const MY_COMMUNITY: Crumb = { label: t("nav.myCommunity"), to: "/dashboard/node" };
+  const EXPLORE: Crumb = { label: t("nav.explore"), to: "/explore" };
+  const ORGS: Crumb = { label: t("nav.organizations"), to: "/orgs" };
+  const THINGS: Crumb = { label: t("nav.things"), to: "/things" };
+  const ADMIN: Crumb = { label: t("nav.admin"), to: "/admin" };
+  const SETTINGS: Crumb = { label: t("nav.settings"), to: "/settings" };
+  const DOCS: Crumb = { label: t("nav.docs"), to: "/about" };
+
   const segments = pathname.split("/").filter(Boolean);
   const [first, second, third, fourth, fifth] = segments;
 
@@ -52,57 +86,60 @@ export function crumbsFor(pathname: string, context: CrumbContext = {}): Crumb[]
     case "dashboard":
       if (second !== "node") return [page(HOME.label)];
       if (third === "proposals") {
-        if (!fourth) return [MY_COMMUNITY, page("Proposals")];
+        if (!fourth) return [MY_COMMUNITY, page(t("common.proposals"))];
         return [
           MY_COMMUNITY,
-          { label: "Proposals", to: "/dashboard/node/proposals" },
-          page("Proposal"),
+          { label: t("common.proposals"), to: "/dashboard/node/proposals" },
+          page(t("nav.proposal")),
         ];
       }
       return [page(MY_COMMUNITY.label)];
     case "nodes":
       if (third === "events" && second) {
-        const events = { label: "Events & profile", to: `/nodes/${second}/content` };
-        if (fourth === "new") return [MY_COMMUNITY, events, page("New event")];
-        if (fifth === "edit") return [MY_COMMUNITY, events, page("Edit event")];
+        const events = { label: t("nav.eventsProfile"), to: `/nodes/${second}/content` };
+        if (fourth === "new") return [MY_COMMUNITY, events, page(t("nav.newEvent"))];
+        if (fifth === "edit") return [MY_COMMUNITY, events, page(t("nav.editEvent"))];
       }
       return [
         MY_COMMUNITY,
         page(
           context.tab === "onboarding"
-            ? "Onboarding"
+            ? t("nav.onboarding")
             : context.tab === "profile"
-              ? "Profile"
-              : "Events & profile",
+              ? t("nav.profile")
+              : t("nav.eventsProfile"),
         ),
       ];
     case "tenant":
-      return [MY_COMMUNITY, page("Community settings")];
+      return [MY_COMMUNITY, page(t("nav.communitySettings"))];
     case "explore":
       return [page(EXPLORE.label)];
     case "n":
       return second ? [EXPLORE, page(humanize(second))] : [page(EXPLORE.label)];
     case "activity":
-      return [EXPLORE, page("Event")];
+      return [EXPLORE, page(t("events.event"))];
     case "stake":
-      return [page("Stake")];
+      return [page(t("common.stake"))];
     case "apply":
-      return [page("Start a community")];
+      return [page(t("dashboard.startCommunity"))];
+    case "build":
+      return [page(t("nav.build"))];
     case "discover":
-      return [page("Directory")];
+      return [page(t("nav.directory"))];
     case "orgs": {
       if (!second) return [page(ORGS.label)];
-      if (second === "new") return [ORGS, page("New organization")];
-      if (second === "invites") return [ORGS, page("Invitation")];
+      if (second === "new") return [ORGS, page(t("nav.newOrganization"))];
+      if (second === "invites") return [ORGS, page(t("nav.invitation"))];
       return [ORGS, page(context.orgName?.(second) ?? decodeURIComponent(second))];
     }
     case "things": {
       if (!second) return [page(THINGS.label)];
-      if (second === "new") return [THINGS, page("New thing")];
-      if (second === "live") return [THINGS, page("Live")];
-      return [THINGS, page("Thing")];
+      if (second === "new") return [THINGS, page(t("nav.newThing"))];
+      if (second === "live") return [THINGS, page(t("nav.live"))];
+      return [THINGS, page(t("nav.thing"))];
     }
     case "admin": {
+      if (second === "organizations") return [ADMIN, page(ORGS.label)];
       const section = second ? ADMIN_SECTIONS[second] : undefined;
       if (!section) return [page(ADMIN.label)];
       if (!third) return [ADMIN, page(section.label)];
@@ -112,13 +149,9 @@ export function crumbsFor(pathname: string, context: CrumbContext = {}): Crumb[]
           ADMIN,
           sectionCrumb,
           { label: section.detail, to: `/admin/${second}/${third}` },
-          page(`Edit ${section.detail.toLowerCase()}`),
+          page(t(section.edit)),
         ];
-      return [
-        ADMIN,
-        sectionCrumb,
-        page(third === "new" ? `New ${section.detail.toLowerCase()}` : section.detail),
-      ];
+      return [ADMIN, sectionCrumb, page(third === "new" ? t(section.create) : section.detail)];
     }
     case "settings": {
       const section = second ? SETTINGS_SECTIONS[second] : undefined;
@@ -127,15 +160,15 @@ export function crumbsFor(pathname: string, context: CrumbContext = {}): Crumb[]
     case "about":
       return [page(DOCS.label)];
     case "skill":
-      return [DOCS, page("Agent skill")];
+      return [DOCS, page(t("about.skill"))];
     case "prototype-staking-poc":
-      return [page("Node lifecycle")];
+      return [page(t("tenant.lifecycle"))];
     case "login":
-      return [page("Sign in")];
+      return [page(t("nav.signIn"))];
     case "onboard":
-      return [page("Join")];
+      return [page(t("nav.join"))];
     case "onboarding":
-      return [page("Onboarding station")];
+      return [page(t("nav.onboardingStation"))];
     default:
       if (segments.length === 1) return [page(decodeURIComponent(first))];
       return segments.map((segment) => page(humanize(segment)));

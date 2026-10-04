@@ -30,6 +30,8 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 
 type Person = { id: string; name: string | null; image: string | null };
 
@@ -51,6 +53,7 @@ function PersonMedia({ person }: { person: Person }) {
 }
 
 export function CurateTeam({ curators }: { curators: string[] }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -88,12 +91,12 @@ export function CurateTeam({ curators }: { curators: string[] }) {
     mutationFn: ({ userId, enabled }: { userId: string; enabled: boolean }) =>
       api.setDiscoveryCurator({ userId, enabled }),
     onSuccess: async (_, { enabled }) => {
-      toast.success(enabled ? "Curator added" : "Curator access removed");
+      toast.success(enabled ? translate("curators.added") : translate("curators.removed"));
       setQuery("");
       setRemoving(null);
       await queryClient.invalidateQueries({ queryKey: ["discover"] });
     },
-    onError: (error: Error) => toast.error(error.message || "Couldn't update curators."),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const matches = (search.data ?? []).filter((person) => !curators.includes(person.id));
@@ -102,12 +105,12 @@ export function CurateTeam({ curators }: { curators: string[] }) {
   return (
     <section className="flex max-w-2xl flex-col gap-6">
       <SectionHeader
-        title="Curators"
-        description="People who can feature communities and see engagement."
+        title={translate("curators.title")}
+        description={translate("curators.description")}
         action={
           <InfoPopover
-            title="What curators can do"
-            body="Curators feature communities and see which links people open. They can't edit a community's page, add events or handle reports."
+            title={translate("curators.permissions")}
+            body={translate("curators.permissionsDescription")}
             testId="curate-team-info"
           />
         }
@@ -124,9 +127,9 @@ export function CurateTeam({ curators }: { curators: string[] }) {
             <UsersThreeIcon />
           </InputGroupAddon>
           <InputGroupInput
-            aria-label="Find a person"
+            aria-label={translate("curators.find")}
             data-testid="curate-team-search"
-            placeholder="Search by name or paste an account ID"
+            placeholder={translate("curators.search")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -138,7 +141,7 @@ export function CurateTeam({ curators }: { curators: string[] }) {
               disabled={!term || setCurator.isPending}
             >
               <PlusIcon />
-              Add
+              {translate("common.add")}
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
@@ -148,7 +151,7 @@ export function CurateTeam({ curators }: { curators: string[] }) {
               <Item key={person.id} variant="muted" size="sm">
                 <PersonMedia person={person} />
                 <ItemContent className="min-w-0">
-                  <ItemTitle>{person.name || "Unnamed"}</ItemTitle>
+                  <ItemTitle>{person.name || translate("common.unnamed")}</ItemTitle>
                   <ItemDescription>
                     <span className="block truncate font-mono">{person.id}</span>
                   </ItemDescription>
@@ -162,7 +165,7 @@ export function CurateTeam({ curators }: { curators: string[] }) {
                     data-testid={`curate-team-match-${person.id}`}
                     onClick={() => add(person.id)}
                   >
-                    Add
+                    {translate("common.add")}
                   </Button>
                 </ItemActions>
               </Item>
@@ -174,14 +177,14 @@ export function CurateTeam({ curators }: { curators: string[] }) {
       {curators.length === 0 ? (
         <EmptyState
           icon={UsersThreeIcon}
-          title="No curators yet"
-          description="Add someone to help highlight good communities."
+          title={translate("curators.empty")}
+          description={translate("curators.emptyHint")}
         />
       ) : (
         <ItemGroup data-testid="curate-team-list">
           {curators.map((id, index) => {
             const person = people[index]?.data ?? { id, name: null, image: null };
-            const label = person.name || "Unknown person";
+            const label = person.name || translate("curators.unknown");
             return (
               <Item key={id} variant="outline" data-testid={`curate-team-member-${id}`}>
                 <PersonMedia person={person} />
@@ -198,7 +201,7 @@ export function CurateTeam({ curators }: { curators: string[] }) {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`More for ${label}`}
+                          aria-label={translate("common.moreNamed", { name: label ?? "" })}
                           data-testid={`curate-team-menu-${id}`}
                         />
                       }
@@ -210,7 +213,7 @@ export function CurateTeam({ curators }: { curators: string[] }) {
                         variant="destructive"
                         onClick={() => setRemoving({ ...person, name: label })}
                       >
-                        Remove access
+                        {translate("curators.remove")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -226,10 +229,12 @@ export function CurateTeam({ curators }: { curators: string[] }) {
         onOpenChange={(open) => {
           if (!open) setRemoving(null);
         }}
-        title={`Remove ${removing?.name ?? "this person"}?`}
-        description="They'll no longer be able to feature communities or see engagement."
-        confirmLabel="Remove access"
-        cancelLabel="Cancel"
+        title={translate("common.removeQuestion", {
+          name: removing?.name ?? translate("curators.personFallback"),
+        })}
+        description={translate("curators.removeDescription")}
+        confirmLabel={translate("curators.removeAccess")}
+        cancelLabel={translate("common.cancel")}
         variant="destructive"
         isPending={setCurator.isPending}
         onConfirm={() => {

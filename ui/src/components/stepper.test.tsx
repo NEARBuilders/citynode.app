@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
+import { act, cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { render, renderHook } from "@/i18n/test-render";
 import { StepList, useStepper } from "./stepper";
 
 afterEach(cleanup);
@@ -33,7 +34,7 @@ describe("stepper", () => {
     rerender();
     expect(result.current.steps).toEqual([
       { label: "Create account", state: "success", error: undefined },
-      { label: "Publish config", blocking: false, state: "failed", error: "Publish failed" },
+      { label: "Publish config", blocking: false, state: "failed", error: "error.action" },
     ]);
 
     act(() => result.current.resetSteps());

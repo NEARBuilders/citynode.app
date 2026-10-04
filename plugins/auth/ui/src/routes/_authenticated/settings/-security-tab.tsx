@@ -26,9 +26,12 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { authErrorMessage, LoginActionError } from "@/i18n/error-message";
+import { useLoginTranslation } from "@/i18n/runtime";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 
 export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean | null } }) {
+  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -40,21 +43,22 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
 
   const changePasswordMutation = useMutation({
     mutationFn: () => {
-      if (newPassword !== confirmPassword) throw new Error("Passwords do not match");
-      if (newPassword.length < 8) throw new Error("Password must be at least 8 characters");
+      if (newPassword !== confirmPassword)
+        throw new LoginActionError("auth.error.passwordMismatch");
+      if (newPassword.length < 8) throw new LoginActionError("auth.error.passwordLength");
       return (async () => {
         const { error } = await auth.changePassword({ currentPassword, newPassword });
         if (error) throw new Error(error.message);
       })();
     },
     onSuccess: () => {
-      toast.success("Password changed");
+      toast.success(translate("auth.security.passwordChanged"));
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setChangingPassword(false);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(authErrorMessage(err, translate)),
   });
 
   const revokeSessionsMutation = useMutation({
@@ -64,9 +68,9 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
     },
     onSuccess: () => {
       setConfirmRevoke(false);
-      toast.success("Other sessions revoked");
+      toast.success(translate("auth.security.sessionsRevoked"));
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(authErrorMessage(err, translate)),
   });
 
   const signOutMutation = useMutation({
@@ -79,7 +83,7 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
       await clearAuthenticatedQueries(queryClient);
       await navigate({ to: "/", replace: true });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(authErrorMessage(err, translate)),
   });
 
   const handlePasswordSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -92,8 +96,8 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
   return (
     <section className="flex flex-col gap-6">
       <SectionHeader
-        title="Security"
-        description="Passwords and signed-in devices."
+        title={translate("auth.settings.security")}
+        description={translate("auth.security.description")}
         sectionTestId="settings.security-heading"
       />
       <ItemGroup>
@@ -103,9 +107,9 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
               <LockIcon />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>Password</ItemTitle>
+              <ItemTitle>{translate("auth.security.password")}</ItemTitle>
               <ItemDescription className="wrap-anywhere">
-                Used when you sign in with {user.email}.
+                {translate("auth.security.passwordEmail", { email: user.email })}
               </ItemDescription>
             </ItemContent>
             <ItemActions className="w-full sm:w-auto">
@@ -115,7 +119,7 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
                 onClick={() => setChangingPassword(true)}
                 data-testid="settings.change-password-button"
               >
-                Change password
+                {translate("auth.security.changePassword")}
               </Button>
             </ItemActions>
           </Item>
@@ -125,8 +129,8 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
             <DevicesIcon />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Other devices</ItemTitle>
-            <ItemDescription>Sign out everywhere except this device.</ItemDescription>
+            <ItemTitle>{translate("auth.security.otherDevices")}</ItemTitle>
+            <ItemDescription>{translate("auth.security.signOutOthersHint")}</ItemDescription>
           </ItemContent>
           <ItemActions className="w-full sm:w-auto">
             <Button
@@ -136,7 +140,7 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
               disabled={revokeSessionsMutation.isPending}
               data-testid="settings.revoke-sessions-button"
             >
-              Sign out others
+              {translate("auth.security.signOutOthers")}
             </Button>
           </ItemActions>
         </Item>
@@ -145,8 +149,8 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
             <SignOutIcon />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>This device</ItemTitle>
-            <ItemDescription>Sign out and return to the home page.</ItemDescription>
+            <ItemTitle>{translate("auth.security.thisDevice")}</ItemTitle>
+            <ItemDescription>{translate("auth.security.signOutHint")}</ItemDescription>
           </ItemContent>
           <ItemActions className="w-full sm:w-auto">
             <Button
@@ -156,7 +160,9 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
               disabled={signOutMutation.isPending}
               data-testid="settings.signout-button"
             >
-              {signOutMutation.isPending ? "Signing out…" : "Sign out"}
+              {signOutMutation.isPending
+                ? translate("auth.identity.signingOut")
+                : translate("auth.identity.signOut")}
             </Button>
           </ItemActions>
         </Item>
@@ -166,12 +172,14 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
         <DialogContent>
           <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-6">
             <DialogHeader>
-              <DialogTitle>Change password</DialogTitle>
-              <DialogDescription>Use at least 8 characters.</DialogDescription>
+              <DialogTitle>{translate("auth.security.changePassword")}</DialogTitle>
+              <DialogDescription>{translate("auth.error.passwordLength")}</DialogDescription>
             </DialogHeader>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="settings-current-password">Current password</FieldLabel>
+                <FieldLabel htmlFor="settings-current-password">
+                  {translate("auth.security.currentPassword")}
+                </FieldLabel>
                 <Input
                   id="settings-current-password"
                   type="password"
@@ -181,7 +189,9 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="settings-new-password">New password</FieldLabel>
+                <FieldLabel htmlFor="settings-new-password">
+                  {translate("auth.security.newPassword")}
+                </FieldLabel>
                 <Input
                   id="settings-new-password"
                   type="password"
@@ -191,7 +201,9 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="settings-confirm-password">Confirm new password</FieldLabel>
+                <FieldLabel htmlFor="settings-confirm-password">
+                  {translate("auth.security.confirmPassword")}
+                </FieldLabel>
                 <Input
                   id="settings-confirm-password"
                   type="password"
@@ -203,7 +215,7 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
             </FieldGroup>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setChangingPassword(false)}>
-                Cancel
+                {translate("auth.common.cancel")}
               </Button>
               <Button
                 type="submit"
@@ -214,7 +226,9 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
                   !confirmPassword
                 }
               >
-                {changePasswordMutation.isPending ? "Updating…" : "Update password"}
+                {changePasswordMutation.isPending
+                  ? translate("auth.common.updating")
+                  : translate("auth.security.updatePassword")}
               </Button>
             </DialogFooter>
           </form>
@@ -224,10 +238,10 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
       <ConfirmDialog
         open={confirmRevoke}
         onOpenChange={setConfirmRevoke}
-        title="Sign out other devices?"
-        description="Every other browser and phone will need to sign in again."
-        confirmLabel="Sign out other devices"
-        cancelLabel="Cancel"
+        title={translate("auth.security.revokeTitle")}
+        description={translate("auth.security.revokeDescription")}
+        confirmLabel={translate("auth.security.signOutDevices")}
+        cancelLabel={translate("auth.common.cancel")}
         variant="destructive"
         onConfirm={() => revokeSessionsMutation.mutate()}
         isPending={revokeSessionsMutation.isPending}
