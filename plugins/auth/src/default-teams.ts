@@ -15,8 +15,7 @@ export async function provisionDefaultTeams(db: Database, organizationId: string
     .from(schema.organization)
     .where(eq(schema.organization.id, organizationId))
     .for("update");
-  if (!organization || organization.status !== "active" || organization.defaultTeamsProvisionedAt)
-    return;
+  if (!organization || organization.status !== "active") return;
   const [personalUser] = await db
     .select({ id: schema.user.id })
     .from(schema.user)
@@ -35,8 +34,4 @@ export async function provisionDefaultTeams(db: Database, organizationId: string
       metadata: serializeTeamAreas([...team.areas]),
     });
   }
-  await db
-    .update(schema.organization)
-    .set({ defaultTeamsProvisionedAt: new Date() })
-    .where(eq(schema.organization.id, organizationId));
 }

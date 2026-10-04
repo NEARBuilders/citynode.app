@@ -201,6 +201,59 @@ describe("organization approval gate", () => {
     ).rejects.toThrow("no longer pending");
   });
 
+  it("keeps edited and deleted default teams unchanged when an approved community is reactivated", async () => {
+    const requester = await createTestUser(setup.services);
+    const organization = await requestOrganization(requester);
+    await setup.services.db.insert(schema.team).values({
+      id: crypto.randomUUID(),
+      name: "Operations",
+      organizationId: organization.id,
+      metadata: '{"areas":["events"]}',
+    });
+    await createTestHandlers(setup.services).organizationRequests.reviewOrganization({
+      input: { organizationId: organization.id, decision: "approve" },
+      context: { reqHeaders: admin.reqHeaders },
+    });
+    const teams = await setup.services.db.query.team.findMany({
+      where: eq(schema.team.organizationId, organization.id),
+    });
+    expect(teams).toHaveLength(3);
+    expect(teams.find((team) => team.name === "Operations")?.metadata).toBe('{"areas":["events"]}');
+    const treasury = teams.find((team) => team.name === "Treasury")!;
+    await setup.services.db
+      .update(schema.team)
+      .set({ name: "Custom treasury", metadata: '{"areas":["stake"]}' })
+      .where(eq(schema.team.id, treasury.id));
+    await setup.services.db
+      .delete(schema.team)
+      .where(eq(schema.team.id, teams.find((team) => team.name === "Community")!.id));
+    await setup.services.auth.api.setActiveOrganization({
+      headers: requester.headers,
+      body: { organizationId: organization.id },
+    });
+    await setup.services.auth.api.setActiveOrganization({
+      headers: requester.headers,
+      body: { organizationId: null },
+    });
+    await setup.services.auth.api.setActiveOrganization({
+      headers: requester.headers,
+      body: { organizationId: organization.id },
+    });
+    const teamsAfterReactivation = await setup.services.db.query.team.findMany({
+      where: eq(schema.team.organizationId, organization.id),
+    });
+    expect(teamsAfterReactivation).toHaveLength(2);
+    expect(teamsAfterReactivation).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: treasury.id,
+          name: "Custom treasury",
+          metadata: '{"areas":["stake"]}',
+        }),
+      ]),
+    );
+  });
+
   it("requires a rejection reason, exposes it to the requester, and keeps rejected orgs gated", async () => {
     const requester = await createTestUser(setup.services);
     const organization = await requestOrganization(requester);
