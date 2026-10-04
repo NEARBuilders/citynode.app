@@ -8,6 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import type { ReactNode } from "react";
 import { buildTenantUrl } from "@/app";
+import { useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 import { NodeDirectorySkeleton } from "./node-directory-skeleton";
 import { Badge } from "./ui/badge";
@@ -45,18 +46,25 @@ export function NodeDirectory({
   gateway,
   validatorNodeIds,
   isLoading = false,
-  emptyMessage = "No communities yet.",
+  emptyMessage,
   empty,
   layout = "list",
   linkTo,
   linkSearch,
 }: NodeDirectoryProps) {
+  const translate = useAppTranslation();
   if (isLoading) {
     return <NodeDirectorySkeleton layout={layout} />;
   }
 
   if (nodes.length === 0) {
-    return empty ?? <p className="py-4 text-sm text-muted-foreground">{emptyMessage}</p>;
+    return (
+      empty ?? (
+        <p className="py-4 text-sm text-muted-foreground">
+          {emptyMessage ?? translate("community.emptyDefault")}
+        </p>
+      )
+    );
   }
 
   const grid = layout === "grid";
@@ -92,9 +100,11 @@ export function NodeDirectory({
               <div className="truncate text-sm text-muted-foreground">{hostname}</div>
             </div>
             <span className="flex shrink-0 items-center gap-2">
-              {validatorNodeIds?.has(node.id) && <Badge variant="success">Validator</Badge>}
+              {validatorNodeIds?.has(node.id) && (
+                <Badge variant="success">{translate("common.validator")}</Badge>
+              )}
               <Badge variant="secondary" className="hidden sm:inline-flex">
-                {nodeKindLabel(node.kind)}
+                {nodeKindLabel(node.kind, undefined, translate)}
               </Badge>
               <CaretRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </span>

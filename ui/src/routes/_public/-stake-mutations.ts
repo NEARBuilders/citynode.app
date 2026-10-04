@@ -3,6 +3,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { AuthClient } from "@/app";
+import { AppActionError, appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { invalidateStakePoolQueries } from "@/lib/queries/stake-pool";
 
 const STAKE_GAS = "300000000000000";
@@ -15,14 +17,15 @@ export type StakeVariables = {
 };
 
 export function useStakeWalletConnection(auth: AuthClient) {
+  const translate = useAppTranslation();
   const [isConnecting, setIsConnecting] = useState(false);
   const connect = async () => {
     setIsConnecting(true);
     try {
       const connected = await auth.near.ensureConnected();
-      if (!connected) toast.error("Failed to connect wallet");
+      if (!connected) toast.error(translate("wallet.connectFailed"));
     } catch {
-      toast.error("Failed to connect wallet");
+      toast.error(translate("wallet.connectFailed"));
     } finally {
       setIsConnecting(false);
     }
@@ -32,6 +35,7 @@ export function useStakeWalletConnection(auth: AuthClient) {
 }
 
 export function useStakeMutation(auth: AuthClient, queryClient: QueryClient) {
+  const translate = useAppTranslation();
   return useMutation({
     mutationFn: async ({
       amount: stakeAmount,
@@ -40,18 +44,18 @@ export function useStakeMutation(auth: AuthClient, queryClient: QueryClient) {
       protocol,
     }: StakeVariables) => {
       if (protocol !== "near") {
-        throw new Error("Only NEAR validators can receive NEAR stakes.");
+        throw new AppActionError("stake.unsupportedProtocol");
       }
       if (stakeAmount <= 0n) {
-        throw new Error("Enter a positive stake amount.");
+        throw new AppActionError("stake.positiveAmount");
       }
       const connected = await auth.near.ensureConnected();
-      if (!connected) throw new Error("Connect a NEAR wallet to stake.");
+      if (!connected) throw new AppActionError("stake.connectRequired");
       if (auth.near.getNetwork() !== network) {
-        throw new Error(`Switch your wallet to ${network} before staking.`);
+        throw new AppActionError("stake.switchNetwork", { network });
       }
       const signer = auth.near.getAccountId();
-      if (!signer) throw new Error("Connect a NEAR wallet to stake.");
+      if (!signer) throw new AppActionError("stake.connectRequired");
       const near = auth.near.getNearClient();
       const result = await near
         .transaction(signer)
@@ -65,15 +69,15 @@ export function useStakeMutation(auth: AuthClient, queryClient: QueryClient) {
       return { network, poolAccountId, result };
     },
     onSuccess: async ({ network, poolAccountId, result }) => {
-      toast.success("Staked", {
+      toast.success(translate("stake.success"), {
         description: result.transaction?.hash ? `tx: ${result.transaction.hash}` : undefined,
       });
       try {
         await invalidateStakePoolQueries(queryClient, poolAccountId, network);
       } catch {
-        toast.warning("Stake confirmed, but live pool stats could not refresh.");
+        toast.warning(translate("stake.refreshFailed"));
       }
     },
-    onError: (err: Error) => toast.error(err.message || "Failed to stake"),
+    onError: (err: Error) => toast.error(appErrorMessage(err, translate)),
   });
 }

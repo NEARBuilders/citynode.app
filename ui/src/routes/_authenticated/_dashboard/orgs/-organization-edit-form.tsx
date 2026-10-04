@@ -17,6 +17,7 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export function OrganizationEditForm({
   open,
@@ -37,6 +38,7 @@ export function OrganizationEditForm({
   onSave: () => void;
   onSlugChange: (value: string) => void;
 }) {
+  const translate = useAppTranslation();
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <DialogContent>
@@ -48,22 +50,22 @@ export function OrganizationEditForm({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Edit organization</DialogTitle>
-            <DialogDescription>Changing the handle changes its links.</DialogDescription>
+            <DialogTitle>{translate("org.edit")}</DialogTitle>
+            <DialogDescription>{translate("org.handleChangesHint")}</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="organization-edit-name">Name</FieldLabel>
+              <FieldLabel htmlFor="organization-edit-name">{translate("common.name")}</FieldLabel>
               <Input
                 id="organization-edit-name"
                 type="text"
                 value={editName}
                 onChange={(event) => onNameChange(event.target.value)}
-                placeholder="Organization name"
+                placeholder={translate("org.name")}
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="organization-edit-slug">Handle</FieldLabel>
+              <FieldLabel htmlFor="organization-edit-slug">{translate("org.handle")}</FieldLabel>
               <InputGroup>
                 <InputGroupAddon>
                   <InputGroupText>@</InputGroupText>
@@ -73,7 +75,7 @@ export function OrganizationEditForm({
                   type="text"
                   value={editSlug}
                   onChange={(event) => onSlugChange(event.target.value.replace(/[^a-z0-9-]/g, ""))}
-                  placeholder="handle"
+                  placeholder={translate("org.handleExample")}
                   pattern="[a-z0-9-]+"
                   className="font-mono"
                 />
@@ -82,10 +84,10 @@ export function OrganizationEditForm({
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onCancel}>
-              Cancel
+              {translate("common.cancel")}
             </Button>
             <Button type="submit" disabled={isPending || !editName || !editSlug}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? translate("common.saving") : translate("common.save")}
             </Button>
           </DialogFooter>
         </form>

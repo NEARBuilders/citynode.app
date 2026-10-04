@@ -8,25 +8,28 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { LogEntry } from "./-poc-lifecycle";
+import { formatPocLogValue } from "./-poc-log-message";
 
 export function PocLogSheet({ entries }: { entries: LogEntry[] }) {
+  const translate = useAppTranslation();
   return (
     <Sheet>
       <SheetTrigger render={<Button variant="outline" data-testid="poc-log-open" />}>
         <ListBulletsIcon />
-        Chain log
+        {translate("lifecycle.chainLog")}
         {entries.length > 0 && <Badge variant="secondary">{entries.length}</Badge>}
       </SheetTrigger>
       <SheetContent side="right" className="w-full sm:max-w-md">
         <SheetHeader>
-          <SheetTitle data-testid="poc-log">Chain log</SheetTitle>
-          <SheetDescription>Everything signed from this page, newest first.</SheetDescription>
+          <SheetTitle data-testid="poc-log">{translate("lifecycle.chainLog")}</SheetTitle>
+          <SheetDescription>{translate("lifecycle.chainLogDescription")}</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           {entries.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
-              No actions signed yet.
+              {translate("lifecycle.noSignedActions")}
             </p>
           ) : (
             <ol className="flex flex-col gap-4" data-testid="poc-log-entries">
@@ -35,10 +38,12 @@ export function PocLogSheet({ entries }: { entries: LogEntry[] }) {
                   <span className="text-xs text-muted-foreground">
                     <LocalDate value={entry.at} format="time" />
                   </span>
-                  <span className="text-sm text-foreground">{entry.label}</span>
+                  <span className="text-sm text-foreground">
+                    {formatPocLogValue(entry.label, translate)}
+                  </span>
                   {entry.detail && (
                     <span className="font-mono text-xs break-all text-muted-foreground">
-                      {entry.detail}
+                      {formatPocLogValue(entry.detail, translate)}
                     </span>
                   )}
                 </li>

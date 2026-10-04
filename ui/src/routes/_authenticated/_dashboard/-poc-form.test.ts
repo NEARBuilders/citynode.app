@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { renderHook } from "@/i18n/test-render";
 import {
   buildPocFormValues,
   loadPocFormDraft,

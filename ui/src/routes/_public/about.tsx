@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
 import { Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { Markdown } from "@/components/markdown";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 
 function sanitizeMarkdownContent(content: string): string {
@@ -63,8 +64,24 @@ export const Route = createFileRoute("/_public/about")({
   },
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("About", match.context.runtimeConfig) },
-      { name: "description", content: "What CityNode is and how to build on it." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.about",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.aboutDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   component: About,
@@ -77,6 +94,7 @@ function parseGithubRepo(url: string): { owner: string; repo: string } | null {
 }
 
 function About() {
+  const translate = useAppTranslation();
   const { repository, readme, description, runtimeConfig } = Route.useLoaderData();
   const runtime = getActiveRuntime(runtimeConfig);
   const account = getAccount(runtimeConfig);
@@ -90,9 +108,9 @@ function About() {
       <PageHeader
         headerTestId="about.heading"
         icon={BookOpenIcon}
-        label="Docs"
-        title={`About ${appName}`}
-        description={description ?? "What this runtime is, how it's built, and how to build on it."}
+        label={translate("common.docs")}
+        title={translate("common.aboutTitle", { name: appName ?? "" })}
+        description={description ?? translate("about.description")}
         actions={
           <>
             <Button
@@ -100,7 +118,7 @@ function About() {
               render={<Link to="/skill" preload="intent" data-testid="about.open-skill-link" />}
             >
               <SparkleIcon />
-              Open agent skill
+              {translate("about.openSkill")}
             </Button>
             {repository && (
               <Button
@@ -111,7 +129,7 @@ function About() {
                 )}
               >
                 <GitBranchIcon />
-                Source code
+                {translate("about.source")}
               </Button>
             )}
           </>
@@ -125,48 +143,52 @@ function About() {
           ) : (
             <EmptyState
               icon={FileTextIcon}
-              title="No README yet"
-              description="This runtime hasn't published a README."
+              title={translate("about.noReadme")}
+              description={translate("about.noReadmeDescription")}
               className="rounded-3xl border border-dashed border-border"
             />
           )}
         </div>
         <aside className="flex flex-col gap-8 lg:sticky lg:top-8 lg:self-start">
           <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-medium text-foreground">Build on it</h2>
+            <h2 className="text-lg font-medium text-foreground">{translate("about.build")}</h2>
             <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border">
               <DocLink
                 to="/skill"
                 icon={<SparkleIcon className="size-5" />}
-                title="Agent skill"
-                meta="Run, change and publish with an agent"
+                title={translate("about.skill")}
+                meta={translate("skill.runMeta")}
               />
               <DocLink
                 href="/skill.md"
                 icon={<FileTextIcon className="size-5" />}
                 title="skill.md"
-                meta="Raw markdown prompt"
+                meta={translate("skill.rawMeta")}
               />
               {repository && (
                 <DocLink
                   href={repository}
                   icon={<GitBranchIcon className="size-5" />}
-                  title={githubRepo ? `${githubRepo.owner}/${githubRepo.repo}` : "Repository"}
-                  meta="Source code"
+                  title={
+                    githubRepo
+                      ? `${githubRepo.owner}/${githubRepo.repo}`
+                      : translate("about.repository")
+                  }
+                  meta={translate("skill.sourceMeta")}
                 />
               )}
             </ul>
           </section>
           <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-medium text-foreground">Runtime</h2>
+            <h2 className="text-lg font-medium text-foreground">{translate("about.runtime")}</h2>
             <dl className="flex flex-col gap-3 text-sm">
               <div className="flex flex-col gap-0.5">
-                <dt className="text-muted-foreground">Account</dt>
+                <dt className="text-muted-foreground">{translate("common.account")}</dt>
                 <dd className="font-mono break-all text-foreground">{accountId}</dd>
               </div>
               {runtime?.gatewayId && (
                 <div className="flex flex-col gap-0.5">
-                  <dt className="text-muted-foreground">Gateway</dt>
+                  <dt className="text-muted-foreground">{translate("about.gateway")}</dt>
                   <dd className="font-mono break-all text-foreground">{runtime.gatewayId}</dd>
                 </div>
               )}

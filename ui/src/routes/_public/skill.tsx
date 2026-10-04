@@ -16,6 +16,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 
 const INTENT_COMMAND = "npx @tanstack/intent@latest load everything-dev";
@@ -44,10 +45,23 @@ export const Route = createFileRoute("/_public/skill")({
   },
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Agent skill", match.context.runtimeConfig) },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "about.skill",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
       {
         name: "description",
-        content: "Agent-oriented instructions for running, editing, and publishing this runtime.",
+        content: translateAppMessage(
+          "meta.skillDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
       },
     ],
   }),
@@ -55,22 +69,25 @@ export const Route = createFileRoute("/_public/skill")({
 });
 
 function SkillPage() {
+  const translate = useAppTranslation();
   const { skill, runtimeConfig, intentRegistryUrl } = Route.useLoaderData();
   const appName = getAppName(runtimeConfig);
   const [copied, setCopied] = useState<"prompt" | "command" | null>(null);
 
   const copy = async (kind: "prompt" | "command", text: string | null) => {
     if (!text) {
-      toast.error("Skill prompt unavailable");
+      toast.error(translate("skill.unavailable"));
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
       setCopied(kind);
-      toast.success(kind === "prompt" ? "Skill prompt copied" : "Command copied");
+      toast.success(
+        kind === "prompt" ? translate("skill.promptCopied") : translate("skill.commandCopied"),
+      );
       setTimeout(() => setCopied(null), 2000);
     } catch {
-      toast.error("Couldn’t copy. Select the text and copy it instead.");
+      toast.error(translate("common.copyFallback"));
     }
   };
 
@@ -84,14 +101,14 @@ function SkillPage() {
         render={<Link to="/about" data-testid="skill.back" />}
       >
         <ArrowLeftIcon />
-        About
+        {translate("about.title")}
       </Button>
       <PageHeader
         headerTestId="skill.heading"
         icon={SparkleIcon}
-        label="Docs"
-        title="Agent skill"
-        description={`One prompt that teaches an agent to run, change and publish ${appName}.`}
+        label={translate("common.docs")}
+        title={translate("about.skill")}
+        description={translate("skill.descriptionNamed", { name: appName ?? "" })}
         actions={
           <>
             <Button
@@ -100,7 +117,7 @@ function SkillPage() {
               data-testid="skill.copy"
             >
               {copied === "prompt" ? <CheckIcon /> : <CopyIcon />}
-              {copied === "prompt" ? "Copied" : "Copy prompt"}
+              {translate(copied === "prompt" ? "common.copied" : "skill.copyPrompt")}
             </Button>
             <Button
               variant="outline"
@@ -123,7 +140,7 @@ function SkillPage() {
       />
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium text-foreground">Load it with TanStack Intent</h2>
+        <h2 className="text-lg font-medium text-foreground">{translate("skill.load")}</h2>
         <div className="flex items-center gap-3 rounded-2xl bg-muted py-2 pr-2 pl-4">
           <TerminalIcon className="size-5 shrink-0 text-muted-foreground" />
           <code className="min-w-0 flex-1 truncate font-mono text-sm text-foreground">
@@ -132,7 +149,7 @@ function SkillPage() {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Copy command"
+            aria-label={translate("skill.copyCommand")}
             onClick={() => copy("command", INTENT_COMMAND)}
           >
             {copied === "command" ? <CheckIcon /> : <CopyIcon />}
@@ -146,7 +163,7 @@ function SkillPage() {
             <a {...props} href={intentRegistryUrl} target="_blank" rel="noopener noreferrer" />
           )}
         >
-          Browse the Intent registry
+          {translate("skill.registry")}
           <ArrowUpRightIcon />
         </Button>
       </section>
@@ -157,8 +174,8 @@ function SkillPage() {
         ) : (
           <EmptyState
             icon={FileTextIcon}
-            title="Skill prompt unavailable"
-            description="Open skill.md directly, or try again in a moment."
+            title={translate("skill.unavailable")}
+            description={translate("skill.retry")}
           />
         )}
       </section>

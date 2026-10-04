@@ -1,5 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { ApiClient } from "@/app";
+import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 
@@ -18,11 +20,11 @@ export function parseProposalReviewFilter(value: unknown): ProposalReviewFilter 
     : undefined;
 }
 
-export const PROPOSAL_REVIEW_FILTER_LABELS: Record<ProposalReviewFilter, string> = {
-  pending: "Pending",
-  approved: "Approved",
-  rejected: "Rejected",
-  all: "All",
+export const PROPOSAL_REVIEW_FILTER_MESSAGE_IDS: Record<ProposalReviewFilter, AppMessageId> = {
+  pending: "label.pending",
+  approved: "label.approved",
+  rejected: "label.rejected",
+  all: "label.all",
 };
 
 export function proposalReviewStatusVariant(
@@ -40,7 +42,10 @@ interface ProposalIdentity {
   payload: unknown;
 }
 
-export function proposalTitle({ pluginId, entityId, payload }: ProposalIdentity) {
+export function proposalTitle(
+  { pluginId, entityId, payload }: ProposalIdentity,
+  _t: AppTranslator = translateEnglishAppMessage,
+) {
   if (pluginId === "node") {
     const parsed = nodeProposalPayloadSchema.safeParse(payload);
     if (parsed.success) return parsed.data.name;
@@ -48,9 +53,9 @@ export function proposalTitle({ pluginId, entityId, payload }: ProposalIdentity)
   return entityId;
 }
 
-export function proposalTypeLabel(pluginId: string) {
-  if (pluginId === "node") return "Community";
-  if (pluginId === "template") return "Thing";
+export function proposalTypeLabel(pluginId: string, t: AppTranslator = translateEnglishAppMessage) {
+  if (pluginId === "node") return t("tenant.communityType");
+  if (pluginId === "template") return t("common.thing");
   return pluginId.charAt(0).toUpperCase() + pluginId.slice(1);
 }
 

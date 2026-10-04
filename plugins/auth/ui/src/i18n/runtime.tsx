@@ -72,3 +72,18 @@ export function LoginI18nProvider({
 export const useLoginLocale = loginRuntime.useLocale;
 export const useLoginTranslation =
   loginRuntime.useTranslation<LoginMessageId> as () => LoginTranslator;
+
+const translators = new Map<LoginLocale, ReturnType<typeof setupI18n>>();
+
+export function translateLoginMessage(
+  id: LoginMessageId,
+  values?: Record<string, string | number>,
+  locale = loginRuntime.getLocale(),
+) {
+  let translator = translators.get(locale);
+  if (!translator) {
+    translator = createLoginI18n(locale);
+    translators.set(locale, translator);
+  }
+  return translator._(id, values);
+}

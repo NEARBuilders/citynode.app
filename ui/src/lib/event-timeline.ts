@@ -49,13 +49,15 @@ function dayParts(instant: Date, timeZone: string, locale?: string) {
   }).format(instant);
   return {
     key: numeric,
-    day: `${part(parts, "month")} ${part(parts, "day")}`,
+    day: new Intl.DateTimeFormat(locale, { timeZone, month: "short", day: "numeric" }).format(
+      instant,
+    ),
     weekday: part(parts, "weekday"),
     year: part(parts, "year"),
   };
 }
 
-function group<T extends TimelineEvent>(events: T[], clock: ViewerClock) {
+function group<T extends TimelineEvent>(events: T[], clock: ViewerClock, t: AppTranslator) {
   const currentYear = dayParts(clock.now, clock.timeZone, clock.locale).year;
   const groups: EventDateGroup<T>[] = [];
   for (const event of events) {
@@ -70,7 +72,7 @@ function group<T extends TimelineEvent>(events: T[], clock: ViewerClock) {
     }
     groups.push({
       key,
-      day: current?.day ?? "Date to be announced",
+      day: current?.day ?? t("events.dateTba"),
       weekday: current?.weekday ?? "",
       year: current && current.year !== currentYear ? current.year : null,
       events: [event],
@@ -86,6 +88,7 @@ function startOf(event: TimelineEvent) {
 export function buildEventTimeline<T extends TimelineEvent>(
   events: readonly T[],
   clock: ViewerClock,
+  t: AppTranslator = translateEnglishAppMessage,
 ): EventTimeline<T> {
   const now = clock.now.getTime();
   const upcoming: T[] = [];
@@ -98,8 +101,8 @@ export function buildEventTimeline<T extends TimelineEvent>(
   upcoming.sort((a, b) => startOf(a) - startOf(b));
   past.sort((a, b) => startOf(b) - startOf(a));
   return {
-    upcoming: group(upcoming, clock),
-    past: group(past, clock),
+    upcoming: group(upcoming, clock, t),
+    past: group(past, clock, t),
     upcomingCount: upcoming.length,
     pastCount: past.length,
   };
@@ -140,3 +143,6 @@ export function eventStartTime(
         );
   return { time, eventLocal };
 }
+
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";

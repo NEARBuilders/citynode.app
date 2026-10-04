@@ -1,4 +1,6 @@
-"use client";
+import { useAppTranslation } from "@/i18n/runtime";
+
+("use client");
 
 import {
   CheckCircleIcon,
@@ -11,10 +13,12 @@ import { useTheme } from "next-themes";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  const translate = useAppTranslation();
   const { theme = "system" } = useTheme();
 
   return (
     <Sonner
+      containerAriaLabel={translate("common.notifications")}
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
       icons={{
@@ -33,6 +37,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         } as React.CSSProperties
       }
       toastOptions={{
+        closeButtonAriaLabel: translate("common.close"),
         classNames: {
           toast: "cn-toast",
         },

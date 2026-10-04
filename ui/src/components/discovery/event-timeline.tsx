@@ -78,6 +78,8 @@ export function EventTimeline<T extends TimelineItem>({
   badges: (event: T) => ReactNode;
   actions: (event: T) => ReactNode;
 }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
   return (
     <ol className="flex flex-col">
       {groups.map((group) => (
@@ -92,7 +94,7 @@ export function EventTimeline<T extends TimelineItem>({
           />
           <DateHeader group={group} />
           {group.events.map((event) => {
-            const start = eventStartTime(event, { timeZone });
+            const start = eventStartTime(event, { timeZone, locale });
             const cancelled = event.status === "cancelled";
             return (
               <article
@@ -118,7 +120,9 @@ export function EventTimeline<T extends TimelineItem>({
                     {event.title}
                   </h4>
                   {event.source && (
-                    <p className="text-sm wrap-anywhere text-muted-foreground">By {event.source}</p>
+                    <p className="text-sm wrap-anywhere text-muted-foreground">
+                      {translate("events.byNamed", { name: event.source })}
+                    </p>
                   )}
                   {event.venue && (
                     <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -137,3 +141,5 @@ export function EventTimeline<T extends TimelineItem>({
     </ol>
   );
 }
+
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";

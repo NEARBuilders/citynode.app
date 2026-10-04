@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
 import {
   createWorkspaceSynchronization,
@@ -9,6 +11,7 @@ import {
 } from "@/lib/workspace-synchronization";
 
 export function useSwitchOrganization() {
+  const translate = useAppTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -17,7 +20,7 @@ export function useSwitchOrganization() {
     synchronization.synchronize({ queryKeys: [["organizations"], tenantQueryKeys.all] });
   const reportError = (error: Error) => {
     if (reportWorkspaceRefreshError(error, refresh, reportError)) return;
-    toast.error(error.message || "Failed to switch organization");
+    toast.error(appErrorMessage(error, translate));
   };
 
   const mutation = useMutation({
@@ -29,7 +32,7 @@ export function useSwitchOrganization() {
     },
     onSuccess: async () => {
       await refresh();
-      toast.success("Switched organization");
+      toast.success(translate("organization.switched"));
     },
     onError: reportError,
   });

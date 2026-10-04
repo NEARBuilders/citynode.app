@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { ActivityDetail } from "@/components/discovery/activity-detail";
 import { PageContainer } from "@/components/layout/page-container";
+import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 export const Route = createFileRoute("/_public/activity/$activityId")({
   validateSearch: z.object({
@@ -13,7 +14,20 @@ export const Route = createFileRoute("/_public/activity/$activityId")({
       .optional()
       .catch(undefined),
   }),
-  head: ({ match }) => ({ meta: [{ title: pageTitle("Event", match.context.runtimeConfig) }] }),
+  head: ({ match }) => ({
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "events.event",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
+  }),
   component: ActivityPage,
 });
 function ActivityPage() {

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { LogoMark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
+import { useAppTranslation } from "@/i18n/runtime";
 
 interface DocumentFallbackProps {
   code?: string;
@@ -11,6 +12,7 @@ interface DocumentFallbackProps {
 }
 
 export function DocumentFallback({ code, title, body, secondaryAction }: DocumentFallbackProps) {
+  const translate = useAppTranslation();
   return (
     <div
       className="flex min-h-dvh items-center justify-center bg-background px-4 text-foreground"
@@ -25,7 +27,7 @@ export function DocumentFallback({ code, title, body, secondaryAction }: Documen
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <Button nativeButton={false} render={<Link to="/" />} data-testid="fallback-home">
-            Back home
+            {translate("common.backHome")}
           </Button>
           {secondaryAction}
         </div>

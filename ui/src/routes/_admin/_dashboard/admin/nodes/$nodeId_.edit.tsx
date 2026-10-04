@@ -3,18 +3,31 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
 import { Button, EmptyState, PageHeader, Skeleton } from "@/components";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { NodeMetadataForm } from "./-node-metadata-editor";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId_/edit")({
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Edit community · Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.editCommunityAdmin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: AdminNodeEdit,
 });
 
 function AdminNodeEdit() {
+  const translate = useAppTranslation();
   const { nodeId } = Route.useParams();
   const apiClient = useApiClient();
   const nodeQuery = useQuery(adminNodeDetailQueryOptions(apiClient, nodeId));
@@ -32,11 +45,11 @@ function AdminNodeEdit() {
             data-testid="admin-back-link"
           >
             <ArrowLeftIcon className="size-4" />
-            {node?.name ?? "Community"}
+            {node?.name ?? translate("common.community")}
           </Link>
         }
-        title="Edit community"
-        description="Name, description and extra metadata."
+        title={translate("admin.community.edit")}
+        description={translate("admin.community.editHint")}
         headerTestId="admin-node-edit.heading"
       />
       {nodeQuery.isLoading ? (
@@ -50,11 +63,11 @@ function AdminNodeEdit() {
       ) : (
         <EmptyState
           icon={TreeStructureIcon}
-          title="Couldn't load this community"
-          description={nodeQuery.error?.message || "The requested community could not be loaded."}
+          title={translate("admin.community.loadError")}
+          description={translate("admin.community.loadEditHint")}
           action={
             <Button variant="outline" nativeButton={false} render={<Link to="/admin/nodes" />}>
-              Back to communities
+              {translate("admin.community.back")}
             </Button>
           }
         />

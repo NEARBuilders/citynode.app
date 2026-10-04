@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { invalidateNodeQueries, nodeByIdQueryOptions } from "@/lib/queries/nodes";
 
 const BULLETIN_MAX_LENGTH = 2000;
 
 export function BulletinEditor({ nodeId }: { nodeId: string }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const nodeQuery = useQuery(nodeByIdQueryOptions(api, nodeId));
@@ -29,10 +32,14 @@ export function BulletinEditor({ nodeId }: { nodeId: string }) {
       api.setNodeBulletin({ nodeId, bulletin: bulletin.trim() ? bulletin.trim() : null }),
     onSuccess: async () => {
       setDirty(false);
-      toast.success(bulletin.trim() ? "Bulletin published" : "Bulletin cleared");
+      toast.success(
+        bulletin.trim()
+          ? translate("community.bulletinPublished")
+          : translate("community.bulletinCleared"),
+      );
       await invalidateNodeQueries(queryClient);
     },
-    onError: (error: Error) => toast.error(error.message || "Couldn't save the bulletin."),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   if (nodeQuery.isPending) {
@@ -44,7 +51,9 @@ export function BulletinEditor({ nodeId }: { nodeId: string }) {
   }
 
   if (!node) {
-    return <p className="text-sm text-muted-foreground">Couldn't load this community.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">{translate("events.communityLoadError")}</p>
+    );
   }
 
   return (
@@ -56,17 +65,14 @@ export function BulletinEditor({ nodeId }: { nodeId: string }) {
       }}
     >
       <Field>
-        <FieldLabel htmlFor="node-bulletin">Dashboard bulletin</FieldLabel>
-        <FieldDescription>
-          A short announcement shown on your community's dashboard and public page. Supports
-          markdown. Leave blank to remove it.
-        </FieldDescription>
+        <FieldLabel htmlFor="node-bulletin">{translate("bulletin.dashboard")}</FieldLabel>
+        <FieldDescription>{translate("bulletin.editorHint")}</FieldDescription>
         <Textarea
           id="node-bulletin"
           value={bulletin}
           maxLength={BULLETIN_MAX_LENGTH}
           rows={5}
-          placeholder="More features are coming soon…"
+          placeholder={translate("bulletin.example")}
           onChange={(event) => {
             setDirty(true);
             setBulletin(event.target.value);
@@ -75,7 +81,7 @@ export function BulletinEditor({ nodeId }: { nodeId: string }) {
       </Field>
       {bulletin.trim() && (
         <Field>
-          <FieldLabel>Preview</FieldLabel>
+          <FieldLabel>{translate("common.preview")}</FieldLabel>
           <div className="rounded-2xl border border-border bg-muted/50 p-4">
             <Markdown content={bulletin} variant="compact" />
           </div>
@@ -83,7 +89,7 @@ export function BulletinEditor({ nodeId }: { nodeId: string }) {
       )}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" data-testid="bulletin-editor-save" disabled={save.isPending}>
-          {save.isPending ? "Saving…" : "Save bulletin"}
+          {save.isPending ? translate("common.saving") : translate("bulletin.save")}
         </Button>
       </div>
     </form>

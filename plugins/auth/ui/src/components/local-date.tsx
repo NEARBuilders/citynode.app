@@ -1,3 +1,4 @@
+import { useLoginLocale } from "@/i18n/runtime";
 import { useClientValue } from "@/lib/use-client";
 
 type LocalDateFormat = "date" | "datetime" | "time" | "relative";
@@ -11,29 +12,34 @@ const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["minute", 60],
 ];
 
-export function formatLocalDate(value: Date | string | number, format: LocalDateFormat = "date") {
+export function formatLocalDate(
+  value: Date | string | number,
+  format: LocalDateFormat = "date",
+  locale = "en",
+) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  if (format === "time") return date.toLocaleTimeString(undefined, { timeStyle: "short" });
+  if (format === "time") return date.toLocaleTimeString(locale, { timeStyle: "short" });
   if (format === "datetime") {
-    return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    return date.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
   }
   if (format === "relative") {
     const seconds = Math.round((date.getTime() - Date.now()) / 1000);
-    const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
     for (const [unit, size] of RELATIVE_UNITS) {
       if (Math.abs(seconds) >= size) return formatter.format(Math.round(seconds / size), unit);
     }
     return formatter.format(seconds, "second");
   }
-  return date.toLocaleDateString(undefined, { dateStyle: "medium" });
+  return date.toLocaleDateString(locale, { dateStyle: "medium" });
 }
 
 export function useLocalDate(
   value: Date | string | number | null | undefined,
   format: LocalDateFormat = "date",
 ) {
-  return useClientValue(() => (value == null ? "" : formatLocalDate(value, format)), "");
+  const { locale } = useLoginLocale();
+  return useClientValue(() => (value == null ? "" : formatLocalDate(value, format, locale)), "");
 }
 
 export function LocalDate({

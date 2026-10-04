@@ -1,5 +1,6 @@
 import type { Messages } from "@lingui/core";
 import { compileMessageOrThrow } from "@lingui/message-utils/compileMessage";
+import { authMessages } from "./messages/auth";
 
 export const LOGIN_LOCALES = ["en", "es", "fr", "zh"] as const;
 
@@ -16,6 +17,7 @@ export const LOGIN_LOCALE_LABELS: Record<LoginLocale, string> = {
 };
 
 export const englishLoginMessages = {
+  ...authMessages.en,
   "auth.login.title": "Sign in to CityNode",
   "auth.login.subtitle": "Welcome back. Pick how you want to sign in.",
   "auth.login.subtitle.stake": "Sign in to stake with a CityNode community.",
@@ -75,6 +77,7 @@ export type LoginMessageValues = Record<string, string | number>;
 export type LoginTranslator = (id: LoginMessageId, values?: LoginMessageValues) => string;
 
 const spanishLoginMessages = {
+  ...authMessages.es,
   "auth.login.title": "Inicia sesión en CityNode",
   "auth.login.subtitle": "Te damos la bienvenida. Elige cómo quieres iniciar sesión.",
   "auth.login.subtitle.stake": "Inicia sesión para delegar con una comunidad de CityNode.",
@@ -132,6 +135,7 @@ const spanishLoginMessages = {
 } satisfies Record<LoginMessageId, string>;
 
 const frenchLoginMessages = {
+  ...authMessages.fr,
   "auth.login.title": "Se connecter à CityNode",
   "auth.login.subtitle": "Ravi de vous revoir. Choisissez comment vous connecter.",
   "auth.login.subtitle.stake": "Connectez-vous pour déléguer auprès d’une communauté CityNode.",
@@ -189,6 +193,7 @@ const frenchLoginMessages = {
 } satisfies Record<LoginMessageId, string>;
 
 const chineseLoginMessages = {
+  ...authMessages.zh,
   "auth.login.title": "登录 CityNode",
   "auth.login.subtitle": "欢迎回来。请选择登录方式。",
   "auth.login.subtitle.stake": "登录后即可为 CityNode 社区质押。",
@@ -241,12 +246,12 @@ const chineseLoginMessages = {
   "auth.login.pair.cancel": "其他登录方式",
 } satisfies Record<LoginMessageId, string>;
 
-const translatedLoginMessages: Record<LoginLocale, Partial<Record<LoginMessageId, string>>> = {
-  en: {},
+export const loginCatalogs = {
+  en: englishLoginMessages,
   es: spanishLoginMessages,
   fr: frenchLoginMessages,
   zh: chineseLoginMessages,
-};
+} satisfies Record<LoginLocale, Record<LoginMessageId, string>>;
 
 export function withEnglishLoginFallback(
   translated: Partial<Record<LoginMessageId, string>>,
@@ -254,13 +259,17 @@ export function withEnglishLoginFallback(
   return { ...englishLoginMessages, ...translated };
 }
 
+const compiledMessages = new Map<LoginLocale, Messages>();
+
 export function getLoginMessages(locale: LoginLocale): Messages {
-  return Object.fromEntries(
-    Object.entries(withEnglishLoginFallback(translatedLoginMessages[locale])).map(
-      ([id, message]) => [
-        id,
-        typeof message === "string" ? compileMessageOrThrow(message) : message,
-      ],
-    ),
+  const cached = compiledMessages.get(locale);
+  if (cached) return cached;
+  const messages = Object.fromEntries(
+    Object.entries(withEnglishLoginFallback(loginCatalogs[locale])).map(([id, message]) => [
+      id,
+      typeof message === "string" ? compileMessageOrThrow(message) : message,
+    ]),
   );
+  compiledMessages.set(locale, messages);
+  return messages;
 }

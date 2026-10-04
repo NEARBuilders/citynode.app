@@ -1,19 +1,29 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { RouterError } from "./router-error";
+import { AppI18nProvider } from "@/i18n/runtime";
+import { RouterError, RouterPending } from "./router-error";
 
-describe("router error fallback", () => {
-  it("renders on the server without application providers and escapes error details", () => {
+describe("router fallbacks", () => {
+  it("renders a safe server fallback without application providers", () => {
     const markup = renderToStaticMarkup(
       <RouterError error={new Error('<script>alert("failure")</script>')} />,
     );
-
-    expect(markup).toContain("This page didn’t load");
-    expect(markup).toContain("<summary");
-    expect(markup).toContain("Error details");
+    expect(markup).toContain("Something went wrong");
     expect(markup).toContain('href="/"');
-    expect(markup).toContain("Back home");
-    expect(markup).toContain("&lt;script&gt;");
+    expect(markup).toContain("Try again");
+    expect(markup).not.toContain("failure");
+    expect(markup).not.toContain("Error details");
     expect(markup).not.toContain("<script>");
+  });
+  it("uses the current language in error and pending boundaries", () => {
+    const markup = renderToStaticMarkup(
+      <AppI18nProvider initialLocale="zh">
+        <RouterError error={new Error("private RPC details")} />
+        <RouterPending />
+      </AppI18nProvider>,
+    );
+    expect(markup).toContain("出现了问题");
+    expect(markup).toContain("正在加载");
+    expect(markup).not.toContain("private RPC details");
   });
 });

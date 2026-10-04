@@ -7,6 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
+
 import {
   formatNearBalance,
   formatPoolFee,
@@ -34,6 +37,7 @@ function metadataUrl(metadata: Validator["metadata"]) {
 }
 
 export function StakePoolCard({ validator }: { validator: Validator }) {
+  const translate = useAppTranslation();
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const network = validator.network || "mainnet";
   const supported =
@@ -59,7 +63,9 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={copyState === "copied" ? "Copied pool account" : "Copy pool account"}
+            aria-label={
+              copyState === "copied" ? translate("stake.poolCopied") : translate("stake.copyPool")
+            }
             onClick={copyAccount}
           >
             {copyState === "copied" ? <CheckIcon /> : <CopyIcon />}
@@ -74,7 +80,7 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
                   href={explorerUrl(validator.accountId, network)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="View account on Nearblocks"
+                  aria-label={translate("stake.explorerAccount")}
                 >
                   <ArrowSquareOutIcon />
                 </a>
@@ -84,14 +90,16 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Badge variant={validator.role === "community" ? "outline" : "secondary"}>
-            <span className="capitalize">{validator.role}</span>
+            <span className="capitalize">
+              {presentationLabel(validator.role ?? "member", translate)}
+            </span>
           </Badge>
           {validator.protocol !== "near" && <span className="font-mono">{validator.protocol}</span>}
           {network !== "mainnet" && <span className="capitalize">{network}</span>}
         </div>
         {copyState === "error" && (
           <p role="status" className="text-sm text-muted-foreground">
-            Couldn&apos;t copy. Select the account name to copy it.
+            {translate("stake.copyFailed")}
           </p>
         )}
       </CardHeader>
@@ -101,8 +109,8 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
         ) : (
           <p className="text-sm text-muted-foreground">
             {validator.protocol !== "near"
-              ? `Live stats are on the ${validator.protocol} explorer.`
-              : `Live stats aren't available on ${network}.`}
+              ? translate("stake.explorerStats", { protocol: validator.protocol })
+              : translate("stake.statsUnavailableNamed", { network })}
           </p>
         )}
         {poolUrl && (
@@ -113,7 +121,7 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
             nativeButton={false}
             render={
               <a href={poolUrl} target="_blank" rel="noopener noreferrer">
-                View pool on explorer
+                {translate("stake.explorerPool")}
                 <ArrowSquareOutIcon data-icon="inline-end" />
               </a>
             }
@@ -125,6 +133,8 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
 }
 
 function NearPoolStats({ accountId, network }: { accountId: string; network: string }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
   const authClient = useAuthClient();
   const poolNetwork = toNetwork(network);
   const stats = useQuery(
@@ -140,52 +150,61 @@ function NearPoolStats({ accountId, network }: { accountId: string; network: str
     <>
       <dl className="grid grid-cols-3 gap-4">
         <Metric
-          label="Total staked"
+          label={translate("stake.total")}
           loading={stats.isLoading}
-          value={statsData && formatNearBalance(statsData.totalStaked)}
+          value={statsData && formatNearBalance(statsData.totalStaked, locale)}
         />
         <Metric
-          label="Fee"
+          label={translate("stake.fee")}
           loading={stats.isLoading}
-          value={statsData && formatPoolFee(statsData.feeNumerator, statsData.feeDenominator)}
+          value={
+            statsData && formatPoolFee(statsData.feeNumerator, statsData.feeDenominator, locale)
+          }
         />
         <Metric
-          label="Stakers"
+          label={translate("stake.stakers")}
           loading={stats.isLoading}
-          value={statsData && new Intl.NumberFormat("en-US").format(statsData.stakerCount)}
+          value={statsData && new Intl.NumberFormat(locale).format(statsData.stakerCount)}
         />
       </dl>
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h4 className="text-sm font-medium">Top stakers</h4>
+          <h4 className="text-sm font-medium">{translate("stake.topStakers")}</h4>
           {holdersData && holdersData.length > 0 && (
             <span className="text-xs text-muted-foreground">
-              Top {Math.min(holdersData.length, 5)} of {holdersData.length}
-              {statsData ? ` sampled from ${statsData.stakerCount}` : " sampled"}
+              {translate(statsData ? "stake.topSampledFrom" : "stake.topSampled", {
+                shown: Math.min(holdersData.length, 5),
+                count: holdersData.length,
+                total: statsData?.stakerCount ?? 0,
+              })}
             </span>
           )}
         </div>
         {holders.isLoading ? (
-          <Skeleton aria-label="Loading pool accounts" className="h-24 w-full" />
+          <Skeleton aria-label={translate("stake.loadingAccounts")} className="h-24 w-full" />
         ) : holdersData ? (
           holdersData.length > 0 ? (
             <>
-              <HolderList holders={holdersData.slice(0, 5)} network={network} label="Top stakers" />
+              <HolderList
+                holders={holdersData.slice(0, 5)}
+                network={network}
+                label={translate("stake.topStakers")}
+              />
               {holdersData.length > 5 && (
                 <details className="group text-sm">
                   <summary className="cursor-pointer py-2 text-muted-foreground">
-                    Show {holdersData.length - 5} more
+                    {translate("common.showMoreNamed", { count: holdersData.length - 5 })}
                   </summary>
                   <HolderList
                     holders={holdersData.slice(5)}
                     network={network}
-                    label="More stakers"
+                    label={translate("stake.moreStakers")}
                   />
                 </details>
               )}
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">No stakers yet.</p>
+            <p className="text-sm text-muted-foreground">{translate("stake.empty")}</p>
           )
         ) : (
           <p className="text-sm text-muted-foreground">—</p>
@@ -193,7 +212,7 @@ function NearPoolStats({ accountId, network }: { accountId: string; network: str
       </div>
       {(stats.isError || holders.isError) && (
         <p className="text-sm text-muted-foreground" role="status">
-          Some pool data is unavailable right now.
+          {translate("stake.partialData")}
         </p>
       )}
     </>
@@ -209,12 +228,16 @@ function Metric({
   loading: boolean;
   value: string | undefined;
 }) {
+  const translate = useAppTranslation();
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="break-words text-xl font-semibold tabular-nums sm:text-2xl">
         {loading ? (
-          <Skeleton aria-label={`Loading ${label}`} className="h-5 w-24" />
+          <Skeleton
+            aria-label={translate("common.loadingNamed", { name: label ?? "" })}
+            className="h-5 w-24"
+          />
         ) : (
           (value ?? "—")
         )}
@@ -232,6 +255,7 @@ function HolderList({
   network: string;
   label: string;
 }) {
+  const { locale } = useAppLocale();
   return (
     <ul aria-label={label} className="divide-y divide-border">
       {holders.map((holder) => (
@@ -245,7 +269,7 @@ function HolderList({
             {holder.accountId}
           </a>
           <span className="shrink-0 tabular-nums text-muted-foreground">
-            {formatNearBalance(holder.stakedBalance)}
+            {formatNearBalance(holder.stakedBalance, locale)}
           </span>
         </li>
       ))}

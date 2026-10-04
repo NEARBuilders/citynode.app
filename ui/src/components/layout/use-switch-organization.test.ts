@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSwitchOrganization } from "./use-switch-organization";
 
+vi.mock("@/i18n/runtime", () => ({ useAppTranslation: () => (id: string) => id }));
+
 interface SwitchOptions {
   mutationFn: (organizationId: string) => Promise<void>;
   onSuccess: () => Promise<void>;

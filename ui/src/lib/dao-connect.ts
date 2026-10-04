@@ -1,3 +1,6 @@
+import type { AppTranslator } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 /**
  * DAO wallet connection — a second NEAR Connect instance locked to the Trezu
  * wallet via an explicit wallet id on every connect, fully separated from the
@@ -176,18 +179,22 @@ export async function verifyDaoAccount(want: string): Promise<boolean> {
 }
 
 /** Maps raw connector errors to actionable messages. */
-export function describeDaoError(error: unknown, want: string): string {
+export function describeDaoError(
+  error: unknown,
+  want: string,
+  t: AppTranslator = translateEnglishAppMessage,
+): string {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("No accounts found") || message.includes("No wallet selected")) {
-    return `Trezu session expired — reconnect ${want} on trezu.app`;
+    return t("wallet.daoExpired", { account: want });
   }
   if (message.includes("returned no accounts")) {
-    return `Trezu has no accounts for ${want} — deploy or import it on trezu.app`;
+    return t("wallet.daoMissing", { account: want });
   }
   if (message.includes("Wallet not found") || message.includes("Failed to load manifest")) {
-    return "Trezu wallet is unavailable — the wallet registry could not be reached. Check your connection and retry.";
+    return t("wallet.daoUnavailable");
   }
-  return message;
+  return appErrorMessage(error, t);
 }
 
 export function getDaoConnector(): NearConnector {

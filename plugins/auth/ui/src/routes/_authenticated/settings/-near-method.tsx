@@ -31,6 +31,8 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { authErrorMessage } from "@/i18n/error-message";
+import { useLoginTranslation } from "@/i18n/runtime";
 import { nearAccountsQueryKey, passkeyQueryKey } from "@/lib/query-keys";
 import { MethodHeader } from "./-method-header";
 
@@ -46,6 +48,7 @@ function toPromise(action: (callbacks: NearCallbacks) => unknown): Promise<void>
 }
 
 export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
+  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const [accountToUnlink, setAccountToUnlink] = useState<ListedNearAccount | null>(null);
@@ -79,12 +82,12 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
     void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
     void queryClient.invalidateQueries({ queryKey: ["user-invitations"] });
   };
-  const onError = (err: Error) => toast.error(err.message);
+  const onError = (err: Error) => toast.error(authErrorMessage(err, translate));
 
   const linkNamedMutation = useMutation({
     mutationFn: () => toPromise((callbacks) => auth.near.link(callbacks)),
     onSuccess: () => {
-      toast.success("NEAR account linked");
+      toast.success(translate("auth.near.linked"));
       refresh();
     },
     onError,
@@ -93,7 +96,7 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
   const createFromPasskeyMutation = useMutation({
     mutationFn: () => toPromise((callbacks) => auth.near.linkPasskeyWallet(callbacks)),
     onSuccess: () => {
-      toast.success("NEAR account created from your passkey");
+      toast.success(translate("auth.near.created"));
       refresh();
     },
     onError,
@@ -108,7 +111,7 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      toast.success("Primary account updated");
+      toast.success(translate("auth.near.primaryUpdated"));
       refresh();
     },
     onError,
@@ -124,7 +127,7 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
     },
     onSuccess: () => {
       setAccountToUnlink(null);
-      toast.success("NEAR account unlinked");
+      toast.success(translate("auth.near.unlinked"));
       refresh();
     },
     onError,
@@ -135,8 +138,8 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
   return (
     <section className="flex flex-col gap-4" data-testid="settings.near-wallet">
       <MethodHeader
-        title="NEAR wallet"
-        description="Linked NEAR accounts for signing in and signing transactions."
+        title={translate("auth.near.wallet")}
+        description={translate("auth.near.description")}
         action={
           <Button
             variant="outline"
@@ -148,8 +151,8 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
             {linkNamedMutation.isPending
               ? "Connecting…"
               : accounts.length
-                ? "Link another account"
-                : "Link a named account"}
+                ? translate("auth.settings.linkAnother")
+                : translate("auth.settings.linkNamed")}
           </Button>
         }
       />
@@ -159,10 +162,8 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
             <FingerprintIcon />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>No NEAR account yet</ItemTitle>
-            <ItemDescription>
-              Create one derived from your passkey — no seed phrase, no gas needed.
-            </ItemDescription>
+            <ItemTitle>{translate("auth.near.empty")}</ItemTitle>
+            <ItemDescription>{translate("auth.near.passkeyDescription")}</ItemDescription>
           </ItemContent>
           <ItemActions className="w-full sm:w-auto">
             <Button
@@ -172,7 +173,9 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
               disabled={linking}
               data-testid="settings.create-near-from-passkey-button"
             >
-              {createFromPasskeyMutation.isPending ? "Creating…" : "Create from passkey"}
+              {createFromPasskeyMutation.isPending
+                ? translate("auth.common.creating")
+                : translate("auth.near.create")}
             </Button>
           </ItemActions>
         </Item>
@@ -184,9 +187,9 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
         />
       ) : accountsQuery.isError ? (
         <p className="text-sm text-destructive" data-testid="settings.near-accounts-error">
-          Couldn't load your NEAR accounts.{" "}
+          {translate("auth.near.loadFailed")}{" "}
           <Button variant="link" size="sm" onClick={() => accountsQuery.refetch()}>
-            Retry
+            {translate("auth.common.retry")}
           </Button>
         </p>
       ) : accounts.length > 0 ? (
@@ -201,14 +204,16 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
                   <span className="min-w-0 truncate font-mono">{account.accountId}</span>
                 </ItemTitle>
                 <ItemDescription>
-                  {account.isPrimary ? "Primary" : "Linked"}
-                  {account.network === "testnet" && " · testnet"}
+                  {account.isPrimary
+                    ? translate("auth.near.primary")
+                    : translate("auth.common.linked")}
+                  {account.network === "testnet" && translate("auth.near.testnet")}
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
                 {account.isPrimary ? (
                   <Badge variant="success" data-testid={`settings.near-primary-${account.id}`}>
-                    Primary
+                    {translate("auth.near.primary")}
                   </Badge>
                 ) : null}
                 <DropdownMenu>
@@ -217,7 +222,9 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label={`Actions for ${account.accountId}`}
+                        aria-label={translate("auth.common.actionsNamed", {
+                          name: account.accountId ?? "",
+                        })}
                         data-testid={`settings.near-menu-${account.id}`}
                       />
                     }
@@ -231,7 +238,7 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
                         disabled={setPrimaryMutation.isPending}
                       >
                         <StarIcon />
-                        Make primary
+                        {translate("auth.near.makePrimary")}
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
@@ -239,7 +246,7 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
                       onClick={() => setAccountToUnlink(account)}
                     >
                       <TrashIcon />
-                      Unlink
+                      {translate("auth.common.unlink")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -250,7 +257,7 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
       ) : (
         !canCreateFromPasskey && (
           <p className="text-sm text-muted-foreground" data-testid="settings.near-accounts-empty">
-            No NEAR account linked yet. Connect a wallet to stake and publish.
+            {translate("auth.near.connectHint")}
           </p>
         )
       )}
@@ -260,10 +267,12 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
         onOpenChange={(open: boolean) => {
           if (!open) setAccountToUnlink(null);
         }}
-        title="Unlink NEAR account?"
-        description={`You won't be able to sign in with ${accountToUnlink?.accountId ?? "this account"} anymore.`}
-        confirmLabel="Unlink"
-        cancelLabel="Cancel"
+        title={translate("auth.near.unlinkTitle")}
+        description={translate("auth.settings.unlinkDescription", {
+          name: accountToUnlink?.accountId ?? translate("auth.near.accountFallback"),
+        })}
+        confirmLabel={translate("auth.common.unlink")}
+        cancelLabel={translate("auth.common.cancel")}
         variant="destructive"
         onConfirm={() => {
           if (accountToUnlink) unlinkMutation.mutate(accountToUnlink);

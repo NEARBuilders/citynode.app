@@ -1,6 +1,7 @@
 import { CaretRightIcon, PencilIcon, TreeStructureIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import { getActiveRuntime, useApiClient } from "@/app";
 import {
   Button,
@@ -23,6 +24,8 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import type { AppMessageId } from "@/i18n/catalogs";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
@@ -34,11 +37,11 @@ import { NodeValidators } from "./-node-validators";
 type ApiClient = ReturnType<typeof useApiClient>;
 type NodeSummary = Awaited<ReturnType<ApiClient["getNodeSummary"]>>;
 
-const TAB_LABELS: Record<NodeDetailTab, string> = {
-  overview: "Overview",
-  validators: "Validators",
-  domains: "Domains",
-  profile: "Profile",
+const TAB_LABELS: Record<NodeDetailTab, AppMessageId> = {
+  overview: "common.overview",
+  validators: "common.validators",
+  domains: "admin.domain.title",
+  profile: "nav.profile",
 };
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
@@ -46,12 +49,24 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
     tab: parseNodeDetailTab(search.tab),
   }),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Community · Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.communityAdmin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: AdminNodeDetail,
 });
 
 function AdminNodeDetail() {
+  const translate = useAppTranslation();
   const { nodeId } = Route.useParams();
   const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -74,11 +89,11 @@ function AdminNodeDetail() {
     return (
       <EmptyState
         icon={TreeStructureIcon}
-        title="Couldn't load this community"
-        description={nodeQuery.error?.message || "The requested node could not be loaded."}
+        title={translate("admin.community.loadError")}
+        description={translate("admin.community.loadErrorHint")}
         action={
           <Button variant="outline" nativeButton={false} render={<Link to="/admin/nodes" />}>
-            Back to nodes
+            {translate("admin.community.backNodes")}
           </Button>
         }
       />
@@ -91,24 +106,27 @@ function AdminNodeDetail() {
   return (
     <>
       <PageHeader
-        label={<BackLink to="/admin/nodes">Communities</BackLink>}
+        label={<BackLink to="/admin/nodes">{translate("common.communities")}</BackLink>}
         title={node.name}
         subtitle={node.slug}
         description={
           parent ? (
-            <>
-              {nodeKindLabel(node.kind, "Node")} in{" "}
-              <Link
-                to="/admin/nodes/$nodeId"
-                params={{ nodeId: parent.id }}
-                search={{}}
-                className="text-foreground hover:underline"
-              >
-                {parent.name}
-              </Link>
-            </>
+            <Trans
+              id="admin.nodeParentNamed"
+              values={{ kind: nodeKindLabel(node.kind, undefined, translate), name: parent.name }}
+              components={{
+                parent: (
+                  <Link
+                    to="/admin/nodes/$nodeId"
+                    params={{ nodeId: parent.id }}
+                    search={{}}
+                    className="text-foreground hover:underline"
+                  ></Link>
+                ),
+              }}
+            />
           ) : (
-            nodeKindLabel(node.kind, "Node")
+            nodeKindLabel(node.kind, translate("label.node"), translate)
           )
         }
         actions={
@@ -118,17 +136,27 @@ function AdminNodeDetail() {
             data-testid="admin-node-edit"
             render={<Link to="/admin/nodes/$nodeId/edit" params={{ nodeId: node.id }} />}
           >
-            <PencilIcon /> Edit details
+            <PencilIcon />
+            {translate("org.editDetails")}
           </Button>
         }
         headerTestId="admin-node.heading"
       />
 
       <StatGrid>
-        <StatFigure label="Direct children" value={summary.childrenCount} />
-        <StatFigure label="Communities below" value={summary.subtreeNodeCount} />
-        <StatFigure label="Validators" value={summary.validators.length} />
-        <StatFigure label="Validators below" value={summary.subtreeValidatorCount} />
+        <StatFigure
+          label={translate("admin.community.directChildren")}
+          value={summary.childrenCount}
+        />
+        <StatFigure
+          label={translate("admin.community.descendants")}
+          value={summary.subtreeNodeCount}
+        />
+        <StatFigure label={translate("common.validators")} value={summary.validators.length} />
+        <StatFigure
+          label={translate("admin.community.descendantValidators")}
+          value={summary.subtreeValidatorCount}
+        />
       </StatGrid>
 
       <div className="flex flex-col gap-6">
@@ -143,7 +171,7 @@ function AdminNodeDetail() {
             <TabsList variant="line">
               {NODE_DETAIL_TABS.map((value) => (
                 <TabsTrigger key={value} value={value} data-testid={`admin-node-tab-${value}`}>
-                  {TAB_LABELS[value]}
+                  {translate(TAB_LABELS[value])}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -164,9 +192,7 @@ function AdminNodeDetail() {
               gateway={getActiveRuntime(runtimeConfig)?.gatewayId ?? ""}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              This node is not attached to a tenant, so it has no domains.
-            </p>
+            <p className="text-sm text-muted-foreground">{translate("admin.community.noTenant")}</p>
           ))}
         {activeTab === "profile" && <ProfileEditor nodeId={node.id} />}
       </div>
@@ -175,6 +201,7 @@ function AdminNodeDetail() {
 }
 
 function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceName?: string }) {
+  const translate = useAppTranslation();
   const { node } = summary;
   const resolvedElsewhere = summary.stakingValidators.sourceNodeId !== node.id;
   const description =
@@ -184,15 +211,19 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
     <div className="flex flex-col gap-12">
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title="Staking"
+          title={translate("common.staking")}
           description={
             resolvedElsewhere
-              ? `Stakes go to validators on ${sourceName ?? summary.stakingValidators.sourceNodeId}.`
-              : "Stakes go to validators on this node or below it."
+              ? translate("admin.validatorSourceNamed", {
+                  name: sourceName ?? summary.stakingValidators.sourceNodeId,
+                })
+              : translate("admin.community.stakingHint")
           }
         />
         {summary.stakingValidators.validators.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No validators to stake with yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {translate("admin.community.noStakeValidators")}
+          </p>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-border">
             <NodeValidatorTable validators={summary.stakingValidators.validators} />
@@ -201,9 +232,9 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="Children" />
+        <SectionHeader title={translate("admin.community.children")} />
         {summary.children.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No communities below this one.</p>
+          <p className="text-sm text-muted-foreground">{translate("admin.community.noChildren")}</p>
         ) : (
           <ItemGroup>
             {summary.children.map((child) => (
@@ -220,7 +251,7 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
                     <span className="min-w-0 truncate">{child.name}</span>
                   </ItemTitle>
                   <ItemDescription>
-                    {nodeKindLabel(child.kind, "Node")} ·{" "}
+                    {nodeKindLabel(child.kind, translate("label.node"), translate)} ·{" "}
                     <span className="font-mono break-all">{child.slug}</span>
                   </ItemDescription>
                 </ItemContent>
@@ -234,14 +265,22 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="Details" />
+        <SectionHeader title={translate("things.details")} />
         {description && <p className="max-w-2xl text-base text-foreground">{description}</p>}
         <div className="flex flex-col">
-          <InfoRow label="Community ID" value={node.id} mono />
-          <InfoRow label="Site ID" value={node.tenantId ?? "None"} mono={!!node.tenantId} />
-          <InfoRow label="Parent ID" value={node.parentId ?? "None"} mono={!!node.parentId} />
+          <InfoRow label={translate("admin.community.id")} value={node.id} mono />
+          <InfoRow
+            label={translate("admin.community.siteId")}
+            value={node.tenantId ?? translate("common.none")}
+            mono={!!node.tenantId}
+          />
+          <InfoRow
+            label={translate("admin.community.parentId")}
+            value={node.parentId ?? translate("common.none")}
+            mono={!!node.parentId}
+          />
         </div>
-        <RawJsonDisclosure value={node.metadata} label="metadata" />
+        <RawJsonDisclosure value={node.metadata} label={translate("admin.community.metadata")} />
       </section>
     </div>
   );

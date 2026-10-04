@@ -6,6 +6,8 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
 import { Button, PageHeader } from "@/components";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { parseNearAmount } from "@/lib/near-amount";
 import { pageTitle } from "@/lib/page-title";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -16,12 +18,24 @@ import { RelayerTopUp } from "./-relayer-top-up";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/relayer")({
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Relayer · Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.relayerAdmin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: AdminRelayerPage,
 });
 
 function AdminRelayerPage() {
+  const translate = useAppTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const nearAccountId = useNearAccount();
@@ -37,21 +51,21 @@ function AdminRelayerPage() {
   const sendFund = useCallback(async () => {
     const target = info?.accountId;
     if (!target) {
-      toast.error("Relayer not configured on the server.");
+      toast.error(translate("admin.relayer.serverUnconfigured"));
       return;
     }
     if (parsedAmount === null) {
-      toast.error("Enter a valid amount in NEAR.");
+      toast.error(translate("admin.relayer.invalidAmount"));
       return;
     }
     const connected = await auth.near.ensureConnected();
     if (!connected) {
-      toast.error("Connect a NEAR wallet first");
+      toast.error(translate("wallet.connectFirst"));
       return;
     }
     const signer = auth.near.getAccountId();
     if (!signer) {
-      toast.error("Connect a NEAR wallet first");
+      toast.error(translate("wallet.connectFirst"));
       return;
     }
     setSending(true);
@@ -61,19 +75,19 @@ function AdminRelayerPage() {
         .transaction(signer)
         .transfer(target, Amount.yocto(parsedAmount))
         .send({ waitUntil: "FINAL" });
-      toast.success("Relayer funded", {
+      toast.success(translate("admin.relayer.funded"), {
         description: result.transaction?.hash
-          ? `tx: ${result.transaction.hash}`
-          : `Sent ${amount} NEAR → ${target}`,
+          ? translate("admin.relayer.txNamed", { hash: result.transaction.hash })
+          : translate("admin.relayer.sentNamed", { amount, account: target }),
       });
       relayerInfoQuery.refetch();
       queryClient.invalidateQueries({ queryKey: ["relay-history"] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Funding failed");
+      toast.error(appErrorMessage(err, translate));
     } finally {
       setSending(false);
     }
-  }, [auth, info?.accountId, parsedAmount, queryClient, relayerInfoQuery]);
+  }, [auth, info?.accountId, parsedAmount, queryClient, relayerInfoQuery, amount, translate]);
 
   const relayHistoryQuery = useQuery({
     queryKey: ["relay-history"],
@@ -92,24 +106,24 @@ function AdminRelayerPage() {
   const handleConnect = async () => {
     const connected = await auth.near.ensureConnected();
     if (connected) {
-      toast.success("Wallet connected");
+      toast.success(translate("admin.walletConnected"));
       refresh();
     } else {
-      toast.error("Wallet connection declined");
+      toast.error(translate("admin.walletDeclined"));
     }
   };
 
   return (
     <>
       <PageHeader
-        title="Relayer"
-        description="Pays gas for gasless writes and session gas keys."
+        title={translate("nav.relayer")}
+        description={translate("admin.relayer.paysGas")}
         actions={
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="Refresh"
+            aria-label={translate("common.refresh")}
             onClick={refresh}
             disabled={relayerInfoQuery.isFetching}
             data-testid="admin-relayer-refresh"

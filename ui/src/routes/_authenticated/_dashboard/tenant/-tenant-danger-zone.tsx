@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, ConfirmDialog, SectionHeader } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import { SettingsRow } from "./-settings-row";
 import type { TenantAction, TenantRecord } from "./-tenant-types";
 
@@ -26,6 +27,7 @@ export function TenantDangerZone({
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
 }) {
+  const translate = useAppTranslation();
   const [suspendOpen, setSuspendOpen] = useState(false);
   const canSuspend = isAdmin && tenant.status === "active";
   const canReactivate = isAdmin && tenant.status === "suspended";
@@ -35,12 +37,12 @@ export function TenantDangerZone({
     <>
       {(canSuspend || canReactivate || canDelete) && (
         <section className="flex flex-col gap-2" data-testid="tenant.danger-zone">
-          <SectionHeader title="Danger zone" />
+          <SectionHeader title={translate("things.danger")} />
           <div className="flex flex-col rounded-2xl border border-destructive/30 px-4">
             {canSuspend && (
               <SettingsRow
-                label="Suspend community"
-                description="Takes the site offline until it's reactivated."
+                label={translate("tenant.suspendCommunity")}
+                description={translate("tenant.suspendHint")}
                 action={
                   <Button
                     variant="outline"
@@ -48,15 +50,15 @@ export function TenantDangerZone({
                     onClick={() => setSuspendOpen(true)}
                     disabled={suspend.isPending}
                   >
-                    Suspend
+                    {translate("tenant.suspend")}
                   </Button>
                 }
               />
             )}
             {canReactivate && (
               <SettingsRow
-                label="Reactivate community"
-                description="Brings the site back online."
+                label={translate("tenant.reactivateCommunity")}
+                description={translate("tenant.reactivateHint")}
                 action={
                   <Button
                     variant="outline"
@@ -64,18 +66,18 @@ export function TenantDangerZone({
                     onClick={() => reactivate.mutate()}
                     disabled={reactivate.isPending}
                   >
-                    Reactivate
+                    {translate("tenant.reactivate")}
                   </Button>
                 }
               />
             )}
             {canDelete && (
               <SettingsRow
-                label="Delete community"
-                description="Suspended now, removed for good after 30 days."
+                label={translate("tenant.deleteCommunity")}
+                description={translate("tenant.deleteHint")}
                 action={
                   <Button variant="destructive" size="sm" onClick={onOpen} disabled={isPending}>
-                    Delete community
+                    {translate("tenant.deleteCommunity")}
                   </Button>
                 }
               />
@@ -87,9 +89,9 @@ export function TenantDangerZone({
       <ConfirmDialog
         open={suspendOpen}
         onOpenChange={setSuspendOpen}
-        title={`Suspend ${tenant.name}?`}
-        description="The site goes offline for everyone until you reactivate it."
-        confirmLabel="Suspend"
+        title={translate("tenant.suspendQuestion", { name: tenant.name ?? "" })}
+        description={translate("tenant.suspendDescription")}
+        confirmLabel={translate("tenant.suspend")}
         variant="destructive"
         isPending={suspend.isPending}
         onConfirm={() => {
@@ -100,9 +102,9 @@ export function TenantDangerZone({
       <ConfirmDialog
         open={open}
         onOpenChange={onOpenChange}
-        title={`Delete ${tenant.name}?`}
-        description="It's suspended immediately and permanently deleted after 30 days. This cannot be undone."
-        confirmLabel="Delete community"
+        title={translate("common.deleteQuestion", { name: tenant.name ?? "" })}
+        description={translate("tenant.deleteDescription")}
+        confirmLabel={translate("tenant.deleteAction")}
         variant="destructive"
         onConfirm={onConfirm}
         isPending={isPending}

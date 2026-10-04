@@ -9,6 +9,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { roleLabel } from "./-org-avatar";
 import { RowMenu } from "./-row-menu";
@@ -63,6 +64,7 @@ export function MemberRow({
   isSelf?: boolean;
   onRemove?: () => void;
 }) {
+  const translate = useAppTranslation();
   const name = memberDisplayName(member, member.userId);
   const secondary = member.user?.name
     ? (realEmail(member.user?.email) ?? member.userId)
@@ -76,7 +78,7 @@ export function MemberRow({
       <ItemContent className="min-w-0">
         <ItemTitle className="max-w-full">
           <span className="min-w-0 truncate">{name}</span>
-          {isSelf && <span className="shrink-0 text-muted-foreground">(you)</span>}
+          {isSelf && <span className="shrink-0 text-muted-foreground">{translate("org.you")}</span>}
         </ItemTitle>
         <ItemDescription>
           <span className="font-mono break-all">{secondary}</span>
@@ -84,13 +86,13 @@ export function MemberRow({
       </ItemContent>
       <ItemActions>
         <Badge variant={member.role === "member" ? "outline" : "secondary"}>
-          {roleLabel(member.role)}
+          {roleLabel(member.role, translate)}
         </Badge>
         {canManage && onRemove ? (
-          <RowMenu label={`Actions for ${name}`}>
+          <RowMenu label={translate("common.actionsNamed", { name: name ?? "" })}>
             <DropdownMenuItem variant="destructive" onClick={onRemove}>
               <UserMinusIcon />
-              Remove from organization
+              {translate("org.removeMember")}
             </DropdownMenuItem>
           </RowMenu>
         ) : (

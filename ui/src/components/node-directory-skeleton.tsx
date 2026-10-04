@@ -1,12 +1,14 @@
 import { cn } from "cn";
+import { useAppTranslation } from "@/i18n/runtime";
 import { Skeleton } from "./ui/skeleton";
 
 export function NodeDirectorySkeleton({ layout = "list" }: { layout?: "list" | "grid" }) {
+  const translate = useAppTranslation();
   const grid = layout === "grid";
   return (
     <div
       role="status"
-      aria-label="Loading communities"
+      aria-label={translate("common.loadingCommunities")}
       className={cn(
         grid
           ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"

@@ -42,6 +42,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useClientValue } from "@/hooks";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage, useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { buildEventTimeline } from "@/lib/event-timeline";
 import { type Activity, activitiesQueryOptions } from "./activity-form";
 import { useStartOnboarding } from "./event-onboarding";
@@ -50,6 +52,8 @@ import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
 
 export function ActivityEditor({ nodeId }: { nodeId: string }) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const api = useApiClient();
   const client = useQueryClient();
   const [lumaOpen, setLumaOpen] = useState(false);
@@ -70,7 +74,9 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     mutationFn: ({ activityId, show }: { activityId: string; show: boolean }) =>
       api.setDiscoveryLumaVisibility({ nodeId, activityId, show }),
     onSuccess: async (activity) => {
-      toast.success(activity.luma?.hidden ? "Hidden from the calendar" : "Shown on the calendar");
+      toast.success(
+        activity.luma?.hidden ? translate("events.hiddenToast") : translate("events.shownToast"),
+      );
       await client.invalidateQueries({
         predicate: (query) => String(query.queryKey[0]).startsWith("discovery"),
       });
@@ -81,11 +87,11 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     return (
       <EmptyState
         icon={CalendarDotsIcon}
-        title="Couldn't load events"
-        description="Check your connection and try again."
+        title={translate("events.loadListError")}
+        description={translate("events.connectionHint")}
         action={
           <Button variant="outline" onClick={() => list.refetch()}>
-            Try again
+            {translate("common.retry")}
           </Button>
         }
       />
@@ -94,7 +100,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
   const posts = list.data?.filter((a) => a.kind !== "event") ?? [];
   const timeline =
     events.length > 0
-      ? buildEventTimeline(events, { now: new Date(), timeZone: viewerTimeZone })
+      ? buildEventTimeline(events, { now: new Date(), timeZone: viewerTimeZone, locale }, translate)
       : null;
   const rowActions = (a: Activity) => (
     <div className="flex items-center gap-1">
@@ -106,7 +112,9 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           disabled={visibility.isPending || (!a.luma.available && a.status === "draft")}
           onClick={() => visibility.mutate({ activityId: a.id, show: a.status === "draft" })}
         >
-          {a.luma.hidden || a.status === "draft" ? "Show" : "Hide"}
+          {a.luma.hidden || a.status === "draft"
+            ? translate("events.show")
+            : translate("events.hide")}
         </Button>
       )}
       {a.luma ? (
@@ -118,7 +126,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             <a {...props} href={a.url} target="_blank" rel="noopener noreferrer" />
           )}
         >
-          Edit in Luma
+          {translate("events.editLuma")}
           <ArrowUpRightIcon />
         </Button>
       ) : (
@@ -126,7 +134,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           data-testid={`discovery-edit-activity-${a.id}`}
           variant="ghost"
           size="sm"
-          aria-label={`Edit ${a.title}`}
+          aria-label={translate("common.editNamed", { name: a.title ?? "" })}
           nativeButton={false}
           render={
             <Link
@@ -135,13 +143,19 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             />
           }
         >
-          Edit
+          {translate("common.edit")}
         </Button>
       )}
       {a.kind === "event" && a.status !== "cancelled" && (
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" aria-label={`More for ${a.title}`} />}
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={translate("common.moreNamed", { name: a.title ?? "" })}
+              />
+            }
           >
             <DotsThreeIcon />
           </DropdownMenuTrigger>
@@ -152,7 +166,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               onClick={() => startOnboarding.mutate({ eventId: a.id })}
             >
               <QrCodeIcon />
-              Start onboarding
+              {translate("events.startOnboarding")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -169,7 +183,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             nativeButton={false}
             render={<Link to="/nodes/$nodeId/events/new" params={{ nodeId }} />}
           >
-            <CalendarDotsIcon /> Add event
+            <CalendarDotsIcon />
+            {translate("events.add")}
           </Button>
           <Button
             data-testid="discovery-new-social"
@@ -183,7 +198,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               />
             }
           >
-            <ChatCircleIcon /> Share a post
+            <ChatCircleIcon />
+            {translate("events.sharePost")}
           </Button>
         </div>
         <Button
@@ -195,9 +211,11 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
         >
           <ArrowsClockwiseIcon />
           <span className="truncate">
-            {connection ? `Luma · ${connection.calendarName}` : "Import from Luma"}
+            {connection ? `Luma · ${connection.calendarName}` : translate("events.importLuma")}
           </span>
-          {connection?.error && <Badge variant="destructive">Sync failed</Badge>}
+          {connection?.error && (
+            <Badge variant="destructive">{translate("events.syncFailed")}</Badge>
+          )}
         </Button>
       </div>
       {list.isPending && (
@@ -211,8 +229,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       {list.data?.length === 0 && (
         <EmptyState
           icon={CalendarDotsIcon}
-          title="No events yet"
-          description="Add your first meetup or share a post so people know what's on."
+          title={translate("events.empty")}
+          description={translate("events.emptyDescription")}
         />
       )}
       {timeline && (
@@ -223,11 +241,11 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
             <TabsList variant="line">
               <TabsTrigger value="upcoming" data-testid="activity-editor.tab-upcoming">
-                Upcoming
+                {translate("events.upcoming")}
                 <Badge variant="secondary">{timeline.upcomingCount}</Badge>
               </TabsTrigger>
               <TabsTrigger value="past" data-testid="activity-editor.tab-past">
-                Past
+                {translate("events.past")}
                 <Badge variant="secondary">{timeline.pastCount}</Badge>
               </TabsTrigger>
             </TabsList>
@@ -236,7 +254,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             <TabsContent key={tab} value={tab} className="pt-6">
               {timeline[tab].length === 0 ? (
                 <p className="py-6 text-sm text-muted-foreground">
-                  {tab === "upcoming" ? "Nothing scheduled." : "No past events yet."}
+                  {tab === "upcoming" ? translate("events.noUpcoming") : translate("events.noPast")}
                 </p>
               ) : (
                 <EventTimeline
@@ -244,7 +262,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                   timeZone={viewerTimeZone}
                   badges={(a) => (
                     <>
-                      <Badge variant={statusVariant(a)}>{statusLabel(a)}</Badge>
+                      <Badge variant={statusVariant(a)}>{statusLabel(a, translate)}</Badge>
                       {a.luma && <Badge variant="outline">Luma</Badge>}
                     </>
                   )}
@@ -257,14 +275,14 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       )}
       {posts.length > 0 && (
         <div className="flex flex-col gap-4">
-          <h3 className="text-lg font-medium">Posts</h3>
+          <h3 className="text-lg font-medium">{translate("events.posts")}</h3>
           <ItemGroup>
             {posts.map((a) => (
               <Item key={a.id} variant="outline" size="sm">
                 <ItemContent>
                   <ItemTitle className="flex-wrap">
                     <span className="min-w-0 truncate">{a.title}</span>
-                    <Badge variant={statusVariant(a)}>{statusLabel(a)}</Badge>
+                    <Badge variant={statusVariant(a)}>{statusLabel(a, translate)}</Badge>
                   </ItemTitle>
                   <ItemDescription>
                     <LocalDate value={a.publishedAt} format="relative" />
@@ -279,11 +297,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       <Dialog open={lumaOpen} onOpenChange={setLumaOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import from Luma</DialogTitle>
-            <DialogDescription>
-              Public events from a Luma calendar appear here hidden. Show each event when it is
-              ready for the community calendar.
-            </DialogDescription>
+            <DialogTitle>{translate("events.importLuma")}</DialogTitle>
+            <DialogDescription>{translate("events.lumaDescription")}</DialogDescription>
           </DialogHeader>
           <LumaImport nodeId={nodeId} />
         </DialogContent>
@@ -296,11 +311,11 @@ function statusVariant(activity: Activity) {
   if (activity.status === "cancelled") return "destructive" as const;
   return "secondary" as const;
 }
-function statusLabel(activity: Activity) {
-  if (activity.luma && activity.status === "draft") return "Hidden";
-  if (activity.status === "draft") return "Draft";
-  if (activity.status === "cancelled") return "Cancelled";
-  return "Published";
+function statusLabel(activity: Activity, t: AppTranslator = translateEnglishAppMessage) {
+  if (activity.luma && activity.status === "draft") return t("events.hidden");
+  if (activity.status === "draft") return t("events.draft");
+  if (activity.status === "cancelled") return t("events.cancelled");
+  return t("events.published");
 }
 function eventDateKey(activity: Activity) {
   if (!activity.startsAt) return "undated";
@@ -311,27 +326,24 @@ function eventDateKey(activity: Activity) {
     day: "2-digit",
   }).format(new Date(activity.startsAt));
 }
-function eventDateLabel(activity: Activity) {
-  if (!activity.startsAt) return "Date to be announced";
-  const parts = new Intl.DateTimeFormat("en-US", {
+function eventDateLabel(activity: Activity, locale: string, t: AppTranslator) {
+  if (!activity.startsAt) return t("events.dateTba");
+  return new Intl.DateTimeFormat(locale, {
     timeZone: activity.timezone,
     month: "short",
     day: "numeric",
     weekday: "long",
-  }).formatToParts(new Date(activity.startsAt));
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  return `${value("month")} ${value("day")} ${value("weekday")}`;
+  }).format(new Date(activity.startsAt));
 }
-function eventTimeRange(activity: Activity) {
+function eventTimeRange(activity: Activity, locale: string) {
   if (!activity.startsAt) return null;
-  const start = new Intl.DateTimeFormat(undefined, {
+  const start = new Intl.DateTimeFormat(locale, {
     timeZone: activity.timezone,
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(activity.startsAt));
   if (!activity.endsAt) return start;
-  const end = new Intl.DateTimeFormat(undefined, {
+  const end = new Intl.DateTimeFormat(locale, {
     timeZone: activity.timezone,
     hour: "numeric",
     minute: "2-digit",
@@ -339,14 +351,14 @@ function eventTimeRange(activity: Activity) {
   }).format(new Date(activity.endsAt));
   return `${start} – ${end}`;
 }
-function eventDateTile(activity: Activity) {
+function eventDateTile(activity: Activity, locale: string) {
   const instant = activity.startsAt ?? activity.publishedAt;
   if (!instant) return null;
   const date = new Date(instant);
   const zone = activity.startsAt ? activity.timezone : undefined;
   return {
-    month: new Intl.DateTimeFormat("en-US", { timeZone: zone, month: "short" }).format(date),
-    day: new Intl.DateTimeFormat("en-US", { timeZone: zone, day: "numeric" }).format(date),
+    month: new Intl.DateTimeFormat(locale, { timeZone: zone, month: "short" }).format(date),
+    day: new Intl.DateTimeFormat(locale, { timeZone: zone, day: "numeric" }).format(date),
   };
 }
 export function EventCalendar({
@@ -360,12 +372,15 @@ export function EventCalendar({
   campaign?: string;
   onOutbound?: (activity: Activity) => void;
 }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
   const groups: { key: string; label: string; events: Activity[] }[] = [];
   for (const activity of events) {
     const key = eventDateKey(activity);
     const current = groups.find((group) => group.key === key);
     if (current) current.events.push(activity);
-    else groups.push({ key, label: eventDateLabel(activity), events: [activity] });
+    else
+      groups.push({ key, label: eventDateLabel(activity, locale, translate), events: [activity] });
   }
   return (
     <div className="flex flex-col gap-6">
@@ -404,8 +419,10 @@ export function ActivityCard({
   campaign?: string;
   variant?: "list" | "detail";
 }) {
-  const tile = eventDateTile(activity);
-  const time = useClientValue(() => eventTimeRange(activity), null);
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
+  const tile = eventDateTile(activity, locale);
+  const time = useClientValue(() => eventTimeRange(activity, locale), null);
   const cancelled = activity.status === "cancelled";
   return (
     <article className="flex flex-col gap-4">
@@ -421,7 +438,7 @@ export function ActivityCard({
               {activity.title}
             </Link>
           </h3>
-          {cancelled && <p className="mt-1 text-xs font-medium">Cancelled</p>}
+          {cancelled && <p className="mt-1 text-xs font-medium">{translate("events.cancelled")}</p>}
           {time && (
             <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
               <ClockIcon className="size-3.5 shrink-0" />
@@ -443,7 +460,7 @@ export function ActivityCard({
               rel="noopener noreferrer"
               onClick={onOutbound}
             >
-              Read original post
+              {translate("events.original")}
               <ArrowUpRightIcon className="size-3.5" />
             </a>
           )}
@@ -456,7 +473,7 @@ export function ActivityCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={onOutbound}
-            aria-label="Event details"
+            aria-label={translate("events.details")}
           >
             <span className="text-sm font-medium text-muted-foreground">{tile.month}</span>
             <span className="text-xl font-semibold tabular-nums leading-none">{tile.day}</span>
@@ -475,7 +492,7 @@ export function ActivityCard({
             <p className="text-sm leading-relaxed text-muted-foreground">{activity.summary}</p>
           )}
           {activity.luma && (
-            <p className="text-sm text-muted-foreground">Details and registration are on Luma.</p>
+            <p className="text-sm text-muted-foreground">{translate("events.lumaDetails")}</p>
           )}
           <ReportContent targetId={activity.id} kind="activity" />
         </div>
