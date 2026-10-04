@@ -163,7 +163,7 @@ export function CurateReports({ studio }: { studio: Studio }) {
                 api.moderateDiscoveryReport({
                   reportId: resolving.id,
                   action,
-                  note: String(data.get("note")),
+                  note: typeof data.get("note") === "string" ? (data.get("note") as string) : "",
                 })
               }
             >

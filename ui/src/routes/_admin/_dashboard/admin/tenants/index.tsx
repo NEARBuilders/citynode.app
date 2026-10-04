@@ -137,7 +137,7 @@ function AdminTenants() {
       {
         accessorKey: "createdAt",
         header: translate("things.created"),
-        meta: { className: "hidden lg:table-cell" },
+        meta: { hideOnMobile: true },
 
         cell: ({ row }) => (
           <span className="text-muted-foreground">

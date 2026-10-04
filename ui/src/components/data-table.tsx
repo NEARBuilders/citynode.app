@@ -44,7 +44,7 @@ const dataTableFeatures = tableFeatures({
 });
 
 export interface DataTableColumnMeta {
-  className?: string;
+  hideOnMobile?: boolean;
 }
 
 export type DataTableColumnDef<TData extends RowData> = ColumnDef<typeof dataTableFeatures, TData>;
@@ -79,7 +79,10 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id} className={header.column.columnDef.meta?.className}>
+                    <TableHead
+                      key={header.id}
+                      data-hide-on-mobile={header.column.columnDef.meta?.hideOnMobile || undefined}
+                    >
                       {header.isPlaceholder
                         ? null
                         : flexRender(header.column.columnDef.header, header.getContext())}
@@ -94,7 +97,10 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id}>
                   {row.getAllCells().map((cell) => (
-                    <TableCell key={cell.id} className={cell.column.columnDef.meta?.className}>
+                    <TableCell
+                      key={cell.id}
+                      data-hide-on-mobile={cell.column.columnDef.meta?.hideOnMobile || undefined}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}

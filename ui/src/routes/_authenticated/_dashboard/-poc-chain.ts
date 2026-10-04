@@ -100,7 +100,9 @@ function balanceOf(value: string | undefined | null): bigint {
 
 export function yoctoArg(value: unknown): bigint {
   try {
-    return value == null ? 0n : BigInt(String(value));
+    if (typeof value === "bigint") return value;
+    if (typeof value === "string" || typeof value === "number") return BigInt(value);
+    return 0n;
   } catch {
     return 0n;
   }

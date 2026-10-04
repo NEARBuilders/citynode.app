@@ -52,7 +52,7 @@ export function PasskeysMethod() {
 
   const [adding, setAdding] = useState(false);
   const [passkeyName, setPasskeyName] = useState("");
-  const [passkeyToDelete, setPasskeyToDelete] = useState<Passkey | null>(null);
+  const [passkeyToDelete, setPasskeyToDelete] = useState<Passkey>(null);
 
   const addPasskeyMutation = useMutation({
     mutationFn: async () => {

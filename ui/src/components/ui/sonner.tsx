@@ -1,6 +1,4 @@
-import { useAppTranslation } from "@/i18n/runtime";
-
-("use client");
+"use client";
 
 import {
   CheckCircleIcon,
@@ -11,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import { useTheme } from "next-themes";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { useAppTranslation } from "@/i18n/runtime";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const translate = useAppTranslation();

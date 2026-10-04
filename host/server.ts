@@ -34,4 +34,4 @@ try {
 // server boots so SSR container loads and any config fetches route through it.
 installBundleFetchFromEnv({ configPath: process.env.BOS_CONFIG_PATH ?? null });
 
-runServerBlocking({ config });
+await runServerBlocking({ config });

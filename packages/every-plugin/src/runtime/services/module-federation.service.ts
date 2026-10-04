@@ -92,7 +92,7 @@ const createModuleFederationInstance = Effect.cached(
 
       return instance;
     } catch (error) {
-      throw new Error(`Failed to initialize Module Federation: ${error}`);
+      throw new Error(`Failed to initialize Module Federation: ${String(error)}`);
     }
   }),
 );

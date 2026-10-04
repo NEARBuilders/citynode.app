@@ -409,8 +409,10 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
             run={(data) =>
               api.featureDiscoveryNode({
                 nodeId: node.nodeId,
-                label: String(data.get("label")),
-                expiresAt: new Date(String(data.get("expires"))).toISOString(),
+                label: typeof data.get("label") === "string" ? (data.get("label") as string) : "",
+                expiresAt: new Date(
+                  typeof data.get("expires") === "string" ? (data.get("expires") as string) : "",
+                ).toISOString(),
               })
             }
           >

@@ -165,7 +165,7 @@ function AdminNodeDetail() {
             value={activeTab}
             onValueChange={(value) => {
               const next = parseNodeDetailTab(value);
-              navigate({ search: { tab: next === "overview" ? undefined : next } });
+              void navigate({ search: { tab: next === "overview" ? undefined : next } });
             }}
           >
             <TabsList variant="line">

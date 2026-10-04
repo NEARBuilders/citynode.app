@@ -83,17 +83,22 @@ describe("constructTree over the auth route shape", () => {
     });
 
     const root = tree.rootRoute as unknown as { children: Array<{ options: { id: string } }> };
-    expect(root.children.map((child) => child.options.id).sort()).toEqual([
-      "__mount_authenticated",
-      "__mount_public",
-    ]);
+    expect(
+      root.children
+        .map((child) => child.options.id)
+        .sort((a, b) => (a ?? "").localeCompare(b ?? "")),
+    ).toEqual(["__mount_authenticated", "__mount_public"]);
 
     const publicMount = root.children.find(
       (child) => child.options.id === "__mount_public",
     ) as unknown as {
       children: Array<{ options: { path?: string; isIndex?: boolean } }>;
     };
-    expect(publicMount.children.map((child) => child.options.path).sort()).toEqual(["/", "/login"]);
+    expect(
+      publicMount.children
+        .map((child) => child.options.path)
+        .sort((a, b) => (a ?? "").localeCompare(b ?? "")),
+    ).toEqual(["/", "/login"]);
 
     const navLogin = tree.nav.items.find((item) => item.plugin === "auth");
     expect(navLogin).toMatchObject({ to: "/login", mount: "public", plugin: "auth" });

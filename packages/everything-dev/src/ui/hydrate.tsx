@@ -236,9 +236,9 @@ export async function hydrate(options: CoreHydrateOptions) {
       import("@tanstack/react-query"),
       import("./router-client"),
     ]);
-    const [coreRouteConfig] = await Promise.all([
-      options.routeConfig().then((mod) => ("default" in mod ? mod.default : mod)),
-    ]);
+    const coreRouteConfig = await options
+      .routeConfig()
+      .then((mod) => ("default" in mod ? mod.default : mod));
     const client = defaultQueryClient();
 
     mark(`$_TSR present: ${Boolean(window.$_TSR)}`);

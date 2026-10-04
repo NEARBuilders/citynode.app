@@ -132,7 +132,7 @@ function AdminNodes() {
         id: "parent",
         accessorFn: (row) => row.parent?.name ?? "",
         header: translate("common.parent"),
-        meta: { className: "hidden lg:table-cell" },
+        meta: { hideOnMobile: true },
 
         cell: ({ row }) =>
           row.original.parent ? (
@@ -164,7 +164,7 @@ function AdminNodes() {
       {
         accessorKey: "childrenCount",
         header: translate("admin.community.children"),
-        meta: { className: "hidden lg:table-cell" },
+        meta: { hideOnMobile: true },
 
         cell: ({ row }) => <span className="tabular-nums">{row.original.childrenCount}</span>,
       },
@@ -190,7 +190,7 @@ function AdminNodes() {
           <Tabs
             value={scope}
             onValueChange={(value) =>
-              navigate({
+              void navigate({
                 search: (previous) => ({
                   ...previous,
                   scope: value === "all" ? "all" : undefined,
@@ -213,7 +213,7 @@ function AdminNodes() {
             onValueChange={(value) => {
               const nextKind = parseKind(value);
               if (!nextKind) return;
-              navigate({
+              void navigate({
                 search: (previous) => ({
                   ...previous,
                   kind: nextKind === "all" ? undefined : nextKind,

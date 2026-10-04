@@ -268,7 +268,7 @@ export function buildStarterRouteExclusions(
   level: StarterLevel,
   parentConfig: { starter?: ParentStarterConfig } | null | undefined,
 ): string[] {
-  const excluded = new Set<string>([...STARTER_PRODUCT_EXCLUSIONS]);
+  const excluded = new Set<string>(STARTER_PRODUCT_EXCLUSIONS);
   if (level === "simple") {
     for (const entry of STARTER_SIMPLE_EXCLUSIONS) excluded.add(entry);
   }

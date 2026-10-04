@@ -16,7 +16,8 @@ export function useSwitchTeam() {
   const router = useRouter();
   const synchronization = createWorkspaceSynchronization({ auth, queryClient, router });
   const reportError = (error: Error) => {
-    if (reportWorkspaceRefreshError(error, synchronization.synchronize, reportError)) return;
+    if (reportWorkspaceRefreshError(error, () => synchronization.synchronize(), reportError))
+      return;
     toast.error(appErrorMessage(error, translate));
   };
 
@@ -34,6 +35,6 @@ export function useSwitchTeam() {
 
   return {
     ...mutation,
-    refreshWorkspace: synchronization.synchronize,
+    refreshWorkspace: () => synchronization.synchronize(),
   };
 }

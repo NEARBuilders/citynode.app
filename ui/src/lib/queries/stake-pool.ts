@@ -84,7 +84,7 @@ function callViewFunction(
   methodName: string,
   args: Record<string, unknown>,
   network: Network = "mainnet",
-): Promise<unknown | null> {
+): Promise<unknown> {
   return authClient.near
     .getNearClient(network)
     .view(accountId, methodName, args)

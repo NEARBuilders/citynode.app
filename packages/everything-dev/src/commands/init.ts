@@ -92,7 +92,7 @@ export function registerInit(builder: BosBuilder) {
         } catch (e) {
           console.warn(
             `[init] Failed to fetch parent config from ${extendsAccount}/${extendsGateway}: ${
-              e instanceof Error ? e.message : e
+              e instanceof Error ? e.message : (JSON.stringify(e) ?? "Unknown error")
             }`,
           );
           return {

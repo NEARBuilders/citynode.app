@@ -4,10 +4,12 @@ class TestRunError extends Data.TaggedError("TestRunError")<{ cause: unknown }> 
 
 export interface ServiceHarness<Svc, LayerError, ServiceError> {
   run<A>(
+    this: void,
     layer: Layer.Layer<any, LayerError, never>,
     fn: (svc: Svc) => Promise<A> | Effect.Effect<A, ServiceError, never>,
   ): Promise<A>;
   squashError<A>(
+    this: void,
     layer: Layer.Layer<any, LayerError, never>,
     fn: (svc: Svc) => Promise<A> | Effect.Effect<A, ServiceError, never>,
   ): Promise<unknown>;

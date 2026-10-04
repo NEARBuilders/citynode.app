@@ -19,7 +19,7 @@ interface SignOutMutationLike {
 
 interface UserNavMenuContentProps {
   nearAccountId: string | null | undefined;
-  activeOrg?: Organization | undefined;
+  activeOrg?: Organization;
   avatarSrc: string | undefined;
   displayName: string;
   handle: string;

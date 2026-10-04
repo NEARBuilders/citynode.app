@@ -100,6 +100,7 @@ const child = spawn(process.execPath, spec.command, {
 let forceExitTimer = null;
 const killGroup = (signal) => {
   try {
+    if (child.pid === undefined) throw new Error("Child process did not expose a pid");
     process.kill(-child.pid, signal);
   } catch {
     child.kill(signal);

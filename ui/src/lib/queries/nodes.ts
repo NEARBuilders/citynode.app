@@ -6,7 +6,7 @@ const NODE_STALE_TIME = 30 * 1000;
 export type AdminNodeListScope = "roots" | "all";
 
 type NodeRecord = Awaited<ReturnType<ApiClient["listNodes"]>>[number];
-export type AdminNodeListKind = NonNullable<NodeRecord["kind"]> | "all";
+export type AdminNodeListKind = string;
 
 export interface AdminNodeListRow {
   node: NodeRecord;

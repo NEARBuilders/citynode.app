@@ -23,7 +23,6 @@ import { MotionConfig } from "framer-motion";
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import type { RouterContext } from "@/app";
-import { getBaseStyles } from "@/app";
 import { RootError } from "@/components/root-error";
 import { RootNotFound } from "@/components/root-not-found";
 import { Toaster } from "@/components/ui/sonner";
@@ -175,7 +174,6 @@ function RootDocument() {
     >
       <head>
         <HeadContent />
-        <style nonce={cspNonce} dangerouslySetInnerHTML={{ __html: getBaseStyles() }} />
       </head>
       <body>
         <MotionConfig reducedMotion="user">
@@ -224,14 +222,7 @@ function GlobalChrome() {
 
   return (
     <TooltipProvider>
-      <div
-        className="h-dvh w-full flex flex-col overflow-hidden bg-background text-foreground"
-        style={{
-          paddingTop: "env(safe-area-inset-top, 0px)",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
+      <div className="h-dvh w-full flex flex-col overflow-hidden bg-background text-foreground safe-area-padding">
         {showBar && (
           <div className="fixed top-0 left-0 right-0 h-0.5 z-50 overflow-hidden pointer-events-none">
             <div className="h-full w-full bg-brand" />

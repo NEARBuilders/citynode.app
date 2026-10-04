@@ -1,6 +1,6 @@
 import { MemoryPublisher } from "@orpc/publisher/memory";
 import { ORPCError } from "@orpc/server";
-import { Context, DateTime, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Exit, Layer } from "effect";
 import { createPlugin } from "every-plugin";
 import { z } from "zod";
 import { contract, type ProposalEventSchema } from "./contract";
@@ -316,15 +316,12 @@ export default createPlugin({
         for await (const event of iterator) {
           if (input.pluginId && event.pluginId !== input.pluginId) continue;
           if (input.entityId && event.entityId !== input.entityId) continue;
-          if (
-            !(await Effect.runPromise(
-              canReadProposal(context, event.pluginId, event.entityId).pipe(
-                Effect.provide(context["effect/context"]),
-              ),
-            ))
-          ) {
-            continue;
-          }
+          const canRead = await Effect.runPromiseExit(
+            canReadProposal(context, event.pluginId, event.entityId).pipe(
+              Effect.provide(context["effect/context"]),
+            ),
+          );
+          if (Exit.isFailure(canRead) || !canRead.value) continue;
           yield event;
         }
       }),

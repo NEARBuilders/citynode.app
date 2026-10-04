@@ -481,7 +481,7 @@ export function readBosConfigForBuild(configDir: string): Record<string, unknown
       }
     } catch (e) {
       console.warn(
-        `[Config] Failed to parse _resolved.json, falling back to bos.config.json: ${e}`,
+        `[Config] Failed to parse _resolved.json, falling back to bos.config.json: ${String(e)}`,
       );
     }
   }
@@ -1337,7 +1337,7 @@ export function resolveUiRuntimeName(
         return sanitizeContainerName(pkg.name);
       }
     } catch (e) {
-      console.warn(`[Config] Could not read package.json at ${pkgPath}: ${e}`);
+      console.warn(`[Config] Could not read package.json at ${pkgPath}: ${String(e)}`);
     }
   }
   return typeof uiConfig?.name === "string" ? uiConfig.name : `${apiName}-ui`;
@@ -1363,7 +1363,7 @@ export function resolvePluginRuntimeName(
       return packageJson.name;
     }
   } catch (e) {
-    console.warn(`[Config] Could not read package.json at ${localPath}: ${e}`);
+    console.warn(`[Config] Could not read package.json at ${localPath}: ${String(e)}`);
   }
 
   return fallback;

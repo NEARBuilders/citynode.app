@@ -266,10 +266,11 @@ export async function fetchDaoMembership(
  * the session to the signed-in identity.
  */
 export function useDaoAutoRestore(authAccountId: string | null): void {
-  const set = useDaoConnectionStore((s) => s.set);
+  const set = (partial: Partial<DaoConnectionState>) =>
+    useDaoConnectionStore.getState().set(partial);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const connector = getConnector();
         const result = await connector.getConnectedWallet();

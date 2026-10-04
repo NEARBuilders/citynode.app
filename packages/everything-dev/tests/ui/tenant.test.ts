@@ -466,7 +466,7 @@ describe("integrity preflight", () => {
 
   const stubBundle = (content: string) => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.includes("remoteEntry.server.js")) return new Response(`${content}-server`);
       return new Response(content);
     });
@@ -508,7 +508,7 @@ describe("integrity preflight", () => {
   it("verifies a pinned slot by SRI-comparing the manifest document", async () => {
     const manifestBody = JSON.stringify({ entry: "remoteEntry.aaa.js" });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.endsWith("versions/8f3ac1d2feedbeef.json")) {
         return new Response(manifestBody);
       }
@@ -537,7 +537,7 @@ describe("integrity preflight", () => {
 
   it("rejects the html landing page a bare base url serves", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url === "https://cdn.example.com/ui/remoteEntry.js")
         return new Response("console.log('hi')");
       return new Response("<!doctype html>landing page");
