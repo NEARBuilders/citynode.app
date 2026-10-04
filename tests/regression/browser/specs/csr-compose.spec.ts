@@ -55,7 +55,8 @@ test.describe("CSR compose", () => {
     }, manifestUrl);
     expect(entryStatus, `auth mf-manifest at ${manifestUrl}`).toBe(200);
 
-    await page.getByTestId("login.language-select").selectOption("es");
+    await page.getByTestId("login.language-select").click();
+    await page.getByRole("option", { name: "Español", exact: true }).click();
     await expect(signInHeading).toHaveText("Inicia sesión en CityNode");
     await expect(page.getByTestId("application-startup-error")).toHaveCount(0);
     await expect(
