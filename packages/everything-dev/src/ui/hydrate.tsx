@@ -10,7 +10,7 @@
  */
 
 import type { ClientRuntimeConfig } from "../types";
-import { createApiClient } from "./api";
+import { type ClientServiceConfig, createApiClient } from "./api";
 import { createAuthClient } from "./auth";
 import {
   CORE_UI_PLUGIN_KEY,
@@ -21,6 +21,7 @@ import {
 } from "./manifest";
 import { defaultQueryClient } from "./router-defaults";
 import { getCspNonce, getRuntimeConfig } from "./runtime";
+import type { CreateRouterOptions } from "./types";
 
 declare global {
   interface Window {
@@ -47,7 +48,11 @@ function isAbsoluteHttpUrl(value: string | undefined): value is string {
   }
 }
 
-export interface CoreHydrateOptions {
+export interface CoreHydrateOptions
+  extends Pick<
+    CreateRouterOptions,
+    "defaultErrorComponent" | "defaultPendingComponent" | "defaultNotFoundComponent"
+  > {
   /**
    * Loads the app's generated core route config — the only app-specific
    * input; clients, compose machinery, and the router come from the package.
@@ -55,6 +60,7 @@ export interface CoreHydrateOptions {
   routeConfig: () => Promise<RouteConfigModule | { default: RouteConfigModule }>;
   /** Overrides the runtime config source (tests, embeds). */
   config?: ClientRuntimeConfig;
+  apiConnectionError?: ClientServiceConfig["connectionError"];
 }
 
 interface ComposedTree {
@@ -241,14 +247,19 @@ export async function hydrate(options: CoreHydrateOptions) {
 
     const { router } = createRouter({
       routeTree: composed?.routeTree,
+      defaultErrorComponent: options.defaultErrorComponent,
+      defaultPendingComponent: options.defaultPendingComponent,
+      defaultNotFoundComponent: options.defaultNotFoundComponent,
       context: {
         pluginNav: composed?.nav,
         queryClient: client,
         runtimeConfig,
         cspNonce,
+        locale: isServerRendered() ? document.documentElement.lang : undefined,
         apiClient: createApiClient({
           hostUrl: runtimeConfig.hostUrl,
           rpcBase: runtimeConfig.rpcBase,
+          connectionError: options.apiConnectionError,
         }),
         authClient: createAuthClient({ runtimeConfig, cspNonce }),
       },

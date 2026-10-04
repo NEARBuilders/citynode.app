@@ -1,4 +1,28 @@
 import type { Messages } from "@lingui/core";
+import { compileMessageOrThrow } from "@lingui/message-utils/compileMessage";
+import { administrationMessages } from "./messages/administration";
+import { commonMessages } from "./messages/common";
+import { configurationMessages } from "./messages/configuration";
+import { deploymentMessages } from "./messages/deployment";
+import { discoveryMessages } from "./messages/discovery";
+import { lifecycleMessages } from "./messages/lifecycle";
+import { metadataMessages } from "./messages/metadata";
+import { organizationsMessages } from "./messages/organizations";
+import { publicMessages } from "./messages/public";
+import { thingsMessages } from "./messages/things";
+
+export const appFeatureCatalogs = [
+  commonMessages,
+  deploymentMessages,
+  publicMessages,
+  discoveryMessages,
+  organizationsMessages,
+  configurationMessages,
+  lifecycleMessages,
+  administrationMessages,
+  thingsMessages,
+  metadataMessages,
+] as const;
 
 export const APP_LOCALES = ["en", "es", "fr", "zh"] as const;
 export type AppLocale = (typeof APP_LOCALES)[number];
@@ -150,6 +174,17 @@ const englishApplyMessages = {
 } as const;
 
 export const englishAppMessages = {
+  ...commonMessages.en,
+  ...deploymentMessages.en,
+  ...publicMessages.en,
+  ...discoveryMessages.en,
+  ...organizationsMessages.en,
+  ...configurationMessages.en,
+  ...lifecycleMessages.en,
+  ...administrationMessages.en,
+  ...thingsMessages.en,
+  ...metadataMessages.en,
+  "locale.saveError": "Could not save your language. Try again.",
   ...englishPublicMessages,
   ...englishApplyMessages,
   "landing.eyebrow": "Local communities on NEAR",
@@ -182,6 +217,17 @@ export type AppMessageId = keyof typeof englishAppMessages;
 export type AppTranslator = (id: AppMessageId, values?: Record<string, string | number>) => string;
 
 const spanishAppMessages = {
+  ...commonMessages.es,
+  ...deploymentMessages.es,
+  ...publicMessages.es,
+  ...discoveryMessages.es,
+  ...organizationsMessages.es,
+  ...configurationMessages.es,
+  ...lifecycleMessages.es,
+  ...administrationMessages.es,
+  ...thingsMessages.es,
+  ...metadataMessages.es,
+  "locale.saveError": "No se pudo guardar tu idioma. Inténtalo de nuevo.",
   "nav.home": "Inicio de CityNode",
   "nav.main": "Navegación principal",
   "nav.explore": "Explorar",
@@ -342,6 +388,17 @@ const spanishAppMessages = {
 } satisfies Record<AppMessageId, string>;
 
 const frenchAppMessages = {
+  ...commonMessages.fr,
+  ...deploymentMessages.fr,
+  ...publicMessages.fr,
+  ...discoveryMessages.fr,
+  ...organizationsMessages.fr,
+  ...configurationMessages.fr,
+  ...lifecycleMessages.fr,
+  ...administrationMessages.fr,
+  ...thingsMessages.fr,
+  ...metadataMessages.fr,
+  "locale.saveError": "Impossible d’enregistrer votre langue. Réessayez.",
   "nav.home": "Accueil CityNode",
   "nav.main": "Navigation principale",
   "nav.explore": "Explorer",
@@ -503,6 +560,17 @@ const frenchAppMessages = {
 } satisfies Record<AppMessageId, string>;
 
 const chineseAppMessages = {
+  ...commonMessages.zh,
+  ...deploymentMessages.zh,
+  ...publicMessages.zh,
+  ...discoveryMessages.zh,
+  ...organizationsMessages.zh,
+  ...configurationMessages.zh,
+  ...lifecycleMessages.zh,
+  ...administrationMessages.zh,
+  ...thingsMessages.zh,
+  ...metadataMessages.zh,
+  "locale.saveError": "无法保存你的语言，请重试。",
   "nav.home": "CityNode 首页",
   "nav.main": "主导航",
   "nav.explore": "探索",
@@ -660,13 +728,24 @@ const chineseAppMessages = {
   "landing.cta.about": "关于 City Nodes",
 } satisfies Record<AppMessageId, string>;
 
-const translatedMessages: Record<AppLocale, Partial<Record<AppMessageId, string>>> = {
-  en: {},
+export const appCatalogs = {
+  en: englishAppMessages,
   es: spanishAppMessages,
   fr: frenchAppMessages,
   zh: chineseAppMessages,
-};
+} satisfies Record<AppLocale, Record<AppMessageId, string>>;
+
+const compiledMessages = new Map<AppLocale, Messages>();
 
 export function getAppMessages(locale: AppLocale): Messages {
-  return { ...englishAppMessages, ...translatedMessages[locale] };
+  const cached = compiledMessages.get(locale);
+  if (cached) return cached;
+  const messages = Object.fromEntries(
+    Object.entries({
+      ...englishAppMessages,
+      ...appCatalogs[locale],
+    }).map(([id, message]) => [id, compileMessageOrThrow(message)]),
+  );
+  compiledMessages.set(locale, messages);
+  return messages;
 }

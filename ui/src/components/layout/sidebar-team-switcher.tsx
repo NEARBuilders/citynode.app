@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { WorkspaceTeam } from "@/lib/team-workspace";
 
 interface SidebarTeamSwitcherProps {
@@ -24,6 +25,7 @@ export function SidebarTeamSwitcher({
   isPending,
   onSelect,
 }: SidebarTeamSwitcherProps) {
+  const translate = useAppTranslation();
   if (teams.length === 0) return null;
   const activeTeam = teams.find((team) => team.id === activeTeamId);
 
@@ -41,8 +43,8 @@ export function SidebarTeamSwitcher({
           >
             <UsersIcon />
             <span className="min-w-0 flex-1 truncate">
-              <span className="text-muted-foreground">Team: </span>
-              {activeTeam?.name ?? "All areas"}
+              <span className="text-muted-foreground">{translate("org.teamLabel")}</span>
+              {activeTeam?.name ?? translate("org.allAreas")}
             </span>
             <CaretUpDownIcon className="ml-auto size-4 text-muted-foreground" />
           </DropdownMenuTrigger>
@@ -53,7 +55,7 @@ export function SidebarTeamSwitcher({
             sideOffset={4}
           >
             <DropdownMenuGroup>
-              <DropdownMenuLabel>Work as a team</DropdownMenuLabel>
+              <DropdownMenuLabel>{translate("org.workAsTeam")}</DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {teams.map((team) => (
@@ -77,7 +79,7 @@ export function SidebarTeamSwitcher({
               data-testid="team-switcher-item-all"
             >
               <StackIcon />
-              All areas
+              {translate("org.allAreas")}
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>

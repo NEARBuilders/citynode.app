@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { refreshSessionCache, useAuthClient } from "everything-dev/ui/auth";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { LoginMessageId } from "@/i18n/catalogs";
+import { useLoginTranslation } from "@/i18n/runtime";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -20,10 +22,11 @@ interface AddEmailDialogProps {
 }
 
 export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
+  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoginMessageId | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -38,19 +41,15 @@ export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
         method: "POST",
         body: { email: newEmail },
       });
-      const message =
-        apiError && typeof apiError === "object" && "message" in apiError
-          ? (apiError as { message?: string }).message
-          : undefined;
-      if (apiError) throw new Error(message || "Could not save email");
+      if (apiError) throw apiError;
     },
     onSuccess: async () => {
       await refreshSessionCache(auth, queryClient);
-      toast.success("Email saved");
+      toast.success(translate("auth.common.emailSaved"));
       onOpenChange(false);
     },
-    onError: (err: Error) => {
-      setError(err.message);
+    onError: () => {
+      setError("auth.email.saveError");
     },
   });
 
@@ -58,7 +57,7 @@ export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
     event.preventDefault();
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
-      setError("Enter your email");
+      setError("auth.email.required");
       return;
     }
     setError(null);
@@ -70,13 +69,11 @@ export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
       <DialogContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <DialogHeader>
-            <DialogTitle>Add your email</DialogTitle>
-            <DialogDescription>
-              So you can sign in from another device and recover your account.
-            </DialogDescription>
+            <DialogTitle>{translate("auth.email.add")}</DialogTitle>
+            <DialogDescription>{translate("auth.email.description")}</DialogDescription>
           </DialogHeader>
           <Field>
-            <FieldLabel htmlFor="add-email-input">Email</FieldLabel>
+            <FieldLabel htmlFor="add-email-input">{translate("auth.common.email")}</FieldLabel>
             <Input
               id="add-email-input"
               type="email"
@@ -86,13 +83,13 @@ export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
+              placeholder={translate("auth.common.emailExample")}
               data-testid="add-email.input"
             />
             {error ? (
-              <FieldError>{error}</FieldError>
+              <FieldError>{translate(error)}</FieldError>
             ) : (
-              <FieldDescription>We won't share it. You can change it later.</FieldDescription>
+              <FieldDescription>{translate("auth.email.privacy")}</FieldDescription>
             )}
           </Field>
           <DialogFooter>
@@ -103,14 +100,14 @@ export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
               disabled={mutation.isPending}
               data-testid="add-email.cancel"
             >
-              Cancel
+              {translate("auth.common.cancel")}
             </Button>
             <Button
               type="submit"
               disabled={mutation.isPending || !email.trim()}
               data-testid="add-email.save"
             >
-              {mutation.isPending ? "Saving…" : "Save"}
+              {mutation.isPending ? translate("auth.common.saving") : translate("auth.common.save")}
             </Button>
           </DialogFooter>
         </form>

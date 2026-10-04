@@ -1,4 +1,5 @@
 import { CopyIcon, KeyIcon, TrashIcon } from "@phosphor-icons/react";
+import { Trans } from "everything-dev/ui/i18n";
 import { useState } from "react";
 import {
   ApiKeyForm,
@@ -22,6 +23,7 @@ import {
   ItemSeparator,
   ItemTitle,
 } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { RowMenu } from "./-row-menu";
 
 export type OrganizationApiKey = {
@@ -57,13 +59,14 @@ export function ApiKeysTab({
   onDelete: (id: string) => void;
   onDismiss: () => void;
 }) {
+  const translate = useAppTranslation();
   const [deleting, setDeleting] = useState<OrganizationApiKey | null>(null);
 
   return (
     <TabsContent value="apikeys" className="flex flex-col gap-6 pt-6">
       <SectionHeader
-        title="API keys"
-        description="Let scripts and agents act for this organization."
+        title={translate("org.apiKeys")}
+        description={translate("org.apiDescription")}
       />
       {canManageMembers && <ApiKeyForm onCreate={onCreate} isPending={isCreating} />}
       {createdApiKey && <ApiKeyReveal apiKey={createdApiKey} onDismiss={onDismiss} />}
@@ -78,25 +81,39 @@ export function ApiKeysTab({
                   <KeyIcon />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
-                  <ItemTitle className="break-all">{key.name ?? "Unnamed key"}</ItemTitle>
+                  <ItemTitle className="break-all">
+                    {key.name ?? translate("org.unnamedKey")}
+                  </ItemTitle>
                   <ItemDescription>
                     <span className="font-mono break-all">
                       {key.prefix ?? "api_"}…{key.start ?? ""}
                     </span>{" "}
-                    · created <LocalDate value={key.createdAt} />
+                    ·{" "}
+                    <Trans
+                      id="date.created"
+                      components={{ date: <LocalDate value={key.createdAt} /> }}
+                    />
                     {key.expiresAt ? (
                       <>
                         {" "}
-                        · expires <LocalDate value={key.expiresAt} format="relative" />
+                        ·{" "}
+                        <Trans
+                          id="date.expires"
+                          components={{
+                            date: <LocalDate value={key.expiresAt} format="relative" />,
+                          }}
+                        />
                       </>
                     ) : null}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
-                  <RowMenu label={`Actions for ${key.name ?? "key"}`}>
-                    <DropdownMenuItem onClick={() => onCopy(key.start || "", "Key prefix copied")}>
+                  <RowMenu label={translate("common.actionsNamed", { name: key.name ?? "key" })}>
+                    <DropdownMenuItem
+                      onClick={() => onCopy(key.start || "", translate("keys.prefixCopied"))}
+                    >
                       <CopyIcon />
-                      Copy prefix
+                      {translate("org.copyPrefix")}
                     </DropdownMenuItem>
                     {canManageMembers && (
                       <>
@@ -107,7 +124,7 @@ export function ApiKeysTab({
                           disabled={isDeleting}
                         >
                           <TrashIcon />
-                          Delete key
+                          {translate("org.deleteKey")}
                         </DropdownMenuItem>
                       </>
                     )}
@@ -118,15 +135,17 @@ export function ApiKeysTab({
           ))}
         </ItemGroup>
       ) : (
-        <EmptyState icon={KeyIcon} title="No API keys" className="py-10" />
+        <EmptyState icon={KeyIcon} title={translate("org.noKeys")} className="py-10" />
       )}
 
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}
-        title={`Delete ${deleting?.name ?? "this key"}?`}
-        description="Anything using it stops working immediately."
-        confirmLabel="Delete key"
+        title={translate("common.deleteQuestion", {
+          name: deleting?.name ?? translate("org.thisKey"),
+        })}
+        description={translate("org.keyDeleteDescription")}
+        confirmLabel={translate("org.deleteKey")}
         variant="destructive"
         isPending={isDeleting}
         onConfirm={() => {

@@ -6,17 +6,20 @@ import { toast } from "sonner";
 import {
   buildDraftFromResolvedConfig,
   buildTenantUrl,
+  createTenantConfigDraftSchema,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,
   type TenantConfigDraft,
-  tenantConfigDraftSchema,
   useApiClient,
   useAuthClient,
 } from "@/app";
 import { Badge, Button, ConfirmDialog, EmptyState, InfoRow, SectionHeader } from "@/components";
 import { FieldGroup } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
 import { canAccountPropose, trezuDaoUrl } from "@/lib/sputnik-proposals";
 import { proposeTenantConfigAsMember, publishTenantConfigForMode } from "@/lib/tenant-deploy";
@@ -42,6 +45,7 @@ export function HomepageTab({
   canManage,
   isActive,
 }: HomepageTabProps) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -75,7 +79,18 @@ export function HomepageTab({
     setDraft(update);
   };
 
-  const parsedDraft = tenantConfigDraftSchema.safeParse(draft);
+  const draftSchema = createTenantConfigDraftSchema({
+    url: translate("nodeConfig.urlInvalid"),
+    integrity: translate("nodeConfig.integrityInvalid"),
+    manifest: translate("bundle.manifestInvalid"),
+    title: translate("nodeConfig.titleRequired"),
+    description: translate("nodeConfig.descriptionRequired"),
+    uiPair: translate("bundle.uiPairRequired"),
+    integrityMode: translate("bundle.integrityMode"),
+    pinPair: translate("bundle.pinPair"),
+    ssrPair: translate("nodeConfig.ssrPairRequired"),
+  });
+  const parsedDraft = draftSchema.safeParse(draft);
   const diff = useMemo(() => diffDraft(draft, resolvedConfig), [draft, resolvedConfig]);
 
   const [verifying, setVerifying] = useState(false);
@@ -91,9 +106,9 @@ export function HomepageTab({
   const proposeMutation = useMutation({
     mutationFn: async () => {
       if (!tenant) throw new Error("Tenant not loaded");
-      if (!gatewayId) throw new Error("Gateway not configured");
+      if (!gatewayId) throw new Error(translate("tenant.noGateway"));
       if (!hostname) throw new Error("No primary domain binding configured for this tenant");
-      const value = tenantConfigDraftSchema.parse(draft);
+      const value = draftSchema.parse(draft);
       const app = draftUiOverride(value);
       const common = {
         gatewayId,
@@ -120,26 +135,22 @@ export function HomepageTab({
       });
     },
     onSuccess: async () => {
-      toast.success(
-        daoOwned
-          ? "Proposal submitted. The homepage goes live once it passes."
-          : "Homepage published",
-      );
+      toast.success(daoOwned ? translate("homepage.proposed") : translate("homepage.published"));
       await invalidateTenantQueries(queryClient);
       await queryClient.invalidateQueries({ queryKey: ["node-config"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const onPropose = async () => {
     if (!parsedDraft.success) {
-      toast.error(parsedDraft.error.issues[0]?.message ?? "Fix the form first");
+      toast.error(parsedDraft.error.issues[0]?.message ?? translate("nodeConfig.fixForm"));
       return;
     }
     setVerifying(true);
     let preflight: Awaited<ReturnType<typeof runIntegrityPreflight>>;
     try {
-      preflight = await runIntegrityPreflight(parsedDraft.data);
+      preflight = await runIntegrityPreflight(parsedDraft.data, translate);
     } finally {
       setVerifying(false);
     }
@@ -159,11 +170,9 @@ export function HomepageTab({
       <div data-testid="orgs-homepage-empty">
         <EmptyState
           icon={StackIcon}
-          title={gatewayId ? "No community yet" : "Gateway not configured"}
+          title={gatewayId ? translate("tenant.noCommunity") : translate("tenant.noGateway")}
           description={
-            gatewayId
-              ? "Start a community to give it a homepage."
-              : "The active runtime declares no gateway, so the homepage can't be resolved here."
+            gatewayId ? translate("homepage.startHint") : translate("homepage.noGateway")
           }
         />
       </div>
@@ -172,41 +181,46 @@ export function HomepageTab({
 
   const busy = proposeMutation.isPending || verifying || computing;
   const blockReason = !canManage
-    ? "Only owners and admins can propose a new homepage."
+    ? translate("homepage.ownerPermission")
     : !isActive
-      ? "Make this organization active to propose a new homepage."
+      ? translate("homepage.activate")
       : tenant.status !== "active"
-        ? `This community is ${tenant.status}.`
+        ? translate("nodeConfig.communityStatusNamed", {
+            status: presentationLabel(tenant.status, translate),
+          })
         : !parsedDraft.success
-          ? (parsedDraft.error.issues[0]?.message ?? "Fix the form first.")
+          ? (parsedDraft.error.issues[0]?.message ?? translate("nodeConfig.fixFormSentence"))
           : daoOwned && !nearAccountId
-            ? "Connect your NEAR wallet to propose."
+            ? translate("homepage.connect")
             : daoOwned && activeNetwork !== "mainnet"
-              ? "Switch your NEAR wallet to mainnet to propose."
+              ? translate("homepage.mainnet")
               : daoOwned && policy && !canAccountPropose(policy, nearAccountId)
-                ? `${nearAccountId} has no AddProposal permission on ${tenantAccount}.`
+                ? translate("homepage.permission", {
+                    account: nearAccountId ?? "",
+                    dao: tenantAccount,
+                  })
                 : !daoOwned && !hasSigningWallet
-                  ? "Connect your NEAR wallet to publish."
+                  ? translate("nodeConfig.connectPublish")
                   : null;
   const canPropose = blockReason === null && !busy;
 
   return (
     <div className="flex flex-col gap-12">
       <section className="flex flex-col gap-4">
-        <SectionHeader title="Homepage" sectionTestId="orgs-homepage-state" />
+        <SectionHeader title={translate("homepage.title")} sectionTestId="orgs-homepage-state" />
         <div className="flex flex-col">
           <InfoRow
-            label="Status"
+            label={translate("common.status")}
             value={
               <span className="inline-flex flex-wrap items-center justify-end gap-2">
                 {pendingProposal ? (
                   <Badge variant="warning" data-testid="orgs-homepage-pending">
-                    Awaiting votes · #{pendingProposal.id}
+                    {translate("lifecycle.awaitingProposal", { proposal: pendingProposal.id })}
                   </Badge>
                 ) : configPublished ? (
-                  <Badge variant="success">Live</Badge>
+                  <Badge variant="success">{translate("things.live")}</Badge>
                 ) : (
-                  <Badge variant="outline">Not published</Badge>
+                  <Badge variant="outline">{translate("tenant.notPublished")}</Badge>
                 )}
               </span>
             }
@@ -214,16 +228,20 @@ export function HomepageTab({
           {pendingProposal && (
             <>
               <InfoRow
-                label="Approvals"
+                label={translate("lifecycle.approvals")}
                 value={
                   <span data-testid="orgs-homepage-threshold">
-                    {threshold.approved}
-                    {threshold.required == null ? "" : `/${threshold.required}`} approvals
+                    {threshold.required == null
+                      ? translate("homepage.approvals", { approved: threshold.approved })
+                      : translate("homepage.approvalThreshold", {
+                          approved: threshold.approved,
+                          required: threshold.required,
+                        })}
                   </span>
                 }
               />
               <InfoRow
-                label="Vote"
+                label={translate("lifecycle.vote")}
                 value={
                   <a
                     href={trezuDaoUrl(tenantAccount)}
@@ -232,7 +250,7 @@ export function HomepageTab({
                     className="inline-flex items-center gap-1 underline underline-offset-2"
                     data-testid="orgs-homepage-trezu-link"
                   >
-                    Vote on trezu.app
+                    {translate("homepage.voteTrezu")}
                     <ArrowSquareOutIcon className="size-3.5 shrink-0" />
                   </a>
                 }
@@ -241,7 +259,7 @@ export function HomepageTab({
           )}
           {tenantUrl && configPublished && (
             <InfoRow
-              label="Address"
+              label={translate("common.address")}
               value={
                 <Link to="/tenant/$tenantId" params={{ tenantId: tenant.id }}>
                   {tenantUrl.replace(/^https?:\/\//, "")}
@@ -255,25 +273,23 @@ export function HomepageTab({
 
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title="Propose a new homepage"
+          title={translate("homepage.propose")}
           description={
-            daoOwned
-              ? "Changes go live when the DAO proposal passes."
-              : "Changes publish immediately."
+            daoOwned ? translate("tenant.daoChangesHint") : translate("tenant.immediateChangesHint")
           }
         />
 
         <FieldGroup className="max-w-2xl">
           <ConfigField
             id="orgs-homepage-title"
-            label="Title"
+            label={translate("common.title")}
             value={draft.title}
             onChange={(value) => editDraft((prev) => ({ ...prev, title: value }))}
             disabled={!editable}
           />
           <ConfigField
             id="orgs-homepage-description"
-            label="Description"
+            label={translate("common.description")}
             value={draft.description}
             onChange={(value) => editDraft((prev) => ({ ...prev, description: value }))}
             disabled={!editable}
@@ -294,14 +310,14 @@ export function HomepageTab({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground" data-testid="orgs-homepage-ui-disabled">
-            Custom UI bundles aren't enabled for this community.
+            {translate("homepage.customDisabled")}
           </p>
         )}
 
         {diff.length > 0 && (
           <div className="flex max-w-2xl flex-col gap-2" data-testid="orgs-homepage-diff">
             <p className="text-sm font-medium text-foreground">
-              {diff.length} change{diff.length === 1 ? "" : "s"}
+              {translate("nodeConfig.changes", { count: diff.length })}
             </p>
             {diff.map((entry) => (
               <p key={entry.field} className="truncate font-mono text-xs text-muted-foreground">
@@ -320,7 +336,7 @@ export function HomepageTab({
             data-testid="orgs-homepage-propose"
           >
             {busy ? <Spinner /> : <HouseIcon />}
-            {daoOwned ? "Propose new homepage" : "Publish new homepage"}
+            {daoOwned ? translate("homepage.proposeAction") : translate("homepage.publishAction")}
           </Button>
           {blockReason && (
             <span
@@ -336,9 +352,13 @@ export function HomepageTab({
       <ConfirmDialog
         open={unverified !== null}
         onOpenChange={(open) => !open && setUnverified(null)}
-        title={daoOwned ? "Propose without verifying?" : "Publish without verifying?"}
+        title={
+          daoOwned ? translate("tenant.proposeUnverified") : translate("tenant.publishUnverified")
+        }
         description={unverified ?? ""}
-        confirmLabel={daoOwned ? "Propose anyway" : "Publish anyway"}
+        confirmLabel={
+          daoOwned ? translate("nodeConfig.proposeAnyway") : translate("nodeConfig.publishAnyway")
+        }
         onConfirm={() => {
           setUnverified(null);
           proposeMutation.mutate();

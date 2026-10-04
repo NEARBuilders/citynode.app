@@ -1,7 +1,10 @@
 import { LockSimpleIcon } from "@phosphor-icons/react";
-import { FEATURE_AREA_LABELS, type FeatureArea } from "@/lib/feature-areas";
+import { Trans } from "everything-dev/ui/i18n";
+import { useAppTranslation } from "@/i18n/runtime";
+import { FEATURE_AREA_MESSAGES, type FeatureArea } from "@/lib/feature-areas";
 
 export function RestrictedAreaNotice({ area }: { area: FeatureArea | "admin" }) {
+  const translate = useAppTranslation();
   return (
     <div
       role="alert"
@@ -11,12 +14,19 @@ export function RestrictedAreaNotice({ area }: { area: FeatureArea | "admin" }) 
       <LockSimpleIcon className="size-4 shrink-0" />
       {area === "admin" ? (
         <p>
-          <span className="font-medium">Admin</span> is only for platform admins.
+          <Trans
+            id="workspace.adminOnly"
+            values={{ area: <span className="font-medium">{translate("common.admin")}</span> }}
+          />
         </p>
       ) : (
         <p>
-          <span className="font-medium">{FEATURE_AREA_LABELS[area]}</span> isn't open to your team.
-          Switch teams in the sidebar or ask an owner.
+          <Trans
+            id="workspace.areaRestricted"
+            values={{
+              area: <span className="font-medium">{translate(FEATURE_AREA_MESSAGES[area])}</span>,
+            }}
+          />
         </p>
       )}
     </div>

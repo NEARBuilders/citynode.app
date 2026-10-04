@@ -4,6 +4,7 @@ import { type SessionData, sessionQueryOptions, useAuthClient } from "everything
 import { useState } from "react";
 import { AddEmailDialog } from "@/components/add-email-dialog";
 import { SectionHeader } from "@/components/layout/section-header";
+import { useLoginTranslation } from "@/i18n/runtime";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNetworkId } from "@/lib/use-network-id";
 import { EmailMethod } from "./-email-method";
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/settings/auth-methods")({
 });
 
 function AuthMethodsSettings() {
+  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const user = session?.user;
@@ -29,8 +31,8 @@ function AuthMethodsSettings() {
   return (
     <div className="flex flex-col gap-10">
       <SectionHeader
-        title="Sign-in methods"
-        description="Ways you can get back into this account."
+        title={translate("auth.settings.methods")}
+        description={translate("auth.methods.description")}
         sectionTestId="settings.auth-methods-heading"
       />
       <PasskeysMethod />

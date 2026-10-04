@@ -4,6 +4,7 @@ import {
   ActivityFormPage,
   blankActivity,
 } from "@/components/discovery/activity-form";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 
 type NewActivitySearch = { kind?: "social" };
@@ -15,7 +16,17 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/e
     meta: [
       {
         title: pageTitle(
-          match.search.kind === "social" ? "New post" : "New event",
+          match.search.kind === "social"
+            ? translateAppMessage(
+                "meta.newPost",
+                undefined,
+                resolveAppLocale(undefined, match.context.locale),
+              )
+            : translateAppMessage(
+                "nav.newEvent",
+                undefined,
+                resolveAppLocale(undefined, match.context.locale),
+              ),
           match.context.runtimeConfig,
         ),
       },
@@ -25,15 +36,16 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/e
 });
 
 function NewActivity() {
+  const translate = useAppTranslation();
   const { nodeId } = Route.useParams();
   const { kind = "event" } = Route.useSearch();
   const isEvent = kind === "event";
   return (
     <ActivityFormPage
       nodeId={nodeId}
-      title={isEvent ? "New event" : "New post"}
+      title={isEvent ? translate("events.new") : translate("events.newPost")}
       description={
-        isEvent ? "When, where, and how to join." : "Link to a post and add a short note."
+        isEvent ? translate("events.formDescription") : translate("events.postDescription")
       }
       headerTestId="activity-form.heading"
     >

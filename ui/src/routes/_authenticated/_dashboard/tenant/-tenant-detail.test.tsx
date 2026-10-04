@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RouterContext } from "@/app";
+import { render } from "@/i18n/test-render";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
 import { TenantDetailContent } from "./-tenant-detail";
@@ -412,7 +413,7 @@ describe("tenant detail mutations", () => {
     await waitFor(() => expect(current.apiClient.suspendTenant).toHaveBeenCalledOnce());
     expect(await screen.findByRole("button", { name: "Reactivate" })).toBeTruthy();
     expect(current.toast.error).toHaveBeenCalledWith(
-      "Community suspended, but config publication failed: publisher unavailable",
+      "Community suspended, but config publication failed. Try publishing again.",
     );
     expect(current.navigate).not.toHaveBeenCalled();
     expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
@@ -446,7 +447,7 @@ describe("tenant detail mutations", () => {
 
     await waitFor(() => expect(current.apiClient.deleteTenant).toHaveBeenCalledOnce());
     expect(current.toast.error).toHaveBeenCalledWith(
-      "Community deletion saved, but config publication failed: registry write failed",
+      "Community deletion saved, but config publication failed. Try publishing again.",
     );
     expect(current.navigate).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeTruthy();
@@ -479,7 +480,11 @@ describe("tenant detail mutations", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(current.toast.error).toHaveBeenCalledWith("database unavailable"));
+    await waitFor(() =>
+      expect(current.toast.error).toHaveBeenCalledWith(
+        "This action could not be completed. Try again.",
+      ),
+    );
     expect(current.publish).not.toHaveBeenCalled();
     expect(screen.getByDisplayValue("Unavailable update")).toBeTruthy();
   });

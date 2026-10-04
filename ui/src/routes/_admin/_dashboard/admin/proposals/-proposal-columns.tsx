@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import type { useApiClient } from "@/app";
 import { Badge, Button, LocalDate } from "@/components";
 import type { DataTableColumnDef } from "@/components/data-table";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { humanize } from "../-admin-ui";
 import { proposalReviewStatusVariant, proposalTitle, proposalTypeLabel } from "./-proposal-review";
 
@@ -10,6 +12,7 @@ type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>
 export type Proposal = ProposalResult["data"][number];
 
 export function ProposalLink({ proposal, className }: { proposal: Proposal; className?: string }) {
+  const translate = useAppTranslation();
   return (
     <Link
       to="/admin/proposals/$proposalId"
@@ -17,17 +20,19 @@ export function ProposalLink({ proposal, className }: { proposal: Proposal; clas
       search={{ pluginId: proposal.pluginId, entityId: proposal.entityId }}
       className={className}
     >
-      {proposalTitle(proposal)}
+      {proposalTitle(proposal, translate)}
     </Link>
   );
 }
 
-export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
+export function createProposalColumns(
+  t: AppTranslator = translateEnglishAppMessage,
+): DataTableColumnDef<Proposal>[] {
   return [
     {
       id: "title",
       accessorFn: (row) => proposalTitle(row),
-      header: "Proposal",
+      header: t("common.proposal"),
       cell: ({ row }) => (
         <div className="flex min-w-0 flex-col gap-0.5">
           <ProposalLink proposal={row.original} className="font-medium hover:underline" />
@@ -39,16 +44,16 @@ export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
     },
     {
       accessorKey: "pluginId",
-      header: "Type",
+      header: t("common.type"),
       meta: { className: "hidden lg:table-cell" },
 
       cell: ({ row }) => (
-        <span className="text-muted-foreground">{proposalTypeLabel(row.original.pluginId)}</span>
+        <span className="text-muted-foreground">{proposalTypeLabel(row.original.pluginId, t)}</span>
       ),
     },
     {
       accessorKey: "createdBy",
-      header: "Submitted by",
+      header: t("admin.proposal.submittedBy"),
       meta: { className: "hidden lg:table-cell" },
 
       cell: ({ row }) => (
@@ -59,16 +64,16 @@ export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
     },
     {
       accessorKey: "reviewStatus",
-      header: "Status",
+      header: t("common.status"),
       cell: ({ row }) => (
         <Badge variant={proposalReviewStatusVariant(row.original.reviewStatus)}>
-          {humanize(row.original.reviewStatus)}
+          {humanize(row.original.reviewStatus, t)}
         </Badge>
       ),
     },
     {
       accessorKey: "createdAt",
-      header: "Submitted",
+      header: t("common.submitted"),
       cell: ({ row }) => (
         <span className="text-muted-foreground">
           <LocalDate value={row.original.createdAt} format="relative" />
@@ -91,7 +96,7 @@ export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
             />
           }
         >
-          {row.original.reviewStatus === "pending" ? "Review" : "View"}
+          {row.original.reviewStatus === "pending" ? t("common.review") : t("common.view")}
         </Button>
       ),
     },

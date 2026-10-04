@@ -2,6 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { type AuthClient, sessionQueryKey } from "@/app";
+import { translateAppMessage } from "@/i18n/runtime";
 import { teamWorkspaceQueryKey } from "./team-workspace";
 
 export type WorkspaceRefreshStage = "session" | "management" | "workspace" | "router";
@@ -47,9 +48,9 @@ export function reportWorkspaceRefreshError(
   onRetryError: (error: Error) => void,
 ): boolean {
   if (!(error instanceof WorkspaceRefreshError)) return false;
-  toast.error(error.message, {
+  toast.error(translateAppMessage("workspace.refreshError"), {
     action: {
-      label: "retry refresh",
+      label: translateAppMessage("common.retry"),
       onClick: () => {
         void retry().catch((retryError) => onRetryError(toError(retryError)));
       },

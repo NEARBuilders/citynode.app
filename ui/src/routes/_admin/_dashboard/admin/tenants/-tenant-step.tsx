@@ -2,6 +2,7 @@ import { CheckIcon, XIcon } from "@phosphor-icons/react";
 import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Button } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { TenantWizardStepStatus } from "./-tenant-wizard";
 
 export function TenantStep({
@@ -23,6 +24,7 @@ export function TenantStep({
   onChange?: () => void;
   children?: ReactNode;
 }) {
+  const translate = useAppTranslation();
   return (
     <li className="flex gap-4" data-testid={`admin-tenant-step-${id}`} data-status={status}>
       <div className="flex flex-col items-center">
@@ -50,14 +52,15 @@ export function TenantStep({
         <div className="flex min-h-8 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
             <h2
+              aria-label={translate(
+                status === "complete" ? "tenant.stepDoneNamed" : "tenant.stepNamed",
+                { number, title },
+              )}
               className={cn(
                 "text-lg font-medium",
                 status === "upcoming" ? "text-muted-foreground" : "text-foreground",
               )}
             >
-              <span className="sr-only">
-                {`Step ${number}${status === "complete" ? ", done" : ""}: `}
-              </span>
               {title}
             </h2>
             {status === "complete" && summary && (
@@ -72,7 +75,7 @@ export function TenantStep({
               data-testid={`admin-tenant-step-${id}-change`}
               onClick={onChange}
             >
-              Change
+              {translate("common.change")}
             </Button>
           )}
         </div>

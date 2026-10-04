@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient, AuthClient } from "@/app";
+import { renderHook } from "@/i18n/test-render";
 import { useOrganizationTeams } from "./-organization-teams";
 
 const mocks = vi.hoisted(() => ({
@@ -145,7 +146,9 @@ describe("useOrganizationTeams", () => {
         memberUserIds: [],
       }),
     );
-    expect(hook.result.current.teams[0].memberError).toBe("membership transport unavailable");
+    expect(hook.result.current.teams[0].memberError).toBe(
+      "Team members could not be loaded. Try again.",
+    );
 
     shouldFail = false;
     await act(async () => {

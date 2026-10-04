@@ -11,7 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FEATURE_AREA_LABELS, FEATURE_AREAS } from "@/lib/feature-areas";
+import { useAppTranslation } from "@/i18n/runtime";
+import { FEATURE_AREA_MESSAGES, FEATURE_AREAS } from "@/lib/feature-areas";
 import { MemberAvatar, type MemberCardMember, memberDisplayName } from "./-member-card";
 import { RowMenu } from "./-row-menu";
 
@@ -49,6 +50,7 @@ export function TeamCard({
   orgMembers: MemberCardMember[];
   team: TeamCardTeam;
 }) {
+  const translate = useAppTranslation();
   const [isRenaming, setIsRenaming] = useState(false);
   const [draftName, setDraftName] = useState(team.name);
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -63,10 +65,10 @@ export function TeamCard({
     value: member.userId,
   }));
   const placeholder = !membersLoaded
-    ? "Members unavailable"
+    ? translate("org.memberUnavailable")
     : candidates.length === 0
-      ? "Everyone is in this team"
-      : "Add a member…";
+      ? translate("org.allMembersInTeam")
+      : translate("org.addMemberPlaceholder");
 
   const toggleArea = (area: string, checked: boolean) => {
     const next = checked
@@ -93,7 +95,7 @@ export function TeamCard({
               <Input
                 value={draftName}
                 onChange={(event) => setDraftName(event.target.value)}
-                aria-label="Team name"
+                aria-label={translate("org.teamName")}
                 autoFocus
                 className="min-w-0 flex-1"
                 data-testid={`teams-tab-rename-input-${team.id}`}
@@ -103,10 +105,10 @@ export function TeamCard({
                 disabled={isMutating || !draftName.trim()}
                 data-testid={`teams-tab-rename-save-${team.id}`}
               >
-                Save
+                {translate("common.save")}
               </Button>
               <Button type="button" variant="ghost" onClick={() => setIsRenaming(false)}>
-                Cancel
+                {translate("common.cancel")}
               </Button>
             </form>
           ) : (
@@ -114,14 +116,14 @@ export function TeamCard({
               <h3 className="text-lg font-medium break-words text-foreground">{team.name}</h3>
               {memberStatus === "success" && (
                 <span className="text-sm text-muted-foreground">
-                  {team.memberUserIds.length} member{team.memberUserIds.length === 1 ? "" : "s"}
+                  {translate("org.memberCount", { count: team.memberUserIds.length })}
                 </span>
               )}
             </div>
           )}
           {canManage && !isRenaming && (
             <RowMenu
-              label={`Actions for ${team.name}`}
+              label={translate("common.actionsNamed", { name: team.name ?? "" })}
               disabled={isMutating}
               testId={`teams-tab-menu-${team.id}`}
             >
@@ -133,7 +135,7 @@ export function TeamCard({
                 data-testid={`teams-tab-rename-${team.id}`}
               >
                 <PencilSimpleIcon />
-                Rename team
+                {translate("org.renameTeam")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 variant="destructive"
@@ -141,14 +143,14 @@ export function TeamCard({
                 data-testid={`teams-tab-delete-${team.id}`}
               >
                 <TrashIcon />
-                Delete team
+                {translate("org.deleteTeam")}
               </DropdownMenuItem>
             </RowMenu>
           )}
         </div>
 
         <FieldSet>
-          <FieldLegend variant="label">Can use</FieldLegend>
+          <FieldLegend variant="label">{translate("org.canUse")}</FieldLegend>
           <div className="flex flex-wrap gap-x-5 gap-y-3">
             {FEATURE_AREAS.map((area) => {
               const checkboxId = `team-${team.id}-area-${area}`;
@@ -161,7 +163,9 @@ export function TeamCard({
                     onCheckedChange={(checked) => toggleArea(area, checked === true)}
                     data-testid={`teams-tab-area-${team.id}-${area}`}
                   />
-                  <FieldLabel htmlFor={checkboxId}>{FEATURE_AREA_LABELS[area]}</FieldLabel>
+                  <FieldLabel htmlFor={checkboxId}>
+                    {translate(FEATURE_AREA_MESSAGES[area])}
+                  </FieldLabel>
                 </Field>
               );
             })}
@@ -171,12 +175,12 @@ export function TeamCard({
         <div className="flex flex-col gap-3">
           {memberStatus === "loading" ? (
             <p className="text-sm text-muted-foreground" role="status">
-              Loading members...
+              {translate("org.loadingMembers")}
             </p>
           ) : memberStatus === "error" ? (
             <div className="flex flex-wrap items-center gap-3" role="alert">
               <p className="text-sm text-destructive">
-                {team.memberError || "Unable to load team members."}
+                {team.memberError || translate("org.loadMembersFailed")}
               </p>
               {onRetryMembers && (
                 <Button
@@ -185,12 +189,12 @@ export function TeamCard({
                   onClick={onRetryMembers}
                   data-testid={`teams-tab-retry-members-${team.id}`}
                 >
-                  Retry
+                  {translate("org.retry")}
                 </Button>
               )}
             </div>
           ) : memberStatus === "unloaded" ? (
-            <p className="text-sm text-muted-foreground">Members are not loaded yet</p>
+            <p className="text-sm text-muted-foreground">{translate("org.membersNotLoaded")}</p>
           ) : team.memberUserIds.length > 0 ? (
             <ul className="flex flex-col gap-1">
               {team.memberUserIds.map((userId) => {
@@ -206,7 +210,10 @@ export function TeamCard({
                         size="icon-sm"
                         onClick={() => onRemoveMember(userId)}
                         disabled={isMutating}
-                        aria-label={`Remove ${name} from ${team.name}`}
+                        aria-label={translate("org.removeTeamMember", {
+                          name: name ?? "",
+                          team: team.name ?? "",
+                        })}
                         data-testid={`teams-tab-remove-member-${team.id}-${userId}`}
                       >
                         <UserMinusIcon />
@@ -217,7 +224,7 @@ export function TeamCard({
               })}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">No members in this team</p>
+            <p className="text-sm text-muted-foreground">{translate("org.noTeamMembers")}</p>
           )}
           {canManage && (
             <div className="flex gap-2">
@@ -228,7 +235,7 @@ export function TeamCard({
                 disabled={!membersLoaded || candidates.length === 0 || isMutating}
               >
                 <SelectTrigger
-                  aria-label={`Add member to ${team.name}`}
+                  aria-label={translate("org.addTeamMember", { team: team.name ?? "" })}
                   className="w-full min-w-0 flex-1"
                   data-testid={`teams-tab-add-member-${team.id}`}
                 >
@@ -256,7 +263,7 @@ export function TeamCard({
                 data-testid={`teams-tab-add-member-button-${team.id}`}
               >
                 <UserPlusIcon />
-                Add
+                {translate("common.add")}
               </Button>
             </div>
           )}

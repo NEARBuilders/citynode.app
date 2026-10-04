@@ -2,6 +2,7 @@ import { DownloadSimpleIcon, UserPlusIcon, UsersIcon } from "@phosphor-icons/rea
 import { useState } from "react";
 import { Button, ConfirmDialog, EmptyState, SectionHeader, TabsContent } from "@/components";
 import { ItemGroup, ItemSeparator } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { type MemberCardMember, MemberRow, memberDisplayName } from "./-member-card";
 
 export function MembersTab({
@@ -25,12 +26,13 @@ export function MembersTab({
   onRemove: (member: MemberCardMember) => void;
   sessionUserId: string | undefined;
 }) {
+  const translate = useAppTranslation();
   const [removing, setRemoving] = useState<MemberCardMember | null>(null);
 
   return (
     <TabsContent value="members" className="flex flex-col gap-6 pt-6">
       <SectionHeader
-        title="Members"
+        title={translate("org.members")}
         action={
           <div className="flex items-center gap-2">
             {canExportEmails && onExportEmails ? (
@@ -42,7 +44,7 @@ export function MembersTab({
                 data-testid="org-members-export-emails"
               >
                 <DownloadSimpleIcon />
-                Export emails
+                {translate("org.exportEmails")}
               </Button>
             ) : null}
             {canManageMembers && onInvite ? (
@@ -53,7 +55,7 @@ export function MembersTab({
                 data-testid="org-members-invite"
               >
                 <UserPlusIcon />
-                Invite people
+                {translate("org.invitePeople")}
               </Button>
             ) : null}
           </div>
@@ -74,14 +76,16 @@ export function MembersTab({
           ))}
         </ItemGroup>
       ) : (
-        <EmptyState icon={UsersIcon} title="No members yet" />
+        <EmptyState icon={UsersIcon} title={translate("org.noMembers")} />
       )}
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
-        title={`Remove ${removing ? memberDisplayName(removing, removing.userId) : ""}?`}
-        description="They lose access to this organization and its teams."
-        confirmLabel="Remove"
+        title={translate("common.removeQuestion", {
+          name: (removing ? memberDisplayName(removing, removing.userId) : "") ?? "",
+        })}
+        description={translate("org.removeMemberDescription")}
+        confirmLabel={translate("common.remove")}
         variant="destructive"
         isPending={isRemoving}
         onConfirm={() => {

@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LoginAccountLocaleProvider } from "@/i18n/account-locale-provider";
+import { render } from "@/i18n/test-render";
 import { ProfileSettings } from "./-components/profile-settings";
 
 const harness = vi.hoisted(() => ({
@@ -61,7 +63,9 @@ describe("profile settings", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ProfileSettings />
+        <LoginAccountLocaleProvider>
+          <ProfileSettings />
+        </LoginAccountLocaleProvider>
       </QueryClientProvider>,
     );
 
@@ -97,14 +101,19 @@ describe("profile settings", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ProfileSettings />
+        <LoginAccountLocaleProvider>
+          <ProfileSettings />
+        </LoginAccountLocaleProvider>
       </QueryClientProvider>,
     );
 
     const selector = await screen.findByTestId("settings.language-select");
-    fireEvent.change(selector, { target: { value: "fr" } });
+    fireEvent.click(selector);
+    const french = await screen.findByRole("option", { name: "Français" });
+    fireEvent.pointerDown(french, { pointerType: "mouse" });
+    fireEvent.click(french);
 
     await waitFor(() => expect(harness.updateUser).toHaveBeenCalledWith({ locale: "fr" }));
-    await waitFor(() => expect(harness.success).toHaveBeenCalledWith("Language updated"));
+    await waitFor(() => expect(harness.success).toHaveBeenCalledWith("Langue mise à jour"));
   });
 });

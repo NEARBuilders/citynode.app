@@ -38,17 +38,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { invalidateTenantQueries, tenantBindingsQueryOptions } from "@/lib/queries/tenants";
 import { ListSkeleton, RowMenu } from "../-admin-ui";
 
 type Binding = Awaited<ReturnType<ApiClient["listTenantBindingsForTenant"]>>[number];
 
-const BINDING_KIND_ITEMS = [
-  { label: "Platform alias", value: "alias" },
-  { label: "Custom domain", value: "custom" },
-];
+export function createBindingKindItems(t: AppTranslator) {
+  return [
+    { label: t("admin.domain.platformAlias"), value: "alias" },
+    { label: t("admin.domain.custom"), value: "custom" },
+  ];
+}
 
 export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway: string }) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
@@ -62,19 +68,22 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
     onSuccess: async (_, { action }) => {
       await invalidateTenantQueries(queryClient);
       setRemoving(null);
-      toast.success(action === "remove" ? "Domain removed" : "Domain verified");
+      toast.success(
+        action === "remove" ? translate("admin.domainRemoved") : translate("admin.domainVerified"),
+      );
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return (
     <section className="flex flex-col gap-6">
       <SectionHeader
-        title="Domains"
-        description="Shared by every community on this site; changes take up to 30 seconds."
+        title={translate("admin.domain.title")}
+        description={translate("admin.domain.sharedHint")}
         action={
           <Button size="sm" onClick={() => setAdding(true)} data-testid="admin-node-add-domain">
-            <PlusIcon /> Add domain
+            <PlusIcon />
+            {translate("admin.domain.add")}
           </Button>
         }
       />
@@ -83,17 +92,17 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
       ) : bindingsQuery.isError ? (
         <div className="flex flex-wrap items-center gap-3">
           <p role="alert" className="text-sm text-destructive">
-            {bindingsQuery.error.message}
+            {appErrorMessage(bindingsQuery.error, translate)}
           </p>
           <Button variant="outline" size="sm" onClick={() => bindingsQuery.refetch()}>
-            Retry
+            {translate("org.retry")}
           </Button>
         </div>
       ) : !bindingsQuery.data?.length ? (
         <EmptyState
           icon={GlobeIcon}
-          title="No domains yet"
-          description="Add a platform alias or bring your own domain."
+          title={translate("admin.domain.empty")}
+          description={translate("admin.domain.emptyHint")}
           className="py-10"
         />
       ) : (
@@ -115,13 +124,21 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                   <ItemTitle className="max-w-full">
                     <span className="min-w-0 truncate font-mono">{hostname}</span>
                   </ItemTitle>
-                  <ItemDescription>{isAlias ? "Platform alias" : "Custom domain"}</ItemDescription>
+                  <ItemDescription>
+                    {isAlias
+                      ? translate("admin.domain.platformAlias")
+                      : translate("admin.domain.custom")}
+                  </ItemDescription>
                   {(binding.isPrimary || !isAlias) && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      {binding.isPrimary && <Badge variant="secondary">Primary</Badge>}
+                      {binding.isPrimary && (
+                        <Badge variant="secondary">{translate("common.primary")}</Badge>
+                      )}
                       {!isAlias && (
                         <Badge variant={binding.isVerified ? "success" : "warning"}>
-                          {binding.isVerified ? "Verified" : "Unverified"}
+                          {binding.isVerified
+                            ? translate("common.verified")
+                            : translate("common.unverified")}
                         </Badge>
                       )}
                     </div>
@@ -129,10 +146,10 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                 </ItemContent>
                 <ItemActions>
                   <RowMenu
-                    label={`Actions for ${hostname}`}
+                    label={translate("common.actionsNamed", { name: hostname ?? "" })}
                     actions={[
                       {
-                        label: "Remove",
+                        label: translate("common.remove"),
                         destructive: true,
                         disabled: mutation.isPending,
                         onSelect: () => setRemoving(binding),
@@ -143,14 +160,14 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                 {needsVerification && (
                   <div className="flex basis-full flex-col gap-4 border-t border-border pt-4">
                     <p className="text-sm text-muted-foreground">
-                      Add this TXT record at your DNS provider, then check.
+                      {translate("admin.domain.txtHint")}
                     </p>
                     <dl className="grid grid-cols-4 gap-x-4 gap-y-2 text-sm text-foreground">
-                      <dt className="text-muted-foreground">Type</dt>
+                      <dt className="text-muted-foreground">{translate("common.type")}</dt>
                       <dd className="col-span-3 font-mono">TXT</dd>
-                      <dt className="text-muted-foreground">Host</dt>
+                      <dt className="text-muted-foreground">{translate("admin.system.host")}</dt>
                       <dd className="col-span-3 font-mono break-all">{binding.hostname}</dd>
-                      <dt className="text-muted-foreground">Value</dt>
+                      <dt className="text-muted-foreground">{translate("common.value")}</dt>
                       <dd className="col-span-3 font-mono break-all">
                         everything-verify={binding.verificationToken}
                       </dd>
@@ -162,19 +179,19 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                         disabled={mutation.isPending}
                         onClick={() => mutation.mutate({ binding, action: "verify" })}
                       >
-                        {verifying ? "Checking…" : "Check verification"}
+                        {verifying ? translate("common.checking") : translate("admin.domain.check")}
                       </Button>
                       <UnderConstruction
-                        label="domain routing"
+                        label={translate("admin.domain.routing")}
                         url="https://www.reddit.com/r/rust/comments/1qew4ra/near_dns_dns_records_stored_on_blockchain_and/"
-                        tooltip="learn about near-dns and contribute"
+                        tooltip={translate("admin.domain.contribute")}
                       />
                     </div>
                     {mutation.isError &&
                       mutation.variables?.binding.id === binding.id &&
                       mutation.variables.action === "verify" && (
                         <p role="alert" className="text-sm text-destructive">
-                          {mutation.error.message}
+                          {appErrorMessage(mutation.error, translate)}
                         </p>
                       )}
                   </div>
@@ -194,11 +211,13 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
         onOpenChange={(open) => {
           if (!open) setRemoving(null);
         }}
-        title="Remove domain?"
-        description={`${removing?.hostname ?? "This domain"} will stop routing to this tenant, for every node that shares it.`}
+        title={translate("admin.domain.removeTitle")}
+        description={translate("admin.domainRemoveNamed", {
+          hostname: removing?.hostname ?? translate("admin.domain.fallback"),
+        })}
         variant="destructive"
-        confirmLabel="Remove domain"
-        cancelLabel="Cancel"
+        confirmLabel={translate("admin.removeDomain")}
+        cancelLabel={translate("common.cancel")}
         isPending={mutation.isPending}
         onConfirm={() => {
           if (removing) mutation.mutate({ binding: removing, action: "remove" });
@@ -217,6 +236,9 @@ function AddBindingForm({
   gateway: string;
   onClose: () => void;
 }) {
+  const translate = useAppTranslation();
+  const BINDING_KIND_ITEMS = createBindingKindItems(translate);
+
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<string>("alias");
@@ -235,17 +257,17 @@ function AddBindingForm({
     onSuccess: async () => {
       await invalidateTenantQueries(queryClient);
       toast.success(
-        kind === "alias" ? "Platform alias added" : "Domain added — DNS verification required",
+        kind === "alias" ? translate("admin.aliasAdded") : translate("admin.domainAddedDns"),
       );
       onClose();
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   return (
     <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Add domain</DialogTitle>
-        <DialogDescription>Choose a platform alias or bring your own domain.</DialogDescription>
+        <DialogTitle>{translate("admin.domain.add")}</DialogTitle>
+        <DialogDescription>{translate("admin.domain.chooseHint")}</DialogDescription>
       </DialogHeader>
       <form
         className="flex flex-col gap-6"
@@ -256,7 +278,7 @@ function AddBindingForm({
       >
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="binding-kind">Domain type</FieldLabel>
+            <FieldLabel htmlFor="binding-kind">{translate("admin.domain.type")}</FieldLabel>
             <Select
               value={kind}
               items={BINDING_KIND_ITEMS}
@@ -271,14 +293,16 @@ function AddBindingForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="alias">Platform alias</SelectItem>
-                <SelectItem value="custom">Custom domain</SelectItem>
+                <SelectItem value="alias">{translate("admin.domain.platformAlias")}</SelectItem>
+                <SelectItem value="custom">{translate("admin.domain.custom")}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
           <Field>
             <FieldLabel htmlFor="binding-hostname">
-              {kind === "alias" ? "Alias" : "Domain"}
+              {kind === "alias"
+                ? translate("admin.domain.alias")
+                : translate("admin.domain.domain")}
             </FieldLabel>
             <Input
               id="binding-hostname"
@@ -291,22 +315,26 @@ function AddBindingForm({
             />
             <FieldDescription className="break-all">
               {kind === "alias"
-                ? `${normalized || "alias"}.${gateway} — no verification needed.`
-                : `${normalized || "Your domain"} — DNS TXT verification required.`}
+                ? translate("admin.domain.aliasHintNamed", {
+                    hostname: `${normalized || translate("admin.domain.aliasExample")}.${gateway}`,
+                  })
+                : translate("admin.domain.customHintNamed", {
+                    hostname: normalized || translate("admin.domain.yourDomain"),
+                  })}
             </FieldDescription>
           </Field>
         </FieldGroup>
         {mutation.isError && (
           <p role="alert" className="text-sm text-destructive">
-            {mutation.error.message}
+            {appErrorMessage(mutation.error, translate)}
           </p>
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>
-            Cancel
+            {translate("common.cancel")}
           </Button>
           <Button type="submit" disabled={mutation.isPending || !normalized}>
-            {mutation.isPending ? "Adding…" : "Add domain"}
+            {mutation.isPending ? translate("common.adding") : translate("admin.domain.add")}
           </Button>
         </DialogFooter>
       </form>

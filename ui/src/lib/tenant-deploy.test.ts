@@ -113,7 +113,7 @@ describe("publishTenantConfigForMode", () => {
     const auth = {} as ReturnType<typeof useAuthClient>;
     await expect(
       publishTenantConfigForMode(apiClient, auth, { ...baseInput, hostname: null, mode: "dao" }),
-    ).rejects.toThrow("No primary domain binding configured for this tenant");
+    ).rejects.toMatchObject({ messageId: "tenant.publishDomainRequired" });
   });
 
   it("routes dao mode through the Trezu signer", async () => {
@@ -334,7 +334,7 @@ describe("publishTenantConfigForMode", () => {
         ...baseInput,
         mode: "platform",
       }),
-    ).rejects.toThrow("Connect a NEAR wallet first");
+    ).rejects.toMatchObject({ messageId: "poc.nearSignInFirst" });
   });
 
   it("refuses to publish when the connected signer does not own the tenant namespace", async () => {
@@ -352,7 +352,10 @@ describe("publishTenantConfigForMode", () => {
         ...baseInput,
         mode: "platform",
       }),
-    ).rejects.toThrow("cannot publish chicago.sputnik-dao.near");
+    ).rejects.toMatchObject({
+      messageId: "wallet.daoWrongAccount",
+      values: { expected: "chicago.sputnik-dao.near" },
+    });
     expect(prepareRegistryConfigWrite).not.toHaveBeenCalled();
   });
 
@@ -371,7 +374,10 @@ describe("publishTenantConfigForMode", () => {
         ...baseInput,
         mode: "platform",
       }),
-    ).rejects.toThrow("Switch your wallet to mainnet");
+    ).rejects.toMatchObject({
+      messageId: "tenant.publishNetworkNamed",
+      values: { network: "mainnet" },
+    });
     expect(prepareRegistryConfigWrite).not.toHaveBeenCalled();
   });
 });

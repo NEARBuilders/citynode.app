@@ -22,7 +22,7 @@ function format(
   );
 }
 
-export function activityDateTile(activity: PublicActivity, locale = "en") {
+export function activityDateTile(activity: PublicActivity, locale: string) {
   const instant = activity.startsAt ?? activity.publishedAt;
   if (!instant) return null;
   const zone = activity.startsAt ? activity.timezone : "UTC";
@@ -44,7 +44,7 @@ export function activityDateTile(activity: PublicActivity, locale = "en") {
   };
 }
 
-export function activityTimeRange(activity: PublicActivity, locale = "en") {
+export function activityTimeRange(activity: PublicActivity, locale: string) {
   if (!activity.startsAt) return null;
   const zone = activity.timezone;
   if (!activity.endsAt) {

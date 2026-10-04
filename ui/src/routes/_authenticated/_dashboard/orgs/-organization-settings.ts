@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { AuthClient } from "@/app";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { orgMembersQueryKey } from "./-organization-query-keys";
 
 type Router = ReturnType<typeof useRouter>;
@@ -12,6 +14,7 @@ export function useOrganizationSettings(
   router: Router,
   onUpdated: () => void,
 ) {
+  const translate = useAppTranslation();
   const queryClient = useQueryClient();
   const updateOrgMutation = useMutation({
     mutationFn: async ({ name, slug }: { name: string; slug: string }) => {
@@ -22,12 +25,12 @@ export function useOrganizationSettings(
       if (error) throw new Error(error.message);
     },
     onSuccess: async () => {
-      toast.success("Organization updated");
+      toast.success(translate("org.updated"));
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await queryClient.invalidateQueries({ queryKey: orgMembersQueryKey(orgId) });
       onUpdated();
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to update organization"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   const leaveOrgMutation = useMutation({
     mutationFn: async () => {
@@ -35,11 +38,11 @@ export function useOrganizationSettings(
       if (error) throw new Error(error.message);
     },
     onSuccess: async () => {
-      toast.success("You have left the organization");
+      toast.success(translate("org.left"));
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await router.navigate({ to: "/orgs" });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to leave organization"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   const deleteOrgMutation = useMutation({
     mutationFn: async () => {
@@ -47,11 +50,11 @@ export function useOrganizationSettings(
       if (error) throw new Error(error.message);
     },
     onSuccess: async () => {
-      toast.success("Organization deleted");
+      toast.success(translate("org.deleted"));
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await router.navigate({ to: "/orgs" });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to delete organization"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return { deleteOrgMutation, leaveOrgMutation, updateOrgMutation };

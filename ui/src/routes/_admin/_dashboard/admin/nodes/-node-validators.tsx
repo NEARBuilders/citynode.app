@@ -37,15 +37,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { humanize, RowMenu } from "../-admin-ui";
 
 type Validator = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["validators"][number];
 
-const VALIDATOR_ROLE_ITEMS = [
-  { label: "Community", value: "community" },
-  { label: "Official", value: "official" },
-];
+export function createValidatorRoleItems(t: AppTranslator) {
+  return [
+    { label: t("tenant.communityType"), value: "community" },
+    { label: t("tenant.official"), value: "official" },
+  ];
+}
 
 export function NodeValidators({
   nodeId,
@@ -54,6 +59,7 @@ export function NodeValidators({
   nodeId: string;
   validators: Validator[];
 }) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
@@ -72,27 +78,32 @@ export function NodeValidators({
     onSuccess: async (_, { action }) => {
       await invalidateNodeQueries(queryClient);
       setRemoving(null);
-      toast.success(action === "remove" ? "Validator removed" : "Default validator updated");
+      toast.success(
+        action === "remove"
+          ? translate("admin.validatorRemoved")
+          : translate("admin.defaultValidatorUpdated"),
+      );
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return (
     <section className="flex flex-col gap-6">
       <SectionHeader
-        title="Validators"
-        description="Staking pools attached to this community."
+        title={translate("common.validators")}
+        description={translate("admin.validator.description")}
         action={
           <Button size="sm" onClick={() => setAdding(true)} data-testid="admin-node-add-validator">
-            <PlusIcon /> Add validator
+            <PlusIcon />
+            {translate("tenant.addValidator")}
           </Button>
         }
       />
       {validators.length === 0 ? (
         <EmptyState
           icon={ShieldCheckIcon}
-          title="No validators yet"
-          description="Add a staking pool so people can stake with this community."
+          title={translate("admin.validator.empty")}
+          description={translate("admin.validator.emptyHint")}
           className="py-10"
         />
       ) : (
@@ -107,25 +118,27 @@ export function NodeValidators({
                   <span className="min-w-0 truncate font-mono">{validator.accountId}</span>
                 </ItemTitle>
                 <ItemDescription>
-                  {humanize(validator.role)} · {validator.network} · {validator.protocol}
+                  {humanize(validator.role, translate)} · {validator.network} · {validator.protocol}
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
-                {validator.isDefault && <Badge variant="success">Default</Badge>}
+                {validator.isDefault && (
+                  <Badge variant="success">{translate("common.default")}</Badge>
+                )}
                 <RowMenu
-                  label={`Actions for ${validator.accountId}`}
+                  label={translate("common.actionsNamed", { name: validator.accountId ?? "" })}
                   actions={[
                     ...(validator.isDefault
                       ? []
                       : [
                           {
-                            label: "Make default",
+                            label: translate("tenant.makeDefault"),
                             disabled: mutation.isPending,
                             onSelect: () => mutation.mutate({ validator, action: "default" }),
                           },
                         ]),
                     {
-                      label: "Remove",
+                      label: translate("common.remove"),
                       destructive: true,
                       disabled: mutation.isPending,
                       onSelect: () => setRemoving(validator),
@@ -145,11 +158,13 @@ export function NodeValidators({
         onOpenChange={(open) => {
           if (!open) setRemoving(null);
         }}
-        title="Remove validator?"
-        description={`${removing?.accountId ?? "This validator"} will be detached from this node. Staking may resolve elsewhere.`}
+        title={translate("admin.validator.removeTitle")}
+        description={translate("admin.validatorRemoveNamed", {
+          account: removing?.accountId ?? translate("admin.validator.fallback"),
+        })}
         variant="destructive"
-        confirmLabel="Remove validator"
-        cancelLabel="Cancel"
+        confirmLabel={translate("admin.removeValidator")}
+        cancelLabel={translate("common.cancel")}
         isPending={mutation.isPending}
         onConfirm={() => {
           if (removing) mutation.mutate({ validator: removing, action: "remove" });
@@ -160,6 +175,9 @@ export function NodeValidators({
 }
 
 function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => void }) {
+  const translate = useAppTranslation();
+  const VALIDATOR_ROLE_ITEMS = createValidatorRoleItems(translate);
+
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const [accountId, setAccountId] = useState("");
@@ -180,16 +198,16 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
       }),
     onSuccess: async () => {
       await invalidateNodeQueries(queryClient);
-      toast.success("Validator added");
+      toast.success(translate("tenant.validatorAdded"));
       onClose();
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   return (
     <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Add validator</DialogTitle>
-        <DialogDescription>Attach a staking pool to this community.</DialogDescription>
+        <DialogTitle>{translate("tenant.addValidator")}</DialogTitle>
+        <DialogDescription>{translate("admin.validator.addDescription")}</DialogDescription>
       </DialogHeader>
       <form
         className="flex flex-col gap-6"
@@ -200,7 +218,9 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
       >
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="validator-account">Pool account</FieldLabel>
+            <FieldLabel htmlFor="validator-account">
+              {translate("admin.validator.poolAccount")}
+            </FieldLabel>
             <Input
               id="validator-account"
               value={accountId}
@@ -213,7 +233,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
           {showAdvanced ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="validator-network">Network</FieldLabel>
+                <FieldLabel htmlFor="validator-network">{translate("common.network")}</FieldLabel>
                 <Input
                   id="validator-network"
                   value={network}
@@ -222,7 +242,9 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="validator-protocol">Protocol</FieldLabel>
+                <FieldLabel htmlFor="validator-protocol">
+                  {translate("admin.validator.protocol")}
+                </FieldLabel>
                 <Input
                   id="validator-protocol"
                   value={protocol}
@@ -239,11 +261,11 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
               className="self-start"
               onClick={() => setShowAdvanced(true)}
             >
-              Change network ({network}, {protocol})
+              {translate("admin.changeNetworkNamed", { network, protocol })}
             </Button>
           )}
           <Field>
-            <FieldLabel htmlFor="validator-role">Role</FieldLabel>
+            <FieldLabel htmlFor="validator-role">{translate("org.role")}</FieldLabel>
             <Select
               value={role}
               items={VALIDATOR_ROLE_ITEMS}
@@ -253,8 +275,8 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="community">Community</SelectItem>
-                <SelectItem value="official">Official</SelectItem>
+                <SelectItem value="community">{translate("common.community")}</SelectItem>
+                <SelectItem value="official">{translate("tenant.official")}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -264,17 +286,19 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
               checked={isDefault}
               onCheckedChange={(checked) => setIsDefault(checked === true)}
             />
-            <FieldLabel htmlFor="validator-default">Make this the community's default</FieldLabel>
+            <FieldLabel htmlFor="validator-default">
+              {translate("admin.validator.makeDefault")}
+            </FieldLabel>
           </Field>
         </FieldGroup>
         {mutation.isError && (
           <p role="alert" className="text-sm text-destructive">
-            {mutation.error.message}
+            {appErrorMessage(mutation.error, translate)}
           </p>
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>
-            Cancel
+            {translate("common.cancel")}
           </Button>
           <Button
             type="submit"
@@ -282,7 +306,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
               mutation.isPending || !accountId.trim() || !network.trim() || !protocol.trim()
             }
           >
-            {mutation.isPending ? "Adding…" : "Add validator"}
+            {mutation.isPending ? translate("common.adding") : translate("tenant.addValidator")}
           </Button>
         </DialogFooter>
       </form>

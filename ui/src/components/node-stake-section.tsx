@@ -7,6 +7,7 @@ import { SectionHeader } from "@/components/layout/section-header";
 import { StakePoolCard } from "@/components/stake-pool-card";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 
 type Node = InferClientOutputs<ApiClient>["getNodeSummary"]["node"];
@@ -26,6 +27,7 @@ export function NodeStakeSection({
   sourceNodeId: string;
   apiClient: Pick<ApiClient, "getNode" | "getSubtree">;
 }) {
+  const translate = useAppTranslation();
   const hasOwnValidator = validators.some((validator) => validator.nodeId === node.id);
   const validatorNodeIds = new Set(validators.map((validator) => validator.nodeId));
   const childrenWithValidators = children.filter((child) => validatorNodeIds.has(child.id));
@@ -49,22 +51,22 @@ export function NodeStakeSection({
       : undefined;
   const scope =
     source?.inherited && source.sourceNode
-      ? `Stake inherited from ${source.sourceNode.name}.`
+      ? translate("stake.inheritedFrom", { name: source.sourceNode.name })
       : hasOwnValidator || (source && !source.inherited)
-        ? "Pools across this node and its descendants."
+        ? translate("stake.nodePoolsHint")
         : null;
 
   return (
     <section className="flex flex-col gap-6" data-testid="node-stake">
       <SectionHeader
-        title="Stake"
+        title={translate("common.stake")}
         description={
           validators.length === 0
-            ? "This node doesn't run a validator yet."
+            ? translate("stake.noValidator")
             : hasOwnValidator
-              ? `Back ${node.name} by staking NEAR to its validator.`
+              ? translate("stake.backNamed", { name: node.name ?? "" })
               : childrenWithValidators.length > 0
-                ? `${node.name} doesn't run its own validator. Stake to a community that does.`
+                ? translate("stake.inheritedNamed", { name: node.name ?? "" })
                 : scope
         }
         action={target && <StakeLink node={target} />}
@@ -108,6 +110,7 @@ export function NodeStakeSection({
 }
 
 function StakeLink({ node }: { node: Pick<Node, "id" | "name"> }) {
+  const translate = useAppTranslation();
   return (
     <Button
       variant="outline"
@@ -115,7 +118,7 @@ function StakeLink({ node }: { node: Pick<Node, "id" | "name"> }) {
       data-testid="node-stake-link"
       render={<Link to="/stake" search={{ nodeId: node.id }} />}
     >
-      Stake to {node.name}
+      {translate("stake.toNamed", { name: node.name })}
       <ArrowRightIcon data-icon="inline-end" />
     </Button>
   );

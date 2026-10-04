@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { MotionConfig } from "framer-motion";
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, renderToStaticMarkup } from "@/i18n/test-render";
 import { UnderConstruction } from "./under-construction";
 
 afterEach(() => {

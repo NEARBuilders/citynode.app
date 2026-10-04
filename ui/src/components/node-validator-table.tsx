@@ -12,6 +12,8 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 
 type Validator = InferClientOutputs<ApiClient>["getNodeSummary"]["validators"][number];
 
@@ -22,6 +24,7 @@ export function NodeValidatorTable({
   validators: Validator[];
   renderActions?: (validator: Validator) => ReactNode;
 }) {
+  const translate = useAppTranslation();
   return (
     <ItemGroup data-testid="node-validators">
       {validators.map((validator) => (
@@ -38,8 +41,10 @@ export function NodeValidatorTable({
             </ItemDescription>
           </ItemContent>
           <ItemActions className="flex-wrap">
-            {validator.isDefault && <Badge variant="success">Default</Badge>}
-            <Badge variant="outline">{validator.role}</Badge>
+            {validator.isDefault && <Badge variant="success">{translate("common.default")}</Badge>}
+            <Badge variant="outline">
+              {presentationLabel(validator.role ?? "member", translate)}
+            </Badge>
             {renderActions?.(validator)}
           </ItemActions>
         </Item>

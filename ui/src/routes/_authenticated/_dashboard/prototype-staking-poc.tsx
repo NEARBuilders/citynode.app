@@ -22,6 +22,8 @@ import { OrgSwitcherMenuContent } from "@/components/layout/org-switcher-menu";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { PocChainState } from "./-poc-chain-state";
 import { usePocLifecycle } from "./-poc-lifecycle";
@@ -30,17 +32,35 @@ import { PocPhaseStepper } from "./-poc-phase-stepper";
 import { PocActors, PocSetupFields, PocTreasuryConnection } from "./-poc-setup";
 import { StationListRow, StationPanel, signerName } from "./-poc-station";
 import { PocStationExtra } from "./-poc-station-extra";
-import { LENS_OPTIONS, PHASES, type PhaseId, type StationId, signerLens } from "./-poc-stations";
+import {
+  createLensOptions,
+  createPhases,
+  type PhaseId,
+  type StationId,
+  signerLens,
+} from "./-poc-stations";
 import { followingStation, phaseProgress, resolveFocus, resolvePhase } from "./-poc-walkthrough";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/prototype-staking-poc")({
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Node lifecycle POC", match.context.runtimeConfig) },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.lifecycle",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
       {
         name: "description",
-        content:
-          "One node, end to end: apply, approve and assign the pool, fund the team treasury, stake, lock veNEAR, sponsor, and vote in House of Stake.",
+        content: translateAppMessage(
+          "meta.lifecycleDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
       },
     ],
   }),
@@ -48,6 +68,10 @@ export const Route = createFileRoute("/_authenticated/_dashboard/prototype-staki
 });
 
 function NodeLifecyclePocPage() {
+  const translate = useAppTranslation();
+  const LENS_OPTIONS = createLensOptions(translate);
+  const PHASES = createPhases(translate);
+
   const { auth: routeAuth, runtimeConfig } = Route.useRouteContext();
   const lc = usePocLifecycle(routeAuth, runtimeConfig);
   const {
@@ -80,7 +104,7 @@ function NodeLifecyclePocPage() {
   const setupComplete = !!team && !!values.name.trim() && !!values.pool.trim();
   const showSetup = setupOpen ?? !setupComplete;
   const activePhase = resolvePhase(stations, selectedPhase);
-  const progress = phaseProgress(stations, activePhase);
+  const progress = phaseProgress(stations, activePhase, PHASES);
   const phaseStations = stations.filter((station) => station.def.phase === activePhase);
   const focused = resolveFocus(stations, activePhase, selectedStation);
   const phase = PHASES.find((entry) => entry.id === activePhase);
@@ -89,7 +113,7 @@ function NodeLifecyclePocPage() {
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" data-testid="poc-org-switcher" />}>
         <BankIcon />
-        {activeOrg?.name ?? "Select an organization"}
+        {activeOrg?.name ?? translate("lifecycle.chooseOrg")}
       </DropdownMenuTrigger>
       <OrgSwitcherMenuContent
         organizations={organizations}
@@ -102,10 +126,10 @@ function NodeLifecyclePocPage() {
   const header = (
     <PageHeader
       icon={FlaskIcon}
-      label="Prototype"
+      label={translate("lifecycle.prototype")}
       headerTestId="prototype-staking-poc.heading"
-      title="Node lifecycle"
-      description="Take one node from application to governance, one station at a time."
+      title={translate("tenant.lifecycle")}
+      description={translate("lifecycle.description")}
       actions={
         <>
           <PocLogSheet entries={entries} />
@@ -113,7 +137,7 @@ function NodeLifecyclePocPage() {
             variant="ghost"
             size="icon"
             onClick={refresh}
-            aria-label="Refresh chain state"
+            aria-label={translate("lifecycle.refreshChain")}
             data-testid="poc-refresh"
           >
             <ArrowsClockwiseIcon />
@@ -128,12 +152,12 @@ function NodeLifecyclePocPage() {
       <PageContainer variant="wide">
         {header}
         <section className="flex flex-col gap-4">
-          <SectionHeader title="Setup" sectionTestId="poc-actors" />
+          <SectionHeader title={translate("lifecycle.setup")} sectionTestId="poc-actors" />
           <EmptyState
             icon={BankIcon}
-            title="Pick an organization"
+            title={translate("lifecycle.pickOrg")}
             description={
-              <span data-testid="poc-org-required">The node is created for this organization.</span>
+              <span data-testid="poc-org-required">{translate("lifecycle.orgHint")}</span>
             }
             action={orgSwitcher}
           />
@@ -154,9 +178,9 @@ function NodeLifecyclePocPage() {
 
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title="Setup"
+          title={translate("lifecycle.setup")}
           sectionTestId="poc-actors"
-          description={showSetup ? "Who signs what, and the node you are standing up." : undefined}
+          description={showSetup ? translate("lifecycle.setupDescription") : undefined}
           action={
             <div className="flex flex-wrap items-center gap-2">
               {orgSwitcher}
@@ -167,7 +191,7 @@ function NodeLifecyclePocPage() {
                 data-testid="poc-setup-toggle"
               >
                 {showSetup ? <CaretUpIcon /> : <CaretDownIcon />}
-                {showSetup ? "Hide" : "Edit"}
+                {showSetup ? translate("common.hide") : translate("common.edit")}
               </Button>
             </div>
           }
@@ -183,7 +207,7 @@ function NodeLifecyclePocPage() {
 
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title="Lifecycle"
+          title={translate("lifecycle.title")}
           sectionTestId="poc-lifecycle"
           action={
             <div className="flex flex-wrap items-center gap-2">
@@ -195,7 +219,7 @@ function NodeLifecyclePocPage() {
                   const next = LENS_OPTIONS.find((option) => value.includes(option.id));
                   if (next) form.setFieldValue("lens", next.id);
                 }}
-                aria-label="Acting as"
+                aria-label={translate("lifecycle.actingAs")}
                 data-testid="poc-lens"
               >
                 {LENS_OPTIONS.map((option) => (
@@ -209,8 +233,8 @@ function NodeLifecyclePocPage() {
                 ))}
               </ToggleGroup>
               <InfoPopover
-                title="Acting as"
-                body="Pick the role you're acting as. Stations another role signs stay visible, with their actions hidden."
+                title={translate("lifecycle.actingAs")}
+                body={translate("lifecycle.roleHint")}
               />
             </div>
           }
@@ -230,7 +254,12 @@ function NodeLifecyclePocPage() {
             {phase?.blurb}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            {stagedCount > 0 && <Badge variant="warning">{stagedCount} awaiting votes</Badge>}
+            {stagedCount > 0 && (
+              <Badge variant="warning">
+                {stagedCount}
+                {translate("lifecycle.awaitingVotesLower")}
+              </Badge>
+            )}
             <Button
               variant="outline"
               onClick={() => runChainMutation.mutate()}
@@ -238,29 +267,34 @@ function NodeLifecyclePocPage() {
               data-testid="poc-run-chain"
             >
               {busy ? <Spinner /> : <PlayIcon />}
-              Run all I can sign{runnable.length > 0 ? ` (${runnable.length})` : ""}
+              {translate("lifecycle.runAll")}
+              {runnable.length > 0 ? ` (${runnable.length})` : ""}
             </Button>
           </div>
         </div>
 
         {runnable.length === 0 && upcoming && (
           <p className="text-sm text-muted-foreground" data-testid="poc-next-hint">
-            Next up: <span className="font-medium text-foreground">{upcoming.def.title}</span>,
-            signed by {signerName(upcoming)}
-            {upcoming.signerAccountId ? (
-              <span className="font-mono break-all"> ({upcoming.signerAccountId})</span>
-            ) : null}
+            {translate(
+              !upcoming.signerConnected && upcoming.blockedBy !== "input"
+                ? "lifecycle.connectNextSigner"
+                : "lifecycle.nextSigner",
+              {
+                station: upcoming.def.title,
+                signer:
+                  signerName(upcoming, translate) +
+                  (upcoming.signerAccountId ? ` (${upcoming.signerAccountId})` : ""),
+              },
+            )}
             {upcoming.blockedBy === "input" && upcoming.blockedReason
               ? ` — ${upcoming.blockedReason}`
-              : !upcoming.signerConnected
-                ? " — connect it to continue"
-                : ""}
+              : ""}
           </p>
         )}
 
         <div className="grid gap-6 lg:grid-cols-3">
           <nav
-            aria-label="Stations"
+            aria-label={translate("lifecycle.stations")}
             className="flex flex-col gap-1 lg:col-span-1"
             data-testid="poc-station-list"
           >
@@ -283,12 +317,13 @@ function NodeLifecyclePocPage() {
                 policy={policyFor(focused.def.signer)}
                 warning={focused.def.id === "approve" ? platformAuditWarning : null}
                 membersHref={focused.def.id === "approve" ? trezuMembersUrl : null}
+                membershipBlocked={focused.def.id === "approve" && !!lc.membershipBlocked}
                 next={followingStation(stations, focused.def.id)}
                 extra={<PocStationExtra lc={lc} station={focused} />}
                 onRun={() => void runStation(focused).catch(() => {})}
                 onConnect={() =>
                   void requireConnected(focused.def.signer).catch((error) =>
-                    toast.error(error instanceof Error ? error.message : String(error)),
+                    toast.error(appErrorMessage(error, translate)),
                   )
                 }
                 onApprove={(proposalId) =>
@@ -307,7 +342,7 @@ function NodeLifecyclePocPage() {
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title="Chain state" sectionTestId="poc-state" />
+        <SectionHeader title={translate("lifecycle.chainState")} sectionTestId="poc-state" />
         <PocChainState lc={lc} />
       </section>
     </PageContainer>

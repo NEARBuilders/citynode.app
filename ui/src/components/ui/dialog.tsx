@@ -3,6 +3,7 @@ import { XIcon } from "@phosphor-icons/react";
 import { cn } from "cn";
 import type * as React from "react";
 import { Button } from "@/components/ui/button";
+import { useAppTranslation } from "@/i18n/runtime";
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -41,6 +42,7 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
 }) {
+  const translate = useAppTranslation();
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -59,7 +61,7 @@ function DialogContent({
             render={<Button variant="ghost" className="absolute top-4 right-4" size="icon-sm" />}
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{translate("common.close")}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>
@@ -81,6 +83,7 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean;
 }) {
+  const translate = useAppTranslation();
   return (
     <div
       data-slot="dialog-footer"
@@ -89,7 +92,9 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>Close</DialogPrimitive.Close>
+        <DialogPrimitive.Close render={<Button variant="outline" />}>
+          {translate("common.close")}
+        </DialogPrimitive.Close>
       )}
     </div>
   );

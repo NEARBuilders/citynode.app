@@ -13,8 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export function LumaImport({ nodeId }: { nodeId: string }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const client = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -45,7 +47,7 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
     !calendars.data?.calendars.some((calendar) => calendar.id === connection.calendarId)
       ? [
           {
-            label: `${connection.calendarName} · unavailable`,
+            label: translate("events.calendarUnavailable", { name: connection.calendarName ?? "" }),
             value: connection.calendarId,
           },
         ]
@@ -60,22 +62,20 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
       {calendars.isPending && <Skeleton className="h-11 w-full" />}
       {calendars.isError && (
         <p role="alert" className="text-sm text-destructive">
-          Couldn't load calendars. Try again in a moment.
+          {translate("calendar.loadError")}
         </p>
       )}
       {calendars.data?.unavailableCount ? (
         <p role="alert" className="text-sm text-muted-foreground">
-          Some calendars couldn't be loaded.
+          {translate("calendar.partialError")}
         </p>
       ) : null}
       {calendars.data?.calendars.length === 0 && !connection && (
-        <p className="text-sm text-muted-foreground">
-          No Luma calendars are set up for this site yet. Ask a site admin to add one.
-        </p>
+        <p className="text-sm text-muted-foreground">{translate("calendar.empty")}</p>
       )}
       {calendars.data && (calendars.data.calendars.length > 0 || connection) && (
         <Field>
-          <FieldLabel htmlFor={`luma-calendar-${nodeId}`}>Calendar</FieldLabel>
+          <FieldLabel htmlFor={`luma-calendar-${nodeId}`}>{translate("calendar.title")}</FieldLabel>
           <Select
             items={calendarItems}
             value={connection?.calendarId ?? null}
@@ -89,7 +89,7 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
               data-testid="discovery-luma-calendar"
               className="w-full"
             >
-              <SelectValue placeholder="Choose a calendar" />
+              <SelectValue placeholder={translate("calendar.choose")} />
             </SelectTrigger>
             <SelectContent>
               {calendarItems.map((item) => (
@@ -102,11 +102,12 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
           {connection && (
             <FieldDescription role="status">
               {refresh.isPending ? (
-                "Loading events…"
+                translate("calendar.loadingEvents")
               ) : (
                 <>
-                  Updated <LocalDate value={connection.syncedAt} format="relative" />
-                  {connection.error ? " · last update failed" : ""}
+                  {translate("things.updated")}
+                  <LocalDate value={connection.syncedAt} format="relative" />
+                  {connection.error ? translate("calendar.lastUpdateFailed") : ""}
                 </>
               )}
             </FieldDescription>
@@ -115,17 +116,17 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
       )}
       {!connection && refresh.isPending && (
         <p role="status" className="text-sm text-muted-foreground">
-          Connecting and loading events…
+          {translate("calendar.connecting")}
         </p>
       )}
       {refresh.isError && (
         <p role="alert" className="text-sm text-destructive">
-          Couldn't connect that calendar. Try again.
+          {translate("calendar.connectError")}
         </p>
       )}
       {disconnect.isError && (
         <p role="alert" className="text-sm text-destructive">
-          Couldn't disconnect the calendar. Try again.
+          {translate("calendar.disconnectError")}
         </p>
       )}
       {connection && (
@@ -137,16 +138,16 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
           disabled={disconnect.isPending}
           onClick={() => setConfirming(true)}
         >
-          Disconnect calendar
+          {translate("calendar.disconnect")}
         </Button>
       )}
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Disconnect Luma?"
-        description="Luma events come off Explore. Events you added yourself stay."
-        confirmLabel="Disconnect"
-        cancelLabel="Cancel"
+        title={translate("calendar.disconnectTitle")}
+        description={translate("calendar.disconnectDescription")}
+        confirmLabel={translate("common.disconnect")}
+        cancelLabel={translate("common.cancel")}
         variant="destructive"
         isPending={disconnect.isPending}
         onConfirm={() => disconnect.mutate(undefined, { onSettled: () => setConfirming(false) })}

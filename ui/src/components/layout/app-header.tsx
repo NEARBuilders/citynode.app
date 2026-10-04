@@ -12,6 +12,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useAppTranslation } from "@/i18n/runtime";
 import { crumbsFor } from "./breadcrumbs";
 import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
@@ -23,6 +24,7 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ runtimeConfig }: AppHeaderProps) {
+  const translate = useAppTranslation();
   const { user, organizations } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
   const activeTeamName = workspace?.activeTeam?.name;
@@ -33,11 +35,15 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
       return typeof value === "string" ? value : undefined;
     },
   });
-  const crumbs = crumbsFor(pathname, {
-    tab,
-    appName: getAppName(runtimeConfig),
-    orgName: (slug) => organizations.find((org) => org.slug === slug)?.name,
-  });
+  const crumbs = crumbsFor(
+    pathname,
+    {
+      tab,
+      appName: getAppName(runtimeConfig),
+      orgName: (slug) => organizations.find((org) => org.slug === slug)?.name,
+    },
+    translate,
+  );
 
   return (
     <header className="sticky top-0 z-10 shrink-0 border-b border-border bg-background">
@@ -70,12 +76,11 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
           <div
             className="flex min-w-0 max-w-40 shrink items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground sm:max-w-64"
             data-testid="workspace-active-team"
-            title={`Working as ${activeTeamName}`}
+            title={translate("identity.workingAsNamed", { name: activeTeamName })}
           >
             <UsersIcon className="size-4 shrink-0" />
             <span className="truncate">
-              <span className="hidden sm:inline">Working as </span>
-              <span className="font-medium text-foreground">{activeTeamName}</span>
+              {translate("identity.workingAsNamed", { name: activeTeamName })}
             </span>
           </div>
         )}

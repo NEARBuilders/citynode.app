@@ -9,10 +9,11 @@ import {
   RouterProvider,
   redirect,
 } from "@tanstack/react-router";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { Near } from "near-kit";
 import { afterEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { render } from "@/i18n/test-render";
 import { createApiClient } from "@/lib/api";
 import { createAuthClient, type SessionData, sessionQueryOptions } from "@/lib/auth";
 import { teamWorkspaceQueryKey } from "@/lib/team-workspace";

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export type CommunitySection = "overview" | "content" | "onboarding" | "bulletin" | "proposals";
 
@@ -21,15 +22,16 @@ export function CommunityNav({
   replace?: boolean;
   testIds?: Partial<Record<CommunityNavSection, string>>;
 }) {
+  const translate = useAppTranslation();
   const items: { value: CommunityNavSection; label: string; link: ReactElement }[] = [
     {
       value: "overview",
-      label: "Overview",
+      label: translate("common.overview"),
       link: <Link to="/dashboard/node" search={{ nodeId }} />,
     },
     {
       value: "content",
-      label: "Events & profile",
+      label: translate("nav.eventsProfile"),
       link: (
         <Link
           to="/nodes/$nodeId/content"
@@ -41,7 +43,7 @@ export function CommunityNav({
     },
     {
       value: "onboarding",
-      label: "Onboarding",
+      label: translate("org.onboarding"),
       link: (
         <Link
           to="/nodes/$nodeId/content"
@@ -53,14 +55,14 @@ export function CommunityNav({
     },
     {
       value: "proposals",
-      label: "Proposals",
+      label: translate("common.proposals"),
       link: <Link to="/dashboard/node/proposals" search={{ nodeId }} />,
     },
     ...(canManage
       ? [
           {
             value: "bulletin" as const,
-            label: "Bulletin",
+            label: translate("bulletin.title"),
             link: (
               <Link
                 to="/nodes/$nodeId/content"
@@ -76,7 +78,7 @@ export function CommunityNav({
       ? [
           {
             value: "settings" as const,
-            label: "Community settings",
+            label: translate("tenant.settings"),
             link: <Link to="/tenant/$tenantId" params={{ tenantId }} />,
           },
         ]
@@ -84,7 +86,10 @@ export function CommunityNav({
   ];
 
   return (
-    <nav aria-label="My community" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+    <nav
+      aria-label={translate("nav.myCommunity")}
+      className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+    >
       <Tabs value={active}>
         <TabsList variant="line">
           {items.map((item) => (
