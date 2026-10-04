@@ -1,3 +1,6 @@
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
+
 /**
  * The node lifecycle as an ordered cycle of stations, grouped into phases.
  *
@@ -64,36 +67,37 @@ export interface PhaseDef {
   blurb: string;
 }
 
-export const PHASES: readonly PhaseDef[] = [
-  {
-    id: "stand-up",
-    title: "Initialize Node",
-    blurb:
-      "anyone can apply, the admin approves and assigns the pool, then funds the team treasury",
-  },
-  {
-    id: "bootstrap",
-    title: "Bootstrap the Node",
-    blurb:
-      "the team publishes the tenant, stakes its pool, and locks NEAR for House of Stake — in any order",
-  },
-  {
-    id: "sponsor",
-    title: "Sponsor Endowment",
-    blurb:
-      "connected by membership, the endowment's treasury receives proposals: release its old pool, stake the node's pool from its lockup, and hand its voting power to the team — optional, never blocks anything",
-  },
-  {
-    id: "vote",
-    title: "Participate in Governance",
-    blurb: "the team votes in House of Stake with its veNEAR",
-  },
-  {
-    id: "refresh",
-    title: "Refresh",
-    blurb: "unstake and withdraw so the cycle can run again for the next node",
-  },
-];
+export function createPhases(t: AppTranslator): readonly PhaseDef[] {
+  return [
+    {
+      id: "stand-up",
+      title: t("lifecycle.initialize"),
+      blurb: t("lifecycle.phaseInitializeHint"),
+    },
+    {
+      id: "bootstrap",
+      title: t("lifecycle.bootstrap"),
+      blurb: t("lifecycle.phaseBootstrapHint"),
+    },
+    {
+      id: "sponsor",
+      title: t("lifecycle.sponsorPhase"),
+      blurb: t("lifecycle.phaseSponsorHint"),
+    },
+    {
+      id: "vote",
+      title: t("lifecycle.governance"),
+      blurb: t("lifecycle.phaseVoteHint"),
+    },
+    {
+      id: "refresh",
+      title: t("lifecycle.refresh"),
+      blurb: t("lifecycle.phaseRefreshHint"),
+    },
+  ];
+}
+
+export const PHASES: readonly PhaseDef[] = createPhases(translateEnglishAppMessage);
 
 export interface StepDef {
   id: string;
@@ -138,7 +142,10 @@ const OFFCHAIN = (id: string, label: string): StepDef => ({ id, label });
  * so the same definition drives staging, proposal matching and the call
  * preview shown in the UI.
  */
-export function buildStations(inputs: StationInputs): StationDef[] {
+export function buildStations(
+  inputs: StationInputs,
+  t: AppTranslator = translateEnglishAppMessage,
+): StationDef[] {
   const {
     pool,
     teamAccount,
@@ -154,46 +161,43 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "apply",
       index: 1,
       phase: "stand-up",
-      title: "Apply for the node",
+      title: t("lifecycle.apply"),
       signer: "session",
-      purpose: "Your session wallet records the application against your organization.",
-      steps: [OFFCHAIN("propose", "submit the application")],
+      purpose: t("lifecycle.purposeApply"),
+      steps: [OFFCHAIN("propose", t("lifecycle.applyStep"))],
     },
     {
       id: "approve",
       index: 2,
       phase: "stand-up",
-      title: "Approve and assign",
+      title: t("lifecycle.approveAssign"),
       signer: "session",
-      purpose:
-        "An admin session approves the application and creates the tenant, node and domain binding, assigning the team DAO and its pre-deployed pool to the node.",
-      requires: { applicationProposed: "submit the application first" },
-      steps: [OFFCHAIN("approve", "approve the application")],
+      purpose: t("lifecycle.purposeApprove"),
+      requires: { applicationProposed: t("lifecycle.applyFirst") },
+      steps: [OFFCHAIN("approve", t("lifecycle.approveStep"))],
     },
     {
       id: "fund",
       index: 3,
       phase: "stand-up",
-      title: "Fund the team treasury",
+      title: t("lifecycle.fundTeam"),
       signer: "session",
-      purpose:
-        "The admin's wallet transfers what the remaining stations cost — their attached deposits — straight into the team's public treasury.",
-      requires: { tenantDeployed: "approve the application first" },
-      steps: [OFFCHAIN("fund-treasury", "fund the team treasury")],
+      purpose: t("lifecycle.purposeFund"),
+      requires: { tenantDeployed: t("lifecycle.approveFirst") },
+      steps: [OFFCHAIN("fund-treasury", t("lifecycle.fundStep"))],
     },
     {
       id: "publish",
       index: 4,
       phase: "bootstrap",
-      title: "Publish and go live",
+      title: t("lifecycle.publishLive"),
       signer: "team",
-      purpose:
-        "The team publishes the tenant's config to the FastKV registry. The trezu proposal often reports failed even when the write lands — the config-live check is the source of truth. Once live, an admin marks the application applied.",
-      requires: { tenantDeployed: "approve the application first" },
+      purpose: t("lifecycle.purposePublish"),
+      requires: { tenantDeployed: t("lifecycle.approveFirst") },
       steps: [
         {
           id: "publish",
-          label: "publish the tenant config",
+          label: t("lifecycle.publishConfig"),
           plan: {
             kind: "call",
             receiverId: ANY_RECEIVER,
@@ -202,25 +206,24 @@ export function buildStations(inputs: StationInputs): StationDef[] {
             gas: "300 Tgas",
           },
         },
-        OFFCHAIN("mark-applied", "mark the proposal applied"),
+        OFFCHAIN("mark-applied", t("lifecycle.markStep")),
       ],
     },
     {
       id: "stake",
       index: 5,
       phase: "bootstrap",
-      title: "Stake the node's pool",
+      title: t("lifecycle.stakePool"),
       signer: "team",
-      purpose:
-        "The team stakes exactly 1 NEAR of its own into its pool — skin in the game, earning rewards and backing the node's validator.",
+      purpose: t("lifecycle.purposeStake"),
       requires: {
-        poolAssigned: "assign the pool first",
-        treasuryFunded: "fund the team treasury first — the stake needs 1 NEAR",
+        poolAssigned: t("lifecycle.poolFirst"),
+        treasuryFunded: t("lifecycle.fundStakeFirst"),
       },
       steps: [
         {
           id: "stake",
-          label: "stake 1 NEAR from the team treasury",
+          label: t("lifecycle.stakeOne"),
           costYocto: MIN_TEAM_STAKE_YOCTO.toString(),
           plan: {
             kind: "call",
@@ -237,17 +240,16 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "setup-hos",
       index: 6,
       phase: "bootstrap",
-      title: "Setup House of Stake",
+      title: t("lifecycle.setupHos"),
       signer: "team",
-      purpose:
-        "Registers the team in veNEAR, deploys its lockup, and locks all of its liquid NEAR — the deploy deposit itself. Locked NEAR is what mints the team's voting power. This is the only gate for voting.",
+      purpose: t("lifecycle.purposeHos"),
       requires: {
-        treasuryFunded: "fund the team treasury first — House of Stake setup needs 2.1 NEAR",
+        treasuryFunded: t("lifecycle.fundHosFirst"),
       },
       steps: [
         {
           id: "register",
-          label: "register in veNEAR (0.1 NEAR)",
+          label: t("lifecycle.registerStep"),
           costYocto: REGISTER_DEPOSIT,
           plan: {
             kind: "call",
@@ -260,7 +262,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "deploy-lockup",
-          label: "deploy the lockup (2 NEAR)",
+          label: t("lifecycle.deployLockup"),
           costYocto: LOCKUP_DEPLOY_DEPOSIT,
           plan: {
             kind: "call",
@@ -273,7 +275,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "lock",
-          label: "lock NEAR for veNEAR",
+          label: t("lifecycle.lockNear"),
           plan: {
             kind: "call",
             receiverId: teamLockup,
@@ -289,15 +291,14 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "sponsor-lock",
       index: 7,
       phase: "sponsor",
-      title: "Lock the sponsor's NEAR",
+      title: t("lifecycle.lockSponsor"),
       signer: "endowment",
-      purpose:
-        "The endowment registers in veNEAR, deploys its lockup, transfers its capital in, and locks it all. Locked NEAR mints the sponsor's veNEAR voting power. Each step is staged as a proposal on the endowment's treasury, signed by a member wallet.",
-      requires: { tenantDeployed: "approve the application first" },
+      purpose: t("lifecycle.purposeSponsorLock"),
+      requires: { tenantDeployed: t("lifecycle.approveFirst") },
       steps: [
         {
           id: "register-endowment",
-          label: "register in veNEAR (0.1 NEAR)",
+          label: t("lifecycle.registerStep"),
           costYocto: REGISTER_DEPOSIT,
           plan: {
             kind: "call",
@@ -310,7 +311,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "deploy-lockup-endowment",
-          label: "deploy the lockup (2 NEAR)",
+          label: t("lifecycle.deployLockup"),
           costYocto: LOCKUP_DEPLOY_DEPOSIT,
           plan: {
             kind: "call",
@@ -323,7 +324,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "fund-lockup",
-          label: "transfer the sponsor NEAR into the lockup",
+          label: t("lifecycle.transferLockup"),
           plan: sponsorYocto
             ? {
                 kind: "transfer",
@@ -334,7 +335,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "lock-endowment",
-          label: "lock all NEAR for veNEAR",
+          label: t("lifecycle.lockAll"),
           plan: {
             kind: "call",
             receiverId: endowmentLockup,
@@ -350,18 +351,17 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "sponsor-stake",
       index: 8,
       phase: "sponsor",
-      title: "Stake the pool from the lockup",
+      title: t("lifecycle.stakeLockup"),
       signer: "endowment",
-      purpose:
-        "Points the endowment's lockup at the node's pool and stakes into it. Releasing the pool the lockup already points at comes first — the contract refuses to select while one is set. NEAR stays veNEAR-earning while it secures the team's validator — this stake is the sponsor's real capital. Each step is staged as a proposal on the endowment's treasury, signed by a member wallet.",
+      purpose: t("lifecycle.purposeSponsorStake"),
       requires: {
-        poolAssigned: "assign the pool first",
-        endowmentFunded: "transfer the sponsor NEAR into the lockup first",
+        poolAssigned: t("lifecycle.poolFirst"),
+        endowmentFunded: t("lifecycle.sponsorFundFirst"),
       },
       steps: [
         {
           id: "unselect-old-pool",
-          label: "release the currently selected pool",
+          label: t("lifecycle.releaseSelected"),
           plan: {
             kind: "call",
             receiverId: endowmentLockup,
@@ -373,7 +373,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "select-pool",
-          label: "select the pool on the lockup",
+          label: t("lifecycle.selectLockupPool"),
           plan: {
             kind: "call",
             receiverId: endowmentLockup,
@@ -385,7 +385,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "stake-endowment",
-          label: "stake from the lockup",
+          label: t("lifecycle.stakeFromLockup"),
           plan: sponsorStakeYocto
             ? {
                 kind: "call",
@@ -403,17 +403,16 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "sponsor-delegate",
       index: 9,
       phase: "sponsor",
-      title: "Delegate the voting power",
+      title: t("lifecycle.delegatePower"),
       signer: "endowment",
-      purpose:
-        "The endowment delegates its veNEAR to the team wallet, replacing its whole delegation set — the previous delegate is dropped in the same call. The team's votes are what the sponsor's stake buys. Staged as a proposal on the endowment's treasury, signed by a member wallet.",
+      purpose: t("lifecycle.purposeDelegate"),
       requires: {
-        teamRegistered: "the team must register in veNEAR before it can receive the delegation",
+        teamRegistered: t("lifecycle.teamRegisterFirst"),
       },
       steps: [
         {
           id: "set-delegations",
-          label: "set delegations",
+          label: t("lifecycle.setDelegations"),
           costYocto: DELEGATE_DEPOSIT,
           plan: {
             kind: "call",
@@ -430,15 +429,17 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "vote",
       index: 10,
       phase: "vote",
-      title: "Vote in House of Stake",
+      title: t("lifecycle.voteHos"),
       signer: "team",
-      purpose:
-        "Casts a vote with the team's veNEAR — its own lock plus any delegated sponsor power. Carries a fresh merkle proof of the account, so it cannot be staged early.",
-      requires: { nearLocked: "lock NEAR in House of Stake first — voting needs veNEAR" },
+      purpose: t("lifecycle.purposeVote"),
+      requires: { nearLocked: t("lifecycle.lockFirst") },
       steps: [
         {
           id: "vote",
-          label: govProposalId == null ? "vote on a proposal" : `vote on proposal ${govProposalId}`,
+          label:
+            govProposalId == null
+              ? t("lifecycle.voteStep")
+              : t("lifecycle.voteProposal", { proposal: govProposalId }),
         },
       ],
     },
@@ -446,15 +447,14 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "unstake",
       index: 11,
       phase: "refresh",
-      title: "Unstake the team's stake",
+      title: t("lifecycle.unstakeTeam"),
       signer: "team",
-      purpose:
-        "Unstakes the team's direct stake from the pool and withdraws it back to the team treasury once the epoch window passes.",
-      requires: { teamStaked: "nothing staked by the team yet" },
+      purpose: t("lifecycle.purposeUnstake"),
+      requires: { teamStaked: t("lifecycle.noTeamStake") },
       steps: [
         {
           id: "unstake-all",
-          label: "unstake everything",
+          label: t("lifecycle.unstakeAll"),
           plan: {
             kind: "call",
             receiverId: pool,
@@ -465,7 +465,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "withdraw",
-          label: "withdraw to the team",
+          label: t("lifecycle.withdrawTeam"),
           plan: {
             kind: "call",
             receiverId: pool,
@@ -480,15 +480,14 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "sponsor-unwind",
       index: 12,
       phase: "refresh",
-      title: "Unwind the sponsor",
+      title: t("lifecycle.unwindSponsor"),
       signer: "endowment",
-      purpose:
-        "Takes the endowment back out: unstakes from the pool, withdraws to the lockup, releases the pool, and clears its delegations so the voting power returns to itself. Each step is staged as a proposal on the endowment's treasury, signed by a member wallet.",
-      requires: { endowmentStaked: "nothing staked from the lockup yet" },
+      purpose: t("lifecycle.purposeUnwind"),
+      requires: { endowmentStaked: t("lifecycle.noLockupStake") },
       steps: [
         {
           id: "unstake-endowment",
-          label: "unstake everything",
+          label: t("lifecycle.unstakeAll"),
           plan: {
             kind: "call",
             receiverId: endowmentLockup,
@@ -500,7 +499,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "withdraw-endowment",
-          label: "withdraw to the lockup",
+          label: t("lifecycle.withdrawLockup"),
           plan: {
             kind: "call",
             receiverId: endowmentLockup,
@@ -512,7 +511,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "unselect-pool",
-          label: "release the pool",
+          label: t("lifecycle.releasePool"),
           plan: {
             kind: "call",
             receiverId: endowmentLockup,
@@ -524,7 +523,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "clear-delegations",
-          label: "remove all delegations",
+          label: t("lifecycle.removeDelegations"),
           costYocto: DELEGATE_DEPOSIT,
           plan: {
             kind: "call",
@@ -622,10 +621,13 @@ export function isSharedTreasurySkip(stationId: StationId, facts: ChainFacts): b
 }
 
 /** Why a shared-treasury skip is a no-op rather than missing work. */
-export function sharedTreasurySkipReason(stationId: StationId): string | null {
+export function sharedTreasurySkipReason(
+  stationId: StationId,
+  t: AppTranslator = translateEnglishAppMessage,
+): string | null {
   if (!SHARED_TREASURY_SKIP.has(stationId)) return null;
-  if (stationId === "sponsor-delegate") return "the endowment cannot delegate to itself";
-  return "team and endowment are one account — the sponsor phase is folded into the team stations";
+  if (stationId === "sponsor-delegate") return t("lifecycle.sharedCannotDelegate");
+  return t("lifecycle.sharedSponsorSkip");
 }
 
 /** Attached deposits the team's remaining stations still need from its treasury. */
@@ -686,7 +688,10 @@ export interface DeriveOptions {
   failedStations?: Partial<Record<StationId, string>>;
 }
 
-export function deriveStations(options: DeriveOptions): StationState[] {
+export function deriveStations(
+  options: DeriveOptions,
+  t: AppTranslator = translateEnglishAppMessage,
+): StationState[] {
   const { stations, facts, proposalsBySigner, accounts, connectedDao } = options;
   const blockers = options.blockers ?? {};
   const failures = options.failedStations ?? {};
@@ -736,20 +741,23 @@ export function deriveStations(options: DeriveOptions): StationState[] {
     const blockedBy = status === "blocked" ? blockedByInput : null;
     const blockedReason = failures[def.id] ?? blockers[def.id] ?? unmetRequirement ?? null;
 
-    const { canRun, runBlockReason } = deriveRunGate({
-      status,
-      blockedBy,
-      blockerReason: blockers[def.id] ?? unmetRequirement,
-      signerConnected,
-      hasPendingSteps: steps.some((step) => step.status === "pending"),
-    });
+    const { canRun, runBlockReason } = deriveRunGate(
+      {
+        status,
+        blockedBy,
+        blockerReason: blockers[def.id] ?? unmetRequirement,
+        signerConnected,
+        hasPendingSteps: steps.some((step) => step.status === "pending"),
+      },
+      t,
+    );
 
     return {
       def,
       status,
       steps,
       blockedReason,
-      skipReason: isSharedTreasurySkip(def.id, facts) ? sharedTreasurySkipReason(def.id) : null,
+      skipReason: isSharedTreasurySkip(def.id, facts) ? sharedTreasurySkipReason(def.id, t) : null,
       blockedBy,
       signerAccountId,
       signerConnected,
@@ -764,24 +772,27 @@ export function deriveStations(options: DeriveOptions): StationState[] {
  * when not. Stations must be disabled with a reason rather than clickable and
  * left to fail.
  */
-export function deriveRunGate(input: {
-  status: StationStatus;
-  blockedBy: "input" | null;
-  blockerReason: string | null;
-  signerConnected: boolean;
-  hasPendingSteps: boolean;
-}): { canRun: boolean; runBlockReason: string | null } {
+export function deriveRunGate(
+  input: {
+    status: StationStatus;
+    blockedBy: "input" | null;
+    blockerReason: string | null;
+    signerConnected: boolean;
+    hasPendingSteps: boolean;
+  },
+  t: AppTranslator = translateEnglishAppMessage,
+): { canRun: boolean; runBlockReason: string | null } {
   if (input.status === "done" || input.status === "skipped" || input.status === "running") {
     return { canRun: false, runBlockReason: null };
   }
   if (input.blockedBy === "input") {
-    return { canRun: false, runBlockReason: input.blockerReason ?? "input needed" };
+    return { canRun: false, runBlockReason: input.blockerReason ?? t("lifecycle.inputRequired") };
   }
   if (!input.signerConnected) {
-    return { canRun: false, runBlockReason: "connect the treasury to continue" };
+    return { canRun: false, runBlockReason: t("lifecycle.connectTreasuryReason") };
   }
   if (!input.hasPendingSteps) {
-    return { canRun: false, runBlockReason: "awaiting votes" };
+    return { canRun: false, runBlockReason: t("lifecycle.awaitingVotesReason") };
   }
   return { canRun: true, runBlockReason: null };
 }
@@ -827,16 +838,28 @@ export function pendingProposalCount(stations: StationState[]): number {
   return ids.size;
 }
 
-export const SIGNER_LABEL: Record<SignerKind, string> = {
-  session: "session wallet",
-  endowment: "endowment",
-  team: "team",
-};
+export function createSignerLabel(t: AppTranslator) {
+  return {
+    session: t("lifecycle.sessionWallet"),
+    endowment: t("lifecycle.endowmentLower"),
+    team: t("lifecycle.teamLower"),
+  };
+}
 
-export const LENS_OPTIONS: readonly { id: LensId; label: string }[] = [
-  { id: "you", label: "you" },
-  { id: "team", label: "team" },
-  { id: "endowment", label: "endowment" },
-];
+export const SIGNER_LABEL: Record<SignerKind, string> = createSignerLabel(
+  translateEnglishAppMessage,
+);
+
+export function createLensOptions(t: AppTranslator): readonly { id: LensId; label: string }[] {
+  return [
+    { id: "you", label: t("lifecycle.youLower") },
+    { id: "team", label: t("lifecycle.teamLower") },
+    { id: "endowment", label: t("lifecycle.endowmentLower") },
+  ];
+}
+
+export const LENS_OPTIONS: readonly { id: LensId; label: string }[] = createLensOptions(
+  translateEnglishAppMessage,
+);
 
 export const signerLens = (signer: SignerKind): LensId => (signer === "session" ? "you" : signer);

@@ -8,6 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import { useMemo, useState } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, PageContainer, PageHeader } from "@/components";
@@ -22,6 +23,8 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { thingQueryKeys } from "./-thing-cache";
 import { filterThings } from "./-thing-list";
@@ -34,10 +37,23 @@ const EMPTY_THINGS: Thing[] = [];
 export const Route = createFileRoute("/_authenticated/_dashboard/things/")({
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Things", match.context.runtimeConfig) },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.things",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
       {
         name: "description",
-        content: "Browse approved Things.",
+        content: translateAppMessage(
+          "meta.thingsDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
       },
     ],
   }),
@@ -45,6 +61,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/things/")({
 });
 
 function ThingsIndexPage() {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const [query, setQuery] = useState("");
 
@@ -68,15 +85,15 @@ function ThingsIndexPage() {
   const newThingButton = (
     <Button nativeButton={false} render={<Link to="/things/new" />} data-testid="things-new">
       <PlusIcon />
-      New thing
+      {translate("things.new")}
     </Button>
   );
 
   return (
     <PageContainer variant="default">
       <PageHeader
-        title="Things"
-        description="Approved things in the registry."
+        title={translate("common.things")}
+        description={translate("things.listDescription")}
         headerTestId="things.heading"
         actions={
           <>
@@ -87,7 +104,7 @@ function ThingsIndexPage() {
               data-testid="things-live"
             >
               <BroadcastIcon />
-              Live
+              {translate("things.live")}
             </Button>
             {newThingButton}
           </>
@@ -104,19 +121,19 @@ function ThingsIndexPage() {
       ) : error ? (
         <EmptyState
           icon={CubeIcon}
-          title="Couldn't load things"
-          description={error.message}
+          title={translate("things.loadFailed")}
+          description={appErrorMessage(error, translate)}
           action={
             <Button variant="outline" onClick={() => void refetch()}>
-              Try again
+              {translate("common.retry")}
             </Button>
           }
         />
       ) : things.length === 0 ? (
         <EmptyState
           icon={CubeIcon}
-          title="No things yet"
-          description="Propose the first one. An admin reviews it before it goes live."
+          title={translate("things.empty")}
+          description={translate("things.emptyDescription")}
           action={newThingButton}
         />
       ) : (
@@ -127,8 +144,8 @@ function ThingsIndexPage() {
                 <MagnifyingGlassIcon />
               </InputGroupAddon>
               <InputGroupInput
-                aria-label="Search things"
-                placeholder="Search by id or type"
+                aria-label={translate("things.search")}
+                placeholder={translate("things.searchPlaceholder")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 data-testid="things-search"
@@ -136,19 +153,22 @@ function ThingsIndexPage() {
             </InputGroup>
             <span className="text-sm text-muted-foreground tabular-nums">
               {visibleThings.length === things.length
-                ? `${things.length} ${things.length === 1 ? "thing" : "things"}`
-                : `${visibleThings.length} of ${things.length}`}
+                ? translate("things.totalCount", { count: things.length })
+                : translate("things.filteredCount", {
+                    shown: visibleThings.length,
+                    total: things.length,
+                  })}
             </span>
           </div>
 
           {visibleThings.length === 0 ? (
             <EmptyState
               icon={MagnifyingGlassIcon}
-              title="No matches"
-              description={`Nothing matches “${query.trim()}”.`}
+              title={translate("things.noMatches")}
+              description={translate("things.noMatchesNamed", { query: query.trim() ?? "" })}
               action={
                 <Button variant="outline" onClick={() => setQuery("")}>
-                  Clear search
+                  {translate("things.clearSearch")}
                 </Button>
               }
             />
@@ -171,7 +191,12 @@ function ThingsIndexPage() {
                       <span className="truncate font-mono">{thing.thingId}</span>
                     </ItemTitle>
                     <ItemDescription>
-                      Updated <LocalDate value={thing.updatedAt} format="relative" />
+                      <Trans
+                        id="date.updated"
+                        components={{
+                          date: <LocalDate value={thing.updatedAt} format="relative" />,
+                        }}
+                      />
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -183,7 +208,7 @@ function ThingsIndexPage() {
                       {upvoteCountsQuery.isLoading
                         ? "—"
                         : (upvoteCountsQuery.data?.[thing.thingId]?.totalCount ?? 0)}
-                      <span className="sr-only">upvotes</span>
+                      <span className="sr-only">{translate("things.upvotes")}</span>
                     </span>
                     <CaretRightIcon className="text-muted-foreground" />
                   </ItemActions>

@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getActiveRuntime } from "@/app";
+import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantByKeyQueryOptions } from "@/lib/queries/tenants";
@@ -22,7 +23,18 @@ export const Route = createFileRoute("/_authenticated/_dashboard/tenant/$tenantI
     if (nodes[0]) await ensureCommunityHeaderData(context, nodes[0].id);
   },
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Community settings", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.communitySettings",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: TenantDetail,
 });

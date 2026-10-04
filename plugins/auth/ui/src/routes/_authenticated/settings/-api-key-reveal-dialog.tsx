@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useLoginTranslation } from "@/i18n/runtime";
 
 export interface CreatedApiKey {
   id: string;
@@ -26,13 +27,14 @@ export function ApiKeyRevealDialog({
   apiKey: CreatedApiKey | null;
   onDismiss: () => void;
 }) {
+  const translate = useLoginTranslation();
   const handleCopy = async () => {
     if (!apiKey) return;
     try {
       await navigator.clipboard.writeText(apiKey.key);
-      toast.success("API key copied");
+      toast.success(translate("auth.keys.copied"));
     } catch {
-      toast.error("Failed to copy API key");
+      toast.error(translate("auth.keys.copyFailed"));
     }
   };
 
@@ -45,11 +47,8 @@ export function ApiKeyRevealDialog({
     >
       <DialogContent data-testid="api-keys.reveal">
         <DialogHeader>
-          <DialogTitle>Copy your new key</DialogTitle>
-          <DialogDescription>
-            You won't see {apiKey?.name ? `"${apiKey.name}"` : "this key"} in full again. Store it
-            somewhere safe.
-          </DialogDescription>
+          <DialogTitle>{translate("auth.keys.revealTitle")}</DialogTitle>
+          <DialogDescription>{translate("auth.keys.revealDescription")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <code
@@ -65,12 +64,12 @@ export function ApiKeyRevealDialog({
             data-testid="api-keys.copy-button"
           >
             <CopyIcon data-icon="inline-start" />
-            Copy key
+            {translate("auth.keys.copy")}
           </Button>
         </div>
         <DialogFooter>
           <Button onClick={onDismiss} data-testid="api-keys.reveal-done">
-            Done
+            {translate("auth.common.done")}
           </Button>
         </DialogFooter>
       </DialogContent>

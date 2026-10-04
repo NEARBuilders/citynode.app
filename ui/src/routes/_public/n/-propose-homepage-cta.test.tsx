@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
 const TENANT_ID = "00000000-0000-4000-8000-000000000276";
@@ -19,10 +20,12 @@ const harness = vi.hoisted(() => ({
 
 vi.mock("@/app", async () => ({
   ...(await vi.importActual<object>("@/app")),
-  useApiClient: () => ({ resolveTenantByOrgId: harness.resolveTenantByOrgId }),
+  useApiClient: () => ({
+    auth: { listOrganizations: harness.listOrganizations },
+    resolveTenantByOrgId: harness.resolveTenantByOrgId,
+  }),
   useAuthClient: () => ({
     getSession: async () => ({ data: harness.session }),
-    organization: { list: harness.listOrganizations },
   }),
 }));
 
@@ -47,11 +50,13 @@ vi.mock("@tanstack/react-router", () => ({
 
 function setup(options: {
   signedIn: boolean;
-  orgs?: { id: string; slug: string }[];
+  orgs?: { id: string; slug: string; status?: "active" | "pending" | "rejected" }[];
   tenants?: Record<string, TenantResult>;
 }) {
   harness.session = options.signedIn ? { user: { id: "u1", isAnonymous: false } } : null;
-  harness.listOrganizations.mockResolvedValue({ data: options.orgs ?? [] });
+  harness.listOrganizations.mockResolvedValue(
+    (options.orgs ?? []).map((org) => ({ status: "active", ...org })),
+  );
   harness.resolveTenantByOrgId.mockImplementation(async ({ orgId }: { orgId: string }) => {
     const result = options.tenants?.[orgId] ?? null;
     if (result instanceof Error) throw result;
@@ -81,6 +86,18 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ProposeHomepageCta", () => {
+  it("does not expose the proposal link for an organization awaiting approval", async () => {
+    setup({
+      signedIn: true,
+      orgs: [{ id: "org-1", slug: "chicago-org", status: "pending" }],
+      tenants: { "org-1": { id: TENANT_ID, ownerKind: "dao" } },
+    });
+    renderCta();
+    await settle();
+    expect(screen.queryByTestId("node-page.propose-homepage")).toBeNull();
+    expect(harness.resolveTenantByOrgId).not.toHaveBeenCalled();
+  });
+
   it("links an owning DAO organization member to the homepage tab", async () => {
     setup({
       signedIn: true,

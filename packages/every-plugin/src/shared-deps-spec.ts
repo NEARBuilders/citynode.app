@@ -51,6 +51,7 @@ export interface SharedDependencySpec {
   /** exact-version pin (requiredVersion = resolved version, strictVersion = true) */
   critical: boolean;
   resolution: SharedDependencyResolution;
+  optional?: true;
 }
 
 export const CORE_SHARED_DEPS = [
@@ -96,6 +97,7 @@ export const UI_SHARED_DEPS = [
   { name: "@tanstack/react-router", singleton: true, critical: true, resolution: "package" },
   { name: "@lingui/core", singleton: true, critical: true, resolution: "package" },
   { name: "@lingui/react", singleton: true, critical: true, resolution: "package" },
+  { name: "sonner", singleton: true, critical: true, resolution: "package", optional: true },
   {
     name: "everything-dev/ui/auth",
     singleton: true,
@@ -376,6 +378,7 @@ export interface UiSharedDepsOptions {
   strictVersion?: boolean;
   role?: "provider" | "consumer";
   workspaceRoot?: string;
+  dependencies?: Record<string, string>;
 }
 
 export function createUiSharedDeps(
@@ -383,6 +386,7 @@ export function createUiSharedDeps(
 ): Record<string, UiSharedDepEntry> {
   const deps: Record<string, UiSharedDepEntry> = {};
   for (const spec of UI_SHARED_DEPS) {
+    if ("optional" in spec && spec.optional && !options.dependencies?.[spec.name]) continue;
     const version = resolveSharedVersion(spec.name, {
       workspaceRoot: options.workspaceRoot,
       resolution: spec.resolution === "subpath" ? "subpath" : "package",

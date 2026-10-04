@@ -217,17 +217,20 @@ export function invalidateStakePoolQueries(
   return queryClient.invalidateQueries({ queryKey: stakePoolQueryKeys.pool(accountId, network) });
 }
 
-export function formatNearBalance(balance: bigint) {
+export function formatNearBalance(balance: bigint, locale = "en") {
   const rounded = (balance + 50_000_000_000_000_000_000n) / 100_000_000_000_000_000_000n;
-  const whole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(
+  const whole = new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(
     rounded / 10_000n,
   );
   const fraction = (rounded % 10_000n).toString().padStart(4, "0").replace(/0+$/, "");
-  return `${whole}${fraction ? `.${fraction}` : ""} NEAR`;
+  const decimal =
+    new Intl.NumberFormat(locale).formatToParts(1.1).find((part) => part.type === "decimal")
+      ?.value ?? ".";
+  return `${whole}${fraction ? `${decimal}${fraction}` : ""} NEAR`;
 }
 
-export function formatPoolFee(numerator: number, denominator: number) {
-  return new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 4 }).format(
+export function formatPoolFee(numerator: number, denominator: number, locale = "en") {
+  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 4 }).format(
     numerator / denominator,
   );
 }

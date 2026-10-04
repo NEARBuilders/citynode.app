@@ -6,6 +6,8 @@ import type { ApiClient } from "@/app";
 import { Avatar, AvatarFallback, LocalDate } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { onboardingUrl } from "@/lib/gateway-origin";
 import { formatRemaining } from "@/lib/onboarding-codes";
 
@@ -34,6 +36,8 @@ export function OnboardingStation({
   organizationId?: string;
   gatewayOrigin: string;
 }) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const station = useQuery({
     queryKey: ["onboarding-station", codeId, organizationId],
@@ -68,9 +72,11 @@ export function OnboardingStation({
         <div className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
           <WarningCircleIcon size={28} />
         </div>
-        <h1 className="text-2xl font-semibold text-foreground">Station unavailable</h1>
+        <h1 className="text-2xl font-semibold text-foreground">
+          {translate("station.unavailable")}
+        </h1>
         <p className="max-w-md text-lg text-muted-foreground" data-testid="station.unavailable">
-          {station.error.message || "This onboarding station is unavailable."}
+          {appErrorMessage(station.error, translate, "station.unavailableHint")}
         </p>
       </div>
     );
@@ -84,7 +90,7 @@ export function OnboardingStation({
           data-testid="station.loading"
         >
           <Spinner />
-          Opening station…
+          {translate("station.opening")}
         </p>
       </div>
     );
@@ -103,7 +109,7 @@ export function OnboardingStation({
           {qrDataUrl ? (
             <img
               src={qrDataUrl}
-              alt={`Scan to join ${station.data.eventName}`}
+              alt={translate("station.scanNamed", { event: station.data.eventName ?? "" })}
               className="aspect-square w-full rounded-2xl"
               data-testid="station.qr"
             />
@@ -113,14 +119,15 @@ export function OnboardingStation({
         </div>
         <p className="text-center text-base text-muted-foreground sm:text-lg">
           <QrCodeIcon className="mr-2 inline size-5 align-text-bottom" />
-          Scan with your phone camera, or open{" "}
-          <span className="font-mono break-all text-foreground">{gatewayHost}/onboard</span>
+          {translate("station.scanPhoneNamed", { url: `${gatewayHost}/onboard` })}
         </p>
       </div>
 
       <div className="flex w-full max-w-lg flex-col gap-10">
         <div className="flex flex-col gap-3">
-          <span className="text-lg font-medium text-muted-foreground">Scan to join</span>
+          <span className="text-lg font-medium text-muted-foreground">
+            {translate("station.scanToJoin")}
+          </span>
           <h1
             className="text-4xl font-semibold wrap-anywhere text-foreground sm:text-6xl"
             data-testid="station.event-name"
@@ -134,7 +141,7 @@ export function OnboardingStation({
             <span className="text-7xl font-semibold tabular-nums text-foreground sm:text-8xl">
               {usedCount}
             </span>{" "}
-            <span className="text-2xl text-muted-foreground">joined</span>
+            <span className="text-2xl text-muted-foreground">{translate("station.joined")}</span>
           </p>
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
@@ -143,13 +150,20 @@ export function OnboardingStation({
             />
           </div>
           <p className="text-sm text-muted-foreground" data-testid="station.capacity">
-            {maxUses - usedCount > 0 ? `${maxUses - usedCount} spots left` : "Full"} ·{" "}
-            {formatRemaining(station.data.expiresAt)} left
+            {maxUses - usedCount > 0
+              ? translate("station.spotsCount", { count: maxUses - usedCount })
+              : translate("station.full")}{" "}
+            ·{" "}
+            {translate("station.timeRemaining", {
+              time: formatRemaining(station.data.expiresAt, Date.now(), translate, locale),
+            })}
           </p>
         </div>
 
         <div className="flex flex-col gap-4">
-          <h2 className="text-xl font-semibold text-foreground">Just joined</h2>
+          <h2 className="text-xl font-semibold text-foreground">
+            {translate("station.justJoined")}
+          </h2>
           {joiners.length > 0 ? (
             <ul className="flex flex-col gap-3" data-testid="station.recent-joiners">
               {joiners.map((entry) => (
@@ -158,7 +172,7 @@ export function OnboardingStation({
                     <AvatarFallback>{initials(entry.userName)}</AvatarFallback>
                   </Avatar>
                   <span className="min-w-0 flex-1 truncate text-xl text-foreground">
-                    {entry.userName ?? "New member"}
+                    {entry.userName ?? translate("org.newMember")}
                   </span>
                   <span className="shrink-0 text-sm text-muted-foreground">
                     <LocalDate value={entry.createdAt} format="relative" />
@@ -169,7 +183,7 @@ export function OnboardingStation({
           ) : (
             <p className="flex items-center gap-3 text-lg text-muted-foreground">
               <span className="size-2.5 animate-pulse rounded-full bg-brand" />
-              Waiting for the first scan…
+              {translate("org.waitingScan")}
             </p>
           )}
         </div>

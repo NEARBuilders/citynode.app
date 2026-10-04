@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { PageHeader } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { BackLink } from "../-admin-ui";
 import { TenantDetailsFields, TenantReview } from "./-tenant-creation-form";
 import { TenantOrganizationGate } from "./-tenant-organization-gate";
@@ -29,6 +30,7 @@ export function TenantCreationStage({
   };
   review: ComponentProps<typeof TenantReview>;
 }) {
+  const translate = useAppTranslation();
   const steps = resolveTenantWizardSteps({
     organization: organization.hasOrg,
     dao: dao.ready,
@@ -39,9 +41,9 @@ export function TenantCreationStage({
   return (
     <>
       <PageHeader
-        label={<BackLink to="/admin/tenants">Sites</BackLink>}
-        title="New site"
-        description="A site, its first community and a primary domain, owned by a DAO."
+        label={<BackLink to="/admin/tenants">{translate("nav.sites")}</BackLink>}
+        title={translate("admin.site.new")}
+        description={translate("admin.site.newDescription")}
         headerTestId="admin-tenant-new.heading"
       />
 
@@ -51,8 +53,8 @@ export function TenantCreationStage({
             <WarningIcon className="text-warning" />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Switch to mainnet</ItemTitle>
-            <ItemDescription>DAO sites can only be created on mainnet.</ItemDescription>
+            <ItemTitle>{translate("admin.site.switchMainnet")}</ItemTitle>
+            <ItemDescription>{translate("admin.site.mainnetOnly")}</ItemDescription>
           </ItemContent>
         </Item>
       )}
@@ -61,16 +63,16 @@ export function TenantCreationStage({
         <TenantStep
           id="organization"
           number={1}
-          title="Organization"
+          title={translate("common.organization")}
           status={steps.status("organization")}
-          summary="Using your active organization"
+          summary={translate("admin.usingActiveOrg")}
         >
           <TenantOrganizationGate {...organization.gate} />
         </TenantStep>
         <TenantStep
           id="dao"
           number={2}
-          title="Owning DAO"
+          title={translate("admin.proposal.owningDao")}
           status={steps.status("dao")}
           summary={dao.accountId}
           onChange={dao.onChange}
@@ -82,7 +84,7 @@ export function TenantCreationStage({
         <TenantStep
           id="details"
           number={3}
-          title="Community"
+          title={translate("common.community")}
           status={steps.status("details")}
           summary={detailsSummary}
           onChange={onEdit}
@@ -92,7 +94,7 @@ export function TenantCreationStage({
         <TenantStep
           id="review"
           number={4}
-          title="Review and create"
+          title={translate("admin.site.reviewCreate")}
           status={steps.status("review")}
           last
         >

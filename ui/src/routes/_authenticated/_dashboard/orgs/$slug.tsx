@@ -26,6 +26,8 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import {
@@ -78,12 +80,12 @@ function isOrganizationTab(value: unknown): value is OrganizationTab {
   return ORGANIZATION_TABS.some((tab) => tab === value);
 }
 
-async function handleCopyApiKey(value: string, message = "API key copied") {
+async function handleCopyApiKey(value: string, message: string) {
   try {
     await navigator.clipboard.writeText(value);
     toast.success(message);
   } catch {
-    toast.error("Failed to copy API key");
+    toast.error(translateAppMessage("keys.copyFailed"));
   }
 }
 
@@ -92,8 +94,24 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
   search: { middlewares: [stripSearchParams({ tab: "members" })] },
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("Organization", match.context.runtimeConfig) },
-      { name: "description", content: "Members, teams and settings for an organization." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.organization",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.organizationDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   loader: async ({ context }) => {
@@ -104,6 +122,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
 });
 
 function OrganizationDetail() {
+  const translate = useAppTranslation();
   const router = useRouter();
   const navigate = Route.useNavigate();
   const { slug: orgSlug } = Route.useParams();
@@ -197,9 +216,9 @@ function OrganizationDetail() {
       link.download = `${org?.slug ?? "organization"}-members.csv`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success("Member emails exported");
+      toast.success(translate("org.emailsExported"));
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to export emails"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   const activeTab =
     (requestedTab === "onboard" && !canOrganize) ||
@@ -234,11 +253,11 @@ function OrganizationDetail() {
       <PageContainer variant="wide">
         <EmptyState
           icon={BankIcon}
-          title="Organization not found"
-          description="It doesn't exist or you're not a member."
+          title={translate("org.notFound")}
+          description={translate("org.notFoundDescription")}
           action={
             <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
-              Back to Organizations
+              {translate("org.back")}
             </Button>
           }
         />
@@ -256,15 +275,15 @@ function OrganizationDetail() {
         />
         <div className="flex flex-col gap-4" data-testid="orgs-request-status">
           <h2 className="text-lg font-medium">
-            {org?.status === "pending" ? "Pending approval" : "Request rejected"}
+            {org?.status === "pending"
+              ? translate("orgApproval.pending")
+              : translate("orgApproval.rejected")}
           </h2>
           <p className="text-sm text-muted-foreground" data-testid="orgs-request-reason">
-            {org?.status === "pending"
-              ? "A platform admin will review your request. Your organization can be used once approved."
-              : org.rejectionReason}
+            {org?.status === "pending" ? translate("orgApproval.pendingHint") : org.rejectionReason}
           </p>
           <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
-            Back to organizations
+            {translate("org.back")}
           </Button>
         </div>
       </PageContainer>
@@ -308,30 +327,34 @@ function OrganizationDetail() {
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <TabsList variant="line">
             <TabsTrigger value="members" data-testid="orgs-tab-members">
-              Members <TabCount value={members.length} />
+              {translate("org.members")}
+              <TabCount value={members.length} />
             </TabsTrigger>
             <TabsTrigger value="teams" data-testid="orgs-tab-teams">
-              Teams <TabCount value={teamsState.teams.length} />
+              {translate("org.teams")}
+              <TabCount value={teamsState.teams.length} />
             </TabsTrigger>
             <TabsTrigger value="invitations" data-testid="orgs-tab-invitations">
-              Invitations <TabCount value={pendingInvitationsCount} />
+              {translate("org.invitations")}
+              <TabCount value={pendingInvitationsCount} />
             </TabsTrigger>
             {canOrganize && (
               <TabsTrigger value="onboard" data-testid="orgs-tab-onboard">
-                Onboarding
+                {translate("org.onboarding")}
               </TabsTrigger>
             )}
             <TabsTrigger value="apikeys" data-testid="orgs-tab-apikeys">
-              API keys <TabCount value={apiKeys.length} />
+              {translate("org.apiKeys")}
+              <TabCount value={apiKeys.length} />
             </TabsTrigger>
             {canViewSettings && (
               <TabsTrigger value="node-config" data-testid="orgs-tab-node-config">
-                Community
+                {translate("common.community")}
               </TabsTrigger>
             )}
             {canViewSettings && (
               <TabsTrigger value="homepage" data-testid="orgs-tab-homepage">
-                Homepage
+                {translate("homepage.title")}
               </TabsTrigger>
             )}
           </TabsList>
@@ -367,9 +390,13 @@ function OrganizationDetail() {
           onOpenChange={(open) => {
             if (!open) setPendingTeamDeleteId(null);
           }}
-          title={`Delete ${teamsState.teams.find((team) => team.id === pendingTeamDeleteId)?.name ?? "team"}?`}
-          description="Members lose the areas this team grants. This can't be undone."
-          confirmLabel="Delete team"
+          title={translate("common.deleteQuestion", {
+            name:
+              teamsState.teams.find((team) => team.id === pendingTeamDeleteId)?.name ??
+              translate("org.teamFallback"),
+          })}
+          description={translate("org.deleteTeamDescription")}
+          confirmLabel={translate("org.deleteTeamAction")}
           variant="destructive"
           isPending={teamsState.deleteTeam.isPending}
           onConfirm={() => {

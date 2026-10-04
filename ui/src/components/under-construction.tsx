@@ -3,6 +3,7 @@ import { cn } from "cn";
 import type { ClientRuntimeConfig } from "everything-dev/types";
 import { getRepository } from "@/app";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAppTranslation } from "@/i18n/runtime";
 
 interface UnderConstructionProps {
   label?: string;
@@ -27,6 +28,7 @@ export function UnderConstruction({
   pressed,
   runtimeConfig,
 }: UnderConstructionProps) {
+  const translate = useAppTranslation();
   const resolveOutlink = () => {
     if (url) return url;
     const repository = getRepository(runtimeConfig);
@@ -54,22 +56,22 @@ export function UnderConstruction({
           aria-label={
             skipNavigation || !hasOutlink
               ? label
-                ? `${label} under construction`
-                : "under construction"
+                ? translate("feature.namedConstruction", { name: label ?? "" })
+                : translate("feature.underConstruction")
               : label
-                ? `${label} under construction - view source`
-                : "under construction - view source"
+                ? translate("feature.namedSource", { name: label ?? "" })
+                : translate("feature.source")
           }
         >
           <span className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-muted px-3 py-4 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
             <HammerIcon className="size-5" aria-hidden="true" />
-            <span>In progress</span>
+            <span>{translate("feature.inProgress")}</span>
           </span>
         </TooltipTrigger>
         {!skipNavigation && hasOutlink && (
           <TooltipContent side="top" sideOffset={6}>
             <span className="flex items-center gap-1.5">
-              {tooltip ?? "See the code and contribute"}
+              {tooltip ?? translate("feature.contribute")}
               <ArrowSquareOutIcon className="size-3" />
             </span>
           </TooltipContent>

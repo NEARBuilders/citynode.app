@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClientValue } from "@/hooks";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { formatRemaining, onboardingCodeState } from "@/lib/onboarding-codes";
 
 export type DiscoveryActivity = Awaited<ReturnType<ApiClient["listDiscoveryActivities"]>>[number];
@@ -54,6 +56,7 @@ export function parseMaxJoins(value: string): number | undefined {
 }
 
 export function useStartOnboarding(organizationId?: string | null) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -66,17 +69,18 @@ export function useStartOnboarding(organizationId?: string | null) {
         params: { codeId: code.id },
         search: { org: organizationId ?? undefined, from: location.href },
       }),
-    onError: (error: Error) =>
-      toast.error(error.message || "Couldn't start onboarding for this event."),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate, "station.startError")),
   });
 }
 
 export function EventDate({ value, timeZone }: { value: string | null; timeZone?: string }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
   const label = useClientValue(() => {
     if (!value) return "";
     const date = new Date(value);
-    const month = new Intl.DateTimeFormat(undefined, { month: "short", timeZone }).format(date);
-    const day = new Intl.DateTimeFormat(undefined, { day: "numeric", timeZone }).format(date);
+    const month = new Intl.DateTimeFormat(locale, { month: "short", timeZone }).format(date);
+    const day = new Intl.DateTimeFormat(locale, { day: "numeric", timeZone }).format(date);
     return `${month}|${day}`;
   }, "");
   const [month, day] = label ? label.split("|") : [];
@@ -88,7 +92,9 @@ export function EventDate({ value, timeZone }: { value: string | null; timeZone?
           <span className="text-lg font-semibold leading-none tabular-nums">{day}</span>
         </>
       ) : (
-        <span className="text-xs text-muted-foreground">{value ? "" : "TBA"}</span>
+        <span className="text-xs text-muted-foreground">
+          {value ? "" : translate("events.tba")}
+        </span>
       )}
     </div>
   );
@@ -105,6 +111,8 @@ function StationRow({
   primary: boolean;
   onRevoke: () => void;
 }) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const location = useLocation();
   return (
     <Item variant="outline" data-testid={`community-onboarding.station-${code.id}`}>
@@ -114,7 +122,11 @@ function StationRow({
       <ItemContent>
         <ItemTitle>{code.eventName}</ItemTitle>
         <ItemDescription>
-          {code.usedCount} of {code.maxUses} joined · {formatRemaining(code.expiresAt)} left
+          {translate("station.joinedCount", {
+            used: code.usedCount,
+            max: code.maxUses,
+            time: formatRemaining(code.expiresAt, Date.now(), translate, locale),
+          })}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -131,19 +143,23 @@ function StationRow({
           }
           data-testid={`community-onboarding.open-station-${code.id}`}
         >
-          Open station
+          {translate("org.openStation")}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="icon-sm" aria-label={`More for ${code.eventName}`} />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={translate("common.moreNamed", { name: code.eventName ?? "" })}
+              />
             }
           >
             <DotsThreeIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem variant="destructive" onClick={onRevoke}>
-              Close station
+              {translate("station.close")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -159,6 +175,7 @@ export function EventOnboardingPanel({
   nodeId: string;
   organizationId: string | null;
 }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [maxJoins, setMaxJoins] = useState("");
@@ -182,11 +199,11 @@ export function EventOnboardingPanel({
     mutationFn: (codeId: string) =>
       api.auth.revokeOnboardingCode({ codeId, organizationId: organizationId ?? "" }),
     onSuccess: () => {
-      toast.success("Station closed");
+      toast.success(translate("station.closed"));
       setRevoking(null);
       return queryClient.invalidateQueries({ queryKey: codesKey });
     },
-    onError: (error: Error) => toast.error(error.message || "Couldn't close the station."),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const events = upcomingEvents(activities.data ?? [], now);
@@ -200,7 +217,7 @@ export function EventOnboardingPanel({
     <div className="flex flex-col gap-12">
       {live.length > 0 && (
         <section className="flex flex-col gap-4">
-          <SectionHeader title="Live stations" />
+          <SectionHeader title={translate("station.live")} />
           <ItemGroup>
             {live.map((code, index) => (
               <StationRow
@@ -217,12 +234,14 @@ export function EventOnboardingPanel({
 
       <section className="flex flex-col gap-4">
         <SectionHeader
-          title="Upcoming events"
-          description="Start a station and attendees join your organization by scanning its QR."
+          title={translate("community.upcoming")}
+          description={translate("station.description")}
           action={
             events.length > 0 ? (
               <Field orientation="horizontal" className="w-auto">
-                <FieldLabel htmlFor="discovery-onboarding-max-joins">Max joins</FieldLabel>
+                <FieldLabel htmlFor="discovery-onboarding-max-joins">
+                  {translate("station.maxJoins")}
+                </FieldLabel>
                 <Input
                   id="discovery-onboarding-max-joins"
                   data-testid="discovery-onboarding-max-joins"
@@ -240,13 +259,13 @@ export function EventOnboardingPanel({
           <Skeleton className="h-20 w-full" />
         ) : activities.isError ? (
           <p role="alert" className="text-sm text-muted-foreground">
-            Couldn't load events. Only this community's owners can run onboarding.
+            {translate("station.eventLoadError")}
           </p>
         ) : events.length === 0 ? (
           <EmptyState
             icon={QrCodeIcon}
-            title="No upcoming events"
-            description="Add an event first, then start onboarding from here."
+            title={translate("station.noEvents")}
+            description={translate("station.addEventHint")}
             action={
               <Button
                 nativeButton={false}
@@ -258,7 +277,7 @@ export function EventOnboardingPanel({
                   />
                 }
               >
-                Add an event
+                {translate("station.addEvent")}
               </Button>
             }
           />
@@ -272,7 +291,9 @@ export function EventOnboardingPanel({
                 <ItemContent>
                   <ItemTitle className="flex-wrap">
                     <span className="min-w-0 truncate">{event.title}</span>
-                    {event.status === "draft" && <Badge variant="secondary">Draft</Badge>}
+                    {event.status === "draft" && (
+                      <Badge variant="secondary">{translate("events.draft")}</Badge>
+                    )}
                   </ItemTitle>
                   <ItemDescription>
                     {event.startsAt ? <LocalDate value={event.startsAt} format="datetime" /> : null}
@@ -290,7 +311,7 @@ export function EventOnboardingPanel({
                     }
                   >
                     <QrCodeIcon />
-                    Start onboarding
+                    {translate("events.startOnboarding")}
                   </Button>
                 </ItemActions>
               </Item>
@@ -303,7 +324,7 @@ export function EventOnboardingPanel({
             className="text-sm text-destructive"
             data-testid="discovery-start-onboarding-error"
           >
-            {start.error.message || "Couldn't start onboarding for this event."}
+            {appErrorMessage(start.error, translate, "station.startError")}
           </p>
         )}
       </section>
@@ -313,10 +334,10 @@ export function EventOnboardingPanel({
         onOpenChange={(open) => {
           if (!open) setRevoking(null);
         }}
-        title="Close this station?"
-        description="Its QR code stops working. People who already joined stay members."
-        confirmLabel="Close station"
-        cancelLabel="Keep open"
+        title={translate("station.closeTitle")}
+        description={translate("station.closeDescription")}
+        confirmLabel={translate("station.closeAction")}
+        cancelLabel={translate("station.keepOpen")}
         variant="destructive"
         isPending={revoke.isPending}
         onConfirm={() => {

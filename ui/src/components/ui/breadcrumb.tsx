@@ -3,10 +3,17 @@ import { useRender } from "@base-ui/react/use-render";
 import { CaretRightIcon, DotsThreeIcon } from "@phosphor-icons/react";
 import { cn } from "cn";
 import type * as React from "react";
+import { useAppTranslation } from "@/i18n/runtime";
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
+  const translate = useAppTranslation();
   return (
-    <nav aria-label="breadcrumb" data-slot="breadcrumb" className={cn(className)} {...props} />
+    <nav
+      aria-label={translate("breadcrumb.label")}
+      data-slot="breadcrumb"
+      className={cn(className)}
+      {...props}
+    />
   );
 }
 
@@ -78,6 +85,7 @@ function BreadcrumbSeparator({ children, className, ...props }: React.ComponentP
 }
 
 function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<"span">) {
+  const translate = useAppTranslation();
   return (
     <span
       data-slot="breadcrumb-ellipsis"
@@ -87,7 +95,7 @@ function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<"span"
       {...props}
     >
       <DotsThreeIcon />
-      <span className="sr-only">More</span>
+      <span className="sr-only">{translate("common.more")}</span>
     </span>
   );
 }

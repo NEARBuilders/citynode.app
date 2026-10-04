@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 
 type DirectoryNode = {
@@ -25,6 +26,7 @@ export function StakeDirectory({
   isLoading: boolean;
   nodes: DirectoryNode[];
 }) {
+  const translate = useAppTranslation();
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -38,11 +40,11 @@ export function StakeDirectory({
     return (
       <EmptyState
         icon={BuildingsIcon}
-        title="No communities to stake to yet"
-        description="Start one and it can run its own validator."
+        title={translate("stake.noCommunities")}
+        description={translate("stake.startHint")}
         action={
           <Button nativeButton={false} render={<Link to="/apply" />}>
-            Start a community
+            {translate("community.start")}
           </Button>
         }
       />
@@ -69,7 +71,7 @@ export function StakeDirectory({
             </ItemContent>
             <ItemActions>
               <Badge variant="secondary">
-                <span className="capitalize">{nodeKindLabel(node.kind)}</span>
+                <span className="capitalize">{nodeKindLabel(node.kind, undefined, translate)}</span>
               </Badge>
               <ArrowRightIcon className="text-muted-foreground" />
             </ItemActions>

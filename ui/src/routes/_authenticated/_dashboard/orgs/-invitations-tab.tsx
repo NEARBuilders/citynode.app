@@ -2,6 +2,7 @@ import { EnvelopeSimpleIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { ConfirmDialog, EmptyState, SectionHeader, TabsContent } from "@/components";
 import { ItemGroup, ItemSeparator } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { InvitationRow, type InvitationRowInvitation } from "./-invitation-row";
 import { InviteMemberForm, type InviteMemberValues } from "./-invite-member-form";
 
@@ -28,6 +29,7 @@ export function InvitationsTab({
   isResending: boolean;
   teams: Array<{ id: string; name: string }>;
 }) {
+  const translate = useAppTranslation();
   const [cancelling, setCancelling] = useState<InvitationRowInvitation | null>(null);
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
   const teamNames = new Map(teams.map((team) => [team.id, team.name]));
@@ -37,13 +39,15 @@ export function InvitationsTab({
     <TabsContent value="invitations" className="flex flex-col gap-12 pt-6">
       {canInvite && (
         <section className="flex flex-col gap-4">
-          <SectionHeader title="Invite people" />
+          <SectionHeader title={translate("org.invitePeople")} />
           <InviteMemberForm teams={teams} isPending={invitePending} onInvite={onInvite} />
         </section>
       )}
 
       <section className="flex flex-col gap-4">
-        <SectionHeader title={`Pending (${pendingInvitations.length})`} />
+        <SectionHeader
+          title={translate("org.pendingCount", { count: pendingInvitations.length ?? "" })}
+        />
         {pendingInvitations.length > 0 ? (
           <ItemGroup>
             {pendingInvitations.map((invitation, index) => (
@@ -61,16 +65,22 @@ export function InvitationsTab({
             ))}
           </ItemGroup>
         ) : (
-          <EmptyState icon={EnvelopeSimpleIcon} title="No pending invitations" className="py-10" />
+          <EmptyState
+            icon={EnvelopeSimpleIcon}
+            title={translate("org.noInvites")}
+            className="py-10"
+          />
         )}
       </section>
 
       <ConfirmDialog
         open={cancelling !== null}
         onOpenChange={(open) => !open && setCancelling(null)}
-        title="Cancel this invitation?"
-        description={`${cancelling?.nearAccountId ?? cancelling?.email ?? ""} will no longer be able to join with it.`}
-        confirmLabel="Cancel invitation"
+        title={translate("org.cancelInviteTitle")}
+        description={translate("org.invitationCancelledNamed", {
+          name: cancelling?.nearAccountId ?? cancelling?.email ?? "",
+        })}
+        confirmLabel={translate("org.cancelInvitation")}
         cancelLabel="Keep"
         variant="destructive"
         isPending={isCancelling}

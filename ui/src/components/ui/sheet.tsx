@@ -1,4 +1,6 @@
-"use client";
+import { useAppTranslation } from "@/i18n/runtime";
+
+("use client");
 
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "@phosphor-icons/react";
@@ -45,6 +47,7 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
 }) {
+  const translate = useAppTranslation();
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -64,7 +67,7 @@ function SheetContent({
             render={<Button variant="ghost" className="absolute top-4 right-4" size="icon-sm" />}
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{translate("common.close")}</span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Popup>

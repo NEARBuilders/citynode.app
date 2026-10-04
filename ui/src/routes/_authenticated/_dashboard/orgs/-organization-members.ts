@@ -1,10 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { AuthClient } from "@/app";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { MemberCardMember } from "./-member-card";
 import { orgMembersQueryKey } from "./-organization-query-keys";
 
 export function useOrganizationMemberActions(auth: AuthClient, orgId: string) {
+  const translate = useAppTranslation();
   const queryClient = useQueryClient();
   const removeMemberMutation = useMutation({
     mutationFn: async (member: MemberCardMember) => {
@@ -16,10 +19,10 @@ export function useOrganizationMemberActions(auth: AuthClient, orgId: string) {
       if (error) throw new Error(error.message);
     },
     onSuccess: async () => {
-      toast.success("Member removed");
+      toast.success(translate("org.memberRemoved"));
       await queryClient.invalidateQueries({ queryKey: orgMembersQueryKey(orgId) });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to remove member"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return { removeMemberMutation };

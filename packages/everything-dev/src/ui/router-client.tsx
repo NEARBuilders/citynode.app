@@ -58,6 +58,7 @@ export function createRouter<
           cspNonce: opts.context.cspNonce,
         }),
       session: opts.context.session,
+      locale: opts.context.locale,
     },
     ...(cspNonce ? { ssr: { nonce: cspNonce } } : {}),
     defaultPreload: "intent",
@@ -65,9 +66,9 @@ export function createRouter<
     defaultStructuralSharing: true,
     defaultPreloadStaleTime: 0,
     defaultPendingMinMs: 0,
-    defaultErrorComponent: RouterError,
-    defaultNotFoundComponent,
-    defaultPendingComponent,
+    defaultErrorComponent: opts.defaultErrorComponent ?? RouterError,
+    defaultNotFoundComponent: opts.defaultNotFoundComponent ?? defaultNotFoundComponent,
+    defaultPendingComponent: opts.defaultPendingComponent ?? defaultPendingComponent,
     dehydrate: () => {
       if (typeof window === "undefined") {
         return { queryClientState: dehydrate(queryClient) };

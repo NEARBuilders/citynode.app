@@ -11,6 +11,8 @@ import {
 import { Button, FieldLabel, Input } from "@/components";
 import { FieldGroup } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { ConfigField } from "./-config-field";
 
 export interface CustomUiBundleFieldsProps {
@@ -34,6 +36,7 @@ export function CustomUiBundleFields({
   collapsed = false,
   onComputingChange,
 }: CustomUiBundleFieldsProps) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const [computing, setComputingState] = useState(false);
   const [sourceAccount, setSourceAccount] = useState("");
@@ -47,7 +50,7 @@ export function CustomUiBundleFields({
   const onFillFromDeployedApp = async () => {
     const account = sourceAccount.trim();
     if (!account) {
-      toast.error("Enter the NEAR account your app deployed under");
+      toast.error(translate("tenant.deployedAccountRequired"));
       return;
     }
     setFetchingSource(true);
@@ -69,9 +72,7 @@ export function CustomUiBundleFields({
       const pinManifest = typeof ui.pin?.manifest === "string" ? ui.pin.manifest : "";
       const pinIntegrity = typeof ui.pin?.integrity === "string" ? ui.pin.integrity : "";
       if (!production || (!integrity && !(pinManifest && pinIntegrity))) {
-        toast.error(
-          `${account} publishes no custom UI bundle yet — run \`bos deploy\` in the app repo with a local UI first.`,
-        );
+        toast.error(translate("tenant.noCustomBundle", { account }));
         return;
       }
       const ssr =
@@ -86,11 +87,9 @@ export function CustomUiBundleFields({
         uiPinIntegrity: pinIntegrity,
         ...(allowSsr && ssrUrl && ssrIntegrity ? { ssrUrl, ssrIntegrity } : {}),
       }));
-      toast.success(`Bundle and integrity filled from ${account}`);
+      toast.success(translate("tenant.bundleFilled", { account }));
     } catch {
-      toast.error(
-        `No published config for ${account} on this gateway — run \`bos deploy\` in the app repo first.`,
-      );
+      toast.error(translate("tenant.noPublishedConfig", { account }));
     } finally {
       setFetchingSource(false);
     }
@@ -108,16 +107,16 @@ export function CustomUiBundleFields({
       const computed = await compute(url);
       if (!currentIntegrity) {
         apply(computed);
-        toast.success(`${label} integrity filled from the bundle`);
+        toast.success(translate("tenant.integrityFilled", { label }));
         return;
       }
       if (computed === currentIntegrity) {
-        toast.success(`${label} integrity matches the bundle`);
+        toast.success(translate("tenant.integrityMatches", { label }));
       } else {
-        toast.error(`${label} integrity mismatch — the bundle hashes to ${computed}`);
+        toast.error(translate("tenant.integrityMismatch", { label, hash: computed }));
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(appErrorMessage(error, translate));
     } finally {
       setComputing(false);
     }
@@ -125,12 +124,12 @@ export function CustomUiBundleFields({
 
   const onVerifyUiBundle = () => {
     if (!draft.uiProduction) {
-      toast.error("Enter the UI bundle URL first");
+      toast.error(translate("tenant.uiUrlRequired"));
       return;
     }
     if (draft.uiManifest) {
       if (!draft.uiPinIntegrity) {
-        toast.error("Enter the pin integrity first (or use Verify to fill it)");
+        toast.error(translate("bundle.pinRequired"));
       }
       return onVerifyBundle(
         draft.uiManifest,
@@ -140,7 +139,7 @@ export function CustomUiBundleFields({
             `${draft.uiProduction.replace(/\/$/, "")}/${manifestName.replace(/^\//, "")}`,
           ),
         (computed) => setDraft((prev) => ({ ...prev, uiPinIntegrity: computed })),
-        "UI pin",
+        translate("bundle.pin"),
       );
     }
     return onVerifyBundle(
@@ -154,7 +153,7 @@ export function CustomUiBundleFields({
 
   const onVerifySsrBundle = () => {
     if (!draft.ssrUrl) {
-      toast.error("Enter the SSR bundle URL first");
+      toast.error(translate("tenant.ssrUrlRequired"));
       return;
     }
     return onVerifyBundle(
@@ -171,13 +170,15 @@ export function CustomUiBundleFields({
   return (
     <FieldGroup>
       <div className="flex flex-col gap-1">
-        <FieldLabel htmlFor={`${idPrefix}-source-account`}>Fill from a deployed app</FieldLabel>
+        <FieldLabel htmlFor={`${idPrefix}-source-account`}>
+          {translate("tenant.fillDeployed")}
+        </FieldLabel>
         <div className="flex items-center gap-2">
           <Input
             id={`${idPrefix}-source-account`}
             type="text"
             value={sourceAccount}
-            placeholder="<your-app>.near — the account that ran bos publish --deploy"
+            placeholder={translate("tenant.accountExample")}
             onChange={(event) => setSourceAccount(event.target.value)}
             disabled={disabled}
             className="font-mono"
@@ -191,18 +192,15 @@ export function CustomUiBundleFields({
             data-testid={`${idPrefix}-autofill`}
           >
             {fetchingSource ? <Spinner /> : null}
-            Fetch bundle
+            {translate("tenant.fetchBundle")}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Reads the published config of your deployed app and fills the bundle URL and integrity
-          below.
-        </p>
+        <p className="text-xs text-muted-foreground">{translate("tenant.fetchHint")}</p>
       </div>
       <div className="flex flex-col gap-1">
         <ConfigField
           id={`${idPrefix}-ui-url`}
-          label="UI bundle URL"
+          label={translate("tenant.uiUrl")}
           value={draft.uiProduction}
           onChange={(value) => setDraft((prev) => ({ ...prev, uiProduction: value }))}
           onBlur={() =>
@@ -224,12 +222,12 @@ export function CustomUiBundleFields({
           className="self-start"
           data-testid={`${idPrefix}-verify`}
         >
-          {computing ? "Hashing…" : "Verify and fill integrity"}
+          {computing ? translate("tenant.hashing") : translate("tenant.verifyIntegrity")}
         </Button>
       </div>
       <ConfigField
         id={`${idPrefix}-ui-integrity`}
-        label="UI integrity (direct entry hash)"
+        label={translate("bundle.directIntegrity")}
         value={draft.uiIntegrity}
         onChange={(value) =>
           setDraft((prev) => ({
@@ -244,7 +242,7 @@ export function CustomUiBundleFields({
       />
       <ConfigField
         id={`${idPrefix}-ui-pin-manifest`}
-        label="UI version-manifest pin"
+        label={translate("bundle.manifest")}
         value={draft.uiManifest}
         onChange={(value) =>
           setDraft((prev) => ({
@@ -266,7 +264,7 @@ export function CustomUiBundleFields({
       {draft.uiManifest && (
         <ConfigField
           id={`${idPrefix}-ui-pin-integrity`}
-          label="Pin integrity (the manifest document's SRI)"
+          label={translate("bundle.pinIntegrity")}
           value={draft.uiPinIntegrity}
           onChange={(value) => setDraft((prev) => ({ ...prev, uiPinIntegrity: value }))}
           placeholder="sha384-…"
@@ -279,7 +277,7 @@ export function CustomUiBundleFields({
           <div className="flex flex-col gap-1">
             <ConfigField
               id={`${idPrefix}-ssr-url`}
-              label="SSR bundle URL"
+              label={translate("tenant.ssrUrl")}
               value={draft.ssrUrl}
               onChange={(value) => setDraft((prev) => ({ ...prev, ssrUrl: value }))}
               onBlur={() =>
@@ -301,12 +299,12 @@ export function CustomUiBundleFields({
               className="self-start"
               data-testid={`${idPrefix}-verify-ssr`}
             >
-              {computing ? "Hashing…" : "Verify and fill integrity"}
+              {computing ? translate("tenant.hashing") : translate("tenant.verifyIntegrity")}
             </Button>
           </div>
           <ConfigField
             id={`${idPrefix}-ssr-integrity`}
-            label="SSR integrity"
+            label={translate("tenant.ssrIntegrity")}
             value={draft.ssrIntegrity}
             onChange={(value) => setDraft((prev) => ({ ...prev, ssrIntegrity: value }))}
             placeholder="sha384-…"

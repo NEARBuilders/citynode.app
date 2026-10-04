@@ -10,6 +10,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { organizationByIdQueryOptions } from "@/lib/queries/organizations";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
@@ -33,7 +34,18 @@ export const Route = createFileRoute("/_admin/_dashboard/admin")({
     return { tenant, tenantOrganizationSlug };
   },
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.admin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: AdminLayout,
 });
@@ -48,6 +60,7 @@ function AdminLayout() {
 }
 
 function RelayerFundingNotice() {
+  const translate = useAppTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { data: relayerInfo } = useRelayerInfoQuery();
   const needsFunding = !!relayerInfo && relayerInfo.enabled === false && !!relayerInfo.accountId;
@@ -59,8 +72,8 @@ function RelayerFundingNotice() {
         <GasPumpIcon className="text-destructive" />
       </ItemMedia>
       <ItemContent className="min-w-0">
-        <ItemTitle>Relayer needs funding</ItemTitle>
-        <ItemDescription>Gasless writes are paused until the relayer has NEAR.</ItemDescription>
+        <ItemTitle>{translate("admin.relayer.needsFunding")}</ItemTitle>
+        <ItemDescription>{translate("admin.relayer.paused")}</ItemDescription>
       </ItemContent>
       <ItemActions>
         <Button
@@ -69,7 +82,7 @@ function RelayerFundingNotice() {
           nativeButton={false}
           render={<Link to="/admin/relayer" />}
         >
-          Fund relayer
+          {translate("admin.relayer.fund")}
         </Button>
       </ItemActions>
     </Item>

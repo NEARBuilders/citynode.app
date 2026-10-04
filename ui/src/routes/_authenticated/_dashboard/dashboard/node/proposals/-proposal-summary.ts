@@ -1,7 +1,13 @@
+import type { AppTranslator } from "@/i18n/catalogs";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 export type ReviewStatus = "pending" | "approved" | "rejected" | "removed";
 export type ApplyStatus = "not_started" | "applying" | "applied" | "failed";
 
-export function proposalTitle(payload: unknown, fallback: string): string {
+export function proposalTitle(
+  payload: unknown,
+  fallback: string,
+  t: AppTranslator = translateEnglishAppMessage,
+): string {
   if (payload && typeof payload === "object" && !Array.isArray(payload)) {
     const record = payload as Record<string, unknown>;
     for (const key of ["title", "name", "slug"]) {
@@ -11,23 +17,33 @@ export function proposalTitle(payload: unknown, fallback: string): string {
     const keys = Object.keys(record);
     if (keys.length > 0) {
       const shown = keys.slice(0, 3).join(", ");
-      return `Change ${shown}${keys.length > 3 ? ` and ${keys.length - 3} more` : ""}`;
+      return keys.length > 3
+        ? t("proposal.changedFieldsMore", { fields: shown, count: keys.length - 3 })
+        : t("proposal.changedFields", { fields: shown });
     }
   }
   return fallback;
 }
 
-export function reviewStatusBadge(status: ReviewStatus) {
-  if (status === "pending") return { label: "Awaiting review", variant: "warning" as const };
-  if (status === "approved") return { label: "Approved", variant: "success" as const };
-  if (status === "rejected") return { label: "Rejected", variant: "destructive" as const };
-  return { label: "Removed", variant: "outline" as const };
+export function reviewStatusBadge(
+  status: ReviewStatus,
+  t: AppTranslator = translateEnglishAppMessage,
+) {
+  if (status === "pending")
+    return { label: t("dashboard.awaitingReview"), variant: "warning" as const };
+  if (status === "approved") return { label: t("dashboard.approved"), variant: "success" as const };
+  if (status === "rejected")
+    return { label: t("dashboard.rejected"), variant: "destructive" as const };
+  return { label: t("dashboard.removed"), variant: "outline" as const };
 }
 
-export function applyStatusLabel(status: ApplyStatus): string | null {
-  if (status === "applying") return "Applying";
-  if (status === "applied") return "Live";
-  if (status === "failed") return "Failed to apply";
+export function applyStatusLabel(
+  status: ApplyStatus,
+  t: AppTranslator = translateEnglishAppMessage,
+): string | null {
+  if (status === "applying") return t("label.applying");
+  if (status === "applied") return t("tenant.live");
+  if (status === "failed") return t("label.applyFailed");
   return null;
 }
 

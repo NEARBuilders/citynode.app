@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { PageHeader } from "@/components";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { createProposalColumns } from "./-proposal-columns";
 import { normalizeProposalReviewFilter, ProposalReviewFilters } from "./-proposal-filters";
@@ -28,19 +29,31 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/proposals/")({
       adminProposalListQueryOptions(context.apiClient, deps.status),
     ),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Proposals · Admin", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.proposalsAdmin",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   component: AdminProposals,
 });
 
 function AdminProposals() {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const navigate = Route.useNavigate();
   const { status } = Route.useSearch();
   const activeFilter = status ?? DEFAULT_PROPOSAL_REVIEW_FILTER;
   const proposalsQuery = useInfiniteQuery(adminProposalListQueryOptions(apiClient, activeFilter));
 
-  const columns = useMemo(createProposalColumns, []);
+  const columns = useMemo(() => createProposalColumns(translate), [translate]);
 
   const proposals = proposalsQuery.data?.pages.flatMap((page) => page.data) ?? [];
   const total = proposalsQuery.data?.pages[0]?.meta.total ?? 0;
@@ -48,8 +61,8 @@ function AdminProposals() {
   return (
     <>
       <PageHeader
-        title="Proposals"
-        description="Community applications and submissions."
+        title={translate("common.proposals")}
+        description={translate("admin.proposal.description")}
         headerTestId="admin-proposals.heading"
       />
 
@@ -63,7 +76,8 @@ function AdminProposals() {
           />
           {!proposalsQuery.isLoading && (
             <span className="text-sm text-muted-foreground" data-testid="admin-proposals-count">
-              {total} {total === 1 ? "proposal" : "proposals"}
+              {total}{" "}
+              {total === 1 ? translate("admin.proposal.one") : translate("admin.proposal.many")}
             </span>
           )}
         </div>
@@ -74,7 +88,6 @@ function AdminProposals() {
           proposals={proposals}
           isLoading={proposalsQuery.isLoading}
           isError={proposalsQuery.isError}
-          errorMessage={proposalsQuery.error?.message}
           onRetry={() => void proposalsQuery.refetch()}
           hasNextPage={proposalsQuery.hasNextPage}
           isFetchingNextPage={proposalsQuery.isFetchingNextPage}

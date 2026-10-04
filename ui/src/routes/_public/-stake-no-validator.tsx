@@ -2,18 +2,18 @@ import { ArrowRightIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import { SectionHeader } from "@/components";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 
 type ChildNode = { id: string; name: string; slug: string };
 
 export function StakeNoValidator({ name, childNodes }: { name: string; childNodes: ChildNode[] }) {
+  const translate = useAppTranslation();
   return (
     <section className="flex flex-col gap-4" data-testid="stake.no-validator">
       <SectionHeader
-        title={`${name} doesn't have a validator yet`}
+        title={translate("stake.noValidatorNamed", { name: name ?? "" })}
         description={
-          childNodes.length > 0
-            ? "Pick a community inside it instead."
-            : "Check back once it sets one up."
+          childNodes.length > 0 ? translate("stake.pickChild") : translate("stake.checkBack")
         }
       />
       {childNodes.length > 0 && (

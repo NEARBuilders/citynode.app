@@ -11,6 +11,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 import {
   accountExplorerUrl,
   formatNear,
@@ -36,7 +38,12 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
 }
 
 function YesNo({ value }: { value: boolean }) {
-  return <Badge variant={value ? "success" : "outline"}>{value ? "Yes" : "No"}</Badge>;
+  const translate = useAppTranslation();
+  return (
+    <Badge variant={value ? "success" : "outline"}>
+      {value ? translate("common.yes") : translate("common.no")}
+    </Badge>
+  );
 }
 
 function Panel({
@@ -70,6 +77,8 @@ function Panel({
 }
 
 export function PocChainState({ lc }: { lc: PocLifecycle }) {
+  const { locale } = useAppLocale();
+  const translate = useAppTranslation();
   const {
     team,
     facts,
@@ -100,58 +109,71 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
     <Tabs defaultValue="team" data-testid="poc-chain-state">
       <TabsList>
         <TabsTrigger value="team" data-testid="poc-state-tab-team">
-          Team
+          {translate("org.team")}
         </TabsTrigger>
         <TabsTrigger value="endowment" data-testid="poc-state-tab-endowment">
-          Endowment
+          {translate("lifecycle.endowment")}
         </TabsTrigger>
         <TabsTrigger value="pool" data-testid="poc-state-tab-pool">
-          Pool
+          {translate("stake.pool")}
         </TabsTrigger>
         {application && (
           <TabsTrigger value="tenant" data-testid="poc-state-tab-tenant">
-            Tenant
+            {translate("common.tenant")}
           </TabsTrigger>
         )}
       </TabsList>
 
       <TabsContent value="team" className="pt-4">
         <Panel
-          title="Team"
+          title={translate("org.team")}
           testId="poc-team-state"
           info={
             <InfoPopover
-              title="Voter and pool owner"
-              body="Registers in veNEAR, locks NEAR for voting power, owns the node's pool, and casts the votes — its own lock plus any delegated sponsor power."
+              title={translate("lifecycle.voterOwner")}
+              body={translate("lifecycle.teamDescription")}
               links={
                 team
-                  ? [{ label: "House of Stake profile", href: hosDelegateUrl(team) }]
+                  ? [{ label: translate("lifecycle.hosProfile"), href: hosDelegateUrl(team) }]
                   : [{ label: "House of Stake", href: HOS_URL }]
               }
             />
           }
         >
-          <InfoRow label="Registered in veNEAR" value={<YesNo value={facts.teamRegistered} />} />
-          <InfoRow label="Own veNEAR" value={formatNear(sumVenear(teamVe?.account.balance))} mono />
           <InfoRow
-            label="Delegated in"
-            value={formatNear(sumVenear(teamVe?.account.delegated_balance))}
+            label={translate("lifecycle.registered")}
+            value={<YesNo value={facts.teamRegistered} />}
+          />
+          <InfoRow
+            label={translate("lifecycle.ownVeNear")}
+            value={formatNear(sumVenear(teamVe?.account.balance), locale)}
             mono
           />
-          <InfoRow label="Treasury balance" value={formatNear(treasuryBalance)} mono />
           <InfoRow
-            label="Bootstrap requirement"
-            value={formatNear(requirementYocto.toString())}
+            label={translate("lifecycle.delegatedIn")}
+            value={formatNear(sumVenear(teamVe?.account.delegated_balance), locale)}
             mono
           />
-          <InfoRow label="Funded" value={<YesNo value={treasuryFunded} />} />
           <InfoRow
-            label="Vote cast"
+            label={translate("lifecycle.treasuryBalance")}
+            value={formatNear(treasuryBalance, locale)}
+            mono
+          />
+          <InfoRow
+            label={translate("lifecycle.bootstrapRequired")}
+            value={formatNear(requirementYocto.toString(), locale)}
+            mono
+          />
+          <InfoRow label={translate("lifecycle.funded")} value={<YesNo value={treasuryFunded} />} />
+          <InfoRow
+            label={translate("lifecycle.voteCast")}
             value={
               voteRecord != null ? (
-                (VOTE_OPTIONS[voteRecord] ?? String(voteRecord))
+                presentationLabel(VOTE_OPTIONS[voteRecord] ?? String(voteRecord), translate)
               ) : team ? (
-                <ExternalLink href={hosDelegateUrl(team)}>View on House of Stake</ExternalLink>
+                <ExternalLink href={hosDelegateUrl(team)}>
+                  {translate("lifecycle.hosView")}
+                </ExternalLink>
               ) : (
                 "—"
               )
@@ -159,7 +181,7 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
           />
           {treasuriesShared && (
             <p className="pt-3 text-sm text-muted-foreground">
-              Same account as the endowment — the sponsor stations are skipped.
+              {translate("lifecycle.sameAccountHint")}
             </p>
           )}
         </Panel>
@@ -167,18 +189,18 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
 
       <TabsContent value="endowment" className="pt-4">
         <Panel
-          title="Endowment"
+          title={translate("lifecycle.endowment")}
           testId="poc-endowment-state"
           info={
             <InfoPopover
-              title="veNEAR lockup"
-              body="The sponsor's lockup: locked NEAR mints veNEAR voting power, and the same locked NEAR is staked into the node's pool from the lockup — the capital works twice."
+              title={translate("lifecycle.veNearLockup")}
+              body={translate("lifecycle.lockupDescription")}
               links={[{ label: "House of Stake", href: HOS_URL }]}
             />
           }
         >
           <InfoRow
-            label="Lockup"
+            label={translate("lifecycle.lockup")}
             value={
               endowmentLockup ? (
                 <ExternalLink href={nearblocksAccount(endowmentLockup)}>
@@ -190,35 +212,54 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
             }
             mono
           />
-          <InfoRow label="Locked" value={formatNear(endowmentLockupState?.locked)} mono />
-          <InfoRow label="Liquid" value={formatNear(endowmentLockupState?.liquid)} mono />
           <InfoRow
-            label="Available to stake"
-            value={
-              endowmentAvailableYocto != null ? formatNear(endowmentAvailableYocto.toString()) : "—"
-            }
+            label={translate("lifecycle.locked")}
+            value={formatNear(endowmentLockupState?.locked, locale)}
             mono
           />
           <InfoRow
-            label="Staked from lockup"
-            value={formatNear(endowmentLockupState?.knownDeposited)}
+            label={translate("lifecycle.liquid")}
+            value={formatNear(endowmentLockupState?.liquid, locale)}
             mono
           />
           <InfoRow
-            label="Unstaking"
+            label={translate("lifecycle.availableStake")}
             value={
-              endowmentPoolAccount && isPositive(endowmentPoolAccount.unstaked_balance)
-                ? `${formatNear(endowmentPoolAccount.unstaked_balance)}${endowmentPoolAccount.can_withdraw ? "" : " — epoch window"}`
+              endowmentAvailableYocto != null
+                ? formatNear(endowmentAvailableYocto.toString(), locale)
                 : "—"
             }
             mono
           />
           <InfoRow
-            label="Delegates to"
+            label={translate("lifecycle.stakedLockup")}
+            value={formatNear(endowmentLockupState?.knownDeposited, locale)}
+            mono
+          />
+          <InfoRow
+            label={translate("lifecycle.unstaking")}
+            value={
+              endowmentPoolAccount && isPositive(endowmentPoolAccount.unstaked_balance)
+                ? endowmentPoolAccount.can_withdraw
+                  ? formatNear(endowmentPoolAccount.unstaked_balance, locale)
+                  : translate("lifecycle.epochWindow", {
+                      amount: formatNear(endowmentPoolAccount.unstaked_balance, locale),
+                    })
+                : "—"
+            }
+            mono
+          />
+          <InfoRow
+            label={translate("lifecycle.delegatesTo")}
             value={
               endowmentVe && endowmentVe.account.delegations.length > 0
                 ? endowmentVe.account.delegations
-                    .map((entry) => `${entry.account_id} (${entry.bps} bps)`)
+                    .map((entry) =>
+                      translate("lifecycle.delegationNamed", {
+                        account: entry.account_id,
+                        bps: new Intl.NumberFormat(locale).format(entry.bps),
+                      }),
+                    )
                     .join(", ")
                 : "—"
             }
@@ -229,14 +270,16 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
 
       <TabsContent value="pool" className="pt-4">
         <Panel
-          title="Pool"
+          title={translate("stake.pool")}
           testId="poc-pool"
           action={
             <>
-              {poolMeta?.paused && <Badge variant="destructive">Paused</Badge>}
+              {poolMeta?.paused && (
+                <Badge variant="destructive">{translate("lifecycle.paused")}</Badge>
+              )}
               {whitelisted !== undefined && (
                 <Badge variant={whitelisted ? "success" : "outline"}>
-                  {whitelisted ? "Whitelisted" : "Not whitelisted"}
+                  {translate(whitelisted ? "lifecycle.whitelisted" : "lifecycle.notWhitelisted")}
                 </Badge>
               )}
             </>
@@ -245,44 +288,52 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
           {poolMeta ? (
             <>
               <InfoRow
-                label="Owner"
+                label={translate("common.owner")}
                 value={
                   poolMeta.owner ? (
                     <ExternalLink href={accountExplorerUrl(poolMeta.owner)}>
                       {poolMeta.owner}
                     </ExternalLink>
                   ) : (
-                    "unknown"
+                    translate("common.unknown")
                   )
                 }
                 mono
               />
               <InfoRow
-                label="Rewards"
+                label={translate("lifecycle.rewards")}
                 value={
                   poolMeta.owner && team && poolMeta.owner === team ? (
-                    <Badge variant="success">Team-owned — fees come to the team</Badge>
+                    <Badge variant="success">{translate("lifecycle.teamOwned")}</Badge>
                   ) : (
-                    <Badge variant="outline">External pool</Badge>
+                    <Badge variant="outline">{translate("lifecycle.externalPool")}</Badge>
                   )
                 }
               />
-              <InfoRow label="Fee" value={poolFeePercent(poolMeta.fee) ?? poolMeta.fee} mono />
-              <InfoRow label="Total staked" value={formatNear(poolMeta.totalStaked)} mono />
               <InfoRow
-                label="Team stake"
-                value={formatNear(teamPoolAccount?.staked_balance)}
+                label={translate("stake.fee")}
+                value={poolFeePercent(poolMeta.fee, locale) ?? poolMeta.fee}
                 mono
               />
               <InfoRow
-                label="Endowment stake"
-                value={formatNear(endowmentPoolAccount?.staked_balance)}
+                label={translate("stake.total")}
+                value={formatNear(poolMeta.totalStaked, locale)}
+                mono
+              />
+              <InfoRow
+                label={translate("stake.teamStake")}
+                value={formatNear(teamPoolAccount?.staked_balance, locale)}
+                mono
+              />
+              <InfoRow
+                label={translate("lifecycle.endowmentStake")}
+                value={formatNear(endowmentPoolAccount?.staked_balance, locale)}
                 mono
               />
             </>
           ) : (
             <p className="py-3 text-sm text-muted-foreground">
-              Pool not found, or not a staking pool contract.
+              {translate("lifecycle.poolNotFound")}
             </p>
           )}
         </Panel>
@@ -291,38 +342,40 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
       {application && (
         <TabsContent value="tenant" className="pt-4">
           <Panel
-            title="Tenant"
+            title={translate("common.tenant")}
             testId="poc-tenant"
             info={
               <InfoPopover
-                title="Tenant state"
-                body="The DB record and binding are created by the approve station; the config goes live in FastKV when the team's publish proposal passes. A tenant page that renders means its config is live — a 404 means it is not. Locally the link points at <slug>.localhost, which the host maps back to the gateway alias in development."
+                title={translate("lifecycle.tenantState")}
+                body={translate("lifecycle.tenantDescription")}
                 links={
                   tenantUrl && facts.configPublished
-                    ? [{ label: "Open the tenant", href: tenantUrl }]
+                    ? [{ label: translate("lifecycle.openTenant"), href: tenantUrl }]
                     : []
                 }
               />
             }
           >
             <InfoRow
-              label="Record"
+              label={translate("lifecycle.record")}
               value={
                 tenantRecord ? (
                   <span
                     className="inline-flex flex-wrap items-center gap-2"
                     data-testid="poc-tenant-record"
                   >
-                    <Badge variant="success">{tenantRecord.status}</Badge>
+                    <Badge variant="success">
+                      {presentationLabel(tenantRecord.status ?? "member", translate)}
+                    </Badge>
                     <span className="truncate">{tenantRecord.name}</span>
                   </span>
                 ) : (
-                  <Badge variant="outline">Not created</Badge>
+                  <Badge variant="outline">{translate("lifecycle.notCreated")}</Badge>
                 )
               }
             />
             <InfoRow
-              label="Binding"
+              label={translate("lifecycle.binding")}
               value={
                 tenantBinding ? (
                   <span
@@ -330,35 +383,47 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
                     data-testid="poc-tenant-binding"
                   >
                     <span className="truncate">{tenantBinding.hostname}</span>
-                    {tenantBinding.isPrimary && <Badge variant="outline">Primary</Badge>}
-                    {tenantBinding.isVerified && <Badge variant="outline">Verified</Badge>}
+                    {tenantBinding.isPrimary && (
+                      <Badge variant="outline">{translate("common.primary")}</Badge>
+                    )}
+                    {tenantBinding.isVerified && (
+                      <Badge variant="outline">{translate("common.verified")}</Badge>
+                    )}
                   </span>
                 ) : (
-                  <Badge variant="outline">Not created</Badge>
+                  <Badge variant="outline">{translate("lifecycle.notCreated")}</Badge>
                 )
               }
               mono
             />
             <InfoRow
-              label="Config"
+              label={translate("lifecycle.config")}
               value={
                 <span
                   className="inline-flex flex-wrap items-center gap-2"
                   data-testid="poc-tenant-config"
                 >
                   {facts.configPublished ? (
-                    <Badge variant="success">Live</Badge>
+                    <Badge variant="success">{translate("things.live")}</Badge>
                   ) : publishPendingProposal ? (
-                    <Badge variant="warning">Awaiting votes #{publishPendingProposal.id}</Badge>
+                    <Badge variant="warning">
+                      {translate("lifecycle.awaitingProposal", {
+                        proposal: publishPendingProposal.id,
+                      })}
+                    </Badge>
                   ) : (
-                    <Badge variant="outline">Not published</Badge>
+                    <Badge variant="outline">{translate("tenant.notPublished")}</Badge>
                   )}
-                  {fastKvUrl && <ExternalLink href={fastKvUrl}>View on FastKV</ExternalLink>}
+                  {fastKvUrl && (
+                    <ExternalLink href={fastKvUrl}>
+                      {translate("lifecycle.viewFastkv")}
+                    </ExternalLink>
+                  )}
                 </span>
               }
             />
             <InfoRow
-              label="Hostname"
+              label={translate("lifecycle.hostname")}
               value={
                 tenantUrl && facts.configPublished ? (
                   <ExternalLink href={tenantUrl}>{tenantDisplayHost}</ExternalLink>
@@ -369,7 +434,7 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
               mono
             />
             <InfoRow
-              label="Application"
+              label={translate("common.application")}
               value={application ? `${application.reviewStatus} / ${application.applyStatus}` : "—"}
               mono
             />
@@ -381,7 +446,8 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
                 render={
                   <a href={tenantUrl} target="_blank" rel="noreferrer">
                     <ArrowSquareOutIcon />
-                    Open {tenantUrl.replace(/^https?:\/\//, "")}
+                    {translate("common.open")}
+                    {tenantUrl.replace(/^https?:\/\//, "")}
                   </a>
                 }
               />

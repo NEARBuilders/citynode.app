@@ -12,6 +12,8 @@ import {
 import { PageContainer, Skeleton } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
@@ -39,6 +41,7 @@ export function TenantDetailContent({
   tenantId: string;
   runtimeConfig?: RouterContext["runtimeConfig"];
 }) {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -113,12 +116,12 @@ export function TenantDetailContent({
   async function finishPersistedChange(message: string, publicationError: Error | null) {
     const refreshError = await invalidatePersistedTenantQueries(queryClient);
     if (publicationError) {
-      toast.error(`${message}, but config publication failed: ${publicationError.message}`);
+      toast.error(translate("tenant.publicationFailed", { change: message }));
     } else {
       toast.success(message);
     }
     if (refreshError) {
-      toast.warning(`${message}, but the page could not refresh.`);
+      toast.warning(translate("tenant.refreshFailed", { change: message }));
     }
     return { publicationError, refreshError };
   }
@@ -143,10 +146,10 @@ export function TenantDetailContent({
         : { updated, publicationError: null };
     },
     onSuccess: async ({ publicationError }) => {
-      await finishPersistedChange("Community renamed", publicationError);
+      await finishPersistedChange(translate("tenant.renamed"), publicationError);
       setEditing(false);
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to rename community"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const suspendMutation = useMutation({
@@ -166,7 +169,7 @@ export function TenantDetailContent({
       );
     },
     onSuccess: async ({ publicationError }) => {
-      await finishPersistedChange("Community suspended", publicationError);
+      await finishPersistedChange(translate("tenant.suspended"), publicationError);
     },
   });
 
@@ -187,7 +190,7 @@ export function TenantDetailContent({
       );
     },
     onSuccess: async ({ publicationError }) => {
-      await finishPersistedChange("Community reactivated", publicationError);
+      await finishPersistedChange(translate("tenant.reactivated"), publicationError);
     },
   });
 
@@ -207,8 +210,8 @@ export function TenantDetailContent({
         mode: publishMode,
       });
     },
-    onSuccess: () => toast.success("Config republished"),
-    onError: (error: Error) => toast.error(error.message || "Failed to republish config"),
+    onSuccess: () => toast.success(translate("tenant.configRepublished")),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const deleteMutation = useMutation({
@@ -229,14 +232,14 @@ export function TenantDetailContent({
     },
     onSuccess: async ({ publicationError }) => {
       if (publicationError) {
-        await finishPersistedChange("Community deletion saved", publicationError);
+        await finishPersistedChange(translate("tenant.deletionSaved"), publicationError);
         return;
       }
-      await finishPersistedChange("Community queued for deletion", null);
+      await finishPersistedChange(translate("tenant.deletionQueued"), null);
       setDeleteOpen(false);
       await router.navigate({ to: "/" });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to delete community"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   const header = (

@@ -1,11 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ApiClient } from "@/app";
+import { appErrorMessage } from "@/i18n/error-message";
+import { useAppTranslation } from "@/i18n/runtime";
 import type { InvitationRowInvitation } from "./-invitation-row";
 import type { InviteMemberValues } from "./-invite-member-form";
 import { orgInvitationsQueryKey } from "./-organization-query-keys";
 
 export function useOrganizationInvitationActions(apiClient: ApiClient, orgId: string) {
+  const translate = useAppTranslation();
   const queryClient = useQueryClient();
   const invalidateInvitations = () =>
     queryClient.invalidateQueries({ queryKey: orgInvitationsQueryKey(orgId) });
@@ -22,20 +25,24 @@ export function useOrganizationInvitationActions(apiClient: ApiClient, orgId: st
       });
     },
     onSuccess: async (_, values) => {
-      toast.success(`Invitation created for ${values.email ?? values.nearAccountId}`);
+      toast.success(
+        translate("org.invitationCreatedNamed", {
+          name: String(values.email ?? values.nearAccountId ?? ""),
+        }),
+      );
       await invalidateInvitations();
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to send invitation"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   const cancelInvitationMutation = useMutation({
     mutationFn: async (invitationId: string) => {
       await apiClient.auth.cancelInvitation({ invitationId });
     },
     onSuccess: async () => {
-      toast.success("Invitation cancelled");
+      toast.success(translate("org.inviteCancelled"));
       await invalidateInvitations();
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to cancel invitation"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
   const resendInvitationMutation = useMutation({
     mutationFn: async (invitation: InvitationRowInvitation) => {
@@ -58,10 +65,10 @@ export function useOrganizationInvitationActions(apiClient: ApiClient, orgId: st
       });
     },
     onSuccess: async () => {
-      toast.success("Invitation resent");
+      toast.success(translate("org.inviteResent"));
       await invalidateInvitations();
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to resend invitation"),
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return { cancelInvitationMutation, inviteMutation, resendInvitationMutation };

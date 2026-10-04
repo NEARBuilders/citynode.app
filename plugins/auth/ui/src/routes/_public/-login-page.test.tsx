@@ -8,8 +8,9 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { render } from "@/i18n/test-render";
 import { Route as LoginRoute } from "./login/index";
 
 const harness = vi.hoisted(() => ({

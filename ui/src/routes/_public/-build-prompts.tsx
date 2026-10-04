@@ -8,6 +8,8 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { useAppTranslation } from "@/i18n/runtime";
 
 export const PRIVATE_INFERENCE_PROMPT = `Install the NEAR AI Cloud skill from https://github.com/near/agent-skills (npx skills add near/agent-skills --skill near-ai-cloud), then let's build an application that leverages verifiable private inference.
 
@@ -49,54 +51,57 @@ type BuildPrompt = {
   links: BuildPromptLink[];
 };
 
-const BUILD_PROMPTS: BuildPrompt[] = [
-  {
-    id: "private-inference",
-    testId: "build.prompt-private-inference",
-    title: "Integrate NEAR AI Private Inference",
-    description:
-      "Copy a prompt that teaches your agent to build with verifiable private inference on NEAR AI Cloud.",
-    icon: SparkleIcon,
-    prompt: PRIVATE_INFERENCE_PROMPT,
-    links: [
-      { label: "cloud.near.ai", href: "https://cloud.near.ai", testId: "build.link-cloud" },
-      {
-        label: "cloud.near.ai/models",
-        href: "https://cloud.near.ai/models",
-        testId: "build.link-models",
-      },
-      { label: "docs.near.ai", href: "https://docs.near.ai", testId: "build.link-docs" },
-    ],
-  },
-  {
-    id: "near-intents",
-    testId: "build.prompt-near-intents",
-    title: "Integrate NEAR Intents",
-    description:
-      "Copy a prompt that teaches your agent to build cross-chain swaps with NEAR Intents and confidential AI.",
-    icon: ArrowsLeftRightIcon,
-    prompt: NEAR_INTENTS_PROMPT,
-    links: [
-      {
-        label: "docs.near-intents.org",
-        href: "https://docs.near-intents.org",
-        testId: "build.link-intents-docs",
-      },
-    ],
-  },
-];
+export function createBuildPrompts(t: AppTranslator) {
+  return [
+    {
+      id: "private-inference",
+      testId: "build.prompt-private-inference",
+      title: t("build.privateTitle"),
+      description: t("build.privateDescription"),
+      icon: SparkleIcon,
+      prompt: PRIVATE_INFERENCE_PROMPT,
+      links: [
+        { label: "cloud.near.ai", href: "https://cloud.near.ai", testId: "build.link-cloud" },
+        {
+          label: "cloud.near.ai/models",
+          href: "https://cloud.near.ai/models",
+          testId: "build.link-models",
+        },
+        { label: "docs.near.ai", href: "https://docs.near.ai", testId: "build.link-docs" },
+      ],
+    },
+    {
+      id: "near-intents",
+      testId: "build.prompt-near-intents",
+      title: t("build.intentsTitle"),
+      description: t("build.intentsDescription"),
+      icon: ArrowsLeftRightIcon,
+      prompt: NEAR_INTENTS_PROMPT,
+      links: [
+        {
+          label: "docs.near-intents.org",
+          href: "https://docs.near-intents.org",
+          testId: "build.link-intents-docs",
+        },
+      ],
+    },
+  ];
+}
 
 export function BuildPrompts() {
+  const translate = useAppTranslation();
+  const BUILD_PROMPTS = createBuildPrompts(translate);
+
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const copy = async (entry: BuildPrompt) => {
     try {
       await navigator.clipboard.writeText(entry.prompt);
       setCopiedId(entry.id);
-      toast.success("Prompt copied — paste it into your AI agent");
+      toast.success(translate("build.promptCopied"));
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      toast.error("Couldn't copy the prompt");
+      toast.error(translate("build.copyFailed"));
     }
   };
 
@@ -122,7 +127,7 @@ export function BuildPrompts() {
               <ItemContent>
                 <ItemTitle>{entry.title}</ItemTitle>
                 <ItemDescription>
-                  {copied ? "Copied — paste it into your AI agent." : entry.description}
+                  {copied ? translate("build.copyHint") : entry.description}
                 </ItemDescription>
               </ItemContent>
               <ItemMedia variant="icon">

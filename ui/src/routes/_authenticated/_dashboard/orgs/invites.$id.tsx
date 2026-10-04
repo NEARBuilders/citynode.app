@@ -1,6 +1,7 @@
 import { EnvelopeSimpleIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import { toast } from "sonner";
 import { useApiClient, useAuthClient } from "@/app";
 import {
@@ -13,13 +14,25 @@ import {
   PageContainer,
   Skeleton,
 } from "@/components";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
-import { roleLabel } from "./-org-avatar";
+import { presentationLabel } from "@/lib/presentation-label";
 import { useInvitationActions } from "./-use-invitation-actions";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/invites/$id")({
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Invitation", match.context.runtimeConfig) }],
+    meta: [
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "nav.invitation",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+    ],
   }),
   loader: async ({ context, params }) => {
     await context.queryClient.ensureQueryData({
@@ -33,6 +46,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/invites/$i
 });
 
 function AcceptInvitation() {
+  const translate = useAppTranslation();
   const { id } = Route.useParams();
   const router = useRouter();
   const auth = useAuthClient();
@@ -49,7 +63,7 @@ function AcceptInvitation() {
     apiClient,
     auth,
     onAccepted: async (acceptedInvitation) => {
-      toast.success("Invitation accepted");
+      toast.success(translate("org.inviteAccepted"));
       if (acceptedInvitation.organizationSlug) {
         await router.navigate({
           to: "/orgs/$slug",
@@ -60,7 +74,7 @@ function AcceptInvitation() {
       }
     },
     onRejected: async () => {
-      toast.success("Invitation declined");
+      toast.success(translate("org.inviteDeclined"));
       await router.navigate({ to: "/orgs" });
     },
   });
@@ -82,11 +96,11 @@ function AcceptInvitation() {
       <PageContainer variant="narrow">
         <EmptyState
           icon={EnvelopeSimpleIcon}
-          title="Invitation not available"
-          description="It has expired, was cancelled, or is addressed to another account."
+          title={translate("org.inviteUnavailable")}
+          description={translate("org.inviteUnavailableDescription")}
           action={
             <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
-              Go to Organizations
+              {translate("org.goOrganizations")}
             </Button>
           }
         />
@@ -95,7 +109,10 @@ function AcceptInvitation() {
   }
 
   const busy = acceptMutation.isPending || rejectMutation.isPending;
-  const orgName = invitation.organizationName ?? invitation.organizationSlug ?? "an organization";
+  const orgName =
+    invitation.organizationName ??
+    invitation.organizationSlug ??
+    translate("dashboard.orgFallback");
   const isPending = invitation.status === "pending";
 
   return (
@@ -109,11 +126,13 @@ function AcceptInvitation() {
         </Avatar>
         <div className="flex flex-col gap-3">
           <h1 className="text-3xl font-semibold wrap-anywhere text-foreground sm:text-4xl">
-            Join {orgName}
+            {translate("invitation.joinTitle", { name: orgName })}
           </h1>
           <p className="text-base text-muted-foreground">
-            You're invited as {roleLabel(invitation.role).toLowerCase()}
-            {invitation.teamId ? " on one of its teams" : ""}.
+            {translate(
+              invitation.teamId ? "organization.invitedTeamRole" : "invitation.roleNamed",
+              { role: presentationLabel(invitation.role ?? "member", translate) },
+            )}
           </p>
         </div>
         {isPending ? (
@@ -124,7 +143,9 @@ function AcceptInvitation() {
               disabled={busy}
               data-testid="invite.accept-button"
             >
-              {acceptMutation.isPending ? "Joining…" : `Join ${orgName}`}
+              {acceptMutation.isPending
+                ? translate("org.joining")
+                : translate("invitation.joinTitle", { name: orgName })}
             </Button>
             <Button
               variant="ghost"
@@ -133,18 +154,31 @@ function AcceptInvitation() {
               disabled={busy}
               data-testid="invite.decline-button"
             >
-              {rejectMutation.isPending ? "Declining…" : "Decline"}
+              {rejectMutation.isPending ? translate("org.declining") : translate("org.decline")}
             </Button>
           </div>
         ) : (
-          <Badge variant="outline">This invitation is {invitation.status}</Badge>
+          <Badge variant="outline">
+            {translate("invitation.statusNamed", {
+              status: presentationLabel(invitation.status, translate),
+            })}
+          </Badge>
         )}
         <p className="text-sm wrap-anywhere text-muted-foreground">
-          For {invitation.nearAccountId ?? invitation.email}
-          {invitation.nearAccountId && invitation.nearNetwork
-            ? ` on ${invitation.nearNetwork}`
-            : ""}{" "}
-          · expires <LocalDate value={invitation.expiresAt} format="relative" />
+          {translate(
+            invitation.nearAccountId && invitation.nearNetwork
+              ? "invitation.forNetworkNamed"
+              : "invitation.forNamed",
+            {
+              account: invitation.nearAccountId ?? invitation.email ?? "",
+              network: invitation.nearNetwork ?? "",
+            },
+          )}{" "}
+          ·{" "}
+          <Trans
+            id="date.expires"
+            components={{ date: <LocalDate value={invitation.expiresAt} format="relative" /> }}
+          />
         </p>
       </div>
     </PageContainer>

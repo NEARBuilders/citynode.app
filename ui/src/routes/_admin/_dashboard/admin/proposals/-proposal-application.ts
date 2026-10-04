@@ -1,4 +1,5 @@
 import type { ApiClient } from "@/app";
+import { AppActionError } from "@/i18n/error-message";
 import type { DaoTenantPublishInput } from "@/lib/tenant-deploy";
 import { parseNodeProposalPayload } from "@/routes/_authenticated/_dashboard/-node-application";
 
@@ -94,7 +95,7 @@ export async function approveAndApplyProposal({
       reviewedProposal = failed.data;
       onProposalChange?.(reviewedProposal);
     } catch {}
-    throw new Error(`Proposal approved, but it could not be fully applied: ${message}`);
+    throw new AppActionError("proposal.partiallyApplied");
   }
 
   if (!resource) return reviewedProposal;
@@ -108,10 +109,8 @@ export async function approveAndApplyProposal({
     });
     reviewedProposal = applied.data;
     onProposalChange?.(reviewedProposal);
-  } catch (error) {
-    throw new Error(
-      `${resource.label} ${resource.id} was created, but the proposal status could not be finalized: ${errorMessage(error)}`,
-    );
+  } catch {
+    throw new AppActionError("proposal.finalizationFailedNamed", { id: resource.id });
   }
 
   return reviewedProposal;

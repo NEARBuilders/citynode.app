@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, SectionHeader, Skeleton } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import { nodeProposalsQueryOptions } from "./-node-proposals-query";
 import { applyStatusLabel, proposalTitle, reviewStatusBadge } from "./-proposal-summary";
 
@@ -13,6 +14,7 @@ export const Route = createFileRoute(
 });
 
 function NodeProposalDetail() {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const { proposalId } = Route.useParams();
   const { selectedNode } = Route.useRouteContext();
@@ -32,7 +34,7 @@ function NodeProposalDetail() {
       render={<Link to="/dashboard/node/proposals" search={{ nodeId }} />}
     >
       <ArrowLeftIcon />
-      Proposals
+      {translate("common.proposals")}
     </Button>
   );
 
@@ -52,16 +54,20 @@ function NodeProposalDetail() {
         {back}
         <EmptyState
           icon={SealCheckIcon}
-          title={proposalsQuery.isError ? "Couldn't load this proposal" : "Proposal not found"}
+          title={
+            proposalsQuery.isError
+              ? translate("dashboard.proposalLoadError")
+              : translate("admin.proposal.notFound")
+          }
           description={
             proposalsQuery.isError
-              ? "Check your connection and try again."
-              : `It isn't in ${selectedNode.name}'s proposals.`
+              ? translate("events.connectionHint")
+              : translate("proposal.otherCommunityNamed", { name: selectedNode.name ?? "" })
           }
           action={
             proposalsQuery.isError ? (
               <Button variant="outline" onClick={() => proposalsQuery.refetch()}>
-                Try again
+                {translate("common.retry")}
               </Button>
             ) : undefined
           }
@@ -70,8 +76,8 @@ function NodeProposalDetail() {
     );
   }
 
-  const badge = reviewStatusBadge(proposal.reviewStatus);
-  const applied = applyStatusLabel(proposal.applyStatus);
+  const badge = reviewStatusBadge(proposal.reviewStatus, translate);
+  const applied = applyStatusLabel(proposal.applyStatus, translate);
   const payload = (proposal.payload ?? {}) as Record<string, unknown>;
   const motivation = typeof payload.motivation === "string" ? payload.motivation : null;
 
@@ -80,10 +86,11 @@ function NodeProposalDetail() {
       <div className="flex flex-col gap-3">
         {back}
         <SectionHeader
-          title={proposalTitle(proposal.payload, "Proposal")}
+          title={proposalTitle(proposal.payload, "Proposal", translate)}
           description={
             <>
-              Submitted <LocalDate value={proposal.createdAt} format="datetime" />
+              {translate("common.submitted")}
+              <LocalDate value={proposal.createdAt} format="datetime" />
               {proposal.rejectionReason ? ` · ${proposal.rejectionReason}` : ""}
             </>
           }
@@ -95,7 +102,7 @@ function NodeProposalDetail() {
       </div>
       {motivation && (
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Motivation</span>
+          <span className="text-sm font-medium">{translate("dashboard.motivation")}</span>
           <p className="text-sm text-muted-foreground whitespace-pre-wrap">{motivation}</p>
         </div>
       )}

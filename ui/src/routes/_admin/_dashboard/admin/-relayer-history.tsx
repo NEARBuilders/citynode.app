@@ -8,6 +8,7 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 import { humanize, ListSkeleton } from "./-admin-ui";
 
 function statusVariant(status: string) {
@@ -23,15 +24,14 @@ export function RelayerHistory({
   history: RelayHistoryResponseT | null | undefined;
   isLoading: boolean;
 }) {
+  const translate = useAppTranslation();
   return (
     <section className="flex flex-col gap-6">
-      <SectionHeader title="Recent relays" />
+      <SectionHeader title={translate("admin.relayer.recent")} />
       {isLoading ? (
         <ListSkeleton rows={3} />
       ) : !history?.transactions.length ? (
-        <p className="text-sm text-muted-foreground">
-          No relays yet. Tenant and app metadata writes show up here.
-        </p>
+        <p className="text-sm text-muted-foreground">{translate("admin.relayer.empty")}</p>
       ) : (
         <ItemGroup data-testid="admin-relayer-history">
           {history.transactions.slice(0, 8).map((tx) => (
@@ -46,7 +46,7 @@ export function RelayerHistory({
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
-                <Badge variant={statusVariant(tx.status)}>{humanize(tx.status)}</Badge>
+                <Badge variant={statusVariant(tx.status)}>{humanize(tx.status, translate)}</Badge>
               </ItemActions>
             </Item>
           ))}

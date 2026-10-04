@@ -7,11 +7,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { presentationLabel } from "@/lib/presentation-label";
 import { formatNear, VOTE_OPTIONS } from "./-poc-chain";
 import type { PocLifecycle } from "./-poc-lifecycle";
 import type { StationState } from "./-poc-stations";
 
 export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: StationState }) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const {
     facts,
     tenantUrl,
@@ -29,7 +33,7 @@ export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: St
       <div className="flex flex-wrap items-center gap-3" data-testid="poc-publish-state">
         {facts.configPublished ? (
           <>
-            <Badge variant="success">Config live</Badge>
+            <Badge variant="success">{translate("lifecycle.configLive")}</Badge>
             {tenantUrl && (
               <a
                 href={tenantUrl}
@@ -38,15 +42,15 @@ export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: St
                 className="inline-flex items-center gap-1 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
                 data-testid="poc-open-tenant"
               >
-                Open {tenantUrl.replace(/^https?:\/\//, "")}
+                {translate("common.open")}
+                {tenantUrl.replace(/^https?:\/\//, "")}
                 <ArrowSquareOutIcon className="shrink-0" />
               </a>
             )}
           </>
         ) : (
           <span className="text-sm text-muted-foreground">
-            Config not live yet. The Trezu proposal can report failed even when the write lands —
-            this check is the source of truth.
+            {translate("lifecycle.configCheckHint")}
             {team ? (
               <>
                 {" "}
@@ -56,7 +60,7 @@ export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: St
                   rel="noreferrer"
                   className="underline underline-offset-4 hover:text-foreground"
                 >
-                  View proposals on Trezu
+                  {translate("lifecycle.viewTrezu")}
                 </a>
               </>
             ) : null}
@@ -70,12 +74,12 @@ export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: St
     return (
       <div className="grid gap-4 sm:grid-cols-3">
         <Field className="sm:col-span-2">
-          <FieldLabel>Proposal</FieldLabel>
+          <FieldLabel>{translate("common.proposal")}</FieldLabel>
           <Select
             value={values.govProposalId || (govProposal ? String(govProposal.id) : "")}
             items={govProposals.map((proposal) => ({
               value: String(proposal.id),
-              label: `#${proposal.id} ${proposal.title ?? "untitled"}`,
+              label: `#${proposal.id} ${proposal.title ?? translate("lifecycle.untitled")}`,
             }))}
             onValueChange={(value) => {
               if (value !== null) form.setFieldValue("govProposalId", value);
@@ -87,14 +91,14 @@ export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: St
             <SelectContent>
               {govProposals.map((proposal) => (
                 <SelectItem key={proposal.id} value={String(proposal.id)}>
-                  #{proposal.id} {proposal.title ?? "untitled"}
+                  #{proposal.id} {proposal.title ?? translate("lifecycle.untitled")}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </Field>
         <Field>
-          <FieldLabel>Vote</FieldLabel>
+          <FieldLabel>{translate("lifecycle.vote")}</FieldLabel>
           <Select
             value={values.voteOption}
             onValueChange={(value) => {
@@ -111,7 +115,7 @@ export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: St
                   value={option}
                   disabled={govProposal?.status === "Sandbox" && option !== "For"}
                 >
-                  {option}
+                  {presentationLabel(option, translate)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -125,15 +129,17 @@ export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: St
     return (
       <div className="flex flex-wrap gap-8" data-testid="poc-fund-detail">
         <div className="flex flex-col gap-1">
-          <span className="text-sm text-muted-foreground">Transfers</span>
+          <span className="text-sm text-muted-foreground">{translate("lifecycle.transfers")}</span>
           <span className="text-2xl font-semibold text-foreground tabular-nums">
-            {formatNear(fundYocto.toString())}
+            {formatNear(fundYocto.toString(), locale)}
           </span>
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-sm text-muted-foreground">Deposits needed later</span>
+          <span className="text-sm text-muted-foreground">
+            {translate("lifecycle.laterDeposits")}
+          </span>
           <span className="text-2xl font-semibold text-foreground tabular-nums">
-            {formatNear(requirementYocto.toString())}
+            {formatNear(requirementYocto.toString(), locale)}
           </span>
         </div>
       </div>
@@ -141,11 +147,7 @@ export function PocStationExtra({ lc, station }: { lc: PocLifecycle; station: St
   }
 
   if (station.def.id === "sponsor-unwind") {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Rewards accrue to the pool's stakers and owner — the cycle starts again for the next node.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">{translate("lifecycle.cycleHint")}</p>;
   }
 
   return null;

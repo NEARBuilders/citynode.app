@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/item";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { useAppTranslation } from "@/i18n/runtime";
 import { DiscoveryAction } from "./discovery-action";
 
 type Studio = Awaited<ReturnType<ApiClient["getDiscoveryStudio"]>>;
@@ -39,6 +40,7 @@ function targetLink(report: Report) {
 }
 
 export function CurateReports({ studio }: { studio: Studio }) {
+  const translate = useAppTranslation();
   const api = useApiClient();
   const [resolving, setResolving] = useState<Report | null>(null);
   const [action, setAction] = useState<"dismiss" | "unpublish">("dismiss");
@@ -46,23 +48,26 @@ export function CurateReports({ studio }: { studio: Studio }) {
   const resolved = studio.reports.filter((report) => report.resolved);
   const targetName = (report: Report) => {
     if (report.kind === "profile")
-      return studio.nodes.find((node) => node.nodeId === report.targetId)?.name ?? "A community";
+      return (
+        studio.nodes.find((node) => node.nodeId === report.targetId)?.name ??
+        translate("community.fallbackName")
+      );
     for (const node of studio.nodes) {
       const match = [...node.events, ...node.updates].find((item) => item.id === report.targetId);
       if (match) return match.title;
     }
-    return "An event or post";
+    return translate("reports.eventOrPost");
   };
 
   return (
     <div className="flex flex-col gap-12">
       <section className="flex flex-col gap-4">
-        <SectionHeader title="Open reports" />
+        <SectionHeader title={translate("reports.open")} />
         {open.length === 0 ? (
           <EmptyState
             icon={ShieldCheckIcon}
-            title="You're all caught up"
-            description="New visitor reports show up here."
+            title={translate("reports.caughtUp")}
+            description={translate("reports.emptyHint")}
           />
         ) : (
           <ItemGroup data-testid="curate-reports-open">
@@ -72,7 +77,9 @@ export function CurateReports({ studio }: { studio: Studio }) {
                   <ItemTitle className="flex-wrap">
                     <span className="min-w-0 truncate">{targetName(report)}</span>
                     <Badge variant="outline">
-                      {report.kind === "profile" ? "Community page" : "Event or post"}
+                      {report.kind === "profile"
+                        ? translate("reports.community")
+                        : translate("reports.event")}
                     </Badge>
                   </ItemTitle>
                   <ItemDescription>
@@ -86,7 +93,7 @@ export function CurateReports({ studio }: { studio: Studio }) {
                     nativeButton={false}
                     render={targetLink(report)}
                   >
-                    View
+                    {translate("common.view")}
                     <ArrowUpRightIcon />
                   </Button>
                   <Button
@@ -98,7 +105,7 @@ export function CurateReports({ studio }: { studio: Studio }) {
                       setResolving(report);
                     }}
                   >
-                    Resolve
+                    {translate("reports.resolve")}
                   </Button>
                 </ItemActions>
               </Item>
@@ -109,7 +116,7 @@ export function CurateReports({ studio }: { studio: Studio }) {
 
       {resolved.length > 0 && (
         <section className="flex flex-col gap-4">
-          <SectionHeader title="Resolved" />
+          <SectionHeader title={translate("reports.resolved")} />
           <ItemGroup>
             {resolved.map((report) => (
               <Item key={report.id} variant="muted" size="sm">
@@ -136,17 +143,21 @@ export function CurateReports({ studio }: { studio: Studio }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Resolve report</DialogTitle>
+            <DialogTitle>{translate("reports.resolveTitle")}</DialogTitle>
             <DialogDescription>
-              {resolving ? `“${resolving.reason}”` : "Decide what happens to this content."}
+              {resolving ? `“${resolving.reason}”` : translate("reports.resolveDescription")}
             </DialogDescription>
           </DialogHeader>
           {resolving && (
             <DiscoveryAction
               testId={`discovery-resolve-report-${resolving.id}`}
-              label={action === "unpublish" ? "Hide and resolve" : "Keep and resolve"}
+              label={
+                action === "unpublish"
+                  ? translate("reports.hideResolve")
+                  : translate("reports.keepResolve")
+              }
               variant={action === "unpublish" ? "destructive" : "default"}
-              successMessage="Report resolved"
+              successMessage={translate("community.reportResolved")}
               onDone={() => setResolving(null)}
               run={(data) =>
                 api.moderateDiscoveryReport({
@@ -157,7 +168,7 @@ export function CurateReports({ studio }: { studio: Studio }) {
               }
             >
               <FieldSet>
-                <FieldLegend variant="label">What should happen?</FieldLegend>
+                <FieldLegend variant="label">{translate("reports.actionQuestion")}</FieldLegend>
                 <RadioGroup
                   value={action}
                   onValueChange={(value) =>
@@ -166,16 +177,22 @@ export function CurateReports({ studio }: { studio: Studio }) {
                 >
                   <Field orientation="horizontal">
                     <RadioGroupItem id="report-action-dismiss" value="dismiss" />
-                    <FieldLabel htmlFor="report-action-dismiss">Keep the content</FieldLabel>
+                    <FieldLabel htmlFor="report-action-dismiss">
+                      {translate("reports.keep")}
+                    </FieldLabel>
                   </Field>
                   <Field orientation="horizontal">
                     <RadioGroupItem id="report-action-unpublish" value="unpublish" />
-                    <FieldLabel htmlFor="report-action-unpublish">Hide it from Explore</FieldLabel>
+                    <FieldLabel htmlFor="report-action-unpublish">
+                      {translate("reports.hide")}
+                    </FieldLabel>
                   </Field>
                 </RadioGroup>
               </FieldSet>
               <Field>
-                <FieldLabel htmlFor={`note-${resolving.id}`}>Note for your team</FieldLabel>
+                <FieldLabel htmlFor={`note-${resolving.id}`}>
+                  {translate("reports.teamNote")}
+                </FieldLabel>
                 <Textarea id={`note-${resolving.id}`} name="note" required maxLength={1000} />
               </Field>
             </DiscoveryAction>

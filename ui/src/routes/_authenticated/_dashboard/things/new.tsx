@@ -15,6 +15,8 @@ import {
   Textarea,
 } from "@/components";
 import { FieldGroup } from "@/components/ui/field";
+import { appErrorMessage } from "@/i18n/error-message";
+import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { invalidateThingAfterProposal } from "./-thing-cache";
 import {
@@ -27,25 +29,42 @@ import {
 export const Route = createFileRoute("/_authenticated/_dashboard/things/new")({
   head: ({ match }) => ({
     meta: [
-      { title: pageTitle("New Thing", match.context.runtimeConfig) },
-      { name: "description", content: "Submit a new thing for community review." },
+      {
+        title: pageTitle(
+          translateAppMessage(
+            "meta.newThing",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
+        ),
+      },
+      {
+        name: "description",
+        content: translateAppMessage(
+          "meta.newThingDescription",
+          undefined,
+          resolveAppLocale(undefined, match.context.locale),
+        ),
+      },
     ],
   }),
   component: CreateThingPage,
 });
 
 function CreateThingPage() {
+  const translate = useAppTranslation();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [thingId, setThingId] = useState("");
   const [payloadRaw, setPayloadRaw] = useState(DEFAULT_THING_PAYLOAD);
-  const payload = parseThingPayload(payloadRaw);
+  const payload = parseThingPayload(payloadRaw, translate);
 
   const submitMutation = useMutation({
     mutationFn: async () => {
       if (!thingId.trim()) throw new Error("thingId is required");
-      const parsed = parseThingPayload(payloadRaw);
+      const parsed = parseThingPayload(payloadRaw, translate);
       if (!parsed.ok) throw new Error("Invalid JSON payload");
       return apiClient.proposals.propose({
         pluginId: "template",
@@ -55,20 +74,20 @@ function CreateThingPage() {
       });
     },
     onSuccess: async ({ data: proposal }) => {
-      toast.success("Proposal submitted", {
-        description: "Your thing is pending admin review.",
+      toast.success(translate("things.submitted"), {
+        description: translate("things.submittedDescription"),
       });
       try {
         await invalidateThingAfterProposal(queryClient, proposal.entityId);
       } catch {
-        toast.warning("Proposal submitted, but its review status could not refresh.");
+        toast.warning(translate("things.submitRefreshFailed"));
       }
       void navigate({
         to: "/things/$thingId",
         params: { thingId: proposal.entityId },
       });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(appErrorMessage(err, translate)),
   });
 
   const submitError = submitMutation.isError ? submitMutation.error : null;
@@ -77,8 +96,8 @@ function CreateThingPage() {
   return (
     <PageContainer variant="narrow">
       <PageHeader
-        title="New thing"
-        description="An admin reviews it before it goes live."
+        title={translate("things.new")}
+        description={translate("things.reviewHint")}
         headerTestId="things.new.heading"
       />
 
@@ -91,23 +110,23 @@ function CreateThingPage() {
       >
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="thing-id">Thing ID</FieldLabel>
+            <FieldLabel htmlFor="thing-id">{translate("things.id")}</FieldLabel>
             <Input
               id="thing-id"
               type="text"
               className="font-mono"
               value={thingId}
               onChange={(e) => setThingId(e.target.value)}
-              placeholder="community-garden"
+              placeholder={translate("things.idExample")}
               autoComplete="off"
               data-testid="things-new-id"
             />
-            <FieldDescription>Must be unique.</FieldDescription>
+            <FieldDescription>{translate("things.uniqueHint")}</FieldDescription>
           </Field>
 
           <Field data-invalid={!payload.ok || undefined}>
             <div className="flex items-center justify-between gap-3">
-              <FieldLabel htmlFor="payload-json">Payload</FieldLabel>
+              <FieldLabel htmlFor="payload-json">{translate("things.payload")}</FieldLabel>
               <Button
                 type="button"
                 variant="ghost"
@@ -115,7 +134,7 @@ function CreateThingPage() {
                 disabled={!payload.ok}
                 onClick={() => setPayloadRaw(formatThingPayload(payloadRaw))}
               >
-                Format
+                {translate("things.format")}
               </Button>
             </div>
             <Textarea
@@ -129,7 +148,7 @@ function CreateThingPage() {
               data-testid="things-new-payload"
             />
             {payload.ok ? (
-              <FieldDescription>JSON object stored with the thing.</FieldDescription>
+              <FieldDescription>{translate("things.jsonHint")}</FieldDescription>
             ) : (
               <FieldError>{payload.error}</FieldError>
             )}
@@ -140,8 +159,8 @@ function CreateThingPage() {
           <div className="flex flex-col gap-1" role="alert" data-testid="things-new-error">
             <p className="text-sm text-destructive">
               {needsSignIn
-                ? "Your session has expired."
-                : submitError.message || "Unable to submit this proposal."}
+                ? translate("things.sessionExpired")
+                : submitError.message || translate("things.submitFailed")}
             </p>
             {needsSignIn && (
               <Link
@@ -149,7 +168,7 @@ function CreateThingPage() {
                 search={pluginSearch({ redirect: "/things/new" })}
                 className="text-sm font-medium text-foreground underline underline-offset-4"
               >
-                Sign in again
+                {translate("things.signInAgain")}
               </Link>
             )}
           </div>
@@ -161,10 +180,10 @@ function CreateThingPage() {
             disabled={submitMutation.isPending || !thingId.trim() || !payload.ok}
             data-testid="things-new-submit"
           >
-            {submitMutation.isPending ? "Submitting…" : "Submit for review"}
+            {submitMutation.isPending ? translate("things.submitting") : translate("things.submit")}
           </Button>
           <Button variant="ghost" nativeButton={false} render={<Link to="/things" />}>
-            Cancel
+            {translate("common.cancel")}
           </Button>
         </div>
       </form>

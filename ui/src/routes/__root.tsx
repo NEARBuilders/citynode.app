@@ -13,6 +13,7 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useRouter,
   useRouterState,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
@@ -29,7 +30,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { VersionRefreshBanner } from "@/components/version-refresh-banner";
 import { useMediaQuery } from "@/hooks";
-import { AppI18nProvider } from "@/i18n/runtime";
+import { AccountLocaleProvider } from "@/i18n/account-locale-provider";
+import { resolveAppLocale, useAppLocale } from "@/i18n/runtime";
 import { resolveSessionFromCache, sessionQueryKey } from "@/lib/auth";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
@@ -41,6 +43,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       runtimeConfig: context.runtimeConfig,
       cspNonce: context.cspNonce,
       session,
+      locale: resolveAppLocale(session?.user.locale, context.locale),
     };
   },
   loader: async ({ context }) => {
@@ -55,6 +58,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       runtimeConfig: context.runtimeConfig,
       cspNonce: context.cspNonce,
       session,
+      locale: resolveAppLocale(session?.user.locale, context.locale),
     };
   },
   head: ({ loaderData }) => {
@@ -143,12 +147,28 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-  const { cspNonce, session, runtimeConfig } = Route.useRouteContext();
+  const { session, locale } = Route.useRouteContext();
+  return (
+    <AccountLocaleProvider preferredLocale={session?.user.locale} initialLocale={locale}>
+      <RootDocument />
+    </AccountLocaleProvider>
+  );
+}
+
+function RootDocument() {
+  const { locale } = useAppLocale();
+  const router = useRouter();
+  const { cspNonce, runtimeConfig } = Route.useRouteContext();
   const isDesktop = useMediaQuery("(min-width: 640px)");
   const isSsr = typeof window === "undefined";
+  useEffect(() => {
+    if (router.options.context.locale === locale) return;
+    router.update({ context: { ...router.options.context, locale } });
+    void router.invalidate();
+  }, [locale, router]);
   return (
     <html
-      lang="en"
+      lang={locale}
       className="scroll-smooth"
       suppressHydrationWarning
       data-everything-ssr={isSsr ? "true" : undefined}
@@ -161,11 +181,7 @@ function RootComponent() {
         <MotionConfig reducedMotion="user">
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={cspNonce}>
             <div id="root">
-              <AppI18nProvider
-                preferredLocale={(session?.user as { locale?: string | null } | undefined)?.locale}
-              >
-                <GlobalChrome />
-              </AppI18nProvider>
+              <GlobalChrome />
             </div>
             <Toaster position={isDesktop ? "bottom-right" : "top-center"} closeButton />
             <ClientOnly>

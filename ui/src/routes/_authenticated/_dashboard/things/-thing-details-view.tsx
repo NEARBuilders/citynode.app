@@ -2,6 +2,7 @@ import { ArrowLeftIcon, ArrowUpIcon, ClockIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import type { useApiClient } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
+import { useAppTranslation } from "@/i18n/runtime";
 import { ThingContent } from "./-thing-content";
 import { type ThingProposal, ThingProposalStatus } from "./-thing-proposal-status";
 
@@ -11,6 +12,7 @@ type UpvoteCount = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCount"]>>;
 type UserVote = Awaited<ReturnType<ApiClient["votes"]["getUserVote"]>>;
 
 export function ThingBackLink({ canGoBack, onBack }: { canGoBack: boolean; onBack: () => void }) {
+  const translate = useAppTranslation();
   return canGoBack ? (
     <Button
       type="button"
@@ -21,7 +23,7 @@ export function ThingBackLink({ canGoBack, onBack }: { canGoBack: boolean; onBac
       data-testid="thing-back"
     >
       <ArrowLeftIcon />
-      Things
+      {translate("common.things")}
     </Button>
   ) : (
     <Button
@@ -33,7 +35,7 @@ export function ThingBackLink({ canGoBack, onBack }: { canGoBack: boolean; onBac
       data-testid="thing-back"
     >
       <ArrowLeftIcon />
-      Things
+      {translate("common.things")}
     </Button>
   );
 }
@@ -67,6 +69,7 @@ export function ThingDetailsView({
   onDelete: () => void;
   onVote: (nextHasUpvote: boolean) => void;
 }) {
+  const translate = useAppTranslation();
   const hasUpvote = userVote?.hasUpvote ?? false;
 
   return (
@@ -89,7 +92,7 @@ export function ThingDetailsView({
               >
                 <ArrowUpIcon />
                 <span className="tabular-nums">{upvoteCount?.totalCount ?? 0}</span>
-                <span>{hasUpvote ? "upvoted" : "upvote"}</span>
+                <span>{translate(hasUpvote ? "things.voteAdded" : "things.upvote")}</span>
               </Button>
             ) : undefined
           }
@@ -114,11 +117,11 @@ export function ThingDetailsView({
       ) : (
         <EmptyState
           icon={ClockIcon}
-          title="Not live yet"
-          description="This thing is not live in the registry yet."
+          title={translate("things.notLive")}
+          description={translate("things.notLiveDescription")}
           action={
             <Button variant="outline" nativeButton={false} render={<Link to="/things/new" />}>
-              Propose another
+              {translate("things.proposeAnother")}
             </Button>
           }
         />
