@@ -5,6 +5,7 @@ import { Effect } from "effect";
 import { type AuthContextShape, createAuthMiddleware } from "everything-dev/api";
 import type { ContractType } from "../contract";
 import * as schema from "../db/schema";
+import { provisionDefaultTeams } from "../default-teams";
 import { AuthServicesTag } from "../service-types";
 import { tryJsonParse } from "../utils";
 
@@ -107,6 +108,7 @@ export function createOrganizationRequestHandlers(
                   role: "owner",
                   createdAt: new Date(),
                 });
+              await provisionDefaultTeams(tx, reviewed.id);
             }
             return reviewed;
           }),
