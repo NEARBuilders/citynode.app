@@ -2,23 +2,23 @@ import { Cause, Data, Effect, Exit, type Layer } from "effect";
 
 class TestRunError extends Data.TaggedError("TestRunError")<{ cause: unknown }> {}
 
-export interface ServiceHarness<Svc> {
+export interface ServiceHarness<Svc, LayerError, ServiceError> {
   run<A>(
-    layer: Layer.Layer<any, unknown, never>,
-    fn: (svc: Svc) => Promise<A> | Effect.Effect<A, unknown, never>,
+    layer: Layer.Layer<any, LayerError, never>,
+    fn: (svc: Svc) => Promise<A> | Effect.Effect<A, ServiceError, never>,
   ): Promise<A>;
   squashError<A>(
-    layer: Layer.Layer<any, unknown, never>,
-    fn: (svc: Svc) => Promise<A> | Effect.Effect<A, unknown, never>,
+    layer: Layer.Layer<any, LayerError, never>,
+    fn: (svc: Svc) => Promise<A> | Effect.Effect<A, ServiceError, never>,
   ): Promise<unknown>;
 }
 
-export function createServiceHarness<Svc, Tags>(
+export function createServiceHarness<Svc, Tags, LayerError, ServiceError>(
   servicesOf: Effect.Effect<Svc, never, Tags>,
-): ServiceHarness<Svc> {
+): ServiceHarness<Svc, LayerError, ServiceError> {
   const compose = (
-    layer: Layer.Layer<Tags, unknown, never>,
-    fn: (svc: Svc) => Promise<unknown> | Effect.Effect<unknown, unknown, never>,
+    layer: Layer.Layer<Tags, LayerError, never>,
+    fn: (svc: Svc) => Promise<unknown> | Effect.Effect<unknown, ServiceError | TestRunError, never>,
   ) =>
     Effect.gen(function* () {
       const svc = yield* servicesOf;
@@ -35,8 +35,8 @@ export function createServiceHarness<Svc, Tags>(
 
   return {
     run: async <A>(
-      layer: Layer.Layer<any, unknown, never>,
-      fn: (svc: Svc) => Promise<A> | Effect.Effect<A, unknown, never>,
+      layer: Layer.Layer<Tags, LayerError, never>,
+      fn: (svc: Svc) => Promise<A> | Effect.Effect<A, ServiceError, never>,
     ) => (await Effect.runPromise(compose(layer, fn))) as A,
     squashError: async (layer, fn) => {
       const exit = await Effect.runPromiseExit(compose(layer, fn));

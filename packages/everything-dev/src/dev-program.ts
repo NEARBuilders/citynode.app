@@ -282,7 +282,7 @@ export const devBootstrap = (
 
     const developmentRuntime = yield* Effect.tryPromise({
       try: async () => {
-        const runtime = await session.buildRuntime({
+        return session.buildRuntime({
           uiSource,
           apiSource,
           authSource,
@@ -290,13 +290,12 @@ export const devBootstrap = (
           env: "development",
           plugins: session.runtime?.plugins,
         });
-        for (const message of session.warnings) {
-          console.warn(message);
-        }
-        return runtime;
       },
       catch: (cause) => new DevStepError({ phase: "build runtime config", cause }),
     });
+    for (const message of session.warnings) {
+      yield* Effect.logWarning(message);
+    }
 
     const plan: InfraPlan = yield* timedEffect(
       timings,

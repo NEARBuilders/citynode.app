@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { Effect, Result } from "effect";
+import { Data, Effect, Result } from "effect";
 import { Near } from "near-kit";
 
 export type NearNetworkId = "mainnet" | "testnet";
@@ -23,6 +23,16 @@ export interface DaoPolicy {
 const MAINNET_RPC_URL = "https://rpc.mainnet.near.org";
 const TESTNET_RPC_URL = "https://rpc.testnet.near.org";
 const GET_POLICY_MAX_RETRIES = 2;
+
+class DaoPolicyQueryError extends Data.TaggedError("DaoPolicyQueryError")<{
+  readonly cause: unknown;
+}> {
+  override get message() {
+    return `Failed to load DAO policy: ${
+      this.cause instanceof Error ? this.cause.message : String(this.cause)
+    }`;
+  }
+}
 
 export function parsePolicyGroupMembers(policy: unknown): string[] {
   if (!policy || typeof policy !== "object") return [];
@@ -82,7 +92,7 @@ export const verifyDaoMembership = ({
       const outcome = yield* Effect.result(
         Effect.tryPromise({
           try: () => near.view<DaoPolicy>(daoAccountId, "get_policy", {}),
-          catch: (error) => error,
+          catch: (error) => new DaoPolicyQueryError({ cause: error }),
         }),
       );
       if (Result.isSuccess(outcome)) {

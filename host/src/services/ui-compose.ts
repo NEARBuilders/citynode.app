@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { Clock, Data, Effect } from "effect";
+import { Clock, Data, Effect, Schema } from "effect";
 import {
   CORE_UI_PLUGIN_KEY as CORE_UI_KEY,
   type ComposePayload,
@@ -32,6 +32,7 @@ import {
 import type { RouterModule } from "../types";
 import { logger } from "../utils/logger";
 import type { RuntimeConfig } from "./config";
+import { UiComposeError } from "./errors";
 import {
   type ComposeModule,
   loadCoreUiRouteConfig,
@@ -167,19 +168,23 @@ const loadRemoteManifestCached = (
   source: UiSource,
   manifestUrl: string,
   cache: UiComposeCacheState,
-): Effect.Effect<PluginManifest, Error> =>
+): Effect.Effect<PluginManifest, UiComposeError> =>
   Effect.gen(function* () {
     const cached = cache.remoteManifests.get(source.key);
     const now = yield* Clock.currentTimeMillis;
     if (cached && now - cached.fetchedAt < MANIFEST_TTL_MS) {
       return cached.manifest;
     }
-    const fresh = yield* Effect.tryPromise(async () => {
-      const response = await runFetch(manifestUrl);
-      if (!response.ok) {
-        throw new Error(`manifest fetch ${response.status} for ${manifestUrl}`);
-      }
-      return PluginManifestSchema.parse(await response.json()) satisfies PluginManifest;
+    const fresh = yield* Effect.tryPromise({
+      try: async () => {
+        const response = await runFetch(manifestUrl);
+        if (!response.ok) {
+          throw new Error(`manifest fetch ${response.status} for ${manifestUrl}`);
+        }
+        return PluginManifestSchema.parse(await response.json()) satisfies PluginManifest;
+      },
+      catch: (cause) =>
+        new UiComposeError({ operation: `Failed to load UI manifest from ${manifestUrl}`, cause }),
     }).pipe(
       Effect.catch((error) =>
         Effect.gen(function* () {
@@ -200,16 +205,33 @@ const loadRemoteManifestCached = (
 const loadManifest = (
   source: UiSource,
   cache: UiComposeCacheState,
-): Effect.Effect<PluginManifest, Error> => {
+): Effect.Effect<PluginManifest, UiComposeError> => {
   if (source.localRoot) {
-    return Effect.try(() =>
-      PluginManifestSchema.parse(
-        JSON.parse(readFileSync(`${source.localRoot}/src/${MANIFEST_FILENAME}`, "utf8")),
+    const manifestContents = Effect.try({
+      try: () => readFileSync(`${source.localRoot}/src/${MANIFEST_FILENAME}`, "utf8"),
+      catch: (cause) =>
+        new UiComposeError({ operation: "Failed to read local UI manifest", cause }),
+    });
+    return manifestContents.pipe(
+      Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Schema.Json))),
+      Effect.mapError(
+        (cause) => new UiComposeError({ operation: "Failed to decode local UI manifest", cause }),
+      ),
+      Effect.flatMap((manifestJson) =>
+        Effect.try({
+          try: () => PluginManifestSchema.parse(manifestJson),
+          catch: (cause) => new UiComposeError({ operation: "Invalid local UI manifest", cause }),
+        }),
       ),
     );
   }
   if (!source.manifestUrl) {
-    return Effect.fail(new Error(`Ui source "${source.key}" has no manifest location`));
+    return Effect.fail(
+      new UiComposeError({
+        operation: `UI source "${source.key}" has no manifest location`,
+        cause: new Error("Manifest location is required"),
+      }),
+    );
   }
   return loadRemoteManifestCached(source, source.manifestUrl, cache);
 };

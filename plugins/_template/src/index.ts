@@ -130,19 +130,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return yield* Effect.fail(errors.UNAUTHORIZED({ message: "User ID required" }));
         }
         const service = yield* TemplateApiClient;
-        const item = yield* service.getById(input.id).pipe(
-          Effect.catch((error) =>
-            Effect.fail(
+        const item = yield* service
+          .getById(input.id)
+          .pipe(
+            Effect.mapError((error) =>
               error.message.includes("Item not found")
-                ? errors.NOT_FOUND({
-                    message: `Failed to fetch item: ${error.message}`,
-                  })
-                : new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: error.message,
-                  }),
+                ? errors.NOT_FOUND({ message: `Failed to fetch item: ${error.message}` })
+                : new ORPCError("INTERNAL_SERVER_ERROR", { message: error.message }),
             ),
-          ),
-        );
+          );
         return { item, userId: context.userId };
       }),
 

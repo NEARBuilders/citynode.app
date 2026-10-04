@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ORPCError } from "@orpc/server";
-import { Effect, Layer } from "effect";
+import { Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DatabaseError } from "@/db";
 import { DatabaseLive } from "@/db/layer";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
 import { createServiceHarness } from "./test-harness";
@@ -35,7 +36,9 @@ const MISSING_ID = "00000000-0000-0000-0000-000000000000";
 
 const { run: runService, squashError: squashServiceError } = createServiceHarness<
   TenantsService,
-  TenantsTag
+  TenantsTag,
+  DatabaseError,
+  ORPCError<string, unknown>
 >(TenantsTag);
 
 const baseInput = {
