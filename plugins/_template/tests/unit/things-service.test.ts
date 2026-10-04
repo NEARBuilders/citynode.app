@@ -29,20 +29,22 @@ function freshLayer() {
 
 type ThingsSvc = typeof ThingsService.Service;
 
+type ThingsError = ORPCError<"NOT_FOUND" | "CONFLICT" | "INTERNAL_SERVER_ERROR", unknown>;
+
 async function runService<A>(
   layer: Layer.Layer<ThingsService, DatabaseError, never>,
-  fn: (svc: ThingsSvc) => Effect.Effect<A, unknown>,
+  fn: (svc: ThingsSvc) => Effect.Effect<A, ThingsError>,
 ): Promise<A> {
   const effect = Effect.gen(function* () {
     const svc = yield* ThingsService;
     return yield* fn(svc);
   });
-  return Effect.runPromise(Effect.provide(effect, layer) as Effect.Effect<A, never, never>);
+  return Effect.runPromise(Effect.provide(effect, layer));
 }
 
 async function squashServiceError<A>(
   layer: Layer.Layer<ThingsService, DatabaseError, never>,
-  fn: (svc: ThingsSvc) => Effect.Effect<A, unknown>,
+  fn: (svc: ThingsSvc) => Effect.Effect<A, ThingsError>,
 ): Promise<unknown> {
   const effect = Effect.gen(function* () {
     const svc = yield* ThingsService;

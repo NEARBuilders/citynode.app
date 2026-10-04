@@ -5,6 +5,7 @@ import { ORPCError } from "@orpc/server";
 import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
+import type { DatabaseError } from "@/db";
 import { DatabaseLive } from "@/db/layer";
 import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
@@ -19,7 +20,7 @@ afterEach(() => {
   }
 });
 
-function freshLayer(): Layer.Layer<NodesTag | TenantsTag, unknown, never> {
+function freshLayer(): Layer.Layer<NodesTag | TenantsTag, DatabaseError, never> {
   const dir = mkdtempSync(join(tmpdir(), "api-nodes-"));
   activeDir = dir;
   const database = DatabaseLive(`pglite:${dir}`);
@@ -28,7 +29,7 @@ function freshLayer(): Layer.Layer<NodesTag | TenantsTag, unknown, never> {
     TenantsLive.pipe(Layer.provide(database)),
   ).pipe(Layer.provide(Layer.succeed(PluginIdTag, "api"))) as Layer.Layer<
     NodesTag | TenantsTag,
-    unknown,
+    DatabaseError,
     never
   >;
 }
@@ -42,7 +43,9 @@ interface TestServices {
 
 const { run: runService, squashError: squashServiceError } = createServiceHarness<
   TestServices,
-  NodesTag | TenantsTag
+  NodesTag | TenantsTag,
+  DatabaseError,
+  ORPCError<string, unknown>
 >(
   Effect.gen(function* () {
     return { nodes: yield* NodesTag, tenants: yield* TenantsTag };

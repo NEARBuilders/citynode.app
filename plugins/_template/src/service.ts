@@ -1,4 +1,4 @@
-import { DateTime, Effect } from "effect";
+import { Data, DateTime, Effect } from "effect";
 import type { z } from "zod";
 // Import types from contract
 import type { ItemSchema, SearchResultSchema } from "./contract";
@@ -6,6 +6,15 @@ import type { ItemSchema, SearchResultSchema } from "./contract";
 // Infer the types from the schemas
 type Item = z.infer<typeof ItemSchema>;
 type SearchResult = z.infer<typeof SearchResultSchema>;
+
+export class TemplateServiceError extends Data.TaggedError("TemplateServiceError")<{
+  readonly detail: string;
+  readonly cause?: unknown;
+}> {
+  override get message() {
+    return this.detail;
+  }
+}
 
 /**
  * Template Service - Wraps external API calls with Effect-based error handling.
@@ -28,7 +37,7 @@ export class TemplateService {
           await new Promise((resolve) => setTimeout(resolve, 50));
 
           if (id === "not-found") {
-            throw new Error("Item not found");
+            throw new TemplateServiceError({ detail: "Item not found" });
           }
 
           return {
@@ -37,10 +46,11 @@ export class TemplateService {
             createdAt,
           } satisfies Item;
         },
-        catch: (error: unknown) =>
-          new Error(
-            `Failed to fetch item: ${error instanceof Error ? error.message : String(error)}`,
-          ),
+        catch: (cause) =>
+          new TemplateServiceError({
+            detail: `Failed to fetch item: ${cause instanceof Error ? cause.message : String(cause)}`,
+            cause,
+          }),
       });
     });
   }

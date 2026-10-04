@@ -5,10 +5,16 @@ import { ORPCError } from "@orpc/server";
 import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
+import type { DatabaseError } from "@/db";
 import { DatabaseLive } from "@/db/layer";
 import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
-import { ValidatorsLive, type ValidatorsService, ValidatorsTag } from "@/services/validators";
+import {
+  type ValidatorRecord,
+  ValidatorsLive,
+  type ValidatorsService,
+  ValidatorsTag,
+} from "@/services/validators";
 import { createServiceHarness } from "./test-harness";
 
 let activeDir: string | null = null;
@@ -39,7 +45,9 @@ interface TestServices {
 
 const { run: runService, squashError: squashServiceError } = createServiceHarness<
   TestServices,
-  NodesTag | TenantsTag | ValidatorsTag
+  NodesTag | TenantsTag | ValidatorsTag,
+  DatabaseError,
+  ORPCError<string, unknown> | ValidatorRecord
 >(
   Effect.gen(function* () {
     return {
