@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { pluginHref, useApiClient } from "@/app";
+import { pluginHref, pluginPath, useApiClient } from "@/app";
 import {
   Button,
   Field,
@@ -163,12 +163,13 @@ function CreateThingPage() {
                 : submitError.message || translate("things.submitFailed")}
             </p>
             {needsSignIn && (
-              <a
+              <Link
+                to={pluginPath("/login")}
                 href={pluginHref("/login", { redirect: "/things/new" })}
                 className="text-sm font-medium text-foreground underline underline-offset-4"
               >
                 {translate("things.signInAgain")}
-              </a>
+              </Link>
             )}
           </div>
         )}

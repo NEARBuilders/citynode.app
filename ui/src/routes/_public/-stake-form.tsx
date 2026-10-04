@@ -1,5 +1,6 @@
 import { SignInIcon, WalletIcon } from "@phosphor-icons/react";
-import { pluginHref, type useApiClient } from "@/app";
+import { Link } from "@tanstack/react-router";
+import { pluginHref, pluginPath, type useApiClient } from "@/app";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -136,7 +137,12 @@ function StakeAction({
           size="lg"
           nativeButton={false}
           data-testid="stake.sign-in"
-          render={<a href={pluginHref("/login", { redirect: signInRedirect })}>Sign in to stake</a>}
+          render={
+            <Link
+              to={pluginPath("/login")}
+              href={pluginHref("/login", { redirect: signInRedirect })}
+            />
+          }
         >
           <SignInIcon data-icon="inline-start" />
           {translate("stake.signIn")}
