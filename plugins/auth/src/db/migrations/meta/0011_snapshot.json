@@ -1168,12 +1168,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "default_teams_provisioned_at": {
-          "name": "default_teams_provisioned_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
