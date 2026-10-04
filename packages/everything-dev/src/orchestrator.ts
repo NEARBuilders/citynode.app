@@ -49,6 +49,32 @@ export class OrchestratorError extends Data.TaggedError("OrchestratorError")<{
   }
 }
 
+const omitUndefined = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => (item === undefined ? null : omitUndefined(item)));
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, omitUndefined(item)]),
+    );
+  }
+  return value;
+};
+
+export const encodeRuntimeConfig = (runtimeConfig: unknown) =>
+  Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Json))(omitUndefined(runtimeConfig)).pipe(
+    Effect.mapError(
+      (cause) =>
+        new OrchestratorError({
+          operation: "serialize runtime config",
+          detail: cause.message,
+          cause,
+        }),
+    ),
+  );
+
 export type ProcessStatus = "pending" | "starting" | "ready" | "error";
 
 export interface ProcessState {
@@ -399,9 +425,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       shellTier,
     );
 
-    envVars.BOS_RUNTIME_CONFIG = yield* Schema.encodeUnknownEffect(
-      Schema.fromJsonString(Schema.Json),
-    )(runtimeConfig);
+    envVars.BOS_RUNTIME_CONFIG = yield* encodeRuntimeConfig(runtimeConfig);
 
     const cmd = spawn(command, args, {
       cwd: fullCwd,
