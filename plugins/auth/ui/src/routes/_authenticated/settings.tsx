@@ -2,6 +2,7 @@ import { KeyIcon, ShieldCheckIcon, UserCircleIcon, UserIcon } from "@phosphor-ic
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { sessionQueryOptions } from "everything-dev/ui/auth";
 import { matchLocale } from "everything-dev/ui/i18n";
+import { getAppName } from "everything-dev/ui/runtime";
 import { useEffect, useRef } from "react";
 import { PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
@@ -14,11 +15,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
   head: ({ match }) => ({
     meta: [
       {
-        title: translateLoginMessage(
-          "auth.meta.settings",
-          undefined,
-          matchLocale(match.context.locale, LOGIN_LOCALES) ?? "en",
-        ),
+        title: `${translateLoginMessage("auth.meta.settings", undefined, matchLocale(match.context.locale, LOGIN_LOCALES) ?? "en")} · ${getAppName(match.context.runtimeConfig)}`,
       },
       {
         name: "description",

@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { matchLocale, Trans } from "everything-dev/ui/i18n";
+import { getAppName } from "everything-dev/ui/runtime";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -44,11 +45,7 @@ export const Route = createFileRoute("/_authenticated/settings/api-keys")({
   head: ({ match }) => ({
     meta: [
       {
-        title: translateLoginMessage(
-          "auth.meta.apiKeys",
-          undefined,
-          matchLocale(match.context.locale, LOGIN_LOCALES) ?? "en",
-        ),
+        title: `${translateLoginMessage("auth.meta.apiKeys", undefined, matchLocale(match.context.locale, LOGIN_LOCALES) ?? "en")} · ${getAppName(match.context.runtimeConfig)}`,
       },
       {
         name: "description",

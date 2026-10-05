@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { pluginPath, pluginSearch, useApiClient } from "@/app";
+import { pluginHref, pluginPath, useApiClient } from "@/app";
 import {
   Button,
   Field,
@@ -165,7 +165,7 @@ function CreateThingPage() {
             {needsSignIn && (
               <Link
                 to={pluginPath("/login")}
-                search={pluginSearch({ redirect: "/things/new" })}
+                href={pluginHref("/login", { redirect: "/things/new" })}
                 className="text-sm font-medium text-foreground underline underline-offset-4"
               >
                 {translate("things.signInAgain")}

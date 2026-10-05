@@ -27,6 +27,7 @@ import {
 import { getNetworkIdForAccount } from "./network";
 import { platformUrlDeployEntries, pluginUiUrlDeployEntries } from "./platform-deploy";
 import { openResolution } from "./resolution/session";
+import { verifyRollbackSnapshot } from "./rollback";
 import { collectDistFiles, uploadBundle, uploadWorkspaceDist } from "./storage-upload";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
@@ -635,6 +636,25 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       };
     }
     publishPayload = (isStaging ? { ...merged, domain: gateway } : merged) as BosConfigInput;
+  }
+
+  const pinVerification = await verifyRollbackSnapshot(publishPayload);
+  if (pinVerification.verifiable && !pinVerification.ok) {
+    const failures = pinVerification.slots
+      .filter((check) => !check.ok)
+      .map((check) => `    ${check.slot}: ${check.reason}`)
+      .join("\n");
+    console.error(
+      `  ${colors.error(icons.err)} Publish blocked — a pinned slot's bytes do not serve at its production URL:\n${failures}`,
+    );
+    return {
+      status: "error",
+      registryUrl,
+      built,
+      skipped,
+      deployResults,
+      error: `Publish blocked — pinned slot bytes missing or SRI mismatched:\n${failures}`,
+    };
   }
 
   const registryKey = `apps/${account}/${gateway}/bos.config.json`;

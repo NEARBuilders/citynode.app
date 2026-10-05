@@ -9,6 +9,7 @@
  * by share-scope negotiation).
  */
 
+import type { AnyRoute } from "@tanstack/react-router";
 import type { ClientRuntimeConfig } from "../types";
 import { type ClientServiceConfig, createApiClient } from "./api";
 import { createAuthClient } from "./auth";
@@ -33,9 +34,10 @@ declare global {
 }
 
 const mark = (message: string) => {
+  if (!import.meta.env.DEV) return;
   const progress = window.__CLIENT_PROGRESS__ ?? [];
   window.__CLIENT_PROGRESS__ = [...progress, message];
-  if (import.meta.env.DEV) console.log(`[Hydrate] ${message}`);
+  console.log(`[Hydrate] ${message}`);
 };
 
 function isAbsoluteHttpUrl(value: string | undefined): value is string {
@@ -64,7 +66,7 @@ export interface CoreHydrateOptions
 }
 
 interface ComposedTree {
-  routeTree: unknown;
+  routeTree: AnyRoute;
   nav: NavManifest;
   /** `true` when plugin composition failed and only the core tree is usable. */
   degraded: boolean;
@@ -88,7 +90,7 @@ async function composeFromPayload(
   const parsed = ComposePayloadSchema.safeParse(payload);
   if (!parsed.success) {
     mark(`compose payload malformed: ${parsed.error.message}`);
-    return undefined;
+    throw new Error("Unable to load the application configuration");
   }
   const { manifests } = parsed.data;
 
@@ -209,8 +211,10 @@ function isServerRendered(): boolean {
 }
 
 function watchHydrationConsumed() {
+  if (!import.meta.env.DEV) return;
+  let remainingChecks = 200;
   const bootstrapWatch = setInterval(() => {
-    if (window.$_TSR === undefined) {
+    if (window.$_TSR === undefined || --remainingChecks === 0) {
       clearInterval(bootstrapWatch);
       mark("hydration consumed ($_TSR deleted — h() ran)");
     }
@@ -244,6 +248,9 @@ export async function hydrate(options: CoreHydrateOptions) {
     mark(`$_TSR present: ${Boolean(window.$_TSR)}`);
 
     const composed = await composeFromPayload(runtimeConfig, coreRouteConfig);
+    if (runtimeConfig.ui?.compose && !composed) {
+      throw new Error("Unable to load the application routes");
+    }
 
     const { router } = createRouter({
       routeTree: composed?.routeTree,
@@ -295,10 +302,35 @@ export async function hydrate(options: CoreHydrateOptions) {
       );
     }
 
+    if (composed?.degraded) {
+      const { toast } = await import("sonner");
+      toast.error("Some application features couldn't load", {
+        id: "application-compose-error",
+        description: "Plugin pages are unavailable. Reload to try again.",
+        duration: Number.POSITIVE_INFINITY,
+        action: { label: "Reload", onClick: () => window.location.reload() },
+      });
+    }
+
     console.log("[Hydrate] Complete!");
   })().catch((error) => {
     console.error("[Hydrate] Failed:", error);
     window.__EVERYTHING_DEV_HYDRATE_PROMISE__ = undefined;
+    const message = document.createElement("main");
+    message.setAttribute("role", "alert");
+    message.dataset.testid = "application-startup-error";
+    message.className =
+      "min-h-screen flex flex-col items-center justify-center gap-4 bg-background text-foreground p-6";
+    const heading = document.createElement("h1");
+    heading.textContent = "The application couldn't load";
+    const detail = document.createElement("p");
+    detail.textContent = "Check your connection and reload to try again.";
+    const retry = document.createElement("button");
+    retry.textContent = "Reload";
+    retry.className = "rounded-md border border-border px-4 py-2";
+    retry.addEventListener("click", () => window.location.reload());
+    message.append(heading, detail, retry);
+    document.body.replaceChildren(message);
     throw error;
   });
 
