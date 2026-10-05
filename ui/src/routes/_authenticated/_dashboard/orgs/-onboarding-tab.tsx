@@ -52,15 +52,7 @@ function stateLabel(
   return state === "expired" ? t("station.expired") : t("station.revoked");
 }
 
-export function OnboardingTab({
-  apiClient,
-  canManage,
-  orgId,
-}: {
-  apiClient: ApiClient;
-  canManage: boolean;
-  orgId: string;
-}) {
+export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgId: string }) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const queryClient = useQueryClient();
@@ -74,7 +66,7 @@ export function OnboardingTab({
       queryFn: async (): Promise<OnboardingCodeSummary[]> => {
         return apiClient.auth.listOnboardingCodes({ organizationId: orgId });
       },
-      enabled: !!orgId && canManage,
+      enabled: !!orgId,
       refetchInterval: 10_000,
     }).data ?? [];
 
@@ -86,7 +78,7 @@ export function OnboardingTab({
         organizationId: orgId,
       });
     },
-    enabled: !!selectedCodeId && canManage,
+    enabled: !!selectedCodeId,
     refetchInterval: 2_000,
   }).data;
 
@@ -105,18 +97,6 @@ export function OnboardingTab({
 
   const selectedCode = codes.find((code) => code.id === selectedCodeId) ?? null;
   const activeStatus = status && selectedCode ? status : null;
-
-  if (!canManage) {
-    return (
-      <TabsContent value="onboard" className="pt-6">
-        <EmptyState
-          icon={QrCodeIcon}
-          title={translate("org.organizersOnly")}
-          description={translate("org.organizersDescription")}
-        />
-      </TabsContent>
-    );
-  }
 
   return (
     <TabsContent value="onboard" className="flex flex-col gap-6 pt-6">

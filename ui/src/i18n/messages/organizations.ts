@@ -353,6 +353,24 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Les groupes dont vous faites partie. Le groupe actif détermine ce que vous gérez.",
     "你所属的组织，当前组织决定你管理的内容。",
   ],
+  "org.loadFailed": [
+    "Couldn't load organizations",
+    "No se pudieron cargar las organizaciones",
+    "Impossible de charger les organisations",
+    "无法加载组织",
+  ],
+  "org.loadFailedRetry": [
+    "Couldn't load organizations. Try again",
+    "No se pudieron cargar las organizaciones. Reintentar",
+    "Impossible de charger les organisations. Réessayer",
+    "无法加载组织。重试",
+  ],
+  "org.loading": [
+    "Loading organizations…",
+    "Cargando organizaciones…",
+    "Chargement des organisations…",
+    "正在加载组织…",
+  ],
   "org.loadingMembers": [
     "Loading members...",
     "Cargando miembros…",

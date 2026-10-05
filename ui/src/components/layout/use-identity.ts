@@ -20,10 +20,11 @@ export function useIdentity() {
   const user = session?.user;
   const nearAccountId = useNearAccount();
 
-  const { data: organizations } = useQuery({
+  const organizationsQuery = useQuery({
     ...organizationsQueryOptions(apiClient),
     enabled: !!user,
   });
+  const organizations = organizationsQuery.data;
   const activeOrgId = session?.session?.activeOrganizationId;
 
   const activeOrg = useMemo(() => {
@@ -73,6 +74,10 @@ export function useIdentity() {
     isSessionLoading: sessionQuery.isLoading,
     nearAccountId,
     organizations: organizations ?? [],
+    isOrganizationsLoading: sessionQuery.isPending || (!!user && organizationsQuery.isPending),
+    organizationsError: sessionQuery.error ?? organizationsQuery.error,
+    retryOrganizations: () =>
+      sessionQuery.isError ? sessionQuery.refetch() : organizationsQuery.refetch(),
     activeOrgId,
     activeOrg,
     nearProfile,

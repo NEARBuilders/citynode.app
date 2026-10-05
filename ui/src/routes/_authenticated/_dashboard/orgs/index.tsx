@@ -86,7 +86,8 @@ function OrganizationsList() {
   const apiClient = useApiClient();
   const router = useRouter();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const { data: organizations, isLoading } = useQuery(organizationsQueryOptions(apiClient));
+  const organizationsQuery = useQuery(organizationsQueryOptions(apiClient));
+  const { data: organizations, isLoading } = organizationsQuery;
 
   const { data: userInvitations = [] } = useQuery({
     queryKey: ["user-invitations"],
@@ -233,13 +234,29 @@ function OrganizationsList() {
         </section>
       )}
 
+      {organizationsQuery.isError && (
+        <div
+          role="alert"
+          data-testid="orgs-error"
+          className="flex items-center gap-3 text-sm text-destructive"
+        >
+          Couldn't load your organizations.
+          <Button
+            variant="outline"
+            onClick={() => void organizationsQuery.refetch()}
+            data-testid="orgs-retry"
+          >
+            Try again
+          </Button>
+        </div>
+      )}
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3].map((n) => (
             <Skeleton key={n} className="h-40 w-full" />
           ))}
         </div>
-      ) : orgs.length === 0 ? (
+      ) : organizationsQuery.isError && orgs.length === 0 ? null : orgs.length === 0 ? (
         <EmptyState
           icon={BankIcon}
           title={translate("org.empty")}

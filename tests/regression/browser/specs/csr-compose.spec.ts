@@ -55,21 +55,16 @@ test.describe("CSR compose", () => {
     }, manifestUrl);
     expect(entryStatus, `auth mf-manifest at ${manifestUrl}`).toBe(200);
 
-    // The tree was constructed from core + auth manifests (2 sources). The
-    // progress array is the reliable signal: mark() only console-logs in DEV
-    // builds, and the no-watch regression stack serves a production build.
-    const progress = await page.evaluate(
-      () => (window as { __CLIENT_PROGRESS__?: string[] }).__CLIENT_PROGRESS__ ?? [],
+    await page.getByTestId("login.language-select").click();
+    await page.getByRole("option", { name: "Español", exact: true }).click();
+    await expect(signInHeading).toHaveText("Inicia sesión en CityNode");
+    await expect(page.getByTestId("application-startup-error")).toHaveCount(0);
+    await expect(
+      page.getByText("Some application features couldn't load", { exact: true }),
+    ).toHaveCount(0);
+    const failed = consoleMarks.find(
+      (mark) => mark.includes("Client compose failed") || mark.includes("Compose digest mismatch"),
     );
-    const constructed = progress.find((mark) => mark.includes("tree constructed"));
-    expect(
-      constructed,
-      `expected a "tree constructed" mark, got: ${progress.join(" | ")}`,
-    ).toBeTruthy();
-
-    const failed =
-      consoleMarks.find((mark) => mark.includes("Client compose failed")) ??
-      progress.find((mark) => mark.includes("CLIENT COMPOSE ERROR"));
     expect(failed, "client compose must not fail").toBeUndefined();
   });
 

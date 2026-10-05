@@ -16,10 +16,14 @@ import { defaultNotFoundComponent, defaultPendingComponent } from "./router-defa
 import { RouterError } from "./router-error";
 import type { CreateRouterOptions, RouterContextWithApi } from "./types";
 
-export interface CoreRouterOptions<TApiClient = unknown, TSession = unknown>
-  extends CreateRouterOptions<TApiClient, TSession> {
+export interface CoreRouterOptions<
+  TApiClient = unknown,
+  TSession = unknown,
+  TRouteTree extends AnyRoute = AnyRoute,
+> extends CreateRouterOptions<TApiClient, TSession> {
   /** The app's generated route tree — the core-only fallback when no composed tree is passed. */
-  defaultRouteTree?: unknown;
+  defaultRouteTree?: TRouteTree;
+  routeTree?: TRouteTree;
 }
 
 export function createRouter<
@@ -27,7 +31,7 @@ export function createRouter<
   TSession = unknown,
   TRouteTree extends AnyRoute = AnyRoute,
 >(
-  opts: CoreRouterOptions<TApiClient, TSession> & {
+  opts: CoreRouterOptions<TApiClient, TSession, TRouteTree> & {
     context: RouterContextWithApi<TApiClient, TSession> & { authClient?: unknown };
   },
 ) {
@@ -43,7 +47,7 @@ export function createRouter<
   }
 
   const router = createTanStackRouter({
-    routeTree: routeTree as TRouteTree,
+    routeTree,
     history,
     basepath: opts.basepath ?? opts.context.runtimeConfig?.runtime?.runtimeBasePath ?? "/",
     context: {

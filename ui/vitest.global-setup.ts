@@ -10,9 +10,5 @@ import { generateUiManifest } from "everything-dev/ui/manifest-generator";
  */
 export default async function setup(): Promise<void> {
   const workspaceRoot = path.dirname(fileURLToPath(import.meta.url));
-  try {
-    await generateUiManifest({ workspaceRoot, pluginName: "ui" });
-  } catch {
-    // generated artifacts stay absent; the suite reports the underlying error
-  }
+  await generateUiManifest({ workspaceRoot, pluginName: "ui" });
 }
