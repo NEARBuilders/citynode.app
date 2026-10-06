@@ -520,6 +520,30 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "L’approbation crée la communauté et demande au DAO de publier ses paramètres.",
     "批准后将创建社区，并请求此 DAO 发布设置。",
   ],
+  "dao.verification.checking": [
+    "Checking DAO…",
+    "Comprobando DAO…",
+    "Vérification de la DAO…",
+    "正在验证 DAO…",
+  ],
+  "dao.verification.verified": [
+    "Sputnik DAO verified",
+    "DAO Sputnik verificada",
+    "DAO Sputnik vérifiée",
+    "Sputnik DAO 已验证",
+  ],
+  "dao.verification.wrongAccount": [
+    "Connect {account} to review this application.",
+    "Conecta {account} para revisar esta solicitud.",
+    "Connectez {account} pour examiner cette demande.",
+    "请连接 {account} 以审核此申请。",
+  ],
+  "dao.verification.error": [
+    "Couldn't verify this DAO. Try again.",
+    "No se pudo verificar este DAO. Inténtalo de nuevo.",
+    "Impossible de vérifier cette DAO. Réessayez.",
+    "无法验证此 DAO，请重试。",
+  ],
   "dao.purposeSettings": [
     "Changes to this community are signed by its DAO.",
     "Los cambios de esta comunidad los firma su DAO.",

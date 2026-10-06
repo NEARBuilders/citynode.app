@@ -56,7 +56,12 @@ export function ProposalReviewActions({
               account: proposalDaoAccountId ?? translate("admin.proposal.daoFallback"),
             })}
           </p>
-          <ConnectDao purpose="proposal-review" variant="plain" onVerified={onDaoVerified} />
+          <ConnectDao
+            purpose="proposal-review"
+            variant="plain"
+            expectedDaoAccountId={proposalDaoAccountId}
+            onVerified={onDaoVerified}
+          />
         </div>
       )}
 

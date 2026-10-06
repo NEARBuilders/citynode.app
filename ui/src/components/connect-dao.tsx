@@ -17,7 +17,7 @@ import {
   connectDaoAccount,
   disconnectDaoAccount,
   fetchDaoMembership,
-  type ParsedDaoMembership,
+  fetchDaoPolicy,
   useDaoAutoRestore,
   useDaoConnection,
 } from "@/lib/dao-connect";
@@ -31,17 +31,20 @@ export type ConnectDaoPurpose =
   | "community-settings";
 
 interface ConnectDaoProps {
-  onVerified?: (info: { daoAccountId: string; membership: ParsedDaoMembership }) => void;
+  onVerified?: (info: { daoAccountId: string }) => void;
+  expectedDaoAccountId?: string | null;
   purpose?: ConnectDaoPurpose;
   variant?: "card" | "plain";
 }
 
-type MembershipState =
+type VerificationState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "ok" }
+  | { kind: "dao-ok" }
   | { kind: "not-member" }
   | { kind: "not-sputnik" }
+  | { kind: "wrong-account"; expectedAccountId: string }
   | { kind: "error"; message: string };
 
 const purposeCopy: Record<ConnectDaoPurpose | "default", AppMessageId> = {
@@ -63,37 +66,62 @@ async function handleDisconnect() {
   await disconnectDaoAccount();
 }
 
-export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDaoProps) {
+export function ConnectDao({
+  onVerified,
+  expectedDaoAccountId,
+  purpose,
+  variant = "card",
+}: ConnectDaoProps) {
   const t = useAppTranslation();
   const primaryAccountId = useNearAccount();
   useDaoAutoRestore(primaryAccountId);
   const connection = useDaoConnection();
-  const [membership, setMembership] = useState<MembershipState>({ kind: "idle" });
+  const [verification, setVerification] = useState<VerificationState>({ kind: "idle" });
 
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      if (connection.status !== "connected" || !connection.daoAccountId || !primaryAccountId) {
-        setMembership({ kind: "idle" });
+      if (
+        connection.status !== "connected" ||
+        !connection.daoAccountId ||
+        (purpose !== "proposal-review" && !primaryAccountId)
+      ) {
+        setVerification({ kind: "idle" });
         return;
       }
-      setMembership({ kind: "loading" });
+      if (expectedDaoAccountId && connection.daoAccountId !== expectedDaoAccountId) {
+        setVerification({ kind: "wrong-account", expectedAccountId: expectedDaoAccountId });
+        return;
+      }
+      setVerification({ kind: "loading" });
       try {
+        if (purpose === "proposal-review") {
+          const policy = await fetchDaoPolicy(connection.daoAccountId);
+          if (cancelled) return;
+          if (!policy) {
+            setVerification({ kind: "not-sputnik" });
+            return;
+          }
+          setVerification({ kind: "dao-ok" });
+          onVerified?.({ daoAccountId: connection.daoAccountId });
+          return;
+        }
+        if (!primaryAccountId) return;
         const result = await fetchDaoMembership(connection.daoAccountId, primaryAccountId);
         if (cancelled) return;
         if (!result.isSputnikContract) {
-          setMembership({ kind: "not-sputnik" });
+          setVerification({ kind: "not-sputnik" });
           return;
         }
         if (!result.isMember) {
-          setMembership({ kind: "not-member" });
+          setVerification({ kind: "not-member" });
           return;
         }
-        setMembership({ kind: "ok" });
-        onVerified?.({ daoAccountId: connection.daoAccountId, membership: result });
+        setVerification({ kind: "ok" });
+        onVerified?.({ daoAccountId: connection.daoAccountId });
       } catch (err) {
         if (cancelled) return;
-        setMembership({
+        setVerification({
           kind: "error",
           message: err instanceof Error ? err.message : String(err),
         });
@@ -103,7 +131,14 @@ export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDao
     return () => {
       cancelled = true;
     };
-  }, [connection.status, connection.daoAccountId, primaryAccountId, onVerified]);
+  }, [
+    connection.status,
+    connection.daoAccountId,
+    expectedDaoAccountId,
+    primaryAccountId,
+    purpose,
+    onVerified,
+  ]);
 
   const connected = connection.status === "connected" && !!connection.daoAccountId;
   const connecting = connection.status === "connecting";
@@ -120,7 +155,11 @@ export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDao
               <ItemTitle data-testid="dao-connect-account">
                 <code className="truncate font-mono">{connection.daoAccountId}</code>
               </ItemTitle>
-              <MembershipLine state={membership} primaryAccountId={primaryAccountId} />
+              <VerificationLine
+                state={verification}
+                primaryAccountId={primaryAccountId}
+                purpose={purpose}
+              />
             </>
           ) : (
             <>
@@ -167,12 +206,14 @@ export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDao
   );
 }
 
-function MembershipLine({
+function VerificationLine({
   state,
   primaryAccountId,
+  purpose,
 }: {
-  state: MembershipState;
+  state: VerificationState;
   primaryAccountId: string | null;
+  purpose?: ConnectDaoPurpose;
 }) {
   const t = useAppTranslation();
   if (state.kind === "idle") return null;
@@ -183,15 +224,17 @@ function MembershipLine({
         data-testid="dao-connect-status"
       >
         <Spinner />
-        {t("dao.membership.checking")}
+        {t(purpose === "proposal-review" ? "dao.verification.checking" : "dao.membership.checking")}
       </div>
     );
   }
-  if (state.kind === "ok") {
+  if (state.kind === "ok" || state.kind === "dao-ok") {
     return (
       <div className="flex flex-wrap items-center gap-2" data-testid="dao-connect-status">
-        <Badge variant="success">{t("dao.membership.member")}</Badge>
-        {primaryAccountId && (
+        <Badge variant="success">
+          {t(state.kind === "dao-ok" ? "dao.verification.verified" : "dao.membership.member")}
+        </Badge>
+        {state.kind === "ok" && primaryAccountId && (
           <span className="truncate text-sm text-muted-foreground">{primaryAccountId}</span>
         )}
       </div>
@@ -204,7 +247,9 @@ function MembershipLine({
         })
       : state.kind === "not-sputnik"
         ? t("dao.membership.notSputnik")
-        : t("wallet.membershipError");
+        : state.kind === "wrong-account"
+          ? t("dao.verification.wrongAccount", { account: state.expectedAccountId })
+          : t(purpose === "proposal-review" ? "dao.verification.error" : "wallet.membershipError");
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="dao-connect-status">
       <Badge variant="destructive">

@@ -80,10 +80,13 @@ function ProposalDetailPage() {
   const reviewHistoryQuery = useQuery(proposalReviewHistoryQueryOptions(apiClient, pluginId));
 
   useEffect(() => {
-    if (verifiedDaoAccountId && verifiedDaoAccountId !== daoConnection.daoAccountId) {
+    if (
+      verifiedDaoAccountId &&
+      (daoConnection.status !== "connected" || verifiedDaoAccountId !== daoConnection.daoAccountId)
+    ) {
       setVerifiedDaoAccountId(null);
     }
-  }, [daoConnection.daoAccountId, verifiedDaoAccountId]);
+  }, [daoConnection.daoAccountId, daoConnection.status, verifiedDaoAccountId]);
 
   const reviewMutation = useMutation({
     mutationFn: async ({
@@ -113,6 +116,7 @@ function ProposalDetailPage() {
       if (proposal.pluginId === "node") {
         const payload = nodeProposalPayloadSchema.parse(proposal.payload);
         if (
+          daoConnection.status !== "connected" ||
           !daoConnection.daoAccountId ||
           daoConnection.daoAccountId !== payload.accountId ||
           verifiedDaoAccountId !== payload.accountId
@@ -210,6 +214,7 @@ function ProposalDetailPage() {
   const daoIsVerified =
     proposal.pluginId !== "node" ||
     (!!proposalDaoAccountId &&
+      daoConnection.status === "connected" &&
       daoConnection.daoAccountId === proposalDaoAccountId &&
       verifiedDaoAccountId === proposalDaoAccountId);
 
