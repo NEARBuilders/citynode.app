@@ -300,9 +300,6 @@ export function createStepRunner(ctx: StepRunnerContext) {
       );
       return;
     }
-    if (station.def.signer === "endowment") {
-      throw new AppActionError("poc.endowmentPermission");
-    }
     const result = await signPlanAsDao(signerId, plan);
     log(
       {
