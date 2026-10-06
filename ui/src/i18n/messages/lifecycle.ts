@@ -1151,12 +1151,6 @@ export const lifecycleMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
     "le contrat de blocage n’est pas encore déployé — déployez-le d’abord",
     "锁仓合约尚未部署 — 请先部署",
   ],
-  "poc.endowmentPermission": [
-    "connect the endowment in Trezu, or hold AddProposal rights on its policy, to stage this step",
-    "conecta la dotación en Trezu o consigue el permiso AddProposal para preparar esta etapa",
-    "connectez la dotation dans Trezu ou obtenez le droit AddProposal pour préparer cette étape",
-    "请在 Trezu 中连接捐赠基金，或获得 AddProposal 权限以提交此步骤",
-  ],
   "poc.endowmentResolving": [
     "resolving the endowment lockup — run again in a moment",
     "resolviendo el bloqueo de la dotación — vuelve a intentar en un momento",
