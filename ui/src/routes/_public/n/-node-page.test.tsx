@@ -77,7 +77,9 @@ function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
       const url = new URL(input instanceof Request ? input.url : String(input));
       const requestBody =
         init?.body ?? (input instanceof Request ? await input.clone().text() : undefined);
-      const body = JSON.parse(String(requestBody || url.searchParams.get("data") || "{}"));
+      const body = JSON.parse(
+        typeof requestBody === "string" ? requestBody : (url.searchParams.get("data") ?? "{}"),
+      );
       if (url.pathname === "/api/auth/get-session") return Response.json(null);
       const args = body.json ?? {};
       const method = url.pathname.split("/").at(-1);

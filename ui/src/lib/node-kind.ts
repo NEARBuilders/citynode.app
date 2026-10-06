@@ -12,7 +12,7 @@ const GEO_KIND_LABELS: Record<string, AppMessageId> = {
 
 export function nodeKindLabel(
   kind: string | null | undefined,
-  fallback: string | undefined = undefined,
+  fallback?: string,
   t: AppTranslator = translateEnglishAppMessage,
 ): string {
   if (!kind) return fallback ?? t("nav.community");

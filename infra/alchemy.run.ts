@@ -35,7 +35,7 @@ export default Alchemy.Stack(
             "Workers R2 Storage Bucket Item Write",
           ],
           resources: {
-            [`com.cloudflare.edge.r2.bucket.${accountId}/${bucketId}`]: "*",
+            [`com.cloudflare.edge.r2.bucket.${String(accountId)}/${String(bucketId)}`]: "*",
           },
         },
       ]),
@@ -44,7 +44,7 @@ export default Alchemy.Stack(
     return {
       bucketName,
       domain: BUNDLE_CDN_DOMAIN,
-      s3Endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      s3Endpoint: `https://${String(accountId)}.r2.cloudflarestorage.com`,
       s3Region: "auto",
       s3AccessKeyId: s3Token.tokenId,
       s3SecretAccessKey: s3Token.value,

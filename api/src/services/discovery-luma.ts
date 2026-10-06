@@ -94,7 +94,7 @@ export function createLumaCalendars(keys: string) {
         params.append("access", "view");
         if (cursor) params.set("pagination_cursor", cursor);
         const parsed = pageSchema.safeParse(
-          await request(`/v1/calendars/events/list?${params}`, entry.key),
+          await request(`/v1/calendars/events/list?${String(params)}`, entry.key),
         );
         if (!parsed.success)
           throw new ORPCError("BAD_REQUEST", {

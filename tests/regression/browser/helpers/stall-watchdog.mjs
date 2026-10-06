@@ -67,7 +67,9 @@ export default class StallWatchdogReporter {
     console.error(
       [
         `[stall-watchdog] SUITE STALLED — no test progress for ${Math.round(stalledFor / 1000)}s`,
-        this.currentTest ? `[stall-watchdog] last test started: ${this.currentTest}` : undefined,
+        this.currentTest
+          ? `[stall-watchdog] last test started: ${String(this.currentTest)}`
+          : undefined,
         runnerSnapshot("runner snapshot at stall"),
       ]
         .filter(Boolean)

@@ -101,7 +101,7 @@ it("preserves multiple nodes per tenant and validates confirmed coordinates", as
 it("derives coordinates from location via Nominatim and skips when already geocoded", async () => {
   const realFetch = globalThis.fetch;
   const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    const url = String(input);
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (!url.includes("nominatim.openstreetmap.org")) {
       return realFetch(input, init);
     }
@@ -132,14 +132,26 @@ it("derives coordinates from location via Nominatim and skips when already geoco
     latitude: 24.86,
     longitude: 67.01,
   });
-  expect(fetchMock.mock.calls.some(([input]) => String(input).includes("nominatim"))).toBe(true);
-  const nominatimCall = fetchMock.mock.calls.find(([input]) => String(input).includes("nominatim"));
+  expect(
+    fetchMock.mock.calls.some(([input]) =>
+      (typeof input === "string" ? input : input instanceof URL ? input.href : input.url).includes(
+        "nominatim",
+      ),
+    ),
+  ).toBe(true);
+  const nominatimCall = fetchMock.mock.calls.find(([input]) =>
+    (typeof input === "string" ? input : input instanceof URL ? input.href : input.url).includes(
+      "nominatim",
+    ),
+  );
   expect(nominatimCall?.[1]?.headers).toMatchObject({
     "User-Agent": expect.stringContaining("citynode.app/discovery-geocode"),
   });
 
   const nominatimCallsBeforeSkip = fetchMock.mock.calls.filter(([input]) =>
-    String(input).includes("nominatim"),
+    (typeof input === "string" ? input : input instanceof URL ? input.href : input.url).includes(
+      "nominatim",
+    ),
   ).length;
   const skipped = await editor.saveDiscoveryProfile({
     nodeId: node.id,
@@ -155,7 +167,11 @@ it("derives coordinates from location via Nominatim and skips when already geoco
     geocodedLocation: uniqueLocation,
   });
   expect(
-    fetchMock.mock.calls.filter(([input]) => String(input).includes("nominatim")),
+    fetchMock.mock.calls.filter(([input]) =>
+      (typeof input === "string" ? input : input instanceof URL ? input.href : input.url).includes(
+        "nominatim",
+      ),
+    ),
   ).toHaveLength(nominatimCallsBeforeSkip);
 
   const failed = await editor.saveDiscoveryProfile({

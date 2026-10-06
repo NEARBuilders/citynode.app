@@ -60,7 +60,7 @@ export function ReportContent({
               targetId,
               kind,
               token,
-              reason: String(data.get("reason")),
+              reason: typeof data.get("reason") === "string" ? (data.get("reason") as string) : "",
             });
           }}
         >

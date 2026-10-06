@@ -594,7 +594,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
       throw error;
     } finally {
       setRunningStation(null);
-      refresh();
+      void refresh();
     }
   };
 
@@ -684,7 +684,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
         },
         txHash(result),
       );
-      refresh();
+      void refresh();
     },
     onError: (error: Error, variables) =>
       toast.error(describeDaoError(error, variables.dao, translate)),
@@ -708,7 +708,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
     },
     onSuccess: (dao) => {
       log({ messageId: "poc.teamLinked", values: { account: dao ?? "" } });
-      refresh();
+      void refresh();
     },
     onError: (error: Error) =>
       toast.error(

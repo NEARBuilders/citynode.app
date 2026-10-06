@@ -72,7 +72,9 @@ describe("CSP Nonce Regression Tests", () => {
       }
     });
 
-    it("includes nonce attribute on <style> tags in SSR output", { timeout: 6000 }, async () => {
+    it("uses the external stylesheet instead of injecting inline style", {
+      timeout: 6000,
+    }, async () => {
       const testNonce = "regression-test-nonce-style-456";
       const request = new Request("http://localhost/");
 
@@ -89,15 +91,8 @@ describe("CSP Nonce Regression Tests", () => {
 
       expect(result.statusCode).toBe(200);
 
-      const nonceStyles = html.match(/<style[^>]*nonce=["'][^"']*["'][^>]*>/g) ?? [];
-      expect(
-        nonceStyles.length,
-        `Expected at least one <style> tag with nonce="${testNonce}", but found none.`,
-      ).toBeGreaterThanOrEqual(1);
-
-      for (const tag of nonceStyles) {
-        expect(tag).toContain(`nonce="${testNonce}"`);
-      }
+      expect(html).toMatch(/<link[^>]+rel="stylesheet"[^>]+href="[^"]*\/static\/css\/style\.css/);
+      expect(html).not.toMatch(/<style(?:\s|>)/);
     });
 
     it("bootstraps the nonce on window for hydration", { timeout: 6000 }, async () => {

@@ -80,8 +80,8 @@ function AdminRelayerPage() {
           ? translate("admin.relayer.txNamed", { hash: result.transaction.hash })
           : translate("admin.relayer.sentNamed", { amount, account: target }),
       });
-      relayerInfoQuery.refetch();
-      queryClient.invalidateQueries({ queryKey: ["relay-history"] });
+      void relayerInfoQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ["relay-history"] });
     } catch (err) {
       toast.error(appErrorMessage(err, translate));
     } finally {
@@ -99,8 +99,8 @@ function AdminRelayerPage() {
   });
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: relayerInfoQueryKey });
-    queryClient.invalidateQueries({ queryKey: ["relay-history"] });
+    void queryClient.invalidateQueries({ queryKey: relayerInfoQueryKey });
+    void queryClient.invalidateQueries({ queryKey: ["relay-history"] });
   };
 
   const handleConnect = async () => {

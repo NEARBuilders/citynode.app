@@ -56,7 +56,7 @@ export interface SputnikProposal {
 
 export interface SputnikRole {
   name: string;
-  kind: { Group?: string[] } | "Everyone" | string;
+  kind: { Group?: string[] } | string;
   permissions?: string[];
   vote_policy?: Record<string, { threshold?: string | [number, number] }>;
 }

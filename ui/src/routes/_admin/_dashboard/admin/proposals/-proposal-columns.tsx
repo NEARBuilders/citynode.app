@@ -45,7 +45,7 @@ export function createProposalColumns(
     {
       accessorKey: "pluginId",
       header: t("common.type"),
-      meta: { className: "hidden lg:table-cell" },
+      meta: { hideOnMobile: true },
 
       cell: ({ row }) => (
         <span className="text-muted-foreground">{proposalTypeLabel(row.original.pluginId, t)}</span>
@@ -54,7 +54,7 @@ export function createProposalColumns(
     {
       accessorKey: "createdBy",
       header: t("admin.proposal.submittedBy"),
-      meta: { className: "hidden lg:table-cell" },
+      meta: { hideOnMobile: true },
 
       cell: ({ row }) => (
         <span className="block max-w-44 truncate font-mono text-xs text-muted-foreground">
