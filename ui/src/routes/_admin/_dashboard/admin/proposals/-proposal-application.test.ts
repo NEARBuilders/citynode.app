@@ -124,7 +124,7 @@ describe("proposal application dispatcher", () => {
     );
   });
 
-  it("does not finalize a node application when the DAO publish proposal fails", async () => {
+  it("keeps the review approved when DAO publication fails", async () => {
     const api = client(proposal("node", nodePayload));
     const publishTenantConfig = vi.fn().mockRejectedValue(new Error("Trezu rejected the request"));
 
@@ -138,6 +138,7 @@ describe("proposal application dispatcher", () => {
       }),
     ).rejects.toMatchObject({ messageId: "proposal.partiallyApplied" });
 
+    expect(api.proposals.approve).toHaveBeenCalledOnce();
     expect(api.applyNodeProposal).toHaveBeenCalledOnce();
     expect(api.proposals.markApplied).not.toHaveBeenCalled();
     expect(api.proposals.markApplyFailed).toHaveBeenCalledWith(

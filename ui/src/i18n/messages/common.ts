@@ -515,10 +515,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "发布需要 DAO 签名，请保持连接直到部署完成。",
   ],
   "dao.purposeReview": [
-    "Approving creates the community and asks this DAO to publish its settings.",
-    "La aprobación crea la comunidad y pide al DAO que publique su configuración.",
-    "L’approbation crée la communauté et demande au DAO de publier ses paramètres.",
-    "批准后将创建社区，并请求此 DAO 发布设置。",
+    "DAO connection is optional for review and is used to publish settings.",
+    "La conexión del DAO es opcional para la revisión y se usa para publicar la configuración.",
+    "La connexion de la DAO est facultative pour l’examen et sert à publier les paramètres.",
+    "审核时可选择连接 DAO，以便发布设置。",
   ],
   "dao.verification.checking": [
     "Checking DAO…",

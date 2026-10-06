@@ -52,7 +52,7 @@ export function ProposalReviewActions({
       {isNodeProposal && (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            {translate("admin.connectApproveNamed", {
+            {translate("admin.proposedDaoNamed", {
               account: proposalDaoAccountId ?? translate("admin.proposal.daoFallback"),
             })}
           </p>
@@ -67,11 +67,7 @@ export function ProposalReviewActions({
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <Button
-            onClick={onApprove}
-            disabled={isReviewing || !daoIsVerified}
-            data-testid="admin-proposal-approve"
-          >
+          <Button onClick={onApprove} disabled={isReviewing} data-testid="admin-proposal-approve">
             <CheckIcon />
             {isReviewing ? translate("admin.proposal.approving") : translate("common.approve")}
           </Button>

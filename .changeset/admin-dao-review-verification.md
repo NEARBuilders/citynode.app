@@ -2,4 +2,4 @@
 "ui": patch
 ---
 
-Allow platform admins to review community proposals while signed in with a NEAR account outside the proposed DAO. Verify the connected Sputnik DAO and its account without applying the applicant membership check to the admin.
+Allow platform admins to approve community proposals without joining or connecting the proposed DAO. Verify an optional connected Sputnik DAO for publication without applying the applicant membership check to the admin.
