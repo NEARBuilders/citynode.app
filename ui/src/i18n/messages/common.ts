@@ -515,10 +515,34 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "发布需要 DAO 签名，请保持连接直到部署完成。",
   ],
   "dao.purposeReview": [
-    "Approving creates the community and asks this DAO to publish its settings.",
-    "La aprobación crea la comunidad y pide al DAO que publique su configuración.",
-    "L’approbation crée la communauté et demande au DAO de publier ses paramètres.",
-    "批准后将创建社区，并请求此 DAO 发布设置。",
+    "DAO connection is optional for review and is used to publish settings.",
+    "La conexión del DAO es opcional para la revisión y se usa para publicar la configuración.",
+    "La connexion de la DAO est facultative pour l’examen et sert à publier les paramètres.",
+    "审核时可选择连接 DAO，以便发布设置。",
+  ],
+  "dao.verification.checking": [
+    "Checking DAO…",
+    "Comprobando DAO…",
+    "Vérification de la DAO…",
+    "正在验证 DAO…",
+  ],
+  "dao.verification.verified": [
+    "Sputnik DAO verified",
+    "DAO Sputnik verificada",
+    "DAO Sputnik vérifiée",
+    "Sputnik DAO 已验证",
+  ],
+  "dao.verification.wrongAccount": [
+    "Connect {account} to review this application.",
+    "Conecta {account} para revisar esta solicitud.",
+    "Connectez {account} pour examiner cette demande.",
+    "请连接 {account} 以审核此申请。",
+  ],
+  "dao.verification.error": [
+    "Couldn't verify this DAO. Try again.",
+    "No se pudo verificar este DAO. Inténtalo de nuevo.",
+    "Impossible de vérifier cette DAO. Réessayez.",
+    "无法验证此 DAO，请重试。",
   ],
   "dao.purposeSettings": [
     "Changes to this community are signed by its DAO.",

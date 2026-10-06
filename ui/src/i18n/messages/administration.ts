@@ -183,11 +183,11 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "configuration non publiée — approuvez dans Trezu si elle est en attente",
     "配置尚未发布，如有待处理提案，请在 Trezu 中批准",
   ],
-  "admin.connectApproveNamed": [
-    "Connect {account} to approve.",
-    "Conecta {account} para aprobar.",
-    "Connectez {account} pour approuver.",
-    "连接 {account} 以批准。",
+  "admin.proposedDaoNamed": [
+    "Proposed DAO: {account}. Connect it to publish settings during approval.",
+    "DAO propuesto: {account}. Conéctalo para publicar la configuración durante la aprobación.",
+    "DAO proposée : {account}. Connectez-la pour publier ses paramètres lors de l’approbation.",
+    "提案中的 DAO：{account}。如需在批准时发布设置，请连接该 DAO。",
   ],
   "admin.decisionsFailed": [
     "Decisions could not be loaded. Try again.",
@@ -387,10 +387,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "提案中的 DAO",
   ],
   "admin.proposal.daoHint": [
-    "Approve unlocks once the DAO is verified.",
-    "La aprobación se habilita al verificar el DAO.",
-    "L'approbation est disponible après vérification de la DAO.",
-    "验证 DAO 后即可批准。",
+    "Approval can proceed without a DAO connection. Publishing settings may need a follow-up.",
+    "Puedes aprobar sin conectar el DAO. La publicación de la configuración podría requerir un paso posterior.",
+    "Vous pouvez approuver sans connecter la DAO. La publication des paramètres peut nécessiter une étape ultérieure.",
+    "无需连接 DAO 即可批准。发布设置可能需要后续处理。",
   ],
   "admin.proposal.decision": ["Decision", "Decisión", "Décision", "决定"],
   "admin.proposal.description": [

@@ -132,7 +132,8 @@ describe("proposal review UI seams", () => {
     expect(onDaoVerified).not.toHaveBeenCalled();
   });
 
-  it("locks approval until the proposal DAO is verified", () => {
+  it("allows admin approval without a connected DAO", () => {
+    const onApprove = vi.fn();
     render(
       <ProposalReviewActions
         isPending
@@ -143,12 +144,15 @@ describe("proposal review UI seams", () => {
         isReviewing={false}
         onDaoVerified={vi.fn()}
         onRejectionReasonChange={vi.fn()}
-        onApprove={vi.fn()}
+        onApprove={onApprove}
         onReject={vi.fn()}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Approve" })).toHaveProperty("disabled", true);
-    expect(screen.getByText("Approve unlocks once the DAO is verified.")).toBeTruthy();
+    const approve = screen.getByRole("button", { name: "Approve" });
+    expect(approve).toHaveProperty("disabled", false);
+    expect(screen.getByText(/Approval can proceed without a DAO connection/)).toBeTruthy();
+    fireEvent.click(approve);
+    expect(onApprove).toHaveBeenCalledOnce();
   });
 });

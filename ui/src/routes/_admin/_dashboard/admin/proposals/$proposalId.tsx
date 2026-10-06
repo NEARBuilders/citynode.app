@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getGatewayId, useApiClient } from "@/app";
 import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from "@/components";
-import { AppActionError, appErrorMessage } from "@/i18n/error-message";
+import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
@@ -80,10 +80,13 @@ function ProposalDetailPage() {
   const reviewHistoryQuery = useQuery(proposalReviewHistoryQueryOptions(apiClient, pluginId));
 
   useEffect(() => {
-    if (verifiedDaoAccountId && verifiedDaoAccountId !== daoConnection.daoAccountId) {
+    if (
+      verifiedDaoAccountId &&
+      (daoConnection.status !== "connected" || verifiedDaoAccountId !== daoConnection.daoAccountId)
+    ) {
       setVerifiedDaoAccountId(null);
     }
-  }, [daoConnection.daoAccountId, verifiedDaoAccountId]);
+  }, [daoConnection.daoAccountId, daoConnection.status, verifiedDaoAccountId]);
 
   const reviewMutation = useMutation({
     mutationFn: async ({
@@ -108,19 +111,6 @@ function ProposalDetailPage() {
           reason: reason?.trim() ?? "",
         });
         return { action, proposal: rejected.data };
-      }
-
-      if (proposal.pluginId === "node") {
-        const payload = nodeProposalPayloadSchema.parse(proposal.payload);
-        if (
-          !daoConnection.daoAccountId ||
-          daoConnection.daoAccountId !== payload.accountId ||
-          verifiedDaoAccountId !== payload.accountId
-        ) {
-          throw new AppActionError("proposal.verifyDaoBeforeApproval", {
-            account: payload.accountId,
-          });
-        }
       }
 
       const reviewedProposal = await approveAndApplyProposal({
@@ -210,6 +200,7 @@ function ProposalDetailPage() {
   const daoIsVerified =
     proposal.pluginId !== "node" ||
     (!!proposalDaoAccountId &&
+      daoConnection.status === "connected" &&
       daoConnection.daoAccountId === proposalDaoAccountId &&
       verifiedDaoAccountId === proposalDaoAccountId);
 
