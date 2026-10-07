@@ -130,6 +130,20 @@ export declare const ProposalEventSchema: z.ZodObject<{
     submissionCount: z.ZodNumber;
     timestamp: z.ZodISODateTime;
 }, z.core.$strip>;
+export declare const NodeApplicationPayloadSchema: z.ZodObject<{
+    kind: z.ZodEnum<{
+        city: "city";
+        country: "country";
+        state: "state";
+    }>;
+    parentId: z.ZodNullable<z.ZodString>;
+    name: z.ZodString;
+    slug: z.ZodString;
+    motivation: z.ZodString;
+    orgId: z.ZodString;
+    accountId: z.ZodString;
+    submitterAccountId: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
 export declare const contract: {
     propose: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         pluginId: z.ZodString;
@@ -188,6 +202,13 @@ export declare const contract: {
                 }>>;
             }, z.core.$strip>;
         };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
         BAD_REQUEST: {
             readonly status: 400;
             readonly data: z.ZodObject<{
@@ -197,6 +218,57 @@ export declare const contract: {
                     message: z.ZodString;
                     code: z.ZodOptional<z.ZodString>;
                 }, z.core.$strip>>>;
+            }, z.core.$strip>;
+        };
+    }>;
+    getMyNodeApplications: import("@orpc/contract").ProcedureContract<import("@orpc/contract").InitialInputSchema, z.ZodObject<{
+        data: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            pluginId: z.ZodString;
+            entityId: z.ZodString;
+            operation: z.ZodLiteral<"create">;
+            payload: z.ZodUnknown;
+            schemaVersion: z.ZodString;
+            createdBy: z.ZodString;
+            reviewStatus: z.ZodEnum<{
+                approved: "approved";
+                pending: "pending";
+                rejected: "rejected";
+                removed: "removed";
+            }>;
+            applyStatus: z.ZodEnum<{
+                applied: "applied";
+                applying: "applying";
+                failed: "failed";
+                not_started: "not_started";
+            }>;
+            removeStatus: z.ZodEnum<{
+                failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
+                removing: "removing";
+            }>;
+            rejectionReason: z.ZodNullable<z.ZodString>;
+            applyError: z.ZodNullable<z.ZodString>;
+            removeError: z.ZodNullable<z.ZodString>;
+            appliedResourceId: z.ZodNullable<z.ZodString>;
+            submissionCount: z.ZodNumber;
+            appliedAt: z.ZodNullable<z.ZodISODateTime>;
+            removedAt: z.ZodNullable<z.ZodISODateTime>;
+            createdAt: z.ZodISODateTime;
+            updatedAt: z.ZodISODateTime;
+        }, z.core.$strip>>;
+    }, z.core.$strip>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
             }, z.core.$strip>;
         };
     }>;

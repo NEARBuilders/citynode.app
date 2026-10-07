@@ -402,6 +402,7 @@
         "@orpc/server": "catalog:",
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
+        "near-kit": "catalog:",
         "pg": "catalog:",
         "zod": "catalog:",
       },

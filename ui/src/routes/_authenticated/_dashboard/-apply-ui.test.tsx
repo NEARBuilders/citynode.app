@@ -16,7 +16,7 @@ type ApplyApiClient = {
   listRootNodes: ReturnType<typeof vi.fn>;
   listChildren: ReturnType<typeof vi.fn>;
   bindingPreflight: ReturnType<typeof vi.fn>;
-  proposals: { propose: ReturnType<typeof vi.fn> };
+  proposals: { propose: ReturnType<typeof vi.fn>; getMyNodeApplications: ReturnType<typeof vi.fn> };
 };
 
 type ApplyAuthClient = {
@@ -128,6 +128,7 @@ function createApiClient(): ApplyApiClient {
     }),
     proposals: {
       propose: vi.fn().mockResolvedValue({ data: { id: "proposal-1" } }),
+      getMyNodeApplications: vi.fn().mockResolvedValue({ data: [] }),
     },
   };
 }
@@ -241,12 +242,13 @@ describe("apply route submission", () => {
           submitterAccountId: "applicant.near",
         },
         source: "/apply",
+        idempotencyKey: expect.any(String),
       }),
     );
-    expect(await screen.findByText("Application submitted")).toBeTruthy();
+    expect(await screen.findByText("Your community application")).toBeTruthy();
     expect(screen.getByText("proposal-1")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "View proposals" }).getAttribute("href")).toBe(
-      "/dashboard/node/proposals",
+    expect(screen.getByRole("link", { name: "View application status" }).getAttribute("href")).toBe(
+      "/apply",
     );
     await waitFor(() => {
       expect(
@@ -260,6 +262,34 @@ describe("apply route submission", () => {
     expect(
       queryClient.getQueryState(tenantQueryKeys.preflight("chicago.citynode.app"))?.isInvalidated,
     ).toBe(false);
+  });
+
+  it.each([
+    ["pending", "not_started", "Awaiting review"],
+    ["approved", "applied", "Live"],
+    ["rejected", "not_started", "Rejected"],
+    ["approved", "failed", "Apply failed"],
+  ])("shows %s/%s application status after reload", async (reviewStatus, applyStatus, expected) => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus,
+          applyStatus,
+          rejectionReason: reviewStatus === "rejected" ? "More detail needed" : null,
+          payload: { name: "Chicago" },
+        },
+      ],
+    });
+    renderApply();
+    expect((await screen.findByTestId("apply.current-status")).textContent).toBe(expected);
+    expect(screen.getByText("existing-1")).toBeTruthy();
+    expect(screen.queryByTestId("apply.submit")).toBeNull();
+    if (reviewStatus === "rejected") {
+      expect(screen.getByText("More detail needed")).toBeTruthy();
+      fireEvent.click(screen.getByTestId("apply.revise"));
+      expect(screen.getByTestId("apply.steps")).toBeTruthy();
+    }
   });
 
   it.each([

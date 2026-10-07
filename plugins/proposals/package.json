@@ -24,6 +24,7 @@
     "@electric-sql/pglite": "catalog:",
     "@orpc/publisher": "catalog:",
     "effect": "catalog:",
+    "near-kit": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

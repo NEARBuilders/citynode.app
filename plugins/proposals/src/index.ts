@@ -3,9 +3,10 @@ import { ORPCError } from "@orpc/server";
 import { Context, DateTime, Effect, Exit, Layer } from "effect";
 import { createPlugin } from "every-plugin";
 import { z } from "zod";
-import { contract, type ProposalEventSchema } from "./contract";
+import { contract, NodeApplicationPayloadSchema, type ProposalEventSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
+import { verifyNodeApplicant } from "./services/node-applicant";
 import { ProposalService, ProposalServiceLive } from "./services/proposals";
 
 type ProposalEvent = z.infer<typeof ProposalEventSchema>;
@@ -146,15 +147,80 @@ export default createPlugin({
         }
         const actorId =
           context.near?.primaryAccountId ?? context.userId ?? context.apiKey?.id ?? "unknown";
+        let submission = input;
+        if (input.pluginId === "node") {
+          const applicantAccountId = context.near?.primaryAccountId;
+          if (!context.userId || !applicantAccountId) {
+            return yield* Effect.fail(
+              new ORPCError("UNAUTHORIZED", { message: "Sign in with a NEAR account to apply" }),
+            );
+          }
+          const parsed = NodeApplicationPayloadSchema.safeParse(input.payload);
+          if (!parsed.success || parsed.data.slug !== input.entityId) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", { message: "Invalid community application payload" }),
+            );
+          }
+          if (parsed.data.orgId !== context.organization?.activeOrganizationId) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", { message: "Select the applicant organization first" }),
+            );
+          }
+          if (
+            parsed.data.submitterAccountId &&
+            parsed.data.submitterAccountId !== applicantAccountId
+          ) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: "Applicant identity does not match the session",
+              }),
+            );
+          }
+          const identity = context.near?.linkedAccounts.find(
+            (account) => account.accountId === applicantAccountId && account.isPrimary,
+          );
+          const networkId = identity?.network === "testnet" ? "testnet" : "mainnet";
+          const eligible = yield* verifyNodeApplicant(
+            parsed.data.accountId,
+            applicantAccountId,
+            networkId,
+          );
+          if (!eligible) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: "The applicant must be an explicit member of the proposed DAO",
+              }),
+            );
+          }
+          submission = {
+            ...input,
+            payload: { ...parsed.data, submitterAccountId: applicantAccountId },
+          };
+        }
         const proposal = yield* ProposalService;
         const result = yield* proposal.propose({
-          ...input,
+          ...submission,
           actorId,
           actor: context.user ?? undefined,
-          resubmissionPolicy: context.resubmissionPolicy,
+          resubmissionPolicy:
+            input.pluginId === "node" ? "rejected-only" : context.resubmissionPolicy,
+          requireSameActor: input.pluginId === "node",
         });
         yield* publishProposalEvent("proposed", result);
         return { data: result };
+      }),
+
+      getMyNodeApplications: builder.getMyNodeApplications.use(requireAuth).effect(function* ({
+        context,
+      }) {
+        const applicantAccountId = context.near?.primaryAccountId;
+        if (!applicantAccountId) {
+          return yield* Effect.fail(
+            new ORPCError("UNAUTHORIZED", { message: "Sign in with a NEAR account" }),
+          );
+        }
+        const proposal = yield* ProposalService;
+        return { data: yield* proposal.getMyNodeApplications(applicantAccountId) };
       }),
 
       approve: builder.approve.use(requireAdmin).effect(function* ({ input, context }) {
