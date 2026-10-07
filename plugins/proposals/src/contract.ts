@@ -72,6 +72,35 @@ export const ProposalEventSchema = z.object({
   timestamp: z.iso.datetime(),
 });
 
+export const NodeApplicationPayloadSchema = z
+  .object({
+    kind: z.enum(["country", "state", "city"]),
+    parentId: z.string().nullable(),
+    name: z.string().trim().min(1),
+    slug: z
+      .string()
+      .min(1)
+      .regex(/^[a-z0-9-]+$/),
+    motivation: z.string().trim().min(1),
+    orgId: z.string().min(1),
+    accountId: z
+      .string()
+      .regex(/^(?=.{2,64}$)[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-_][a-z0-9]+)*)*$/),
+    submitterAccountId: z.string().optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.kind === "country" && value.parentId !== null) {
+      context.addIssue({
+        code: "custom",
+        path: ["parentId"],
+        message: "Country cannot have a parent",
+      });
+    }
+    if (value.kind !== "country" && !value.parentId) {
+      context.addIssue({ code: "custom", path: ["parentId"], message: "Parent is required" });
+    }
+  });
+
 export const contract = oc.router({
   propose: oc
     .route({ method: "POST", path: "/v1/proposals" })
@@ -86,7 +115,12 @@ export const contract = oc.router({
       }),
     )
     .output(z.object({ data: ProposalSchema }))
-    .errors({ UNAUTHORIZED, BAD_REQUEST }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
+
+  getMyNodeApplications: oc
+    .route({ method: "GET", path: "/v1/proposals/node/mine" })
+    .output(z.object({ data: z.array(ProposalSchema) }))
+    .errors({ UNAUTHORIZED }),
 
   approve: oc
     .route({ method: "POST", path: "/v1/proposals/{pluginId}/{entityId}/approve" })

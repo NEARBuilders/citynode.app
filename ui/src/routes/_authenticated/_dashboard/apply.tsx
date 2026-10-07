@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { getGatewayId, useApiClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
+import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import { AppActionError, appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
@@ -28,6 +29,7 @@ import { ApplySubmitted } from "./-apply-submitted";
 import {
   canSubmitNodeApplication,
   getDefaultOrganizationId,
+  myNodeApplicationsQueryOptions,
   type NodeApplicationValues,
   proposeNodeApplication,
   resolveActiveOrganizationLabel,
@@ -78,6 +80,7 @@ function ApplyPage() {
   const slugManuallyEdited = useRef(false);
   const [rootParentId, setRootParentId] = useState(initialRootNodes[0]?.id ?? "");
   const [submittedProposalId, setSubmittedProposalId] = useState<string | null>(null);
+  const [revising, setRevising] = useState(false);
   const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
   const [reopenedStep, setReopenedStep] = useState<ApplyStepId | null>(null);
   const handleDaoVerified = useCallback(
@@ -108,6 +111,7 @@ function ApplyPage() {
       });
       try {
         await invalidateProposalQueries(queryClient);
+        await queryClient.invalidateQueries({ queryKey: ["my-node-applications", nearAccountId] });
       } catch {
         toast.warning(t("apply.success.refresh"));
       }
@@ -119,6 +123,10 @@ function ApplyPage() {
   const hostname = formValues.slug && gatewayId ? `${formValues.slug}.${gatewayId}` : "";
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
+  const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
+  const existingApplication = submittedProposalId
+    ? myApplications.data?.data.find((proposal) => proposal.id === submittedProposalId)
+    : myApplications.data?.data[0];
   const rootNodes = queriedRootNodes ?? initialRootNodes;
   const { data: organizations = [] } = useQuery(organizationsQueryOptions(apiClient));
   const defaultOrgId = getDefaultOrganizationId(activeOrgId, organizations);
@@ -166,8 +174,47 @@ function ApplyPage() {
     reopenedStep,
   );
 
-  if (submittedProposalId) {
-    return <ApplySubmitted proposalId={submittedProposalId} name={formValues.name.trim()} />;
+  if (nearAccountId && myApplications.isError && !submittedProposalId) {
+    return (
+      <PageContainer variant="narrow">
+        <p role="alert">{t("dashboard.proposalLoadError")}</p>
+        <Button variant="outline" onClick={() => void myApplications.refetch()}>
+          {t("common.retry")}
+        </Button>
+      </PageContainer>
+    );
+  }
+
+  if (submittedProposalId || (existingApplication && !revising)) {
+    return (
+      <ApplySubmitted
+        proposalId={existingApplication?.id ?? submittedProposalId ?? ""}
+        name={
+          typeof (existingApplication?.payload as { name?: unknown } | undefined)?.name === "string"
+            ? (existingApplication?.payload as { name: string }).name
+            : formValues.name.trim()
+        }
+        reviewStatus={existingApplication?.reviewStatus ?? "pending"}
+        applyStatus={existingApplication?.applyStatus ?? "not_started"}
+        rejectionReason={existingApplication?.rejectionReason ?? null}
+        onRevise={
+          existingApplication?.reviewStatus === "rejected" && !submittedProposalId
+            ? () => {
+                const prior = existingApplication.payload as Partial<NodeApplicationValues>;
+                form.reset({
+                  kind: prior.kind ?? "country",
+                  parentId: prior.parentId ?? null,
+                  name: prior.name ?? "",
+                  slug: prior.slug ?? "",
+                  motivation: prior.motivation ?? "",
+                });
+                setRevising(true);
+              }
+            : undefined
+        }
+        onApplyAgain={!submittedProposalId ? () => setRevising(true) : undefined}
+      />
+    );
   }
 
   return (

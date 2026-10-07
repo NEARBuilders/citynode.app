@@ -138,5 +138,14 @@ export function proposeNodeApplication(
     entityId: payload.slug,
     payload,
     source: "/apply",
+    idempotencyKey: crypto.randomUUID(),
   });
+}
+
+export function myNodeApplicationsQueryOptions(apiClient: ApiClient, applicantAccountId: string) {
+  return {
+    queryKey: ["my-node-applications", applicantAccountId] as const,
+    queryFn: () => apiClient.proposals.getMyNodeApplications(),
+    enabled: !!applicantAccountId,
+  };
 }

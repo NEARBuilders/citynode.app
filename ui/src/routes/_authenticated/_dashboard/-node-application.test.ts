@@ -108,6 +108,7 @@ describe("node application", () => {
       pluginId: "node",
       entityId: "chicago",
       source: "/apply",
+      idempotencyKey: expect.any(String),
       payload: {
         kind: "city",
         parentId: "state-id",

@@ -140,6 +140,7 @@ export class ProposalService extends Context.Service<
       actorId: string;
       actor?: { name?: string; email?: string };
       resubmissionPolicy?: ResubmissionPolicy;
+      requireSameActor?: boolean;
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
     approve: (input: {
       pluginId: string;
@@ -205,6 +206,7 @@ export class ProposalService extends Context.Service<
       viewerId?: string;
       isAdmin?: boolean;
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
+    getMyNodeApplications: (actorId: string) => Effect.Effect<any[], ORPCError<string, unknown>>;
     getProposalCount: (input: {
       pluginId: string;
       entityId: string;
@@ -293,6 +295,32 @@ export const ProposalServiceLive = Layer.effect(
           const proposalId = existing?.id ?? generateId("prop");
           const now = nextTimestamp(existing?.updatedAt);
 
+          if (existing && input.requireSameActor) {
+            if (existing.createdBy !== input.actorId) {
+              return yield* Effect.fail(
+                new ORPCError("FORBIDDEN", {
+                  message: "This community application belongs to another applicant",
+                }),
+              );
+            }
+            const previous = parseJson(existing.payload);
+            const previousOrgId =
+              previous && typeof previous === "object" && "orgId" in previous
+                ? previous.orgId
+                : null;
+            const nextOrgId =
+              input.payload && typeof input.payload === "object" && "orgId" in input.payload
+                ? input.payload.orgId
+                : null;
+            if (previousOrgId !== nextOrgId) {
+              return yield* Effect.fail(
+                new ORPCError("FORBIDDEN", {
+                  message: "This community application belongs to another organization",
+                }),
+              );
+            }
+          }
+
           if (
             existing &&
             (existing.applyStatus === "applying" || existing.removeStatus === "removing")
@@ -339,26 +367,31 @@ export const ProposalServiceLive = Layer.effect(
           const saved = yield* Effect.promise(() =>
             db.transaction(async (tx) => {
               if (!existing) {
-                await tx.insert(proposals).values({
-                  id: proposalId,
-                  pluginId: input.pluginId,
-                  entityId: input.entityId,
-                  operation: "create",
-                  payload: serialize(input.payload),
-                  schemaVersion: "1",
-                  createdBy: input.actorId,
-                  reviewStatus: "pending",
-                  applyStatus: "not_started",
-                  removeStatus: "not_started",
-                  rejectionReason: null,
-                  applyError: null,
-                  removeError: null,
-                  appliedResourceId: null,
-                  appliedAt: null,
-                  removedAt: null,
-                  createdAt: now,
-                  updatedAt: now,
-                });
+                const inserted = await tx
+                  .insert(proposals)
+                  .values({
+                    id: proposalId,
+                    pluginId: input.pluginId,
+                    entityId: input.entityId,
+                    operation: "create",
+                    payload: serialize(input.payload),
+                    schemaVersion: "1",
+                    createdBy: input.actorId,
+                    reviewStatus: "pending",
+                    applyStatus: "not_started",
+                    removeStatus: "not_started",
+                    rejectionReason: null,
+                    applyError: null,
+                    removeError: null,
+                    appliedResourceId: null,
+                    appliedAt: null,
+                    removedAt: null,
+                    createdAt: now,
+                    updatedAt: now,
+                  })
+                  .onConflictDoNothing()
+                  .returning({ id: proposals.id });
+                if (!inserted[0]) return false;
               } else {
                 const updated = await tx
                   .update(proposals)
@@ -1026,6 +1059,16 @@ export const ProposalServiceLive = Layer.effect(
               nextCursor: hasMore ? String(nextOffset) : null,
             },
           };
+        }),
+
+      getMyNodeApplications: (actorId) =>
+        Effect.promise(async () => {
+          const rows = await db
+            .select()
+            .from(proposals)
+            .where(and(eq(proposals.pluginId, "node"), eq(proposals.createdBy, actorId)))
+            .orderBy(desc(proposals.updatedAt));
+          return Promise.all(rows.map((row) => loadProposal(db, row.pluginId, row.entityId)));
         }),
 
       getProposalCount: (input) =>
