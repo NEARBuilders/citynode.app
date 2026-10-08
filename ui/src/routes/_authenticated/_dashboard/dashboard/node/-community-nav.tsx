@@ -31,7 +31,7 @@ export function CommunityNav({
     },
     {
       value: "content",
-      label: translate("nav.eventsProfile"),
+      label: translate("events.title"),
       link: (
         <Link
           to="/nodes/$nodeId/content"
@@ -79,7 +79,7 @@ export function CommunityNav({
           {
             value: "settings" as const,
             label: translate("tenant.settings"),
-            link: <Link to="/tenant/$tenantId" params={{ tenantId }} />,
+            link: <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />,
           },
         ]
       : []),

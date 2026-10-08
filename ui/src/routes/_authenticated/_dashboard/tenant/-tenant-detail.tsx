@@ -32,13 +32,26 @@ import {
   invalidatePersistedTenantQueries,
   publishPersistedTenantChange,
 } from "./-tenant-mutations";
+import { TenantProfile } from "./-tenant-profile";
 import { TenantUnavailable } from "./-tenant-unavailable";
+
+export function selectTenantNode<T extends { id: string; name: string }>(
+  nodes: T[],
+  nodeId?: string,
+) {
+  return (
+    nodes.find((node) => node.id === nodeId) ??
+    [...nodes].sort((a, b) => a.name.localeCompare(b.name))[0]
+  );
+}
 
 export function TenantDetailContent({
   tenantId,
+  nodeId,
   runtimeConfig,
 }: {
   tenantId: string;
+  nodeId?: string;
   runtimeConfig?: RouterContext["runtimeConfig"];
 }) {
   const translate = useAppTranslation();
@@ -242,8 +255,9 @@ export function TenantDetailContent({
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
+  const node = selectTenantNode(nodes, nodeId);
   const header = (
-    <CommunityHeader headerTestId="tenant.heading" nodeId={nodes[0]?.id} active="settings" />
+    <CommunityHeader headerTestId="tenant.heading" nodeId={node?.id} active="settings" />
   );
   if (tenantLoading && gatewayId) {
     return (
@@ -281,6 +295,7 @@ export function TenantDetailContent({
             onNameChange: setName,
           }}
         />
+        {node && (isAdmin || isPlatformAdmin) && <TenantProfile nodeId={node.id} />}
         <TenantLiveSite
           tenant={tenant}
           hostname={hostname}

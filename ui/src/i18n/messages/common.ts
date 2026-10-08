@@ -1211,12 +1211,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "nav.editRelayer": ["Edit relayer", "Editar relayer", "Modifier le relais", "编辑中继服务"],
   "nav.editSite": ["Edit site", "Editar sitio", "Modifier le site", "编辑站点"],
   "nav.editSystem": ["Edit system", "Editar sistema", "Modifier le système", "编辑系统"],
-  "nav.eventsProfile": [
-    "Events & profile",
-    "Eventos y perfil",
-    "Événements et profil",
-    "活动与资料",
-  ],
   "nav.explore": ["Explore", "Explorar", "Explorer", "探索"],
   "nav.home": ["Home", "Inicio", "Accueil", "首页"],
   "nav.invitation": ["Invitation", "Invitación", "Invitation", "邀请"],

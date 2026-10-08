@@ -34,12 +34,7 @@ export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
     "Mettez les bonnes communautés en avant et gardez Explorer à jour.",
     "推荐优质社区，并保持探索页面内容准确。",
   ],
-  "directory.editContent": [
-    "Edit events & profile",
-    "Editar eventos y perfil",
-    "Modifier les événements et le profil",
-    "编辑活动和资料",
-  ],
+  "directory.editProfile": ["Edit profile", "Editar perfil", "Modifier le profil", "编辑资料"],
   "directory.engagement": ["Engagement", "Participación", "Engagement", "互动"],
   "directory.feature": [
     "Feature on Explore",

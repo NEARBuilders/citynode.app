@@ -1,4 +1,9 @@
-import { CaretRightIcon, PencilIcon, TreeStructureIcon } from "@phosphor-icons/react";
+import {
+  CalendarDotsIcon,
+  CaretRightIcon,
+  PencilIcon,
+  TreeStructureIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
@@ -130,15 +135,32 @@ function AdminNodeDetail() {
           )
         }
         actions={
-          <Button
-            variant="outline"
-            nativeButton={false}
-            data-testid="admin-node-edit"
-            render={<Link to="/admin/nodes/$nodeId/edit" params={{ nodeId: node.id }} />}
-          >
-            <PencilIcon />
-            {translate("org.editDetails")}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              data-testid="admin-node-events"
+              render={
+                <Link
+                  to="/nodes/$nodeId/content"
+                  params={{ nodeId: node.id }}
+                  search={{ tab: "events" }}
+                />
+              }
+            >
+              <CalendarDotsIcon />
+              {translate("events.title")}
+            </Button>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              data-testid="admin-node-edit"
+              render={<Link to="/admin/nodes/$nodeId/edit" params={{ nodeId: node.id }} />}
+            >
+              <PencilIcon />
+              {translate("org.editDetails")}
+            </Button>
+          </>
         }
         headerTestId="admin-node.heading"
       />

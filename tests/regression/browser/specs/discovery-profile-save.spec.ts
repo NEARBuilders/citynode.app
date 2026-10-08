@@ -1,21 +1,29 @@
 import { expect, test } from "@playwright/test";
+import { seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
-import { injectCookies, seedDiscoveryNode } from "../helpers/seeded";
+import { injectCookies, loadSeedData } from "../helpers/seeded";
 
 test.describe("discovery profile save → Explore", () => {
   test("saving with Show on Explore publishes the community to list and map", async ({ page }) => {
     const pageErrors = collectErrors(page);
-    const node = await seedDiscoveryNode({
-      name: `Karachi Explore ${Date.now().toString(36)}`,
+    const unique = `${process.pid}-${Date.now().toString(36)}`;
+    const tenant = await seedTenant({
+      subdomain: `karachi-${unique}`,
+      name: `Karachi ${unique}`,
+      accountId: `karachi-${unique}.near`,
+      orgId: loadSeedData().orgAID,
+    });
+    const node = await seedNode({
+      tenantId: tenant.id,
+      slug: `karachi-${unique}`,
+      name: `Karachi Explore ${unique}`,
     });
 
     await injectCookies(page);
-    await page.goto(`/nodes/${node.id}/content?tab=profile`, {
-      waitUntil: "domcontentloaded",
-    });
+    await page.goto(`/tenant/${tenant.id}`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await expect(page.getByTestId("content.heading")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("tenant.heading")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("discovery-profile-form")).toBeVisible({ timeout: 15000 });
 
     const published = page.getByTestId("discovery-profile-published");

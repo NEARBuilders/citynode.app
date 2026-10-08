@@ -218,7 +218,7 @@ describe("active state", () => {
     expect(isNavItemActive(explore, "/stake")).toBe(false);
   });
 
-  it("tells Events & profile and Onboarding apart by tab", () => {
+  it("tells Events and Onboarding apart by tab", () => {
     const events = { to: "/nodes/n1/content", search: { tab: "events" } };
     const onboarding = { to: "/nodes/n1/content", search: { tab: "onboarding" } };
     expect(isNavItemActive(events, "/nodes/n1/content", {})).toBe(true);
@@ -263,7 +263,7 @@ describe("breadcrumbs", () => {
     expect(labels("/dashboard")).toEqual(["Home"]);
     expect(labels("/discover")).toEqual(["Directory"]);
     expect(labels("/dashboard/node/proposals")).toEqual(["My community", "Proposals"]);
-    expect(labels("/nodes/abc/content")).toEqual(["My community", "Events & profile"]);
+    expect(labels("/nodes/abc/content")).toEqual(["My community", "Events"]);
     expect(
       crumbsFor("/nodes/abc/content", { tab: "onboarding" }).map((crumb) => crumb.label),
     ).toEqual(["My community", "Onboarding"]);
@@ -282,14 +282,10 @@ describe("breadcrumbs", () => {
   it("names focused form and detail pages under their parent", () => {
     expect(crumbsFor("/nodes/abc/events/new")).toEqual([
       { label: "My community", to: "/dashboard/node" },
-      { label: "Events & profile", to: "/nodes/abc/content" },
+      { label: "Events", to: "/nodes/abc/content" },
       { label: "New event" },
     ]);
-    expect(labels("/nodes/abc/events/e1/edit")).toEqual([
-      "My community",
-      "Events & profile",
-      "Edit event",
-    ]);
+    expect(labels("/nodes/abc/events/e1/edit")).toEqual(["My community", "Events", "Edit event"]);
     expect(crumbsFor("/dashboard/node/proposals/p1")).toEqual([
       { label: "My community", to: "/dashboard/node" },
       { label: "Proposals", to: "/dashboard/node/proposals" },

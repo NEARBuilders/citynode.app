@@ -369,13 +369,13 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
               nativeButton={false}
               render={
                 <Link
-                  to="/nodes/$nodeId/content"
+                  to="/admin/nodes/$nodeId"
                   params={{ nodeId: node.nodeId }}
                   search={{ tab: "profile" }}
                 />
               }
             >
-              {translate("directory.editContent")}
+              {translate("directory.editProfile")}
             </Button>
           )}
         </section>

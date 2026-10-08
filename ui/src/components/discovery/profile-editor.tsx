@@ -1,10 +1,9 @@
 import { LockSimpleIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
 import { EmptyState } from "@/components/empty-state";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -18,15 +17,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
-import { ActivityEditor } from "./activity-editor";
 
 type Profile = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryProfile"]>>>;
-export type ProfileEditorTab = "profile" | "events";
 
 function profileSaveErrorMessage(error: unknown, t: AppTranslator) {
   return appErrorMessage(error, t, "community.saveError");
@@ -40,30 +36,24 @@ function validateProfile(profile: Profile): AppMessageId | null {
   return null;
 }
 
-export function ProfileEditor({
-  nodeId,
-  defaultTab = "profile",
-  tab,
-  onTabChange,
-}: {
-  nodeId: string;
-  defaultTab?: ProfileEditorTab;
-  tab?: ProfileEditorTab;
-  onTabChange?: (tab: ProfileEditorTab) => void;
-}) {
-  const translate = useAppTranslation();
-  const api = useApiClient();
-  const [localTab, setLocalTab] = useState<ProfileEditorTab>(defaultTab);
-  const current = tab ?? localTab;
-  const select = (next: ProfileEditorTab) => {
-    setLocalTab(next);
-    onTabChange?.(next);
-  };
-  const query = useQuery({
+export function discoveryProfileQueryOptions(api: ApiClient, nodeId: string) {
+  return queryOptions({
     queryKey: ["discovery-profile", nodeId],
     queryFn: () => api.getDiscoveryProfile({ nodeId }),
     retry: false,
   });
+}
+
+export function DiscoveryProfileGate({
+  nodeId,
+  children,
+}: {
+  nodeId: string;
+  children: (profile: Profile) => ReactNode;
+}) {
+  const translate = useAppTranslation();
+  const api = useApiClient();
+  const query = useQuery(discoveryProfileQueryOptions(api, nodeId));
   if (query.isPending)
     return (
       <div className="flex flex-col gap-8">
@@ -79,54 +69,27 @@ export function ProfileEditor({
         description={translate("community.cannotEditHint")}
       />
     );
+  return children(
+    query.data ?? {
+      nodeId,
+      summary: "",
+      location: "",
+      region: "",
+      latitude: null,
+      longitude: null,
+      channels: [],
+      published: false,
+      geocodedLocation: null,
+      geocodeHint: null,
+    },
+  );
+}
+
+export function ProfileEditor({ nodeId }: { nodeId: string }) {
   return (
-    <Tabs
-      value={current}
-      onValueChange={(value) => select(value === "profile" ? "profile" : "events")}
-    >
-      <TabsList>
-        <TabsTrigger value="events" data-testid="content-tab-events">
-          {translate("events.title")}
-        </TabsTrigger>
-        <TabsTrigger value="profile" data-testid="content-tab-profile">
-          {translate("community.profile")}
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="events" className="flex flex-col gap-8 pt-8">
-        {!query.data?.published && (
-          <div
-            className="flex flex-wrap items-center gap-3 text-sm"
-            data-testid="content-not-published"
-          >
-            <Badge variant="warning">{translate("community.hidden")}</Badge>
-            <span className="text-muted-foreground">{translate("community.hiddenHint")}</span>
-            <Button variant="link" size="xs" onClick={() => select("profile")}>
-              {translate("community.openProfile")}
-            </Button>
-          </div>
-        )}
-        <ActivityEditor nodeId={nodeId} />
-      </TabsContent>
-      <TabsContent value="profile" className="pt-8">
-        <ProfileForm
-          key={nodeId}
-          initial={
-            query.data ?? {
-              nodeId,
-              summary: "",
-              location: "",
-              region: "",
-              latitude: null,
-              longitude: null,
-              channels: [],
-              published: false,
-              geocodedLocation: null,
-              geocodeHint: null,
-            }
-          }
-        />
-      </TabsContent>
-    </Tabs>
+    <DiscoveryProfileGate nodeId={nodeId}>
+      {(profile) => <ProfileForm key={nodeId} initial={profile} />}
+    </DiscoveryProfileGate>
   );
 }
 
