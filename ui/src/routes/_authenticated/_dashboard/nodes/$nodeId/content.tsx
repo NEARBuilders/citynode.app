@@ -5,6 +5,7 @@ import { PageContainer } from "@/components";
 import { BulletinEditor } from "@/components/discovery/bulletin-editor";
 import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { EventsEditor } from "@/components/discovery/events-editor";
+import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
@@ -17,7 +18,14 @@ const TABS: readonly ContentTab[] = ["events", "onboarding", "bulletin"];
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
   validateSearch: (search: Record<string, unknown>): { tab?: ContentTab } =>
     TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {},
-  loader: ({ context, params }) => ensureCommunityHeaderData(context, params.nodeId),
+  loader: async ({ context, params }) => {
+    await Promise.all([
+      ensureCommunityHeaderData(context, params.nodeId),
+      context.queryClient.prefetchQuery(
+        discoveryProfileQueryOptions(context.apiClient, params.nodeId),
+      ),
+    ]);
+  },
   head: ({ match }) => ({
     meta: [
       {

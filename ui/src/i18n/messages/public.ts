@@ -68,6 +68,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Retour à Explorer",
     "返回探索页面",
   ],
+  "community.backOverview": [
+    "Back to overview",
+    "Volver al resumen",
+    "Retour à la vue d'ensemble",
+    "返回概览",
+  ],
   "community.bulletinCleared": [
     "Bulletin cleared",
     "Novedades eliminadas",
@@ -196,6 +202,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Usa una URL HTTP(S) para cada enlace",
     "Utilisez une URL HTTP(S) pour chaque lien",
     "请为每个链接使用 HTTP(S) 地址",
+  ],
+  "community.loadProfileError": [
+    "Couldn't load the profile",
+    "No se pudo cargar el perfil",
+    "Impossible de charger le profil",
+    "无法加载资料",
   ],
   "community.local": ["Local community", "Comunidad local", "Communauté locale", "本地社区"],
   "community.locals": [
