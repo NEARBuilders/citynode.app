@@ -4,6 +4,9 @@ import { useAppTranslation } from "@/i18n/runtime";
 import "leaflet/dist/leaflet.css";
 
 type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
+
+const WORLD_COPY_OFFSETS = [-360, 0, 360] as const;
+
 export function GeographicMap({
   nodes,
   onSelect,
@@ -38,6 +41,7 @@ export function GeographicMap({
         if (cancelled || !container.current) return;
         const map = L.map(container.current, {
           scrollWheelZoom: false,
+          worldCopyJump: true,
           minZoom: 2,
           maxZoom: 18,
         }).setView([20, 0], 2);
@@ -80,39 +84,55 @@ export function GeographicMap({
                 : "border-background bg-primary text-primary-foreground"
             }`;
             content.textContent = group.length > 1 ? String(group.length) : "";
-            const marker = L.marker(first.point, {
-              title: label,
-              alt: label,
-              icon: L.divIcon({ html: content, className: "", iconSize: [32, 32] }),
-            }).addTo(markers);
-            marker.getElement()?.setAttribute("aria-label", label);
-            marker.getElement()?.setAttribute("aria-current", active ? "true" : "false");
-            marker
-              .getElement()
-              ?.setAttribute("data-testid", `discovery-map-marker-${first.node.nodeId}`);
-            marker.on("click", () => {
-              if (group.length === 1) {
-                select.current(first.node.nodeId);
-                return;
+            for (const offset of WORLD_COPY_OFFSETS) {
+              const primary = offset === 0;
+              const marker = L.marker([first.point.lat, first.point.lng + offset], {
+                title: label,
+                alt: label,
+                keyboard: primary,
+                icon: L.divIcon({
+                  html: primary ? content : content.outerHTML,
+                  className: "",
+                  iconSize: [32, 32],
+                }),
+              }).addTo(markers);
+              const element = marker.getElement();
+              if (primary) {
+                element?.setAttribute("aria-label", label);
+                element?.setAttribute("aria-current", active ? "true" : "false");
+                element?.setAttribute("data-testid", `discovery-map-marker-${first.node.nodeId}`);
+              } else {
+                element?.setAttribute("aria-hidden", "true");
               }
-              const list = document.createElement("div");
-              list.className = "flex max-h-64 flex-col gap-1 overflow-y-auto";
-              for (const { node } of group) {
-                const button = document.createElement("button");
-                button.type = "button";
-                button.dataset.testid = `discovery-cluster-node-${node.nodeId}`;
-                button.className = "rounded-lg px-3 py-2 text-left text-sm hover:bg-muted";
-                button.textContent = node.name;
-                button.addEventListener("click", () => {
-                  marker.getElement()?.focus();
-                  select.current(node.nodeId);
-                  map.closePopup();
-                });
-                list.append(button);
-              }
-              marker.bindPopup(list).openPopup();
-            });
+              bindSelect(marker, group);
+            }
           }
+        };
+        const bindSelect = (marker: ReturnType<typeof L.marker>, group: typeof points) => {
+          const first = group[0];
+          if (!first) return;
+          marker.on("click", () => {
+            if (group.length === 1) {
+              select.current(first.node.nodeId);
+              return;
+            }
+            const list = document.createElement("div");
+            list.className = "flex max-h-64 flex-col gap-1 overflow-y-auto";
+            for (const { node } of group) {
+              const button = document.createElement("button");
+              button.type = "button";
+              button.dataset.testid = `discovery-cluster-node-${node.nodeId}`;
+              button.className = "rounded-lg px-3 py-2 text-left text-sm hover:bg-muted";
+              button.textContent = node.name;
+              button.addEventListener("click", () => {
+                marker.getElement()?.focus();
+                select.current(node.nodeId);
+                map.closePopup();
+              });
+              list.append(button);
+            }
+            marker.bindPopup(list).openPopup();
+          });
         };
         const update = (next: Node[]) => {
           points = next.flatMap((node) =>
