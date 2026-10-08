@@ -5,9 +5,12 @@ import { pageTitle } from "@/lib/page-title";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantByKeyQueryOptions } from "@/lib/queries/tenants";
 import { ensureCommunityHeaderData } from "../dashboard/node/-community-header";
-import { TenantDetailContent } from "./-tenant-detail";
+import { selectTenantNode, TenantDetailContent } from "./-tenant-detail";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/tenant/$tenantId")({
+  validateSearch: (search: Record<string, unknown>): { nodeId?: string } =>
+    typeof search.nodeId === "string" && search.nodeId ? { nodeId: search.nodeId } : {},
+  loaderDeps: ({ search }) => ({ nodeId: search.nodeId }),
   beforeLoad: async ({ context, params }) => {
     const gateway = getActiveRuntime(context.runtimeConfig)?.gatewayId ?? "";
     const tenant = await context.queryClient.fetchQuery({
@@ -16,11 +19,20 @@ export const Route = createFileRoute("/_authenticated/_dashboard/tenant/$tenantI
     });
     if (!tenant) throw redirect({ to: "/dashboard" });
   },
-  loader: async ({ context, params }) => {
+  loader: async ({ context, params, deps }) => {
     const nodes = await context.queryClient
       .ensureQueryData(tenantNodesQueryOptions(context.apiClient, params.tenantId))
       .catch(() => []);
-    if (nodes[0]) await ensureCommunityHeaderData(context, nodes[0].id);
+    const node = selectTenantNode(nodes, deps.nodeId);
+    if (node && deps.nodeId && deps.nodeId !== node.id) {
+      throw redirect({
+        to: "/tenant/$tenantId",
+        params,
+        search: { nodeId: node.id },
+        replace: true,
+      });
+    }
+    if (node) await ensureCommunityHeaderData(context, node.id);
   },
   head: ({ match }) => ({
     meta: [
@@ -41,6 +53,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/tenant/$tenantI
 
 function TenantDetail() {
   const { tenantId } = Route.useParams();
+  const { nodeId } = Route.useSearch();
   const { runtimeConfig } = Route.useRouteContext();
-  return <TenantDetailContent tenantId={tenantId} runtimeConfig={runtimeConfig} />;
+  return <TenantDetailContent tenantId={tenantId} nodeId={nodeId} runtimeConfig={runtimeConfig} />;
 }

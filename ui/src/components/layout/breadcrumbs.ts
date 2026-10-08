@@ -96,19 +96,13 @@ export function crumbsFor(
       return [page(MY_COMMUNITY.label)];
     case "nodes":
       if (third === "events" && second) {
-        const events = { label: t("nav.eventsProfile"), to: `/nodes/${second}/content` };
+        const events = { label: t("events.title"), to: `/nodes/${second}/content` };
         if (fourth === "new") return [MY_COMMUNITY, events, page(t("nav.newEvent"))];
         if (fifth === "edit") return [MY_COMMUNITY, events, page(t("nav.editEvent"))];
       }
       return [
         MY_COMMUNITY,
-        page(
-          context.tab === "onboarding"
-            ? t("nav.onboarding")
-            : context.tab === "profile"
-              ? t("nav.profile")
-              : t("nav.eventsProfile"),
-        ),
+        page(context.tab === "onboarding" ? t("nav.onboarding") : t("events.title")),
       ];
     case "tenant":
       return [MY_COMMUNITY, page(t("nav.communitySettings"))];

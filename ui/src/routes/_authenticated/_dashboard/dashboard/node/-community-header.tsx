@@ -92,7 +92,13 @@ export function CommunityHeader({
   const siteUrl = node && gateway ? buildTenantUrl(node.slug, gateway) : null;
 
   const switchTo = (targetId: string) => {
-    if (active === "proposals") {
+    if (active === "settings" && node?.tenantId) {
+      void navigate({
+        to: "/tenant/$tenantId",
+        params: { tenantId: node.tenantId },
+        search: { nodeId: targetId },
+      });
+    } else if (active === "proposals") {
       void navigate({ to: "/dashboard/node/proposals", search: { nodeId: targetId } });
     } else if (active === "content" || active === "onboarding" || active === "bulletin") {
       void navigate({
@@ -148,6 +154,7 @@ export function CommunityHeader({
               >
                 <SelectTrigger
                   id="managed-node"
+                  data-testid="community-switcher"
                   aria-label={translate("dashboard.switchCommunity")}
                   className="w-full sm:w-auto"
                 >

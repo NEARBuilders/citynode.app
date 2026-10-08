@@ -99,7 +99,7 @@ and JSON.
 ## Glossary (use exactly)
 
 Home (`/dashboard`) · Explore (`/explore`) · Directory (`/discover`) · My community
-(`/dashboard/node`) · Events & profile (`/nodes/$id/content`) · Proposals · Community
+(`/dashboard/node`) · Events (`/nodes/$id/content`) · Proposals · Community
 settings (`/tenant/$id`) · Organizations · Stake · Start a community (`/apply`) · Settings.
 
 ## Test ids

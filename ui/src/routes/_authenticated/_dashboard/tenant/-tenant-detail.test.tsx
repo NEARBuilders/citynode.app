@@ -7,7 +7,7 @@ import type { RouterContext } from "@/app";
 import { render } from "@/i18n/test-render";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
-import { TenantDetailContent } from "./-tenant-detail";
+import { selectTenantNode, TenantDetailContent } from "./-tenant-detail";
 
 const TENANT_ID = "00000000-0000-4000-8000-000000000071";
 const GATEWAY_ID = "citynode.app";
@@ -20,7 +20,7 @@ type MemberRole = "owner" | "admin" | "member";
 type Tenant = {
   id: string;
   accountId: string;
-  orgId: string;
+  orgId: string | null;
   name: string;
   status: TenantStatus;
   ownerKind: "platform" | "dao";
@@ -127,6 +127,10 @@ vi.mock("../dashboard/node/-community-header", () => ({
 
 vi.mock("./-node-validators", () => ({
   TenantNodeValidators: () => <div data-testid="tenant-node-validators" />,
+}));
+
+vi.mock("./-tenant-profile", () => ({
+  TenantProfile: () => <div data-testid="tenant-profile" />,
 }));
 
 function makeTenant(status: TenantStatus = "active", name = "Original tenant"): Tenant {
@@ -500,5 +504,31 @@ describe("tenant detail mutations", () => {
     expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
     expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
+    expect(screen.queryByTestId("tenant-profile")).toBeNull();
+  });
+
+  it("hides the profile editor from a personal owner the profile API would reject", async () => {
+    const current = createHarness();
+    current.server.tenant = { ...current.server.tenant, orgId: null, accountId: "wallet.near" };
+    renderTenant(current);
+
+    await screen.findByText("Original tenant");
+    expect(screen.queryByTestId("tenant-profile")).toBeNull();
+  });
+});
+
+describe("selectTenantNode", () => {
+  const nodes = [
+    { id: "n-zeta", name: "Zeta" },
+    { id: "n-alpha", name: "Alpha" },
+  ];
+
+  it("selects the requested community", () => {
+    expect(selectTenantNode(nodes, "n-zeta")?.id).toBe("n-zeta");
+  });
+
+  it("falls back to the first community by name, matching the dashboard", () => {
+    expect(selectTenantNode(nodes)?.id).toBe("n-alpha");
+    expect(selectTenantNode(nodes, "unknown")?.id).toBe("n-alpha");
   });
 });

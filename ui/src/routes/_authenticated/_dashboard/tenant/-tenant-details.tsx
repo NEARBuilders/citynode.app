@@ -65,7 +65,11 @@ export function TenantDetails({
                 onChange={(event) => editor.onNameChange(event.target.value)}
                 className="min-w-0 flex-1"
               />
-              <Button type="submit" disabled={editor.isPending || !editor.name.trim()}>
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={editor.isPending || !editor.name.trim()}
+              >
                 {editor.isPending ? translate("common.saving") : translate("common.save")}
               </Button>
               <Button type="button" variant="ghost" onClick={editor.onCancel}>
