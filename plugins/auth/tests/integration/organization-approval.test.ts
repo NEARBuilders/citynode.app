@@ -418,6 +418,36 @@ describe("organization approval gate", () => {
     ).toEqual([expect.objectContaining({ userId: requester.userId, role: "owner" })]);
   });
 
+  it.each([
+    "pending",
+    "rejected",
+  ])("rejects outsiders adding themselves to %s organizations without revealing the status", async (status) => {
+    const requester = await createTestUser(setup.services);
+    const outsider = await createTestUser(setup.services);
+    const organization = await requestOrganization(requester);
+    const handlers = createTestHandlers(setup.services);
+    if (status === "rejected") {
+      await handlers.organizationRequests.reviewOrganization({
+        input: { organizationId: organization.id, decision: "reject", reason: "Not approved" },
+        context: { reqHeaders: admin.reqHeaders },
+      });
+    }
+    await expect(
+      handlers.members.addMember({
+        input: { userId: outsider.userId, role: "owner", organizationId: organization.id },
+        context: { reqHeaders: outsider.reqHeaders },
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Only organization owners and admins can add members",
+    });
+    expect(
+      await setup.services.db.query.member.findMany({
+        where: eq(schema.member.organizationId, organization.id),
+      }),
+    ).toEqual([expect.objectContaining({ userId: requester.userId, role: "owner" })]);
+  });
+
   it("preserves an approved organization after the requester account is removed", async () => {
     const requester = await createTestUser(setup.services);
     const successor = await createTestUser(setup.services);
