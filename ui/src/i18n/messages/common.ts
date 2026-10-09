@@ -117,12 +117,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Annonce du tableau de bord",
     "控制台公告",
   ],
-  "bulletin.description": [
-    "See what we're building",
-    "Mira lo que estamos construyendo",
-    "Découvrez ce que nous préparons",
-    "了解我们正在开发的功能",
-  ],
   "bulletin.editorHint": [
     "A short announcement shown on your community's dashboard and public page. Supports markdown. Leave blank to remove it.",
     "Un anuncio breve en el panel y la página pública de tu comunidad. Admite Markdown. Déjalo vacío para eliminarlo.",
@@ -135,7 +129,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "De nouvelles fonctionnalités arrivent bientôt…",
     "更多功能即将推出…",
   ],
-  "bulletin.features": ["new features", "nuevas funciones", "nouvelles fonctionnalités", "新功能"],
   "bulletin.save": ["Save bulletin", "Guardar anuncio", "Enregistrer l'annonce", "保存公告"],
   "bulletin.title": ["Bulletin", "Novedades", "Actualités", "公告"],
   "calendar.choose": [
