@@ -120,6 +120,8 @@ import type {
   RenderOptions as BaseRenderOptions,
   RouterContextWithApi as BaseRouterContextWithApi,
 } from "everything-dev/ui/types";
+import { APP_LOCALE_COOKIE, APP_LOCALES, DEFAULT_APP_LOCALE } from "./i18n/catalogs";
+import { translateAppMessage } from "./i18n/runtime";
 import type { SessionData } from "./lib/auth";
 
 export type {
@@ -149,4 +151,24 @@ export interface RenderOptions extends Omit<BaseRenderOptions<SessionData>, "run
   runtimeConfig: BaseRenderOptions<SessionData>["runtimeConfig"];
   apiClient: ApiClient;
   authClient?: AuthClientType;
+}
+
+/**
+ * SSR locale negotiation config — consumed by the generated SSR router stub.
+ */
+export const appLocale = {
+  locales: APP_LOCALES,
+  defaultLocale: DEFAULT_APP_LOCALE,
+  cookieName: APP_LOCALE_COOKIE,
+};
+
+/**
+ * API connection-error copy — consumed by the generated hydrate stub and
+ * surfaced by the API client when the RPC connection fails.
+ */
+export function apiConnectionError() {
+  return {
+    title: translateAppMessage("error.apiConnection"),
+    description: translateAppMessage("error.apiUnavailable"),
+  };
 }

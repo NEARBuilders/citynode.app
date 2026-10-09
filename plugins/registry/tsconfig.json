@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "types": ["node"],
-    "lib": ["ESNext", "DOM"],
+    "lib": ["ESNext"],
     "target": "ESNext",
     "module": "ESNext",
     "moduleDetection": "force",
@@ -31,6 +31,7 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "plugin.dev.ts"],
+  "files": ["tests/types.d.ts"],
+  "include": ["src/**/*", "tests/**/*", "plugin.dev.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -2,7 +2,7 @@
   "name": "citynode.app",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.20.0",
+  "packageManager": "pnpm@12.10.1+sha512.ba40a37eb1a370d60fea8c4cf1d364c13bcccef518e98ad2bcee954f539d38da37458e58261a3fa55e06523450ea0ffff9f497b135be41f2c15c1642bacace6c",
   "engines": {
     "node": ">=20.11"
   },
@@ -12,22 +12,31 @@
     "build": "bos build",
     "deploy": "bos deploy",
     "publish": "bos publish",
-    "start": "bos start --no-interactive",
-    "typecheck": "bos typecheck",
-    "test": "pnpm -r --if-present run test",
+    "start": "bos start",
+    "typecheck": "pnpm run types:gen && if [ -d ui ]; then pnpm --dir ui run typecheck; fi && if [ -d api ]; then pnpm --dir api run typecheck; fi && if [ -d plugins ]; then for dir in plugins/*; do if [ -f \"$dir/package.json\" ]; then pnpm --dir \"$dir\" run typecheck; fi; done; fi",
+    "test": "pnpm --dir api run test --if-present && pnpm --dir ui run test --if-present && for d in plugins/*; do [ -f \"$d/package.json\" ] && pnpm --dir \"$d\" run test --if-present; done",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "changeset": "changeset",
     "version": "changeset version",
-    "db:push": "pnpm --filter api db:push",
-    "db:studio": "pnpm --filter api db:studio",
-    "db:generate": "pnpm --filter api db:generate",
-    "db:migrate": "pnpm --filter api db:migrate",
+    "db:push": "pnpm --dir api exec drizzle-kit push",
+    "db:studio": "bos db:studio",
+    "db:generate": "pnpm --dir api exec drizzle-kit generate",
+    "db:migrate": "pnpm --dir api exec drizzle-kit migrate",
     "dev:postgres": "docker compose up -d --wait && pnpm run dev",
     "dev:postgres:down": "docker compose down",
-    "dev:postgres:reset": "docker compose down -v && docker compose up -d --wait"
+    "dev:postgres:reset": "docker compose down -v && docker compose up -d --wait",
+    "dev:proxy": "bos dev --proxy",
+    "release": "echo 'Packages versioned - app release handled by workflow'",
+    "types:gen": "bos types gen",
+    "db:doctor": "bos db:doctor",
+    "db:repair": "bos db:repair",
+    "test:api": "pnpm --dir api run test --if-present",
+    "test:integration": "pnpm --dir api run test tests/integration/ --if-present",
+    "dev:ui": "bos dev --ui local --api remote",
+    "dev:api": "bos dev --ui remote --api local"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
@@ -35,6 +44,7 @@
   },
   "dependencies": {
     "every-plugin": "catalog:",
-    "everything-dev": "catalog:"
+    "everything-dev": "catalog:",
+    "better-near-auth": "catalog:"
   }
 }

@@ -1,5 +1,9 @@
 name: CI
 
+# Thin wrapper — the shared implementation lives in the base runtime repo
+# (NEARBuilders/everything-dev). This repo owns triggers, secret policy, and
+# working directory. The @main ref matches the sync trust model: bos sync
+# already tracks the parent's main for all framework-owned files.
 on:
   push:
     branches: [main]
@@ -8,11 +12,13 @@ on:
       - "docs/**"
       - ".changeset/**"
   pull_request:
+    # Docs-only PRs cannot affect lint/typecheck/tests; changeset-only PRs
+    # have nothing to validate here.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".changeset/**"
   workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -21,3 +27,6 @@ jobs:
   ci:
     name: CI
     uses: NEARBuilders/everything-dev/.github/workflows/consumer-ci.yml@main
+    with:
+      working_directory: .
+    secrets: inherit

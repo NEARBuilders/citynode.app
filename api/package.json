@@ -22,14 +22,15 @@
     "@electric-sql/pglite": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/server": "catalog:",
-    "aws4fetch": "^1.0.20",
+    "aws4fetch": "catalog:",
     "drizzle-kit": "catalog:",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
     "every-plugin": "catalog:",
     "near-kit": "catalog:",
     "pg": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@orpc/openapi": "catalog:"
   },
   "devDependencies": {
     "@module-federation/node": "catalog:",
@@ -47,7 +48,7 @@
   "scripts": {
     "build": "every-plugin build",
     "dev": "every-plugin dev",
-    "test": "vitest run --root . --pool=forks",
+    "test": "vitest run --root . --pool=forks --passWithNoTests",
     "test:watch": "vitest --root .",
     "coverage": "vitest run --root . --coverage",
     "typecheck": "tsc --noEmit",

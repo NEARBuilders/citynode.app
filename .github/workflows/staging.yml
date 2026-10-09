@@ -1,5 +1,9 @@
 name: Staging
 
+# Thin wrapper — the shared implementation lives in the base runtime repo
+# (NEARBuilders/everything-dev). This repo owns triggers, secret policy, and
+# working directory. The @main ref matches the sync trust model: bos sync
+# already tracks the parent's main for all framework-owned files.
 on:
   push:
     branches:
@@ -11,10 +15,6 @@ on:
         type: boolean
         default: false
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   packages: write
@@ -24,5 +24,6 @@ jobs:
     name: Deploy Staging
     uses: NEARBuilders/everything-dev/.github/workflows/consumer-staging.yml@main
     with:
+      working_directory: .
       verbose: ${{ inputs.verbose == true }}
     secrets: inherit
