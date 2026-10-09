@@ -49,7 +49,7 @@ export function ProposalDetails({ proposal }: { proposal: Proposal }) {
   const translate = useAppTranslation();
   return (
     <section className="flex flex-col gap-6">
-      <SectionHeader title={translate("things.details")} />
+      <SectionHeader title={translate("common.details")} />
       <div className="flex flex-col">
         <InfoRow label={translate("admin.proposal.submittedBy")} value={proposal.createdBy} mono />
         <InfoRow
@@ -57,7 +57,7 @@ export function ProposalDetails({ proposal }: { proposal: Proposal }) {
           value={<LocalDate value={proposal.createdAt} format="datetime" />}
         />
         <InfoRow
-          label={translate("things.updated")}
+          label={translate("common.updated")}
           value={<LocalDate value={proposal.updatedAt} format="datetime" />}
         />
         <InfoRow label={translate("admin.proposal.submissions")} value={proposal.submissionCount} />
@@ -103,7 +103,7 @@ export function ProposalOutcome({ proposal }: { proposal: Proposal }) {
         <div className="flex items-start gap-2 text-sm text-destructive" role="alert">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <span className="min-w-0 wrap-anywhere">
-            {translate("things.applyFailedDescription")}
+            {translate("proposal.applyFailedDescription")}
           </span>
         </div>
       )}

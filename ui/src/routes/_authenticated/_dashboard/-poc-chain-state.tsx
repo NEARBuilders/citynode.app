@@ -404,7 +404,7 @@ export function PocChainState({ lc }: { lc: PocLifecycle }) {
                   data-testid="poc-tenant-config"
                 >
                   {facts.configPublished ? (
-                    <Badge variant="success">{translate("things.live")}</Badge>
+                    <Badge variant="success">{translate("common.live")}</Badge>
                   ) : publishPendingProposal ? (
                     <Badge variant="warning">
                       {translate("lifecycle.awaitingProposal", {

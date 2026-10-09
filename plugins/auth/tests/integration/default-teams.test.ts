@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema";
-import { DEFAULT_TEAMS } from "../../src/default-teams";
 import { parseTeamAreas } from "../../src/utils";
 import { createTestOrg, createTestServices, createTestUser } from "../helpers";
 
@@ -46,11 +45,10 @@ describe("default community teams", () => {
     expect(teams.find((team) => team.id === "existing-treasury")?.metadata).toBe(
       '{"areas":["stake"]}',
     );
-    for (const team of DEFAULT_TEAMS.filter((team) => team.name !== "Treasury")) {
-      expect(parseTeamAreas(teams.find((stored) => stored.name === team.name)?.metadata)).toEqual([
-        ...team.areas,
-      ]);
-    }
+    const areasOf = (name: string) =>
+      parseTeamAreas(teams.find((stored) => stored.name === name)?.metadata);
+    expect(areasOf("Operations")).toEqual(["node-operations"]);
+    expect(areasOf("Community")).toEqual(["things", "events"]);
     for (const orgId of [owner.personalOrgId, pending.id, rejected.id]) {
       expect(
         await setup.services.db.query.team.findMany({

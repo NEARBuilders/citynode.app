@@ -175,15 +175,6 @@ export function buildNavItems(
       roleRequired: "member",
       section: "organization",
     },
-    {
-      icon: CubeIcon,
-      label: t("common.things"),
-      slug: "things",
-      to: "/things",
-      roleRequired: "member",
-      area: "things",
-      section: "organization",
-    },
     ...(context.canCurate || context.isAdmin
       ? [
           {

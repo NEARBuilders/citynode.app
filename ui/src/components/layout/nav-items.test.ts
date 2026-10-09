@@ -27,7 +27,7 @@ function flattenSlugs(items: SidebarItem[]): string[] {
 }
 
 describe("sidebar navigation", () => {
-  it("orders the sidebar as Home, Explore, Stake, Build, About, My community, Organization, Things, Directory, Admin", () => {
+  it("orders the sidebar as Home, Explore, Stake, Build, About, My community, Organization, Directory, Admin", () => {
     const labels = filterSidebarByRole(buildNavItems({ isAdmin: true }), "admin").map(
       (item) => item.label,
     );
@@ -39,7 +39,6 @@ describe("sidebar navigation", () => {
       "About",
       "My community",
       "Organization",
-      "Things",
       "Directory",
       "Admin",
     ]);
@@ -56,7 +55,6 @@ describe("sidebar navigation", () => {
         "about",
         "my-node",
         "orgs",
-        "things",
         "discover",
         "admin",
       ]),
@@ -118,14 +116,14 @@ describe("route-aware filtering", () => {
         parentId: "_admin/_dashboard/admin",
       }),
       manifestRoute({
-        id: "_authenticated/_dashboard/things/",
-        path: "/things/",
+        id: "_authenticated/_dashboard/orgs/",
+        path: "/orgs/",
         parentId: "_authenticated/_dashboard",
       }),
       manifestRoute({ id: "_public/", path: "/", isIndex: true, parentId: "_public" }),
     ];
     expect(routePathsFromManifest(routes)).toEqual(
-      new Set(["/about", "/admin", "/admin/system", "/things"]),
+      new Set(["/about", "/admin", "/admin/system", "/orgs"]),
     );
   });
 
@@ -155,7 +153,6 @@ describe("route-aware filtering", () => {
       "/about",
       "/build",
       "/orgs",
-      "/things",
       "/admin",
       "/admin/system",
     ]);
@@ -168,7 +165,6 @@ describe("route-aware filtering", () => {
       "/build",
       "/about",
       "/orgs",
-      "/things",
       "/admin",
     ]);
     const admin = filtered.find((item) => item.to === "/admin");
@@ -235,8 +231,6 @@ describe("team area navigation", () => {
 
     expect(paths).toEqual(expect.arrayContaining(["/explore", "/dashboard", "/stake", "/orgs"]));
     expect(paths).not.toContain("/dashboard/node");
-    expect(paths).not.toContain("/things");
-    expect(paths).not.toContain("/things/new");
   });
 
   it("leaves navigation untouched when unrestricted", () => {
@@ -304,6 +298,6 @@ describe("breadcrumbs", () => {
   });
 
   it("links parent crumbs", () => {
-    expect(crumbsFor("/things/new")[0]).toEqual({ label: "Things", to: "/things" });
+    expect(crumbsFor("/orgs/new")[0]).toEqual({ label: "Organizations", to: "/orgs" });
   });
 });

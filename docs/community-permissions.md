@@ -35,10 +35,12 @@ authority over a DAO or NEAR account.
 | --- | --- |
 | Operations | Node operations (`node-operations`) |
 | Treasury | Finance (`finance`), Stake (`stake`) |
-| Community | Things (`things`), Events (`events`) |
+| Community | Events (`events`) |
 
 Approval creates these teams in the same transaction that activates the org.
-Migration `0011_default-community-teams` provisions already-active organizations.
+Migration `0011_default-community-teams` provisions already-active organizations;
+the Community teams it created also store a `things` grant, which is ignored now
+that `things` is no longer a feature area.
 Activation also repairs active organizations that have not yet been provisioned.
 Personal organizations (whose slug is their user's ID), pending requests, and
 rejected requests are excluded. Existing teams with the same name are preserved,

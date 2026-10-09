@@ -85,7 +85,7 @@ describe("useOrganizationTeams", () => {
     const teams = Array.from({ length: 20 }, (_, index) => ({
       id: `team-${index}`,
       name: `Team ${index}`,
-      areas: ["things"],
+      areas: ["events"],
     }));
     const listTeamMembers = vi.fn(async ({ teamId }: { teamId: string }) => [
       { userId: `${teamId}-member` },
@@ -133,7 +133,7 @@ describe("useOrganizationTeams", () => {
       auth: {
         listTeams: vi
           .fn()
-          .mockResolvedValue([{ id: "team-1", name: "Operations", areas: ["things"] }]),
+          .mockResolvedValue([{ id: "team-1", name: "Operations", areas: ["events"] }]),
         listTeamMembers,
       },
     } as unknown as ApiClient;
@@ -170,11 +170,11 @@ describe("useOrganizationTeams", () => {
     const updateTeam = vi.fn().mockResolvedValue({
       id: "team-1",
       name: "Renamed",
-      areas: ["things"],
+      areas: ["events"],
     });
     const listTeams = vi.fn(async () => {
       if (shouldFailRefresh) throw new Error("team list transport unavailable");
-      return [{ id: "team-1", name: "Operations", areas: ["things"] }];
+      return [{ id: "team-1", name: "Operations", areas: ["events"] }];
     });
     mocks.apiClient = {
       auth: {

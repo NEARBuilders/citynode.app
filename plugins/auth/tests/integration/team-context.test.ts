@@ -179,7 +179,7 @@ describe("listUserTeams", () => {
 
 describe("team area grants", () => {
   it("round-trips areas through create, update and list", async () => {
-    const { owner, org, team, handlers } = await orgWithTeamMember(["things"]);
+    const { owner, org, team, handlers } = await orgWithTeamMember(["events"]);
 
     const updated = await handlers.teams.updateTeam({
       input: { teamId: team.id, organizationId: org.id, data: { areas: ["stake", "finance"] } },

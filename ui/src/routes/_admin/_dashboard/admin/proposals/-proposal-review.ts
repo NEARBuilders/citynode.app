@@ -55,7 +55,6 @@ export function proposalTitle(
 
 export function proposalTypeLabel(pluginId: string, t: AppTranslator = translateEnglishAppMessage) {
   if (pluginId === "node") return t("tenant.communityType");
-  if (pluginId === "template") return t("common.thing");
   return pluginId.charAt(0).toUpperCase() + pluginId.slice(1);
 }
 

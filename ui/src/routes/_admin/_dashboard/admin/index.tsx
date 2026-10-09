@@ -291,7 +291,7 @@ function AdminOverview() {
           {tenant?.createdAt && (
             <ContextRow
               id="created"
-              label={translate("things.created")}
+              label={translate("common.created")}
               value={<LocalDate value={tenant.createdAt} />}
             />
           )}

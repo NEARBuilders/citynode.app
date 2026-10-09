@@ -57,8 +57,6 @@ func TestOpenAPISurface(t *testing.T) {
 		}
 
 		checkPath("/ping")
-		checkPath("/things")
-		checkPath("/things/{thingId}")
 	})
 }
 

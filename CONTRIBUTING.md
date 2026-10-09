@@ -43,7 +43,6 @@ Business logic lives in independent plugins. A plugin entry in `bos.config.json`
 - **`plugins/_template/`** — Scaffold for new plugins
 - **Auth** — Extended remote plugin from `bos://auth.everything.near` (Better-Auth, NEAR SIWN, organizations, API keys)
 - **Proposals** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
-- **Votes** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
 
 Each plugin has its own `contract.ts`, `index.ts`, `rspack.config.js`, and `package.json`. Routes are namespaced in the UI: `apiClient.apps.*()`, `apiClient.proposals.*()`, etc.
 

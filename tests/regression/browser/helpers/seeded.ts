@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 import { seedNode } from "../../lib/seed-tenant.mjs";
 import { waitForApp } from "./page-ready";
 
@@ -48,23 +47,6 @@ function readJsonFile(filePath: string) {
 export async function injectCookies(page: Page) {
   const cookies: CookieEntry[] = readJsonFile(COOKIES_PATH);
   await page.context().addCookies(cookies);
-}
-
-export async function seedRegressionThing() {
-  const { baseUrl } = computeRegressionEnv();
-  const cookies: CookieEntry[] = readJsonFile(COOKIES_PATH);
-  const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
-  const response = await fetch(`${baseUrl}/api/things`, {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie: cookieHeader },
-    body: JSON.stringify({
-      thingId: "regression-plugin-test",
-      payload: { kind: "regression", source: "plugin-passthrough" },
-    }),
-  });
-  if (!response.ok && response.status !== 409) {
-    throw new Error(`seeding regression thing failed: ${response.status} ${await response.text()}`);
-  }
 }
 
 export async function injectAdminCookies(page: Page) {

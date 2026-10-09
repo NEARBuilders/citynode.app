@@ -6,7 +6,7 @@ function proposal(pluginId: string, payload: unknown = {}) {
   return {
     id: "proposal-id",
     pluginId,
-    entityId: pluginId === "node" ? "chicago" : "thing-id",
+    entityId: pluginId === "node" ? "chicago" : "entity-id",
     payload,
     reviewStatus: "pending" as const,
     applyStatus: "not_started" as const,
@@ -41,7 +41,6 @@ function client(initialProposal = proposal("node", nodePayload)) {
         data: { ...approved, applyStatus: "failed", applyError: "creation failed" },
       }),
     },
-    template: { createThing: vi.fn().mockResolvedValue({ thingId: "thing-id" }) },
     applyNodeProposal: vi.fn().mockResolvedValue({ nodeId: "node-id" }),
   };
 }
@@ -84,25 +83,6 @@ describe("proposal application dispatcher", () => {
       title: "Chicago",
     });
     expect(result.applyStatus).toBe("applied");
-  });
-
-  it("preserves template application behavior", async () => {
-    const templateProposal = proposal("template", { title: "Example" });
-    const api = client(templateProposal);
-    const publishTenantConfig = vi.fn().mockResolvedValue(undefined);
-    await approveAndApplyProposal({
-      apiClient: api as unknown as ApiClient,
-      proposal: templateProposal,
-      gatewayId: "citynode.app",
-      baseAccount: "everything.near",
-      publishTenantConfig,
-    });
-
-    expect(api.template.createThing).toHaveBeenCalledWith({
-      thingId: "thing-id",
-      payload: { title: "Example" },
-    });
-    expect(publishTenantConfig).not.toHaveBeenCalled();
   });
 
   it("marks node application failures", async () => {
@@ -159,7 +139,6 @@ describe("proposal application dispatcher", () => {
     });
 
     expect(api.applyNodeProposal).not.toHaveBeenCalled();
-    expect(api.template.createThing).not.toHaveBeenCalled();
     expect(api.proposals.markApplied).not.toHaveBeenCalled();
     expect(result.reviewStatus).toBe("approved");
   });

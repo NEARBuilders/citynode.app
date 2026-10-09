@@ -9,7 +9,6 @@ import { lifecycleMessages } from "./messages/lifecycle";
 import { metadataMessages } from "./messages/metadata";
 import { organizationsMessages } from "./messages/organizations";
 import { publicMessages } from "./messages/public";
-import { thingsMessages } from "./messages/things";
 
 export const appFeatureCatalogs = [
   commonMessages,
@@ -20,7 +19,6 @@ export const appFeatureCatalogs = [
   configurationMessages,
   lifecycleMessages,
   administrationMessages,
-  thingsMessages,
   metadataMessages,
 ] as const;
 
@@ -186,7 +184,6 @@ export const englishAppMessages = {
   ...configurationMessages.en,
   ...lifecycleMessages.en,
   ...administrationMessages.en,
-  ...thingsMessages.en,
   ...metadataMessages.en,
   "locale.saveError": "Could not save your language. Try again.",
   ...englishPublicMessages,
@@ -229,7 +226,6 @@ const spanishAppMessages = {
   ...configurationMessages.es,
   ...lifecycleMessages.es,
   ...administrationMessages.es,
-  ...thingsMessages.es,
   ...metadataMessages.es,
   "locale.saveError": "No se pudo guardar tu idioma. Inténtalo de nuevo.",
   "nav.home": "Inicio de CityNode",
@@ -404,7 +400,6 @@ const frenchAppMessages = {
   ...configurationMessages.fr,
   ...lifecycleMessages.fr,
   ...administrationMessages.fr,
-  ...thingsMessages.fr,
   ...metadataMessages.fr,
   "locale.saveError": "Impossible d’enregistrer votre langue. Réessayez.",
   "nav.home": "Accueil CityNode",
@@ -580,7 +575,6 @@ const chineseAppMessages = {
   ...configurationMessages.zh,
   ...lifecycleMessages.zh,
   ...administrationMessages.zh,
-  ...thingsMessages.zh,
   ...metadataMessages.zh,
   "locale.saveError": "无法保存你的语言，请重试。",
   "nav.home": "CityNode 首页",
