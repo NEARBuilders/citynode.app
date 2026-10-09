@@ -125,43 +125,54 @@ export interface StakePoolAccountView {
   canWithdraw: boolean;
 }
 
-export function stakePoolAccountQueryOptions(options: {
+interface StakePoolAccountOptions {
   poolAccountId: string;
   stakerAccountId: string;
   authClient: AuthClient;
   network?: Network;
   protocol?: string;
-}) {
-  const { poolAccountId, stakerAccountId, authClient, network = "mainnet" } = options;
+}
+
+export async function readStakePoolAccount({
+  poolAccountId,
+  stakerAccountId,
+  authClient,
+  network = "mainnet",
+}: StakePoolAccountOptions): Promise<StakePoolAccountView> {
+  const raw = await callViewFunction(
+    authClient,
+    poolAccountId,
+    "get_account",
+    { account_id: stakerAccountId },
+    network,
+  );
+  const account = z
+    .object({
+      account_id: z.string().min(1),
+      staked_balance: balanceSchema,
+      unstaked_balance: balanceSchema,
+      can_withdraw: z.boolean(),
+    })
+    .parse(raw);
+  return {
+    accountId: account.account_id,
+    stakedBalance: account.staked_balance,
+    unstakedBalance: account.unstaked_balance,
+    canWithdraw: account.can_withdraw,
+  };
+}
+
+export function stakePoolAccountQueryOptions(
+  options: StakePoolAccountOptions & { syncedTo?: number },
+) {
+  const { poolAccountId, stakerAccountId, network = "mainnet", syncedTo } = options;
+  const accountKey = stakePoolQueryKeys.account(poolAccountId, network, stakerAccountId);
   return queryOptions({
-    queryKey: stakePoolQueryKeys.account(poolAccountId, network, stakerAccountId),
+    queryKey: syncedTo === undefined ? accountKey : [...accountKey, syncedTo],
     enabled: canReadPool({ ...options, accountId: poolAccountId }) && !!stakerAccountId,
     staleTime: 5 * 60_000,
     retry: false,
-    queryFn: async () => {
-      const raw = await callViewFunction(
-        authClient,
-        poolAccountId,
-        "get_account",
-        { account_id: stakerAccountId },
-        network,
-      );
-      const account = z
-        .object({
-          account_id: z.string().min(1),
-          staked_balance: balanceSchema,
-          unstaked_balance: balanceSchema,
-          can_withdraw: z.boolean(),
-        })
-        .parse(raw);
-      const view: StakePoolAccountView = {
-        accountId: account.account_id,
-        stakedBalance: account.staked_balance,
-        unstakedBalance: account.unstaked_balance,
-        canWithdraw: account.can_withdraw,
-      };
-      return view;
-    },
+    queryFn: () => readStakePoolAccount(options),
   });
 }
 

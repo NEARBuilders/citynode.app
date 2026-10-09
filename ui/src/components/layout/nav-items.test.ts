@@ -233,6 +233,15 @@ describe("team area navigation", () => {
     expect(paths).not.toContain("/dashboard/node");
   });
 
+  it("shows My community to a Finance-active member, matching the overview route", () => {
+    const paths = flattenPaths(
+      filterSidebarByArea(filterSidebarByRole(NAV_ITEMS, "member"), ["finance", "stake"]),
+    );
+
+    expect(paths).toContain("/dashboard/node");
+    expect(paths).toContain("/stake");
+  });
+
   it("leaves navigation untouched when unrestricted", () => {
     const member = filterSidebarByRole(NAV_ITEMS, "member");
 

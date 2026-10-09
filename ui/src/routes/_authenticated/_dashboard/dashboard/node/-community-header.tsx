@@ -13,6 +13,7 @@ import {
 import { useAppTranslation } from "@/i18n/runtime";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import { teamWorkspaceQueryOptions } from "@/lib/team-workspace";
 import { CommunityNav, type CommunityNavSection } from "./-community-nav";
 
 type CommunityNode = NonNullable<Awaited<ReturnType<ApiClient["getNode"]>>>;
@@ -88,6 +89,7 @@ export function CommunityHeader({
   const authContext = useQuery(communityAuthContextQueryOptions(api, activeOrganizationId));
   const orgRole = authContext.data?.organization?.member?.role;
   const canManage = auth?.isAdmin || orgRole === "owner" || orgRole === "admin";
+  const workspace = useQuery(teamWorkspaceQueryOptions(api));
 
   const siteUrl = node && gateway ? buildTenantUrl(node.slug, gateway) : null;
 
@@ -188,6 +190,7 @@ export function CommunityHeader({
           nodeId={nodeId}
           tenantId={node?.tenantId}
           canManage={canManage}
+          allowedAreas={workspace.data?.allowedAreas ?? null}
           replace={replace}
           testIds={testIds}
         />
