@@ -24,62 +24,7 @@ jobs:
   deploy:
     name: Deploy Production
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
-      BOS_STORAGE_API_KEY: ${{ secrets.BOS_STORAGE_API_KEY }}
-      BOS_BUNDLE_CDN_ORIGIN: https://cdn.everything.dev
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (Node 24)
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.4.2"
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Deploy (preflight → build → upload → publish → image → Railway)
-        timeout-minutes: 50
-        # One command runs the whole train (ADR 0020/0021): staleness-checked
-        # prerequisite builds + workspace dists, bundle upload to the R2-backed
-        # storage, FastKV publish with read-back confirmation, `runtime`-stage
-        # image build pushed by SHA + latest tags, then a pull-only Railway
-        # deploy pinned to the pushed digest via a generated thin Dockerfile.
-        run: bun run bos deploy${{ inputs.verbose == true && ' --verbose' || '' }}
-
-      - name: Verify release-train identity (mf check)
-        timeout-minutes: 5
-        run: |
-          # Gate the release train: all host/plugin bundles must agree on shared-dep
-          # versions (exact for effect-critical deps) and pluginVersion. Runs AFTER
-          # the deploy — CDN-mode bundles serve from cdn.everything.dev, so the
-          # check passes once the config is published and the new bytes are live.
-          attempts=10
-          until bun run bos mf check; do
-            attempts=$((attempts - 1))
-            if [ "$attempts" -le 0 ]; then
-              echo "::error::Release-train identity check failed — bundles are inconsistent (deployment did not come up healthy or skew). See bos mf check output."
-              exit 1
-            fi
-            echo "mf check failed; retrying in 20s ($attempts attempt(s) left)…"
-            sleep 20
-          done
-
-      - name: Deploy smoke — remote runtime against the live deployment
-        timeout-minutes: 10
-        # ADR 0009 §4: published-config coverage lives in the Deploy workflow.
-        # Boots the real host program against the live production URLs from the
-        # deployed SHA's bos.config.json — SSR compose from the deployed ui,
-        # doc-asset proxy, api ping, root document contract. mf check has
-        # already gated the site being up and consistent above.
-        run: bun run --cwd host test:integration:remote
+    uses: NEARBuilders/everything-dev/.github/workflows/consumer-deploy.yml@main
+    with:
+      verbose: ${{ inputs.verbose == true }}
+    secrets: inherit

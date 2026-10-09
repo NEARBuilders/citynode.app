@@ -33,7 +33,6 @@
     "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
     "everything-dev": "catalog:",
     "every-plugin": "catalog:",
-    "host": "workspace:*",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "catalog:"
   },

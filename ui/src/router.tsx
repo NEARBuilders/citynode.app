@@ -1,15 +1,14 @@
-import { RootNotFound } from "./components/root-not-found";
-import { RouterError, RouterPending } from "./components/router-error";
 /**
- * Client router — thin stub injecting the app's generated route tree into the
- * framework router factory, keeping full route-type inference for the app.
- *
- * BE CAREFUL MODIFYING THIS FILE — changes will be overwritten by `bos sync` / `bos upgrade`.
- * Prefer upstream changes at https://github.com/nearbuilders/everything-dev
+ * Client router — the authored router seam. Injects the app's generated
+ * route tree into the framework router factory, keeping full route-type
+ * inference for the app. App-owned: customize router policy, query timings,
+ * and error/pending/not-found components here.
  */
 
 import { createRouter as createCoreRouter } from "everything-dev/ui/router-client";
 import type { ApiClient, CreateRouterOptions, SessionData } from "./app";
+import { RootNotFound } from "./components/root-not-found";
+import { RouterError, RouterPending } from "./components/router-error";
 import { routeTree } from "./routeTree.gen";
 
 export type {
