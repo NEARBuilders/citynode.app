@@ -18,10 +18,11 @@ export const Route = createFileRoute("/_authenticated/_dashboard/tenant/$tenantI
       staleTime: 0,
     });
     if (!tenant) throw redirect({ to: "/dashboard" });
+    return { tenantId: tenant.id };
   },
   loader: async ({ context, params, deps }) => {
     const nodes = await context.queryClient
-      .ensureQueryData(tenantNodesQueryOptions(context.apiClient, params.tenantId))
+      .ensureQueryData(tenantNodesQueryOptions(context.apiClient, context.tenantId))
       .catch(() => []);
     const node = selectTenantNode(nodes, deps.nodeId);
     if (node && deps.nodeId && deps.nodeId !== node.id) {
@@ -52,8 +53,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/tenant/$tenantI
 });
 
 function TenantDetail() {
-  const { tenantId } = Route.useParams();
+  const { tenantId, runtimeConfig } = Route.useRouteContext();
   const { nodeId } = Route.useSearch();
-  const { runtimeConfig } = Route.useRouteContext();
   return <TenantDetailContent tenantId={tenantId} nodeId={nodeId} runtimeConfig={runtimeConfig} />;
 }
