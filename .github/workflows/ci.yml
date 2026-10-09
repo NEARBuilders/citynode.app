@@ -161,10 +161,10 @@ jobs:
         run: bun typecheck
 
       # The build train: staleness-checked quiet prerequisites
-      # (every-plugin / everything-dev / better-near-auth) + the template
+      # (every-plugin / everything-dev / better-near-auth) + the registry
       # plugin target — contract types + manifest pipeline in one call.
-      - name: Build template plugin via the train (contract types + manifest pipeline)
-        run: bun run build template
+      - name: Build registry plugin via the train (contract types + manifest pipeline)
+        run: bun run build registry
 
   framework-tests:
     name: Framework tests
@@ -190,7 +190,7 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build framework dists via the train
-        run: bun run build template
+        run: bun run build registry
 
       - name: Test everything-dev
         run: bun run --cwd packages/everything-dev test
@@ -217,7 +217,7 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build every-plugin dist via the train
-        run: bun run build template
+        run: bun run build registry
 
       - name: Test every-plugin
         run: bun run --cwd packages/every-plugin test:all
@@ -244,7 +244,7 @@ jobs:
         run: bun run prepare
 
       - name: Build framework dists via the train
-        run: bun run build template
+        run: bun run build registry
 
       - name: Test host
         run: bun run --cwd host test
@@ -339,7 +339,7 @@ jobs:
 
       - name: Build every-plugin dist via the train
         if: matrix.command == 'dev'
-        run: bun run build template
+        run: bun run build registry
 
       - name: Run HTTP regression suite (${{ matrix.command }})
         run: bun run test:regression:http:${{ matrix.command }}
@@ -407,7 +407,7 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build every-plugin dist via the train
-        run: bun run build template
+        run: bun run build registry
 
       - name: Run framework regression suite
         run: bun run test:regression:framework
@@ -491,7 +491,7 @@ jobs:
 
       - name: Build every-plugin dist via the train
         if: startsWith(matrix.mode, 'dev:')
-        run: bun run build template
+        run: bun run build registry
 
       - name: Cache Playwright browsers
         id: playwright-cache
