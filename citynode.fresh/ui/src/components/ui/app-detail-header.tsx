@@ -1,0 +1,101 @@
+import { Check, Copy } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { BASE_RUNTIME, type RegistryAppDetail } from "./app-detail-types";
+import { Badge } from "./badge";
+
+export function AppDetailHeader({
+  accountId,
+  gatewayId,
+  app,
+}: {
+  accountId: string;
+  gatewayId: string;
+  app: RegistryAppDetail;
+}) {
+  const [copiedUri, setCopiedUri] = useState(false);
+  const isTenant = app.extends === BASE_RUNTIME;
+  const bosUri = `bos://${accountId}/${gatewayId}`;
+  const displayTitle = app.metadata?.title ?? `${accountId} / ${gatewayId}`;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span
+          className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+            app.status === "ready" ? "bg-green-500" : "bg-destructive"
+          }`}
+        />
+        {isTenant && (
+          <Badge variant="outline" className="text-xs">
+            tenant
+          </Badge>
+        )}
+        {app.metadata?.claimedBy ? (
+          <Badge variant="secondary" className="text-xs">
+            claimed by {app.metadata.claimedBy}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-xs text-muted-foreground">
+            unclaimed
+          </Badge>
+        )}
+      </div>
+
+      <h1 className="text-xl font-bold text-foreground break-all">{displayTitle}</h1>
+
+      <button
+        type="button"
+        onClick={async () => {
+          await navigator.clipboard.writeText(bosUri);
+          setCopiedUri(true);
+          toast.success("Copied bos:// address");
+          setTimeout(() => setCopiedUri(false), 2000);
+        }}
+        className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors group cursor-pointer"
+      >
+        <code className="font-mono text-xs">{bosUri}</code>
+        {copiedUri ? (
+          <Check size={11} className="shrink-0 text-green-500" />
+        ) : (
+          <Copy size={11} className="shrink-0 transition-opacity" />
+        )}
+      </button>
+
+      {app.metadata?.description && (
+        <p className="text-sm text-muted-foreground leading-relaxed">{app.metadata.description}</p>
+      )}
+
+      <div className="flex gap-3 flex-wrap">
+        {app.metadata?.repoUrl && (
+          <a
+            href={app.metadata.repoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+          >
+            repository
+          </a>
+        )}
+        {app.metadata?.homepageUrl && (
+          <a
+            href={app.metadata.homepageUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+          >
+            homepage
+          </a>
+        )}
+        <a
+          href={app.canonicalConfigUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+        >
+          FastKV config
+        </a>
+      </div>
+    </div>
+  );
+}
