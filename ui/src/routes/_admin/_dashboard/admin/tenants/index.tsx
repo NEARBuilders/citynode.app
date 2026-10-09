@@ -136,7 +136,7 @@ function AdminTenants() {
       },
       {
         accessorKey: "createdAt",
-        header: translate("things.created"),
+        header: translate("common.created"),
         meta: { hideOnMobile: true },
 
         cell: ({ row }) => (

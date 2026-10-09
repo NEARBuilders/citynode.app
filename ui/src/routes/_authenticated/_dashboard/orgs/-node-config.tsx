@@ -294,7 +294,7 @@ export function NodeConfigTab({
                 data-testid="orgs-node-config-config"
               >
                 {configPublished ? (
-                  <Badge variant="success">{translate("things.live")}</Badge>
+                  <Badge variant="success">{translate("common.live")}</Badge>
                 ) : pendingConfigProposal ? (
                   <Badge variant="warning">
                     {translate("lifecycle.awaitingProposal", {

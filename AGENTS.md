@@ -504,7 +504,6 @@ Business logic is organized into independent plugins loaded via Module Federatio
 - **`plugins/_template/`** — Scaffold for creating new plugins
 - **Auth** — Extended remote plugin from `bos://auth.everything.near` (Better-Auth, NEAR SIWN, organizations, API keys)
 - **Proposals** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
-- **Votes** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
 
 Each plugin is self-contained with its own:
 - `contract.ts` — oRPC route definitions and Zod schemas
@@ -781,7 +780,7 @@ The `x-api-key` header works for all API surfaces. The session middleware resolv
 
 ### MCP tool generation
 
-The MCP server (`host/src/services/mcp.ts`) generates tools from the API's OpenAPI spec. The base API router composes all plugin routes (auth, registry, proposals, votes) via `pluginsClient`, so every API operation — including auth, NEAR SIWN, relay, and API key management — becomes an MCP tool. Auth context flows through `AsyncLocalStorage` into every tool invocation.
+The MCP server (`host/src/services/mcp.ts`) generates tools from the API's OpenAPI spec. The base API router composes all plugin routes (auth, registry, proposals) via `pluginsClient`, so every API operation — including auth, NEAR SIWN, relay, and API key management — becomes an MCP tool. Auth context flows through `AsyncLocalStorage` into every tool invocation.
 
 ### Agent entry points (URL-served)
 

@@ -6,7 +6,7 @@ import { serializeTeamAreas } from "./utils";
 export const DEFAULT_TEAMS = [
   { name: "Operations", areas: ["node-operations"] },
   { name: "Treasury", areas: ["finance", "stake"] },
-  { name: "Community", areas: ["things", "events"] },
+  { name: "Community", areas: ["events"] },
 ] as const;
 
 export async function provisionDefaultTeams(db: Database, organizationId: string) {

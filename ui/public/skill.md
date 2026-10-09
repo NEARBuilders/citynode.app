@@ -53,13 +53,12 @@ Returns a JSON descriptor with the server name, endpoint URL, and auth scheme.
 
 ### Available operations
 
-The API exposes tenants, nodes, validators, and generic things:
+The API exposes tenants, nodes, and validators:
 
 - **Tenants**: list, create, update, delete, suspend, reactivate, resolve
 - **Tenant bindings**: list, create, verify custom domain, set primary, resolve by hostname
 - **Nodes**: list, get, create, update, delete, list root nodes, list children, resolve by slug
 - **Validators**: list, get, create, update, delete, set default, resolve by account ID, resolve staking validators
-- **Things**: create, get, list, delete (generic typed store via template plugin)
 
 Auth plugin operations (session, NEAR SIWN, relay, API keys, organizations) are available via `/api/rpc/auth/*`.
 
@@ -107,7 +106,6 @@ Public routes (no auth):
 - `/apply` — internal route that redirects externally to `https://citynode.app/apply`
 - `/skill` — renders this `skill.md`
 - `/skill.md`, `/llms.txt` — raw doc endpoints
-- `/things`, `/things/$thingId`, `/things/new`, `/things/live` — generic typed table demo (durable store + SSE)
 - `/$accountId` — NEAR account profile overview (public)
 
 Authed routes (behind `_authenticated`):
@@ -171,7 +169,7 @@ bos start --no-interactive   # production URLs
 - API contract: `api/src/contract.ts` (oRPC route definitions + Zod schemas)
 - API router: `api/src/index.ts` (`createRouter`)
 - Plugins live under `plugins/<name>/` with `contract.ts` + `index.ts` + rspack config
-- UI calls plugins via namespaced clients: `apiClient.template.listThings(...)`, `apiClient.registry.listRegistryApps(...)`, etc.
+- UI calls plugins via namespaced clients: `apiClient.registry.listRegistryApps(...)`, `apiClient.proposals.getProposals(...)`, etc.
 
 ### Publish
 

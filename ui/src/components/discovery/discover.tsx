@@ -496,5 +496,5 @@ function historyLabel(action: string, t: AppTranslator = translateEnglishAppMess
   if (action.endsWith(" published")) return t("events.published");
   if (action.endsWith(" draft")) return t("community.historySavedDraft");
   if (action.endsWith(" cancelled")) return t("events.historyCancelled");
-  return t("things.actionUpdated");
+  return t("common.actionUpdated");
 }

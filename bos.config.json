@@ -175,18 +175,6 @@
     ]
   },
   "plugins": {
-    "template": {
-      "development": "local:plugins/_template",
-      "variables": {},
-      "secrets": [
-        "TEMPLATE_DATABASE_URL"
-      ],
-      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/template/",
-      "pin": {
-        "integrity": "sha384-8ko3uryp4pXDT/eujCE/W6GIo0qW0MK0BSUPHdCOVAdXvF/TJswlMvlFaTOB+056",
-        "manifest": "versions/cccc82bd356d35f9.json"
-      }
-    },
     "registry": {
       "development": "local:plugins/registry",
       "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/registry/",
@@ -207,18 +195,6 @@
       "pin": {
         "integrity": "sha384-Ss/yZWG3aPkZSHPhlS7Mp7zhetmQDrXn7A4oLb5bgyDSNZ+xQxSjHKiY22sCN8eM",
         "manifest": "versions/26185da62e5a5938.json"
-      }
-    },
-    "votes": {
-      "development": "local:plugins/votes",
-      "variables": {},
-      "secrets": [
-        "VOTES_DATABASE_URL"
-      ],
-      "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/votes/",
-      "pin": {
-        "integrity": "sha384-aqrLImr+x/QFblr+sYQ4SRTmDB1/4vDFiXQ+BJaN3hbNsfFSQ4ShuBbOY34reKNy",
-        "manifest": "versions/527b68be3f7190eb.json"
       }
     }
   }

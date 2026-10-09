@@ -110,9 +110,6 @@ describe("init starter levels", () => {
     expect(existsSync(join(routes, "_authenticated.tsx"))).toBe(true);
     expect(existsSync(join(routes, "_admin.tsx"))).toBe(true);
     expect(existsSync(join(routes, "_authenticated", "_dashboard", "orgs"))).toBe(true);
-    expect(existsSync(join(routes, "_authenticated", "_dashboard", "things", "index.tsx"))).toBe(
-      true,
-    );
     expect(existsSync(join(routes, "_public", "stake.tsx"))).toBe(false);
     expect(
       existsSync(join(routes, "_authenticated", "_dashboard", "prototype-staking-poc.tsx")),

@@ -94,14 +94,13 @@ describe("proposal titles", () => {
     expect(proposalTitle({ pluginId: "node", entityId: "node-entity", payload: {} })).toBe(
       "node-entity",
     );
-    expect(proposalTitle({ pluginId: "template", entityId: "thing-1", payload: nodePayload })).toBe(
-      "thing-1",
+    expect(proposalTitle({ pluginId: "votes", entityId: "entity-1", payload: nodePayload })).toBe(
+      "entity-1",
     );
   });
 
   it("labels proposal types in plain words", () => {
     expect(proposalTypeLabel("node")).toBe("Community");
-    expect(proposalTypeLabel("template")).toBe("Thing");
     expect(proposalTypeLabel("votes")).toBe("Votes");
   });
 });

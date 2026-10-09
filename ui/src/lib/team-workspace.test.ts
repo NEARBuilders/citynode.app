@@ -12,13 +12,18 @@ import {
 const finance = { id: "team-fin", name: "Finance", areas: ["finance", "stake"] };
 const ops = { id: "team-ops", name: "Node Operator", areas: ["node-operations"] };
 
-function context(options: { orgRole?: string; userRole?: string; activeTeamId?: string | null }) {
+function context(options: {
+  orgRole?: string;
+  userRole?: string;
+  activeTeamId?: string | null;
+  teams?: Array<{ id: string; name: string; areas: string[] }>;
+}) {
   return {
     user: { role: options.userRole ?? null },
     organization: {
       activeOrganizationId: "org-1",
       member: { id: "m1", role: options.orgRole ?? "member" },
-      teams: [finance, ops],
+      teams: options.teams ?? [finance, ops],
       activeTeamId: options.activeTeamId ?? null,
     },
   } as AuthRequestContext;
@@ -29,7 +34,7 @@ describe("resolveTeamWorkspace", () => {
     const workspace = resolveTeamWorkspace(context({ activeTeamId: "removed-team" }));
 
     expect(workspace.activeTeam).toBeNull();
-    expect(isPathAllowed(workspace, "/things")).toBe(true);
+    expect(isPathAllowed(workspace, "/dashboard/node")).toBe(true);
   });
 
   it("restricts a member to the active team's areas", () => {
@@ -37,6 +42,18 @@ describe("resolveTeamWorkspace", () => {
 
     expect(workspace.activeTeam?.name).toBe("Finance");
     expect(workspace.allowedAreas).toEqual(["finance", "stake"]);
+  });
+
+  it("restricts a team whose only grant is no longer a feature area from every area", () => {
+    const legacy = { id: "team-legacy", name: "Community", areas: ["things"] };
+    const workspace = resolveTeamWorkspace(context({ activeTeamId: legacy.id, teams: [legacy] }));
+
+    expect(workspace.activeTeam?.name).toBe("Community");
+    expect(workspace.allowedAreas).toEqual([]);
+    expect(isPathAllowed(workspace, "/dashboard/node")).toBe(false);
+    expect(isPathAllowed(workspace, "/stake")).toBe(false);
+    expect(isPathAllowed(workspace, "/dashboard")).toBe(true);
+    expect(isPathAllowed(workspace, "/orgs/acme")).toBe(true);
   });
 
   it("leaves members without an active team unrestricted", () => {
@@ -80,7 +97,6 @@ describe("route areas", () => {
     expect(areaForPath("/dashboard/node")).toBe("node-operations");
     expect(areaForPath("/dashboard/node/proposals")).toBe("node-operations");
     expect(areaForPath("/tenant/abc")).toBe("node-operations");
-    expect(areaForPath("/things/new")).toBe("things");
     expect(areaForPath("/stake")).toBe("stake");
     expect(areaForPath("/dashboard")).toBeNull();
     expect(areaForPath("/orgs/acme")).toBeNull();
@@ -92,10 +108,9 @@ describe("route areas", () => {
     const open = resolveTeamWorkspace(context({}));
 
     expect(isPathAllowed(restricted, "/stake")).toBe(true);
-    expect(isPathAllowed(restricted, "/things")).toBe(false);
     expect(isPathAllowed(restricted, "/dashboard/node")).toBe(false);
     expect(isPathAllowed(restricted, "/dashboard")).toBe(true);
-    expect(isPathAllowed(open, "/things")).toBe(true);
+    expect(isPathAllowed(open, "/dashboard/node")).toBe(true);
   });
 });
 
