@@ -27,6 +27,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
+import { saveConfirmation } from "@/lib/event-visibility";
+import { discoveryNodeQueryOptions } from "./event-visibility";
 
 export type Activity = Awaited<ReturnType<ApiClient["saveDiscoveryActivity"]>>;
 export type ActivityDraft = Parameters<ApiClient["saveDiscoveryActivity"]>[0];
@@ -46,7 +48,7 @@ export function blankActivity(nodeId: string, kind: ActivityKind): ActivityDraft
     endsAt: null,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     venue: "",
-    status: "draft",
+    status: "published",
   };
 }
 
@@ -118,7 +120,11 @@ export function ActivityForm({
   const save = useMutation({
     mutationFn: (input: ActivityDraft) => api.saveDiscoveryActivity(input),
     onSuccess: async (saved) => {
-      toast.success(saved.status === "published" ? translate("events.publishedExplore") : "Saved");
+      const communityPublic = await client
+        .fetchQuery({ ...discoveryNodeQueryOptions(api, nodeId), staleTime: 0 })
+        .then((node) => node !== null)
+        .catch(() => null);
+      toast.success(translate(saveConfirmation(saved, { communityPublic, now: Date.now() })));
       await client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });

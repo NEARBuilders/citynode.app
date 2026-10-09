@@ -8,9 +8,11 @@ import { DiscoveryProfileGate } from "./profile-editor";
 export function EventsEditor({
   nodeId,
   profileLink,
+  reviewImports,
 }: {
   nodeId: string;
   profileLink?: ReactElement;
+  reviewImports?: boolean;
 }) {
   const translate = useAppTranslation();
   return (
@@ -37,7 +39,7 @@ export function EventsEditor({
               )}
             </div>
           )}
-          <ActivityEditor nodeId={nodeId} />
+          <ActivityEditor nodeId={nodeId} reviewImports={reviewImports} />
         </div>
       )}
     </DiscoveryProfileGate>

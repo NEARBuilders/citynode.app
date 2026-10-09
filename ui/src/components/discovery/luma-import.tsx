@@ -13,10 +13,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAppTranslation } from "@/i18n/runtime";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 
 export function LumaImport({ nodeId }: { nodeId: string }) {
   const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const api = useApiClient();
   const client = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -36,12 +37,17 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
   });
   const disconnect = useMutation({
     mutationFn: () => api.disconnectDiscoveryLuma({ nodeId }),
-    onSuccess: () =>
-      client.invalidateQueries({
+    onSuccess: () => {
+      refresh.reset();
+      return client.invalidateQueries({
         predicate: (query) => String(query.queryKey[0]).startsWith("discovery"),
-      }),
+      });
+    },
   });
   const connection = calendars.data?.connection;
+  const importLines = refresh.data
+    ? describeImport(refresh.data, translate, locale.startsWith("zh") ? "" : " ")
+    : [];
   const calendarItems = [
     ...(connection &&
     !calendars.data?.calendars.some((calendar) => calendar.id === connection.calendarId)
@@ -114,6 +120,17 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
           )}
         </Field>
       )}
+      {refresh.isSuccess && (
+        <div
+          role="status"
+          className="flex flex-col gap-1 text-sm text-muted-foreground"
+          data-testid="luma-import.result"
+        >
+          {importLines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      )}
       {!connection && refresh.isPending && (
         <p role="status" className="text-sm text-muted-foreground">
           {translate("calendar.connecting")}
@@ -154,4 +171,26 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
       />
     </div>
   );
+}
+
+function describeImport(
+  result: { imported: number; updated: number; withdrawn: number; skipped: number },
+  translate: ReturnType<typeof useAppTranslation>,
+  separator: string,
+) {
+  const existing = [
+    ...(result.updated ? [translate("calendar.updatedEvents", { count: result.updated })] : []),
+    ...(result.skipped ? [translate("calendar.skippedEvents", { count: result.skipped })] : []),
+  ];
+  const lines = result.imported
+    ? [
+        `${translate("calendar.imported", { count: result.imported })}${separator}${translate("events.importsWaitingHint")}`,
+        ...existing,
+      ]
+    : existing.map((line, index) =>
+        index === 0 ? `${translate("calendar.noNewEvents")}${separator}${line}` : line,
+      );
+  if (result.withdrawn)
+    lines.push(translate("calendar.withdrawnEvents", { count: result.withdrawn }));
+  return lines.length ? lines : [translate("calendar.nothingChanged")];
 }

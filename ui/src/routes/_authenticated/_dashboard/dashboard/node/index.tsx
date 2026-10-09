@@ -7,10 +7,8 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import {
-  Badge,
   Bulletin,
   Button,
   LocalDate,
@@ -19,6 +17,11 @@ import {
   TeamStakeCard,
 } from "@/components";
 import { EventDate, upcomingEvents } from "@/components/discovery/event-onboarding";
+import {
+  EventVisibilityBadge,
+  ImportsWaiting,
+  useVisibilityContext,
+} from "@/components/discovery/event-visibility";
 import {
   Item,
   ItemActions,
@@ -29,6 +32,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
+import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
@@ -56,7 +60,6 @@ function NodeOverview() {
   const { runtimeConfig, selectedNode, summary, stakingSourceNode, tenant, auth, canManage } =
     Route.useRouteContext();
   const apiClient = useApiClient();
-  const [now] = useState(() => Date.now());
   const orgId = tenant?.orgId ?? auth.activeOrganizationId;
   const nodeId = selectedNode?.id ?? "";
   const daoQuery = useQuery({
@@ -75,6 +78,8 @@ function NodeOverview() {
     enabled: !!nodeId,
     retry: false,
   });
+  const visibilityContext = useVisibilityContext(nodeId);
+  const { now } = visibilityContext;
   const daoOwned = !!tenant && tenant.ownerKind === "dao";
   const pendingConfigQuery = useQuery({
     queryKey: ["dashboard-node", "pending-config-proposal", tenant?.accountId],
@@ -104,8 +109,19 @@ function NodeOverview() {
     validators: summary.stakingValidators.validators,
   });
   const upcoming = upcomingEvents(activities.data ?? [], now);
-  const contentLink = (tab: "events" | "onboarding") => (
-    <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} search={{ tab }} />
+  const liveCount =
+    visibilityContext.communityPublic === null
+      ? null
+      : upcoming.filter((event) => eventVisibility(event, visibilityContext) === "live").length;
+  const waitingCount = (activities.data ?? []).filter((event) =>
+    isWaitingImport(event, now),
+  ).length;
+  const onboardingLink = (
+    <Link
+      to="/nodes/$nodeId/content"
+      params={{ nodeId: selectedNode.id }}
+      search={{ tab: "onboarding" }}
+    />
   );
 
   const bulletin = selectedNode.metadata?.bulletin;
@@ -118,7 +134,7 @@ function NodeOverview() {
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         <Stat
           label={translate("community.upcoming")}
-          value={activities.isSuccess ? String(upcoming.length) : "—"}
+          value={activities.isSuccess && liveCount !== null ? String(liveCount) : "—"}
           testId="dashboard-node.stat-events"
         />
         <Stat
@@ -178,12 +194,23 @@ function NodeOverview() {
             <Button
               size="sm"
               nativeButton={false}
-              render={contentLink("events")}
+              render={<Link to="/nodes/$nodeId/events/new" params={{ nodeId: selectedNode.id }} />}
               data-testid="dashboard-node.add-event"
             >
               <CalendarDotsIcon />
               {translate("events.add")}
             </Button>
+          }
+        />
+        <ImportsWaiting
+          count={waitingCount}
+          testId="dashboard-node.imports-waiting"
+          link={
+            <Link
+              to="/nodes/$nodeId/content"
+              params={{ nodeId: selectedNode.id }}
+              search={{ tab: "events", review: "imports" }}
+            />
           }
         />
         {upcoming.length === 0 ? (
@@ -200,11 +227,9 @@ function NodeOverview() {
                   <EventDate value={event.startsAt} />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
-                  <ItemTitle>
+                  <ItemTitle className="flex-wrap">
                     {event.title}
-                    {event.status === "draft" && (
-                      <Badge variant="secondary">{translate("events.draft")}</Badge>
-                    )}
+                    <EventVisibilityBadge activity={event} context={visibilityContext} />
                   </ItemTitle>
                   <ItemDescription>
                     {event.startsAt && <LocalDate value={event.startsAt} format="datetime" />}
@@ -216,7 +241,7 @@ function NodeOverview() {
                     size="sm"
                     variant="outline"
                     nativeButton={false}
-                    render={contentLink("onboarding")}
+                    render={onboardingLink}
                     aria-label={translate("station.onboardingNamed", { event: event.title ?? "" })}
                   >
                     <QrCodeIcon />
