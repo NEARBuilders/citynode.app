@@ -12,7 +12,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
 import { cn } from "cn";
 import { Trans } from "everything-dev/ui/i18n";
-import type { ComponentType, ReactNode } from "react";
+import { type ComponentType, type ReactNode, useMemo, useState } from "react";
 import { getAccount, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, PageHeader, SectionHeader } from "@/components";
 import {
@@ -24,6 +24,14 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { VersionCard } from "@/components/version-card";
 import {
   resolveAppLocale,
@@ -34,11 +42,17 @@ import {
 import { pageTitle } from "@/lib/page-title";
 import { presentationLabel } from "@/lib/presentation-label";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
+import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { formatNearFigure, ListSkeleton, StatFigure, StatGrid } from "./-admin-ui";
+import {
+  buildCommunityJoinRows,
+  COMMUNITY_JOINS_LIMIT,
+  visibleCommunityJoinRows,
+} from "./-community-joins";
 import {
   adminProposalListQueryOptions,
   proposalTitle,
@@ -82,6 +96,7 @@ function AdminOverview() {
   const nodesQuery = useQuery(allNodesQueryOptions(apiClient));
   const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
   const relayerQuery = useRelayerInfoQuery();
+  const joinsQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(0)));
 
   const pending = pendingQuery.data?.pages[0]?.data ?? [];
   const pendingTotal = pendingQuery.data?.pages[0]?.meta.total;
@@ -124,6 +139,16 @@ function AdminOverview() {
           }
           tone={relayer && !relayer.enabled ? "attention" : "default"}
           testId="admin.stat.relayer"
+        />
+        <StatFigure
+          label={translate("admin.redeemedThisMonth")}
+          value={joinsQuery.data?.totals.redeemed ?? "—"}
+          testId="admin.stat.redeemed"
+        />
+        <StatFigure
+          label={translate("admin.newMembersThisMonth")}
+          value={joinsQuery.data?.totals.newMembers ?? "—"}
+          testId="admin.stat.new-members"
         />
       </StatGrid>
 
@@ -202,6 +227,8 @@ function AdminOverview() {
           </ItemGroup>
         )}
       </section>
+
+      <CommunityJoins />
 
       <section className="flex flex-col gap-6">
         <SectionHeader title={translate("nav.manage")} sectionTestId="admin.section.manage" />
@@ -314,6 +341,122 @@ function AdminOverview() {
         </div>
       </section>
     </>
+  );
+}
+
+function CommunityJoins() {
+  const translate = useAppTranslation();
+  const apiClient = useApiClient();
+  const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
+  const currentQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(0)));
+  const previousQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(-1)));
+  const queries = [tenantsQuery, currentQuery, previousQuery];
+  const [showAll, setShowAll] = useState(false);
+
+  const rows = useMemo(
+    () => buildCommunityJoinRows(tenantsQuery.data ?? [], currentQuery.data, previousQuery.data),
+    [tenantsQuery.data, currentQuery.data, previousQuery.data],
+  );
+  const visibleRows = visibleCommunityJoinRows(rows, showAll);
+
+  return (
+    <section className="flex flex-col gap-6">
+      <SectionHeader
+        title={translate("admin.redemptions.title")}
+        sectionTestId="admin.section.joins"
+      />
+      {queries.some((query) => query.isLoading) ? (
+        <ListSkeleton rows={3} />
+      ) : queries.some((query) => query.isError) ? (
+        <p role="alert" className="text-sm text-destructive" data-testid="admin-joins-error">
+          {translate("admin.redemptions.failed")}
+        </p>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={UsersIcon}
+          title={translate("admin.redemptions.empty")}
+          description={translate("admin.redemptions.emptyDescription")}
+          className="py-10"
+        />
+      ) : (
+        <div className="flex flex-col gap-3">
+          <Table data-testid="admin-joins">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{translate("common.community")}</TableHead>
+                <TableHead className="text-right">
+                  {translate("admin.redemptions.thisMonth")}
+                </TableHead>
+                <TableHead className="text-right">
+                  {translate("admin.redemptions.newThisMonth")}
+                </TableHead>
+                <TableHead className="text-right">
+                  {translate("admin.redemptions.lastMonth")}
+                </TableHead>
+                <TableHead className="hidden text-right md:table-cell">
+                  {translate("admin.redemptions.newLastMonth")}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleRows.map((row) => (
+                <TableRow key={row.tenant.id} data-testid={`admin-joins-row-${row.tenant.id}`}>
+                  <TableCell>
+                    <Link
+                      to="/tenant/$tenantId"
+                      params={{ tenantId: row.tenant.id }}
+                      className="font-medium text-foreground hover:underline"
+                      data-testid="admin-joins-link"
+                    >
+                      {row.tenant.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="tabular-nums" data-testid="admin-joins-this-month">
+                      {row.thisMonth.redeemed}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="tabular-nums" data-testid="admin-joins-new-this-month">
+                      {row.thisMonth.newMembers}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span
+                      className="tabular-nums text-muted-foreground"
+                      data-testid="admin-joins-last-month"
+                    >
+                      {row.lastMonth.redeemed}
+                    </span>
+                  </TableCell>
+                  <TableCell className="hidden text-right md:table-cell">
+                    <span
+                      className="tabular-nums text-muted-foreground"
+                      data-testid="admin-joins-new-last-month"
+                    >
+                      {row.lastMonth.newMembers}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {rows.length > COMMUNITY_JOINS_LIMIT && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={() => setShowAll((value) => !value)}
+              data-testid="admin-joins-toggle"
+            >
+              {showAll
+                ? translate("admin.redemptions.showTop", { count: COMMUNITY_JOINS_LIMIT })
+                : translate("admin.redemptions.showAll", { count: rows.length })}
+            </Button>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

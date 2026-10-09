@@ -14,6 +14,7 @@ import { createInvitationHandlers } from "./handlers/invitations";
 import { createMemberHandlers } from "./handlers/members";
 import { createNearHandlers } from "./handlers/near";
 import { createOnboardingHandlers } from "./handlers/onboarding";
+import { createOnboardingJoinHandlers } from "./handlers/onboarding-joins";
 import { createOrganizationRequestHandlers } from "./handlers/organization-requests";
 import { createOrganizationHandlers } from "./handlers/organizations";
 import { createSessionHandlers } from "./handlers/session";
@@ -79,6 +80,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       ...createTeamHandlers(builder, requireAuth),
       ...createNearHandlers(builder, requireAuth),
       ...createOnboardingHandlers(builder, requireAuth),
+      ...createOnboardingJoinHandlers(builder, requireAuth),
     };
   },
 });

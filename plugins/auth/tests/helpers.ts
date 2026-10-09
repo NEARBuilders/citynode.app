@@ -12,6 +12,7 @@ import { createInvitationHandlers } from "../src/handlers/invitations";
 import { createMemberHandlers } from "../src/handlers/members";
 import { createNearHandlers } from "../src/handlers/near";
 import { createOnboardingHandlers } from "../src/handlers/onboarding";
+import { createOnboardingJoinHandlers } from "../src/handlers/onboarding-joins";
 import {
   createOrganizationRequestHandlers,
   type OrganizationRequestContext,
@@ -269,6 +270,10 @@ export function createTestHandlers(services: PluginServices) {
     requestBuilder,
     createRequireAuth(requestBuilder),
   );
+  const joinHandlers = createOnboardingJoinHandlers(
+    requestBuilder,
+    createRequireAuth(requestBuilder),
+  );
 
   const withEffectContext =
     <R>(fn: HandlerFn<R>): HandlerFn<R> =>
@@ -299,6 +304,15 @@ export function createTestHandlers(services: PluginServices) {
         context: { reqHeaders?: Record<string, string> };
       }) =>
         call(requestHandlers.reviewOrganization, opts.input, {
+          context: { ...opts.context, "effect/context": effectContext },
+        }),
+    },
+    onboardingJoins: {
+      listOnboardingJoins: (opts: {
+        input: InferInput<"listOnboardingJoins">;
+        context: { reqHeaders?: Record<string, string> };
+      }) =>
+        call(joinHandlers.listOnboardingJoins, opts.input, {
           context: { ...opts.context, "effect/context": effectContext },
         }),
     },
