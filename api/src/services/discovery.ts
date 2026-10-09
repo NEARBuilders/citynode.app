@@ -23,7 +23,7 @@ import type {
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
 import { type GeocodeService, GeocodeTag, shouldGeocodeProfile } from "./discovery-geocode";
-import { createLumaCalendars } from "./discovery-luma";
+import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";
 
 export type DiscoveryEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
@@ -508,6 +508,11 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       for (const connection of due) {
         const retryAt = yield* Clock.currentTimeMillis;
         yield* syncLuma(connection).pipe(
+          Effect.tapError((error) =>
+            Effect.logWarning(
+              `[Discovery] Luma sync failed for node ${connection.nodeId} calendar ${connection.calendarId}: ${describeLumaFailure(error)}`,
+            ),
+          ),
           Effect.catch(() =>
             query(() =>
               db

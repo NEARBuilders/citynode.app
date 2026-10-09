@@ -186,6 +186,42 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Aucun calendrier Luma configuré pour ce site. Demandez à un administrateur d'en ajouter un.",
     "此站点尚未设置 Luma 日历，请联系管理员添加。",
   ],
+  "calendar.imported": [
+    "{count, plural, one {Imported # event.} other {Imported # events.}}",
+    "{count, plural, one {Se importó # evento.} other {Se importaron # eventos.}}",
+    "{count, plural, one {# événement importé.} other {# événements importés.}}",
+    "{count, plural, other {已导入 # 个活动。}}",
+  ],
+  "calendar.noNewEvents": [
+    "No new events.",
+    "No hay eventos nuevos.",
+    "Aucun nouvel événement.",
+    "没有新活动。",
+  ],
+  "calendar.updatedEvents": [
+    "Updated {count, plural, one {# event} other {# events}} already imported.",
+    "Se {count, plural, one {actualizó # evento ya importado} other {actualizaron # eventos ya importados}}.",
+    "{count, plural, one {# événement déjà importé a été mis à jour} other {# événements déjà importés ont été mis à jour}}.",
+    "{count, plural, other {已更新 # 个已导入的活动。}}",
+  ],
+  "calendar.skippedEvents": [
+    "{count, plural, one {# event was} other {# events were}} skipped because {count, plural, one {it's} other {they're}} already on your community.",
+    "{count, plural, one {Se omitió # evento} other {Se omitieron # eventos}} porque {count, plural, one {ya está} other {ya están}} en tu comunidad.",
+    "{count, plural, one {# événement a été ignoré} other {# événements ont été ignorés}} car {count, plural, one {il est} other {ils sont}} déjà dans votre communauté.",
+    "已跳过 {count, plural, other {# 个活动}}，因为{count, plural, other {这些活动}}已在你的社区中。",
+  ],
+  "calendar.withdrawnEvents": [
+    "{count, plural, one {# event is} other {# events are}} no longer public on this Luma calendar, so {count, plural, one {it was} other {they were}} hidden.",
+    "{count, plural, one {# evento ya no es público} other {# eventos ya no son públicos}} en este calendario de Luma, así que {count, plural, one {se ocultó} other {se ocultaron}}.",
+    "{count, plural, one {# événement n'est plus public} other {# événements ne sont plus publics}} sur ce calendrier Luma, {count, plural, one {il a donc été masqué} other {ils ont donc été masqués}}.",
+    "{count, plural, other {# 个活动}}已不再在此 Luma 日历上公开，因此{count, plural, other {已被隐藏}}。",
+  ],
+  "calendar.nothingChanged": [
+    "No new events found.",
+    "No se encontraron eventos nuevos.",
+    "Aucun nouvel événement trouvé.",
+    "未找到新活动。",
+  ],
   "calendar.lastUpdateFailed": [
     " · last update failed",
     " · última actualización fallida",
