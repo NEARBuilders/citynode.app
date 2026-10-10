@@ -12,6 +12,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type AuthClient, useAuthClient } from "@/app";
 import { SectionHeader } from "@/components/layout/section-header";
+import { useLocalDate } from "@/components/local-date";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -76,6 +77,7 @@ type PoolMethod = "unstake" | "withdraw";
 
 interface TeamPoolProposals {
   open: boolean;
+  failedUntilMs: number | null;
 }
 
 export function teamPoolPhase(
@@ -205,7 +207,7 @@ function teamPoolProposalsQueryOptions(target: TeamStakeTarget | null, queryClie
   return {
     queryKey: teamPoolQueryKeys.proposals(target),
     queryFn: async (): Promise<TeamPoolProposals> => {
-      if (!target) return { open: false };
+      if (!target) return { open: false, failedUntilMs: null };
       return readTeamPoolProposals(
         target,
         await queryClient.fetchQuery(teamPolicyQueryOptions(target)),
@@ -223,12 +225,23 @@ async function readTeamPoolProposals(
   const chainNowNs = await readChainTimeNs();
   const sinceNs = policy?.proposal_period ? chainNowNs - BigInt(policy.proposal_period) : 0n;
   const proposals = await readDaoProposalsSince(target.teamAccountId, sinceNs);
+  const open = proposals.filter(
+    (proposal) =>
+      isOpenProposal(proposal, policy, chainNowNs) &&
+      proposalCallsMethod(proposal, target.poolAccountId, TEAM_POOL_RELEASE_METHODS),
+  );
+  const period = policy?.proposal_period;
+  const onlyFailed =
+    !!period && open.length > 0 && open.every((proposal) => proposal.status === "Failed");
   return {
-    open: proposals.some(
-      (proposal) =>
-        isOpenProposal(proposal, policy, chainNowNs) &&
-        proposalCallsMethod(proposal, target.poolAccountId, TEAM_POOL_RELEASE_METHODS),
-    ),
+    open: open.length > 0,
+    failedUntilMs: onlyFailed
+      ? Math.max(
+          ...open.map((proposal) =>
+            Number((BigInt(proposal.submission_time) + BigInt(period)) / 1_000_000n),
+          ),
+        )
+      : null,
   };
 }
 
@@ -561,6 +574,7 @@ function useTeamPoolReads(
     statusFailed: status.isError,
     claimHidden: phase === "unstake" && !status.isLoading && !poolOffersClaim(poolState),
     retryStatus: () => void status.refetch(),
+    failedUntilMs: proposals.data?.failedUntilMs ?? null,
     method: method === "unstake" && !poolOffersClaim(poolState) ? null : method,
     canStart: canStartTeamPoolAction(
       target,
@@ -611,12 +625,14 @@ export function TeamStakeCard({
     statusFailed,
     claimHidden,
     retryStatus,
+    failedUntilMs,
     method,
     canStart,
     settled,
     retry,
   } = useTeamPoolReads(target, authClient, queryClient, authAccountId);
   const showsPoolNote = !readFailed && phase !== "proposal-pending";
+  const failedUntil = useLocalDate(failedUntilMs, "datetime");
   const loading = pending || (!!target && reading);
   const dataReady = !!target && !!method && canStart;
   const actionReady = dataReady && settled;
@@ -702,9 +718,11 @@ export function TeamStakeCard({
           )}
           {phase === "proposal-pending" && (
             <TeamStakeNote testId="dashboard-node.team-stake-proposal-pending">
-              {translate("stake.proposalPending")}{" "}
+              {failedUntilMs !== null
+                ? translate("stake.proposalFailed", { date: failedUntil })
+                : translate("stake.proposalPending")}{" "}
               <TrezuRequestsLink teamAccountId={target.teamAccountId}>
-                {translate("stake.voteTrezu")}
+                {translate(failedUntilMs !== null ? "stake.reviewTrezu" : "stake.voteTrezu")}
               </TrezuRequestsLink>
             </TeamStakeNote>
           )}

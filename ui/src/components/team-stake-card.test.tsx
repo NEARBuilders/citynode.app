@@ -6,6 +6,7 @@ import { Effect } from "effect";
 import { Near } from "near-kit";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatLocalDate } from "@/components/local-date";
 import { englishAppMessages } from "@/i18n/catalogs";
 import { render } from "@/i18n/test-render";
 import type { StakePoolStatus } from "@/lib/queries/stake-pool";
@@ -816,6 +817,35 @@ describe("TeamStakeCard chain-state safety", () => {
       await waitFor(() => expect(actionButton().disabled).toBe(false));
       expect(screen.queryByTestId("dashboard-node.team-stake-proposal-pending")).toBeNull();
     }
+  });
+
+  it("says a failed claim proposal can be retried until its period ends, not that it awaits votes", async () => {
+    const submittedMs = Date.now() - 60_000;
+    stubChain(stakedOnly(), [poolProposal({ status: "Failed", submittedMs })]);
+    renderCard();
+    const note = await screen.findByTestId("dashboard-node.team-stake-proposal-pending");
+    const until = formatLocalDate(submittedMs + 7 * 24 * 60 * 60 * 1000, "datetime", "en");
+    await waitFor(() =>
+      expect(note.textContent).toContain(
+        `An unstake or withdraw proposal failed on-chain. It can be retried until ${until}, so new proposals are paused until then.`,
+      ),
+    );
+    expect(note.textContent).toContain("Review it on trezu.app");
+    expect(note.textContent).not.toContain("waiting for votes");
+    expect(actionButton().disabled).toBe(true);
+  });
+
+  it("still says it awaits votes while any open claim proposal is in progress", async () => {
+    stubChain(stakedOnly(), [
+      poolProposal({ id: 7, status: "Failed" }),
+      poolProposal({ id: 8, status: "InProgress" }),
+    ]);
+    renderCard();
+    const note = await screen.findByTestId("dashboard-node.team-stake-proposal-pending");
+    expect(note.textContent).toContain(
+      "An unstake or withdraw proposal is waiting for votes in the DAO.",
+    );
+    expect(note.textContent).not.toContain("failed on-chain");
   });
 
   it("enables actions through a Member role with no minimum", async () => {
