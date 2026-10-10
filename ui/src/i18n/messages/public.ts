@@ -731,6 +731,18 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Une proposition de retrait du staking ou de retrait des fonds attend des votes dans la DAO.",
     "一项解除质押或提取提案正在等待 DAO 投票。",
   ],
+  "stake.proposalFailed": [
+    "An unstake or withdraw proposal failed on-chain. It can be retried until {date}, so new proposals are paused until then.",
+    "Una propuesta de retirada de delegación o de retiro falló en la cadena. Se puede reintentar hasta el {date}, así que las nuevas propuestas están en pausa hasta entonces.",
+    "Une proposition de retrait du staking ou de retrait des fonds a échoué sur la chaîne. Elle peut être relancée jusqu'au {date} : les nouvelles propositions sont suspendues jusque-là.",
+    "一项解除质押或提取提案在链上执行失败。在 {date} 之前仍可重试，因此新提案会暂停到那时。",
+  ],
+  "stake.reviewTrezu": [
+    "Review it on trezu.app",
+    "Revísala en trezu.app",
+    "La consulter sur trezu.app",
+    "在 trezu.app 查看",
+  ],
   "stake.proposersOnly": [
     "Only DAO members who can propose can start this.",
     "Solo los miembros del DAO que pueden proponer pueden iniciar esto.",
