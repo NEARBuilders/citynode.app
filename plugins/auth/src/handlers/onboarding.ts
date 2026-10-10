@@ -515,6 +515,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             id: crypto.randomUUID(),
             codeId: codeRow.id,
             userId,
+            newMember: !existingMember,
             createdAt: new Date(),
           });
         });

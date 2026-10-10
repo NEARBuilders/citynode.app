@@ -106,3 +106,86 @@ export async function seedOnboardingCodes(): Promise<{
     await close();
   }
 }
+
+export async function seedCommunityJoins(): Promise<{
+  organizationId: string;
+}> {
+  const regressionEnv = computeRegressionEnv();
+  const { test, db, close } = await createAuthTestInstance({
+    authDatabaseUrl: regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "",
+    secret: regressionEnv.authSecret,
+  });
+  try {
+    const unique = randomUUID().slice(0, 8);
+    const saveUser = (role: string) =>
+      test.saveUser(
+        test.createUser({
+          email: `regression-${role}-${unique}@citynode.test`,
+          name: `Regression ${role}`,
+          emailVerified: true,
+        }),
+      );
+    const organizer = await saveUser("organizer");
+    const organizationName = `regression-joins-${unique}`;
+    const organization = await test.saveOrganization(
+      test.createOrganization({ name: organizationName, slug: organizationName }),
+    );
+    const now = new Date();
+    const [team] = await db
+      .insert(authSchema.team)
+      .values({
+        id: randomUUID(),
+        name: `Regression Joins ${unique}`,
+        organizationId: organization.id,
+        metadata: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    const createCode = async () => {
+      const [code] = await db
+        .insert(authSchema.onboardingCode)
+        .values({
+          id: randomUUID(),
+          codeHash: createHash("sha256").update(rawCode()).digest("hex"),
+          organizationId: organization.id,
+          eventId: randomUUID(),
+          eventName: team!.name,
+          teamId: team!.id,
+          role: "member",
+          maxUses: 5,
+          usedCount: 0,
+          expiresAt: new Date(now.getTime() + 24 * HOUR),
+          createdBy: organizer.id,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      return code!.id;
+    };
+    const launch = await createCode();
+    const mixer = await createCode();
+    const twice = await saveUser("twice");
+    const once = await saveUser("once");
+    const earlier = await saveUser("earlier");
+    const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15));
+    const redeemed = (codeId: string, userId: string, createdAt: Date, newMember: boolean) => ({
+      id: randomUUID(),
+      codeId,
+      userId,
+      newMember,
+      createdAt,
+    });
+    await db
+      .insert(authSchema.onboardingRedemption)
+      .values([
+        redeemed(launch, twice.id, now, true),
+        redeemed(mixer, twice.id, now, false),
+        redeemed(mixer, once.id, now, false),
+        redeemed(launch, earlier.id, lastMonth, true),
+      ]);
+    return { organizationId: organization.id };
+  } finally {
+    await close();
+  }
+}

@@ -78,6 +78,13 @@
       "when": 1790960000000,
       "tag": "0011_default-community-teams",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791553729501,
+      "tag": "0012_onboarding-redemption-new-member",
+      "breakpoints": true
     }
   ]
 }

@@ -808,6 +808,34 @@ export const contract = oc.router({
     )
     .errors(Errors),
 
+  listOnboardingJoins: oc
+    .route({ method: "GET", path: "/v1/auth/admin/onboarding/joins" })
+    .input(
+      z.object({
+        month: z
+          .string()
+          .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+          .optional(),
+      }),
+    )
+    .output(
+      z.object({
+        month: z.string(),
+        totals: z.object({
+          redeemed: z.number().int().nonnegative(),
+          newMembers: z.number().int().nonnegative(),
+        }),
+        organizations: z.array(
+          z.object({
+            organizationId: z.string(),
+            redeemed: z.number().int().nonnegative(),
+            newMembers: z.number().int().nonnegative(),
+          }),
+        ),
+      }),
+    )
+    .errors(Errors),
+
   getOnboardingCodeInfo: oc
     .route({ method: "GET", path: "/v1/auth/onboarding/info" })
     .input(z.object({ code: z.string().min(1) }))
