@@ -43,6 +43,7 @@ import {
   resolveLocalRoot,
   waitForLocalContainer,
 } from "./federation.server";
+import { enforceCacheLimit } from "./ttl-cache";
 
 const MAX_COMPOSE_VARIANTS = 64;
 
@@ -164,55 +165,53 @@ export function createUiComposeCacheState(): UiComposeCacheState {
 
 const runFetch = (url: string, init?: RequestInit): Promise<Response> => fetch(url, init);
 
-const loadRemoteManifestCached = (
+const loadRemoteManifestCached = Effect.fn("loadRemoteManifestCached")(function* (
   source: UiSource,
   manifestUrl: string,
   cache: UiComposeCacheState,
-): Effect.Effect<PluginManifest, UiComposeError> =>
-  Effect.gen(function* () {
-    const cached = cache.remoteManifests.get(source.key);
-    const now = yield* Clock.currentTimeMillis;
-    if (cached && now - cached.fetchedAt < MANIFEST_TTL_MS) {
-      return cached.manifest;
-    }
-    const fresh = yield* Effect.tryPromise({
-      try: async () => {
-        const response = await runFetch(manifestUrl);
-        if (!response.ok) {
-          throw new Error(`manifest fetch ${response.status} for ${manifestUrl}`);
+) {
+  const cached = cache.remoteManifests.get(source.key);
+  const now = yield* Clock.currentTimeMillis;
+  if (cached && now - cached.fetchedAt < MANIFEST_TTL_MS) {
+    return cached.manifest;
+  }
+  const fresh = yield* Effect.tryPromise({
+    try: async () => {
+      const response = await runFetch(manifestUrl);
+      if (!response.ok) {
+        throw new Error(`manifest fetch ${response.status} for ${manifestUrl}`);
+      }
+      return PluginManifestSchema.parse(await response.json()) satisfies PluginManifest;
+    },
+    catch: (cause) =>
+      new UiComposeError({ operation: `Failed to load UI manifest from ${manifestUrl}`, cause }),
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.gen(function* () {
+        if (cached?.manifest) {
+          yield* Effect.logWarning(
+            `[Compose] Manifest fetch failed for "${source.key}" (${error.message}); using last-good snapshot`,
+          );
+          return cached.manifest;
         }
-        return PluginManifestSchema.parse(await response.json()) satisfies PluginManifest;
-      },
-      catch: (cause) =>
-        new UiComposeError({ operation: `Failed to load UI manifest from ${manifestUrl}`, cause }),
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.gen(function* () {
-          if (cached?.manifest) {
-            yield* Effect.logWarning(
-              `[Compose] Manifest fetch failed for "${source.key}" (${error.message}); using last-good snapshot`,
-            );
-            return cached.manifest;
-          }
-          return yield* error;
-        }),
-      ),
-    );
-    cache.remoteManifests.set(source.key, { manifest: fresh, fetchedAt: now });
-    return fresh;
-  });
+        return yield* error;
+      }),
+    ),
+  );
+  cache.remoteManifests.set(source.key, { manifest: fresh, fetchedAt: now });
+  return fresh;
+});
 
-const loadManifest = (
+const loadManifest = Effect.fn("loadManifest")(function* (
   source: UiSource,
   cache: UiComposeCacheState,
-): Effect.Effect<PluginManifest, UiComposeError> => {
+) {
   if (source.localRoot) {
-    const manifestContents = Effect.try({
+    return yield* Effect.try({
       try: () => readFileSync(`${source.localRoot}/src/${MANIFEST_FILENAME}`, "utf8"),
       catch: (cause) =>
         new UiComposeError({ operation: "Failed to read local UI manifest", cause }),
-    });
-    return manifestContents.pipe(
+    }).pipe(
       Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Schema.Json))),
       Effect.mapError(
         (cause) => new UiComposeError({ operation: "Failed to decode local UI manifest", cause }),
@@ -226,40 +225,32 @@ const loadManifest = (
     );
   }
   if (!source.manifestUrl) {
-    return Effect.fail(
-      new UiComposeError({
-        operation: `UI source "${source.key}" has no manifest location`,
-        cause: new Error("Manifest location is required"),
-      }),
-    );
+    return yield* new UiComposeError({
+      operation: `UI source "${source.key}" has no manifest location`,
+      cause: new Error("Manifest location is required"),
+    });
   }
-  return loadRemoteManifestCached(source, source.manifestUrl, cache);
-};
-
-interface ResolvedManifests {
-  manifests: PluginManifest[];
-  digest: string;
-}
+  return yield* loadRemoteManifestCached(source, source.manifestUrl, cache);
+});
 
 /** The shared front half of composition: manifests + digest. Both composeUi
  * (full SSR variant) and composeClientPayload (payload only) run this so the
  * two paths digest identically by construction. */
-const resolveManifestsAndDigest = (
+const resolveManifestsAndDigest = Effect.fn("resolveManifestsAndDigest")(function* (
   sources: UiSource[],
   cache: UiComposeCacheState,
-): Effect.Effect<ResolvedManifests, Error> =>
-  Effect.gen(function* () {
-    const manifests = yield* Effect.forEach(sources, (source) => loadManifest(source, cache), {
-      concurrency: "unbounded",
-    });
-    const digest = yield* Effect.tryPromise(() =>
-      digestOf({
-        plugins: sources.map((source) => ({ key: source.key, mfName: source.mfName })),
-        manifests,
-      }),
-    );
-    return { manifests, digest };
+) {
+  const manifests = yield* Effect.forEach(sources, (source) => loadManifest(source, cache), {
+    concurrency: "unbounded",
   });
+  const digest = yield* Effect.tryPromise(() =>
+    digestOf({
+      plugins: sources.map((source) => ({ key: source.key, mfName: source.mfName })),
+      manifests,
+    }),
+  );
+  return { manifests, digest };
+});
 
 const clientPayloadOf = (
   sources: UiSource[],
@@ -307,103 +298,96 @@ function variantFingerprint(sources: UiSource[]): string {
     .join("|");
 }
 
-export const composeUi = (
+export const composeUi = Effect.fn("composeUi")(function* (
   config: RuntimeConfig,
   cache: UiComposeCacheState,
-): Effect.Effect<ComposedUi, Error> =>
-  Effect.gen(function* () {
-    const sources = uiSources(config);
-    const core = sources.find((source) => source.key === CORE_UI_KEY)!;
+) {
+  const sources = uiSources(config);
+  const core = sources.find((source) => source.key === CORE_UI_KEY)!;
 
-    const { manifests, digest } = yield* resolveManifestsAndDigest(sources, cache);
-    const manifestByKey = new Map(sources.map((source, i) => [source.key, manifests[i]!]));
+  const { manifests, digest } = yield* resolveManifestsAndDigest(sources, cache);
+  const manifestByKey = new Map(sources.map((source, i) => [source.key, manifests[i]!]));
 
-    const variantKey = `${digest}::${variantFingerprint(sources)}`;
-    const isDev = sources.some((source) => source.localRoot);
-    const now = yield* Clock.currentTimeMillis;
-    const cached = cache.variants.get(variantKey);
-    if (cached && (isDev ? cached.staleAfter > now : true)) {
-      return cached.variant;
+  const variantKey = `${digest}::${variantFingerprint(sources)}`;
+  const isDev = sources.some((source) => source.localRoot);
+  const now = yield* Clock.currentTimeMillis;
+  const cached = cache.variants.get(variantKey);
+  if (cached && (isDev ? cached.staleAfter > now : true)) {
+    return cached.variant;
+  }
+
+  let compose: ComposeModule["constructTree"];
+  let coreRouteConfig: RouteConfigModule;
+
+  const coreEntry = core.localRoot
+    ? yield* Effect.tryPromise(() =>
+        localUiRemoteEntry({ name: core.mfName, localRoot: core.localRoot! }),
+      )
+    : core.remote!;
+  if (core.localRoot) {
+    yield* waitForLocalContainer(coreEntry, config.env);
+  }
+  const [composeModule, routeConfig, routerModule] = yield* Effect.all([
+    loadUiComposeModule(coreEntry, config.env),
+    loadCoreUiRouteConfig(coreEntry, config.env),
+    loadRouterModule(config, core.localRoot ? coreEntry : undefined),
+  ]);
+  compose = composeModule.constructTree;
+  coreRouteConfig = routeConfig;
+
+  const routeConfigBySource = new Map<string, RouteConfigModule>([[CORE_UI_KEY, coreRouteConfig]]);
+  for (const source of sources) {
+    if (source.key === CORE_UI_KEY) continue;
+    if (source.localRoot) {
+      const localEntry = yield* Effect.tryPromise(() =>
+        localUiRemoteEntry({ name: source.mfName, localRoot: source.localRoot! }),
+      );
+      yield* waitForLocalContainer(localEntry, config.env);
+      routeConfigBySource.set(source.key, yield* loadUiRouteConfig(localEntry, config.env));
+    } else if (source.remote) {
+      routeConfigBySource.set(source.key, yield* loadUiRouteConfig(source.remote, config.env));
     }
+  }
 
-    let compose: ComposeModule["constructTree"];
-    let coreRouteConfig: RouteConfigModule;
+  const constructed = yield* Effect.tryPromise(() =>
+    compose({
+      name: "server",
+      plugins: sources.map((source) => ({ key: source.key, mfName: source.mfName })),
+      resolve: async (ref: { key: string }) => {
+        const manifest = manifestByKey.get(ref.key);
+        const routeConfig = routeConfigBySource.get(ref.key);
+        if (!manifest || !routeConfig) {
+          throw new Error(`composition source "${ref.key}" is not fully resolved`);
+        }
+        return { key: ref.key, manifest, routeConfig };
+      },
+      rootOptions: coreRouteConfig.rootMeta,
+    }),
+  );
 
-    const coreEntry = core.localRoot
-      ? yield* Effect.tryPromise(() =>
-          localUiRemoteEntry({ name: core.mfName, localRoot: core.localRoot! }),
-        )
-      : core.remote!;
-    if (core.localRoot) {
-      yield* waitForLocalContainer(coreEntry, config.env);
-    }
-    const [composeModule, routeConfig, routerModule] = yield* Effect.all([
-      loadUiComposeModule(coreEntry, config.env),
-      loadCoreUiRouteConfig(coreEntry, config.env),
-      loadRouterModule(config, core.localRoot ? coreEntry : undefined),
-    ]);
-    compose = composeModule.constructTree;
-    coreRouteConfig = routeConfig;
+  if (constructed.digest !== digest) {
+    return yield* new ComposeDigestMismatchError({
+      engineDigest: constructed.digest,
+      manifestDigest: digest,
+    });
+  }
 
-    const routeConfigBySource = new Map<string, RouteConfigModule>([
-      [CORE_UI_KEY, coreRouteConfig],
-    ]);
-    for (const source of sources) {
-      if (source.key === CORE_UI_KEY) continue;
-      if (source.localRoot) {
-        const localEntry = yield* Effect.tryPromise(() =>
-          localUiRemoteEntry({ name: source.mfName, localRoot: source.localRoot! }),
-        );
-        yield* waitForLocalContainer(localEntry, config.env);
-        routeConfigBySource.set(source.key, yield* loadUiRouteConfig(localEntry, config.env));
-      } else if (source.remote) {
-        routeConfigBySource.set(source.key, yield* loadUiRouteConfig(source.remote, config.env));
-      }
-    }
-
-    const constructed = yield* Effect.tryPromise(() =>
-      compose({
-        name: "server",
-        plugins: sources.map((source) => ({ key: source.key, mfName: source.mfName })),
-        resolve: async (ref: { key: string }) => {
-          const manifest = manifestByKey.get(ref.key);
-          const routeConfig = routeConfigBySource.get(ref.key);
-          if (!manifest || !routeConfig) {
-            throw new Error(`composition source "${ref.key}" is not fully resolved`);
-          }
-          return { key: ref.key, manifest, routeConfig };
-        },
-        rootOptions: coreRouteConfig.rootMeta,
-      }),
-    );
-
-    if (constructed.digest !== digest) {
-      return yield* new ComposeDigestMismatchError({
-        engineDigest: constructed.digest,
-        manifestDigest: digest,
-      });
-    }
-
-    const variant: ComposedUi = {
-      routerModule,
-      routeTree: constructed.rootRoute,
-      digest,
-      nav: constructed.nav,
-      clientPayload: clientPayloadOf(sources, manifests, digest),
-    };
-    rememberVariant(
-      cache,
-      variantKey,
-      variant,
-      isDev ? now + DEV_VARIANT_TTL_MS : Number.POSITIVE_INFINITY,
-    );
-    while (cache.variants.size > MAX_COMPOSE_VARIANTS) {
-      const oldest = cache.variants.keys().next().value;
-      if (!oldest) break;
-      cache.variants.delete(oldest);
-    }
-    return variant;
-  });
+  const variant: ComposedUi = {
+    routerModule,
+    routeTree: constructed.rootRoute,
+    digest,
+    nav: constructed.nav,
+    clientPayload: clientPayloadOf(sources, manifests, digest),
+  };
+  rememberVariant(
+    cache,
+    variantKey,
+    variant,
+    isDev ? now + DEV_VARIANT_TTL_MS : Number.POSITIVE_INFINITY,
+  );
+  enforceCacheLimit(cache.variants, MAX_COMPOSE_VARIANTS);
+  return variant;
+});
 
 export interface ClientCompose {
   digest: string;
@@ -420,13 +404,12 @@ export interface ClientCompose {
  * for the constructed one. Digest parity with composeUi is structural: both
  * run resolveManifestsAndDigest over the same sources.
  */
-export const composeClientPayload = (
+export const composeClientPayload = Effect.fn("composeClientPayload")(function* (
   config: RuntimeConfig,
   cache: UiComposeCacheState,
-): Effect.Effect<ClientCompose | undefined, Error> =>
-  Effect.gen(function* () {
-    const sources = uiSources(config);
-    if (sources.every((source) => source.key === CORE_UI_KEY)) return undefined;
-    const { manifests, digest } = yield* resolveManifestsAndDigest(sources, cache);
-    return { digest, clientPayload: clientPayloadOf(sources, manifests, digest) };
-  });
+) {
+  const sources = uiSources(config);
+  if (sources.every((source) => source.key === CORE_UI_KEY)) return undefined;
+  const { manifests, digest } = yield* resolveManifestsAndDigest(sources, cache);
+  return { digest, clientPayload: clientPayloadOf(sources, manifests, digest) };
+});

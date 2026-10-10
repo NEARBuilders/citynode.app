@@ -16,9 +16,9 @@ import {
   LocalDate,
   NodeValidatorTable,
   SectionHeader,
-  TeamStakeCard,
 } from "@/components";
 import { EventDate, upcomingEvents } from "@/components/discovery/event-onboarding";
+import { TeamStakeCard, useCanSeeTeamStake } from "@/components/team-stake-card";
 import {
   Item,
   ItemActions,
@@ -53,8 +53,16 @@ function Stat({ label, value, testId }: { label: string; value: string; testId: 
 
 function NodeOverview() {
   const translate = useAppTranslation();
-  const { runtimeConfig, selectedNode, summary, stakingSourceNode, tenant, auth, canManage } =
-    Route.useRouteContext();
+  const {
+    runtimeConfig,
+    selectedNode,
+    summary,
+    stakingSourceNode,
+    tenant,
+    auth,
+    canManage,
+    inFinanceTeam,
+  } = Route.useRouteContext();
   const apiClient = useApiClient();
   const [now] = useState(() => Date.now());
   const orgId = tenant?.orgId ?? auth.activeOrganizationId;
@@ -90,6 +98,13 @@ function NodeOverview() {
     enabled: daoOwned && canManage && !!orgId,
     staleTime: 30_000,
   });
+  const teamStake = resolveTeamStakeTarget({
+    daoAccountId: daoQuery.data?.daoAccountId,
+    tenantAccountId: tenant?.accountId,
+    tenantOwnerKind: tenant?.ownerKind,
+    validators: summary?.stakingValidators.validators ?? [],
+  });
+  const showTeamStake = useCanSeeTeamStake(teamStake, { canManage, inFinanceTeam });
   if (!selectedNode || !summary) return null;
 
   const pendingConfig = pendingConfigQuery.data ?? null;
@@ -97,12 +112,6 @@ function NodeOverview() {
 
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
   const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
-  const teamStake = resolveTeamStakeTarget({
-    daoAccountId: daoQuery.data?.daoAccountId,
-    tenantAccountId: tenant?.accountId,
-    tenantOwnerKind: tenant?.ownerKind,
-    validators: summary.stakingValidators.validators,
-  });
   const upcoming = upcomingEvents(activities.data ?? [], now);
   const contentLink = (tab: "events" | "onboarding") => (
     <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} search={{ tab }} />
@@ -112,9 +121,7 @@ function NodeOverview() {
 
   return (
     <div className="flex flex-col gap-12">
-      {typeof bulletin === "string" && bulletin.trim() && (
-        <Bulletin content={bulletin} runtimeConfig={runtimeConfig} />
-      )}
+      {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         <Stat
           label={translate("community.upcoming")}
@@ -229,7 +236,7 @@ function NodeOverview() {
         )}
       </section>
 
-      <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />
+      {showTeamStake && <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />}
 
       <section className="flex flex-col gap-6">
         <SectionHeader

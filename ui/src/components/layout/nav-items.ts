@@ -21,6 +21,7 @@ import {
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
 import type { FeatureArea } from "@/lib/feature-areas";
+import { areasAllowPath } from "@/lib/team-workspace";
 
 export type SidebarRole = "anon" | "member" | "admin";
 
@@ -44,7 +45,6 @@ export interface SidebarItem {
   search?: Record<string, string>;
   exact?: boolean;
   activePrefixes?: string[];
-  area?: FeatureArea;
   children?: SidebarItem[];
   section?: SidebarSection;
   group?: string;
@@ -137,7 +137,6 @@ export function buildNavItems(
       slug: "stake",
       to: "/stake",
       roleRequired: "anon",
-      area: "stake",
       section: "main",
     },
     {
@@ -153,6 +152,7 @@ export function buildNavItems(
       label: t("footer.about"),
       slug: "about",
       to: "/about",
+      activePrefixes: ["/about", "/skill"],
       roleRequired: "anon",
       section: "main",
     },
@@ -163,7 +163,6 @@ export function buildNavItems(
       to: "/dashboard/node",
       activePrefixes: ["/dashboard/node", "/nodes/", "/tenant/"],
       roleRequired: "member",
-      area: "node-operations",
       section: "organization",
     },
     {
@@ -261,7 +260,7 @@ export function filterSidebarByArea(
 ): SidebarItem[] {
   if (!allowedAreas) return items;
   const visible = (item: SidebarItem): SidebarItem | null => {
-    if (item.area && !allowedAreas.includes(item.area)) return null;
+    if (!areasAllowPath(allowedAreas, item.to)) return null;
     if (!item.children) return item;
     const children = item.children
       .map(visible)

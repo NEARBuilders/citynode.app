@@ -1,3 +1,4 @@
+import { Data, Effect } from "effect";
 import { AppActionError } from "@/i18n/error-message";
 import {
   signAsDaoTransaction,
@@ -44,7 +45,15 @@ export function parseUnstakeAmount(amount: string, max: bigint) {
   return yocto;
 }
 
-export async function proposeTeamPoolAction(input: {
+export class TeamPoolWalletFailed extends Data.TaggedError("TeamPoolWalletFailed")<{
+  readonly cause: unknown;
+}> {}
+
+function walletStep<A>(run: () => Promise<A>) {
+  return Effect.tryPromise({ try: run, catch: (cause) => new TeamPoolWalletFailed({ cause }) });
+}
+
+export const proposeTeamPoolAction = Effect.fn("proposeTeamPoolAction")(function* <E>(input: {
   teamAccountId: string;
   poolAccountId: string;
   method: "unstake" | "withdraw";
@@ -52,27 +61,39 @@ export async function proposeTeamPoolAction(input: {
   maxAmountYocto: bigint;
   authAccountId: string | null;
   connection: Pick<UseDaoConnectionResult, "daoAccountId" | "connect" | "disconnect">;
+  beforeSign: Effect.Effect<void, E>;
 }) {
   if (input.amountYocto <= 0n || input.amountYocto > input.maxAmountYocto) {
-    throw new AppActionError(
+    return yield* new AppActionError(
       input.method === "unstake" ? "stake.invalidTeamUnstake" : "stake.invalidTeamWithdraw",
     );
   }
-  let dao = input.connection.daoAccountId;
-  if (dao !== input.teamAccountId || !(await verifyDaoAccount(input.teamAccountId))) {
-    if (dao) await input.connection.disconnect();
-    dao = await input.connection.connect({
-      authAccountId: input.authAccountId ?? undefined,
-    });
-  }
+  const dao = yield* Effect.interruptible(
+    Effect.gen(function* () {
+      const current = input.connection.daoAccountId;
+      if (
+        current === input.teamAccountId &&
+        (yield* walletStep(() => verifyDaoAccount(input.teamAccountId)))
+      ) {
+        return current;
+      }
+      if (current) yield* walletStep(() => input.connection.disconnect());
+      return yield* walletStep(() =>
+        input.connection.connect({ authAccountId: input.authAccountId ?? undefined }),
+      );
+    }),
+  );
   if (dao !== input.teamAccountId) {
-    throw new AppActionError("wallet.daoWrongAccount", {
+    return yield* new AppActionError("wallet.daoWrongAccount", {
       actual: dao,
       expected: input.teamAccountId,
     });
   }
-  await signAsDaoTransaction(
-    input.teamAccountId,
-    teamPoolCall(input.poolAccountId, input.method, input.amountYocto),
+  yield* Effect.interruptible(input.beforeSign);
+  yield* walletStep(() =>
+    signAsDaoTransaction(
+      input.teamAccountId,
+      teamPoolCall(input.poolAccountId, input.method, input.amountYocto),
+    ),
   );
-}
+}, Effect.uninterruptible);

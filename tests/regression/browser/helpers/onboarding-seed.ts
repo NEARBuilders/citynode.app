@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import * as authSchema from "../../../../plugins/auth/src/db/schema.ts";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
@@ -11,16 +12,36 @@ function rawCode() {
   return randomUUID().replaceAll("-", "");
 }
 
+function hashCode(code: string) {
+  return createHash("sha256").update(code).digest("hex");
+}
+
+async function openAuthDatabase() {
+  const regressionEnv = computeRegressionEnv();
+  return createAuthTestInstance({
+    authDatabaseUrl: regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "",
+    secret: regressionEnv.authSecret,
+  });
+}
+
+export async function expireOnboardingCode(code: string): Promise<void> {
+  const { db, close } = await openAuthDatabase();
+  try {
+    await db
+      .update(authSchema.onboardingCode)
+      .set({ expiresAt: new Date(Date.now() - HOUR) })
+      .where(eq(authSchema.onboardingCode.codeHash, hashCode(code)));
+  } finally {
+    await close();
+  }
+}
+
 export async function seedOnboardingCodes(): Promise<{
   organizationName: string;
   eventName: string;
   codes: Record<OnboardingCodeFixture, string>;
 }> {
-  const regressionEnv = computeRegressionEnv();
-  const { test, db, close } = await createAuthTestInstance({
-    authDatabaseUrl: regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "",
-    secret: regressionEnv.authSecret,
-  });
+  const { test, db, close } = await openAuthDatabase();
   try {
     const unique = randomUUID().slice(0, 8);
     const organizer = await test.saveUser(
@@ -65,7 +86,7 @@ export async function seedOnboardingCodes(): Promise<{
       codes[fixture] = code;
       await db.insert(authSchema.onboardingCode).values({
         id: randomUUID(),
-        codeHash: createHash("sha256").update(code).digest("hex"),
+        codeHash: hashCode(code),
         organizationId: organization.id,
         eventId: randomUUID(),
         eventName,

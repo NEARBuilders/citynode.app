@@ -28,11 +28,12 @@ export interface TeamWorkspace {
   canManageOrganization?: boolean;
 }
 
-const ROUTE_AREAS: Array<{ prefix: string; area: FeatureArea }> = [
-  { prefix: "/dashboard/node", area: "node-operations" },
-  { prefix: "/tenant", area: "node-operations" },
-  { prefix: "/nodes", area: "node-operations" },
-  { prefix: "/stake", area: "stake" },
+const ROUTE_AREAS: Array<{ path: string; exact?: boolean; areas: FeatureArea[] }> = [
+  { path: "/dashboard/node", exact: true, areas: ["node-operations", "finance"] },
+  { path: "/dashboard/node", areas: ["node-operations"] },
+  { path: "/tenant", areas: ["node-operations"] },
+  { path: "/nodes", areas: ["node-operations"] },
+  { path: "/stake", areas: ["stake"] },
 ];
 
 export const teamWorkspaceQueryKey = ["team-workspace"] as const;
@@ -52,17 +53,26 @@ export function resolveTeamWorkspace(
   };
 }
 
-export function areaForPath(pathname: string): FeatureArea | null {
-  const match = ROUTE_AREAS.find(
-    ({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+export function areasForPath(pathname: string): FeatureArea[] | null {
+  const match = ROUTE_AREAS.find(({ path, exact }) =>
+    exact
+      ? pathname === path || pathname === `${path}/`
+      : pathname === path || pathname.startsWith(`${path}/`),
   );
-  return match?.area ?? null;
+  return match?.areas ?? null;
+}
+
+export function areasAllowPath(
+  allowedAreas: readonly FeatureArea[] | null,
+  pathname: string,
+): boolean {
+  const areas = areasForPath(pathname);
+  if (!areas || !allowedAreas) return true;
+  return areas.some((area) => allowedAreas.includes(area));
 }
 
 export function isPathAllowed(workspace: TeamWorkspace, pathname: string): boolean {
-  const area = areaForPath(pathname);
-  if (!area || !workspace.allowedAreas) return true;
-  return workspace.allowedAreas.includes(area);
+  return areasAllowPath(workspace.allowedAreas, pathname);
 }
 
 export function teamWorkspaceQueryOptions(apiClient: ApiClient) {
@@ -80,12 +90,12 @@ export async function requireTeamArea({
   context: { apiClient: ApiClient; queryClient: QueryClient };
   location: { pathname: string };
 }) {
-  const area = areaForPath(location.pathname);
-  if (!area) return;
+  const areas = areasForPath(location.pathname);
+  if (!areas) return;
   const workspace = await context.queryClient
     .ensureQueryData(teamWorkspaceQueryOptions(context.apiClient))
     .catch(() => null);
   if (workspace && !isPathAllowed(workspace, location.pathname)) {
-    throw redirect({ to: "/dashboard", search: { restricted: area } });
+    throw redirect({ to: "/dashboard", search: { restricted: areas[0] } });
   }
 }
