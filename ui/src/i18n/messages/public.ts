@@ -647,12 +647,6 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Disponible au retrait : {amount}",
     "可提取：{amount}",
   ],
-  "stake.readyBalance": [
-    "Ready to withdraw: {amount}",
-    "Listo para retirar: {amount}",
-    "Prêt à retirer : {amount}",
-    "可提取：{amount}",
-  ],
   "stake.recommended": ["Recommended", "Recomendado", "Recommandé", "推荐"],
   "stake.refreshFailed": [
     "Stake confirmed, but live pool stats could not refresh.",
@@ -731,7 +725,31 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "{team} dans {pool}",
     "{team} 位于 {pool}",
   ],
+  "stake.proposalPending": [
+    "An unstake or withdraw proposal is waiting for votes in the DAO.",
+    "Una propuesta de retirada de delegación o de retiro espera votos en la DAO.",
+    "Une proposition de retrait du staking ou de retrait des fonds attend des votes dans la DAO.",
+    "一项解除质押或提取提案正在等待 DAO 投票。",
+  ],
+  "stake.proposersOnly": [
+    "Only DAO members who can propose can start this.",
+    "Solo los miembros del DAO que pueden proponer pueden iniciar esto.",
+    "Seuls les membres de la DAO autorisés à proposer peuvent lancer cette action.",
+    "只有可以提交提案的 DAO 成员才能发起此操作。",
+  ],
+  "stake.readFailed": [
+    "Couldn't read the pool or the DAO's proposals, so actions are paused.",
+    "No se pudo leer el pool ni las propuestas del DAO, así que las acciones están en pausa.",
+    "Impossible de lire le pool ou les propositions de la DAO : les actions sont suspendues.",
+    "无法读取质押池或 DAO 提案，操作已暂停。",
+  ],
   "stake.teamStake": ["Team stake", "Delegación del equipo", "Staking de l'équipe", "团队质押"],
+  "stake.testnetPaused": [
+    "This DAO is on testnet, where its rules and proposals can't be read here, so actions are paused.",
+    "Este DAO está en testnet, donde no se pueden leer aquí sus reglas ni sus propuestas, así que las acciones están en pausa.",
+    "Cette DAO est sur testnet, où ses règles et ses propositions ne peuvent pas être lues ici : les actions sont suspendues.",
+    "此 DAO 位于测试网，无法在此读取其规则和提案，操作已暂停。",
+  ],
   "stake.toNamed": [
     "Stake to {name}",
     "Delegar en {name}",
@@ -769,17 +787,17 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ce pool ne peut pas recevoir de NEAR ici.",
     "此处无法向该质押池转入 NEAR。",
   ],
-  "stake.unlockingAmount": [
-    "Unlocking: {amount}",
-    "Desbloqueando: {amount}",
-    "En cours de déblocage : {amount}",
-    "解锁中：{amount}",
+  "stake.askTrezu": [
+    "Ask a DAO member on trezu.app",
+    "Pide a un miembro del DAO en trezu.app",
+    "Demandez à un membre de la DAO sur trezu.app",
+    "在 trezu.app 联系 DAO 成员",
   ],
-  "stake.unlockingBalance": [
-    "Unlocking: {amount}",
-    "Desbloqueando: {amount}",
-    "En cours de déblocage : {amount}",
-    "解锁中：{amount}",
+  "stake.voteTrezu": [
+    "Vote on trezu.app",
+    "Votar en trezu.app",
+    "Voter sur trezu.app",
+    "在 trezu.app 投票",
   ],
   "stake.unlockNotice": [
     "Unlocks for withdrawal after about a day.",
