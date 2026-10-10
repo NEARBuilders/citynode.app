@@ -93,7 +93,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
         ))}
       </div>
     );
-  if (list.isError)
+  if (list.isError && !list.data)
     return (
       <DiscoveryLoadError
         error={list.error}

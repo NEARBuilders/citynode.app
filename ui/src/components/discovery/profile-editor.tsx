@@ -55,7 +55,7 @@ export function ProfileEditor({ nodeId }: { nodeId: string }) {
         <Skeleton className="h-64 w-full" />
       </div>
     );
-  if (query.isError)
+  if (query.isError && query.data === undefined)
     return (
       <DiscoveryLoadError
         error={query.error}

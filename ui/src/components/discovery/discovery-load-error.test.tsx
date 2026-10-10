@@ -6,12 +6,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
 import { DiscoveryLoadError } from "./discovery-load-error";
 
-vi.mock("@/app", () => ({
-  pluginHref: (path: string, search?: Record<string, string>) =>
-    `${path}?redirect=${encodeURIComponent(search?.redirect ?? "")}`,
-  pluginPath: (path: string) => path,
-}));
-
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to: _to, ...props }: { children?: ReactNode; to?: string }) => (
     <a {...props}>{children}</a>
@@ -51,6 +45,14 @@ describe("DiscoveryLoadError", () => {
 
     expect(screen.getByTestId("community-cannot-edit")).toBeTruthy();
     expect(screen.queryByTestId("community-load-error")).toBeNull();
+  });
+
+  it("shows a not-found state without a retry when the community is gone", () => {
+    renderFailure({ code: "NOT_FOUND", status: 404 });
+
+    expect(screen.getByTestId("community-not-found")).toBeTruthy();
+    expect(screen.getByTestId("community-not-found-home")).toBeTruthy();
+    expect(screen.queryByTestId("community-load-error-retry")).toBeNull();
   });
 
   it("offers a retry for any other failure", () => {

@@ -25,6 +25,11 @@ export function isPermissionError(error: unknown) {
   return status === 403 || code === "FORBIDDEN";
 }
 
+export function isNotFoundError(error: unknown) {
+  const { status, code } = errorStatusAndCode(error);
+  return status === 404 || code === "NOT_FOUND";
+}
+
 export function appErrorMessage(
   error: unknown,
   t: AppTranslator,

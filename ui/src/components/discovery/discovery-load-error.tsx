@@ -1,10 +1,10 @@
-import { SignInIcon } from "@phosphor-icons/react";
+import { CompassIcon, SignInIcon } from "@phosphor-icons/react";
 import { Link, useLocation } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { pluginHref, pluginPath } from "@/app";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import { isPermissionError, isSessionError } from "@/i18n/error-message";
+import { isNotFoundError, isPermissionError, isSessionError } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { CannotEditState } from "./cannot-edit-state";
 
@@ -39,6 +39,26 @@ export function DiscoveryLoadError({
               }
             >
               {translate("nav.signIn")}
+            </Button>
+          }
+        />
+      </div>
+    );
+  if (isNotFoundError(error))
+    return (
+      <div data-testid="community-not-found">
+        <EmptyState
+          icon={CompassIcon}
+          title={translate("community.notFound")}
+          description={translate("community.notFoundDescription")}
+          action={
+            <Button
+              variant="outline"
+              nativeButton={false}
+              data-testid="community-not-found-home"
+              render={<Link to="/dashboard" />}
+            >
+              {translate("common.backHome")}
             </Button>
           }
         />

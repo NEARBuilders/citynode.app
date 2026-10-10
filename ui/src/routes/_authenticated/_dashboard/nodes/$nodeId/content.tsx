@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
 import { PageContainer } from "@/components";
+import { activitiesQueryOptions } from "@/components/discovery/activity-form";
 import { BulletinEditor } from "@/components/discovery/bulletin-editor";
 import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { EventsEditor } from "@/components/discovery/events-editor";
@@ -18,12 +19,17 @@ const TABS: readonly ContentTab[] = ["events", "onboarding", "bulletin"];
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
   validateSearch: (search: Record<string, unknown>): { tab?: ContentTab } =>
     TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {},
-  loader: async ({ context, params }) => {
+  loaderDeps: ({ search }) => ({ tab: search.tab ?? "events" }),
+  loader: async ({ context, params, deps }) => {
+    const { queryClient, apiClient } = context;
     await Promise.all([
       ensureCommunityHeaderData(context, params.nodeId),
-      context.queryClient.prefetchQuery(
-        discoveryProfileQueryOptions(context.apiClient, params.nodeId),
-      ),
+      ...(deps.tab === "events"
+        ? [
+            queryClient.prefetchQuery(discoveryProfileQueryOptions(apiClient, params.nodeId)),
+            queryClient.prefetchQuery(activitiesQueryOptions(apiClient, params.nodeId)),
+          ]
+        : []),
     ]);
   },
   head: ({ match }) => ({
