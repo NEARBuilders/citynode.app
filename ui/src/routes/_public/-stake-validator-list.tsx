@@ -7,6 +7,7 @@ import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import {
   formatNearBalance,
   formatPoolFee,
+  isFullCommission,
   stakePoolStatsQueryOptions,
   toNetwork,
 } from "@/lib/queries/stake-pool";
@@ -95,11 +96,16 @@ function PoolSummary({ validator }: { validator: StakeValidator }) {
     );
   }
   return (
-    <p className="text-sm text-muted-foreground">
-      {translate("stake.poolStatsNamed", {
-        fee: formatPoolFee(stats.data.feeNumerator, stats.data.feeDenominator, locale),
-        balance: formatNearBalance(stats.data.totalStaked, locale),
-      })}
-    </p>
+    <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+      <p>
+        {translate("stake.poolStatsNamed", {
+          fee: formatPoolFee(stats.data.feeNumerator, stats.data.feeDenominator, locale),
+          balance: formatNearBalance(stats.data.totalStaked, locale),
+        })}
+      </p>
+      {isFullCommission(stats.data.feeNumerator, stats.data.feeDenominator) && (
+        <p data-testid="stake.full-commission">{translate("stake.fullCommission")}</p>
+      )}
+    </div>
   );
 }
