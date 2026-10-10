@@ -166,7 +166,7 @@ function NodeProposals() {
                       />
                     }
                   >
-                    {translate("things.details")}
+                    {translate("common.details")}
                   </Button>
                   {reviewable && (
                     <>

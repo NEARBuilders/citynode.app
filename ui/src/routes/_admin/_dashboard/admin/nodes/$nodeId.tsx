@@ -287,7 +287,7 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
       </section>
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title={translate("things.details")} />
+        <SectionHeader title={translate("common.details")} />
         {description && <p className="max-w-2xl text-base text-foreground">{description}</p>}
         <div className="flex flex-col">
           <InfoRow label={translate("admin.community.id")} value={node.id} mono />

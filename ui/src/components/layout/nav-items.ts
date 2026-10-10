@@ -153,6 +153,7 @@ export function buildNavItems(
       label: t("footer.about"),
       slug: "about",
       to: "/about",
+      activePrefixes: ["/about", "/skill"],
       roleRequired: "anon",
       section: "main",
     },
@@ -173,15 +174,6 @@ export function buildNavItems(
       to: orgPath,
       activePrefixes: ["/orgs"],
       roleRequired: "member",
-      section: "organization",
-    },
-    {
-      icon: CubeIcon,
-      label: t("common.things"),
-      slug: "things",
-      to: "/things",
-      roleRequired: "member",
-      area: "things",
       section: "organization",
     },
     ...(context.canCurate || context.isAdmin

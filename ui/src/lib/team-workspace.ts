@@ -32,7 +32,6 @@ const ROUTE_AREAS: Array<{ prefix: string; area: FeatureArea }> = [
   { prefix: "/dashboard/node", area: "node-operations" },
   { prefix: "/tenant", area: "node-operations" },
   { prefix: "/nodes", area: "node-operations" },
-  { prefix: "/things", area: "things" },
   { prefix: "/stake", area: "stake" },
 ];
 

@@ -196,10 +196,10 @@ test.describe("team workspace", () => {
     await expect(switcher).toContainText(teamName, { timeout: 10000 });
     await expect(page.getByTestId("workspace-active-team")).toContainText(teamName);
     await expect(page.getByTestId("sidebar-nav-stake")).toBeVisible();
-    await expect(page.getByTestId("sidebar-nav-things")).toHaveCount(0);
+    await expect(page.getByTestId("sidebar-nav-my-node")).toHaveCount(0);
 
-    await page.goto("/things", { waitUntil: "domcontentloaded" });
-    await page.waitForURL(/\/dashboard\?restricted=things/, {
+    await page.goto("/dashboard/node", { waitUntil: "domcontentloaded" });
+    await page.waitForURL(/\/dashboard\?restricted=node-operations/, {
       timeout: 10000,
       waitUntil: "commit",
     });
@@ -208,11 +208,11 @@ test.describe("team workspace", () => {
     await switcher.click();
     await page.getByTestId("team-switcher-item-all").click();
     await expect(switcher).toContainText("All areas", { timeout: 10000 });
-    await expect(page.getByTestId("sidebar-nav-things")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("sidebar-nav-my-node")).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);
 
-    await page.getByTestId("sidebar-nav-things").click();
-    await page.waitForURL(/\/things/, { timeout: 10000, waitUntil: "commit" });
+    await page.getByTestId("sidebar-nav-my-node").click();
+    await page.waitForURL(/\/dashboard\/node/, { timeout: 10000, waitUntil: "commit" });
 
     expectNoHydrationFailure(pageErrors);
   });

@@ -134,9 +134,6 @@ function ProposalDetailPage() {
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),
-        queryClient.invalidateQueries({ queryKey: ["thing-proposal", proposal.entityId] }),
-        queryClient.invalidateQueries({ queryKey: ["thing", proposal.entityId] }),
-        queryClient.invalidateQueries({ queryKey: ["things-list"] }),
         queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.histories() }),
         invalidateNodeQueries(queryClient),
         invalidateTenantQueries(queryClient),

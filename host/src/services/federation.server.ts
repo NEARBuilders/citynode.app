@@ -36,7 +36,7 @@ interface CachedPromise<T> {
   value: Promise<T>;
 }
 
-const routerModuleCache = new Map<string, CachedPromise<RouterModule>>();
+const routerModuleCache = new Map<string, CachedPromise<unknown>>();
 const verifiedSsrEntryCache = new Map<string, CachedPromise<void>>();
 const uiExposeCache = new Map<string, CachedPromise<unknown>>();
 
@@ -144,25 +144,23 @@ function initializeShareScope(mf: ModuleFederationInstance): Effect.Effect<void,
   );
 }
 
-function disposeFederationResources(): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    routerModuleCache.clear();
-    verifiedSsrEntryCache.clear();
-    uiExposeCache.clear();
-    yield* Effect.forEach(
-      [...localDistServers.values()],
-      (server) => Effect.tryPromise(() => server.stop()).pipe(Effect.ignore),
-      { discard: true },
-    );
-    localDistServers.clear();
-    if (compositionInstance) {
-      removeInstanceRemotes(compositionInstance);
-    }
-    compositionInstance = null;
-    compositionRemoteEntries.clear();
-    loadedEntryByRemote.clear();
-  });
-}
+const disposeFederationResources = Effect.fn("disposeFederationResources")(function* () {
+  routerModuleCache.clear();
+  verifiedSsrEntryCache.clear();
+  uiExposeCache.clear();
+  yield* Effect.forEach(
+    [...localDistServers.values()],
+    (server) => Effect.tryPromise(() => server.stop()).pipe(Effect.ignore),
+    { discard: true },
+  );
+  localDistServers.clear();
+  if (compositionInstance) {
+    removeInstanceRemotes(compositionInstance);
+  }
+  compositionInstance = null;
+  compositionRemoteEntries.clear();
+  loadedEntryByRemote.clear();
+});
 
 /** Ties federation state and local dist servers to the host runtime scope. */
 export class FederationLifecycle extends Context.Service<FederationLifecycle, undefined>()(
@@ -291,12 +289,12 @@ async function verifySsrEntryIntegrity(entryUrl: string, expectedIntegrity: stri
 
 const retrySchedule = Schedule.addDelay(Schedule.recurs(5), () => Effect.succeed(500));
 
-interface RemoteModuleLoad<T> {
+interface RemoteModuleLoad {
   cacheKey: string;
   remoteName: string;
   entryUrl: string;
   expose: string;
-  cache: Map<string, CachedPromise<T>>;
+  cache: Map<string, CachedPromise<unknown>>;
   ttlMs: number;
   maxSize: number;
   /** the expose's contract: `./Router` default-exports its module object; `./compose`/`./routeConfig` export named members */
@@ -331,7 +329,7 @@ function bypassCompositionModuleCache(mf: ModuleFederationInstance, remoteName: 
  * for NEGATIVE_CACHE_TTL_MS so a downed remote is probed once per window,
  * not once per request.
  */
-function loadRemoteExpose<T>(params: RemoteModuleLoad<T>): Promise<T> {
+function loadRemoteExpose<T>(params: RemoteModuleLoad): Promise<T> {
   const {
     cacheKey,
     remoteName,
@@ -348,7 +346,7 @@ function loadRemoteExpose<T>(params: RemoteModuleLoad<T>): Promise<T> {
 
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
-    return cached.value;
+    return cached.value as Promise<T>;
   }
 
   const mf = getCompositionInstance({ name: remoteName, entry: entryUrl });
@@ -432,15 +430,15 @@ function requireSsrEntryUrl(entry: EntrySlot, env: BosEnv): string {
   return ssr;
 }
 
-function loadUiExpose<T>(params: {
-  entry: EntrySlot;
-  env: BosEnv;
-  expose: string;
-  unwrapDefault: boolean;
-  timeoutLabel: string;
-}) {
-  const { entry, env, expose, unwrapDefault, timeoutLabel } = params;
-  return Effect.gen(function* () {
+const loadUiExpose = Effect.fn("loadUiExpose")(
+  function* <T>(params: {
+    entry: EntrySlot;
+    env: BosEnv;
+    expose: string;
+    unwrapDefault: boolean;
+    timeoutLabel: string;
+  }) {
+    const { entry, env, expose, unwrapDefault } = params;
     const entryUrl = requireSsrEntryUrl(entry, env);
     yield* verifyUiEntry(entry, entryUrl);
     const cacheKey = `${entry.name}::${entryUrl}::${entry.ssrIntegrity ?? "no-integrity"}::${expose}`;
@@ -451,7 +449,7 @@ function loadUiExpose<T>(params: {
           remoteName: entry.name,
           entryUrl,
           expose: `${entry.name}/${expose.replace(/^\.\//, "")}`,
-          cache: uiExposeCache as Map<string, CachedPromise<T>>,
+          cache: uiExposeCache,
           ttlMs: UI_EXPOSE_CACHE_TTL_MS,
           maxSize: MAX_UI_EXPOSE_CACHE_SIZE,
           unwrapDefault,
@@ -460,63 +458,81 @@ function loadUiExpose<T>(params: {
       catch: (e) =>
         new FederationError({ remoteName: entry.name, remoteUrl: entry.ssrUrl, cause: e }),
     });
-  }).pipe(
-    Effect.timeout("30 seconds"),
-    Effect.tapError((error: Error) =>
-      Effect.logError(`[SSR] ${timeoutLabel} ${entry.name} failed: ${error.message}`),
+  },
+  (effect, params) =>
+    effect.pipe(
+      Effect.timeout("30 seconds"),
+      Effect.tapError((error: Error) =>
+        Effect.logError(
+          `[SSR] ${params.timeoutLabel} ${params.entry.name} failed: ${error.message}`,
+        ),
+      ),
     ),
-  );
+);
+
+function hasRouteConfigLoaders(
+  module: RouteConfigModule,
+): module is RouteConfigModule & { routeConfigLoaders: object } {
+  return Boolean(module?.routeConfigLoaders && typeof module.routeConfigLoaders === "object");
 }
 
-/** A plugin ui's generated import map (`./routeConfig` expose) for host construction. */
-export const loadUiRouteConfig = (entry: EntrySlot, env: BosEnv) =>
-  loadUiExpose<RouteConfigModule>({
+const loadValidatedRouteConfig = Effect.fn("loadValidatedRouteConfig")(function* (
+  entry: EntrySlot,
+  env: BosEnv,
+) {
+  const module = yield* loadUiExpose<RouteConfigModule>({
     entry,
     env,
     expose: UI_EXPOSES.routeConfig,
     unwrapDefault: false,
     timeoutLabel: "Ui routeConfig",
-  }).pipe(
-    Effect.filterOrFail(
-      (module) =>
-        Boolean(module?.routeConfigLoaders && typeof module.routeConfigLoaders === "object"),
-      () =>
-        new FederationError({
-          remoteName: entry.name,
-          remoteUrl: entry.ssrUrl,
-          cause: new Error(
-            `routeConfig expose resolved without routeConfigLoaders — the built container name likely does not match the registered remote name "${entry.name}"`,
-          ),
-        }),
+  });
+  if (hasRouteConfigLoaders(module)) return module;
+  return yield* new FederationError({
+    remoteName: entry.name,
+    remoteUrl: entry.ssrUrl,
+    cause: new Error(
+      `routeConfig expose resolved without routeConfigLoaders — the built container name likely does not match the registered remote name "${entry.name}"`,
     ),
-  );
+  });
+});
+
+/** A plugin ui's generated import map (`./routeConfig` expose) for host construction. */
+export const loadUiRouteConfig = Effect.fn("loadUiRouteConfig")(function* (
+  entry: EntrySlot,
+  env: BosEnv,
+) {
+  return yield* loadValidatedRouteConfig(entry, env);
+});
 
 export interface ComposeModule {
   constructTree: (input: ConstructInput) => Promise<ConstructedTree>;
 }
 
 /** The core ui's construction engine (`./compose` expose) — executes inside the core's module graph. */
-export const loadUiComposeModule = (entry: EntrySlot, env: BosEnv) =>
-  loadUiExpose<ComposeModule>({
+export const loadUiComposeModule = Effect.fn("loadUiComposeModule")(function* (
+  entry: EntrySlot,
+  env: BosEnv,
+) {
+  return yield* loadUiExpose<ComposeModule>({
     entry,
     env,
     expose: UI_EXPOSES.compose,
     unwrapDefault: false,
     timeoutLabel: "Ui compose",
   });
+});
 
 /** The core ui's generated import map (`./routeConfig` expose). */
-export const loadCoreUiRouteConfig = (entry: EntrySlot, env: BosEnv) =>
-  loadUiExpose<RouteConfigModule>({
-    entry,
-    env,
-    expose: UI_EXPOSES.routeConfig,
-    unwrapDefault: false,
-    timeoutLabel: "Ui routeConfig",
-  });
+export const loadCoreUiRouteConfig = Effect.fn("loadCoreUiRouteConfig")(function* (
+  entry: EntrySlot,
+  env: BosEnv,
+) {
+  return yield* loadValidatedRouteConfig(entry, env);
+});
 
-export const loadRouterModule = (config: RuntimeConfig, localEntry?: EntrySlot) =>
-  Effect.gen(function* () {
+export const loadRouterModule = Effect.fn("loadRouterModule")(
+  function* (config: RuntimeConfig, localEntry?: EntrySlot) {
     const useCache = shouldCacheRouterModule(config) && !localEntry;
     const ssrEntryUrl = requireSsrEntryUrl(localEntry ?? config.ui, config.env);
     const ssrIntegrity = localEntry ? localEntry.ssrIntegrity : config.ui.ssrIntegrity;
@@ -539,7 +555,7 @@ export const loadRouterModule = (config: RuntimeConfig, localEntry?: EntrySlot) 
           remoteName: config.ui.name,
           entryUrl: ssrEntryUrl,
           expose: `${config.ui.name}/Router`,
-          cache: useCache ? routerModuleCache : new Map(),
+          cache: useCache ? routerModuleCache : new Map<string, CachedPromise<unknown>>(),
           ttlMs: ROUTER_MODULE_CACHE_TTL_MS,
           maxSize: MAX_ROUTER_MODULE_CACHE_SIZE,
           unwrapDefault: true,
@@ -554,7 +570,7 @@ export const loadRouterModule = (config: RuntimeConfig, localEntry?: EntrySlot) 
     });
 
     return loadedModule;
-  }).pipe(
-    Effect.timeout("30 seconds"),
-    Effect.tapError((error: Error) => Effect.logError(`[SSR] Failed: ${error.message}`)),
-  );
+  },
+  Effect.timeout("30 seconds"),
+  Effect.tapError((error: Error) => Effect.logError(`[SSR] Failed: ${error.message}`)),
+);

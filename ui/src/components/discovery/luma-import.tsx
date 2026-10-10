@@ -105,7 +105,7 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
                 translate("calendar.loadingEvents")
               ) : (
                 <>
-                  {translate("things.updated")}
+                  {translate("common.updated")}
                   <LocalDate value={connection.syncedAt} format="relative" />
                   {connection.error ? translate("calendar.lastUpdateFailed") : ""}
                 </>

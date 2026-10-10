@@ -85,14 +85,10 @@ export default App({
     },
   }),
   plugins: {
-    template: Plugin("template").path("plugins/_template", {
-      secrets: ["TEMPLATE_DATABASE_URL"],
-    }),
     registry: Plugin("registry").path("plugins/registry"),
     proposals: Plugin("proposals").path("plugins/proposals", {
       variables: { privatePluginIds: [] },
       secrets: ["PROPOSALS_DATABASE_URL"],
     }),
-    votes: Plugin("votes").path("plugins/votes", { secrets: ["VOTES_DATABASE_URL"] }),
   },
 });

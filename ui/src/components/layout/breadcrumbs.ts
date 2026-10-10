@@ -72,7 +72,6 @@ export function crumbsFor(
   const MY_COMMUNITY: Crumb = { label: t("nav.myCommunity"), to: "/dashboard/node" };
   const EXPLORE: Crumb = { label: t("nav.explore"), to: "/explore" };
   const ORGS: Crumb = { label: t("nav.organizations"), to: "/orgs" };
-  const THINGS: Crumb = { label: t("nav.things"), to: "/things" };
   const ADMIN: Crumb = { label: t("nav.admin"), to: "/admin" };
   const SETTINGS: Crumb = { label: t("nav.settings"), to: "/settings" };
   const DOCS: Crumb = { label: t("nav.docs"), to: "/about" };
@@ -125,12 +124,6 @@ export function crumbsFor(
       if (second === "new") return [ORGS, page(t("nav.newOrganization"))];
       if (second === "invites") return [ORGS, page(t("nav.invitation"))];
       return [ORGS, page(context.orgName?.(second) ?? decodeURIComponent(second))];
-    }
-    case "things": {
-      if (!second) return [page(THINGS.label)];
-      if (second === "new") return [THINGS, page(t("nav.newThing"))];
-      if (second === "live") return [THINGS, page(t("nav.live"))];
-      return [THINGS, page(t("nav.thing"))];
     }
     case "admin": {
       if (second === "organizations") return [ADMIN, page(ORGS.label)];

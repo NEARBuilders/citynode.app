@@ -240,7 +240,7 @@ it("lets anonymous visitors browse a pool and asks them to sign in to stake", as
 
 it("sends signed-in members of a team without the stake area to Home", async () => {
   mockApi([parent, child], child.id);
-  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["things"]);
+  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["events"]);
   await vi.waitFor(() => expect(router.state.location.pathname).toBe("/dashboard"));
   expect(router.state.location.search).toEqual({ restricted: "stake" });
 });

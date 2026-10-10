@@ -19,13 +19,6 @@ type ProposalApplicationHandler = (input: {
 }) => Promise<AppliedResource>;
 
 const proposalApplicationHandlers = {
-  template: async ({ apiClient, proposal }) => {
-    const thing = await apiClient.template.createThing({
-      thingId: proposal.entityId,
-      payload: proposal.payload,
-    });
-    return { id: thing.thingId, label: "Thing" };
-  },
   node: async ({ apiClient, proposal, gatewayId, baseAccount, publishTenantConfig }) => {
     const payload = parseNodeProposalPayload(proposal.payload);
     const hostname = `${payload.slug}.${gatewayId}`;

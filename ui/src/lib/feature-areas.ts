@@ -1,11 +1,10 @@
-export const FEATURE_AREAS = ["node-operations", "finance", "things", "stake", "events"] as const;
+export const FEATURE_AREAS = ["node-operations", "finance", "stake", "events"] as const;
 
 export type FeatureArea = (typeof FEATURE_AREAS)[number];
 
 export const FEATURE_AREA_MESSAGES: Record<FeatureArea, AppMessageId> = {
   "node-operations": "feature.nodeOperations",
   finance: "feature.finance",
-  things: "nav.things",
   stake: "nav.stake",
   events: "feature.events",
 };

@@ -129,7 +129,7 @@ export function regressionStackOptions(config, mode, env = process.env) {
           "--auth",
           "local",
           "--remote-plugins",
-          "apps,template",
+          "apps",
           "--port",
           String(basePort),
           "--api-port",

@@ -121,7 +121,7 @@ export function TenantDetails({
         >
           <span className="font-mono break-all">{orgSlug ? `@${orgSlug}` : tenant.orgId}</span>
         </SettingsRow>
-        <SettingsRow label={translate("things.created")}>
+        <SettingsRow label={translate("common.created")}>
           <LocalDate value={tenant.createdAt} fallback="—" />
           {tenant.updatedAt ? (
             <span className="text-muted-foreground">

@@ -218,7 +218,7 @@ export function HomepageTab({
                     {translate("lifecycle.awaitingProposal", { proposal: pendingProposal.id })}
                   </Badge>
                 ) : configPublished ? (
-                  <Badge variant="success">{translate("things.live")}</Badge>
+                  <Badge variant="success">{translate("common.live")}</Badge>
                 ) : (
                   <Badge variant="outline">{translate("tenant.notPublished")}</Badge>
                 )}

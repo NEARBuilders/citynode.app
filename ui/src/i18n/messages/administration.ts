@@ -1087,6 +1087,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Connexion du portefeuille refusée",
     "钱包连接已拒绝",
   ],
+  "proposal.applyFailedDescription": [
+    "Approved, but applying it failed. Please try again.",
+    "Aprobado, pero no se pudo aplicar. Inténtalo de nuevo.",
+    "Approuvé, mais l’application a échoué. Réessayez.",
+    "已批准，但应用失败。请重试。",
+  ],
   "proposal.applying": ["Applying", "Aplicando", "Application en cours", "正在应用"],
   "proposal.changedFields": [
     "Change {fields}",
@@ -1130,12 +1136,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "La propuesta se aprobó, pero no pudo aplicarse por completo. Revisa sus detalles antes de volver a intentarlo.",
     "La proposition a été approuvée, mais n’a pas pu être entièrement appliquée. Vérifiez ses détails avant de réessayer.",
     "提案已获批准，但未能完全应用。重试前请检查提案详情。",
-  ],
-  "proposal.statusUnavailable": [
-    "Proposal status could not be loaded.",
-    "No se pudo cargar el estado de la propuesta.",
-    "Impossible de charger l’état de la proposition.",
-    "无法加载提案状态。",
   ],
   "proposal.verifyDaoBeforeApproval": [
     "Connect and verify {account} through Trezu before approval.",

@@ -37,7 +37,7 @@ export function TenantDangerZone({
     <>
       {(canSuspend || canReactivate || canDelete) && (
         <section className="flex flex-col gap-2" data-testid="tenant.danger-zone">
-          <SectionHeader title={translate("things.danger")} />
+          <SectionHeader title={translate("common.danger")} />
           <div className="flex flex-col rounded-2xl border border-destructive/30 px-4">
             {canSuspend && (
               <SettingsRow

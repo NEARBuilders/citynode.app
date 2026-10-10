@@ -1302,11 +1302,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }),
     };
 
-    const templateRouter = (plugins as Record<string, { router?: unknown }>).template?.router;
-    if (templateRouter) {
-      (router as Record<string, unknown>).things = templateRouter;
-    }
-
     return router as ContractedRouter<typeof contract, any>;
   },
 });
