@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Data, Effect, Fiber, Scheduler } from "effect";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -40,11 +41,14 @@ import {
 } from "@/lib/dao-connect";
 import {
   formatNearBalance,
+  formatPoolFeeTenths,
   invalidateStakePoolQueries,
   readStakePoolAccount,
   type StakePoolAccountView,
+  type StakePoolStatus,
   stakePoolAccountQueryOptions,
   stakePoolQueryKeys,
+  stakePoolStatusQueryOptions,
   type TeamStakeTarget,
 } from "@/lib/queries/stake-pool";
 import {
@@ -87,6 +91,35 @@ export function teamPoolPhase(
   }
   if (accountView.stakedBalance > 0n) return "unstake";
   return null;
+}
+
+export type TeamPoolState =
+  | { kind: "earning" }
+  | { kind: "run-by-other"; ownerId: string; feeNumerator: number; feeDenominator: number }
+  | { kind: "full-commission"; ownerId: string }
+  | { kind: "paused"; ownerId: string | null }
+  | { kind: "not-validating"; ownerId: string | null }
+  | { kind: "joining" };
+
+export function teamPoolState(status: StakePoolStatus, teamAccountId: string): TeamPoolState {
+  const otherOwner = status.ownerId === teamAccountId ? null : status.ownerId;
+  if (status.stakingPaused) return { kind: "paused", ownerId: otherOwner };
+  if (status.validatorSet === "next") return { kind: "joining" };
+  if (status.validatorSet === "none") return { kind: "not-validating", ownerId: otherOwner };
+  if (!otherOwner) return { kind: "earning" };
+  if (status.feeNumerator === status.feeDenominator) {
+    return { kind: "full-commission", ownerId: otherOwner };
+  }
+  return {
+    kind: "run-by-other",
+    ownerId: otherOwner,
+    feeNumerator: status.feeNumerator,
+    feeDenominator: status.feeDenominator,
+  };
+}
+
+function poolOffersClaim(state: TeamPoolState | null) {
+  return state?.kind === "earning" || state?.kind === "run-by-other";
 }
 
 function poolMethodOf(phase: PoolPhase | null): PoolMethod | null {
@@ -503,6 +536,18 @@ function useTeamPoolReads(
   const policy = useQuery(teamPolicyQueryOptions(target));
   const delegationOptions = teamDelegationQueryOptions(target, policy.data, accountId);
   const delegation = useQuery(delegationOptions);
+  const status = useQuery(
+    stakePoolStatusQueryOptions({
+      accountId: target?.poolAccountId ?? "",
+      authClient,
+      network: target?.network,
+      protocol: target?.protocol,
+    }),
+  );
+  const poolState =
+    target && status.data && !status.isError
+      ? teamPoolState(status.data, target.teamAccountId)
+      : null;
   const delegationNeeded = delegationOptions.enabled;
   const accountView = account.isError ? undefined : account.data;
   const readFailed =
@@ -518,14 +563,19 @@ function useTeamPoolReads(
   const rolesRead = policy.isSuccess && (!delegationNeeded || delegation.isSuccess);
   const readsSucceeded = account.isSuccess && proposals.isSuccess && rolesRead;
   const phase = readFailed ? null : teamPoolPhase(accountView, !!proposals.data?.open);
+  const method = readsSucceeded ? poolMethodOf(phase) : null;
   return {
     accountView,
     reading: account.isLoading || proposals.isLoading,
     readFailed,
     rolesRead,
     phase,
+    poolState,
+    statusFailed: status.isError,
+    claimHidden: phase === "unstake" && !status.isLoading && !poolOffersClaim(poolState),
+    retryStatus: () => void status.refetch(),
     failedUntilMs: proposals.data?.failedUntilMs ?? null,
-    method: readsSucceeded ? poolMethodOf(phase) : null,
+    method: method === "unstake" && !poolOffersClaim(poolState) ? null : method,
     canStart: canStartTeamPoolAction(
       target,
       policy.data,
@@ -537,6 +587,7 @@ function useTeamPoolReads(
       void account.refetch();
       void policy.refetch();
       void proposals.refetch();
+      void status.refetch();
       if (delegationNeeded) void delegation.refetch();
     },
   };
@@ -545,9 +596,13 @@ function useTeamPoolReads(
 export function TeamStakeCard({
   target,
   pending = false,
+  teamLinked = false,
+  validatorsTenantId,
 }: {
   target: TeamStakeTarget | null;
   pending?: boolean;
+  teamLinked?: boolean;
+  validatorsTenantId?: string;
 }) {
   const { locale } = useAppLocale();
   const translate = useAppTranslation();
@@ -566,12 +621,17 @@ export function TeamStakeCard({
     readFailed,
     rolesRead,
     phase,
+    poolState,
+    statusFailed,
+    claimHidden,
+    retryStatus,
     failedUntilMs,
     method,
     canStart,
     settled,
     retry,
   } = useTeamPoolReads(target, authClient, queryClient, authAccountId);
+  const showsPoolNote = !readFailed && phase !== "proposal-pending";
   const failedUntil = useLocalDate(failedUntilMs, "datetime");
   const loading = pending || (!!target && reading);
   const dataReady = !!target && !!method && canStart;
@@ -620,7 +680,7 @@ export function TeamStakeCard({
             : undefined
         }
         action={
-          target ? (
+          target && !claimHidden ? (
             <Button
               size="sm"
               variant="outline"
@@ -690,6 +750,30 @@ export function TeamStakeCard({
               </Button>
             </div>
           )}
+          {showsPoolNote && statusFailed && (
+            <div
+              className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+              data-testid="dashboard-node.team-stake-pool-status-failed"
+            >
+              <span>{translate("stake.poolStatusFailed")}</span>
+              <Button size="sm" variant="outline" onClick={retryStatus}>
+                {translate("common.retry")}
+              </Button>
+            </div>
+          )}
+          {showsPoolNote && poolState && poolState.kind !== "earning" && (
+            <TeamStakeNote testId={`dashboard-node.team-stake-pool-${poolState.kind}`}>
+              {poolStateMessage(poolState, translate, locale)}{" "}
+              <a
+                className="text-foreground underline underline-offset-4"
+                href={poolExplorerUrl(target.poolAccountId, target.network)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {translate("stake.explorerPool")}
+              </a>
+            </TeamStakeNote>
+          )}
           {method ? (
             <PoolActionDialog
               open={dialogOpen}
@@ -727,11 +811,53 @@ export function TeamStakeCard({
         </div>
       ) : loading ? (
         <Skeleton aria-label={translate("stake.loadingTeam")} className="h-10 w-40" />
+      ) : teamLinked ? (
+        <TeamStakeNote testId="dashboard-node.team-stake-no-pool">
+          {translate("stake.noTeamPool")}
+          {validatorsTenantId && (
+            <>
+              {" "}
+              <Link
+                className="text-foreground underline underline-offset-4"
+                to="/tenant/$tenantId"
+                params={{ tenantId: validatorsTenantId }}
+              >
+                {translate("stake.manageValidators")}
+              </Link>
+            </>
+          )}
+        </TeamStakeNote>
       ) : (
         <p className="text-sm text-muted-foreground">{translate("stake.linkTreasury")}</p>
       )}
     </section>
   );
+}
+
+function poolExplorerUrl(accountId: string, network: string) {
+  return `https://${network === "testnet" ? "testnet." : ""}nearblocks.io/address/${encodeURIComponent(accountId)}`;
+}
+
+function poolStateMessage(state: TeamPoolState, translate: AppTranslator, locale: string) {
+  const runBy = (ownerId: string | null) =>
+    ownerId ? ` ${translate("stake.poolRunBy", { owner: ownerId })}` : "";
+  switch (state.kind) {
+    case "run-by-other":
+      return translate("stake.poolOtherOwner", {
+        owner: state.ownerId,
+        fee: formatPoolFeeTenths(state.feeNumerator, state.feeDenominator, locale),
+      });
+    case "full-commission":
+      return translate("stake.poolFullCommission", { owner: state.ownerId });
+    case "paused":
+      return `${translate("stake.poolPaused")}${runBy(state.ownerId)}`;
+    case "not-validating":
+      return `${translate("stake.poolNotValidating")}${runBy(state.ownerId)}`;
+    case "joining":
+      return translate("stake.poolJoining");
+    default:
+      return null;
+  }
 }
 
 function TeamStakeNote({ testId, children }: { testId: string; children: ReactNode }) {

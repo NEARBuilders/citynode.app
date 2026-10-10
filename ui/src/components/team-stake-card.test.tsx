@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { Effect } from "effect";
 import { Near } from "near-kit";
 import { toast } from "sonner";
@@ -9,8 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatLocalDate } from "@/components/local-date";
 import { englishAppMessages } from "@/i18n/catalogs";
 import { render } from "@/i18n/test-render";
+import type { StakePoolStatus } from "@/lib/queries/stake-pool";
 import { teamPoolCall } from "@/lib/team-unstake";
-import { canSeeTeamStake, TeamStakeCard, teamPoolPhase } from "./team-stake-card";
+import { canSeeTeamStake, TeamStakeCard, teamPoolPhase, teamPoolState } from "./team-stake-card";
 
 const target = {
   teamAccountId: "india.sputnik-dao.near",
@@ -27,6 +28,7 @@ const poolActionMocks = vi.hoisted(() => ({
   connect: vi.fn(),
   verifyDaoAccount: vi.fn(),
   signAsDaoTransaction: vi.fn(),
+  poolStatus: null as StakePoolStatus | Error | null,
 }));
 const realDateNow = Date.now;
 const NEAR = 1_000_000_000_000_000_000_000_000n;
@@ -70,6 +72,36 @@ vi.mock("@/lib/dao-connect", () => ({
   describeDaoError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
+function earningPool(overrides: Partial<StakePoolStatus> = {}): StakePoolStatus {
+  return {
+    ownerId: target.teamAccountId,
+    feeNumerator: 100,
+    feeDenominator: 100,
+    stakingPaused: false,
+    validatorSet: "current",
+    ...overrides,
+  };
+}
+
+vi.mock("@/lib/queries/stake-pool", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/queries/stake-pool")>(
+    "@/lib/queries/stake-pool",
+  );
+  return {
+    ...actual,
+    stakePoolStatusQueryOptions: (
+      options: Parameters<typeof actual.stakePoolStatusQueryOptions>[0],
+    ) => ({
+      ...actual.stakePoolStatusQueryOptions(options),
+      queryFn: async () => {
+        const status = poolActionMocks.poolStatus ?? earningPool();
+        if (status instanceof Error) throw status;
+        return status;
+      },
+    }),
+  };
+});
+
 vi.mock("@/lib/team-unstake", async () => {
   const actual = await vi.importActual<typeof import("@/lib/team-unstake")>("@/lib/team-unstake");
   return {
@@ -86,6 +118,7 @@ afterEach(() => {
   poolActionMocks.verifyDaoAccount.mockReset();
   poolActionMocks.signAsDaoTransaction.mockReset();
   poolActionMocks.nearAccount = PROPOSER;
+  poolActionMocks.poolStatus = null;
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -1190,5 +1223,187 @@ describe("TeamStakeCard superseded submissions", () => {
     await settle();
     chain.release();
     await waitFor(() => expect(poolActionMocks.proposeTeamPoolAction).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("teamPoolState", () => {
+  const team = target.teamAccountId;
+
+  it("earns as today in the DAO's own validating pool, even at a 100% fee", () => {
+    expect(teamPoolState(earningPool(), team)).toEqual({ kind: "earning" });
+  });
+
+  it("names another owner and its fee, and keeps claiming", () => {
+    expect(
+      teamPoolState(
+        earningPool({ ownerId: "operator.near", feeNumerator: 9996, feeDenominator: 10000 }),
+        team,
+      ),
+    ).toEqual({
+      kind: "run-by-other",
+      ownerId: "operator.near",
+      feeNumerator: 9996,
+      feeDenominator: 10000,
+    });
+  });
+
+  it("decides a 100% fee from the exact fraction", () => {
+    expect(
+      teamPoolState(
+        earningPool({ ownerId: "operator.near", feeNumerator: 1000, feeDenominator: 1000 }),
+        team,
+      ),
+    ).toEqual({ kind: "full-commission", ownerId: "operator.near" });
+  });
+
+  it("puts paused staking before the validator set and the fee", () => {
+    expect(
+      teamPoolState(
+        earningPool({ ownerId: "operator.near", stakingPaused: true, validatorSet: "none" }),
+        team,
+      ),
+    ).toEqual({ kind: "paused", ownerId: "operator.near" });
+    expect(teamPoolState(earningPool({ stakingPaused: true }), team)).toEqual({
+      kind: "paused",
+      ownerId: null,
+    });
+  });
+
+  it("shows another account's pool that isn't validating as not validating, with its owner", () => {
+    expect(
+      teamPoolState(earningPool({ ownerId: "operator.near", validatorSet: "none" }), team),
+    ).toEqual({ kind: "not-validating", ownerId: "operator.near" });
+  });
+
+  it("treats a pool only in the next set as joining", () => {
+    expect(teamPoolState(earningPool({ validatorSet: "next" }), team)).toEqual({
+      kind: "joining",
+    });
+  });
+});
+
+describe("TeamStakeCard pool state", () => {
+  const unstakeOffered = async () => {
+    const action = await screen.findByTestId("dashboard-node.team-stake-unstake");
+    await waitFor(() => expect((action as HTMLButtonElement).disabled).toBe(false));
+    expect(action.textContent).toBe("Propose unstake");
+  };
+
+  const unstakeHidden = async (testId: string) => {
+    await screen.findByTestId(testId);
+    await screen.findByText("2.5 NEAR");
+    expect(screen.queryByTestId("dashboard-node.team-stake-unstake")).toBeNull();
+  };
+
+  it("adds nothing for the DAO's own validating pool", async () => {
+    stubChain(teamAccount(), []);
+    renderCard();
+    await unstakeOffered();
+    expect(screen.queryByTestId(/dashboard-node\.team-stake-pool-/)).toBeNull();
+  });
+
+  it("names another owner with a 99.96% fee as 99.9% and still offers the claim", async () => {
+    poolActionMocks.poolStatus = earningPool({
+      ownerId: "operator.near",
+      feeNumerator: 9996,
+      feeDenominator: 10000,
+    });
+    stubChain(teamAccount(), []);
+    renderCard();
+    await unstakeOffered();
+    const note = screen.getByTestId("dashboard-node.team-stake-pool-run-by-other");
+    expect(note.textContent).toContain(
+      "This pool is run by operator.near. Your DAO's stake earns rewards, minus the pool's 99.9% fee.",
+    );
+    expect(note.querySelector("a")?.getAttribute("href")).toBe(
+      "https://nearblocks.io/address/india.poolv1.near",
+    );
+  });
+
+  it("hides the claim when another account takes the whole fee", async () => {
+    poolActionMocks.poolStatus = earningPool({ ownerId: "operator.near" });
+    stubChain(teamAccount(), []);
+    renderCard();
+    await unstakeHidden("dashboard-node.team-stake-pool-full-commission");
+    expect(
+      screen.getByTestId("dashboard-node.team-stake-pool-full-commission").textContent,
+    ).toContain("all rewards go to operator.near and none to your DAO");
+  });
+
+  it("hides the claim while the pool's staking is paused", async () => {
+    poolActionMocks.poolStatus = earningPool({ stakingPaused: true });
+    stubChain(teamAccount(), []);
+    renderCard();
+    await unstakeHidden("dashboard-node.team-stake-pool-paused");
+    expect(screen.getByTestId("dashboard-node.team-stake-pool-paused").textContent).not.toContain(
+      "Run by",
+    );
+  });
+
+  it("hides the claim for another account's pool that isn't validating and names its owner", async () => {
+    poolActionMocks.poolStatus = earningPool({ ownerId: "operator.near", validatorSet: "none" });
+    stubChain(teamAccount(), []);
+    renderCard();
+    await unstakeHidden("dashboard-node.team-stake-pool-not-validating");
+    const note = screen.getByTestId("dashboard-node.team-stake-pool-not-validating");
+    expect(note.textContent).toContain("This pool isn't validating");
+    expect(note.textContent).toContain("Run by operator.near.");
+  });
+
+  it("hides the claim while the pool is only joining the validator set", async () => {
+    poolActionMocks.poolStatus = earningPool({ validatorSet: "next" });
+    stubChain(teamAccount(), []);
+    renderCard();
+    await unstakeHidden("dashboard-node.team-stake-pool-joining");
+  });
+
+  it("pauses claiming when the pool's status can't be read, and offers it once a retry succeeds", async () => {
+    poolActionMocks.poolStatus = new Error("RPC unavailable");
+    stubChain(teamAccount(), []);
+    renderCard();
+    const failed = await screen.findByTestId("dashboard-node.team-stake-pool-status-failed");
+    await screen.findByText("2.5 NEAR");
+    expect(screen.queryByTestId("dashboard-node.team-stake-unstake")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.team-stake-read-failed")).toBeNull();
+    poolActionMocks.poolStatus = null;
+    fireEvent.click(within(failed).getByRole("button", { name: "Try again" }));
+    await unstakeOffered();
+    expect(screen.queryByTestId("dashboard-node.team-stake-pool-status-failed")).toBeNull();
+  });
+
+  it("keeps offering the withdraw of an unlocked balance whatever the pool's state", async () => {
+    poolActionMocks.poolStatus = new Error("RPC unavailable");
+    stubChain(teamAccount({ staked: 0n, unstaked: (3n * NEAR) / 2n }), []);
+    renderCard();
+    await screen.findByTestId("dashboard-node.team-stake-pool-status-failed");
+    const withdraw = await screen.findByTestId("dashboard-node.team-stake-unstake");
+    await waitFor(() => expect((withdraw as HTMLButtonElement).disabled).toBe(false));
+    expect(withdraw.textContent).toBe("Propose withdraw");
+  });
+
+  it("shows only the pending proposal when one is open on a pool that isn't validating", async () => {
+    poolActionMocks.poolStatus = earningPool({ validatorSet: "none" });
+    stubChain(teamAccount(), [poolProposal()]);
+    renderCard();
+    await screen.findByTestId("dashboard-node.team-stake-proposal-pending");
+    await settle();
+    expect(screen.queryByTestId("dashboard-node.team-stake-pool-not-validating")).toBeNull();
+  });
+
+  it("shows only the read failure when the DAO can't be read on a pool that isn't validating", async () => {
+    poolActionMocks.poolStatus = earningPool({ validatorSet: "none" });
+    stubChain(teamAccount(), new Error("RPC unavailable"));
+    renderCard();
+    await screen.findByTestId("dashboard-node.team-stake-read-failed");
+    await settle();
+    expect(screen.queryByTestId("dashboard-node.team-stake-pool-not-validating")).toBeNull();
+  });
+
+  it("tells a linked DAO without a pool apart from no DAO", () => {
+    renderCard({ target: null, teamLinked: true });
+    expect(screen.getByTestId("dashboard-node.team-stake-no-pool").textContent).toContain(
+      "No staking pool is linked to this community yet.",
+    );
+    expect(screen.queryByText("Link a team treasury to see its stake here.")).toBeNull();
   });
 });
