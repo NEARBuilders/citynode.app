@@ -13,6 +13,7 @@ import { presentationLabel } from "@/lib/presentation-label";
 import {
   formatNearBalance,
   formatPoolFee,
+  isFullCommission,
   stakePoolStatsQueryOptions,
   stakePoolTopHoldersQueryOptions,
   toNetwork,
@@ -167,6 +168,11 @@ function NearPoolStats({ accountId, network }: { accountId: string; network: str
           value={statsData && new Intl.NumberFormat(locale).format(statsData.stakerCount)}
         />
       </dl>
+      {statsData && isFullCommission(statsData.feeNumerator, statsData.feeDenominator) && (
+        <p className="text-sm text-muted-foreground" data-testid="stake.full-commission">
+          {translate("stake.fullCommission")}
+        </p>
+      )}
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h4 className="text-sm font-medium">{translate("stake.topStakers")}</h4>

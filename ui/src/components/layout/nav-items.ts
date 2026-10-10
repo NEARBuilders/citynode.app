@@ -153,6 +153,7 @@ export function buildNavItems(
       label: t("footer.about"),
       slug: "about",
       to: "/about",
+      activePrefixes: ["/about", "/skill"],
       roleRequired: "anon",
       section: "main",
     },

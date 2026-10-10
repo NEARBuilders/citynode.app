@@ -100,7 +100,17 @@ export function StakeForm({
           validator={validator}
         />
 
-        <p className="text-sm text-muted-foreground">{translate("stake.unstakeHint")}</p>
+        <p className="text-sm text-muted-foreground">
+          {translate("stake.unstakeHint")}{" "}
+          <a
+            className="text-foreground underline underline-offset-4"
+            href="https://docs.near.org/protocol/network/staking#withdrawing-staked-tokens"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {translate("stake.unstakeGuide")}
+          </a>
+        </p>
       </CardContent>
     </Card>
   );
