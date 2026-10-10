@@ -18,11 +18,17 @@ export const Route = createFileRoute("/_authenticated/_dashboard/tenant/$tenantI
       staleTime: 0,
     });
     if (!tenant) throw redirect({ to: "/dashboard" });
-    return { tenantId: tenant.id };
+    if (tenant.id !== params.tenantId) {
+      context.queryClient.setQueryData(
+        tenantByKeyQueryOptions(context.apiClient, tenant.id, gateway).queryKey,
+        tenant,
+      );
+    }
+    return { resolvedTenantId: tenant.id };
   },
   loader: async ({ context, params, deps }) => {
     const nodes = await context.queryClient
-      .ensureQueryData(tenantNodesQueryOptions(context.apiClient, context.tenantId))
+      .ensureQueryData(tenantNodesQueryOptions(context.apiClient, context.resolvedTenantId))
       .catch(() => []);
     const node = selectTenantNode(nodes, deps.nodeId);
     if (node && deps.nodeId && deps.nodeId !== node.id) {
@@ -53,7 +59,13 @@ export const Route = createFileRoute("/_authenticated/_dashboard/tenant/$tenantI
 });
 
 function TenantDetail() {
-  const { tenantId, runtimeConfig } = Route.useRouteContext();
+  const { resolvedTenantId, runtimeConfig } = Route.useRouteContext();
   const { nodeId } = Route.useSearch();
-  return <TenantDetailContent tenantId={tenantId} nodeId={nodeId} runtimeConfig={runtimeConfig} />;
+  return (
+    <TenantDetailContent
+      tenantId={resolvedTenantId}
+      nodeId={nodeId}
+      runtimeConfig={runtimeConfig}
+    />
+  );
 }

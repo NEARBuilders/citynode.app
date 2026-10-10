@@ -195,7 +195,10 @@ const authClient = {
 
 async function openSettings(key: string) {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false, staleTime: 5 * 60 * 1000 },
+      mutations: { retry: false },
+    },
   });
   const context = {
     apiClient,
@@ -272,6 +275,13 @@ describe("community settings tenant id", () => {
       }),
     );
     expect(await screen.findByText("Renamed Harbor")).toBeTruthy();
+  });
+
+  it("looks the tenant up once when opened by slug", async () => {
+    await openSettings("harbor");
+
+    expect(await screen.findByText("Harbor")).toBeTruthy();
+    expect(apiClient.listTenants).toHaveBeenCalledTimes(1);
   });
 
   it("redirects an unknown key before loading settings", async () => {
