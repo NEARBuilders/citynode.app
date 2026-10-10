@@ -90,6 +90,17 @@ async function belongsToEventsTeam(
   return teams.some((team) => parseTeamAreas(team.metadata).includes(EVENTS_AREA));
 }
 
+async function isMember(
+  db: PluginServices["db"],
+  organizationId: string,
+  userId: string,
+): Promise<boolean> {
+  const row = await db.query.member.findFirst({
+    where: and(eq(schema.member.organizationId, organizationId), eq(schema.member.userId, userId)),
+  });
+  return !!row;
+}
+
 async function resolveEventTeamId(
   db: PluginServices["db"],
   organizationId: string,
@@ -387,16 +398,9 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           });
         }
 
-        if (codeRow.revokedAt) {
+        const state = codeState(codeRow);
+        if (state === "revoked") {
           throw new ORPCError("FORBIDDEN", { message: "This onboarding code was revoked" });
-        }
-        if (toDate(codeRow.expiresAt) < new Date()) {
-          throw new ORPCError("BAD_REQUEST", { message: "This onboarding code has expired" });
-        }
-        if (codeRow.usedCount >= codeRow.maxUses) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "This onboarding code has reached its limit",
-          });
         }
 
         const already = await services.db.query.onboardingRedemption.findFirst({
@@ -405,7 +409,10 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             eq(schema.onboardingRedemption.userId, userId),
           ),
         });
-        if (already) {
+        if (
+          already &&
+          (state === "active" || (await isMember(services.db, codeRow.organizationId, userId)))
+        ) {
           await services.db
             .update(schema.session)
             .set({ activeOrganizationId: codeRow.organizationId })
@@ -416,6 +423,15 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             organizationName,
             eventName: codeRow.eventName,
           };
+        }
+
+        if (state === "expired") {
+          throw new ORPCError("BAD_REQUEST", { message: "This onboarding code has expired" });
+        }
+        if (state === "used-up") {
+          throw new ORPCError("FORBIDDEN", {
+            message: "This onboarding code has reached its limit",
+          });
         }
 
         await services.db.transaction(async (tx) => {

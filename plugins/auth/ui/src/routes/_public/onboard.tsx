@@ -76,7 +76,7 @@ function OnboardContent() {
   const queryClient = useQueryClient();
   const code = sanitizeCode(Route.useSearch().code);
   const { apiClient, runtimeConfig } = Route.useRouteContext();
-  const { data: session } = useQuery(sessionQueryOptions(auth));
+  const { data: session, isPending: sessionPending } = useQuery(sessionQueryOptions(auth));
   const { data: info } = useQuery({
     queryKey: ["onboarding-info", code],
     queryFn: async () => {
@@ -225,7 +225,10 @@ function OnboardContent() {
     );
   }
 
-  if (info === undefined) {
+  const awaitingJoin = sessionPending || (!!session?.user && !redeemError);
+  const closedForNewcomers = !!info && !info.revoked && (info.expired || info.usedUp);
+
+  if (info === undefined || (closedForNewcomers && awaitingJoin)) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-20">
         <p

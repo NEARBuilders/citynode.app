@@ -185,6 +185,20 @@ describe("onboarding handlers", () => {
     });
     expect(context.organization.activeOrganizationId).toBe(org.id);
     expect(context.organization.activeTeamId).toBe(workspace!.id);
+
+    await services.services.db
+      .update(schema.onboardingCode)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.onboardingCode.id, code.id));
+    const revisit = await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+    expect(revisit.alreadyRedeemed).toBe(true);
+    const revisitContext = await handlers.session.getContext({
+      context: { reqHeaders: member.reqHeaders },
+    });
+    expect(revisitContext.organization.activeTeamId).toBe(workspace!.id);
   });
 
   it("redeems idempotently without double-crediting the code", async () => {
@@ -294,6 +308,180 @@ describe("onboarding handlers", () => {
         context: { reqHeaders: member.reqHeaders },
       }),
     ).rejects.toThrow(/revoked/i);
+  });
+
+  it("recognizes a prior redeemer after the code expires", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Expired Later"), organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const member = await createTestUser(services.services, { email: undefined });
+    await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+    await services.services.db
+      .update(schema.onboardingCode)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.onboardingCode.id, code.id));
+
+    const again = await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+
+    expect(again.alreadyRedeemed).toBe(true);
+    expect(again.eventName).toBe("Expired Later");
+    const status = await handlers.onboarding.getOnboardingStatus({
+      input: { codeId: code.id, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    expect(status.usedCount).toBe(1);
+  });
+
+  it("rejects a removed member who revisits an expired code without changing their session", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Removed Later"), organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const member = await createTestUser(services.services, { email: undefined });
+    await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+    const membership = await services.services.db.query.member.findFirst({
+      where: and(eq(schema.member.userId, member.userId), eq(schema.member.organizationId, org.id)),
+    });
+    await handlers.members.removeMember({
+      input: { memberIdOrEmail: membership!.id, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await services.services.db
+      .update(schema.session)
+      .set({ activeOrganizationId: null })
+      .where(eq(schema.session.userId, member.userId));
+    await services.services.db
+      .update(schema.onboardingCode)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.onboardingCode.id, code.id));
+
+    await expect(
+      handlers.onboarding.redeemOnboardingCode({
+        input: { code: code.code },
+        context: { reqHeaders: member.reqHeaders },
+      }),
+    ).rejects.toThrow(/expired/i);
+
+    const session = await services.services.db.query.session.findFirst({
+      where: eq(schema.session.userId, member.userId),
+    });
+    expect(session?.activeOrganizationId).toBeNull();
+  });
+
+  it("rejects a member who revisits a revoked code without changing their session", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Withdrawn Invite"), organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const member = await createTestUser(services.services, { email: undefined });
+    await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+    await handlers.onboarding.revokeOnboardingCode({
+      input: { codeId: code.id, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await services.services.db
+      .update(schema.session)
+      .set({ activeOrganizationId: null })
+      .where(eq(schema.session.userId, member.userId));
+
+    await expect(
+      handlers.onboarding.redeemOnboardingCode({
+        input: { code: code.code },
+        context: { reqHeaders: member.reqHeaders },
+      }),
+    ).rejects.toThrow(/revoked/i);
+
+    const session = await services.services.db.query.session.findFirst({
+      where: eq(schema.session.userId, member.userId),
+    });
+    expect(session?.activeOrganizationId).toBeNull();
+  });
+
+  it("rejects a removed member who revisits a used-up code without changing their session", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Single Seat"), organizationId: org.id, maxUses: 1 },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const member = await createTestUser(services.services, { email: undefined });
+    await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+    const membership = await services.services.db.query.member.findFirst({
+      where: and(eq(schema.member.userId, member.userId), eq(schema.member.organizationId, org.id)),
+    });
+    await handlers.members.removeMember({
+      input: { memberIdOrEmail: membership!.id, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await services.services.db
+      .update(schema.session)
+      .set({ activeOrganizationId: null })
+      .where(eq(schema.session.userId, member.userId));
+
+    await expect(
+      handlers.onboarding.redeemOnboardingCode({
+        input: { code: code.code },
+        context: { reqHeaders: member.reqHeaders },
+      }),
+    ).rejects.toThrow(/reached its limit/i);
+
+    const session = await services.services.db.query.session.findFirst({
+      where: eq(schema.session.userId, member.userId),
+    });
+    expect(session?.activeOrganizationId).toBeNull();
+  });
+
+  it("recognizes a prior redeemer after the code is used up", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Full Room"), organizationId: org.id, maxUses: 1 },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const member = await createTestUser(services.services, { email: undefined });
+    await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+
+    const again = await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+
+    expect(again.alreadyRedeemed).toBe(true);
+    const status = await handlers.onboarding.getOnboardingStatus({
+      input: { codeId: code.id, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    expect(status.usedCount).toBe(1);
   });
 
   it("rejects expired and revoked codes", async () => {
