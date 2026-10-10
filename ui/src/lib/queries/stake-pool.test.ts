@@ -5,8 +5,11 @@ import type { AuthClient } from "@/app";
 import {
   formatNearBalance,
   formatPoolFee,
+  formatPoolFeeTenths,
   invalidateStakePoolQueries,
   isFullCommission,
+  readStakePoolStatus,
+  resolveTeamAccountId,
   resolveTeamStakeTarget,
   stakePoolAccountQueryOptions,
   stakePoolStatsQueryOptions,
@@ -308,5 +311,114 @@ describe("isFullCommission", () => {
     expect(isFullCommission(999, 1000)).toBe(false);
     expect(isFullCommission(1000, 1000)).toBe(true);
     expect(isFullCommission(0, 0)).toBe(false);
+  });
+});
+
+describe("formatPoolFeeTenths", () => {
+  it("rounds a fractional fee to one decimal place", () => {
+    expect(formatPoolFeeTenths(75, 1000)).toBe("7.5%");
+    expect(formatPoolFeeTenths(10, 100)).toBe("10%");
+  });
+
+  it("never shows a fee below 100% as 100%", () => {
+    expect(formatPoolFeeTenths(9996, 10000)).toBe("99.9%");
+    expect(formatPoolFeeTenths(100, 100)).toBe("100%");
+  });
+});
+
+describe("resolveTeamAccountId", () => {
+  it("tells a linked DAO apart from no DAO, whether or not it has a pool", () => {
+    expect(resolveTeamAccountId({ daoAccountId: " india.sputnik-dao.near " })).toBe(
+      "india.sputnik-dao.near",
+    );
+    expect(
+      resolveTeamAccountId({ tenantAccountId: "india.sputnik-dao.near", tenantOwnerKind: "dao" }),
+    ).toBe("india.sputnik-dao.near");
+    expect(
+      resolveTeamAccountId({ tenantAccountId: "india.near", tenantOwnerKind: "personal" }),
+    ).toBe("");
+  });
+});
+
+describe("readStakePoolStatus", () => {
+  const pool = "india.poolv1.near";
+
+  function stubPool(
+    views: Record<string, unknown>,
+    validators: unknown = { current_validators: [{ account_id: pool }], next_validators: [] },
+  ) {
+    const view = vi
+      .spyOn(Near.prototype, "view")
+      .mockImplementation((_contractId, method) =>
+        method in views
+          ? views[method] instanceof Error
+            ? Promise.reject(views[method])
+            : Promise.resolve(views[method])
+          : Promise.reject(new Error(`unexpected ${method}`)),
+      );
+    const call = vi.fn(async (method: string) => {
+      if (validators instanceof Error) throw validators;
+      if (method !== "validators") throw new Error(`unexpected ${method}`);
+      return validators;
+    });
+    vi.spyOn(Near.prototype, "rpc", "get").mockReturnValue({ call } as never);
+    return { view, call };
+  }
+
+  const views = {
+    get_owner_id: "owner.near",
+    get_reward_fee_fraction: { numerator: 75, denominator: 1000 },
+    is_staking_paused: false,
+  };
+
+  it("reads the owner, fee, paused flag and validator set on the pool's network", async () => {
+    const { call } = stubPool(views);
+    const authClient = fakeAuthClient();
+    const getNearClient = vi.spyOn(authClient.near, "getNearClient");
+    await expect(
+      readStakePoolStatus({ accountId: pool, authClient, network: "testnet" }),
+    ).resolves.toEqual({
+      ownerId: "owner.near",
+      feeNumerator: 75,
+      feeDenominator: 1000,
+      stakingPaused: false,
+      validatorSet: "current",
+    });
+    expect(getNearClient.mock.calls.every(([network]) => network === "testnet")).toBe(true);
+    expect(call).toHaveBeenCalledWith("validators", [null]);
+  });
+
+  it("tells a pool only in the next set apart from one in neither", async () => {
+    stubPool(views, { current_validators: [], next_validators: [{ account_id: pool }] });
+    expect(
+      (await readStakePoolStatus({ accountId: pool, authClient: fakeAuthClient() })).validatorSet,
+    ).toBe("next");
+    vi.restoreAllMocks();
+    stubPool(views, {
+      current_validators: [{ account_id: "other.poolv1.near" }],
+      next_validators: [],
+    });
+    expect(
+      (await readStakePoolStatus({ accountId: pool, authClient: fakeAuthClient() })).validatorSet,
+    ).toBe("none");
+  });
+
+  it("fails instead of guessing when any read fails", async () => {
+    for (const broken of [
+      { ...views, get_owner_id: new Error("RPC unavailable") },
+      { ...views, is_staking_paused: null },
+      { ...views, get_reward_fee_fraction: null },
+    ]) {
+      vi.restoreAllMocks();
+      stubPool(broken);
+      await expect(
+        readStakePoolStatus({ accountId: pool, authClient: fakeAuthClient() }),
+      ).rejects.toThrow();
+    }
+    vi.restoreAllMocks();
+    stubPool(views, new Error("RPC unavailable"));
+    await expect(
+      readStakePoolStatus({ accountId: pool, authClient: fakeAuthClient() }),
+    ).rejects.toThrow();
   });
 });

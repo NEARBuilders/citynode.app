@@ -88,6 +88,7 @@ function stubChain(
     getBlock: async () => ({
       header: { timestamp_nanosec: (BigInt(Date.now()) * 1_000_000n).toString() },
     }),
+    call: async () => ({ current_validators: [{ account_id: POOL }], next_validators: [] }),
   } as never);
   vi.spyOn(Near.prototype, "view").mockImplementation((_contractId, method) => {
     if (method === "delegation_balance_of")
@@ -104,6 +105,10 @@ function stubChain(
         can_withdraw: true,
       });
     if (method === "get_last_proposal_id") return Promise.resolve(0);
+    if (method === "get_owner_id") return Promise.resolve(DAO);
+    if (method === "get_reward_fee_fraction")
+      return Promise.resolve({ numerator: 100, denominator: 100 });
+    if (method === "is_staking_paused") return Promise.resolve(false);
     return Promise.resolve(null);
   });
 }

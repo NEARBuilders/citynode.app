@@ -31,7 +31,7 @@ import {
 import { useAppTranslation } from "@/i18n/runtime";
 import { presentationLabel } from "@/lib/presentation-label";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
-import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
+import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
   CONFIG_WRITE_PLAN,
   fetchDaoProposals,
@@ -236,7 +236,20 @@ function NodeOverview() {
         )}
       </section>
 
-      {showTeamStake && <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />}
+      {showTeamStake && (
+        <TeamStakeCard
+          target={teamStake}
+          pending={daoQuery.isLoading}
+          teamLinked={
+            !!resolveTeamAccountId({
+              daoAccountId: daoQuery.data?.daoAccountId,
+              tenantAccountId: tenant?.accountId,
+              tenantOwnerKind: tenant?.ownerKind,
+            })
+          }
+          validatorsTenantId={canManage ? tenant?.id : undefined}
+        />
+      )}
 
       <section className="flex flex-col gap-6">
         <SectionHeader
