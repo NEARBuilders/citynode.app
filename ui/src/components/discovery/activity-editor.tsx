@@ -46,6 +46,7 @@ import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage, useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { buildEventTimeline } from "@/lib/event-timeline";
 import { type Activity, activitiesQueryOptions } from "./activity-form";
+import { DiscoveryLoadError } from "./discovery-load-error";
 import { useStartOnboarding } from "./event-onboarding";
 import { EventTimeline } from "./event-timeline";
 import { LumaImport } from "./luma-import";
@@ -83,17 +84,23 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     },
     onError: (error) => toast.error(error.message),
   });
-  if (list.isError)
+  if (list.isPending)
     return (
-      <EmptyState
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-10 w-48" />
+        {["a", "b", "c"].map((key) => (
+          <Skeleton key={key} className="h-20 w-full" />
+        ))}
+      </div>
+    );
+  if (list.isError && !list.data)
+    return (
+      <DiscoveryLoadError
+        error={list.error}
+        nodeId={nodeId}
         icon={CalendarDotsIcon}
         title={translate("events.loadListError")}
-        description={translate("events.connectionHint")}
-        action={
-          <Button variant="outline" onClick={() => list.refetch()}>
-            {translate("common.retry")}
-          </Button>
-        }
+        onRetry={() => list.refetch()}
       />
     );
   const events = list.data?.filter((a) => a.kind === "event") ?? [];
@@ -218,14 +225,6 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           )}
         </Button>
       </div>
-      {list.isPending && (
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-10 w-48" />
-          {["a", "b", "c"].map((key) => (
-            <Skeleton key={key} className="h-20 w-full" />
-          ))}
-        </div>
-      )}
       {list.data?.length === 0 && (
         <EmptyState
           icon={CalendarDotsIcon}
