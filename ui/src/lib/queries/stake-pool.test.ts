@@ -6,6 +6,7 @@ import {
   formatNearBalance,
   formatPoolFee,
   invalidateStakePoolQueries,
+  isFullCommission,
   resolveTeamStakeTarget,
   stakePoolAccountQueryOptions,
   stakePoolStatsQueryOptions,
@@ -296,5 +297,16 @@ describe("team stake pool account query", () => {
     expect(stakePoolAccountQueryOptions({ ...options, network: "localnet" as never }).enabled).toBe(
       false,
     );
+  });
+});
+
+describe("isFullCommission", () => {
+  it("is true only when the pool keeps every reward", () => {
+    expect(isFullCommission(100, 100)).toBe(true);
+    expect(isFullCommission(1, 1)).toBe(true);
+    expect(isFullCommission(7, 100)).toBe(false);
+    expect(isFullCommission(999, 1000)).toBe(false);
+    expect(isFullCommission(1000, 1000)).toBe(true);
+    expect(isFullCommission(0, 0)).toBe(false);
   });
 });

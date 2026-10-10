@@ -240,6 +240,10 @@ export function formatNearBalance(balance: bigint, locale = "en") {
   return `${whole}${fraction ? `${decimal}${fraction}` : ""} NEAR`;
 }
 
+export function isFullCommission(numerator: number, denominator: number) {
+  return denominator > 0 && numerator >= denominator;
+}
+
 export function formatPoolFee(numerator: number, denominator: number, locale = "en") {
   return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 4 }).format(
     numerator / denominator,

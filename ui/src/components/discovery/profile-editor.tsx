@@ -1,9 +1,8 @@
-import { LockSimpleIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
+import { IdentificationCardIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
-import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -21,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
+import { DiscoveryLoadError } from "./discovery-load-error";
 
 type Profile = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryProfile"]>>>;
 
@@ -44,13 +44,7 @@ export function discoveryProfileQueryOptions(api: ApiClient, nodeId: string) {
   });
 }
 
-export function DiscoveryProfileGate({
-  nodeId,
-  children,
-}: {
-  nodeId: string;
-  children: (profile: Profile) => ReactNode;
-}) {
+export function ProfileEditor({ nodeId }: { nodeId: string }) {
   const translate = useAppTranslation();
   const api = useApiClient();
   const query = useQuery(discoveryProfileQueryOptions(api, nodeId));
@@ -61,35 +55,34 @@ export function DiscoveryProfileGate({
         <Skeleton className="h-64 w-full" />
       </div>
     );
-  if (query.isError)
+  if (query.isError && query.data === undefined)
     return (
-      <EmptyState
-        icon={LockSimpleIcon}
-        title={translate("community.cannotEdit")}
-        description={translate("community.cannotEditHint")}
+      <DiscoveryLoadError
+        error={query.error}
+        nodeId={nodeId}
+        icon={IdentificationCardIcon}
+        title={translate("community.loadProfileError")}
+        onRetry={() => query.refetch()}
       />
     );
-  return children(
-    query.data ?? {
-      nodeId,
-      summary: "",
-      location: "",
-      region: "",
-      latitude: null,
-      longitude: null,
-      channels: [],
-      published: false,
-      geocodedLocation: null,
-      geocodeHint: null,
-    },
-  );
-}
-
-export function ProfileEditor({ nodeId }: { nodeId: string }) {
   return (
-    <DiscoveryProfileGate nodeId={nodeId}>
-      {(profile) => <ProfileForm key={nodeId} initial={profile} />}
-    </DiscoveryProfileGate>
+    <ProfileForm
+      key={nodeId}
+      initial={
+        query.data ?? {
+          nodeId,
+          summary: "",
+          location: "",
+          region: "",
+          latitude: null,
+          longitude: null,
+          channels: [],
+          published: false,
+          geocodedLocation: null,
+          geocodeHint: null,
+        }
+      }
+    />
   );
 }
 

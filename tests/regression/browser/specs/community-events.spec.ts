@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
-import { injectAdminCookies } from "../helpers/seeded";
+import { injectAdminCookies, injectCookies } from "../helpers/seeded";
 
 test.use({ trace: "on" });
 
@@ -22,6 +22,25 @@ test.describe("community events", () => {
     pageErrors = collectErrors(page);
   });
 
+  test("a signed-in user without access sees the locked state, not a connection error", async ({
+    page,
+  }) => {
+    const node = await seedCommunity("events-locked");
+    await injectCookies(page);
+
+    await page.goto(`/nodes/${node.id}/content`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    await expect(page.getByTestId("community-cannot-edit")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("discovery-new-event")).toHaveCount(0);
+    await expect(page.getByTestId("content-not-published")).toHaveCount(0);
+
+    await page.getByTestId("community-cannot-edit-overview").click();
+    await page.waitForURL(/\/dashboard\/node/, { waitUntil: "commit" });
+
+    expectNoHydrationFailure(pageErrors);
+  });
+
   test("a platform admin reaches a community's events from the admin page", async ({ page }) => {
     const node = await seedCommunity("events-admin");
     await injectAdminCookies(page);
@@ -36,6 +55,23 @@ test.describe("community events", () => {
     await expect(page.getByTestId("content.heading")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("content-not-published")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("discovery-new-event")).toBeVisible({ timeout: 15000 });
+
+    expectNoHydrationFailure(pageErrors);
+  });
+
+  test("the hidden notice is shown with the events list, not after it", async ({ page }) => {
+    const node = await seedCommunity("events-notice");
+    await injectAdminCookies(page);
+    await page.route("**/*getDiscoveryProfile*", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+
+    await page.goto(`/nodes/${node.id}/content`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    await expect(page.getByTestId("discovery-new-event")).toBeVisible({ timeout: 15000 });
+    expect(await page.getByTestId("content-not-published").isVisible()).toBe(true);
 
     expectNoHydrationFailure(pageErrors);
   });
