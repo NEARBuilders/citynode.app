@@ -208,6 +208,13 @@ describe("active state", () => {
     expect(isNavItemActive(home, "/dashboard/node")).toBe(false);
   });
 
+  it("keeps About active on the agent skill page", () => {
+    const about = buildNavItems({}).find((item) => navSlug(item) === "about");
+    if (!about) throw new Error("About nav item missing");
+    expect(isNavItemActive(about, "/skill")).toBe(true);
+    expect(isNavItemActive(about, "/build")).toBe(false);
+  });
+
   it("treats public community pages as Explore", () => {
     const explore = { to: "/explore", activePrefixes: ["/explore", "/n/", "/activity/"] };
     expect(isNavItemActive(explore, "/n/brooklyn")).toBe(true);

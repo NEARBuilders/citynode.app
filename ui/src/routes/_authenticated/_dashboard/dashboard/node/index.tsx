@@ -121,9 +121,7 @@ function NodeOverview() {
 
   return (
     <div className="flex flex-col gap-12">
-      {typeof bulletin === "string" && bulletin.trim() && (
-        <Bulletin content={bulletin} runtimeConfig={runtimeConfig} />
-      )}
+      {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         <Stat
           label={translate("community.upcoming")}
