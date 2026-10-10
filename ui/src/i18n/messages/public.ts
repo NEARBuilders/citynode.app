@@ -777,10 +777,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "stake.unstaked": ["Unstaked", "Sin delegar", "Hors staking", "已解除质押"],
   "stake.unstakeHint": [
-    "To unstake, use the wallet you staked from; unstaked NEAR unlocks after about a day.",
-    "Para retirar tu delegación, usa la billetera con la que delegaste; los NEAR retirados se desbloquean en aproximadamente un día.",
-    "Pour retirer votre staking, utilisez le portefeuille avec lequel vous avez staké ; les NEAR retirés sont disponibles après environ un jour.",
-    "如需解除质押，请使用质押时的钱包；解除质押的 NEAR 约一天后解锁。",
+    "To unstake, use the wallet you staked from; unstaked NEAR unlocks after about a day. Unstaking more restarts the wait for everything already unstaked.",
+    "Para retirar tu delegación, usa la billetera con la que delegaste; los NEAR retirados se desbloquean en aproximadamente un día. Si retiras más, la espera se reinicia para todo lo ya retirado.",
+    "Pour retirer votre staking, utilisez le portefeuille avec lequel vous avez staké ; les NEAR retirés sont disponibles après environ un jour. Retirer davantage relance l'attente pour tout ce qui a déjà été retiré.",
+    "如需解除质押，请使用质押时的钱包；解除质押的 NEAR 约一天后解锁。再次解除质押会重新开始所有已解除质押 NEAR 的等待时间。",
   ],
   "stake.unstakeGuide": [
     "How unstaking works",
