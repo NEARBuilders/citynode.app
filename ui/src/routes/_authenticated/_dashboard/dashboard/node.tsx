@@ -2,6 +2,7 @@ import { NetworkIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Button, EmptyState, PageContainer } from "@/components";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { isOnboardingOrganizer } from "@/lib/onboarding-codes";
 import { pageTitle } from "@/lib/page-title";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         canReview: false,
         canManage: false,
         inFinanceTeam: false,
+        isOrganizer: false,
         emptyReason: "no-org" as const,
       };
     }
@@ -43,6 +45,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         canReview: false,
         canManage: false,
         inFinanceTeam: false,
+        isOrganizer: false,
         emptyReason: "no-tenant" as const,
       };
     }
@@ -61,6 +64,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         canReview: false,
         canManage: false,
         inFinanceTeam: false,
+        isOrganizer: false,
         emptyReason: "no-node" as const,
       };
     }
@@ -83,6 +87,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
     const canManage = canReview || orgRole === "owner" || orgRole === "admin";
     const inFinanceTeam =
       authContext?.organization?.teams?.some((team) => team.areas.includes("finance")) ?? false;
+    const isOrganizer = isOnboardingOrganizer(authContext);
 
     return {
       tenant,
@@ -93,6 +98,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       canReview,
       canManage,
       inFinanceTeam,
+      isOrganizer,
       emptyReason: null,
     };
   },

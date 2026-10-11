@@ -2,7 +2,6 @@ import {
   ArrowSquareOutIcon,
   CalendarDotsIcon,
   HourglassMediumIcon,
-  QrCodeIcon,
   TreeStructureIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +16,11 @@ import {
   NodeValidatorTable,
   SectionHeader,
 } from "@/components";
-import { EventDate, upcomingEvents } from "@/components/discovery/event-onboarding";
+import {
+  EventDate,
+  OpenEventStationButton,
+  upcomingEvents,
+} from "@/components/discovery/event-onboarding";
 import { TeamStakeCard, useCanSeeTeamStake } from "@/components/team-stake-card";
 import {
   Item,
@@ -62,6 +65,7 @@ function NodeOverview() {
     auth,
     canManage,
     inFinanceTeam,
+    isOrganizer,
   } = Route.useRouteContext();
   const apiClient = useApiClient();
   const [now] = useState(() => Date.now());
@@ -218,18 +222,11 @@ function NodeOverview() {
                     {event.venue ? ` · ${event.venue}` : ""}
                   </ItemDescription>
                 </ItemContent>
-                <ItemActions>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    nativeButton={false}
-                    render={contentLink("onboarding")}
-                    aria-label={translate("station.onboardingNamed", { event: event.title ?? "" })}
-                  >
-                    <QrCodeIcon />
-                    <span className="hidden sm:inline">{translate("org.onboarding")}</span>
-                  </Button>
-                </ItemActions>
+                {isOrganizer && (
+                  <ItemActions>
+                    <OpenEventStationButton event={event} organizationId={orgId} />
+                  </ItemActions>
+                )}
               </Item>
             ))}
           </ItemGroup>

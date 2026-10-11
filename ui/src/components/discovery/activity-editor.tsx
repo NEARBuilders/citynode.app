@@ -47,12 +47,18 @@ import { translateEnglishAppMessage, useAppLocale, useAppTranslation } from "@/i
 import { buildEventTimeline } from "@/lib/event-timeline";
 import { type Activity, activitiesQueryOptions } from "./activity-form";
 import { DiscoveryLoadError } from "./discovery-load-error";
-import { useStartOnboarding } from "./event-onboarding";
+import { useOpenEventStation } from "./event-onboarding";
 import { EventTimeline } from "./event-timeline";
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
 
-export function ActivityEditor({ nodeId }: { nodeId: string }) {
+export function ActivityEditor({
+  nodeId,
+  canOnboard = false,
+}: {
+  nodeId: string;
+  canOnboard?: boolean;
+}) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const api = useApiClient();
@@ -70,7 +76,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
     "UTC",
   );
-  const startOnboarding = useStartOnboarding();
+  const openStation = useOpenEventStation();
   const visibility = useMutation({
     mutationFn: ({ activityId, show }: { activityId: string; show: boolean }) =>
       api.setDiscoveryLumaVisibility({ nodeId, activityId, show }),
@@ -153,7 +159,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           {translate("common.edit")}
         </Button>
       )}
-      {a.kind === "event" && a.status !== "cancelled" && (
+      {canOnboard && a.kind === "event" && a.status !== "cancelled" && (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -169,8 +175,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               data-testid={`activity-editor.start-onboarding-${a.id}`}
-              disabled={startOnboarding.isPending}
-              onClick={() => startOnboarding.mutate({ eventId: a.id })}
+              disabled={openStation.isPending}
+              onClick={() => openStation.mutate({ eventId: a.id })}
             >
               <QrCodeIcon />
               {translate("events.startOnboarding")}

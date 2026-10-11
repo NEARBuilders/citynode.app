@@ -60,4 +60,38 @@ describe("ActivityEditor", () => {
     expect(screen.getByTestId("discovery-new-event")).toBeTruthy();
     expect(screen.queryByTestId("community-load-error")).toBeNull();
   });
+
+  it("offers an event's onboarding menu only to organizers", async () => {
+    const startsAt = new Date(Date.now() + 86_400_000).toISOString();
+    api.listDiscoveryActivities.mockResolvedValue([
+      {
+        id: "e1",
+        kind: "event",
+        status: "published",
+        title: "Launch Night",
+        startsAt,
+        endsAt: startsAt,
+        timezone: "UTC",
+      },
+    ]);
+    api.listDiscoveryLumaCalendars.mockResolvedValue([]);
+    const renderEditor = (canOnboard: boolean) => {
+      const client = new QueryClient();
+      clients.push(client);
+      return render(
+        <QueryClientProvider client={client}>
+          <ActivityEditor nodeId="n1" canOnboard={canOnboard} />
+        </QueryClientProvider>,
+      );
+    };
+
+    const member = renderEditor(false);
+    await screen.findByTestId("discovery-edit-activity-e1");
+    expect(screen.queryByLabelText(/Launch Night/, { selector: "[aria-haspopup]" })).toBeNull();
+    member.unmount();
+
+    renderEditor(true);
+    await screen.findByTestId("discovery-edit-activity-e1");
+    expect(screen.getByLabelText(/Launch Night/, { selector: "[aria-haspopup]" })).toBeTruthy();
+  });
 });
