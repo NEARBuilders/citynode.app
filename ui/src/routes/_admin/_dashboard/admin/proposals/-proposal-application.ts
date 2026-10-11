@@ -27,16 +27,49 @@ const proposalApplicationHandlers = {
       entityId: proposal.entityId,
       hostname,
     });
-    await publishTenantConfig({
-      daoAccountId: payload.accountId,
-      gatewayId,
-      baseAccount,
-      hostname,
-      title: payload.name,
-    });
+    const published = () =>
+      isTenantConfigPublished(apiClient, payload.accountId, gatewayId, hostname);
+    if (!(await published())) {
+      try {
+        await publishTenantConfig({
+          daoAccountId: payload.accountId,
+          gatewayId,
+          baseAccount,
+          hostname,
+          title: payload.name,
+        });
+      } catch (error) {
+        if (!(await waitForTenantConfig(published))) throw error;
+      }
+    }
     return { id: node.nodeId, label: "Node" };
   },
 } satisfies Record<string, ProposalApplicationHandler>;
+
+const PUBLISH_CHECK_ATTEMPTS = 3;
+const PUBLISH_CHECK_INTERVAL_MS = 2000;
+
+async function isTenantConfigPublished(
+  apiClient: ApiClient,
+  accountId: string,
+  gatewayId: string,
+  hostname: string,
+) {
+  try {
+    const app = await apiClient.registry.getRegistryApp({ accountId, gatewayId });
+    return app.data.domain?.toLowerCase() === hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+async function waitForTenantConfig(published: () => Promise<boolean>) {
+  for (let attempt = 0; attempt < PUBLISH_CHECK_ATTEMPTS; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, PUBLISH_CHECK_INTERVAL_MS));
+    if (await published()) return true;
+  }
+  return false;
+}
 
 function applicationHandler(pluginId: string): ProposalApplicationHandler | undefined {
   return proposalApplicationHandlers[pluginId as keyof typeof proposalApplicationHandlers];

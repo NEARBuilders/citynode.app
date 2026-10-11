@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@/app";
 import { approveAndApplyProposal } from "./-proposal-application";
 
@@ -42,7 +42,16 @@ function client(initialProposal = proposal("node", nodePayload)) {
       }),
     },
     applyCommunityProposal: vi.fn().mockResolvedValue({ nodeId: "node-id" }),
+    registry: {
+      getRegistryApp: vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error("Not found"), { code: "NOT_FOUND" })),
+    },
   };
+}
+
+function publishedApp(domain: string) {
+  return { data: { domain } };
 }
 
 const nodePayload = {
@@ -57,6 +66,10 @@ const nodePayload = {
 };
 
 describe("proposal application dispatcher", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("applies node proposals and finalizes them with the node ID", async () => {
     const api = client(proposal("node", nodePayload));
     const publishTenantConfig = vi.fn().mockResolvedValue(undefined);
@@ -126,18 +139,22 @@ describe("proposal application dispatcher", () => {
   });
 
   it("keeps the review approved when DAO publication fails", async () => {
+    vi.useFakeTimers();
     const api = client(proposal("node", nodePayload));
     const publishTenantConfig = vi.fn().mockRejectedValue(new Error("Trezu rejected the request"));
 
-    await expect(
-      approveAndApplyProposal({
-        apiClient: api as unknown as ApiClient,
-        proposal: proposal("node", nodePayload),
-        gatewayId: "citynode.app",
-        baseAccount: "everything.near",
-        publishTenantConfig,
-      }),
-    ).rejects.toMatchObject({ messageId: "proposal.partiallyApplied" });
+    const result = approveAndApplyProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      gatewayId: "citynode.app",
+      baseAccount: "everything.near",
+      publishTenantConfig,
+    });
+    const assertion = expect(result).rejects.toMatchObject({
+      messageId: "proposal.partiallyApplied",
+    });
+    await vi.runAllTimersAsync();
+    await assertion;
 
     expect(api.proposals.approve).toHaveBeenCalledOnce();
     expect(api.applyCommunityProposal).toHaveBeenCalledOnce();
@@ -145,6 +162,66 @@ describe("proposal application dispatcher", () => {
     expect(api.proposals.markApplyFailed).toHaveBeenCalledWith(
       expect.objectContaining({ error: "Trezu rejected the request" }),
     );
+  });
+
+  it("finalizes when the DAO reports a failed proposal but the config is indexed", async () => {
+    const api = client(proposal("node", nodePayload));
+    api.registry.getRegistryApp
+      .mockRejectedValueOnce(Object.assign(new Error("Not found"), { code: "NOT_FOUND" }))
+      .mockResolvedValue(publishedApp("chicago.citynode.app"));
+    const publishTenantConfig = vi.fn().mockRejectedValue(new Error("Proposal 0 was failed"));
+
+    const result = await approveAndApplyProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      gatewayId: "citynode.app",
+      baseAccount: "everything.near",
+      publishTenantConfig,
+    });
+
+    expect(publishTenantConfig).toHaveBeenCalledOnce();
+    expect(api.proposals.markApplyFailed).not.toHaveBeenCalled();
+    expect(api.proposals.markApplied).toHaveBeenCalledWith(
+      expect.objectContaining({ appliedResourceId: "node-id" }),
+    );
+    expect(result.applyStatus).toBe("applied");
+  });
+
+  it("does not publish again when the community config is already indexed", async () => {
+    const api = client(proposal("node", nodePayload));
+    api.registry.getRegistryApp.mockResolvedValue(publishedApp("chicago.citynode.app"));
+    const publishTenantConfig = vi.fn();
+
+    const result = await approveAndApplyProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      gatewayId: "citynode.app",
+      baseAccount: "everything.near",
+      publishTenantConfig,
+    });
+
+    expect(api.registry.getRegistryApp).toHaveBeenCalledWith({
+      accountId: "chicago.sputnik-dao.near",
+      gatewayId: "citynode.app",
+    });
+    expect(publishTenantConfig).not.toHaveBeenCalled();
+    expect(result.applyStatus).toBe("applied");
+  });
+
+  it("publishes when the indexed config belongs to another hostname", async () => {
+    const api = client(proposal("node", nodePayload));
+    api.registry.getRegistryApp.mockResolvedValue(publishedApp("old-name.citynode.app"));
+    const publishTenantConfig = vi.fn().mockResolvedValue(undefined);
+
+    await approveAndApplyProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      gatewayId: "citynode.app",
+      baseAccount: "everything.near",
+      publishTenantConfig,
+    });
+
+    expect(publishTenantConfig).toHaveBeenCalledOnce();
   });
 
   it("approves unsupported plugins without applying them", async () => {
