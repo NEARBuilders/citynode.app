@@ -150,6 +150,56 @@ export async function seedNode(input) {
   }
 }
 
+export async function seedDiscoveryProfile(input) {
+  const { nodeId, published = true, summary = "" } = input;
+  if (!nodeId) throw new Error("seedDiscoveryProfile requires nodeId");
+
+  const root = findRepoRoot();
+  if (!root) throw new Error("bos.config.json not found in any parent directory");
+  const resolved = computeRegressionEnv({ repoRoot: root });
+  const url = resolved.dbUrls.API_DATABASE_URL;
+  if (!url) throw new Error("API_DATABASE_URL is not configured for this workspace");
+  const target = parsePostgresUrl(url);
+
+  const client = new pg.Client({
+    host: target.host,
+    port: target.port,
+    user: target.user,
+    password: target.password,
+    database: target.database,
+  });
+  await client.connect();
+  try {
+    const located = await client.query(
+      "SELECT table_schema FROM information_schema.tables WHERE table_name = 'discovery_profiles' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema LIMIT 1",
+    );
+    const schema = located.rows[0]?.table_schema;
+    if (!schema)
+      throw new Error(
+        "discovery_profiles table not found in api database — did API migrations run?",
+      );
+    await client.query(`SET search_path TO "${schema}", public`);
+
+    const data = {
+      nodeId,
+      summary,
+      location: "",
+      region: "",
+      latitude: null,
+      longitude: null,
+      channels: [],
+      published,
+    };
+    await client.query(
+      "INSERT INTO discovery_profiles (node_id, data) VALUES ($1, $2::jsonb) ON CONFLICT (node_id) DO UPDATE SET data = EXCLUDED.data",
+      [nodeId, JSON.stringify(data)],
+    );
+    return data;
+  } finally {
+    await client.end();
+  }
+}
+
 const thisFile = path.resolve(fileURLToPath(import.meta.url));
 if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) {
   const payload = process.argv[2];

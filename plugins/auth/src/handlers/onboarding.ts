@@ -420,6 +420,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           return {
             success: true,
             alreadyRedeemed: true,
+            organizationId: codeRow.organizationId,
             organizationName,
             eventName: codeRow.eventName,
           };
@@ -528,6 +529,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
         return {
           success: true,
           alreadyRedeemed: false,
+          organizationId: codeRow.organizationId,
           organizationName,
           eventName: codeRow.eventName,
         };

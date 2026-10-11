@@ -37,6 +37,7 @@ export async function expireOnboardingCode(code: string): Promise<void> {
 }
 
 export async function seedOnboardingCodes(): Promise<{
+  organizationId: string;
   organizationName: string;
   eventName: string;
   codes: Record<OnboardingCodeFixture, string>;
@@ -101,7 +102,7 @@ export async function seedOnboardingCodes(): Promise<{
         updatedAt: now,
       });
     }
-    return { organizationName, eventName, codes };
+    return { organizationId: organization.id, organizationName, eventName, codes };
   } finally {
     await close();
   }
