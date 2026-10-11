@@ -50,7 +50,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     return Effect.void;
   }
 
-  function authorize(nodeId: string, context: AuthContext) {
+  function nodeAccess(nodeId: string, context: AuthContext) {
     return Effect.gen(function* () {
       if (!context.userId || !context.user) {
         return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
@@ -65,13 +65,23 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       if (!record) {
         return yield* Effect.fail(new ORPCError("NOT_FOUND"));
       }
-      if (context.user.role === "admin") return record;
+      if (context.user.role === "admin") return { record, level: "editor" as const };
       const org = context.organization;
-      if (
-        !record.tenant.orgId ||
-        org?.activeOrganizationId !== record.tenant.orgId ||
-        !["owner", "admin"].includes(org.member?.role ?? "")
-      ) {
+      const role = org?.member?.role ?? "";
+      if (!record.tenant.orgId || org?.activeOrganizationId !== record.tenant.orgId || !role) {
+        return { record, level: null };
+      }
+      return {
+        record,
+        level: ["owner", "admin"].includes(role) ? ("editor" as const) : ("member" as const),
+      };
+    });
+  }
+
+  function authorize(nodeId: string, context: AuthContext) {
+    return Effect.gen(function* () {
+      const { record, level } = yield* nodeAccess(nodeId, context);
+      if (level !== "editor") {
         return yield* Effect.fail(new ORPCError("FORBIDDEN"));
       }
       return record;
@@ -334,7 +344,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             .where(eq(discoveryActivities.canonicalUrl, data.url));
           if (duplicate && duplicate.id !== data.id)
             throw new ORPCError("BAD_REQUEST", {
-              message: "This source URL already has an activity",
+              message: `"${duplicate.data.title}" already uses this link. Give each event its own page link, like its Luma or Meetup page.`,
             });
           await tx
             .insert(discoveryActivities)
@@ -930,11 +940,17 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     activities: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context);
+        const { level } = yield* nodeAccess(nodeId, context);
+        if (!level) {
+          return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+        }
         const rows = yield* query(() =>
           db.select().from(discoveryActivities).where(eq(discoveryActivities.ownerNodeId, nodeId)),
         );
-        return rows.map((r) => r.data);
+        const activities = rows.map((r) => r.data);
+        return level === "editor"
+          ? activities
+          : activities.filter((activity) => activity.status !== "draft" && !activity.luma?.hidden);
       }),
     eventOrganization: (eventId: string) =>
       Effect.gen(function* () {
@@ -1013,10 +1029,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               latitude: null,
               longitude: null,
               geocodedLocation: null,
-              geocodeHint:
-                geocoded.reason === "not_found"
-                  ? "Couldn't place that location on the map. Try a clearer city or venue name."
-                  : "Map lookup is unavailable right now. Your profile was saved without a pin.",
+              geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
             };
           }
         }

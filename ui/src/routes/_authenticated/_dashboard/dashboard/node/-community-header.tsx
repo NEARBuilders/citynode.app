@@ -2,7 +2,7 @@ import { ArrowSquareOutIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
-import { Button, PageHeader, Skeleton } from "@/components";
+import { Badge, Button, PageHeader, Skeleton } from "@/components";
 import {
   Select,
   SelectContent,
@@ -15,6 +15,7 @@ import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { teamWorkspaceQueryOptions } from "@/lib/team-workspace";
 import { CommunityNav, type CommunityNavSection } from "./-community-nav";
+import { canManageCommunity } from "./-node-access";
 
 type CommunityNode = NonNullable<Awaited<ReturnType<ApiClient["getNode"]>>>;
 
@@ -88,7 +89,8 @@ export function CommunityHeader({
 
   const authContext = useQuery(communityAuthContextQueryOptions(api, activeOrganizationId));
   const orgRole = authContext.data?.organization?.member?.role;
-  const canManage = auth?.isAdmin || orgRole === "owner" || orgRole === "admin";
+  const canManage = canManageCommunity(auth?.isAdmin ? "admin" : null, orgRole);
+  const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
   const workspace = useQuery(teamWorkspaceQueryOptions(api));
 
   const siteUrl = node && gateway ? buildTenantUrl(node.slug, gateway) : null;
@@ -124,9 +126,16 @@ export function CommunityHeader({
         description={
           node ? (
             <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-base">
-              <span className="capitalize">
-                {presentationLabel(node.kind ?? "member", translate)}
-              </span>
+              {viewerRole && (
+                <Badge variant="secondary" data-testid="community-viewer-role">
+                  {translate("community.yourRole", {
+                    role: presentationLabel(viewerRole, translate),
+                  })}
+                </Badge>
+              )}
+              {node.kind && (
+                <span className="capitalize">{presentationLabel(node.kind, translate)}</span>
+              )}
               {siteUrl && (
                 <a
                   href={siteUrl}

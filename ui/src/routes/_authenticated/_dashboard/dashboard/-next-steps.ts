@@ -3,11 +3,11 @@ import { translateEnglishAppMessage } from "@/i18n/runtime";
 export type NextStepId =
   | "save-account"
   | "add-email"
-  | "create-org"
   | "choose-org"
   | "start-community"
   | "open-community"
-  | "community-settings"
+  | "payouts"
+  | "launch-node"
   | "admin"
   | "stake"
   | "explore";
@@ -55,13 +55,30 @@ export function getNextSteps(
     });
   }
 
-  if (state.organizationCount === 0) {
+  if (state.isAdmin) {
     steps.push({
-      id: "create-org",
-      title: t("dashboard.createOrg"),
-      description: t("dashboard.orgsRunCommunities"),
-      actionLabel: t("org.create"),
+      id: "launch-node",
+      title: t("dashboard.launchNode"),
+      description: t("dashboard.launchNodeHint"),
+      actionLabel: t("dashboard.launchNode"),
     });
+    steps.push({
+      id: "admin",
+      title: t("dashboard.adminQueue"),
+      description: t("dashboard.adminQueueHint"),
+      actionLabel: t("common.openAdmin"),
+    });
+  }
+
+  if (state.organizationCount === 0) {
+    if (!state.isAdmin) {
+      steps.push({
+        id: "start-community",
+        title: t("dashboard.startCommunity"),
+        description: t("dashboard.startCommunityHint"),
+        actionLabel: t("dashboard.startCommunity"),
+      });
+    }
   } else if (!state.activeOrganizationName) {
     steps.push({
       id: "choose-org",
@@ -85,21 +102,12 @@ export function getNextSteps(
     });
     if (state.canManageCommunity) {
       steps.push({
-        id: "community-settings",
-        title: t("dashboard.communitySettings"),
-        description: t("dashboard.settingsHint"),
-        actionLabel: t("common.openSettings"),
+        id: "payouts",
+        title: t("ownerActions.payouts"),
+        description: t("ownerActions.payoutsHint"),
+        actionLabel: t("common.open"),
       });
     }
-  }
-
-  if (state.isAdmin) {
-    steps.push({
-      id: "admin",
-      title: t("dashboard.adminQueue"),
-      description: t("dashboard.adminQueueHint"),
-      actionLabel: t("common.openAdmin"),
-    });
   }
 
   steps.push({
@@ -119,4 +127,32 @@ export function getNextSteps(
   }
 
   return steps;
+}
+
+export type NodeSetupStepId = "map" | "profile" | "event" | "qr";
+
+export interface NodeSetupStep {
+  id: NodeSetupStepId;
+  done: boolean;
+}
+
+export interface NodeSetupState {
+  profile: {
+    published: boolean;
+    latitude: number | null;
+    summary: string;
+    channels: readonly unknown[];
+  } | null;
+  eventCount: number;
+  onboardingCodeCount: number;
+}
+
+export function getNodeSetupSteps(state: NodeSetupState): NodeSetupStep[] {
+  const profile = state.profile;
+  return [
+    { id: "map", done: !!profile?.published && profile.latitude !== null },
+    { id: "profile", done: !!profile && profile.channels.length > 0 && !!profile.summary.trim() },
+    { id: "event", done: state.eventCount > 0 },
+    { id: "qr", done: state.onboardingCodeCount > 0 },
+  ];
 }

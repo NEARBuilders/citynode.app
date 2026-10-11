@@ -34,32 +34,36 @@ export function CommunityNav({
       path: "/dashboard/node",
       link: <Link to="/dashboard/node" search={{ nodeId }} />,
     },
-    {
-      value: "content",
-      label: translate("events.title"),
-      path: `/nodes/${nodeId}/content`,
-      link: (
-        <Link
-          to="/nodes/$nodeId/content"
-          params={{ nodeId }}
-          search={{ tab: "events" }}
-          replace={replace}
-        />
-      ),
-    },
-    {
-      value: "onboarding",
-      label: translate("org.onboarding"),
-      path: `/nodes/${nodeId}/content`,
-      link: (
-        <Link
-          to="/nodes/$nodeId/content"
-          params={{ nodeId }}
-          search={{ tab: "onboarding" }}
-          replace={replace}
-        />
-      ),
-    },
+    ...(canManage
+      ? [
+          {
+            value: "content" as const,
+            label: translate("events.title"),
+            path: `/nodes/${nodeId}/content`,
+            link: (
+              <Link
+                to="/nodes/$nodeId/content"
+                params={{ nodeId }}
+                search={{ tab: "events" }}
+                replace={replace}
+              />
+            ),
+          },
+          {
+            value: "onboarding" as const,
+            label: translate("nav.qrOnboarding"),
+            path: `/nodes/${nodeId}/content`,
+            link: (
+              <Link
+                to="/nodes/$nodeId/content"
+                params={{ nodeId }}
+                search={{ tab: "onboarding" }}
+                replace={replace}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       value: "proposals",
       label: translate("common.proposals"),
@@ -87,7 +91,7 @@ export function CommunityNav({
       ? [
           {
             value: "settings" as const,
-            label: translate("tenant.settings"),
+            label: translate("nav.profileSettings"),
             path: `/tenant/${tenantId}`,
             link: <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />,
           },

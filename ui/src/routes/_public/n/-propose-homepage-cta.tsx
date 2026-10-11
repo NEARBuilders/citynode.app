@@ -44,7 +44,7 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
         <Link
           to="/orgs/$slug"
           params={{ slug: owningOrg.slug }}
-          search={{ tab: "homepage" }}
+          search={{ tab: "node-config" }}
           data-testid="node-page.propose-homepage"
         />
       }

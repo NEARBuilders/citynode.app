@@ -5,17 +5,17 @@ import {
   CoinsIcon,
   CompassIcon,
   CubeIcon,
-  HammerIcon,
   HouseIcon,
-  InfoIcon,
   LightningIcon,
   ListChecksIcon,
   NetworkIcon,
   PlusCircleIcon,
+  RocketLaunchIcon,
   ScrollIcon,
   ShieldIcon,
   SparkleIcon,
   TreeStructureIcon,
+  UsersThreeIcon,
   WrenchIcon,
 } from "@phosphor-icons/react";
 import type { AppTranslator } from "@/i18n/catalogs";
@@ -53,6 +53,7 @@ export interface SidebarItem {
 
 export interface NavContext {
   activeOrgSlug?: string | null;
+  hasOrganization?: boolean;
   canManageOrganization?: boolean;
   canCurate?: boolean;
   isAdmin?: boolean;
@@ -139,41 +140,43 @@ export function buildNavItems(
       roleRequired: "anon",
       section: "main",
     },
-    {
-      icon: HammerIcon,
-      label: t("nav.build"),
-      slug: "build",
-      to: "/build",
-      roleRequired: "anon",
-      section: "main",
-    },
-    {
-      icon: InfoIcon,
-      label: t("footer.about"),
-      slug: "about",
-      to: "/about",
-      activePrefixes: ["/about", "/skill"],
-      roleRequired: "anon",
-      section: "main",
-    },
-    {
-      icon: NetworkIcon,
-      label: t("nav.myCommunity"),
-      slug: "my-node",
-      to: "/dashboard/node",
-      activePrefixes: ["/dashboard/node", "/nodes/", "/tenant/"],
-      roleRequired: "member",
-      section: "organization",
-    },
-    {
-      icon: BuildingsIcon,
-      label: t("common.organization"),
-      slug: "orgs",
-      to: orgPath,
-      activePrefixes: ["/orgs"],
-      roleRequired: "member",
-      section: "organization",
-    },
+    ...(context.hasOrganization === false
+      ? context.isAdmin
+        ? []
+        : [
+            {
+              icon: RocketLaunchIcon,
+              label: t("dashboard.startCommunity"),
+              slug: "start-community",
+              to: "/apply",
+              roleRequired: "member" as const,
+              section: "organization" as const,
+            },
+          ]
+      : [
+          {
+            icon: NetworkIcon,
+            label: t("nav.myCommunity"),
+            slug: "my-node",
+            to: "/dashboard/node",
+            activePrefixes: ["/dashboard/node", "/nodes/", "/tenant/"],
+            roleRequired: "member" as const,
+            section: "organization" as const,
+          },
+          ...(context.canManageOrganization || context.isAdmin
+            ? [
+                {
+                  icon: UsersThreeIcon,
+                  label: t("nav.membersRoles"),
+                  slug: "orgs",
+                  to: orgPath,
+                  activePrefixes: ["/orgs"],
+                  roleRequired: "member" as const,
+                  section: "organization" as const,
+                },
+              ]
+            : []),
+        ]),
     ...(context.canCurate || context.isAdmin
       ? [
           {

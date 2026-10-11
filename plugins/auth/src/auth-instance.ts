@@ -66,6 +66,7 @@ import {
 } from "./near-invitations";
 import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
 import { setEmail } from "./set-email";
+import { isSyntheticEmail } from "./synthetic-email";
 
 export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPluginOptions & {
   recipients: { mainnet: string; testnet: string };
@@ -160,7 +161,7 @@ async function sendEmail(
   { to, subject, text, html }: { to: string; subject: string; text: string; html?: string },
   emailApiKey?: string,
   from?: string,
-) {
+): Promise<boolean> {
   try {
     if (!emailApiKey || !from) {
       throw new Error("no email API key or from address configured");
@@ -177,6 +178,7 @@ async function sendEmail(
       const errorText = await res.text();
       throw new Error(`Resend error ${res.status}: ${errorText}`);
     }
+    return true;
   } catch (err) {
     console.log(`\n📧 [Email Preview — ${err instanceof Error ? err.message : "send failed"}] ===`);
     console.log(`To: ${to}`);
@@ -188,6 +190,7 @@ async function sendEmail(
       console.log(`\n[HTML version available but not shown in console]`);
     }
     console.log(`================================================================\n`);
+    return false;
   }
 }
 
@@ -454,15 +457,24 @@ export function createAuthInstance(
         async sendInvitationEmail(data) {
           if (isNearInvitation(data.invitation)) return;
           const inviteLink = `${config.baseUrl}/orgs/invites/${data.id}`;
-          await sendEmail(
+          const inviter = isSyntheticEmail(data.inviter.user.email)
+            ? data.inviter.user.name
+            : `${data.inviter.user.name} (${data.inviter.user.email})`;
+          const delivered = await sendEmail(
             {
               to: data.email,
               subject: `Invitation to join ${data.organization.name}`,
-              text: `You've been invited by ${data.inviter.user.name} (${data.inviter.user.email}) to join ${data.organization.name}.\n\nClick here to accept: ${inviteLink}`,
+              text: `You've been invited by ${inviter} to join ${data.organization.name}.\n\nClick here to accept: ${inviteLink}`,
             },
             emailApiKey,
             emailConfig?.from,
           );
+          if (!delivered && (emailApiKey || process.env.NODE_ENV === "production")) {
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message:
+                "The invitation was saved, but the email couldn't be sent. Try Resend from the Invitations tab.",
+            });
+          }
         },
       }),
       nearInvitations(db, membershipPolicy),

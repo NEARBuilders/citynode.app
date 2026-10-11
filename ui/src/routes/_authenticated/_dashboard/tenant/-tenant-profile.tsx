@@ -5,9 +5,10 @@ import { useAppTranslation } from "@/i18n/runtime";
 export function TenantProfile({ nodeId }: { nodeId: string }) {
   const translate = useAppTranslation();
   return (
-    <section className="flex flex-col gap-6">
+    <section id="profile" className="flex scroll-mt-20 flex-col gap-6">
       <SectionHeader
-        title={translate("community.profile")}
+        title={translate("ownerActions.profile")}
+        description={translate("ownerActions.profileSectionHint")}
         sectionTestId="tenant.section.profile"
       />
       <ProfileEditor nodeId={nodeId} />

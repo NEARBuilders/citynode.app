@@ -1,4 +1,6 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as schema from "../../src/db/schema";
 import { createTestHandlers, createTestOrg, createTestServices, createTestUser } from "../helpers";
 
 let services: Awaited<ReturnType<typeof createTestServices>>;
@@ -200,6 +202,60 @@ describe("invitation handlers", () => {
       });
 
       expect(result.success).toBe(true);
+    });
+
+    it("lets a passkey user open and accept an invite sent to their real address", async () => {
+      const owner = await createTestUser(services.services);
+      const org = await createTestOrg(services.services, owner.userId);
+      const placeholder = `passkey-${crypto.randomUUID().slice(0, 8)}@passkey.local`;
+      const passkeyUser = await createTestUser(services.services, { email: placeholder });
+      const invitedEmail = `real-${crypto.randomUUID().slice(0, 8)}@example.com`;
+      const handlers = createTestHandlers(services.services);
+
+      const invite = await handlers.invitations.inviteMember({
+        input: { email: invitedEmail, role: "member", organizationId: org.id },
+        context: { reqHeaders: owner.reqHeaders },
+      });
+
+      const shown = await handlers.invitations.getInvitation({
+        input: { id: invite.id },
+        context: { reqHeaders: passkeyUser.reqHeaders },
+      });
+      expect(shown?.organizationName).toBe(org.name);
+
+      const result = await handlers.invitations.acceptInvitation({
+        input: { invitationId: invite.id },
+        context: { reqHeaders: passkeyUser.reqHeaders },
+      });
+      expect(result.success).toBe(true);
+
+      const user = await services.services.db.query.user.findFirst({
+        where: eq(schema.user.id, passkeyUser.userId),
+      });
+      expect(user?.email).toBe(invitedEmail);
+    });
+
+    it("refuses to hand a passkey user an invite whose address belongs to someone else", async () => {
+      const owner = await createTestUser(services.services);
+      const org = await createTestOrg(services.services, owner.userId);
+      const invitedEmail = `taken-${crypto.randomUUID().slice(0, 8)}@example.com`;
+      await createTestUser(services.services, { email: invitedEmail });
+      const passkeyUser = await createTestUser(services.services, {
+        email: `passkey-${crypto.randomUUID().slice(0, 8)}@passkey.local`,
+      });
+      const handlers = createTestHandlers(services.services);
+
+      const invite = await handlers.invitations.inviteMember({
+        input: { email: invitedEmail, role: "member", organizationId: org.id },
+        context: { reqHeaders: owner.reqHeaders },
+      });
+
+      await expect(
+        handlers.invitations.acceptInvitation({
+          input: { invitationId: invite.id },
+          context: { reqHeaders: passkeyUser.reqHeaders },
+        }),
+      ).rejects.toThrow(/belongs to another account/);
     });
   });
 

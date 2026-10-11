@@ -12,6 +12,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type AuthClient, useAuthClient } from "@/app";
 import { SectionHeader } from "@/components/layout/section-header";
+import { LinkTreasury } from "@/components/link-treasury";
 import { useLocalDate } from "@/components/local-date";
 import { Button } from "@/components/ui/button";
 import {
@@ -598,11 +599,13 @@ export function TeamStakeCard({
   pending = false,
   teamLinked = false,
   validatorsTenantId,
+  linkOrganizationId,
 }: {
   target: TeamStakeTarget | null;
   pending?: boolean;
   teamLinked?: boolean;
   validatorsTenantId?: string;
+  linkOrganizationId?: string;
 }) {
   const { locale } = useAppLocale();
   const translate = useAppTranslation();
@@ -827,6 +830,8 @@ export function TeamStakeCard({
             </>
           )}
         </TeamStakeNote>
+      ) : linkOrganizationId ? (
+        <LinkTreasury organizationId={linkOrganizationId} />
       ) : (
         <p className="text-sm text-muted-foreground">{translate("stake.linkTreasury")}</p>
       )}

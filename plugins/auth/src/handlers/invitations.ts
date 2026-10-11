@@ -9,6 +9,7 @@ import {
   normalizeNearAccountId,
 } from "../near-invitations";
 import { AuthServicesTag } from "../service-types";
+import { isSyntheticEmail } from "../synthetic-email";
 import { canReadMemberEmails, createHeaders, safeAuthApi } from "../utils";
 
 function resolveInvitee(input: { email?: string; nearAccountId?: string; nearNetwork?: string }) {
@@ -59,6 +60,24 @@ function toInvitation(invitation: any) {
   };
 }
 
+async function invitationForPlaceholderUser(services: any, headers: Headers, invitationId: string) {
+  const session = await services.auth.api.getSession({ headers }).catch(() => null);
+  const user = session?.user as { id: string; email: string } | undefined;
+  if (!user || !isSyntheticEmail(user.email)) return null;
+  const invitation = await services.db.query.invitation.findFirst({
+    where: eq(schema.invitation.id, invitationId),
+  });
+  if (
+    !invitation ||
+    invitation.nearAccountId ||
+    invitation.status !== "pending" ||
+    new Date(invitation.expiresAt) < new Date()
+  ) {
+    return null;
+  }
+  return { user, invitation };
+}
+
 export function createInvitationHandlers(builder: any, requireAuth: any) {
   return {
     inviteMember: builder.inviteMember
@@ -101,6 +120,24 @@ export function createInvitationHandlers(builder: any, requireAuth: any) {
               ...toInvitation(match.invitation),
               organizationName: match.organizationName,
               organizationSlug: match.organizationSlug,
+              inviterName: inviter?.name ?? null,
+              inviterEmail: null,
+            };
+          }
+          const claimable = await invitationForPlaceholderUser(services, headers, input.id);
+          if (claimable) {
+            const [organization, inviter] = await Promise.all([
+              services.db.query.organization.findFirst({
+                where: eq(schema.organization.id, claimable.invitation.organizationId),
+              }),
+              services.db.query.user.findFirst({
+                where: eq(schema.user.id, claimable.invitation.inviterId),
+              }),
+            ]);
+            return {
+              ...toInvitation(claimable.invitation),
+              organizationName: organization?.name ?? null,
+              organizationSlug: organization?.slug ?? null,
               inviterName: inviter?.name ?? null,
               inviterEmail: null,
             };
@@ -190,9 +227,26 @@ export function createInvitationHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
+        const headers = createHeaders(context.reqHeaders);
+        const claimable = await invitationForPlaceholderUser(services, headers, input.invitationId);
+        if (claimable) {
+          const email = claimable.invitation.email.trim().toLowerCase();
+          const holder = await services.db.query.user.findFirst({
+            where: eq(schema.user.email, email),
+          });
+          if (holder && holder.id !== claimable.user.id) {
+            throw new ORPCError("CONFLICT", {
+              message: `This invitation is for ${email}, which belongs to another account. Sign in with that account to accept it.`,
+            });
+          }
+          await services.db
+            .update(schema.user)
+            .set({ email, emailVerified: true, updatedAt: new Date() })
+            .where(eq(schema.user.id, claimable.user.id));
+        }
         await safeAuthApi(() =>
           services.auth.api.acceptInvitation({
-            headers: createHeaders(context.reqHeaders),
+            headers,
             body: { invitationId: input.invitationId },
           }),
         );

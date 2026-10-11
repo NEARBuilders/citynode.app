@@ -35,7 +35,6 @@ import {
   type CreatedOrganizationApiKey,
   type OrganizationApiKey,
 } from "./-api-keys-tab";
-import { HomepageTab } from "./-homepage-tab";
 import { InvitationsTab } from "./-invitations-tab";
 import { MembersTab } from "./-members-tab";
 import { NodeConfigTab } from "./-node-config";
@@ -220,11 +219,12 @@ function OrganizationDetail() {
     },
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
+  const settingsTab = requestedTab === "homepage" ? "node-config" : requestedTab;
   const activeTab =
-    (requestedTab === "onboard" && !canOrganize) ||
-    (["node-config", "homepage"].includes(requestedTab) && !canViewSettings)
+    (settingsTab === "onboard" && !canOrganize) ||
+    (settingsTab === "node-config" && !canViewSettings)
       ? "members"
-      : requestedTab;
+      : settingsTab;
   const setActiveTab = (value: unknown) => {
     if (!isOrganizationTab(value) || value === activeTab) return;
     void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
@@ -349,11 +349,6 @@ function OrganizationDetail() {
             </TabsTrigger>
             {canViewSettings && (
               <TabsTrigger value="node-config" data-testid="orgs-tab-node-config">
-                {translate("common.community")}
-              </TabsTrigger>
-            )}
-            {canViewSettings && (
-              <TabsTrigger value="homepage" data-testid="orgs-tab-homepage">
                 {translate("homepage.title")}
               </TabsTrigger>
             )}
@@ -438,17 +433,6 @@ function OrganizationDetail() {
               baseAccount={baseAccount}
               canManage={canViewSettings}
               isPlatformAdmin={session?.user?.role === "admin"}
-            />
-          </TabsContent>
-        )}
-        {canViewSettings && (
-          <TabsContent value="homepage" className="flex flex-col gap-6 pt-6">
-            <HomepageTab
-              orgId={orgId}
-              gatewayId={gatewayId}
-              baseAccount={baseAccount}
-              canManage={canViewSettings}
-              isActive={isActive}
             />
           </TabsContent>
         )}

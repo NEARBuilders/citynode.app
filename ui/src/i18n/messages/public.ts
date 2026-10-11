@@ -118,6 +118,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "{name} est à la une",
     "{name}已被推荐",
   ],
+  "community.geocodeUnavailable": [
+    "The profile was saved, but the map service is down right now, so there's no pin yet. Save again later to add it.",
+    "El perfil se guardó, pero el servicio de mapas no está disponible ahora, así que aún no hay marcador. Vuelve a guardar más tarde.",
+    "Le profil a été enregistré, mais le service de carte est indisponible pour le moment : pas encore d’épingle. Enregistrez à nouveau plus tard.",
+    "资料已保存，但地图服务暂时不可用，因此还没有地图标记。请稍后重新保存。",
+  ],
   "community.geocodeHint": [
     "The profile was saved, but the location could not be found on the map. Check the address and save again.",
     "El perfil se guardó, pero no se encontró la ubicación en el mapa. Comprueba la dirección y vuelve a guardar.",
@@ -866,17 +872,17 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "在 trezu.app 投票",
   ],
   "stake.unlockNotice": [
-    "Unlocks for withdrawal after about a day.",
-    "Se podrá retirar después de aproximadamente un día.",
-    "Le retrait sera possible après environ un jour.",
-    "约一天后可解锁提取。",
+    "Unlocks for withdrawal after about 2–3 days.",
+    "Se podrá retirar después de unos 2–3 días.",
+    "Le retrait sera possible après environ 2 à 3 jours.",
+    "约 2–3 天后可解锁提取。",
   ],
   "stake.unstaked": ["Unstaked", "Sin delegar", "Hors staking", "已解除质押"],
   "stake.unstakeHint": [
-    "To unstake, use the wallet you staked from; unstaked NEAR unlocks after about a day. Unstaking more restarts the wait for everything already unstaked.",
-    "Para retirar tu delegación, usa la billetera con la que delegaste; los NEAR retirados se desbloquean en aproximadamente un día. Si retiras más, la espera se reinicia para todo lo ya retirado.",
-    "Pour retirer votre staking, utilisez le portefeuille avec lequel vous avez staké ; les NEAR retirés sont disponibles après environ un jour. Retirer davantage relance l'attente pour tout ce qui a déjà été retiré.",
-    "如需解除质押，请使用质押时的钱包；解除质押的 NEAR 约一天后解锁。再次解除质押会重新开始所有已解除质押 NEAR 的等待时间。",
+    "To unstake, use the wallet you staked from; unstaked NEAR unlocks after about 2–3 days. Unstaking more restarts the wait for everything already unstaked.",
+    "Para retirar tu delegación, usa la billetera con la que delegaste; los NEAR retirados se desbloquean en unos 2–3 días. Si retiras más, la espera se reinicia para todo lo ya retirado.",
+    "Pour retirer votre staking, utilisez le portefeuille avec lequel vous avez staké ; les NEAR retirés sont disponibles après environ 2 à 3 jours. Retirer davantage relance l'attente pour tout ce qui a déjà été retiré.",
+    "如需解除质押，请使用质押时的钱包；解除质押的 NEAR 约 2–3 天后解锁。再次解除质押会重新开始所有已解除质押 NEAR 的等待时间。",
   ],
   "stake.unstakeGuide": [
     "How unstaking works",
@@ -891,10 +897,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "在此质押即支持该社区，你本人不会获得奖励。",
   ],
   "stake.unstakeProposal": [
-    "Creates a treasury proposal. Rewards are already included; the NEAR unlocks after about a day.",
-    "Crea una propuesta de tesorería. Las recompensas ya están incluidas; los NEAR se desbloquean en aproximadamente un día.",
-    "Crée une proposition de trésorerie. Les récompenses sont incluses ; les NEAR seront disponibles après environ un jour.",
-    "创建金库提案，金额已包含奖励，NEAR 约一天后解锁。",
+    "Creates a treasury proposal. Rewards are already included; the NEAR unlocks after about 2–3 days.",
+    "Crea una propuesta de tesorería. Las recompensas ya están incluidas; los NEAR se desbloquean en unos 2–3 días.",
+    "Crée une proposition de trésorerie. Les récompenses sont incluses ; les NEAR seront disponibles après environ 2 à 3 jours.",
+    "创建金库提案，金额已包含奖励，NEAR 约 2–3 天后解锁。",
   ],
   "stake.unstakeProposed": [
     "Unstake proposed",
@@ -909,10 +915,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "只有 NEAR 验证节点可以接受 NEAR 质押。",
   ],
   "stake.withdrawDelay": [
-    "Withdraw to {account} in about a day.",
-    "Retira a {account} en aproximadamente un día.",
-    "Retirez vers {account} dans environ un jour.",
-    "约一天后可提取至 {account}。",
+    "Withdraw to {account} in about 2–3 days.",
+    "Retira a {account} en unos 2–3 días.",
+    "Retirez vers {account} dans environ 2 à 3 jours.",
+    "约 2–3 天后可提取至 {account}。",
   ],
   "stake.withdrawProposal": [
     "Creates a treasury proposal to move unstaked NEAR back to the team.",

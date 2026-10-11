@@ -1,4 +1,4 @@
-import { DotsThreeIcon, QrCodeIcon } from "@phosphor-icons/react";
+import { DotsThreeIcon, QrCodeIcon, UsersThreeIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -114,8 +114,13 @@ function StationRow({
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const location = useLocation();
+  const [open, setOpen] = useState(false);
   return (
-    <Item variant="outline" data-testid={`community-onboarding.station-${code.id}`}>
+    <Item
+      variant="outline"
+      className="flex-wrap"
+      data-testid={`community-onboarding.station-${code.id}`}
+    >
       <ItemMedia variant="icon">
         <QrCodeIcon />
       </ItemMedia>
@@ -158,12 +163,99 @@ function StationRow({
             <DotsThreeIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setOpen((value) => !value)}>
+              {open ? translate("checkIn.hide") : translate("checkIn.seeWho")}
+            </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onClick={onRevoke}>
               {translate("station.close")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </ItemActions>
+      {open && (
+        <div className="basis-full pt-2">
+          <WhoJoined codeId={code.id} organizationId={organizationId} />
+        </div>
+      )}
+    </Item>
+  );
+}
+
+function WhoJoined({ codeId, organizationId }: { codeId: string; organizationId: string }) {
+  const translate = useAppTranslation();
+  const api = useApiClient();
+  const status = useQuery({
+    queryKey: ["onboarding-attendees", codeId],
+    queryFn: () => api.auth.getOnboardingStatus({ codeId, organizationId }),
+    retry: false,
+  });
+  if (status.isPending) return <Skeleton className="h-10 w-full" />;
+  if (status.isError) {
+    return (
+      <p role="alert" className="text-sm text-muted-foreground">
+        {appErrorMessage(status.error, translate)}
+      </p>
+    );
+  }
+  if (status.data.joined.length === 0) {
+    return <p className="text-sm text-muted-foreground">{translate("checkIn.nobody")}</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-2" data-testid={`check-in-attendees-${codeId}`}>
+      {status.data.joined.map((entry) => (
+        <li key={entry.userId} className="flex min-w-0 items-center justify-between gap-4 text-sm">
+          <span className="min-w-0 truncate text-foreground">
+            {entry.userName ?? translate("org.newMember")}
+            {entry.accountId ? (
+              <span className="text-muted-foreground"> · {entry.accountId}</span>
+            ) : null}
+          </span>
+          <span className="shrink-0 text-muted-foreground">
+            <LocalDate value={entry.createdAt} format="datetime" />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PastCheckInRow({
+  code,
+  organizationId,
+}: {
+  code: OnboardingCode;
+  organizationId: string;
+}) {
+  const translate = useAppTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <Item variant="outline" className="flex-wrap" data-testid={`check-in-past-${code.id}`}>
+      <ItemMedia variant="icon">
+        <UsersThreeIcon />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>{code.eventName}</ItemTitle>
+        <ItemDescription>
+          {translate("checkIn.joined", { count: code.usedCount })} ·{" "}
+          <LocalDate value={code.createdAt} format="date" />
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          data-testid={`check-in-toggle-${code.id}`}
+        >
+          {open ? translate("checkIn.hide") : translate("checkIn.seeWho")}
+        </Button>
+      </ItemActions>
+      {open && (
+        <div className="basis-full pt-2">
+          <WhoJoined codeId={code.id} organizationId={organizationId} />
+        </div>
+      )}
     </Item>
   );
 }
@@ -208,9 +300,12 @@ export function EventOnboardingPanel({
 
   const events = upcomingEvents(activities.data ?? [], now);
   const nodeEventIds = new Set((activities.data ?? []).map((activity) => activity.id));
-  const live = (codes.data ?? []).filter(
-    (code) =>
-      onboardingCodeState(code) === "active" && (!code.eventId || nodeEventIds.has(code.eventId)),
+  const nodeCodes = (codes.data ?? []).filter(
+    (code) => !code.eventId || nodeEventIds.has(code.eventId),
+  );
+  const live = nodeCodes.filter((code) => onboardingCodeState(code) === "active");
+  const past = nodeCodes.filter(
+    (code) => onboardingCodeState(code) !== "active" && code.usedCount > 0,
   );
 
   return (
@@ -328,6 +423,20 @@ export function EventOnboardingPanel({
           </p>
         )}
       </section>
+
+      {past.length > 0 && (
+        <section className="flex flex-col gap-4">
+          <SectionHeader
+            title={translate("checkIn.pastTitle")}
+            description={translate("checkIn.pastHint")}
+          />
+          <ItemGroup>
+            {past.map((code) => (
+              <PastCheckInRow key={code.id} code={code} organizationId={organizationId ?? ""} />
+            ))}
+          </ItemGroup>
+        </section>
+      )}
 
       <ConfirmDialog
         open={!!revoking}

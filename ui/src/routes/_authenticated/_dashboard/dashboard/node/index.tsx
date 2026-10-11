@@ -37,6 +37,7 @@ import {
   fetchDaoProposals,
   findPendingProposalForPlan,
 } from "@/lib/sputnik-proposals";
+import { OwnerActions } from "./-owner-actions";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,
@@ -113,7 +114,7 @@ function NodeOverview() {
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
   const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
   const upcoming = upcomingEvents(activities.data ?? [], now);
-  const contentLink = (tab: "events" | "onboarding") => (
+  const contentLink = (tab: "onboarding") => (
     <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} search={{ tab }} />
   );
 
@@ -151,6 +152,14 @@ function NodeOverview() {
         />
       </dl>
 
+      {canManage && (
+        <OwnerActions
+          nodeId={selectedNode.id}
+          tenantId={tenant?.id ?? null}
+          showPayouts={showTeamStake}
+        />
+      )}
+
       {daoOwned && canManage && pendingConfig && orgSlug && (
         <Item variant="outline" data-testid="dashboard-node.pending-config-proposal">
           <ItemMedia variant="icon">
@@ -182,22 +191,28 @@ function NodeOverview() {
         <SectionHeader
           title={translate("dashboard.comingUp")}
           action={
-            <Button
-              size="sm"
-              nativeButton={false}
-              render={contentLink("events")}
-              data-testid="dashboard-node.add-event"
-            >
-              <CalendarDotsIcon />
-              {translate("events.add")}
-            </Button>
+            canManage ? (
+              <Button
+                size="sm"
+                nativeButton={false}
+                render={
+                  <Link to="/nodes/$nodeId/events/new" params={{ nodeId: selectedNode.id }} />
+                }
+                data-testid="dashboard-node.add-event"
+              >
+                <CalendarDotsIcon />
+                {translate("events.add")}
+              </Button>
+            ) : undefined
           }
         />
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {activities.isError
               ? translate("dashboard.eventsOwnerHint")
-              : translate("dashboard.noEventsHint")}
+              : canManage
+                ? translate("dashboard.noEventsHint")
+                : translate("dashboard.noEventsMemberHint")}
           </p>
         ) : (
           <ItemGroup>
@@ -218,18 +233,22 @@ function NodeOverview() {
                     {event.venue ? ` · ${event.venue}` : ""}
                   </ItemDescription>
                 </ItemContent>
-                <ItemActions>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    nativeButton={false}
-                    render={contentLink("onboarding")}
-                    aria-label={translate("station.onboardingNamed", { event: event.title ?? "" })}
-                  >
-                    <QrCodeIcon />
-                    <span className="hidden sm:inline">{translate("org.onboarding")}</span>
-                  </Button>
-                </ItemActions>
+                {canManage && (
+                  <ItemActions>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      nativeButton={false}
+                      render={contentLink("onboarding")}
+                      aria-label={translate("station.onboardingNamed", {
+                        event: event.title ?? "",
+                      })}
+                    >
+                      <QrCodeIcon />
+                      <span className="hidden sm:inline">{translate("nav.qrOnboarding")}</span>
+                    </Button>
+                  </ItemActions>
+                )}
               </Item>
             ))}
           </ItemGroup>
@@ -237,18 +256,21 @@ function NodeOverview() {
       </section>
 
       {showTeamStake && (
-        <TeamStakeCard
-          target={teamStake}
-          pending={daoQuery.isLoading}
-          teamLinked={
-            !!resolveTeamAccountId({
-              daoAccountId: daoQuery.data?.daoAccountId,
-              tenantAccountId: tenant?.accountId,
-              tenantOwnerKind: tenant?.ownerKind,
-            })
-          }
-          validatorsTenantId={canManage ? tenant?.id : undefined}
-        />
+        <div id="payouts" className="scroll-mt-20">
+          <TeamStakeCard
+            target={teamStake}
+            pending={daoQuery.isLoading}
+            teamLinked={
+              !!resolveTeamAccountId({
+                daoAccountId: daoQuery.data?.daoAccountId,
+                tenantAccountId: tenant?.accountId,
+                tenantOwnerKind: tenant?.ownerKind,
+              })
+            }
+            validatorsTenantId={canManage ? tenant?.id : undefined}
+            linkOrganizationId={canManage ? (orgId ?? undefined) : undefined}
+          />
+        </div>
       )}
 
       <section className="flex flex-col gap-6">

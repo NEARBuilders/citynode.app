@@ -107,7 +107,7 @@ describe("ProposeHomepageCta", () => {
     renderCta();
 
     const link = await screen.findByTestId("node-page.propose-homepage");
-    expect(link.getAttribute("href")).toBe("/orgs/chicago-org?tab=homepage");
+    expect(link.getAttribute("href")).toBe("/orgs/chicago-org?tab=node-config");
     expect(link.textContent).toContain("Propose homepage change");
   });
 

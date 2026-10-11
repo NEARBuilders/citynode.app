@@ -72,6 +72,34 @@ describe("onboarding handlers", () => {
     expect(second.eventId).toBe(launch.eventId);
   });
 
+  it("hands back the live code for an event instead of opening a second station", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const meetup = eventOf("Meetup");
+
+    const first = await handlers.onboarding.createOnboardingCode({
+      input: { ...meetup, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const again = await handlers.onboarding.createOnboardingCode({
+      input: { ...meetup, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    expect(again.id).toBe(first.id);
+    expect(again.code).toBe(first.code);
+
+    await handlers.onboarding.revokeOnboardingCode({
+      input: { codeId: first.id, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const reopened = await handlers.onboarding.createOnboardingCode({
+      input: { ...meetup, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    expect(reopened.id).not.toBe(first.id);
+  });
+
   it("gives two events with the same title separate Event Teams", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);

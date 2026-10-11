@@ -9,10 +9,10 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "auth.email.add": ["Add email", "Añadir correo", "Ajouter une adresse e-mail", "添加邮箱"],
   "auth.email.description": [
-    "Add an email so you can sign in from another device.",
-    "Añade un correo para poder iniciar sesión desde otro dispositivo.",
-    "Ajoutez une adresse e-mail pour vous connecter depuis un autre appareil.",
-    "添加邮箱，以便在其他设备上登录。",
+    "Add your email so communities can invite you and reach you.",
+    "Añade tu correo para que las comunidades puedan invitarte y contactarte.",
+    "Ajoutez votre adresse e-mail pour que les communautés puissent vous inviter et vous contacter.",
+    "添加邮箱，方便社区邀请和联系你。",
   ],
   "auth.common.email": ["Email", "Correo electrónico", "Adresse e-mail", "邮箱"],
   "auth.common.emailExample": [
@@ -182,17 +182,12 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "你已加入 {name}",
   ],
   "auth.onboard.ready": ["You're in", "Ya estás dentro", "Vous êtes inscrit", "已成功加入"],
-  "auth.onboard.readyBuild": [
-    "Ready to start building?",
-    "¿Listo para empezar a construir?",
-    "Prêt à commencer à développer ?",
-    "准备好开始开发了吗？",
-  ],
-  "auth.onboard.buildPrompts": [
-    "Get build prompts",
-    "Obtener prompts de desarrollo",
-    "Obtenir des consignes de développement",
-    "获取开发提示词",
+  "auth.onboard.youreIn": ["You're in!", "¡Ya estás dentro!", "Vous y êtes !", "你已加入！"],
+  "auth.onboard.openCommunity": [
+    "Open {organization}",
+    "Abrir {organization}",
+    "Ouvrir {organization}",
+    "打开 {organization}",
   ],
   "auth.onboard.desktop": [
     "Continue on your computer",
@@ -645,10 +640,10 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "添加登录方式",
   ],
   "auth.profile.emailHint": [
-    "Sign in from another device and recover your account.",
-    "Inicia sesión desde otro dispositivo y recupera tu cuenta.",
-    "Connectez-vous depuis un autre appareil et récupérez votre compte.",
-    "在其他设备上登录并恢复账户。",
+    "So communities can invite you and reach you.",
+    "Para que las comunidades puedan invitarte y contactarte.",
+    "Pour que les communautés puissent vous inviter et vous contacter.",
+    "方便社区邀请和联系你。",
   ],
   "auth.locale.updated": [
     "Language updated",

@@ -94,11 +94,11 @@ test.describe("node page propose homepage CTA", () => {
     await expect(button).toBeVisible({ timeout: 15000 });
     await button.click();
 
-    await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}\\?tab=homepage`), {
+    await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}\\?tab=node-config`), {
       timeout: 15000,
       waitUntil: "commit",
     });
-    await expect(page.getByTestId("orgs-tab-homepage")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("orgs-tab-node-config")).toHaveAttribute("aria-selected", "true");
     expectNoHydrationFailure(pageErrors);
   });
 });
