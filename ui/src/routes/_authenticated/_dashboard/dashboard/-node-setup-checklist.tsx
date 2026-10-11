@@ -8,7 +8,7 @@ import {
   UserCircleIcon,
 } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import type { ReactElement } from "react";
+import type { CSSProperties, ReactElement } from "react";
 import { Button, SectionHeader } from "@/components";
 import {
   Item,
@@ -66,11 +66,12 @@ export function NodeSetupChecklist({
         title={translate("setup.title", { name: communityName })}
         description={translate("setup.progress", { done, total: steps.length })}
       />
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
-        <div
-          className="h-full rounded-full bg-success transition-all"
-          style={{ width: `${(done / steps.length) * 100}%` }}
-        />
+      <div
+        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        style={{ "--setup-progress": `${(done / steps.length) * 100}%` } as CSSProperties}
+        aria-hidden
+      >
+        <div className="h-full w-(--setup-progress) rounded-full bg-success transition-all" />
       </div>
       <ItemGroup>
         {steps.map((step) => {
@@ -84,13 +85,11 @@ export function NodeSetupChecklist({
               data-testid={`home-setup-${step.id}`}
               data-done={step.done}
             >
-              <ItemMedia variant="icon" className={step.done ? "text-success" : undefined}>
+              <ItemMedia variant="icon">
                 <StepIcon weight={step.done ? "fill" : "regular"} />
               </ItemMedia>
               <ItemContent className="min-w-0">
-                <ItemTitle className={step.done ? "text-muted-foreground" : undefined}>
-                  {translate(`setup.${step.id}.title`)}
-                </ItemTitle>
+                <ItemTitle>{translate(`setup.${step.id}.title`)}</ItemTitle>
                 <ItemDescription>{translate(`setup.${step.id}.hint`)}</ItemDescription>
               </ItemContent>
               <ItemActions className={isNext ? "w-full sm:w-auto" : undefined}>
