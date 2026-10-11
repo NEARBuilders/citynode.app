@@ -20,11 +20,15 @@ import type {
   DiscoveryMeasurement,
   DiscoveryProfile,
 } from "../discovery-contract";
+import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
+import { resolveTeamAccess } from "../team-access-policy";
 import { type GeocodeService, GeocodeTag, shouldGeocodeProfile } from "./discovery-geocode";
 import { createLumaCalendars } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";
+
+const EVENTS_AREA: FeatureArea = "events";
 
 export type DiscoveryEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
@@ -50,7 +54,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     return Effect.void;
   }
 
-  function authorize(nodeId: string, context: AuthContext) {
+  function authorize(nodeId: string, context: AuthContext, area?: FeatureArea) {
     return Effect.gen(function* () {
       if (!context.userId || !context.user) {
         return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
@@ -67,11 +71,16 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }
       if (context.user.role === "admin") return record;
       const org = context.organization;
-      if (
-        !record.tenant.orgId ||
-        org?.activeOrganizationId !== record.tenant.orgId ||
-        !["owner", "admin"].includes(org.member?.role ?? "")
-      ) {
+      if (!record.tenant.orgId || org?.activeOrganizationId !== record.tenant.orgId) {
+        return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+      }
+      const role = org.member?.role ?? "";
+      const granted =
+        ["owner", "admin"].includes(role) ||
+        (!!role &&
+          !!area &&
+          resolveTeamAccess(context).teams.some((team) => team.areas.includes(area)));
+      if (!granted) {
         return yield* Effect.fail(new ORPCError("FORBIDDEN"));
       }
       return record;
@@ -271,9 +280,10 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       if (input.id && !initial) {
         return yield* Effect.fail(new ORPCError("NOT_FOUND"));
       }
-      yield* authorize(initial?.ownerNodeId ?? input.ownerNodeId, context);
+      const area = input.kind === "event" ? EVENTS_AREA : undefined;
+      yield* authorize(initial?.ownerNodeId ?? input.ownerNodeId, context, area);
       for (const nodeId of new Set(input.nodeIds)) {
-        if (!initial?.nodeIds.includes(nodeId)) yield* authorize(nodeId, context);
+        if (!initial?.nodeIds.includes(nodeId)) yield* authorize(nodeId, context, area);
       }
       return yield* query(() =>
         db.transaction(async (tx) => {
@@ -540,7 +550,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     }) => list(input),
     lumaCalendars: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context);
+        yield* authorize(nodeId, context, EVENTS_AREA);
         const [connection] = yield* query(() =>
           db
             .select()
@@ -562,12 +572,12 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     syncDueLuma,
     importLuma: (input: { nodeId: string; calendarId: string }, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(input.nodeId, context);
+        yield* authorize(input.nodeId, context, EVENTS_AREA);
         return yield* syncLuma(input, context.userId!);
       }),
     disconnectLuma: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context);
+        yield* authorize(nodeId, context, EVENTS_AREA);
         yield* query(() =>
           db.transaction(async (tx) => {
             await tx.select().from(nodes).where(eq(nodes.id, nodeId)).for("update");
@@ -889,7 +899,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       context: AuthContext,
     ) =>
       Effect.gen(function* () {
-        yield* authorize(input.nodeId, context);
+        yield* authorize(input.nodeId, context, EVENTS_AREA);
         return yield* query(() =>
           db.transaction(async (tx) => {
             await tx.select().from(nodes).where(eq(nodes.id, input.nodeId)).for("update");
@@ -930,7 +940,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     activities: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context);
+        yield* authorize(nodeId, context, EVENTS_AREA);
         const rows = yield* query(() =>
           db.select().from(discoveryActivities).where(eq(discoveryActivities.ownerNodeId, nodeId)),
         );
@@ -960,7 +970,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     profile: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context);
+        yield* authorize(nodeId, context, EVENTS_AREA);
         const [row] = yield* query(() =>
           db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, nodeId)),
         );
