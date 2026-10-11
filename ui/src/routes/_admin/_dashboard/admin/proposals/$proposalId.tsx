@@ -191,6 +191,7 @@ function ProposalDetailPage() {
 
   const proposal = proposalQuery.data;
   const isPending = proposal.reviewStatus === "pending";
+  const isRetry = proposal.reviewStatus === "approved" && proposal.applyStatus === "failed";
   const parsedNodePayload =
     proposal.pluginId === "node" ? nodeProposalPayloadSchema.safeParse(proposal.payload) : null;
   const proposalDaoAccountId = parsedNodePayload?.success ? parsedNodePayload.data.accountId : null;
@@ -219,9 +220,11 @@ function ProposalDetailPage() {
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <Card>
             <CardContent className="p-5 sm:p-6">
-              {isPending ? (
+              {isPending || isRetry ? (
                 <ProposalReviewActions
                   isPending={isPending}
+                  isRetry={isRetry}
+                  applyError={proposal.applyError}
                   isNodeProposal={proposal.pluginId === "node"}
                   proposalDaoAccountId={proposalDaoAccountId}
                   daoIsVerified={daoIsVerified}

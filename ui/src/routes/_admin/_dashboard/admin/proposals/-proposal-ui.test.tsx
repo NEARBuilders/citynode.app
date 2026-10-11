@@ -155,4 +155,29 @@ describe("proposal review UI seams", () => {
     fireEvent.click(approve);
     expect(onApprove).toHaveBeenCalledOnce();
   });
+
+  it("lets an admin retry a failed application and shows the recorded error", () => {
+    const onApprove = vi.fn();
+    render(
+      <ProposalReviewActions
+        isPending={false}
+        isRetry
+        applyError="User closed the window"
+        isNodeProposal
+        proposalDaoAccountId="dao.sputnik-dao.near"
+        daoIsVerified={false}
+        rejectionReason=""
+        isReviewing={false}
+        onDaoVerified={vi.fn()}
+        onRejectionReasonChange={vi.fn()}
+        onApprove={onApprove}
+        onReject={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert").textContent).toBe("User closed the window");
+    expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onApprove).toHaveBeenCalledOnce();
+  });
 });

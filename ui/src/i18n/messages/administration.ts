@@ -501,6 +501,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Rejeter cette proposition ?",
     "拒绝此提案？",
   ],
+  "admin.proposal.retryApply": [
+    "Retry applying",
+    "Reintentar aplicación",
+    "Réessayer l’application",
+    "重试应用",
+  ],
   "admin.proposal.resource": [
     "Created resource",
     "Recurso creado",

@@ -104,6 +104,7 @@ export function ProposalOutcome({ proposal }: { proposal: Proposal }) {
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <span className="min-w-0 wrap-anywhere">
             {translate("proposal.applyFailedDescription")}
+            <span className="mt-1 block">{proposal.applyError}</span>
           </span>
         </div>
       )}

@@ -18,6 +18,8 @@ import { useAppTranslation } from "@/i18n/runtime";
 
 interface ProposalReviewActionsProps {
   isPending: boolean;
+  isRetry?: boolean;
+  applyError?: string | null;
   isNodeProposal: boolean;
   proposalDaoAccountId: string | null;
   daoIsVerified: boolean;
@@ -31,6 +33,8 @@ interface ProposalReviewActionsProps {
 
 export function ProposalReviewActions({
   isPending,
+  isRetry = false,
+  applyError,
   isNodeProposal,
   proposalDaoAccountId,
   daoIsVerified,
@@ -43,11 +47,18 @@ export function ProposalReviewActions({
 }: ProposalReviewActionsProps) {
   const translate = useAppTranslation();
   const [rejecting, setRejecting] = useState(false);
-  if (!isPending) return null;
+  if (!isPending && !isRetry) return null;
 
   return (
     <div className="flex flex-col gap-6" data-testid="admin-proposal-decision">
-      <h2 className="text-xl font-semibold">{translate("admin.proposal.decision")}</h2>
+      <h2 className="text-xl font-semibold">
+        {isRetry ? translate("admin.proposal.retryApply") : translate("admin.proposal.decision")}
+      </h2>
+      {isRetry && applyError && (
+        <p className="text-sm wrap-anywhere text-destructive" role="alert">
+          {applyError}
+        </p>
+      )}
 
       {isNodeProposal && (
         <div className="flex flex-col gap-3">
@@ -69,16 +80,22 @@ export function ProposalReviewActions({
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <Button onClick={onApprove} disabled={isReviewing} data-testid="admin-proposal-approve">
             <CheckIcon />
-            {isReviewing ? translate("admin.proposal.approving") : translate("common.approve")}
+            {isReviewing
+              ? translate("admin.proposal.approving")
+              : isRetry
+                ? translate("common.retry")
+                : translate("common.approve")}
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => setRejecting(true)}
-            disabled={isReviewing}
-            data-testid="admin-proposal-reject"
-          >
-            {translate("common.reject")}
-          </Button>
+          {isPending && (
+            <Button
+              variant="ghost"
+              onClick={() => setRejecting(true)}
+              disabled={isReviewing}
+              data-testid="admin-proposal-reject"
+            >
+              {translate("common.reject")}
+            </Button>
+          )}
         </div>
         {!daoIsVerified && (
           <p className="text-sm text-muted-foreground">{translate("admin.proposal.daoHint")}</p>
