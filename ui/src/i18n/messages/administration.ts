@@ -501,6 +501,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Rejeter cette proposition ?",
     "拒绝此提案？",
   ],
+  "admin.proposal.retryDaoHint": [
+    "Connect the proposed DAO with Trezu before retrying. Publishing its settings needs a DAO member's wallet.",
+    "Conecta el DAO propuesto con Trezu antes de reintentar. Publicar su configuración requiere la billetera de un miembro del DAO.",
+    "Connectez la DAO proposée avec Trezu avant de réessayer. La publication de ses paramètres nécessite le portefeuille d’un membre de la DAO.",
+    "重试前请通过 Trezu 连接拟议的 DAO。发布其设置需要 DAO 成员的钱包。",
+  ],
   "admin.proposal.retryApply": [
     "Retry applying",
     "Reintentar aplicación",

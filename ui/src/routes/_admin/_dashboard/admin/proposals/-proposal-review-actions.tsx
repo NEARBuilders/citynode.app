@@ -98,7 +98,9 @@ export function ProposalReviewActions({
           )}
         </div>
         {!daoIsVerified && (
-          <p className="text-sm text-muted-foreground">{translate("admin.proposal.daoHint")}</p>
+          <p className="text-sm text-muted-foreground">
+            {translate(isRetry ? "admin.proposal.retryDaoHint" : "admin.proposal.daoHint")}
+          </p>
         )}
       </div>
 
