@@ -37,6 +37,7 @@ export function ApplyNodeFields({
   hostname,
   preflight,
   preflightLoading,
+  organizationSlugAvailable,
   rootNodes,
   rootParentId,
   setRootParentId,
@@ -50,6 +51,7 @@ export function ApplyNodeFields({
   hostname: string;
   preflight: { hostname: { available: boolean } } | undefined;
   preflightLoading: boolean;
+  organizationSlugAvailable?: boolean;
   rootNodes: NodeOption[];
   rootParentId: string;
   setRootParentId: (value: string) => void;
@@ -196,8 +198,13 @@ export function ApplyNodeFields({
         {(field) => {
           const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
           const available = preflight?.hostname.available;
+          const organizationTaken = organizationSlugAvailable === false;
           return (
-            <Field data-invalid={errors.length > 0 || available === false || undefined}>
+            <Field
+              data-invalid={
+                errors.length > 0 || available === false || organizationTaken || undefined
+              }
+            >
               <FieldLabel htmlFor="application-slug">{t("apply.slug.label")}</FieldLabel>
               <InputGroup>
                 <InputGroupInput
@@ -214,7 +221,9 @@ export function ApplyNodeFields({
                   }}
                   placeholder={t("apply.slug.placeholder")}
                   pattern="[a-z0-9-]+"
-                  aria-invalid={errors.length > 0 || available === false || undefined}
+                  aria-invalid={
+                    errors.length > 0 || available === false || organizationTaken || undefined
+                  }
                 />
                 <InputGroupAddon align="inline-end">
                   <InputGroupText>
@@ -227,11 +236,13 @@ export function ApplyNodeFields({
                   ? t("apply.slug.rules")
                   : preflightLoading
                     ? t("apply.slug.checking")
-                    : available === true
-                      ? t("apply.slug.available", { hostname })
-                      : available === false
-                        ? t("apply.slug.taken", { hostname })
-                        : hostname}
+                    : organizationTaken
+                      ? t("apply.slug.organizationTaken")
+                      : available === true
+                        ? t("apply.slug.available", { hostname })
+                        : available === false
+                          ? t("apply.slug.taken", { hostname })
+                          : hostname}
               </FieldDescription>
               <FieldError errors={errors} />
             </Field>

@@ -22,8 +22,9 @@ const proposalApplicationHandlers = {
   node: async ({ apiClient, proposal, gatewayId, baseAccount, publishTenantConfig }) => {
     const payload = parseNodeProposalPayload(proposal.payload);
     const hostname = `${payload.slug}.${gatewayId}`;
-    const node = await apiClient.applyNodeProposal({
-      ...payload,
+    const node = await apiClient.applyCommunityProposal({
+      proposalId: proposal.id,
+      entityId: proposal.entityId,
       hostname,
     });
     await publishTenantConfig({
@@ -88,6 +89,13 @@ export async function approveAndApplyProposal({
       reviewedProposal = failed.data;
       onProposalChange?.(reviewedProposal);
     } catch {}
+    if (
+      error &&
+      typeof error === "object" &&
+      (Reflect.get(error, "code") === "CONFLICT" || Reflect.get(error, "status") === 409)
+    ) {
+      throw new AppActionError("proposal.resourceConflict");
+    }
     throw new AppActionError("proposal.partiallyApplied");
   }
 

@@ -82,11 +82,12 @@ export const NodeApplicationPayloadSchema = z
       .min(1)
       .regex(/^[a-z0-9-]+$/),
     motivation: z.string().trim().min(1),
-    orgId: z.string().min(1),
+    orgId: z.string().min(1).optional(),
     accountId: z
       .string()
       .regex(/^(?=.{2,64}$)[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-_][a-z0-9]+)*)*$/),
     submitterAccountId: z.string().optional(),
+    applicantUserId: z.string().optional(),
   })
   .superRefine((value, context) => {
     if (value.kind === "country" && value.parentId !== null) {

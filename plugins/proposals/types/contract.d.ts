@@ -140,9 +140,10 @@ export declare const NodeApplicationPayloadSchema: z.ZodObject<{
     name: z.ZodString;
     slug: z.ZodString;
     motivation: z.ZodString;
-    orgId: z.ZodString;
+    orgId: z.ZodOptional<z.ZodString>;
     accountId: z.ZodString;
     submitterAccountId: z.ZodOptional<z.ZodString>;
+    applicantUserId: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export declare const contract: {
     propose: import("@orpc/contract").ProcedureContract<z.ZodObject<{

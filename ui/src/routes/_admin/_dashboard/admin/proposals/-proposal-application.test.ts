@@ -41,7 +41,7 @@ function client(initialProposal = proposal("node", nodePayload)) {
         data: { ...approved, applyStatus: "failed", applyError: "creation failed" },
       }),
     },
-    applyNodeProposal: vi.fn().mockResolvedValue({ nodeId: "node-id" }),
+    applyCommunityProposal: vi.fn().mockResolvedValue({ nodeId: "node-id" }),
   };
 }
 
@@ -68,8 +68,9 @@ describe("proposal application dispatcher", () => {
       publishTenantConfig,
     });
 
-    expect(api.applyNodeProposal).toHaveBeenCalledWith({
-      ...nodePayload,
+    expect(api.applyCommunityProposal).toHaveBeenCalledWith({
+      proposalId: "proposal-id",
+      entityId: "chicago",
       hostname: "chicago.citynode.app",
     });
     expect(api.proposals.markApplied).toHaveBeenCalledWith(
@@ -87,7 +88,7 @@ describe("proposal application dispatcher", () => {
 
   it("marks node application failures", async () => {
     const api = client(proposal("node", nodePayload));
-    api.applyNodeProposal.mockRejectedValue(new Error("creation failed"));
+    api.applyCommunityProposal.mockRejectedValue(new Error("creation failed"));
     const publishTenantConfig = vi.fn().mockResolvedValue(undefined);
 
     await expect(
@@ -101,6 +102,26 @@ describe("proposal application dispatcher", () => {
     ).rejects.toMatchObject({ messageId: "proposal.partiallyApplied" });
     expect(api.proposals.markApplyFailed).toHaveBeenCalledWith(
       expect.objectContaining({ error: "creation failed" }),
+    );
+  });
+
+  it("shows a resource conflict after recording the failed apply", async () => {
+    const api = client(proposal("node", nodePayload));
+    api.applyCommunityProposal.mockRejectedValue(
+      Object.assign(new Error("Slug in use"), { code: "CONFLICT" }),
+    );
+
+    await expect(
+      approveAndApplyProposal({
+        apiClient: api as unknown as ApiClient,
+        proposal: proposal("node", nodePayload),
+        gatewayId: "citynode.app",
+        baseAccount: "everything.near",
+        publishTenantConfig: vi.fn(),
+      }),
+    ).rejects.toMatchObject({ messageId: "proposal.resourceConflict" });
+    expect(api.proposals.markApplyFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "Slug in use" }),
     );
   });
 
@@ -119,7 +140,7 @@ describe("proposal application dispatcher", () => {
     ).rejects.toMatchObject({ messageId: "proposal.partiallyApplied" });
 
     expect(api.proposals.approve).toHaveBeenCalledOnce();
-    expect(api.applyNodeProposal).toHaveBeenCalledOnce();
+    expect(api.applyCommunityProposal).toHaveBeenCalledOnce();
     expect(api.proposals.markApplied).not.toHaveBeenCalled();
     expect(api.proposals.markApplyFailed).toHaveBeenCalledWith(
       expect.objectContaining({ error: "Trezu rejected the request" }),
@@ -138,7 +159,7 @@ describe("proposal application dispatcher", () => {
       publishTenantConfig,
     });
 
-    expect(api.applyNodeProposal).not.toHaveBeenCalled();
+    expect(api.applyCommunityProposal).not.toHaveBeenCalled();
     expect(api.proposals.markApplied).not.toHaveBeenCalled();
     expect(result.reviewStatus).toBe("approved");
   });

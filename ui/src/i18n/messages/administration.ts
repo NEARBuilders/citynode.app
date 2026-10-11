@@ -1199,6 +1199,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "La proposition a été approuvée, mais n’a pas pu être entièrement appliquée. Vérifiez ses détails avant de réessayer.",
     "提案已获批准，但未能完全应用。重试前请检查提案详情。",
   ],
+  "proposal.resourceConflict": [
+    "The application was approved, but its organization or community resources conflict with existing records. Review the saved application and existing resources before retrying.",
+    "La solicitud se aprobó, pero sus recursos de organización o comunidad entran en conflicto con registros existentes. Revisa la solicitud guardada y los recursos existentes antes de reintentar.",
+    "La demande a été approuvée, mais ses ressources d’organisation ou de communauté sont en conflit avec des enregistrements existants. Vérifiez la demande et les ressources existantes avant de réessayer.",
+    "申请已获批准，但其组织或社区资源与现有记录冲突。重试前请检查已保存的申请和现有资源。",
+  ],
   "proposal.verifyDaoBeforeApproval": [
     "Connect and verify {account} through Trezu before approval.",
     "Conecta y verifica {account} a través de Trezu antes de aprobar.",

@@ -31,10 +31,12 @@ export function NodeProposalDetails({ payload }: { payload: unknown }) {
         <InfoRow label={translate("admin.proposal.owningDao")} value={proposal.accountId} mono />
         <InfoRow
           label={translate("admin.proposal.submittedFrom")}
-          value={proposal.submitterAccountId}
+          value={proposal.submitterAccountId ?? ""}
           mono
         />
-        <InfoRow label={translate("common.organization")} value={proposal.orgId} mono />
+        {proposal.orgId && (
+          <InfoRow label={translate("common.organization")} value={proposal.orgId} mono />
+        )}
       </div>
     </div>
   );

@@ -75,7 +75,7 @@ describe.sequential("node applications", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  function client(account: string, orgId = "org-1") {
+  function client(account: string, orgId: string | null = "org-1") {
     return loaded.createClient({
       userId: `user-${account}`,
       user: user(`user-${account}`),
@@ -109,7 +109,24 @@ describe.sequential("node applications", () => {
       payload,
     });
     expect(result.data.createdBy).toBe("alice.near");
-    expect(result.data.payload).toMatchObject({ submitterAccountId: "alice.near" });
+    expect(result.data.payload).toMatchObject({
+      submitterAccountId: "alice.near",
+      applicantUserId: "user-alice.near",
+    });
+  });
+
+  it("accepts an eligible applicant without an organization and stamps their user identity", async () => {
+    const result = await client("alice.near", null).propose({
+      pluginId: "node",
+      entityId: "madison",
+      payload: { ...payload, slug: "madison", orgId: undefined, applicantUserId: "spoofed" },
+    });
+    expect(result.data.payload).toMatchObject({
+      slug: "madison",
+      applicantUserId: "user-alice.near",
+      submitterAccountId: "alice.near",
+    });
+    expect(result.data.payload).not.toHaveProperty("orgId");
   });
 
   it("blocks duplicate pending submissions and another applicant's slug collision", async () => {
@@ -129,8 +146,9 @@ describe.sequential("node applications", () => {
       }),
     ).rejects.toThrow(/another applicant/);
     const mine = await client("alice.near").getMyNodeApplications();
-    expect(mine.data).toHaveLength(1);
-    expect(mine.data[0]?.payload).toMatchObject({ motivation: "Serve the community" });
+    expect(mine.data.find((proposal) => proposal.entityId === "chicago")?.payload).toMatchObject({
+      motivation: "Serve the community",
+    });
     expect((await client("bob.near").getMyNodeApplications()).data).toHaveLength(0);
   });
 
@@ -200,13 +218,16 @@ describe.sequential("node applications", () => {
         payload: { ...payload, orgId: "org-2" },
       }),
     ).rejects.toThrow(/another organization/);
-    const revised = await client("alice.near").propose({
+    const revised = await client("alice.near", null).propose({
       pluginId: "node",
       entityId: "chicago",
       payload: { ...payload, motivation: "Expanded plan" },
     });
     expect(revised.data.reviewStatus).toBe("pending");
-    expect(revised.data.payload).toMatchObject({ motivation: "Expanded plan" });
+    expect(revised.data.payload).toMatchObject({
+      motivation: "Expanded plan",
+      orgId: "org-1",
+    });
     expect(revised.data.createdBy).toBe("alice.near");
     expect(revised.data.submissionCount).toBe(2);
 

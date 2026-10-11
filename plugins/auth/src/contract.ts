@@ -20,6 +20,10 @@ const Errors = {
     status: 400,
     message: "Invalid request",
   },
+  CONFLICT: {
+    status: 409,
+    message: "Resource conflict",
+  },
 };
 
 const nearIdentitySchema = z.object({
@@ -382,6 +386,21 @@ export const contract = oc.router({
           reason: z.string().trim().min(1).max(2000),
         }),
       ]),
+    )
+    .output(organizationInfoSchema)
+    .errors(Errors),
+
+  provisionCommunityOrganization: oc
+    .route({ method: "POST", path: "/v1/auth/admin/community-organizations" })
+    .input(
+      z.object({
+        proposalId: z.string().min(1),
+        name: z.string().trim().min(1),
+        slug: z.string().regex(/^[a-z0-9-]+$/),
+        proposerAccountId: z.string().min(1),
+        proposerUserId: z.string().optional(),
+        legacyOrgId: z.string().optional(),
+      }),
     )
     .output(organizationInfoSchema)
     .errors(Errors),
