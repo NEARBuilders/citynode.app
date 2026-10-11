@@ -726,6 +726,121 @@ describe("onboarding organizers", () => {
   });
 });
 
+describe("listing one event's onboarding codes", () => {
+  it("finds an event's live code older than the organization's 20 newest codes", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const launch = eventOf("Launch Night");
+    const live = await handlers.onboarding.createOnboardingCode({
+      input: { ...launch, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await services.services.db
+      .update(schema.onboardingCode)
+      .set({ createdAt: new Date(Date.now() - 3_600_000) })
+      .where(eq(schema.onboardingCode.id, live.id));
+    for (let index = 0; index < 20; index++) {
+      await handlers.onboarding.createOnboardingCode({
+        input: { ...eventOf(`Meetup ${index}`), organizationId: org.id },
+        context: { reqHeaders: owner.reqHeaders },
+      });
+    }
+
+    const newest = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const forEvent = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id, eventId: launch.eventId },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+
+    expect(newest).toHaveLength(20);
+    expect(newest.some((code: { id: string }) => code.id === live.id)).toBe(false);
+    expect(forEvent.map((code: { id: string }) => code.id)).toEqual([live.id]);
+  });
+
+  it("lists only that event's codes, newest first, including closed ones", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const launch = eventOf("Launch Night");
+    const first = await handlers.onboarding.createOnboardingCode({
+      input: { ...launch, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await services.services.db
+      .update(schema.onboardingCode)
+      .set({ createdAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.onboardingCode.id, first.id));
+    const second = await handlers.onboarding.createOnboardingCode({
+      input: { ...launch, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await handlers.onboarding.revokeOnboardingCode({
+      input: { codeId: second.id, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Other Night"), organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+
+    const listed = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id, eventId: launch.eventId },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+
+    expect(listed.map((code: { id: string }) => code.id)).toEqual([second.id, first.id]);
+    expect(listed[0]!.revokedAt).not.toBeNull();
+    expect(listed[1]!.revokedAt).toBeNull();
+  });
+
+  it("does not list another organization's codes for the same event", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const otherOwner = await createTestUser(services.services);
+    const other = await createTestOrg(services.services, otherOwner.userId);
+    const handlers = createTestHandlers(services.services);
+    const shared = eventOf("Shared Night");
+    await handlers.onboarding.createOnboardingCode({
+      input: { ...shared, organizationId: other.id },
+      context: { reqHeaders: otherOwner.reqHeaders },
+    });
+
+    const listed = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id, eventId: shared.eventId },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+
+    expect(listed).toEqual([]);
+  });
+
+  it("lets an events Team member filter by event and refuses other members", async () => {
+    const { owner, org, member, handlers } = await orgWithTeamMember(["events"]);
+    const launch = eventOf("Crew Night");
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...launch, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const finance = await orgWithTeamMember(["finance"]);
+
+    const listed = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id, eventId: launch.eventId },
+      context: { reqHeaders: member.reqHeaders },
+    });
+
+    expect(listed.map((entry: { id: string }) => entry.id)).toEqual([code.id]);
+    await expect(
+      finance.handlers.onboarding.listOnboardingCodes({
+        input: { organizationId: finance.org.id, eventId: launch.eventId },
+        context: { reqHeaders: finance.member.reqHeaders },
+      }),
+    ).rejects.toThrow(/organizers/i);
+  });
+});
+
 describe("onboarding station", () => {
   async function stationFixture(options: { maxUses?: number } = {}) {
     const owner = await createTestUser(services.services);

@@ -759,6 +759,7 @@ export const contract = oc.router({
     .input(
       z.object({
         organizationId: z.string().optional(),
+        eventId: z.string().min(1).max(200).optional(),
       }),
     )
     .output(z.array(onboardingCodeSummarySchema))

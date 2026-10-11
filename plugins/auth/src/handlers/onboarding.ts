@@ -227,7 +227,12 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
         const rows = await services.db
           .select()
           .from(schema.onboardingCode)
-          .where(eq(schema.onboardingCode.organizationId, organizationId))
+          .where(
+            and(
+              eq(schema.onboardingCode.organizationId, organizationId),
+              input.eventId ? eq(schema.onboardingCode.eventId, input.eventId) : undefined,
+            ),
+          )
           .orderBy(desc(schema.onboardingCode.createdAt))
           .limit(20);
         return rows.map(toSummary);
