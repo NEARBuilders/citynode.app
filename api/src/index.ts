@@ -848,7 +848,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         const reqHeaders = Object.fromEntries(new Headers(context.reqHeaders).entries());
-        const proposalsClient = proposalsPlugin.client({ reqHeaders });
+        // In-process plugin clients need the verified reviewer context; headers alone are not rehydrated.
+        const reviewerContext = {
+          reqHeaders,
+          userId: context.userId ?? context.user?.id,
+          user: context.user,
+        };
+        const proposalsClient = proposalsPlugin.client(reviewerContext);
         const listed = yield* Effect.tryPromise({
           try: () =>
             proposalsClient.getProposals({
@@ -896,7 +902,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("BAD_REQUEST", { message: "Hostname does not match the community slug" }),
           );
         }
-        const auth = authPlugin.client({ reqHeaders });
+        const auth = authPlugin.client(reviewerContext);
         const organization = yield* Effect.tryPromise({
           try: () =>
             auth.provisionCommunityOrganization({

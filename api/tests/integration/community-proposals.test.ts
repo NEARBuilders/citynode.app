@@ -40,15 +40,26 @@ describe("approved community proposal provisioning", () => {
     proposals.set("chicago", savedProposal("prop-chicago", "chicago"));
     await getPluginClient(undefined, {
       proposals: {
-        client: () => ({
+        client: (context?: { user?: { role?: string | null } }) => ({
           getProposals: async ({ entityId }: { entityId: string }) => ({
-            data: proposals.has(entityId) ? [proposals.get(entityId)] : [],
+            data: proposals.has(entityId)
+              ? [
+                  context?.user?.role === "admin"
+                    ? proposals.get(entityId)
+                    : { ...proposals.get(entityId), payload: null },
+                ]
+              : [],
           }),
         }),
         router: {},
       },
       auth: {
-        client: () => ({ provisionCommunityOrganization: provision }),
+        client: (context?: { user?: { role?: string | null } }) => ({
+          provisionCommunityOrganization: async (input: Parameters<typeof provision>[0]) => {
+            if (context?.user?.role !== "admin") throw new Error("Reviewer context missing");
+            return provision(input);
+          },
+        }),
         router: {},
       },
     } as never);
