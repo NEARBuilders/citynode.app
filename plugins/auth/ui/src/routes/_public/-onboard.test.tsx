@@ -7,7 +7,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
 import { Route as OnboardRoute } from "./onboard";
@@ -288,11 +288,13 @@ describe("onboard community link", () => {
     expect(harness.getDiscoveryNode).toHaveBeenCalledWith({ nodeId: "node-a" });
   });
 
-  const failures: Array<[string, () => void]> = [
-    ["the organization has no tenant", () => undefined],
-    ["the tenant has no nodes", () => communityWithNodes([])],
+  type Lookup = "resolveTenantByOrgId" | "listNodes" | "getDiscoveryNode";
+  const failures: Array<[string, Lookup, () => void]> = [
+    ["the organization has no tenant", "resolveTenantByOrgId", () => undefined],
+    ["the tenant has no nodes", "listNodes", () => communityWithNodes([])],
     [
       "the community has no public page",
+      "getDiscoveryNode",
       () => {
         communityWithNodes([{ id: "node-a", slug: "chicago", name: "Chicago", parentId: null }]);
         harness.getDiscoveryNode.mockResolvedValue(null);
@@ -300,27 +302,38 @@ describe("onboard community link", () => {
     ],
     [
       "a lookup fails on the network",
+      "listNodes",
       () => {
         communityWithNodes([{ id: "node-a", slug: "chicago", name: "Chicago", parentId: null }]);
         harness.listNodes.mockRejectedValue(new TypeError("Failed to fetch"));
       },
     ],
     [
-      "a node comes back without a slug",
-      () => communityWithNodes([{ id: "node-a", name: "Chicago", parentId: null }]),
+      "the node My community opens comes back without a slug",
+      "listNodes",
+      () =>
+        communityWithNodes([
+          { id: "node-a", name: "Alpha", parentId: null },
+          { id: "node-b", slug: "beta", name: "Beta", parentId: null },
+        ]),
     ],
   ];
 
-  it.each(failures)("shows no link and no error when %s", async (_case, arrange) => {
+  it.each(failures)("shows no link and no error when %s", async (_case, lastLookup, arrange) => {
     joinAsNamedMember();
     arrange();
 
     renderOnboard();
 
     expect(await screen.findByTestId("onboard.build-button")).toBeTruthy();
-    await waitFor(() => expect(harness.resolveTenantByOrgId).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    const lookup = harness[lastLookup];
+    await waitFor(() => expect(lookup).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.allSettled(lookup.mock.results.map((result) => result.value));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(screen.queryByTestId("onboard.community-link")).toBeNull();
+    expect(harness.getDiscoveryNode.mock.calls.length > 0).toBe(lastLookup === "getDiscoveryNode");
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByTestId("onboard.success")).toBeTruthy();
     expect(screen.getByTestId("onboard.continue-on-computer")).toBeTruthy();

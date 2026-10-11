@@ -11,6 +11,10 @@ function isText(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+function nameOf(node: NodeResult): string {
+  return typeof node.name === "string" ? node.name : "";
+}
+
 function isCommunityNode(node: NodeResult): node is CommunityNode {
   return isText(node.id) && isText(node.slug) && typeof node.name === "string";
 }
@@ -25,8 +29,10 @@ export async function findCommunityPage(
 
     const nodes: unknown = await apiClient.listNodes({ tenantId: tenant.id });
     if (!Array.isArray(nodes)) return null;
-    const [node] = nodes.filter(isCommunityNode).sort((a, b) => a.name.localeCompare(b.name));
-    if (!node) return null;
+    const [node] = [...nodes].sort((a: NodeResult, b: NodeResult) =>
+      nameOf(a).localeCompare(nameOf(b)),
+    );
+    if (!node || !isCommunityNode(node)) return null;
 
     const discovery: DiscoveryNodeResult = await apiClient.getDiscoveryNode({ nodeId: node.id });
     if (!discovery) return null;
