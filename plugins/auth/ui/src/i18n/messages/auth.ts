@@ -194,6 +194,12 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Obtenir des consignes de développement",
     "获取开发提示词",
   ],
+  "auth.onboard.seeCommunity": [
+    "See {community}",
+    "Ver {community}",
+    "Voir {community}",
+    "查看 {community}",
+  ],
   "auth.onboard.desktop": [
     "Continue on your computer",
     "Continuar en tu ordenador",
@@ -940,6 +946,60 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "No se pudo unirte a esta organización. Pide un nuevo enlace al organizador.",
     "Impossible de rejoindre cette organisation. Demandez un nouveau lien à l’organisateur.",
     "无法加入此组织，请向组织者索取新链接。",
+  ],
+  "auth.onboard.loadFailed": [
+    "Couldn't load this invitation",
+    "No se pudo cargar esta invitación",
+    "Impossible de charger cette invitation",
+    "无法加载此邀请",
+  ],
+  "auth.onboard.joinUnavailable": [
+    "Couldn't join right now",
+    "No se pudo unir ahora",
+    "Impossible de rejoindre pour le moment",
+    "现在无法加入",
+  ],
+  "auth.onboard.communityNotOpen": [
+    "This community isn't open yet",
+    "Esta comunidad aún no está abierta",
+    "Cette communauté n’est pas encore ouverte",
+    "此社区尚未开放",
+  ],
+  "auth.onboard.communityFull": [
+    "This community is full",
+    "Esta comunidad está completa",
+    "Cette communauté est complète",
+    "此社区已满员",
+  ],
+  "auth.onboard.invitationRevoked": [
+    "This invitation was turned off",
+    "Esta invitación fue desactivada",
+    "Cette invitation a été désactivée",
+    "此邀请已关闭",
+  ],
+  "auth.onboard.invitationExpired": [
+    "This invitation has expired",
+    "Esta invitación ha caducado",
+    "Cette invitation a expiré",
+    "此邀请已过期",
+  ],
+  "auth.onboard.invitationUsedUp": [
+    "This invitation has been used up",
+    "Esta invitación se ha agotado",
+    "Cette invitation a été utilisée",
+    "此邀请已用完",
+  ],
+  "auth.onboard.invitationInvalid": [
+    "This invitation isn't valid",
+    "Esta invitación no es válida",
+    "Cette invitation n’est pas valable",
+    "此邀请无效",
+  ],
+  "auth.onboard.askOrganizer": [
+    "Ask the organizer for a new link",
+    "Pide un nuevo enlace al organizador",
+    "Demandez un nouveau lien à l’organisateur",
+    "请向组织者索取新链接",
   ],
   "auth.onboard.stepAccount": [
     "Create your account",

@@ -22,6 +22,34 @@ const Errors = {
   },
 };
 
+export const onboardingRedeemReasons = [
+  "organization_not_active",
+  "organization_full",
+  "code_revoked",
+  "code_expired",
+  "code_used_up",
+  "code_not_found",
+  "organization_not_found",
+] as const;
+
+export const onboardingRedeemReasonSchema = z.enum(onboardingRedeemReasons);
+const onboardingRedeemErrorData = z.object({ reason: onboardingRedeemReasonSchema });
+const onboardingRedeemErrors = {
+  UNAUTHORIZED: Errors.UNAUTHORIZED,
+  FORBIDDEN: {
+    status: 403,
+    data: onboardingRedeemErrorData,
+  },
+  BAD_REQUEST: {
+    status: 400,
+    data: onboardingRedeemErrorData,
+  },
+  NOT_FOUND: {
+    status: 404,
+    data: onboardingRedeemErrorData,
+  },
+};
+
 const nearIdentitySchema = z.object({
   accountId: z.string(),
   network: z.string(),
@@ -863,9 +891,10 @@ export const contract = oc.router({
         alreadyRedeemed: z.boolean(),
         organizationName: z.string(),
         eventName: z.string(),
+        organizationId: z.string(),
       }),
     )
-    .errors(Errors),
+    .errors(onboardingRedeemErrors),
 
   // ── API Keys ───────────────────────────────────────────────────────
 

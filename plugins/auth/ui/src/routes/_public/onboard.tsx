@@ -1,4 +1,5 @@
 import {
+  ArrowRightIcon,
   CheckCircleIcon,
   CheckIcon,
   CopyIcon,
@@ -24,7 +25,9 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import type { LoginMessageId } from "@/i18n/catalogs";
 import { useLoginTranslation } from "@/i18n/runtime";
+import { communityPageForOrganization, communityPageHref } from "@/lib/community-page";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { DisplayNameStep } from "./-display-name-step";
 import { OnboardSignUp } from "./-onboard-sign-up";
@@ -49,9 +52,48 @@ export const Route = createFileRoute("/_public/onboard")({
   component: OnboardPage,
 });
 
-type Redeemed = { organizationName: string; eventName: string };
+type Redeemed = { organizationName: string; eventName: string; organizationId?: string };
 
 const PASSKEY_DEFAULT_NAME = "Passkey user";
+
+const redeemReasons = [
+  "organization_not_active",
+  "organization_full",
+  "code_revoked",
+  "code_expired",
+  "code_used_up",
+  "code_not_found",
+  "organization_not_found",
+] as const;
+
+type RedeemReason = (typeof redeemReasons)[number];
+type RedeemFailure = RedeemReason | "network";
+type StatusAction = "retry" | "explore" | "ask-organizer";
+
+const redeemCopy: Record<
+  RedeemReason,
+  { title: LoginMessageId; action: Exclude<StatusAction, "retry"> }
+> = {
+  organization_not_active: { title: "auth.onboard.communityNotOpen", action: "explore" },
+  organization_full: { title: "auth.onboard.communityFull", action: "explore" },
+  code_revoked: { title: "auth.onboard.invitationRevoked", action: "ask-organizer" },
+  code_expired: { title: "auth.onboard.invitationExpired", action: "ask-organizer" },
+  code_used_up: { title: "auth.onboard.invitationUsedUp", action: "ask-organizer" },
+  code_not_found: { title: "auth.onboard.invitationInvalid", action: "ask-organizer" },
+  organization_not_found: { title: "auth.onboard.invitationInvalid", action: "ask-organizer" },
+};
+
+function redeemFailureOf(error: unknown): RedeemFailure {
+  if (!error || typeof error !== "object") return "network";
+  const data = "data" in error ? error.data : undefined;
+  const reason =
+    data && typeof data === "object" && data && "reason" in data
+      ? (data as { reason: unknown }).reason
+      : undefined;
+  return typeof reason === "string" && (redeemReasons as readonly string[]).includes(reason)
+    ? (reason as RedeemReason)
+    : "network";
+}
 
 function hasChosenName(accountCreated: boolean, name: string | undefined | null): boolean {
   return !accountCreated && !!name && name !== PASSKEY_DEFAULT_NAME;
@@ -77,20 +119,32 @@ function OnboardContent() {
   const code = sanitizeCode(Route.useSearch().code);
   const { apiClient, runtimeConfig } = Route.useRouteContext();
   const { data: session, isPending: sessionPending } = useQuery(sessionQueryOptions(auth));
-  const { data: info } = useQuery({
+  const infoQuery = useQuery({
     queryKey: ["onboarding-info", code],
     queryFn: async () => {
       return apiClient.auth.getOnboardingCodeInfo({ code: code! });
     },
     enabled: !!code,
+    retry: false,
   });
+  const info = infoQuery.data;
 
   const [accountCreated, setAccountCreated] = useState(false);
   const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
   const [nameDone, setNameDone] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [redeemError, setRedeemError] = useState(false);
+  const [redeemError, setRedeemError] = useState<RedeemFailure | null>(null);
   const redeemingRef = useRef(false);
+  const communityPageQuery = useQuery({
+    queryKey: ["onboard-community-page", redeemed?.organizationId],
+    queryFn: () => {
+      const organizationId = redeemed?.organizationId;
+      if (typeof organizationId !== "string") return null;
+      return communityPageForOrganization(apiClient, organizationId);
+    },
+    enabled: typeof redeemed?.organizationId === "string",
+    retry: false,
+  });
 
   const copyPairLink = async (url: string) => {
     try {
@@ -109,14 +163,20 @@ function OnboardContent() {
     void apiClient.auth
       .redeemOnboardingCode({ code })
       .then((result: Redeemed) => {
-        setRedeemed({ organizationName: result.organizationName, eventName: result.eventName });
+        setRedeemed({
+          organizationName: result.organizationName,
+          eventName: result.eventName,
+          ...(typeof result.organizationId === "string"
+            ? { organizationId: result.organizationId }
+            : {}),
+        });
         toast.success(
           translate("auth.onboard.joinedToast", { organization: result.organizationName }),
         );
         void refreshSessionCache(auth, queryClient);
       })
-      .catch(() => {
-        setRedeemError(true);
+      .catch((error: unknown) => {
+        setRedeemError(redeemFailureOf(error));
       });
   }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient, translate]);
 
@@ -167,6 +227,19 @@ function OnboardContent() {
         >
           {translate("auth.onboard.buildPrompts")}
         </Button>
+        {communityPageQuery.data ? (
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full"
+            nativeButton={false}
+            render={<Link to={communityPageHref(communityPageQuery.data)} />}
+            data-testid="onboard.see-community"
+          >
+            {translate("auth.onboard.seeCommunity", { community: redeemed.organizationName })}
+            <ArrowRightIcon />
+          </Button>
+        ) : null}
         <Item variant="muted" data-testid="onboard.continue-on-computer">
           <ItemMedia variant="icon">
             <DesktopIcon />
@@ -221,6 +294,20 @@ function OnboardContent() {
         title={translate("auth.onboard.invalid")}
         description={translate("auth.onboard.missingCode")}
         testId="onboard.invalid"
+        action="explore"
+      />
+    );
+  }
+
+  if (infoQuery.isError) {
+    return (
+      <StatusPanel
+        title={translate("auth.onboard.loadFailed")}
+        testId="onboard.load-error"
+        action="retry"
+        onRetry={() => {
+          void infoQuery.refetch();
+        }}
       />
     );
   }
@@ -248,6 +335,7 @@ function OnboardContent() {
         title={translate("auth.onboard.notFound")}
         description={translate("auth.onboard.invalidCode")}
         testId="onboard.not-found"
+        action="ask-organizer"
       />
     );
   }
@@ -264,16 +352,28 @@ function OnboardContent() {
               : translate("auth.onboard.limit")
         }
         testId="onboard.unavailable"
+        action="ask-organizer"
       />
     );
   }
 
   if (redeemError) {
+    const copy =
+      redeemError === "network"
+        ? { title: "auth.onboard.joinUnavailable" as const, action: "retry" as const }
+        : redeemCopy[redeemError];
     return (
       <StatusPanel
-        title={translate("auth.onboard.joinFailed")}
-        description={translate("auth.onboard.joinError")}
+        title={translate(copy.title)}
+        description={
+          copy.action === "ask-organizer" ? translate("auth.onboard.askOrganizer") : undefined
+        }
         testId="onboard.error"
+        action={copy.action}
+        onRetry={() => {
+          redeemingRef.current = false;
+          setRedeemError(null);
+        }}
       />
     );
   }
@@ -329,30 +429,47 @@ function StatusPanel({
   title,
   description,
   testId,
+  action,
+  onRetry,
 }: {
   title: string;
-  description: string;
+  description?: string;
   testId: string;
+  action: StatusAction;
+  onRetry?: () => void;
 }) {
   const translate = useLoginTranslation();
-  return (
+  const panel = (
     <AuthPanel
       icon={<WarningCircleIcon />}
       title={title}
       titleTestId="onboard.heading"
       description={description}
-      descriptionTestId={testId}
+      descriptionTestId={description ? testId : undefined}
     >
-      <Button
-        variant="outline"
-        size="lg"
-        className="w-full"
-        nativeButton={false}
-        render={<Link to="/explore" />}
-        data-testid="onboard.explore-button"
-      >
-        {translate("auth.common.exploreCommunities")}
-      </Button>
+      {action === "retry" ? (
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full"
+          onClick={onRetry}
+          data-testid="onboard.retry-button"
+        >
+          {translate("auth.common.retry")}
+        </Button>
+      ) : action === "explore" ? (
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full"
+          nativeButton={false}
+          render={<Link to="/explore" />}
+          data-testid="onboard.explore-button"
+        >
+          {translate("auth.common.exploreCommunities")}
+        </Button>
+      ) : null}
     </AuthPanel>
   );
+  return description ? panel : <div data-testid={testId}>{panel}</div>;
 }

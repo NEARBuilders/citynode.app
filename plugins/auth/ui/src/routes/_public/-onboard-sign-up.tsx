@@ -36,9 +36,12 @@ export function OnboardSignUp({
   const walletAvailable = isPasskeyWalletAvailable(networkId);
 
   useEffect(() => {
-    void auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
-      if (result?.accountId) setDetectedAccount(result.accountId);
-    });
+    void auth.near
+      .detectNearAccount()
+      .then((result: { accountId?: string | null } | null) => {
+        if (result?.accountId) setDetectedAccount(result.accountId);
+      })
+      .catch(() => undefined);
   }, [auth.near]);
 
   const handleCreate = async () => {
