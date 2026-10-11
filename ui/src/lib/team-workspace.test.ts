@@ -5,7 +5,6 @@ import type { AuthRequestContext } from "@/lib/auth";
 import {
   areasForPath,
   canManageCommunity,
-  canOrganizeEvents,
   isPathAllowed,
   resolveTeamWorkspace,
   teamWorkspaceQueryOptions,
@@ -157,26 +156,14 @@ describe("route areas", () => {
 });
 
 describe("community permissions", () => {
-  const events = { id: "team-events", name: "Community", areas: ["events"] };
-
-  it("lets owners, admins and events-team members organize, with the team active or not", () => {
-    expect(canOrganizeEvents(context({ orgRole: "owner" }))).toBe(true);
-    expect(canOrganizeEvents(context({ orgRole: "admin" }))).toBe(true);
-    expect(canOrganizeEvents(context({ teams: [events] }))).toBe(true);
-    expect(canOrganizeEvents(context({ teams: [events, ops], activeTeamId: ops.id }))).toBe(true);
-  });
-
-  it("refuses members without the events area and platform admins outside the organization", () => {
-    expect(canOrganizeEvents(context({}))).toBe(false);
-    expect(canOrganizeEvents(context({ teams: [] }))).toBe(false);
-    expect(canOrganizeEvents({ user: { role: "admin" } } as AuthRequestContext)).toBe(false);
-    expect(canOrganizeEvents(null)).toBe(false);
-  });
-
   it("keeps community management with owners, admins and platform admins", () => {
     expect(canManageCommunity(context({ orgRole: "owner" }))).toBe(true);
     expect(canManageCommunity(context({ orgRole: "member", userRole: "admin" }))).toBe(true);
-    expect(canManageCommunity(context({ teams: [events] }))).toBe(false);
+    expect(
+      canManageCommunity(
+        context({ teams: [{ id: "team-events", name: "Community", areas: ["events"] }] }),
+      ),
+    ).toBe(false);
   });
 });
 

@@ -11,6 +11,7 @@ import {
   CardContent,
   ConfirmDialog,
   EmptyState,
+  formatLocalDate,
   LocalDate,
   SectionHeader,
   Skeleton,
@@ -76,6 +77,7 @@ function StartStation({
   isActive: boolean;
 }) {
   const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const [eventId, setEventId] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
   const start = useStartOnboarding(orgId);
@@ -98,21 +100,21 @@ function StartStation({
       </p>
     );
   }
-  if (tenant.isPending || nodes.isPending || activities.isPending) {
+  if (tenant.isPending || nodes.isLoading || activities.isPending) {
     return <Skeleton className="h-10 w-full max-w-md" />;
+  }
+  if (nodes.isError || activities.isError) {
+    return (
+      <p role="alert" className="text-sm text-muted-foreground" data-testid="onboard.events-error">
+        {translate("station.eventLoadError")}
+      </p>
+    );
   }
   const firstNodeId = nodes.data?.[0]?.id;
   if (!tenant.data || !firstNodeId) {
     return (
       <p className="text-sm text-muted-foreground" data-testid="onboard.no-community">
         {translate("org.noCommunityEvents")}
-      </p>
-    );
-  }
-  if (nodes.isError || activities.isError) {
-    return (
-      <p role="alert" className="text-sm text-muted-foreground" data-testid="onboard.events-error">
-        {translate("station.eventLoadError")}
       </p>
     );
   }
@@ -152,7 +154,12 @@ function StartStation({
         <FieldLabel htmlFor="onboard-event">{translate("org.pickEvent")}</FieldLabel>
         <Select
           value={selected?.id ?? null}
-          items={events.map((event) => ({ label: event.title, value: event.id }))}
+          items={events.map((event) => ({
+            label: event.startsAt
+              ? `${event.title} · ${formatLocalDate(event.startsAt, "date", locale)}`
+              : event.title,
+            value: event.id,
+          }))}
           onValueChange={(value) => setEventId(typeof value === "string" ? value : null)}
         >
           <SelectTrigger id="onboard-event" className="w-full" data-testid="onboard.event-select">

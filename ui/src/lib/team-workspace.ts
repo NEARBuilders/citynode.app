@@ -58,13 +58,6 @@ export function canManageCommunity(context: AuthRequestContext | null | undefine
   return context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
 }
 
-export function canOrganizeEvents(context: AuthRequestContext | null | undefined): boolean {
-  const orgRole = context?.organization?.member?.role;
-  if (orgRole === "owner" || orgRole === "admin") return true;
-  const teams: WorkspaceTeam[] = [...(context?.organization?.teams ?? [])];
-  return !!orgRole && teams.some((team) => team.areas.includes("events"));
-}
-
 export function areasForPath(pathname: string): FeatureArea[] | null {
   const match = ROUTE_AREAS.find(({ path, exact }) =>
     exact

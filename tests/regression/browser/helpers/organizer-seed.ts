@@ -26,8 +26,9 @@ export interface OrganizerCommunity {
 }
 
 async function seedEvent(nodeId: string, title: string) {
-  const { dbUrls } = computeRegressionEnv();
-  const client = new pg.Client({ connectionString: dbUrls.API_DATABASE_URL });
+  const url = computeRegressionEnv().dbUrls.API_DATABASE_URL;
+  if (!url) throw new Error("API_DATABASE_URL is not configured for this workspace");
+  const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
     const located = await client.query(
