@@ -50,8 +50,8 @@ function client(initialProposal = proposal("node", nodePayload)) {
   };
 }
 
-function publishedApp(domain: string) {
-  return { data: { domain } };
+function publishedApp(domain: string, title = "Chicago") {
+  return { data: { domain, resolvedConfig: { title } } };
 }
 
 const nodePayload = {
@@ -222,6 +222,45 @@ describe("proposal application dispatcher", () => {
     });
 
     expect(publishTenantConfig).toHaveBeenCalledOnce();
+  });
+
+  it("publishes when the indexed config has another title", async () => {
+    const api = client(proposal("node", nodePayload));
+    api.registry.getRegistryApp.mockResolvedValue(
+      publishedApp("chicago.citynode.app", "Old Chicago"),
+    );
+    const publishTenantConfig = vi.fn().mockResolvedValue(undefined);
+
+    await approveAndApplyProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      gatewayId: "citynode.app",
+      baseAccount: "everything.near",
+      publishTenantConfig,
+    });
+
+    expect(publishTenantConfig).toHaveBeenCalledOnce();
+  });
+
+  it("does not publish again when the registry cannot be read", async () => {
+    const api = client(proposal("node", nodePayload));
+    api.registry.getRegistryApp.mockRejectedValue(new Error("Registry unavailable"));
+    const publishTenantConfig = vi.fn();
+
+    await expect(
+      approveAndApplyProposal({
+        apiClient: api as unknown as ApiClient,
+        proposal: proposal("node", nodePayload),
+        gatewayId: "citynode.app",
+        baseAccount: "everything.near",
+        publishTenantConfig,
+      }),
+    ).rejects.toMatchObject({ messageId: "proposal.partiallyApplied" });
+
+    expect(publishTenantConfig).not.toHaveBeenCalled();
+    expect(api.proposals.markApplyFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "Registry unavailable" }),
+    );
   });
 
   it("approves unsupported plugins without applying them", async () => {

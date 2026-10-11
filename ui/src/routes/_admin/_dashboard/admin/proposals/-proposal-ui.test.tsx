@@ -176,7 +176,7 @@ describe("proposal review UI seams", () => {
     );
 
     expect(screen.getByRole("alert").textContent).toBe("User closed the window");
-    expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
     expect(screen.getByText(/Connect the proposed DAO with Trezu before retrying/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(onApprove).toHaveBeenCalledOnce();

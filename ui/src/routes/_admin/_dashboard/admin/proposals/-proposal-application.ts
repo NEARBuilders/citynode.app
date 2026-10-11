@@ -27,8 +27,8 @@ const proposalApplicationHandlers = {
       entityId: proposal.entityId,
       hostname,
     });
-    const published = () =>
-      isTenantConfigPublished(apiClient, payload.accountId, gatewayId, hostname);
+    const expected = { accountId: payload.accountId, gatewayId, hostname, title: payload.name };
+    const published = () => isTenantConfigPublished(apiClient, expected);
     if (!(await published())) {
       try {
         await publishTenantConfig({
@@ -51,22 +51,29 @@ const PUBLISH_CHECK_INTERVAL_MS = 2000;
 
 async function isTenantConfigPublished(
   apiClient: ApiClient,
-  accountId: string,
-  gatewayId: string,
-  hostname: string,
+  expected: { accountId: string; gatewayId: string; hostname: string; title: string },
 ) {
   try {
-    const app = await apiClient.registry.getRegistryApp({ accountId, gatewayId });
-    return app.data.domain?.toLowerCase() === hostname.toLowerCase();
-  } catch {
-    return false;
+    const app = await apiClient.registry.getRegistryApp({
+      accountId: expected.accountId,
+      gatewayId: expected.gatewayId,
+    });
+    return (
+      app.data.domain?.toLowerCase() === expected.hostname.toLowerCase() &&
+      app.data.resolvedConfig.title === expected.title
+    );
+  } catch (error) {
+    if (error && typeof error === "object" && Reflect.get(error, "code") === "NOT_FOUND") {
+      return false;
+    }
+    throw error;
   }
 }
 
 async function waitForTenantConfig(published: () => Promise<boolean>) {
   for (let attempt = 0; attempt < PUBLISH_CHECK_ATTEMPTS; attempt++) {
     if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, PUBLISH_CHECK_INTERVAL_MS));
-    if (await published()) return true;
+    if (await published().catch(() => false)) return true;
   }
   return false;
 }

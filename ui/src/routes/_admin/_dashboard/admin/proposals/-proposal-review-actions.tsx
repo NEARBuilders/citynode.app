@@ -86,16 +86,14 @@ export function ProposalReviewActions({
                 ? translate("common.retry")
                 : translate("common.approve")}
           </Button>
-          {isPending && (
-            <Button
-              variant="ghost"
-              onClick={() => setRejecting(true)}
-              disabled={isReviewing}
-              data-testid="admin-proposal-reject"
-            >
-              {translate("common.reject")}
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            onClick={() => setRejecting(true)}
+            disabled={isReviewing}
+            data-testid="admin-proposal-reject"
+          >
+            {translate("common.reject")}
+          </Button>
         </div>
         {!daoIsVerified && (
           <p className="text-sm text-muted-foreground">

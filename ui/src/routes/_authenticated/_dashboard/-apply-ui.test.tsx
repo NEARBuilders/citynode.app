@@ -322,6 +322,68 @@ describe("apply route submission", () => {
     expect(stepStatus("details")).toBe("current");
   });
 
+  it("does not carry an earlier application's organization into a new application", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus: "approved",
+          applyStatus: "applied",
+          rejectionReason: null,
+          payload: { name: "Springfield", slug: "springfield", orgId: "legacy-org" },
+        },
+      ],
+    });
+    renderApply();
+    fireEvent.click(await screen.findByTestId("apply.new"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await fillValidApplication();
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).not.toHaveProperty(
+      "orgId",
+    );
+    expect(harness.apiClient?.auth.checkSlug).toHaveBeenCalledWith({ slug: "chicago" });
+  });
+
+  it("keeps the organization when revising a rejected legacy application", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus: "rejected",
+          applyStatus: "not_started",
+          rejectionReason: "More detail needed",
+          payload: {
+            kind: "country",
+            parentId: null,
+            name: "Chicago",
+            slug: "chicago",
+            motivation: "Serve the local community.",
+            orgId: "legacy-org",
+          },
+        },
+      ],
+    });
+    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: false });
+    renderApply();
+    fireEvent.click(await screen.findByTestId("apply.revise"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await fillValidApplication();
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
+      slug: "chicago",
+      orgId: "legacy-org",
+    });
+  });
+
   it("starts with the NEAR account when there is no active organization", async () => {
     harness.routeContext = {
       auth: { activeOrganizationId: null },

@@ -86,9 +86,14 @@ function ApplyPage() {
     ? myApplications.data?.data.find((proposal) => proposal.id === submittedProposalId)
     : myApplications.data?.data[0];
   const existingPayload = existingApplication?.payload as
-    | { orgId?: unknown; name?: unknown }
+    | { orgId?: unknown; name?: unknown; slug?: unknown }
     | undefined;
-  const legacyOrgId = typeof existingPayload?.orgId === "string" ? existingPayload.orgId : null;
+  const retainedOrgId = (slug: string) =>
+    existingApplication?.reviewStatus === "rejected" &&
+    existingPayload?.slug === slug &&
+    typeof existingPayload.orgId === "string"
+      ? existingPayload.orgId
+      : null;
 
   const submitMutation = useMutation({
     mutationFn: async (values: NodeApplicationValues) => {
@@ -99,8 +104,9 @@ function ApplyPage() {
       if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
         throw new AppActionError("apply.error.dao");
       }
+      const orgId = retainedOrgId(values.slug);
       return proposeNodeApplication(apiClient, values, {
-        ...(legacyOrgId ? { orgId: legacyOrgId } : {}),
+        ...(orgId ? { orgId } : {}),
         daoAccountId: daoConnection.daoAccountId,
         submitterAccountId: nearAccountId,
       });
@@ -122,6 +128,7 @@ function ApplyPage() {
   const form = useApplicationForm((values) => submitMutation.mutateAsync(values));
   const formValues = useSelector(form.store, (state) => state.values);
   const hostname = formValues.slug && gatewayId ? `${formValues.slug}.${gatewayId}` : "";
+  const legacyOrgId = retainedOrgId(formValues.slug);
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
   const rootNodes = queriedRootNodes ?? initialRootNodes;
