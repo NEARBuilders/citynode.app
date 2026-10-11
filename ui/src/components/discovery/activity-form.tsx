@@ -27,6 +27,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
+import { HiddenProfileNotice } from "./hidden-profile-notice";
+import { discoveryProfileQueryOptions } from "./profile-editor";
 
 export type Activity = Awaited<ReturnType<ApiClient["saveDiscoveryActivity"]>>;
 export type ActivityDraft = Parameters<ApiClient["saveDiscoveryActivity"]>[0];
@@ -46,7 +48,7 @@ export function blankActivity(nodeId: string, kind: ActivityKind): ActivityDraft
     endsAt: null,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     venue: "",
-    status: "draft",
+    status: "published",
   };
 }
 
@@ -113,12 +115,19 @@ export function ActivityForm({
     queryKey: ["discovery-editor-nodes"],
     queryFn: () => api.listNodes({}),
   });
+  const profile = useQuery(discoveryProfileQueryOptions(api, nodeId));
   const backToEvents = () =>
     navigate({ to: "/nodes/$nodeId/content", params: { nodeId }, search: { tab: "events" } });
   const save = useMutation({
     mutationFn: (input: ActivityDraft) => api.saveDiscoveryActivity(input),
     onSuccess: async (saved) => {
-      toast.success(saved.status === "published" ? translate("events.publishedExplore") : "Saved");
+      if (saved.status !== "published") {
+        toast.success(translate("events.savedDraft"));
+      } else if (profile.isSuccess && !profile.data?.published) {
+        toast.warning(translate("events.publishedHidden"));
+      } else {
+        toast.success(translate("events.publishedExplore"));
+      }
       await client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });
@@ -303,6 +312,7 @@ export function ActivityForm({
           </SelectContent>
         </Select>
       </Field>
+      {draft.status === "published" && <HiddenProfileNotice nodeId={nodeId} />}
       {save.isError && (
         <p role="alert" className="text-sm text-destructive">
           {appErrorMessage(save.error, translate)}

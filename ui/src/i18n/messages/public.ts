@@ -142,18 +142,6 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Lien d’inscription renseigné",
     "已设置加入链接",
   ],
-  "community.hidden": [
-    "Hidden from Explore",
-    "Oculta en Explorar",
-    "Masquée dans Explorer",
-    "已从探索页面隐藏",
-  ],
-  "community.hiddenHint": [
-    "Published events show up once your profile is public.",
-    "Los eventos publicados aparecen cuando tu perfil es público.",
-    "Les événements publiés apparaissent lorsque votre profil est public.",
-    "资料公开后，已发布活动才会显示。",
-  ],
   "community.historyDraft": [
     "Saved as a draft",
     "Guardado como borrador",
@@ -265,7 +253,6 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "尚未标记在地图上",
   ],
   "community.onMap": ["On the map", "En el mapa", "Sur la carte", "已标记在地图上"],
-  "community.openProfile": ["Open profile", "Abrir perfil", "Ouvrir le profil", "打开资料"],
   "community.profile": ["Profile", "Perfil", "Profil", "资料"],
   "community.profileExample": [
     "Who is this community for? What do you do together?",
@@ -937,5 +924,47 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Devuelve los NEAR a {account}.",
     "Restitue les NEAR à {account}.",
     "将 NEAR 转回 {account}。",
+  ],
+  "payout.stepUnstake": [
+    "Step 1 of 2 · Unstake from the pool (a treasury vote)",
+    "Paso 1 de 2 · Retirar del pool (votación de la tesorería)",
+    "Étape 1 sur 2 · Retirer du pool (vote de la trésorerie)",
+    "第 1 步，共 2 步 · 从质押池解除质押（金库投票）",
+  ],
+  "payout.stepWithdraw": [
+    "Step 2 of 2 · Withdraw to the treasury (a second vote)",
+    "Paso 2 de 2 · Retirar a la tesorería (segunda votación)",
+    "Étape 2 sur 2 · Retirer vers la trésorerie (second vote)",
+    "第 2 步，共 2 步 · 提取到金库（第二次投票）",
+  ],
+  "payout.stepWithdrawWaiting": [
+    "Step 2 of 2 · Withdraw to the treasury, once the NEAR unlocks",
+    "Paso 2 de 2 · Retirar a la tesorería cuando se desbloqueen los NEAR",
+    "Étape 2 sur 2 · Retirer vers la trésorerie une fois les NEAR débloqués",
+    "第 2 步，共 2 步 · NEAR 解锁后提取到金库",
+  ],
+  "payout.approvals": [
+    "Proposal #{id}: {approved} of {required} approvals.",
+    "Propuesta #{id}: {approved} de {required} aprobaciones.",
+    "Proposition n°{id} : {approved} approbation(s) sur {required}.",
+    "提案 #{id}：已获 {approved}/{required} 个批准。",
+  ],
+  "payout.votingCloses": [
+    "Voting closes {date}.",
+    "La votación cierra el {date}.",
+    "Le vote se termine le {date}.",
+    "投票将于 {date} 截止。",
+  ],
+  "payout.unlockSince": [
+    "Unstake proposed {date}. NEAR usually unlocks 2–3 days after the vote passes; then propose the withdraw.",
+    "Retiro propuesto el {date}. Los NEAR suelen desbloquearse 2–3 días después de aprobarse la votación; luego propón la retirada.",
+    "Retrait proposé le {date}. Les NEAR sont généralement débloqués 2 à 3 jours après l’adoption du vote ; proposez ensuite le retrait.",
+    "解除质押提案于 {date} 提出。NEAR 通常在投票通过后 2–3 天解锁，届时再发起提取提案。",
+  ],
+  "payout.poolStats": [
+    "The pool holds {total} from {count} stakers · {fee} fee.",
+    "El pool tiene {total} de {count} participantes · comisión {fee}.",
+    "Le pool détient {total} de {count} stakers · frais de {fee}.",
+    "质押池共有 {count} 位质押者的 {total} · 费率 {fee}。",
   ],
 });

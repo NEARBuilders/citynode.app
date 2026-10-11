@@ -602,4 +602,28 @@ export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
     "Personne n’a rejoint avec ce code.",
     "没有人通过此二维码加入。",
   ],
+  "events.savedDraft": [
+    "Saved as a draft. Only your team can see it.",
+    "Guardado como borrador. Solo tu equipo puede verlo.",
+    "Enregistré comme brouillon. Seule votre équipe peut le voir.",
+    "已保存为草稿，仅你的团队可见。",
+  ],
+  "events.publishedHidden": [
+    "Published, but your community is hidden from Explore, so nobody can see it yet. Turn on Show on Explore in your profile.",
+    "Publicado, pero tu comunidad está oculta en Explorar, así que nadie puede verlo todavía. Activa Mostrar en Explorar en tu perfil.",
+    "Publié, mais votre communauté est masquée dans Explorer : personne ne peut encore le voir. Activez Afficher dans Explorer dans votre profil.",
+    "已发布，但你的社区在探索页面中隐藏，所以还没有人能看到。请在资料中开启“在探索中显示”。",
+  ],
+  "events.profileHiddenNotice": [
+    "Your community is hidden from Explore, so published events won't show anywhere yet.",
+    "Tu comunidad está oculta en Explorar, así que los eventos publicados aún no se muestran.",
+    "Votre communauté est masquée dans Explorer : les événements publiés ne s’affichent encore nulle part.",
+    "你的社区在探索页面中隐藏，已发布的活动暂时不会显示。",
+  ],
+  "events.showOnExplore": [
+    "Show community on Explore",
+    "Mostrar la comunidad en Explorar",
+    "Afficher la communauté dans Explorer",
+    "在探索中显示社区",
+  ],
 });

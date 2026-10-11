@@ -14,6 +14,7 @@ import { type AuthClient, useAuthClient } from "@/app";
 import { SectionHeader } from "@/components/layout/section-header";
 import { LinkTreasury } from "@/components/link-treasury";
 import { useLocalDate } from "@/components/local-date";
+import { type Step, StepList } from "@/components/stepper";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,6 +43,7 @@ import {
 } from "@/lib/dao-connect";
 import {
   formatNearBalance,
+  formatPoolFee,
   formatPoolFeeTenths,
   invalidateStakePoolQueries,
   readStakePoolAccount,
@@ -49,10 +51,12 @@ import {
   type StakePoolStatus,
   stakePoolAccountQueryOptions,
   stakePoolQueryKeys,
+  stakePoolStatsQueryOptions,
   stakePoolStatusQueryOptions,
   type TeamStakeTarget,
 } from "@/lib/queries/stake-pool";
 import {
+  approvalThreshold,
   canAccountApprove,
   canAccountPropose,
   isOpenProposal,
@@ -76,9 +80,19 @@ import { useNearAccount } from "@/lib/use-near-account";
 type PoolPhase = "unstake" | "pending-release" | "withdraw" | "proposal-pending";
 type PoolMethod = "unstake" | "withdraw";
 
+interface TeamPoolPendingProposal {
+  id: number;
+  method: PoolMethod;
+  approved: number;
+  required: number | null;
+  closesAtMs: number | null;
+}
+
 interface TeamPoolProposals {
   open: boolean;
   failedUntilMs: number | null;
+  pending: TeamPoolPendingProposal | null;
+  lastUnstakeMs: number | null;
 }
 
 export function teamPoolPhase(
@@ -164,9 +178,10 @@ export function canSeeTeamStake({
   );
 }
 
+const TEAM_POOL_UNSTAKE_METHODS = ["unstake", "unstake_all"] as const;
+
 const TEAM_POOL_RELEASE_METHODS = [
-  "unstake",
-  "unstake_all",
+  ...TEAM_POOL_UNSTAKE_METHODS,
   "withdraw",
   "withdraw_all",
   "withdraw_all_from_staking_pool",
@@ -208,7 +223,7 @@ function teamPoolProposalsQueryOptions(target: TeamStakeTarget | null, queryClie
   return {
     queryKey: teamPoolQueryKeys.proposals(target),
     queryFn: async (): Promise<TeamPoolProposals> => {
-      if (!target) return { open: false, failedUntilMs: null };
+      if (!target) return { open: false, failedUntilMs: null, pending: null, lastUnstakeMs: null };
       return readTeamPoolProposals(
         target,
         await queryClient.fetchQuery(teamPolicyQueryOptions(target)),
@@ -234,7 +249,29 @@ async function readTeamPoolProposals(
   const period = policy?.proposal_period;
   const onlyFailed =
     !!period && open.length > 0 && open.every((proposal) => proposal.status === "Failed");
+  const voting = open.find((proposal) => proposal.status !== "Failed") ?? null;
+  const votingThreshold = voting ? approvalThreshold(policy, voting) : null;
+  const lastUnstake = proposals.find(
+    (proposal) =>
+      proposal.status === "Approved" &&
+      proposalCallsMethod(proposal, target.poolAccountId, TEAM_POOL_UNSTAKE_METHODS),
+  );
   return {
+    pending:
+      voting && votingThreshold
+        ? {
+            id: voting.id,
+            method: proposalCallsMethod(voting, target.poolAccountId, TEAM_POOL_UNSTAKE_METHODS)
+              ? "unstake"
+              : "withdraw",
+            approved: votingThreshold.approved,
+            required: votingThreshold.required,
+            closesAtMs: period
+              ? Number((BigInt(voting.submission_time) + BigInt(period)) / 1_000_000n)
+              : null,
+          }
+        : null,
+    lastUnstakeMs: lastUnstake ? Number(BigInt(lastUnstake.submission_time) / 1_000_000n) : null,
     open: open.length > 0,
     failedUntilMs: onlyFailed
       ? Math.max(
@@ -244,6 +281,29 @@ async function readTeamPoolProposals(
         )
       : null,
   };
+}
+
+export function payoutSteps(
+  phase: PoolPhase,
+  votingMethod: PoolMethod | null,
+  t: AppTranslator,
+): Step[] {
+  const unstakeVoting = phase === "proposal-pending" && votingMethod === "unstake";
+  const unstakeDone =
+    phase === "pending-release" || phase === "withdraw" || votingMethod === "withdraw";
+  const withdrawVoting = phase === "proposal-pending" && votingMethod === "withdraw";
+  return [
+    {
+      id: "unstake",
+      label: t("payout.stepUnstake"),
+      state: unstakeDone ? "success" : unstakeVoting ? "running" : "pending",
+    },
+    {
+      id: "withdraw",
+      label: t(phase === "pending-release" ? "payout.stepWithdrawWaiting" : "payout.stepWithdraw"),
+      state: withdrawVoting ? "running" : "pending",
+    },
+  ];
 }
 
 export function createButtonLabel(t: AppTranslator) {
@@ -576,6 +636,8 @@ function useTeamPoolReads(
     claimHidden: phase === "unstake" && !status.isLoading && !poolOffersClaim(poolState),
     retryStatus: () => void status.refetch(),
     failedUntilMs: proposals.data?.failedUntilMs ?? null,
+    pendingProposal: proposals.data?.pending ?? null,
+    lastUnstakeMs: proposals.data?.lastUnstakeMs ?? null,
     method: method === "unstake" && !poolOffersClaim(poolState) ? null : method,
     canStart: canStartTeamPoolAction(
       target,
@@ -629,11 +691,23 @@ export function TeamStakeCard({
     claimHidden,
     retryStatus,
     failedUntilMs,
+    pendingProposal,
+    lastUnstakeMs,
     method,
     canStart,
     settled,
     retry,
   } = useTeamPoolReads(target, authClient, queryClient, authAccountId);
+  const poolStats = useQuery({
+    ...stakePoolStatsQueryOptions({
+      accountId: target?.poolAccountId ?? "",
+      authClient,
+      network: target?.network ?? "mainnet",
+    }),
+    enabled: !!target,
+  });
+  const votingCloses = useLocalDate(pendingProposal?.closesAtMs ?? null, "datetime");
+  const unstakeProposed = useLocalDate(lastUnstakeMs, "date");
   const showsPoolNote = !readFailed && phase !== "proposal-pending";
   const failedUntil = useLocalDate(failedUntilMs, "datetime");
   const loading = pending || (!!target && reading);
@@ -714,9 +788,34 @@ export function TeamStakeCard({
               "—"
             )}
           </div>
+          {balancePhase && (
+            <div className="flex flex-col gap-2 pt-2" data-testid="dashboard-node.team-stake-steps">
+              <StepList
+                steps={payoutSteps(balancePhase, pendingProposal?.method ?? null, translate)}
+              />
+            </div>
+          )}
+          {poolStats.data && (
+            <span
+              className="text-sm text-muted-foreground"
+              data-testid="dashboard-node.team-pool-stats"
+            >
+              {translate("payout.poolStats", {
+                total: formatNearBalance(poolStats.data.totalStaked, locale),
+                count: new Intl.NumberFormat(locale).format(poolStats.data.stakerCount),
+                fee: formatPoolFee(
+                  poolStats.data.feeNumerator,
+                  poolStats.data.feeDenominator,
+                  locale,
+                ),
+              })}
+            </span>
+          )}
           {phase === "pending-release" && (
             <TeamStakeNote testId="dashboard-node.team-stake-pending-release">
-              {translate("stake.unlockNotice")}
+              {lastUnstakeMs !== null
+                ? translate("payout.unlockSince", { date: unstakeProposed })
+                : translate("stake.unlockNotice")}
             </TeamStakeNote>
           )}
           {phase === "proposal-pending" && (
@@ -724,6 +823,18 @@ export function TeamStakeCard({
               {failedUntilMs !== null
                 ? translate("stake.proposalFailed", { date: failedUntil })
                 : translate("stake.proposalPending")}{" "}
+              {failedUntilMs === null && pendingProposal?.required != null && (
+                <span data-testid="dashboard-node.team-stake-approvals">
+                  {translate("payout.approvals", {
+                    id: pendingProposal.id,
+                    approved: pendingProposal.approved,
+                    required: pendingProposal.required,
+                  })}{" "}
+                </span>
+              )}
+              {failedUntilMs === null && votingCloses && (
+                <span>{translate("payout.votingCloses", { date: votingCloses })} </span>
+              )}
               <TrezuRequestsLink teamAccountId={target.teamAccountId}>
                 {translate(failedUntilMs !== null ? "stake.reviewTrezu" : "stake.voteTrezu")}
               </TrezuRequestsLink>

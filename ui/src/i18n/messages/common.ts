@@ -1685,4 +1685,46 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Trésorerie {dao} liée",
     "已关联金库 {dao}",
   ],
+  "apply.organization.nameLabel": [
+    "Community name",
+    "Nombre de la comunidad",
+    "Nom de la communauté",
+    "社区名称",
+  ],
+  "apply.organization.namePlaceholder": [
+    "Lagos Builders",
+    "Lagos Builders",
+    "Lagos Builders",
+    "Lagos Builders",
+  ],
+  "apply.organization.nameHint": [
+    "This creates your community's organization. An admin approves it first; you'll continue your application here once it's approved.",
+    "Esto crea la organización de tu comunidad. Un administrador la aprueba primero; continuarás tu solicitud aquí cuando esté aprobada.",
+    "Cela crée l’organisation de votre communauté. Un administrateur l’approuve d’abord ; vous poursuivrez votre candidature ici une fois approuvée.",
+    "这将创建你社区的组织。管理员会先批准它，批准后你可以在这里继续申请。",
+  ],
+  "apply.organization.waiting": [
+    "{name} is waiting for an admin to approve it. Come back here once it's approved to finish your application.",
+    "{name} está esperando la aprobación de un administrador. Vuelve aquí cuando esté aprobada para terminar tu solicitud.",
+    "{name} attend l’approbation d’un administrateur. Revenez ici une fois approuvée pour terminer votre candidature.",
+    "{name} 正在等待管理员批准。批准后回到这里完成申请。",
+  ],
+  "apply.dao.what": [
+    "A DAO is a shared wallet your team controls together. It owns the community and its staking rewards, so no single person holds the keys.",
+    "Una DAO es una billetera compartida que tu equipo controla en conjunto. Es dueña de la comunidad y de sus recompensas, así nadie tiene las llaves solo.",
+    "Une DAO est un portefeuille partagé que votre équipe contrôle ensemble. Elle possède la communauté et ses récompenses : personne ne détient seul les clés.",
+    "DAO 是由团队共同控制的共享钱包。它拥有社区及其质押奖励，因此没有任何一个人单独掌握密钥。",
+  ],
+  "apply.dao.none": [
+    "Don't have one yet? It takes a few minutes, and you'll need to be one of its members.",
+    "¿Aún no tienes una? Solo lleva unos minutos, y debes ser uno de sus miembros.",
+    "Vous n’en avez pas encore ? Cela prend quelques minutes, et vous devez en être membre.",
+    "还没有？只需几分钟，你需要成为它的成员之一。",
+  ],
+  "apply.dao.create": [
+    "Create a DAO on Trezu",
+    "Crear una DAO en Trezu",
+    "Créer une DAO sur Trezu",
+    "在 Trezu 上创建 DAO",
+  ],
 });

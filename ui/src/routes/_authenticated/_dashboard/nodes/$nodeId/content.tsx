@@ -1,6 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useApiClient } from "@/app";
+import { createFileRoute } from "@tanstack/react-router";
 import { PageContainer } from "@/components";
 import { activitiesQueryOptions } from "@/components/discovery/activity-form";
 import { BulletinEditor } from "@/components/discovery/bulletin-editor";
@@ -9,7 +7,6 @@ import { EventsEditor } from "@/components/discovery/events-editor";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
-import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { CommunityHeader, ensureCommunityHeaderData } from "../../dashboard/node/-community-header";
 
 type ContentTab = "events" | "onboarding" | "bulletin";
@@ -53,8 +50,6 @@ function CommunityContent() {
   const { nodeId } = Route.useParams();
   const { tab = "events" } = Route.useSearch();
   const { auth } = Route.useRouteContext();
-  const api = useApiClient();
-  const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
 
   return (
     <PageContainer variant="wide">
@@ -70,14 +65,7 @@ function CommunityContent() {
       ) : tab === "bulletin" ? (
         <BulletinEditor nodeId={nodeId} />
       ) : (
-        <EventsEditor
-          nodeId={nodeId}
-          profileLink={
-            tenantId ? (
-              <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
-            ) : undefined
-          }
-        />
+        <EventsEditor nodeId={nodeId} />
       )}
     </PageContainer>
   );
