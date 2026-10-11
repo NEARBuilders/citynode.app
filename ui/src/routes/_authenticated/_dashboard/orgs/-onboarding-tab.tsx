@@ -1,5 +1,5 @@
-import { ArrowRightIcon, QrCodeIcon } from "@phosphor-icons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { QrCodeIcon } from "@phosphor-icons/react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -11,9 +11,14 @@ import {
   CardContent,
   ConfirmDialog,
   EmptyState,
+  LocalDate,
   SectionHeader,
+  Skeleton,
   TabsContent,
 } from "@/components";
+import { activitiesQueryOptions } from "@/components/discovery/activity-form";
+import { upcomingEvents, useStartOnboarding } from "@/components/discovery/event-onboarding";
+import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Item,
   ItemActions,
@@ -23,10 +28,19 @@ import {
   ItemSeparator,
   ItemTitle,
 } from "@/components/ui/item";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { appErrorMessage } from "@/i18n/error-message";
 import { translateEnglishAppMessage, useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { formatRemaining, onboardingCodeState } from "@/lib/onboarding-codes";
+import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 
 type OnboardingCodeSummary = Awaited<ReturnType<ApiClient["auth"]["listOnboardingCodes"]>>[number];
 type OnboardingStatus = Awaited<ReturnType<ApiClient["auth"]["getOnboardingStatus"]>>;
@@ -52,7 +66,142 @@ function stateLabel(
   return state === "expired" ? t("station.expired") : t("station.revoked");
 }
 
-export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgId: string }) {
+function StartStation({
+  apiClient,
+  orgId,
+  isActive,
+}: {
+  apiClient: ApiClient;
+  orgId: string;
+  isActive: boolean;
+}) {
+  const translate = useAppTranslation();
+  const [eventId, setEventId] = useState<string | null>(null);
+  const [now] = useState(() => Date.now());
+  const start = useStartOnboarding(orgId);
+  const tenant = useQuery({ ...tenantByOrgQueryOptions(apiClient, orgId), enabled: isActive });
+  const tenantId = tenant.data?.id ?? "";
+  const nodes = useQuery({ ...tenantNodesQueryOptions(apiClient, tenantId), enabled: !!tenantId });
+  const activities = useQueries({
+    queries: (nodes.data ?? []).map((node) => activitiesQueryOptions(apiClient, node.id)),
+    combine: (results) => ({
+      data: results.flatMap((result) => result.data ?? []),
+      isPending: results.some((result) => result.isPending),
+      isError: results.some((result) => result.isError),
+    }),
+  });
+
+  if (!isActive) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="onboard.switch-to-start">
+        {translate("org.switchToStartStation")}
+      </p>
+    );
+  }
+  if (tenant.isPending || nodes.isPending || activities.isPending) {
+    return <Skeleton className="h-10 w-full max-w-md" />;
+  }
+  const firstNodeId = nodes.data?.[0]?.id;
+  if (!tenant.data || !firstNodeId) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="onboard.no-community">
+        {translate("org.noCommunityEvents")}
+      </p>
+    );
+  }
+  if (nodes.isError || activities.isError) {
+    return (
+      <p role="alert" className="text-sm text-muted-foreground" data-testid="onboard.events-error">
+        {translate("station.eventLoadError")}
+      </p>
+    );
+  }
+  const events = upcomingEvents(activities.data, now);
+  if (events.length === 0) {
+    return (
+      <EmptyState
+        icon={QrCodeIcon}
+        title={translate("station.noEvents")}
+        description={translate("station.addEventHint")}
+        className="py-10"
+        action={
+          <Button
+            nativeButton={false}
+            render={
+              <Link
+                to="/nodes/$nodeId/content"
+                params={{ nodeId: firstNodeId }}
+                search={{ tab: "events" }}
+              />
+            }
+            data-testid="onboard.add-event"
+          >
+            {translate("station.addEvent")}
+          </Button>
+        }
+      />
+    );
+  }
+  const selected = events.find((event) => event.id === eventId) ?? null;
+  return (
+    <div
+      className="flex flex-col gap-3 sm:flex-row sm:items-end"
+      data-testid="onboard.event-picker"
+    >
+      <Field className="min-w-0 sm:w-96">
+        <FieldLabel htmlFor="onboard-event">{translate("org.pickEvent")}</FieldLabel>
+        <Select
+          value={selected?.id ?? null}
+          items={events.map((event) => ({ label: event.title, value: event.id }))}
+          onValueChange={(value) => setEventId(typeof value === "string" ? value : null)}
+        >
+          <SelectTrigger id="onboard-event" className="w-full" data-testid="onboard.event-select">
+            <SelectValue placeholder={translate("org.pickEventPlaceholder")} />
+          </SelectTrigger>
+          <SelectContent>
+            {events.map((event) => (
+              <SelectItem
+                key={event.id}
+                value={event.id}
+                data-testid={`onboard.event-option-${event.id}`}
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">
+                    {event.title}
+                    {event.status === "draft" ? ` · ${translate("events.draft")}` : ""}
+                  </span>
+                  {event.startsAt && (
+                    <span className="text-xs text-muted-foreground">
+                      <LocalDate value={event.startsAt} format="datetime" />
+                    </span>
+                  )}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Button
+        disabled={!selected || start.isPending}
+        onClick={() => selected && start.mutate({ eventId: selected.id })}
+        data-testid="onboard.start-station"
+      >
+        <QrCodeIcon />
+        {translate("events.startOnboarding")}
+      </Button>
+    </div>
+  );
+}
+
+export function OnboardingTab({
+  apiClient,
+  orgId,
+  isActive,
+}: {
+  apiClient: ApiClient;
+  orgId: string;
+  isActive: boolean;
+}) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const queryClient = useQueryClient();
@@ -105,19 +254,8 @@ export function OnboardingTab({ apiClient, orgId }: { apiClient: ApiClient; orgI
         description={
           <span data-testid="onboard.start-from-event">{translate("org.stationsDescription")}</span>
         }
-        action={
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<Link to="/dashboard/node" />}
-            data-testid="onboard.open-my-community"
-          >
-            {translate("org.openCommunity")}
-            <ArrowRightIcon />
-          </Button>
-        }
       />
+      <StartStation apiClient={apiClient} orgId={orgId} isActive={isActive} />
 
       {activeStatus && selectedCode && (
         <Card data-testid="onboard.status">

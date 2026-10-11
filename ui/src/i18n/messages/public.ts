@@ -93,10 +93,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "你无法编辑此社区",
   ],
   "community.cannotEditHint": [
-    "Only its owners and admins can change the profile or publish events.",
-    "Solo sus propietarios y administradores pueden cambiar el perfil o publicar eventos.",
-    "Seuls ses propriétaires et administrateurs peuvent modifier le profil ou publier des événements.",
-    "只有所有者和管理员可更改资料或发布活动。",
+    "Only its owners and admins can change the profile. Owners, admins and members of a team with the Events area can publish events.",
+    "Solo sus propietarios y administradores pueden cambiar el perfil. Los propietarios, administradores y miembros de un equipo con el área de Eventos pueden publicar eventos.",
+    "Seuls ses propriétaires et administrateurs peuvent modifier le profil. Les propriétaires, administrateurs et membres d'une équipe ayant accès au domaine Événements peuvent publier des événements.",
+    "只有所有者和管理员可更改资料。所有者、管理员以及拥有活动功能区权限的团队成员可发布活动。",
   ],
   "community.childrenNamed": [
     "States and cities under {name}.",

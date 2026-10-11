@@ -9,9 +9,11 @@ import { discoveryProfileQueryOptions } from "./profile-editor";
 
 export function EventsEditor({
   nodeId,
+  canManage = true,
   profileLink,
 }: {
   nodeId: string;
+  canManage?: boolean;
   profileLink?: ReactElement;
 }) {
   const translate = useAppTranslation();
@@ -39,7 +41,7 @@ export function EventsEditor({
           )}
         </div>
       )}
-      <ActivityEditor nodeId={nodeId} />
+      <ActivityEditor nodeId={nodeId} canPost={canManage} />
     </div>
   );
 }

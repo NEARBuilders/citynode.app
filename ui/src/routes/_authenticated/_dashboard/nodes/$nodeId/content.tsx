@@ -10,7 +10,12 @@ import { discoveryProfileQueryOptions } from "@/components/discovery/profile-edi
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
-import { CommunityHeader, ensureCommunityHeaderData } from "../../dashboard/node/-community-header";
+import { canManageCommunity } from "@/lib/team-workspace";
+import {
+  CommunityHeader,
+  communityAuthContextQueryOptions,
+  ensureCommunityHeaderData,
+} from "../../dashboard/node/-community-header";
 
 type ContentTab = "events" | "onboarding" | "bulletin";
 
@@ -55,6 +60,8 @@ function CommunityContent() {
   const { auth } = Route.useRouteContext();
   const api = useApiClient();
   const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
+  const authContext = useQuery(communityAuthContextQueryOptions(api, auth.activeOrganizationId));
+  const canManage = canManageCommunity(authContext.data);
 
   return (
     <PageContainer variant="wide">
@@ -72,8 +79,9 @@ function CommunityContent() {
       ) : (
         <EventsEditor
           nodeId={nodeId}
+          canManage={canManage}
           profileLink={
-            tenantId ? (
+            tenantId && canManage ? (
               <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
             ) : undefined
           }
