@@ -40,7 +40,6 @@ const payload = {
   name: "Chicago",
   slug: "chicago",
   motivation: "Serve the community",
-  orgId: "org-1",
   accountId: "dao.sputnik-dao.near",
 };
 
@@ -96,7 +95,14 @@ describe.sequential("node applications", () => {
       client("alice.near", "other-org").propose({
         pluginId: "node",
         entityId: "wrong-org",
-        payload: { ...payload, slug: "wrong-org" },
+        payload: { ...payload, slug: "wrong-org", orgId: "org-1" },
+      }),
+    ).rejects.toThrow(/organization/);
+    await expect(
+      client("alice.near").propose({
+        pluginId: "node",
+        entityId: "existing-org",
+        payload: { ...payload, slug: "existing-org", orgId: "org-1" },
       }),
     ).rejects.toThrow(/organization/);
     await expect(
@@ -119,7 +125,7 @@ describe.sequential("node applications", () => {
     const result = await client("alice.near", null).propose({
       pluginId: "node",
       entityId: "madison",
-      payload: { ...payload, slug: "madison", orgId: undefined, applicantUserId: "spoofed" },
+      payload: { ...payload, slug: "madison", applicantUserId: "spoofed" },
     });
     expect(result.data.payload).toMatchObject({
       slug: "madison",
@@ -217,17 +223,15 @@ describe.sequential("node applications", () => {
         entityId: "chicago",
         payload: { ...payload, orgId: "org-2" },
       }),
-    ).rejects.toThrow(/another organization/);
+    ).rejects.toThrow(/existing organization/);
     const revised = await client("alice.near", null).propose({
       pluginId: "node",
       entityId: "chicago",
       payload: { ...payload, motivation: "Expanded plan" },
     });
     expect(revised.data.reviewStatus).toBe("pending");
-    expect(revised.data.payload).toMatchObject({
-      motivation: "Expanded plan",
-      orgId: "org-1",
-    });
+    expect(revised.data.payload).toMatchObject({ motivation: "Expanded plan" });
+    expect(revised.data.payload).not.toHaveProperty("orgId");
     expect(revised.data.createdBy).toBe("alice.near");
     expect(revised.data.submissionCount).toBe(2);
 

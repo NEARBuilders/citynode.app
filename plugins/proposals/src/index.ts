@@ -161,10 +161,7 @@ export default createPlugin({
               new ORPCError("BAD_REQUEST", { message: "Invalid community application payload" }),
             );
           }
-          if (
-            parsed.data.orgId &&
-            parsed.data.orgId !== context.organization?.activeOrganizationId
-          ) {
+          if (parsed.data.orgId) {
             const proposals = yield* ProposalService;
             const previous = (yield* proposals.getMyNodeApplications(applicantAccountId)).find(
               (proposal) => proposal.entityId === input.entityId,
@@ -175,9 +172,15 @@ export default createPlugin({
               "orgId" in previous.payload
                 ? previous.payload.orgId
                 : null;
-            if (previous?.reviewStatus !== "rejected" || previousOrgId !== parsed.data.orgId) {
+            if (
+              previous?.reviewStatus !== "rejected" ||
+              previous.createdBy !== applicantAccountId ||
+              previousOrgId !== parsed.data.orgId
+            ) {
               return yield* Effect.fail(
-                new ORPCError("FORBIDDEN", { message: "Select the applicant organization first" }),
+                new ORPCError("FORBIDDEN", {
+                  message: "An existing organization can only be retained for a rejected revision",
+                }),
               );
             }
           }

@@ -16,6 +16,7 @@ type ApplyApiClient = {
   listRootNodes: ReturnType<typeof vi.fn>;
   listChildren: ReturnType<typeof vi.fn>;
   bindingPreflight: ReturnType<typeof vi.fn>;
+  auth: { checkSlug: ReturnType<typeof vi.fn> };
   proposals: { propose: ReturnType<typeof vi.fn>; getMyNodeApplications: ReturnType<typeof vi.fn> };
 };
 
@@ -126,6 +127,7 @@ function createApiClient(): ApplyApiClient {
     bindingPreflight: vi.fn().mockResolvedValue({
       hostname: { available: true, format: "valid" },
     }),
+    auth: { checkSlug: vi.fn().mockResolvedValue({ status: true }) },
     proposals: {
       propose: vi.fn().mockResolvedValue({ data: { id: "proposal-1" } }),
       getMyNodeApplications: vi.fn().mockResolvedValue({ data: [] }),
@@ -215,7 +217,6 @@ describe("apply route submission", () => {
     });
     renderApply(queryClient);
 
-    expect(stepStatus("organization")).toBe("complete");
     expect(stepStatus("near")).toBe("complete");
     expect(stepStatus("dao")).toBe("current");
     expect(stepStatus("details")).toBe("upcoming");
@@ -237,7 +238,6 @@ describe("apply route submission", () => {
           name: "Chicago",
           slug: "chicago",
           motivation: "Serve the local community.",
-          orgId: "org-1",
           accountId: "dao.sputnik",
           submitterAccountId: "applicant.near",
         },
@@ -322,18 +322,17 @@ describe("apply route submission", () => {
     expect(stepStatus("details")).toBe("current");
   });
 
-  it("opens the organization step first when there is no active organization", async () => {
+  it("starts with the NEAR account when there is no active organization", async () => {
     harness.routeContext = {
       auth: { activeOrganizationId: null },
       runtimeConfig: TEST_RUNTIME_CONFIG,
     };
-    harness.authClient = {
-      organization: { list: vi.fn().mockResolvedValue({ data: [], error: null }) },
-    };
+    harness.nearAccount = null;
     renderApply();
 
-    expect(stepStatus("organization")).toBe("current");
-    expect(await screen.findByRole("link", { name: /Create organization/ })).toBeTruthy();
+    expect(stepStatus("near")).toBe("current");
+    expect(screen.queryByTestId("apply.step-organization")).toBeNull();
+    expect(await screen.findByRole("link", { name: /Link NEAR account/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "verify DAO" })).toBeNull();
   });
 });

@@ -75,7 +75,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       ...createSessionHandlers(builder),
       ...createOrganizationHandlers(builder, requireAuth),
       ...createOrganizationRequestHandlers(builder, requireAuth),
-      ...createCommunityOrganizationHandlers(builder, requireAuth),
+      ...createCommunityOrganizationHandlers(builder),
       ...createMemberHandlers(builder, requireAuth),
       ...createInvitationHandlers(builder, requireAuth),
       ...createApiKeyHandlers(builder, requireAuth),

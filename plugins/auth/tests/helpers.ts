@@ -271,10 +271,7 @@ export function createTestHandlers(services: PluginServices) {
     requestBuilder,
     createRequireAuth(requestBuilder),
   );
-  const communityHandlers = createCommunityOrganizationHandlers(
-    requestBuilder,
-    createRequireAuth(requestBuilder),
-  );
+  const communityHandlers = createCommunityOrganizationHandlers(requestBuilder);
   const joinHandlers = createOnboardingJoinHandlers(
     requestBuilder,
     createRequireAuth(requestBuilder),

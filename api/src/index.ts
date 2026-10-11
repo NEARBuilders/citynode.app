@@ -820,10 +820,24 @@ export default createPlugin.withPlugins<PluginsClient>()({
           });
         }),
 
-      applyCommunityProposal: builder.applyCommunityProposal.use(requireAdmin).effect(function* ({
+      applyCommunityProposal: builder.applyCommunityProposal.effect(function* ({
         input,
         context,
+        errors,
       }) {
+        if (!context.userId && !context.user?.id) {
+          return yield* Effect.fail(
+            errors.UNAUTHORIZED({
+              message: "Authentication required",
+              data: { apiKeyProvided: Boolean(context.apiKey) },
+            }),
+          );
+        }
+        if (context.user?.role !== "admin") {
+          return yield* Effect.fail(
+            errors.FORBIDDEN({ message: "Platform admin required", data: {} }),
+          );
+        }
         const proposalsPlugin = plugins.proposals;
         const authPlugin = plugins.auth;
         if (!proposalsPlugin || !authPlugin) {
