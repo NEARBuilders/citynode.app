@@ -132,7 +132,6 @@ describe("onboarding handlers", () => {
     expect(result.alreadyRedeemed).toBe(false);
     expect(result.organizationName).toBe(org.name);
     expect(result.eventName).toBe("Meetup");
-    expect(result.organizationId).toBe(org.id);
 
     const member = await services.services.db.query.member.findFirst({
       where: and(
@@ -196,7 +195,6 @@ describe("onboarding handlers", () => {
       context: { reqHeaders: member.reqHeaders },
     });
     expect(revisit.alreadyRedeemed).toBe(true);
-    expect(revisit.organizationId).toBe(org.id);
     const revisitContext = await handlers.session.getContext({
       context: { reqHeaders: member.reqHeaders },
     });

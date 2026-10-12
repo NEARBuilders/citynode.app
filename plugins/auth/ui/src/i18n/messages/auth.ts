@@ -194,12 +194,6 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Obtenir des consignes de développement",
     "获取开发提示词",
   ],
-  "auth.onboard.seeCommunity": [
-    "See {community}",
-    "Ver {community}",
-    "Voir {community}",
-    "查看 {community}",
-  ],
   "auth.onboard.desktop": [
     "Continue on your computer",
     "Continuar en tu ordenador",

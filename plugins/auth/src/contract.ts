@@ -891,7 +891,6 @@ export const contract = oc.router({
         alreadyRedeemed: z.boolean(),
         organizationName: z.string(),
         eventName: z.string(),
-        organizationId: z.string(),
       }),
     )
     .errors(onboardingRedeemErrors),

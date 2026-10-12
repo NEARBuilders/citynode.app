@@ -17,9 +17,6 @@ const harness = vi.hoisted(() => ({
   sessionGate: null as Promise<never> | null,
   getOnboardingCodeInfo: vi.fn(),
   redeemOnboardingCode: vi.fn(),
-  resolveTenantByOrgId: vi.fn(),
-  listNodes: vi.fn(),
-  getDiscoveryNode: vi.fn(),
   detectNearAccount: vi.fn(async () => null as { accountId?: string | null } | null),
   clipboardWriteText: vi.fn(async () => undefined),
 }));
@@ -73,9 +70,6 @@ function renderOnboard() {
           getOnboardingCodeInfo: harness.getOnboardingCodeInfo,
           redeemOnboardingCode: harness.redeemOnboardingCode,
         },
-        resolveTenantByOrgId: harness.resolveTenantByOrgId,
-        listNodes: harness.listNodes,
-        getDiscoveryNode: harness.getDiscoveryNode,
       },
       runtimeConfig: { networkId: "mainnet", runtime: { gatewayId: "citynode.app" } },
     },
@@ -326,80 +320,5 @@ describe("onboard join flow", () => {
       expect(screen.queryByTestId("onboard.explore-button")).toBeNull();
       expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
     }
-  });
-});
-
-const PARENT_ID = "22222222-2222-2222-2222-222222222222";
-
-function mockJoinedCommunity() {
-  harness.session = { user: { id: "user-1", name: "Grace" } };
-  harness.getOnboardingCodeInfo.mockResolvedValue(info);
-  harness.redeemOnboardingCode.mockResolvedValue({
-    organizationName: "Chicago Builders",
-    eventName: "Launch Night",
-    organizationId: "org-1",
-  });
-}
-
-describe("onboard community link", () => {
-  it("links See community to the public page of the first node by name", async () => {
-    mockJoinedCommunity();
-    harness.resolveTenantByOrgId.mockResolvedValue({ id: "tenant-1" });
-    harness.listNodes.mockResolvedValue([
-      { id: "node-z", slug: "zeta", parentId: null, name: "Zeta" },
-      { id: "node-a", slug: "chicago", parentId: PARENT_ID, name: "Alpha" },
-    ]);
-    harness.getDiscoveryNode.mockResolvedValue({ nodeId: "node-a" });
-
-    renderOnboard();
-
-    const link = await screen.findByTestId("onboard.see-community");
-    expect(link.textContent).toContain("See Chicago Builders");
-    expect(link.getAttribute("href")).toBe(`/n/chicago?parentId=${PARENT_ID}`);
-    expect(screen.getByTestId("onboard.build-button").getAttribute("href")).toBe("/build");
-    expect(screen.getByTestId("onboard.home-button")).toBeTruthy();
-  });
-
-  it.each([
-    [
-      "the organization has no tenant",
-      () => {
-        harness.resolveTenantByOrgId.mockRejectedValue({ code: "NOT_FOUND" });
-      },
-    ],
-    [
-      "the tenant has no nodes",
-      () => {
-        harness.resolveTenantByOrgId.mockResolvedValue({ id: "tenant-1" });
-        harness.listNodes.mockResolvedValue([]);
-      },
-    ],
-    [
-      "the profile is not public",
-      () => {
-        harness.resolveTenantByOrgId.mockResolvedValue({ id: "tenant-1" });
-        harness.listNodes.mockResolvedValue([
-          { id: "node-a", slug: "chicago", parentId: null, name: "Alpha" },
-        ]);
-        harness.getDiscoveryNode.mockResolvedValue(null);
-      },
-    ],
-    [
-      "a lookup fails",
-      () => {
-        harness.resolveTenantByOrgId.mockRejectedValue(new Error("Failed to fetch"));
-      },
-    ],
-  ] as const)("hides See community when %s", async (_label, setup) => {
-    mockJoinedCommunity();
-    setup();
-
-    renderOnboard();
-
-    expect(await screen.findByTestId("onboard.build-button")).toBeTruthy();
-    await waitFor(() => expect(harness.resolveTenantByOrgId).toHaveBeenCalled());
-    expect(screen.queryByTestId("onboard.see-community")).toBeNull();
-    expect(screen.getByTestId("onboard.home-button")).toBeTruthy();
-    expect(screen.getByTestId("onboard.continue-on-computer")).toBeTruthy();
   });
 });

@@ -1,5 +1,4 @@
 import {
-  ArrowRightIcon,
   CheckCircleIcon,
   CheckIcon,
   CopyIcon,
@@ -27,7 +26,6 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import type { LoginMessageId } from "@/i18n/catalogs";
 import { useLoginTranslation } from "@/i18n/runtime";
-import { communityPageForOrganization, communityPageHref } from "@/lib/community-page";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { DisplayNameStep } from "./-display-name-step";
 import { OnboardSignUp } from "./-onboard-sign-up";
@@ -52,7 +50,7 @@ export const Route = createFileRoute("/_public/onboard")({
   component: OnboardPage,
 });
 
-type Redeemed = { organizationName: string; eventName: string; organizationId?: string };
+type Redeemed = { organizationName: string; eventName: string };
 
 const PASSKEY_DEFAULT_NAME = "Passkey user";
 
@@ -135,16 +133,6 @@ function OnboardContent() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [redeemError, setRedeemError] = useState<RedeemFailure | null>(null);
   const redeemingRef = useRef(false);
-  const communityPageQuery = useQuery({
-    queryKey: ["onboard-community-page", redeemed?.organizationId],
-    queryFn: () => {
-      const organizationId = redeemed?.organizationId;
-      if (typeof organizationId !== "string") return null;
-      return communityPageForOrganization(apiClient, organizationId);
-    },
-    enabled: typeof redeemed?.organizationId === "string",
-    retry: false,
-  });
 
   const copyPairLink = async (url: string) => {
     try {
@@ -163,13 +151,7 @@ function OnboardContent() {
     void apiClient.auth
       .redeemOnboardingCode({ code })
       .then((result: Redeemed) => {
-        setRedeemed({
-          organizationName: result.organizationName,
-          eventName: result.eventName,
-          ...(typeof result.organizationId === "string"
-            ? { organizationId: result.organizationId }
-            : {}),
-        });
+        setRedeemed({ organizationName: result.organizationName, eventName: result.eventName });
         toast.success(
           translate("auth.onboard.joinedToast", { organization: result.organizationName }),
         );
@@ -227,19 +209,6 @@ function OnboardContent() {
         >
           {translate("auth.onboard.buildPrompts")}
         </Button>
-        {communityPageQuery.data ? (
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full"
-            nativeButton={false}
-            render={<Link to={communityPageHref(communityPageQuery.data)} />}
-            data-testid="onboard.see-community"
-          >
-            {translate("auth.onboard.seeCommunity", { community: redeemed.organizationName })}
-            <ArrowRightIcon />
-          </Button>
-        ) : null}
         <Item variant="muted" data-testid="onboard.continue-on-computer">
           <ItemMedia variant="icon">
             <DesktopIcon />

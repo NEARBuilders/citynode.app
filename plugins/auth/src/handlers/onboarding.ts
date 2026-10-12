@@ -450,7 +450,6 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             alreadyRedeemed: true,
             organizationName,
             eventName: codeRow.eventName,
-            organizationId: codeRow.organizationId,
           };
         }
 
@@ -553,7 +552,6 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           alreadyRedeemed: false,
           organizationName,
           eventName: codeRow.eventName,
-          organizationId: codeRow.organizationId,
         };
       }),
   };
