@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestHandlers, createTestOrg, createTestServices, createTestUser } from "../helpers";
 
 let services: Awaited<ReturnType<typeof createTestServices>>;
@@ -92,19 +92,14 @@ describe("team-targeted email invitations", () => {
 
   it("links invitation emails to the invitation acceptance page", async () => {
     const { owner, org, handlers } = await orgWithTeam();
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
-    try {
-      const invitation = await handlers.invitations.inviteMember({
-        input: { email: "linked@example.com", role: "member", organizationId: org.id },
-        context: { reqHeaders: owner.reqHeaders },
-      });
+    const invitation = await handlers.invitations.inviteMember({
+      input: { email: "linked@example.com", role: "member", organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
 
-      const printed = log.mock.calls.map((call) => call.join(" ")).join("\n");
-      expect(printed).toContain(`http://localhost:3000/orgs/invites/${invitation.id}`);
-      expect(printed).not.toContain("/accept-invitation/");
-    } finally {
-      log.mockRestore();
-    }
+    const sent = services.outbox.findLast((message) => message.to === "linked@example.com");
+    expect(sent?.text).toContain(`http://localhost:3000/orgs/invites/${invitation.id}`);
+    expect(sent?.text).not.toContain("/accept-invitation/");
   });
 });

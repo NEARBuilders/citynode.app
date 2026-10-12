@@ -7,17 +7,15 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
-import {
-  Badge,
-  Bulletin,
-  Button,
-  LocalDate,
-  NodeValidatorTable,
-  SectionHeader,
-} from "@/components";
+import { Bulletin, Button, LocalDate, NodeValidatorTable, SectionHeader } from "@/components";
+import { CommunityMapStatus } from "@/components/discovery/community-map-status";
 import { EventDate, upcomingEvents } from "@/components/discovery/event-onboarding";
+import {
+  EventVisibilityBadge,
+  ImportsWaiting,
+  useVisibilityContext,
+} from "@/components/discovery/event-visibility";
 import { TeamStakeCard, useCanSeeTeamStake } from "@/components/team-stake-card";
 import {
   Item,
@@ -29,7 +27,9 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
+import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
+import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
@@ -37,6 +37,7 @@ import {
   fetchDaoProposals,
   findPendingProposalForPlan,
 } from "@/lib/sputnik-proposals";
+import { OwnerActions } from "./-owner-actions";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,
@@ -51,6 +52,33 @@ function Stat({ label, value, testId }: { label: string; value: string; testId: 
   );
 }
 
+const REDEMPTION_STATS = [
+  {
+    label: "dashboard.redeemedThisMonth",
+    month: "thisMonth",
+    figure: "redeemed",
+    testId: "dashboard-node.stat-redeemed-this-month",
+  },
+  {
+    label: "dashboard.newMembersThisMonth",
+    month: "thisMonth",
+    figure: "newMembers",
+    testId: "dashboard-node.stat-new-members-this-month",
+  },
+  {
+    label: "dashboard.redeemedLastMonth",
+    month: "lastMonth",
+    figure: "redeemed",
+    testId: "dashboard-node.stat-redeemed-last-month",
+  },
+  {
+    label: "dashboard.newMembersLastMonth",
+    month: "lastMonth",
+    figure: "newMembers",
+    testId: "dashboard-node.stat-new-members-last-month",
+  },
+] as const;
+
 function NodeOverview() {
   const translate = useAppTranslation();
   const {
@@ -62,9 +90,9 @@ function NodeOverview() {
     auth,
     canManage,
     inFinanceTeam,
+    canOrganize,
   } = Route.useRouteContext();
   const apiClient = useApiClient();
-  const [now] = useState(() => Date.now());
   const orgId = tenant?.orgId ?? auth.activeOrganizationId;
   const nodeId = selectedNode?.id ?? "";
   const daoQuery = useQuery({
@@ -82,6 +110,12 @@ function NodeOverview() {
     queryFn: () => apiClient.listDiscoveryActivities({ nodeId }),
     enabled: !!nodeId,
     retry: false,
+  });
+  const visibilityContext = useVisibilityContext(nodeId);
+  const { now } = visibilityContext;
+  const redemptions = useQuery({
+    ...onboardingRedemptionsQueryOptions(apiClient, orgId ?? ""),
+    enabled: !!canOrganize && !!orgId,
   });
   const daoOwned = !!tenant && tenant.ownerKind === "dao";
   const pendingConfigQuery = useQuery({
@@ -113,43 +147,96 @@ function NodeOverview() {
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
   const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
   const upcoming = upcomingEvents(activities.data ?? [], now);
-  const contentLink = (tab: "events" | "onboarding") => (
-    <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} search={{ tab }} />
+  const liveCount =
+    visibilityContext.communityPublic === null
+      ? null
+      : upcoming.filter((event) => eventVisibility(event, visibilityContext) === "live").length;
+  const waitingCount = (activities.data ?? []).filter((event) =>
+    isWaitingImport(event, now),
+  ).length;
+  const onboardingLink = (
+    <Link
+      to="/nodes/$nodeId/content"
+      params={{ nodeId: selectedNode.id }}
+      search={{ tab: "onboarding" }}
+    />
   );
 
   const bulletin = selectedNode.metadata?.bulletin;
 
   return (
     <div className="flex flex-col gap-12">
+      <CommunityMapStatus
+        nodeId={selectedNode.id}
+        tenantStatus={tenant?.status}
+        testId="dashboard-node.map-status"
+        settingsLink={
+          canManage && tenant ? (
+            <Link
+              to="/tenant/$tenantId"
+              params={{ tenantId: tenant.id }}
+              search={{ nodeId: selectedNode.id }}
+            />
+          ) : undefined
+        }
+      />
       {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
-      <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-        <Stat
-          label={translate("community.upcoming")}
-          value={activities.isSuccess ? String(upcoming.length) : "—"}
-          testId="dashboard-node.stat-events"
+      <div className="flex flex-col gap-6">
+        <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+          <Stat
+            label={translate("community.upcoming")}
+            value={activities.isSuccess && liveCount !== null ? String(liveCount) : "—"}
+            testId="dashboard-node.stat-events"
+          />
+          <Stat
+            label={translate("common.validators")}
+            value={String(summary.validators.length)}
+            testId="dashboard-node.stat-validators"
+          />
+          <Stat
+            label={translate("dashboard.subcommunities")}
+            value={String(summary.children.length)}
+            testId="dashboard-node.stat-children"
+          />
+          <Stat
+            label={translate("common.staking")}
+            value={
+              summary.stakingValidators.validators.length === 0
+                ? "—"
+                : stakingIsInherited
+                  ? translate("dashboard.stakingInherited")
+                  : translate("dashboard.stakingOwn")
+            }
+            testId="dashboard-node.stat-staking"
+          />
+          {canOrganize &&
+            !redemptions.isError &&
+            REDEMPTION_STATS.map(({ label, month, figure, testId }) => (
+              <Stat
+                key={testId}
+                label={translate(label)}
+                value={redemptions.data ? String(redemptions.data[month][figure]) : "—"}
+                testId={testId}
+              />
+            ))}
+        </dl>
+        {canOrganize && redemptions.isError && (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="dashboard-node.redemptions-error"
+          >
+            {translate("dashboard.redemptionsFailed")}
+          </p>
+        )}
+      </div>
+
+      {canManage && (
+        <OwnerActions
+          nodeId={selectedNode.id}
+          tenantId={tenant?.id ?? null}
+          showPayouts={showTeamStake}
         />
-        <Stat
-          label={translate("common.validators")}
-          value={String(summary.validators.length)}
-          testId="dashboard-node.stat-validators"
-        />
-        <Stat
-          label={translate("dashboard.subcommunities")}
-          value={String(summary.children.length)}
-          testId="dashboard-node.stat-children"
-        />
-        <Stat
-          label={translate("common.staking")}
-          value={
-            summary.stakingValidators.validators.length === 0
-              ? "—"
-              : stakingIsInherited
-                ? translate("dashboard.stakingInherited")
-                : translate("dashboard.stakingOwn")
-          }
-          testId="dashboard-node.stat-staking"
-        />
-      </dl>
+      )}
 
       {daoOwned && canManage && pendingConfig && orgSlug && (
         <Item variant="outline" data-testid="dashboard-node.pending-config-proposal">
@@ -182,22 +269,39 @@ function NodeOverview() {
         <SectionHeader
           title={translate("dashboard.comingUp")}
           action={
-            <Button
-              size="sm"
-              nativeButton={false}
-              render={contentLink("events")}
-              data-testid="dashboard-node.add-event"
-            >
-              <CalendarDotsIcon />
-              {translate("events.add")}
-            </Button>
+            canManage || canOrganize ? (
+              <Button
+                size="sm"
+                nativeButton={false}
+                render={
+                  <Link to="/nodes/$nodeId/events/new" params={{ nodeId: selectedNode.id }} />
+                }
+                data-testid="dashboard-node.add-event"
+              >
+                <CalendarDotsIcon />
+                {translate("events.add")}
+              </Button>
+            ) : undefined
+          }
+        />
+        <ImportsWaiting
+          count={waitingCount}
+          testId="dashboard-node.imports-waiting"
+          link={
+            <Link
+              to="/nodes/$nodeId/content"
+              params={{ nodeId: selectedNode.id }}
+              search={{ tab: "events", review: "imports" }}
+            />
           }
         />
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {activities.isError
               ? translate("dashboard.eventsOwnerHint")
-              : translate("dashboard.noEventsHint")}
+              : canManage || canOrganize
+                ? translate("dashboard.noEventsHint")
+                : translate("dashboard.noEventsMemberHint")}
           </p>
         ) : (
           <ItemGroup>
@@ -207,29 +311,31 @@ function NodeOverview() {
                   <EventDate value={event.startsAt} />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
-                  <ItemTitle>
+                  <ItemTitle className="flex-wrap">
                     {event.title}
-                    {event.status === "draft" && (
-                      <Badge variant="secondary">{translate("events.draft")}</Badge>
-                    )}
+                    <EventVisibilityBadge activity={event} context={visibilityContext} />
                   </ItemTitle>
                   <ItemDescription>
                     {event.startsAt && <LocalDate value={event.startsAt} format="datetime" />}
                     {event.venue ? ` · ${event.venue}` : ""}
                   </ItemDescription>
                 </ItemContent>
-                <ItemActions>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    nativeButton={false}
-                    render={contentLink("onboarding")}
-                    aria-label={translate("station.onboardingNamed", { event: event.title ?? "" })}
-                  >
-                    <QrCodeIcon />
-                    <span className="hidden sm:inline">{translate("org.onboarding")}</span>
-                  </Button>
-                </ItemActions>
+                {canOrganize && (
+                  <ItemActions>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      nativeButton={false}
+                      render={onboardingLink}
+                      aria-label={translate("station.onboardingNamed", {
+                        event: event.title ?? "",
+                      })}
+                    >
+                      <QrCodeIcon />
+                      <span className="hidden sm:inline">{translate("org.onboarding")}</span>
+                    </Button>
+                  </ItemActions>
+                )}
               </Item>
             ))}
           </ItemGroup>
@@ -237,18 +343,21 @@ function NodeOverview() {
       </section>
 
       {showTeamStake && (
-        <TeamStakeCard
-          target={teamStake}
-          pending={daoQuery.isLoading}
-          teamLinked={
-            !!resolveTeamAccountId({
-              daoAccountId: daoQuery.data?.daoAccountId,
-              tenantAccountId: tenant?.accountId,
-              tenantOwnerKind: tenant?.ownerKind,
-            })
-          }
-          validatorsTenantId={canManage ? tenant?.id : undefined}
-        />
+        <div id="payouts" className="scroll-mt-20">
+          <TeamStakeCard
+            target={teamStake}
+            pending={daoQuery.isLoading}
+            teamLinked={
+              !!resolveTeamAccountId({
+                daoAccountId: daoQuery.data?.daoAccountId,
+                tenantAccountId: tenant?.accountId,
+                tenantOwnerKind: tenant?.ownerKind,
+              })
+            }
+            validatorsTenantId={canManage ? tenant?.id : undefined}
+            linkOrganizationId={canManage ? (orgId ?? undefined) : undefined}
+          />
+        </div>
       )}
 
       <section className="flex flex-col gap-6">

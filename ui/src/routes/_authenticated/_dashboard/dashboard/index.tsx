@@ -17,6 +17,7 @@ import {
   SectionHeader,
   Skeleton,
 } from "@/components";
+import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
@@ -25,17 +26,21 @@ import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
+import { canManageCommunity } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
-import { getNextSteps } from "./-next-steps";
+import { getNextSteps, getNodeSetupSteps } from "./-next-steps";
 import { NextStepsList } from "./-next-steps-list";
+import { NodeSetupChecklist } from "./-node-setup-checklist";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
-  validateSearch: (search: Record<string, unknown>): { restricted?: FeatureArea | "admin" } =>
-    search.restricted === "admin"
-      ? { restricted: "admin" }
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { restricted?: FeatureArea | "admin" | "owners" } =>
+    search.restricted === "admin" || search.restricted === "owners"
+      ? { restricted: search.restricted }
       : typeof search.restricted === "string" && isFeatureArea(search.restricted)
         ? { restricted: search.restricted }
         : {},
@@ -105,13 +110,32 @@ function Home() {
     staleTime: 30 * 1000,
   });
 
-  const bulletin = nodes.data?.[0]?.metadata?.bulletin;
-
   const user = session?.user;
+  const canManage = user?.role === "admin" || canManageCommunity(authContext.data);
+  const node = nodes.data?.[0] ?? null;
+  const nodeId = node?.id ?? "";
+  const profile = useQuery({
+    ...discoveryProfileQueryOptions(apiClient, nodeId),
+    enabled: canManage && !!nodeId,
+  });
+  const activities = useQuery({
+    queryKey: ["discovery-activities", nodeId],
+    queryFn: () => apiClient.listDiscoveryActivities({ nodeId }),
+    enabled: canManage && !!nodeId,
+    retry: false,
+  });
+  const onboardingCodes = useQuery({
+    queryKey: ["home-onboarding-codes", activeOrgId],
+    queryFn: () => apiClient.auth.listOnboardingCodes({ organizationId: activeOrgId }),
+    enabled: canManage && !!nodeId && !!activeOrgId,
+    retry: false,
+  });
+
+  const bulletin = node?.metadata?.bulletin;
+
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
   const orgs = organizations.data ?? [];
   const activeOrg = orgs.find((org) => org.id === activeOrgId) ?? null;
-  const orgRole = authContext.data?.organization?.member?.role;
   const isAdmin = user?.role === "admin";
   const community = tenant.data ? { name: tenant.data.name, tenantId: tenant.data.id } : null;
   const loading =
@@ -127,11 +151,21 @@ function Home() {
       organizationCount: orgs.length,
       activeOrganizationName: activeOrg?.name ?? null,
       community,
-      canManageCommunity: isAdmin || orgRole === "owner" || orgRole === "admin",
+      canManageCommunity: canManage,
       isAdmin,
     },
     translate,
   );
+
+  const setupSteps =
+    canManage && community && node && profile.isSuccess && activities.isSuccess
+      ? getNodeSetupSteps({
+          profile: profile.data,
+          eventCount: activities.data.length,
+          onboardingCodeCount: onboardingCodes.data?.length ?? 0,
+        })
+      : null;
+  const showSetup = !!setupSteps && setupSteps.some((step) => !step.done);
 
   const [addEmailOpen, setAddEmailOpen] = useState(false);
 
@@ -170,6 +204,14 @@ function Home() {
               <InvitationSteps invitations={pending} />
             </section>
           )}
+          {showSetup && setupSteps && community && node && (
+            <NodeSetupChecklist
+              steps={setupSteps}
+              communityName={community.name}
+              nodeId={node.id}
+              tenantId={community.tenantId}
+            />
+          )}
           <section className="flex flex-col gap-6">
             <SectionHeader title={translate("dashboard.nextSteps")} />
             {loading ? (
@@ -181,8 +223,7 @@ function Home() {
             ) : (
               <NextStepsList
                 steps={steps}
-                tenantId={community?.tenantId ?? null}
-                primary={pending.length === 0}
+                primary={pending.length === 0 && !showSetup}
                 onAddEmail={() => setAddEmailOpen(true)}
               />
             )}
