@@ -1,6 +1,7 @@
 import { NetworkIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Button, EmptyState, PageContainer } from "@/components";
+import { discoveryNodeQueryOptions } from "@/components/discovery/event-visibility";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
@@ -65,7 +66,12 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       };
     }
 
-    const summary = await context.apiClient.getNodeSummary({ nodeId: selectedNode.id });
+    const [summary] = await Promise.all([
+      context.apiClient.getNodeSummary({ nodeId: selectedNode.id }),
+      context.queryClient.prefetchQuery(
+        discoveryNodeQueryOptions(context.apiClient, selectedNode.id),
+      ),
+    ]);
     const stakingSourceNode =
       summary.stakingValidators.sourceNodeId === selectedNode.id
         ? selectedNode

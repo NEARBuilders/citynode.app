@@ -30,6 +30,7 @@ export async function seedTenant(input) {
     allowBackendOverrides = false,
     allowSsr = false,
     ownerKind = "platform",
+    status = "active",
   } = input;
 
   const root = findRepoRoot();
@@ -83,7 +84,7 @@ export async function seedTenant(input) {
         accountId,
         orgId,
         name,
-        "active",
+        status,
         ownerKind,
         allowUiOverrides,
         allowBackendOverrides,
@@ -174,15 +175,17 @@ async function withApiTable(table, run) {
 }
 
 export async function seedDiscoveryProfile(input) {
-  const { nodeId, published } = input;
+  const { nodeId, published, latitude = null, longitude = null } = input;
   if (!nodeId) throw new Error("seedDiscoveryProfile requires nodeId");
+  if ((latitude === null) !== (longitude === null))
+    throw new Error("seedDiscoveryProfile requires both coordinates or neither");
   const data = {
     nodeId,
     summary: "",
-    location: "",
+    location: input.location ?? (latitude === null ? "" : "Regression City"),
     region: "",
-    latitude: null,
-    longitude: null,
+    latitude,
+    longitude,
     channels: [],
     published: Boolean(published),
   };

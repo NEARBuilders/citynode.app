@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import { Bulletin, Button, LocalDate, NodeValidatorTable, SectionHeader } from "@/components";
+import { CommunityMapStatus } from "@/components/discovery/community-map-status";
 import { EventDate, upcomingEvents } from "@/components/discovery/event-onboarding";
 import {
   EventVisibilityBadge,
@@ -131,6 +132,20 @@ function NodeOverview() {
 
   return (
     <div className="flex flex-col gap-12">
+      <CommunityMapStatus
+        nodeId={selectedNode.id}
+        tenantStatus={tenant?.status}
+        testId="dashboard-node.map-status"
+        settingsLink={
+          canManage && tenant ? (
+            <Link
+              to="/tenant/$tenantId"
+              params={{ tenantId: tenant.id }}
+              search={{ nodeId: selectedNode.id }}
+            />
+          ) : undefined
+        }
+      />
       {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         <Stat

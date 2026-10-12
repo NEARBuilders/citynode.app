@@ -10,7 +10,12 @@ import { discoveryProfileQueryOptions } from "@/components/discovery/profile-edi
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
-import { CommunityHeader, ensureCommunityHeaderData } from "../../dashboard/node/-community-header";
+import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
+import {
+  CommunityHeader,
+  communityAuthContextQueryOptions,
+  ensureCommunityHeaderData,
+} from "../../dashboard/node/-community-header";
 
 type ContentTab = "events" | "onboarding" | "bulletin";
 type ContentSearch = { tab?: ContentTab; review?: "imports" };
@@ -31,6 +36,14 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
         ? [
             queryClient.prefetchQuery(discoveryProfileQueryOptions(apiClient, params.nodeId)),
             queryClient.prefetchQuery(activitiesQueryOptions(apiClient, params.nodeId)),
+            queryClient
+              .ensureQueryData(nodeByIdQueryOptions(apiClient, params.nodeId))
+              .then((node) =>
+                node?.tenantId
+                  ? queryClient.prefetchQuery(tenantByIdQueryOptions(apiClient, node.tenantId))
+                  : undefined,
+              )
+              .catch(() => undefined),
           ]
         : []),
     ]);
@@ -58,6 +71,15 @@ function CommunityContent() {
   const { auth } = Route.useRouteContext();
   const api = useApiClient();
   const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
+  const tenant = useQuery(tenantByIdQueryOptions(api, tenantId ?? ""));
+  const authContext = useQuery(
+    communityAuthContextQueryOptions(api, auth.activeOrganizationId ?? null),
+  );
+  const orgRole = authContext.data?.organization?.member?.role;
+  const managesTenant =
+    tenant.data?.orgId === auth.activeOrganizationId &&
+    (orgRole === "owner" || orgRole === "admin");
+  const canManage = auth.isAdmin || managesTenant;
 
   return (
     <PageContainer variant="wide">
@@ -76,8 +98,9 @@ function CommunityContent() {
         <EventsEditor
           nodeId={nodeId}
           reviewImports={review === "imports"}
+          tenantStatus={tenant.data?.status}
           profileLink={
-            tenantId ? (
+            tenantId && canManage ? (
               <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
             ) : undefined
           }
