@@ -4,6 +4,7 @@ import { seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
 import {
   authFetch,
   FETCH_TIMEOUT_MS,
+  markEmailVerified,
   refreshSessionCookies,
   signInAnonymously,
   useCookieHeader,
@@ -49,6 +50,7 @@ async function seedCommunity() {
   ).json();
   const memberCookie = await signInAnonymously();
   const memberSession = await (await authFetch("/get-session", memberCookie)).json();
+  markEmailVerified(memberSession.user.id);
   const invitation = await (
     await authFetch("/organization/invite-member", ownerCookie, {
       email: memberSession.user.email,

@@ -57,9 +57,11 @@ import { ReportContent } from "./report-content";
 export function ActivityEditor({
   nodeId,
   reviewImports = false,
+  canPost = true,
 }: {
   nodeId: string;
   reviewImports?: boolean;
+  canPost?: boolean;
 }) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
@@ -140,7 +142,7 @@ export function ActivityEditor({
             : translate("events.hide")}
         </Button>
       )}
-      {a.luma ? (
+      {a.kind !== "event" && !canPost ? null : a.luma ? (
         <Button
           size="sm"
           variant="ghost"
@@ -209,21 +211,23 @@ export function ActivityEditor({
             <CalendarDotsIcon />
             {translate("events.add")}
           </Button>
-          <Button
-            data-testid="discovery-new-social"
-            variant="outline"
-            nativeButton={false}
-            render={
-              <Link
-                to="/nodes/$nodeId/events/new"
-                params={{ nodeId }}
-                search={{ kind: "social" }}
-              />
-            }
-          >
-            <ChatCircleIcon />
-            {translate("events.sharePost")}
-          </Button>
+          {canPost && (
+            <Button
+              data-testid="discovery-new-social"
+              variant="outline"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/nodes/$nodeId/events/new"
+                  params={{ nodeId }}
+                  search={{ kind: "social" }}
+                />
+              }
+            >
+              <ChatCircleIcon />
+              {translate("events.sharePost")}
+            </Button>
+          )}
         </div>
         <Button
           variant="ghost"

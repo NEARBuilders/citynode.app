@@ -5,6 +5,7 @@ import { seedDiscoveryProfile, seedNode, seedTenant } from "../../lib/seed-tenan
 import {
   authFetch,
   FETCH_TIMEOUT_MS,
+  markEmailVerified,
   signInAnonymously,
   useCookieHeader,
 } from "../helpers/auth-session";
@@ -144,6 +145,7 @@ test.describe("community map status", () => {
 
     const memberCookie = await signInAnonymously();
     const session = await (await authFetch("/get-session", memberCookie)).json();
+    markEmailVerified(session.user.id);
     const invitation = await (
       await authFetch("/organization/invite-member", ownerCookie, {
         email: session.user.email,

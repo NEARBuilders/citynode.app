@@ -229,7 +229,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           .from(schema.onboardingCode)
           .where(eq(schema.onboardingCode.organizationId, organizationId))
           .orderBy(desc(schema.onboardingCode.createdAt))
-          .limit(20);
+          .limit(100);
         return rows.map(toSummary);
       }),
 

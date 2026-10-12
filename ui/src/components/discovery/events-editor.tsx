@@ -11,11 +11,13 @@ export function EventsEditor({
   tenantStatus,
   profileLink,
   reviewImports,
+  canManage = true,
 }: {
   nodeId: string;
   tenantStatus: TenantStatus | undefined;
   profileLink?: ReactElement;
   reviewImports?: boolean;
+  canManage?: boolean;
 }) {
   const api = useApiClient();
   const profile = useQuery(discoveryProfileQueryOptions(api, nodeId));
@@ -25,12 +27,12 @@ export function EventsEditor({
         <CommunityMapStatus
           nodeId={nodeId}
           tenantStatus={tenantStatus}
-          settingsLink={profileLink}
+          settingsLink={canManage ? profileLink : undefined}
           hiddenHint="community.hiddenHint"
           testId="content-map-status"
         />
       )}
-      <ActivityEditor nodeId={nodeId} reviewImports={reviewImports} />
+      <ActivityEditor nodeId={nodeId} reviewImports={reviewImports} canPost={canManage} />
     </div>
   );
 }

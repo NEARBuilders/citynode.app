@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
 import { PageContainer } from "@/components";
 import { activitiesQueryOptions } from "@/components/discovery/activity-form";
@@ -27,6 +27,11 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
     ...(TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {}),
     ...(search.review === "imports" ? { review: "imports" as const } : {}),
   }),
+  beforeLoad: ({ context, search }) => {
+    if (search.tab === "bulletin" && !context.canManageCommunity) {
+      throw redirect({ to: "/dashboard", search: { restricted: "owners" } });
+    }
+  },
   loaderDeps: ({ search }) => ({ tab: search.tab ?? "events" }),
   loader: async ({ context, params, deps }) => {
     const { queryClient, apiClient } = context;
@@ -99,6 +104,7 @@ function CommunityContent() {
           nodeId={nodeId}
           reviewImports={review === "imports"}
           tenantStatus={tenant.data?.status}
+          canManage={canManage}
           profileLink={
             tenantId && canManage ? (
               <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />

@@ -84,6 +84,13 @@ describe("node application", () => {
     expect(getDefaultOrganizationId(null, organizations)).toBe("org-1");
     expect(getDefaultOrganizationId("org-2", organizations)).toBeNull();
     expect(getDefaultOrganizationId(null, [])).toBeNull();
+    expect(
+      getDefaultOrganizationId(null, [
+        { id: "waiting", status: "pending" },
+        { id: "approved", status: "active" },
+      ]),
+    ).toBe("approved");
+    expect(getDefaultOrganizationId(null, [{ id: "waiting", status: "pending" }])).toBeNull();
   });
 
   it("submits the exact node proposal envelope", async () => {

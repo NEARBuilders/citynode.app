@@ -2,7 +2,7 @@ import "@orpc/experimental-effect/extensions/effect";
 import { call, implement, type ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { Context, Effect } from "effect";
-import { type AuthConfig, createAuthInstance } from "../src/auth-instance";
+import { type AuthConfig, createAuthInstance, type EmailMessage } from "../src/auth-instance";
 import { contract, type InferInput } from "../src/contract";
 import { createDatabaseDriver } from "../src/db";
 import { loadMigrations, migrate } from "../src/db/migrate";
@@ -36,6 +36,7 @@ export async function createTestServices(configOverrides?: Partial<AuthConfig>) 
   if (migrations.length > 0) {
     await Effect.runPromise(migrate(driver.db, migrations));
   }
+  const outbox: EmailMessage[] = [];
   const auth = createAuthInstance(
     {
       secret: process.env.BETTER_AUTH_SECRET!,
@@ -44,6 +45,13 @@ export async function createTestServices(configOverrides?: Partial<AuthConfig>) 
       ...configOverrides,
     },
     driver.db,
+    undefined,
+    {
+      deliverEmail: async (message) => {
+        outbox.push(message);
+        return true;
+      },
+    },
   );
 
   const services: PluginServices = {
@@ -57,7 +65,7 @@ export async function createTestServices(configOverrides?: Partial<AuthConfig>) 
     onboardingCodeCipher: createOnboardingCodeCipher(process.env.BETTER_AUTH_SECRET!),
   };
 
-  return { services, driver };
+  return { services, driver, outbox };
 }
 
 export interface TestUser {

@@ -177,6 +177,7 @@ export function ActivityForm({
             value={draft.url}
             onChange={(e) => update("url", e.target.value)}
           />
+          <FieldDescription>{translate("events.linkHint")}</FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="activity-source">{translate("events.organizer")}</FieldLabel>
