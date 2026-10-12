@@ -288,6 +288,7 @@ describe("apply route submission", () => {
     expect((await screen.findByTestId("apply.current-status")).textContent).toBe(expected);
     expect(screen.getByText("existing-1")).toBeTruthy();
     expect(screen.queryByTestId("apply.submit")).toBeNull();
+    expect(screen.queryByTestId("apply.progress") !== null).toBe(reviewStatus === "approved");
     if (reviewStatus === "rejected") {
       expect(screen.getByText("More detail needed")).toBeTruthy();
       fireEvent.click(screen.getByTestId("apply.revise"));

@@ -79,8 +79,11 @@ export function ApplySubmitted({
           </p>
           {rejectionReason && <p className="text-sm text-muted-foreground">{rejectionReason}</p>}
         </div>
-        {progress && (
-          <div className="w-full max-w-sm rounded-lg border border-border p-5">
+        {progress?.reviewStatus === "approved" && (
+          <div
+            className="w-full max-w-sm rounded-lg border border-border p-5"
+            data-testid="apply.progress"
+          >
             <ApplicationProgressList proposal={progress} daoAccountId={daoAccountId ?? null} />
           </div>
         )}

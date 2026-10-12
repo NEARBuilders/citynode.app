@@ -1,5 +1,5 @@
 import { GavelIcon } from "@phosphor-icons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -76,9 +76,11 @@ function ProposalDetailPage() {
     [],
   );
   const proposalQueryKey = proposalReviewQueryKeys.detail(proposalId, pluginId, entityId);
-  const proposalQuery = useQuery(
-    adminProposalDetailQueryOptions(apiClient, proposalId, pluginId, entityId),
-  );
+  const applyingHere = useIsMutating({ mutationKey: proposalQueryKey }) > 0;
+  const proposalQuery = useQuery({
+    ...adminProposalDetailQueryOptions(apiClient, proposalId, pluginId, entityId),
+    refetchInterval: applyingHere ? 2000 : false,
+  });
   const reviewHistoryQuery = useQuery(proposalReviewHistoryQueryOptions(apiClient, pluginId));
 
   useEffect(() => {
@@ -91,6 +93,7 @@ function ProposalDetailPage() {
   }, [daoConnection.daoAccountId, daoConnection.status, verifiedDaoAccountId]);
 
   const reviewMutation = useMutation({
+    mutationKey: proposalQueryKey,
     mutationFn: async ({
       proposal,
       action,
