@@ -101,10 +101,10 @@ export function crumbsFor(
       }
       return [
         MY_COMMUNITY,
-        page(context.tab === "onboarding" ? t("nav.qrOnboarding") : t("events.title")),
+        page(context.tab === "onboarding" ? t("nav.onboarding") : t("events.title")),
       ];
     case "tenant":
-      return [MY_COMMUNITY, page(t("nav.profileSettings"))];
+      return [MY_COMMUNITY, page(t("nav.communitySettings"))];
     case "explore":
       return [page(EXPLORE.label)];
     case "n":

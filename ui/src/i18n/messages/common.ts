@@ -1198,7 +1198,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Paramètres de la communauté",
     "社区设置",
   ],
-  "nav.directory": ["Curation", "Curaduría", "Curation", "内容审核"],
+  "nav.directory": ["Directory", "Directorio", "Annuaire", "目录"],
   "nav.docs": ["Docs", "Documentación", "Documentation", "文档"],
   "nav.editCommunity": ["Edit community", "Editar comunidad", "Modifier la communauté", "编辑社区"],
   "nav.editEvent": ["Edit event", "Editar evento", "Modifier l’événement", "编辑活动"],
@@ -1259,7 +1259,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Afficher ou masquer {name}",
     "展开或收起 {name}",
   ],
-  "nav.workspace": ["Your community", "Tu comunidad", "Votre communauté", "你的社区"],
+  "nav.workspace": ["Workspace", "Espacio de trabajo", "Espace de travail", "工作空间"],
   "permissions.adminOnly": [
     "{area} is only for platform admins.",
     "{area} solo está disponible para administradores de plataforma.",
@@ -1533,14 +1533,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Créez le site d’une communauté et confiez-le à son DAO.",
     "创建社区站点并移交给其 DAO。",
   ],
-  "nav.membersRoles": ["Members & roles", "Miembros y roles", "Membres et rôles", "成员与角色"],
-  "nav.profileSettings": [
-    "Profile & settings",
-    "Perfil y ajustes",
-    "Profil et paramètres",
-    "资料与设置",
-  ],
-  "nav.qrOnboarding": ["QR check-in", "Registro con QR", "Accueil par QR", "二维码签到"],
   "ownerActions.title": ["Run your node", "Gestiona tu nodo", "Gérer votre nœud", "运营你的节点"],
   "ownerActions.eventHint": [
     "Publish it to your page and the Explore map.",

@@ -53,7 +53,7 @@ export function CommunityNav({
           },
           {
             value: "onboarding" as const,
-            label: translate("nav.qrOnboarding"),
+            label: translate("org.onboarding"),
             path: `/nodes/${nodeId}/content`,
             link: (
               <Link
@@ -93,7 +93,7 @@ export function CommunityNav({
       ? [
           {
             value: "settings" as const,
-            label: translate("nav.profileSettings"),
+            label: translate("tenant.settings"),
             path: `/tenant/${tenantId}`,
             link: <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />,
           },

@@ -246,7 +246,7 @@ function NodeOverview() {
                       })}
                     >
                       <QrCodeIcon />
-                      <span className="hidden sm:inline">{translate("nav.qrOnboarding")}</span>
+                      <span className="hidden sm:inline">{translate("org.onboarding")}</span>
                     </Button>
                   </ItemActions>
                 )}

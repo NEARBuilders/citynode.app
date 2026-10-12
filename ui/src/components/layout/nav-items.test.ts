@@ -27,7 +27,7 @@ function flattenSlugs(items: SidebarItem[]): string[] {
 }
 
 describe("sidebar navigation", () => {
-  it("orders the sidebar as Home, Explore, Stake, My community, Members & roles, Curation, Admin", () => {
+  it("orders the sidebar as Home, Explore, Stake, My community, Organization, Directory, Admin", () => {
     const labels = filterSidebarByRole(buildNavItems({ isAdmin: true }), "admin").map(
       (item) => item.label,
     );
@@ -36,13 +36,13 @@ describe("sidebar navigation", () => {
       "Explore",
       "Stake",
       "My community",
-      "Members & roles",
-      "Curation",
+      "Organization",
+      "Directory",
       "Admin",
     ]);
   });
 
-  it("shows Members & roles only to people who manage the organization", () => {
+  it("shows Organization only to people who manage the organization", () => {
     const slugs = (context: Parameters<typeof buildNavItems>[0]) =>
       filterSidebarByRole(buildNavItems(context), "member").map(navSlug);
     expect(slugs({ hasOrganization: true })).not.toContain("orgs");
@@ -113,7 +113,7 @@ describe("sidebar navigation", () => {
 
   it("groups items into labelled sections", () => {
     const sections = groupSidebarItems(filterSidebarByRole(NAV_ITEMS, "admin"));
-    expect(sections.map((section) => section.label)).toEqual([null, "Your community", "Manage"]);
+    expect(sections.map((section) => section.label)).toEqual([null, "Workspace", "Manage"]);
   });
 });
 
@@ -278,13 +278,13 @@ describe("breadcrumbs", () => {
 
   it("names pages instead of echoing path segments", () => {
     expect(labels("/dashboard")).toEqual(["Home"]);
-    expect(labels("/discover")).toEqual(["Curation"]);
+    expect(labels("/discover")).toEqual(["Directory"]);
     expect(labels("/dashboard/node/proposals")).toEqual(["My community", "Proposals"]);
     expect(labels("/nodes/abc/content")).toEqual(["My community", "Events"]);
     expect(
       crumbsFor("/nodes/abc/content", { tab: "onboarding" }).map((crumb) => crumb.label),
-    ).toEqual(["My community", "QR check-in"]);
-    expect(labels("/tenant/t1")).toEqual(["My community", "Profile & settings"]);
+    ).toEqual(["My community", "Onboarding"]);
+    expect(labels("/tenant/t1")).toEqual(["My community", "Community settings"]);
     expect(labels("/settings/api-keys")).toEqual(["Settings", "API keys"]);
     expect(labels("/admin/tenants/new")).toEqual(["Admin", "Sites", "New site"]);
     expect(labels("/apply")).toEqual(["Start a community"]);

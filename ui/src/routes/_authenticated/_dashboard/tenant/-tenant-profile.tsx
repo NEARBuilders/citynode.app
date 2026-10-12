@@ -7,7 +7,7 @@ export function TenantProfile({ nodeId }: { nodeId: string }) {
   return (
     <section id="profile" className="flex scroll-mt-20 flex-col gap-6">
       <SectionHeader
-        title={translate("ownerActions.profile")}
+        title={translate("community.profile")}
         description={translate("ownerActions.profileSectionHint")}
         sectionTestId="tenant.section.profile"
       />

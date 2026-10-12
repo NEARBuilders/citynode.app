@@ -168,7 +168,7 @@ export function buildNavItems(
             ? [
                 {
                   icon: UsersThreeIcon,
-                  label: t("nav.membersRoles"),
+                  label: t("common.organization"),
                   slug: "orgs",
                   to: orgPath,
                   activePrefixes: ["/orgs"],
