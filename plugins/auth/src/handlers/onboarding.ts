@@ -32,7 +32,7 @@ function membershipPolicyOf(services: {
   return services.membershipPolicy ?? createOrganizationMembershipPolicy();
 }
 
-async function requireOrganizerContext(
+export async function requireOrganizerContext(
   services: any,
   context: any,
   inputOrganizationId?: string,

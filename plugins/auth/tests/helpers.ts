@@ -315,6 +315,13 @@ export function createTestHandlers(services: PluginServices) {
         call(joinHandlers.listOnboardingJoins, opts.input, {
           context: { ...opts.context, "effect/context": effectContext },
         }),
+      getOnboardingRedemptions: (opts: {
+        input: InferInput<"getOnboardingRedemptions">;
+        context: { reqHeaders?: Record<string, string> };
+      }) =>
+        call(joinHandlers.getOnboardingRedemptions, opts.input, {
+          context: { ...opts.context, "effect/context": effectContext },
+        }),
     },
     members: wrap(createMemberHandlers(builder, requireAuth)),
     invitations: wrap(createInvitationHandlers(builder, requireAuth)),
