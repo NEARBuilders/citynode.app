@@ -92,7 +92,7 @@ describe("login language selector", () => {
     expect(screen.getByRole("heading").textContent).toBe("Sign in to CityNode");
     expect(document.documentElement.lang).toBe("en");
 
-    fireEvent.click(screen.getByTestId("login.language-select"));
+    fireEvent.click(screen.getByTestId("login-language-select"));
     const spanish = await screen.findByRole("option", { name: "Español" });
     fireEvent.pointerDown(spanish, { pointerType: "mouse" });
     fireEvent.click(spanish);
@@ -124,12 +124,12 @@ describe("login language selector", () => {
       </LoginI18nProvider>,
     );
 
-    fireEvent.click(screen.getByTestId("login.language-select"));
+    fireEvent.click(screen.getByTestId("login-language-select"));
     const french = await screen.findByRole("option", { name: "Français" });
     fireEvent.keyDown(french, { key: "Enter" });
     expect(screen.getByRole("heading").textContent).toBe("Se connecter à CityNode");
 
-    fireEvent.click(screen.getByTestId("login.language-select"));
+    fireEvent.click(screen.getByTestId("login-language-select"));
     const chinese = await screen.findByRole("option", { name: "中文" });
     fireEvent.pointerDown(chinese, { pointerType: "mouse" });
     fireEvent.click(chinese);
