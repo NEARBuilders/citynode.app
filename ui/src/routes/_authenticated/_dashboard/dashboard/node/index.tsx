@@ -29,6 +29,7 @@ import {
 import { useAppTranslation } from "@/i18n/runtime";
 import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
+import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
@@ -50,6 +51,33 @@ function Stat({ label, value, testId }: { label: string; value: string; testId: 
   );
 }
 
+const REDEMPTION_STATS = [
+  {
+    label: "dashboard.redeemedThisMonth",
+    month: "thisMonth",
+    figure: "redeemed",
+    testId: "dashboard-node.stat-redeemed-this-month",
+  },
+  {
+    label: "dashboard.newMembersThisMonth",
+    month: "thisMonth",
+    figure: "newMembers",
+    testId: "dashboard-node.stat-new-members-this-month",
+  },
+  {
+    label: "dashboard.redeemedLastMonth",
+    month: "lastMonth",
+    figure: "redeemed",
+    testId: "dashboard-node.stat-redeemed-last-month",
+  },
+  {
+    label: "dashboard.newMembersLastMonth",
+    month: "lastMonth",
+    figure: "newMembers",
+    testId: "dashboard-node.stat-new-members-last-month",
+  },
+] as const;
+
 function NodeOverview() {
   const translate = useAppTranslation();
   const {
@@ -61,6 +89,7 @@ function NodeOverview() {
     auth,
     canManage,
     inFinanceTeam,
+    canOrganize,
   } = Route.useRouteContext();
   const apiClient = useApiClient();
   const orgId = tenant?.orgId ?? auth.activeOrganizationId;
@@ -83,6 +112,10 @@ function NodeOverview() {
   });
   const visibilityContext = useVisibilityContext(nodeId);
   const { now } = visibilityContext;
+  const redemptions = useQuery({
+    ...onboardingRedemptionsQueryOptions(apiClient, orgId ?? ""),
+    enabled: !!canOrganize && !!orgId,
+  });
   const daoOwned = !!tenant && tenant.ownerKind === "dao";
   const pendingConfigQuery = useQuery({
     queryKey: ["dashboard-node", "pending-config-proposal", tenant?.accountId],
@@ -147,34 +180,54 @@ function NodeOverview() {
         }
       />
       {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
-      <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-        <Stat
-          label={translate("community.upcoming")}
-          value={activities.isSuccess && liveCount !== null ? String(liveCount) : "—"}
-          testId="dashboard-node.stat-events"
-        />
-        <Stat
-          label={translate("common.validators")}
-          value={String(summary.validators.length)}
-          testId="dashboard-node.stat-validators"
-        />
-        <Stat
-          label={translate("dashboard.subcommunities")}
-          value={String(summary.children.length)}
-          testId="dashboard-node.stat-children"
-        />
-        <Stat
-          label={translate("common.staking")}
-          value={
-            summary.stakingValidators.validators.length === 0
-              ? "—"
-              : stakingIsInherited
-                ? translate("dashboard.stakingInherited")
-                : translate("dashboard.stakingOwn")
-          }
-          testId="dashboard-node.stat-staking"
-        />
-      </dl>
+      <div className="flex flex-col gap-6">
+        <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+          <Stat
+            label={translate("community.upcoming")}
+            value={activities.isSuccess && liveCount !== null ? String(liveCount) : "—"}
+            testId="dashboard-node.stat-events"
+          />
+          <Stat
+            label={translate("common.validators")}
+            value={String(summary.validators.length)}
+            testId="dashboard-node.stat-validators"
+          />
+          <Stat
+            label={translate("dashboard.subcommunities")}
+            value={String(summary.children.length)}
+            testId="dashboard-node.stat-children"
+          />
+          <Stat
+            label={translate("common.staking")}
+            value={
+              summary.stakingValidators.validators.length === 0
+                ? "—"
+                : stakingIsInherited
+                  ? translate("dashboard.stakingInherited")
+                  : translate("dashboard.stakingOwn")
+            }
+            testId="dashboard-node.stat-staking"
+          />
+          {canOrganize &&
+            !redemptions.isError &&
+            REDEMPTION_STATS.map(({ label, month, figure, testId }) => (
+              <Stat
+                key={testId}
+                label={translate(label)}
+                value={redemptions.data ? String(redemptions.data[month][figure]) : "—"}
+                testId={testId}
+              />
+            ))}
+        </dl>
+        {canOrganize && redemptions.isError && (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="dashboard-node.redemptions-error"
+          >
+            {translate("dashboard.redemptionsFailed")}
+          </p>
+        )}
+      </div>
 
       {daoOwned && canManage && pendingConfig && orgSlug && (
         <Item variant="outline" data-testid="dashboard-node.pending-config-proposal">

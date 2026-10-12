@@ -16,7 +16,7 @@ function hashCode(code: string) {
   return createHash("sha256").update(code).digest("hex");
 }
 
-async function openAuthDatabase() {
+export async function openAuthDatabase() {
   const regressionEnv = computeRegressionEnv();
   return createAuthTestInstance({
     authDatabaseUrl: regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "",
