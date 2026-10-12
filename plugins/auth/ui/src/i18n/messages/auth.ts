@@ -189,6 +189,12 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ouvrir {organization}",
     "打开 {organization}",
   ],
+  "auth.onboard.seeCommunity": [
+    "See {community}",
+    "Ver {community}",
+    "Voir {community}",
+    "查看 {community}",
+  ],
   "auth.onboard.desktop": [
     "Continue on your computer",
     "Continuar en tu ordenador",

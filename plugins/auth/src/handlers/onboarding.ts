@@ -32,10 +32,11 @@ function membershipPolicyOf(services: {
   return services.membershipPolicy ?? createOrganizationMembershipPolicy();
 }
 
-async function requireOrganizerContext(
+export async function requireOrganizerContext(
   services: any,
   context: any,
   inputOrganizationId?: string,
+  forbiddenAction = "manage onboarding codes",
 ): Promise<{ userId: string; organizationId: string; headers: Headers }> {
   const headers = createHeaders(context.reqHeaders);
   const session = await safeAuthApi(() => services.auth.api.getSession({ headers }));
@@ -68,8 +69,7 @@ async function requireOrganizerContext(
     (role !== null && (await belongsToEventsTeam(services.db, userId, organizationId)));
   if (!isOrganizer) {
     throw new ORPCError("FORBIDDEN", {
-      message:
-        "Only organizers — organization owners, admins, or members of a team with the events area — can manage onboarding codes",
+      message: `Only organizers — organization owners, admins, or members of a team with the events area — can ${forbiddenAction}`,
     });
   }
   return { userId, organizationId, headers };
@@ -420,6 +420,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           return {
             success: true,
             alreadyRedeemed: true,
+            organizationId: codeRow.organizationId,
             organizationName,
             eventName: codeRow.eventName,
           };
@@ -528,6 +529,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
         return {
           success: true,
           alreadyRedeemed: false,
+          organizationId: codeRow.organizationId,
           organizationName,
           eventName: codeRow.eventName,
         };

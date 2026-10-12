@@ -159,6 +159,7 @@ describe("onboarding handlers", () => {
 
     expect(result.success).toBe(true);
     expect(result.alreadyRedeemed).toBe(false);
+    expect(result.organizationId).toBe(org.id);
     expect(result.organizationName).toBe(org.name);
     expect(result.eventName).toBe("Meetup");
 
@@ -251,6 +252,7 @@ describe("onboarding handlers", () => {
     });
 
     expect(again.alreadyRedeemed).toBe(true);
+    expect(again.organizationId).toBe(org.id);
 
     const drifted = await services.services.db.query.session.findFirst({
       where: eq(schema.session.userId, newcomer.userId),
