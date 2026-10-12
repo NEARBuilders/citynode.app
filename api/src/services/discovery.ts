@@ -588,7 +588,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     disconnectLuma: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context, EVENTS_AREA);
+        yield* authorize(nodeId, context);
         yield* query(() =>
           db.transaction(async (tx) => {
             await tx.select().from(nodes).where(eq(nodes.id, nodeId)).for("update");

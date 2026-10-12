@@ -221,7 +221,7 @@ describe("events-area organizers", () => {
     ).resolves.toMatchObject({ title: "Renamed" });
   });
 
-  it("lets an events-team member import Luma events and approve them", async () => {
+  it("lets an events-team member import and approve Luma events but not disconnect the calendar", async () => {
     const realFetch = globalThis.fetch;
     vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
@@ -249,7 +249,7 @@ describe("events-area organizers", () => {
             },
       );
     });
-    const { id, org, node } = await community();
+    const { id, org, node, owner } = await community();
     const organizer = await getPluginClient(memberWithTeam(`organizer-${id}`, org, ["events"]));
     const member = await getPluginClient(orgContext(`plain-${id}`, org, "member"));
     await expect(
@@ -270,5 +270,22 @@ describe("events-area organizers", () => {
         show: true,
       }),
     ).toMatchObject({ status: "published", luma: { hidden: false } });
+
+    await expect(organizer.disconnectDiscoveryLuma({ nodeId: node.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(await organizer.listDiscoveryLumaCalendars({ nodeId: node.id })).toMatchObject({
+      connection: { calendarId: "cal-organizers" },
+    });
+    const admin = await getPluginClient(orgContext(`admin-${id}`, org, "admin"));
+    await admin.disconnectDiscoveryLuma({ nodeId: node.id });
+    expect(await admin.listDiscoveryLumaCalendars({ nodeId: node.id })).toMatchObject({
+      connection: null,
+    });
+    await organizer.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-organizers" });
+    await owner.disconnectDiscoveryLuma({ nodeId: node.id });
+    expect(await owner.listDiscoveryLumaCalendars({ nodeId: node.id })).toMatchObject({
+      connection: null,
+    });
   });
 });
