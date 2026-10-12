@@ -108,12 +108,6 @@ export function createCommunityOrganizationHandlers(
             ) {
               throw conflict("The saved community organization belongs to another applicant");
             }
-            if (
-              !input.legacyOrgId &&
-              (organization.slug !== input.slug || organization.name !== input.name)
-            ) {
-              throw conflict("The saved community organization does not match this application");
-            }
             const [proposerMember] = await tx
               .select()
               .from(schema.member)

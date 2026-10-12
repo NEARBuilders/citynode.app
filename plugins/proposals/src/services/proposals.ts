@@ -8,6 +8,8 @@ type ReviewStatus = "pending" | "approved" | "rejected" | "removed";
 type ApplyStatus = "not_started" | "applying" | "applied" | "failed";
 type RemoveStatus = "not_started" | "removing" | "removed" | "failed";
 type ResubmissionPolicy = "rejected-only" | "rejected-or-removed";
+type ApplyStepStatus = "completed" | "waiting";
+type ApplyStep = { status: ApplyStepStatus; resourceId: string | null; recordedAt: string };
 const SYSTEM_ACTOR = "system";
 const SYSTEM_ACTOR_LABEL = "System";
 const LIFECYCLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -41,6 +43,25 @@ function parseJson(value: string | null | undefined): unknown {
   } catch {
     return null;
   }
+}
+
+function parseApplySteps(value: string | null | undefined): Record<string, ApplyStep> {
+  const parsed = parseJson(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  const steps: Record<string, ApplyStep> = {};
+  for (const [name, step] of Object.entries(parsed)) {
+    if (!step || typeof step !== "object") continue;
+    const { status, resourceId, recordedAt } = step as Record<string, unknown>;
+    if ((status !== "completed" && status !== "waiting") || typeof recordedAt !== "string") {
+      continue;
+    }
+    steps[name] = {
+      status,
+      resourceId: typeof resourceId === "string" ? resourceId : null,
+      recordedAt,
+    };
+  }
+  return steps;
 }
 
 function actorLabel(user?: { name?: string; email?: string }, source?: string): string | null {
@@ -96,6 +117,8 @@ async function loadProposal(db: any, pluginId: string, entityId: string) {
     applyError: row.applyError ?? null,
     removeError: (row.removeError as string) ?? null,
     appliedResourceId: row.appliedResourceId ?? null,
+    applySteps: parseApplySteps(row.applySteps),
+    applyTimedOut: row.applyStatus === "applying" && lifecycleTimedOut(row.updatedAt),
     submissionCount,
     appliedAt: toIsoString(row.appliedAt),
     removedAt: toIsoString(row.removedAt),
@@ -182,6 +205,13 @@ export class ProposalService extends Context.Service<
       entityId: string;
       expectedUpdatedAt: string;
       error: string;
+    }) => Effect.Effect<any, ORPCError<string, unknown>>;
+    recordApplyStep: (input: {
+      pluginId: string;
+      entityId: string;
+      step: string;
+      status: ApplyStepStatus;
+      resourceId?: string;
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
     markRemoved: (input: {
       pluginId: string;
@@ -404,6 +434,7 @@ export const ProposalServiceLive = Layer.effect(
                     applyError: null,
                     removeError: null,
                     appliedResourceId: null,
+                    applySteps: null,
                     appliedAt: null,
                     removedAt: null,
                     updatedAt: now,
@@ -848,6 +879,70 @@ export const ProposalServiceLive = Layer.effect(
           );
 
           if (!updated) return yield* Effect.fail(staleProposal());
+
+          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+        }),
+
+      recordApplyStep: (input) =>
+        Effect.gen(function* () {
+          const recordedAt = DateTime.formatIso(yield* DateTime.now);
+          const outcome = yield* Effect.promise(() =>
+            db.transaction(async (tx) => {
+              const [existing] = await tx
+                .select()
+                .from(proposals)
+                .where(
+                  and(
+                    eq(proposals.pluginId, input.pluginId),
+                    eq(proposals.entityId, input.entityId),
+                  ),
+                )
+                .limit(1)
+                .for("update");
+              if (!existing) return "missing" as const;
+              if (existing.reviewStatus !== "approved" || existing.applyStatus !== "applying") {
+                return "inactive" as const;
+              }
+              const steps = parseApplySteps(existing.applySteps);
+              const previous = steps[input.step];
+              const resourceId = input.resourceId ?? previous?.resourceId ?? null;
+              if (
+                previous?.status === "completed" ||
+                (previous?.status === input.status && previous.resourceId === resourceId)
+              ) {
+                return "unchanged" as const;
+              }
+              steps[input.step] = { status: input.status, resourceId, recordedAt };
+              await tx
+                .update(proposals)
+                .set({ applySteps: serialize(steps) })
+                .where(eq(proposals.id, existing.id));
+              await appendAudit(
+                tx,
+                existing.id,
+                input.pluginId,
+                input.entityId,
+                "apply_step_recorded",
+                SYSTEM_ACTOR,
+                SYSTEM_ACTOR_LABEL,
+                { step: input.step, status: input.status, resourceId },
+              );
+              return "recorded" as const;
+            }),
+          );
+
+          if (outcome === "missing") {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
+            );
+          }
+          if (outcome === "inactive") {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", {
+                message: "Setup steps can only be recorded while an approved proposal is applying",
+              }),
+            );
+          }
 
           return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
         }),

@@ -98,6 +98,65 @@ describe("community organization provisioning", () => {
     ).toHaveLength(2);
   });
 
+  it("reuses the application's organization after it was renamed", async () => {
+    const provision = createTestHandlers(setup.services).communityOrganizations
+      .provisionCommunityOrganization;
+    const input = {
+      ...request,
+      proposalId: "prop-community-lisbon",
+      name: "Lisbon",
+      slug: "lisbon",
+      proposerUserId: proposer.userId,
+    };
+    const created = await provision({ input, context: { reqHeaders: admin.reqHeaders } });
+    await setup.services.db
+      .update(schema.organization)
+      .set({ name: "Lisboa Builders", slug: "lisboa-builders" })
+      .where(eq(schema.organization.id, created.id));
+
+    const retried = await provision({ input, context: { reqHeaders: admin.reqHeaders } });
+    expect(retried).toMatchObject({
+      id: created.id,
+      name: "Lisboa Builders",
+      slug: "lisboa-builders",
+      status: "active",
+    });
+    expect(
+      await setup.services.db.query.organization.findMany({
+        where: eq(schema.organization.slug, "lisbon"),
+      }),
+    ).toHaveLength(0);
+  });
+
+  it("creates one organization when approvals provision it concurrently", async () => {
+    const provision = createTestHandlers(setup.services).communityOrganizations
+      .provisionCommunityOrganization;
+    const input = {
+      ...request,
+      proposalId: "prop-community-porto",
+      name: "Porto",
+      slug: "porto",
+      proposerUserId: proposer.userId,
+    };
+    const results = await Promise.all([
+      provision({ input, context: { reqHeaders: admin.reqHeaders } }),
+      provision({ input, context: { reqHeaders: admin.reqHeaders } }),
+    ]);
+    expect(new Set(results.map((organization) => organization.id))).toEqual(
+      new Set([`community-${input.proposalId}`]),
+    );
+    expect(
+      await setup.services.db.query.member.findMany({
+        where: eq(schema.member.organizationId, `community-${input.proposalId}`),
+      }),
+    ).toHaveLength(2);
+    expect(
+      await setup.services.db.query.team.findMany({
+        where: eq(schema.team.organizationId, `community-${input.proposalId}`),
+      }),
+    ).toHaveLength(3);
+  });
+
   it("rejects a community slug already held by an unrelated organization", async () => {
     const existing = await createTestOrg(setup.services, outsider.userId, {
       name: "Existing Boston",

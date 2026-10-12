@@ -303,6 +303,13 @@ export default createPlugin({
         return { data: result };
       }),
 
+      recordApplyStep: builder.recordApplyStep.use(requireAdmin).effect(function* ({ input }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.recordApplyStep(input);
+        yield* publishProposalEvent("apply_step_recorded", result);
+        return { data: result };
+      }),
+
       markRemoved: builder.markRemoved.use(requireAdmin).effect(function* ({ input }) {
         const proposal = yield* ProposalService;
         const result = yield* proposal.markRemoved(input);

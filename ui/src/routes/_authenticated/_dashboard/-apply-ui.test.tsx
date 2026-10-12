@@ -277,6 +277,9 @@ describe("apply route submission", () => {
           reviewStatus,
           applyStatus,
           rejectionReason: reviewStatus === "rejected" ? "More detail needed" : null,
+          applySteps: {},
+          applyTimedOut: false,
+          appliedAt: null,
           payload: { name: "Chicago" },
         },
       ],
@@ -290,6 +293,49 @@ describe("apply route submission", () => {
       fireEvent.click(screen.getByTestId("apply.revise"));
       expect(screen.getByTestId("apply.steps")).toBeTruthy();
     }
+  });
+
+  it("shows the applicant which setup step is waiting on their DAO", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus: "approved",
+          applyStatus: "failed",
+          rejectionReason: null,
+          applyTimedOut: false,
+          appliedAt: null,
+          applySteps: {
+            organization: {
+              status: "completed",
+              resourceId: "org",
+              recordedAt: "2026-09-10T00:01:00.000Z",
+            },
+            community: {
+              status: "completed",
+              resourceId: "node",
+              recordedAt: "2026-09-10T00:02:00.000Z",
+            },
+            publication: {
+              status: "waiting",
+              resourceId: "12",
+              recordedAt: "2026-09-10T00:03:00.000Z",
+            },
+          },
+          payload: { name: "Chicago", accountId: "chicago.sputnik-dao.near" },
+        },
+      ],
+    });
+    renderApply();
+    const publication = await screen.findByTestId("application-progress-publication");
+    expect(publication.getAttribute("data-state")).toBe("waiting");
+    expect(screen.getByTestId("application-progress-community").getAttribute("data-state")).toBe(
+      "done",
+    );
+    expect(screen.queryByText("node")).toBeNull();
+    expect(screen.getByTestId("application-progress-dao-vote").getAttribute("href")).toBe(
+      "https://trezu.app/chicago.sputnik-dao.near/requests",
+    );
   });
 
   it.each([
@@ -330,6 +376,9 @@ describe("apply route submission", () => {
           reviewStatus: "approved",
           applyStatus: "applied",
           rejectionReason: null,
+          applySteps: {},
+          applyTimedOut: false,
+          appliedAt: null,
           payload: { name: "Springfield", slug: "springfield", orgId: "legacy-org" },
         },
       ],
@@ -357,6 +406,9 @@ describe("apply route submission", () => {
           reviewStatus: "rejected",
           applyStatus: "not_started",
           rejectionReason: "More detail needed",
+          applySteps: {},
+          applyTimedOut: false,
+          appliedAt: null,
           payload: {
             kind: "country",
             parentId: null,

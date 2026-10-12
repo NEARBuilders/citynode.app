@@ -3,6 +3,10 @@ import type { ApiClient } from "@/app";
 import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
+import {
+  communitySetupNeedsAttention,
+  pendingPublicationProposalId,
+} from "@/routes/_authenticated/_dashboard/-application-progress";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 
 export { proposalReviewQueryKeys } from "@/lib/queries/proposals";
@@ -36,6 +40,30 @@ export function proposalReviewStatusVariant(
   return "success" as const;
 }
 
+type SetupStatusInput = Parameters<typeof pendingPublicationProposalId>[0] &
+  Parameters<typeof communitySetupNeedsAttention>[0];
+
+export function proposalSetupStatus(
+  proposal: SetupStatusInput,
+  t: AppTranslator = translateEnglishAppMessage,
+) {
+  if (proposal.reviewStatus !== "approved") return null;
+  if (pendingPublicationProposalId(proposal) && proposal.applyStatus !== "applied") {
+    return { label: t("admin.proposal.awaitingDaoVote"), variant: "warning" as const };
+  }
+  if (proposal.applyStatus === "failed") {
+    return { label: t("admin.proposal.setupFailed"), variant: "destructive" as const };
+  }
+  if (communitySetupNeedsAttention(proposal)) {
+    return { label: t("admin.proposal.setupStalled"), variant: "destructive" as const };
+  }
+  return null;
+}
+
+export function proposalNeedsAction(proposal: SetupStatusInput) {
+  return proposal.reviewStatus === "pending" || communitySetupNeedsAttention(proposal);
+}
+
 interface ProposalIdentity {
   pluginId: string;
   entityId: string;
@@ -61,7 +89,8 @@ export function proposalTypeLabel(pluginId: string, t: AppTranslator = translate
 export function pendingProposalCountQueryOptions(apiClient: ApiClient) {
   return queryOptions({
     queryKey: proposalReviewQueryKeys.pendingCount(),
-    queryFn: () => apiClient.proposals.getProposals({ reviewStatus: "pending" as const, limit: 1 }),
+    queryFn: () =>
+      apiClient.proposals.getProposals({ lifecycleStatus: "actionable" as const, limit: 1 }),
     staleTime: 15 * 1000,
   });
 }
@@ -71,7 +100,8 @@ export function adminProposalListQueryOptions(apiClient: ApiClient, filter: Prop
     queryKey: proposalReviewQueryKeys.list(filter),
     queryFn: ({ pageParam }) =>
       apiClient.proposals.getProposals({
-        ...(filter !== "all" && { reviewStatus: filter }),
+        ...(filter === "pending" && { lifecycleStatus: "actionable" as const }),
+        ...(filter !== "all" && filter !== "pending" && { reviewStatus: filter }),
         limit: 50,
         ...(pageParam !== undefined && { cursor: pageParam }),
       }),

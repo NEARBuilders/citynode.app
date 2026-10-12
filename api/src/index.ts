@@ -880,6 +880,30 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("BAD_REQUEST", { message: "The application is not approved" }),
           );
         }
+        if (proposal.applyStatus !== "applying") {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "Approve or retry the application before applying it",
+            }),
+          );
+        }
+        const recordStep = (step: "organization" | "community", resourceId: string) =>
+          Effect.tryPromise({
+            try: () =>
+              proposalsClient.recordApplyStep({
+                pluginId: "node",
+                entityId: proposal.entityId,
+                step,
+                status: "completed",
+                resourceId,
+              }),
+            catch: (error) =>
+              error instanceof ORPCError
+                ? error
+                : new ORPCError("INTERNAL_SERVER_ERROR", {
+                    message: "Could not record the application's setup progress",
+                  }),
+          });
         const parsed = NodeProposalPayloadSchema.safeParse(proposal.payload);
         if (!parsed.success || parsed.data.slug !== proposal.entityId) {
           return yield* Effect.fail(
@@ -920,8 +944,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
                   message: "Could not provision the community organization",
                 }),
         });
+        yield* recordStep("organization", organization.id);
         const services = yield* ApiServices;
-        return yield* services.tenants.applyNodeProposal({
+        const community = yield* services.tenants.applyNodeProposal({
           kind: payload.kind,
           name: payload.name,
           slug: payload.slug,
@@ -930,8 +955,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
           accountId: payload.accountId,
           hostname: input.hostname.toLowerCase(),
           proposalId: proposal.id,
-          ...(payload.orgId ? { legacyOrgId: payload.orgId } : {}),
         });
+        yield* recordStep("community", community.nodeId);
+        return community;
       }),
 
       listNodes: builder.listNodes.effect(function* ({ input }) {

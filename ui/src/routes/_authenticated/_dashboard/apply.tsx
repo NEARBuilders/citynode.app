@@ -86,7 +86,7 @@ function ApplyPage() {
     ? myApplications.data?.data.find((proposal) => proposal.id === submittedProposalId)
     : myApplications.data?.data[0];
   const existingPayload = existingApplication?.payload as
-    | { orgId?: unknown; name?: unknown; slug?: unknown }
+    | { orgId?: unknown; name?: unknown; slug?: unknown; accountId?: unknown }
     | undefined;
   const retainedOrgId = (slug: string) =>
     existingApplication?.reviewStatus === "rejected" &&
@@ -189,6 +189,10 @@ function ApplyPage() {
         reviewStatus={existingApplication?.reviewStatus ?? "pending"}
         applyStatus={existingApplication?.applyStatus ?? "not_started"}
         rejectionReason={existingApplication?.rejectionReason ?? null}
+        progress={existingApplication}
+        daoAccountId={
+          typeof existingPayload?.accountId === "string" ? existingPayload.accountId : null
+        }
         onRevise={
           existingApplication?.reviewStatus === "rejected" && !submittedProposalId
             ? () => {

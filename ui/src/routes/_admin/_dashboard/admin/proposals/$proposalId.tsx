@@ -11,7 +11,9 @@ import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
-import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
+import { findOpenTenantConfigProposal, publishDaoTenantConfig } from "@/lib/tenant-deploy";
+import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
+import { ApplicationProgressList } from "@/routes/_authenticated/_dashboard/-application-progress-list";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 import { BackLink } from "../-admin-ui";
 import { approveAndApplyProposal } from "./-proposal-application";
@@ -119,6 +121,7 @@ function ProposalDetailPage() {
         gatewayId,
         baseAccount,
         publishTenantConfig: (input) => publishDaoTenantConfig(apiClient, input),
+        findOpenTenantConfigProposal,
         onProposalChange: (nextProposal) =>
           queryClient.setQueryData(proposalQueryKey, nextProposal),
       });
@@ -191,7 +194,8 @@ function ProposalDetailPage() {
 
   const proposal = proposalQuery.data;
   const isPending = proposal.reviewStatus === "pending";
-  const isRetry = proposal.reviewStatus === "approved" && proposal.applyStatus === "failed";
+  const isRetry = communitySetupNeedsAttention(proposal);
+  const publicationRecorded = proposal.applySteps.publication?.status === "completed";
   const parsedNodePayload =
     proposal.pluginId === "node" ? nodeProposalPayloadSchema.safeParse(proposal.payload) : null;
   const proposalDaoAccountId = parsedNodePayload?.success ? parsedNodePayload.data.accountId : null;
@@ -219,7 +223,14 @@ function ProposalDetailPage() {
         </div>
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <Card>
-            <CardContent className="p-5 sm:p-6">
+            <CardContent className="flex flex-col gap-8 p-5 sm:p-6">
+              {proposal.pluginId === "node" && (
+                <ApplicationProgressList
+                  proposal={proposal}
+                  daoAccountId={proposalDaoAccountId}
+                  showResources
+                />
+              )}
               {isPending || isRetry ? (
                 <ProposalReviewActions
                   isPending={isPending}
@@ -227,7 +238,7 @@ function ProposalDetailPage() {
                   applyError={proposal.applyError}
                   isNodeProposal={proposal.pluginId === "node"}
                   proposalDaoAccountId={proposalDaoAccountId}
-                  daoIsVerified={daoIsVerified}
+                  daoIsVerified={daoIsVerified || (isRetry && publicationRecorded)}
                   rejectionReason={rejectionReason}
                   isReviewing={reviewMutation.isPending}
                   onDaoVerified={handleDaoVerified}

@@ -59,6 +59,9 @@ export function ProposalReviewActions({
           {applyError}
         </p>
       )}
+      {isRetry && (
+        <p className="text-sm text-muted-foreground">{translate("admin.proposal.resumeHint")}</p>
+      )}
 
       {isNodeProposal && (
         <div className="flex flex-col gap-3">
@@ -81,9 +84,9 @@ export function ProposalReviewActions({
           <Button onClick={onApprove} disabled={isReviewing} data-testid="admin-proposal-approve">
             <CheckIcon />
             {isReviewing
-              ? translate("admin.proposal.approving")
+              ? translate(isRetry ? "admin.proposal.resuming" : "admin.proposal.approving")
               : isRetry
-                ? translate("common.retry")
+                ? translate("admin.proposal.resume")
                 : translate("common.approve")}
           </Button>
           <Button

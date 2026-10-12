@@ -4,6 +4,8 @@ import { cn } from "cn";
 import { PageContainer } from "@/components";
 import { Button } from "@/components/ui/button";
 import { useAppTranslation } from "@/i18n/runtime";
+import type { ApplicationProgressInput } from "./-application-progress";
+import { ApplicationProgressList } from "./-application-progress-list";
 import {
   type ApplyStatus,
   applyStatusLabel,
@@ -17,6 +19,8 @@ export function ApplySubmitted({
   reviewStatus,
   applyStatus,
   rejectionReason,
+  progress,
+  daoAccountId,
   onRevise,
   onApplyAgain,
 }: {
@@ -25,6 +29,8 @@ export function ApplySubmitted({
   reviewStatus: ReviewStatus;
   applyStatus: ApplyStatus;
   rejectionReason: string | null;
+  progress?: ApplicationProgressInput;
+  daoAccountId?: string | null;
   onRevise?: () => void;
   onApplyAgain?: () => void;
 }) {
@@ -73,6 +79,11 @@ export function ApplySubmitted({
           </p>
           {rejectionReason && <p className="text-sm text-muted-foreground">{rejectionReason}</p>}
         </div>
+        {progress && (
+          <div className="w-full max-w-sm rounded-lg border border-border p-5">
+            <ApplicationProgressList proposal={progress} daoAccountId={daoAccountId ?? null} />
+          </div>
+        )}
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
           <Button
             nativeButton={false}

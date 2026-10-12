@@ -1,5 +1,13 @@
 import "@orpc/openapi/extensions/route";
 import { z } from "zod";
+export declare const ApplyStepSchema: z.ZodObject<{
+    status: z.ZodEnum<{
+        completed: "completed";
+        waiting: "waiting";
+    }>;
+    resourceId: z.ZodNullable<z.ZodString>;
+    recordedAt: z.ZodISODateTime;
+}, z.core.$strip>;
 export declare const ProposalSchema: z.ZodObject<{
     id: z.ZodString;
     pluginId: z.ZodString;
@@ -30,6 +38,15 @@ export declare const ProposalSchema: z.ZodObject<{
     applyError: z.ZodNullable<z.ZodString>;
     removeError: z.ZodNullable<z.ZodString>;
     appliedResourceId: z.ZodNullable<z.ZodString>;
+    applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+        status: z.ZodEnum<{
+            completed: "completed";
+            waiting: "waiting";
+        }>;
+        resourceId: z.ZodNullable<z.ZodString>;
+        recordedAt: z.ZodISODateTime;
+    }, z.core.$strip>>;
+    applyTimedOut: z.ZodBoolean;
     submissionCount: z.ZodNumber;
     appliedAt: z.ZodNullable<z.ZodISODateTime>;
     removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -98,6 +115,15 @@ export declare const ProposalReviewHistoryEntrySchema: z.ZodObject<{
         applyError: z.ZodNullable<z.ZodString>;
         removeError: z.ZodNullable<z.ZodString>;
         appliedResourceId: z.ZodNullable<z.ZodString>;
+        applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+            status: z.ZodEnum<{
+                completed: "completed";
+                waiting: "waiting";
+            }>;
+            resourceId: z.ZodNullable<z.ZodString>;
+            recordedAt: z.ZodISODateTime;
+        }, z.core.$strip>>;
+        applyTimedOut: z.ZodBoolean;
         submissionCount: z.ZodNumber;
         appliedAt: z.ZodNullable<z.ZodISODateTime>;
         removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -184,6 +210,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -253,6 +288,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -308,6 +352,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -389,6 +442,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -469,6 +531,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -549,6 +620,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -630,6 +710,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -711,6 +800,109 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
+            submissionCount: z.ZodNumber;
+            appliedAt: z.ZodNullable<z.ZodISODateTime>;
+            removedAt: z.ZodNullable<z.ZodISODateTime>;
+            createdAt: z.ZodISODateTime;
+            updatedAt: z.ZodISODateTime;
+        }, z.core.$strip>;
+    }, z.core.$strip>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        BAD_REQUEST: {
+            readonly status: 400;
+            readonly data: z.ZodObject<{
+                invalidFields: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                validationErrors: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    field: z.ZodString;
+                    message: z.ZodString;
+                    code: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+            }, z.core.$strip>;
+        };
+    }>;
+    recordApplyStep: import("@orpc/contract").ProcedureContract<z.ZodObject<{
+        pluginId: z.ZodString;
+        entityId: z.ZodString;
+        step: z.ZodString;
+        status: z.ZodEnum<{
+            completed: "completed";
+            waiting: "waiting";
+        }>;
+        resourceId: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>, z.ZodObject<{
+        data: z.ZodObject<{
+            id: z.ZodString;
+            pluginId: z.ZodString;
+            entityId: z.ZodString;
+            operation: z.ZodLiteral<"create">;
+            payload: z.ZodUnknown;
+            schemaVersion: z.ZodString;
+            createdBy: z.ZodString;
+            reviewStatus: z.ZodEnum<{
+                approved: "approved";
+                pending: "pending";
+                rejected: "rejected";
+                removed: "removed";
+            }>;
+            applyStatus: z.ZodEnum<{
+                applied: "applied";
+                applying: "applying";
+                failed: "failed";
+                not_started: "not_started";
+            }>;
+            removeStatus: z.ZodEnum<{
+                failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
+                removing: "removing";
+            }>;
+            rejectionReason: z.ZodNullable<z.ZodString>;
+            applyError: z.ZodNullable<z.ZodString>;
+            removeError: z.ZodNullable<z.ZodString>;
+            appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -791,6 +983,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -872,6 +1073,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -961,6 +1171,15 @@ export declare const contract: {
             applyError: z.ZodNullable<z.ZodString>;
             removeError: z.ZodNullable<z.ZodString>;
             appliedResourceId: z.ZodNullable<z.ZodString>;
+            applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                status: z.ZodEnum<{
+                    completed: "completed";
+                    waiting: "waiting";
+                }>;
+                resourceId: z.ZodNullable<z.ZodString>;
+                recordedAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+            applyTimedOut: z.ZodBoolean;
             submissionCount: z.ZodNumber;
             appliedAt: z.ZodNullable<z.ZodISODateTime>;
             removedAt: z.ZodNullable<z.ZodISODateTime>;
@@ -1111,6 +1330,15 @@ export declare const contract: {
                 applyError: z.ZodNullable<z.ZodString>;
                 removeError: z.ZodNullable<z.ZodString>;
                 appliedResourceId: z.ZodNullable<z.ZodString>;
+                applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
+                    status: z.ZodEnum<{
+                        completed: "completed";
+                        waiting: "waiting";
+                    }>;
+                    resourceId: z.ZodNullable<z.ZodString>;
+                    recordedAt: z.ZodISODateTime;
+                }, z.core.$strip>>;
+                applyTimedOut: z.ZodBoolean;
                 submissionCount: z.ZodNumber;
                 appliedAt: z.ZodNullable<z.ZodISODateTime>;
                 removedAt: z.ZodNullable<z.ZodISODateTime>;

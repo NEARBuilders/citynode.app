@@ -7,13 +7,22 @@ const provision = vi.fn(
   }),
 );
 
+type RecordedStep = { entityId: string; step: string; status: string; resourceId?: string };
+const recordApplyStep = vi.fn(async (_input: RecordedStep) => ({}));
+
 const proposals = new Map<string, Record<string, unknown>>();
 const applicant = "community-applicant.near";
 
 function savedProposal(
   id: string,
   slug: string,
-  options?: { orgId?: string; createdBy?: string; submitterAccountId?: string; status?: string },
+  options?: {
+    orgId?: string;
+    createdBy?: string;
+    submitterAccountId?: string;
+    status?: string;
+    applyStatus?: string;
+  },
 ) {
   return {
     id,
@@ -21,10 +30,11 @@ function savedProposal(
     entityId: slug,
     createdBy: options?.createdBy ?? applicant,
     reviewStatus: options?.status ?? "approved",
+    applyStatus: options?.applyStatus ?? "applying",
     payload: {
       kind: "country",
       parentId: null,
-      name: slug === "chicago" ? "Chicago" : "Boston",
+      name: slug.charAt(0).toUpperCase() + slug.slice(1),
       slug,
       motivation: "Serve the local community",
       accountId: `${slug}.sputnik-dao.near`,
@@ -50,6 +60,7 @@ describe("approved community proposal provisioning", () => {
                 ]
               : [],
           }),
+          recordApplyStep: (input: RecordedStep) => recordApplyStep(input),
         }),
         router: {},
       },
@@ -77,6 +88,20 @@ describe("approved community proposal provisioning", () => {
       hostname: "chicago.citynode.app",
     };
     const first = await admin.applyCommunityProposal(input);
+    expect(recordApplyStep.mock.calls.map(([call]) => call)).toEqual([
+      expect.objectContaining({
+        entityId: "chicago",
+        step: "organization",
+        status: "completed",
+        resourceId: "community-prop-chicago",
+      }),
+      expect.objectContaining({
+        entityId: "chicago",
+        step: "community",
+        status: "completed",
+        resourceId: first.nodeId,
+      }),
+    ]);
     expect(provision).toHaveBeenCalledWith({
       proposalId: "prop-chicago",
       name: "Chicago",
@@ -160,6 +185,100 @@ describe("approved community proposal provisioning", () => {
     expect(results[0]?.nodeId).toBe(results[1]?.nodeId);
     expect(
       (await admin.listTenants()).filter((item) => item.accountId === "race.sputnik-dao.near"),
+    ).toHaveLength(1);
+  });
+
+  it("only applies an application that an approval or retry has claimed", async () => {
+    proposals.set("idle", savedProposal("prop-idle", "idle", { applyStatus: "failed" }));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    await expect(
+      admin.applyCommunityProposal({
+        proposalId: "prop-idle",
+        entityId: "idle",
+        hostname: "idle.citynode.app",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(
+      (await admin.listTenants()).some((item) => item.accountId === "idle.sputnik-dao.near"),
+    ).toBe(false);
+  });
+
+  it("resumes after organization provisioning fails", async () => {
+    proposals.set("denver", savedProposal("prop-denver", "denver"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = {
+      proposalId: "prop-denver",
+      entityId: "denver",
+      hostname: "denver.citynode.app",
+    };
+    recordApplyStep.mockClear();
+    provision.mockRejectedValueOnce(new Error("auth unavailable"));
+    await expect(admin.applyCommunityProposal(input)).rejects.toBeTruthy();
+    expect(recordApplyStep).not.toHaveBeenCalled();
+    expect(
+      (await admin.listTenants()).some((item) => item.accountId === "denver.sputnik-dao.near"),
+    ).toBe(false);
+
+    const resumed = await admin.applyCommunityProposal(input);
+    expect(recordApplyStep.mock.calls.map(([call]) => call.step)).toEqual([
+      "organization",
+      "community",
+    ]);
+    expect(await admin.getNode({ nodeId: resumed.nodeId })).toMatchObject({ slug: "denver" });
+  });
+
+  it("reuses created resources when recording progress fails after they exist", async () => {
+    proposals.set("austin", savedProposal("prop-austin", "austin"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = {
+      proposalId: "prop-austin",
+      entityId: "austin",
+      hostname: "austin.citynode.app",
+    };
+    recordApplyStep.mockClear();
+    recordApplyStep.mockImplementation(async (call) => {
+      if (call.step === "community") throw new Error("proposals unavailable");
+      return {};
+    });
+    try {
+      await expect(admin.applyCommunityProposal(input)).rejects.toBeTruthy();
+    } finally {
+      recordApplyStep.mockImplementation(async () => ({}));
+    }
+    const created = (await admin.listTenants()).filter(
+      (item) => item.accountId === "austin.sputnik-dao.near",
+    );
+    expect(created).toHaveLength(1);
+
+    recordApplyStep.mockClear();
+    const resumed = await admin.applyCommunityProposal(input);
+    const node = await admin.getNode({ nodeId: resumed.nodeId });
+    expect(node?.tenantId).toBe(created[0]?.id);
+    expect(recordApplyStep).toHaveBeenLastCalledWith(
+      expect.objectContaining({ step: "community", resourceId: resumed.nodeId }),
+    );
+  });
+
+  it("resumes after the community was renamed and its metadata replaced", async () => {
+    proposals.set("seattle", savedProposal("prop-seattle", "seattle"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = {
+      proposalId: "prop-seattle",
+      entityId: "seattle",
+      hostname: "seattle.citynode.app",
+    };
+    const first = await admin.applyCommunityProposal(input);
+    await admin.updateNode({
+      nodeId: first.nodeId,
+      name: "Emerald City",
+      slug: "emerald-city",
+      metadata: { kind: "country" },
+    });
+
+    const resumed = await admin.applyCommunityProposal(input);
+    expect(resumed.nodeId).toBe(first.nodeId);
+    expect(
+      (await admin.listTenants()).filter((item) => item.accountId === "seattle.sputnik-dao.near"),
     ).toHaveLength(1);
   });
 });

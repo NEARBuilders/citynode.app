@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, not, notLike, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, not, notLike, or, sql } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer } from "effect";
+import type { Database } from "../db/index";
 import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
@@ -108,7 +109,6 @@ export interface ApplyNodeProposalInput {
   hostname: string;
   poolAccountId?: string;
   proposalId?: string;
-  legacyOrgId?: string;
 }
 
 export interface TenantsService {
@@ -148,30 +148,36 @@ export class TenantsTag extends Context.Service<TenantsTag, TenantsService>()("a
 
 type TenantRow = typeof tenantsTable.$inferSelect;
 type BindingRow = typeof domainBindingsTable.$inferSelect;
-type NodeRow = typeof nodesTable.$inferSelect;
-
-function matchingProposalNode(
+async function findProposalNode(
+  db: Pick<Database, "select">,
   input: ApplyNodeProposalInput,
-  tenant: TenantRow | undefined,
-  node: NodeRow | undefined,
-  binding: BindingRow | undefined,
-): string | null {
-  if (
-    !input.proposalId ||
-    tenant?.accountId !== input.accountId ||
-    tenant.orgId !== input.orgId ||
-    tenant.name !== input.name ||
-    tenant.ownerKind !== "dao" ||
-    node?.tenantId !== tenant.id ||
-    node.parentId !== input.parentId ||
-    node.name !== input.name ||
-    nodeKindOf(node.metadata) !== input.kind ||
-    (!input.legacyOrgId && node.metadata.communityProposalId !== input.proposalId) ||
-    binding?.tenantId !== tenant.id
-  ) {
-    return null;
-  }
-  return node.id;
+): Promise<string | null> {
+  if (!input.proposalId) return null;
+  const linked = await db
+    .select({ id: nodesTable.id })
+    .from(nodesTable)
+    .where(
+      and(
+        sql`${nodesTable.metadata}->>'communityProposalId' = ${input.proposalId}`,
+        not(isNull(nodesTable.tenantId)),
+      ),
+    )
+    .limit(1);
+  if (linked[0]) return linked[0].id;
+  const owned = await db
+    .select({ id: nodesTable.id })
+    .from(nodesTable)
+    .innerJoin(tenantsTable, eq(nodesTable.tenantId, tenantsTable.id))
+    .where(
+      and(
+        eq(tenantsTable.accountId, input.accountId),
+        eq(tenantsTable.orgId, input.orgId),
+        eq(tenantsTable.ownerKind, "dao"),
+        isNull(tenantsTable.deletedAt),
+      ),
+    )
+    .limit(1);
+  return owned[0]?.id ?? null;
 }
 
 function toTenantRecord(row: TenantRow): TenantRecord {
@@ -654,6 +660,10 @@ export const TenantsLive = Layer.effect(
           try: async () => {
             try {
               return await db.transaction(async (tx) => {
+                const proposalNodeId = await findProposalNode(tx, input);
+                if (proposalNodeId) {
+                  return { nodeId: proposalNodeId };
+                }
                 const [existingTenant, existingNode, existingBinding] = await Promise.all([
                   tx
                     .select()
@@ -668,18 +678,6 @@ export const TenantsLive = Layer.effect(
                     .limit(1),
                 ]);
 
-                const tenantMatch = existingTenant[0];
-                const nodeMatch = existingNode[0];
-                const bindingMatch = existingBinding[0];
-                const matchedNodeId = matchingProposalNode(
-                  input,
-                  tenantMatch,
-                  nodeMatch,
-                  bindingMatch,
-                );
-                if (matchedNodeId) {
-                  return { nodeId: matchedNodeId };
-                }
                 if (existingTenant.length > 0) {
                   throw new ORPCError("CONFLICT", {
                     message: "Tenant with this accountId already exists",
@@ -790,20 +788,7 @@ export const TenantsLive = Layer.effect(
               });
             } catch (error) {
               if (input.proposalId && isUniqueViolation(error)) {
-                const [tenants, nodes, bindings] = await Promise.all([
-                  db
-                    .select()
-                    .from(tenantsTable)
-                    .where(eq(tenantsTable.accountId, input.accountId))
-                    .limit(1),
-                  db.select().from(nodesTable).where(eq(nodesTable.slug, input.slug)).limit(1),
-                  db
-                    .select()
-                    .from(domainBindingsTable)
-                    .where(eq(domainBindingsTable.hostname, input.hostname))
-                    .limit(1),
-                ]);
-                const nodeId = matchingProposalNode(input, tenants[0], nodes[0], bindings[0]);
+                const nodeId = await findProposalNode(db, input);
                 if (nodeId) return { nodeId };
               }
               throw error;

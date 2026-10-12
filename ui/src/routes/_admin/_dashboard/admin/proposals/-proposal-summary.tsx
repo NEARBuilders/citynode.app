@@ -4,10 +4,11 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { humanize, RawJson, RawJsonDisclosure } from "../-admin-ui";
 import { NodeProposalDetails } from "./-node-proposal-details";
 import type { Proposal } from "./-proposal-columns";
-import { proposalReviewStatusVariant } from "./-proposal-review";
+import { proposalReviewStatusVariant, proposalSetupStatus } from "./-proposal-review";
 
 export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
   const translate = useAppTranslation();
+  const setup = proposalSetupStatus(proposal, translate);
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Badge
@@ -16,10 +17,16 @@ export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
       >
         {humanize(proposal.reviewStatus, translate)}
       </Badge>
-      {proposal.applyStatus !== "not_started" && (
-        <Badge variant={proposal.applyStatus === "applied" ? "success" : "outline"}>
-          {humanize(proposal.applyStatus, translate)}
+      {setup ? (
+        <Badge variant={setup.variant} data-testid="admin-proposal-setup-status">
+          {setup.label}
         </Badge>
+      ) : (
+        proposal.applyStatus !== "not_started" && (
+          <Badge variant={proposal.applyStatus === "applied" ? "success" : "outline"}>
+            {humanize(proposal.applyStatus, translate)}
+          </Badge>
+        )
       )}
     </div>
   );

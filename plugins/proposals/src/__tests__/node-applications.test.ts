@@ -21,6 +21,10 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
     new URL("../db/migrations/0000_concerned_blade.sql", import.meta.url),
     "utf8",
   );
+  const applyStepsSource = await readFile(
+    new URL("../db/migrations/0003_apply_steps.sql", import.meta.url),
+    "utf8",
+  );
   return {
     default: [
       {
@@ -29,6 +33,13 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
         hash: "node-application-test",
         tag: "node-application-test",
         sql: source.split("--> statement-breakpoint").map((statement) => statement.trim()),
+      },
+      {
+        idx: 3,
+        when: 1791763200000,
+        hash: "node-application-apply-steps-test",
+        tag: "node-application-apply-steps-test",
+        sql: [applyStepsSource.trim()],
       },
     ],
   };

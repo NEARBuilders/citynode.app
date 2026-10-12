@@ -5,7 +5,13 @@ import type { DataTableColumnDef } from "@/components/data-table";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { humanize } from "../-admin-ui";
-import { proposalReviewStatusVariant, proposalTitle, proposalTypeLabel } from "./-proposal-review";
+import {
+  proposalNeedsAction,
+  proposalReviewStatusVariant,
+  proposalSetupStatus,
+  proposalTitle,
+  proposalTypeLabel,
+} from "./-proposal-review";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
@@ -22,6 +28,22 @@ export function ProposalLink({ proposal, className }: { proposal: Proposal; clas
     >
       {proposalTitle(proposal, translate)}
     </Link>
+  );
+}
+
+export function ProposalStatusCell({ proposal, t }: { proposal: Proposal; t: AppTranslator }) {
+  const setup = proposalSetupStatus(proposal, t);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Badge variant={proposalReviewStatusVariant(proposal.reviewStatus)}>
+        {humanize(proposal.reviewStatus, t)}
+      </Badge>
+      {setup && (
+        <Badge variant={setup.variant} data-testid="admin-proposal-setup-status">
+          {setup.label}
+        </Badge>
+      )}
+    </div>
   );
 }
 
@@ -65,11 +87,7 @@ export function createProposalColumns(
     {
       accessorKey: "reviewStatus",
       header: t("common.status"),
-      cell: ({ row }) => (
-        <Badge variant={proposalReviewStatusVariant(row.original.reviewStatus)}>
-          {humanize(row.original.reviewStatus, t)}
-        </Badge>
-      ),
+      cell: ({ row }) => <ProposalStatusCell proposal={row.original} t={t} />,
     },
     {
       accessorKey: "createdAt",
@@ -85,7 +103,7 @@ export function createProposalColumns(
       header: "",
       cell: ({ row }) => (
         <Button
-          variant={row.original.reviewStatus === "pending" ? "outline" : "ghost"}
+          variant={proposalNeedsAction(row.original) ? "outline" : "ghost"}
           size="sm"
           nativeButton={false}
           render={
@@ -96,7 +114,11 @@ export function createProposalColumns(
             />
           }
         >
-          {row.original.reviewStatus === "pending" ? t("common.review") : t("common.view")}
+          {row.original.reviewStatus === "pending"
+            ? t("common.review")
+            : proposalNeedsAction(row.original)
+              ? t("admin.proposal.resume")
+              : t("common.view")}
         </Button>
       ),
     },

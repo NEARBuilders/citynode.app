@@ -1,5 +1,6 @@
 import type { ApiClient } from "@/app";
 import { AppActionError } from "@/i18n/error-message";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 import type { DaoTenantPublishInput } from "@/lib/tenant-deploy";
 import { parseNodeProposalPayload } from "@/routes/_authenticated/_dashboard/-node-application";
 
@@ -10,16 +11,27 @@ type ProposalApplicationInput = Pick<Proposal, "pluginId" | "entityId" | "payloa
 
 type AppliedResource = { id: string; label: string };
 export type TenantConfigPublisher = (input: DaoTenantPublishInput) => Promise<unknown>;
+export type OpenTenantConfigProposalFinder = (
+  daoAccountId: string,
+) => Promise<{ id: number } | null>;
 type ProposalApplicationHandler = (input: {
   apiClient: ApiClient;
   proposal: Proposal;
   gatewayId: string;
   baseAccount: string;
   publishTenantConfig: TenantConfigPublisher;
+  findOpenTenantConfigProposal: OpenTenantConfigProposalFinder;
 }) => Promise<AppliedResource>;
 
 const proposalApplicationHandlers = {
-  node: async ({ apiClient, proposal, gatewayId, baseAccount, publishTenantConfig }) => {
+  node: async ({
+    apiClient,
+    proposal,
+    gatewayId,
+    baseAccount,
+    publishTenantConfig,
+    findOpenTenantConfigProposal,
+  }) => {
     const payload = parseNodeProposalPayload(proposal.payload);
     const hostname = `${payload.slug}.${gatewayId}`;
     const node = await apiClient.applyCommunityProposal({
@@ -29,7 +41,23 @@ const proposalApplicationHandlers = {
     });
     const expected = { accountId: payload.accountId, gatewayId, hostname, title: payload.name };
     const published = () => isTenantConfigPublished(apiClient, expected);
+    const recordPublication = (status: "completed" | "waiting", resourceId?: string) =>
+      apiClient.proposals.recordApplyStep({
+        pluginId: proposal.pluginId,
+        entityId: proposal.entityId,
+        step: "publication",
+        status,
+        ...(resourceId ? { resourceId } : {}),
+      });
+    const stopIfDaoVoteOpen = async () => {
+      const open = await findOpenTenantConfigProposal(payload.accountId);
+      if (!open) return;
+      await recordPublication("waiting", String(open.id));
+      throw new AppActionError("proposal.publicationAwaitingVote", { id: open.id });
+    };
     if (!(await published())) {
+      await stopIfDaoVoteOpen();
+      let publishError: unknown = null;
       try {
         await publishTenantConfig({
           daoAccountId: payload.accountId,
@@ -39,9 +67,14 @@ const proposalApplicationHandlers = {
           title: payload.name,
         });
       } catch (error) {
-        if (!(await waitForTenantConfig(published))) throw error;
+        publishError = error;
+      }
+      if (!(await waitForTenantConfig(published))) {
+        await stopIfDaoVoteOpen();
+        throw publishError ?? new AppActionError("proposal.publicationUnconfirmed");
       }
     }
+    await recordPublication("completed");
     return { id: node.nodeId, label: "Node" };
   },
 } satisfies Record<string, ProposalApplicationHandler>;
@@ -88,6 +121,7 @@ export async function approveAndApplyProposal({
   gatewayId,
   baseAccount,
   publishTenantConfig,
+  findOpenTenantConfigProposal,
   onProposalChange,
 }: {
   apiClient: ApiClient;
@@ -95,6 +129,7 @@ export async function approveAndApplyProposal({
   gatewayId: string;
   baseAccount: string;
   publishTenantConfig: TenantConfigPublisher;
+  findOpenTenantConfigProposal: OpenTenantConfigProposalFinder;
   onProposalChange?: (proposal: Proposal) => void;
 }) {
   const approved = await apiClient.proposals.approve({
@@ -115,6 +150,7 @@ export async function approveAndApplyProposal({
         gatewayId,
         baseAccount,
         publishTenantConfig,
+        findOpenTenantConfigProposal,
       });
     }
   } catch (error) {
@@ -129,6 +165,7 @@ export async function approveAndApplyProposal({
       reviewedProposal = failed.data;
       onProposalChange?.(reviewedProposal);
     } catch {}
+    if (error instanceof AppActionError) throw error;
     if (
       error &&
       typeof error === "object" &&
@@ -150,7 +187,17 @@ export async function approveAndApplyProposal({
     });
     reviewedProposal = applied.data;
     onProposalChange?.(reviewedProposal);
-  } catch {
+  } catch (error) {
+    try {
+      const failed = await apiClient.proposals.markApplyFailed({
+        pluginId: reviewedProposal.pluginId,
+        entityId: reviewedProposal.entityId,
+        expectedUpdatedAt: reviewedProposal.updatedAt,
+        error: errorMessage(error),
+      });
+      reviewedProposal = failed.data;
+      onProposalChange?.(reviewedProposal);
+    } catch {}
     throw new AppActionError("proposal.finalizationFailedNamed", { id: resource.id });
   }
 
@@ -158,5 +205,8 @@ export async function approveAndApplyProposal({
 }
 
 export function errorMessage(error: unknown) {
+  if (error instanceof AppActionError) {
+    return translateEnglishAppMessage(error.messageId, error.values);
+  }
   return error instanceof Error ? error.message : String(error);
 }

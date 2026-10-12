@@ -6,4 +6,25 @@ For a new application, approval reserves `community-<proposal ID>` as the organi
 
 Applications submitted under the older wizard keep their `orgId`. Approval verifies that the linked NEAR user requested or owns that organization. A pending organization request from the separate #269/#284 workflow is activated in this approval transaction, with its original name and slug retained. An already active legacy organization is reused. A rejected request, missing organization, foreign owner or organization linked to another application is a conflict. The separate organization-request review path still handles requests that have no community application; its personal-organization exemption remains unchanged.
 
-The API creates the tenant, node and primary domain binding in one database transaction, all linked to the chosen organization. If the complete resource set already matches the saved proposal, a repeated apply returns the existing node. Conflicting existing resources are reported rather than adopted. DAO config publication and final apply-status changes remain in the existing flow; the retry and progress UX for those stages belongs to #322.
+The API creates the tenant, node and primary domain binding in one database transaction, all linked to the chosen organization. A repeated apply returns the existing node when one is linked to the proposal: first by the `communityProposalId` in the node's metadata, then by a live DAO tenant with the application's DAO account and organization. Names, slugs and hostnames are not compared, so a community or organization renamed between a failed apply and a retry is reused instead of becoming a conflict. Other existing resources are reported rather than adopted.
+
+## Resumable setup
+
+Approval moves a proposal to `approved`/`applying`. Each setup step is recorded on the proposal in `applySteps` while it is applying:
+
+| Step | Recorded by | Resource |
+| --- | --- | --- |
+| `organization` | API, after the auth plugin provisions it | organization ID |
+| `community` | API, after the tenant, node and binding exist | node ID |
+| `publication` | admin browser, after the registry serves the DAO's config | DAO proposal ID while a vote is open |
+
+Recording a step does not change `updatedAt`, so the admin's optimistic version stays valid. A completed step is never downgraded, and repeating a step writes nothing. `markApplied` completes the application. The admin proposal page and the applicant's `/apply` status show these steps from the saved record.
+
+A failed apply (`applyStatus: failed`) and one left `applying` for more than five minutes (`applyTimedOut`) appear on the admin Proposals **Pending** tab with a "Setup failed" or "Setup stalled" badge. **Resume** goes through `approve`, which accepts only those two states and compares `updatedAt`, so only one of several concurrent resumes proceeds. The resumed run reuses the organization and node, then checks publication before proposing anything to the DAO:
+
+1. If the registry already serves the expected domain and title, publication is recorded as complete.
+2. Otherwise, if the DAO has an open `__fastdata_kv` proposal, publication is recorded as waiting on that proposal and setup stops until the DAO votes. No second DAO proposal is created.
+3. If the registry or the DAO's proposals cannot be read, setup stops without publishing.
+4. Only when the config is unpublished and no DAO proposal is open is a new one submitted.
+
+If the final `markApplied` write fails, the browser records the failure so the application can be resumed immediately; the resumed run finds every step complete and only finalizes it. Trezu may show the executed FastKV proposal as failed because the namespace account has no contract; the registry check is what counts.

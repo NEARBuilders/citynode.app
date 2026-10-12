@@ -6,10 +6,18 @@ import { z } from "zod";
 const ReviewStatus = z.enum(["pending", "approved", "rejected", "removed"]);
 const ApplyStatus = z.enum(["not_started", "applying", "applied", "failed"]);
 const RemoveStatus = z.enum(["not_started", "removing", "removed", "failed"]);
+const ApplyStepName = z.string().regex(/^[a-z][a-z0-9_-]{0,49}$/);
+const ApplyStepStatus = z.enum(["completed", "waiting"]);
 const ExpectedProposalVersion = z.object({
   pluginId: z.string(),
   entityId: z.string(),
   expectedUpdatedAt: z.iso.datetime(),
+});
+
+export const ApplyStepSchema = z.object({
+  status: ApplyStepStatus,
+  resourceId: z.string().nullable(),
+  recordedAt: z.iso.datetime(),
 });
 
 export const ProposalSchema = z.object({
@@ -27,6 +35,8 @@ export const ProposalSchema = z.object({
   applyError: z.string().nullable(),
   removeError: z.string().nullable(),
   appliedResourceId: z.string().nullable(),
+  applySteps: z.record(z.string(), ApplyStepSchema),
+  applyTimedOut: z.boolean(),
   submissionCount: z.number().int().nonnegative(),
   appliedAt: z.iso.datetime().nullable(),
   removedAt: z.iso.datetime().nullable(),
@@ -175,6 +185,20 @@ export const contract = oc.router({
         entityId: z.string(),
         expectedUpdatedAt: z.iso.datetime(),
         error: z.string().max(4000),
+      }),
+    )
+    .output(z.object({ data: ProposalSchema }))
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  recordApplyStep: oc
+    .route({ method: "POST", path: "/v1/internal/proposals/{pluginId}/{entityId}/apply-steps" })
+    .input(
+      z.object({
+        pluginId: z.string(),
+        entityId: z.string(),
+        step: ApplyStepName,
+        status: ApplyStepStatus,
+        resourceId: z.string().min(1).max(255).optional(),
       }),
     )
     .output(z.object({ data: ProposalSchema }))
