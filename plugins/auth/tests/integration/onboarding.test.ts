@@ -72,6 +72,35 @@ describe("onboarding handlers", () => {
     expect(second.eventId).toBe(launch.eventId);
   });
 
+  it("starts a new station with its own join limit while the event's first one is still live", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const meetup = eventOf("Meetup");
+
+    const first = await handlers.onboarding.createOnboardingCode({
+      input: { ...meetup, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const second = await handlers.onboarding.createOnboardingCode({
+      input: { ...meetup, organizationId: org.id, maxUses: 5 },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+
+    expect(second.id).not.toBe(first.id);
+    expect(second.code).not.toBe(first.code);
+    expect(second.maxUses).toBe(5);
+    expect(second.teamId).toBe(first.teamId);
+
+    const listed = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    expect(listed.map((code: { id: string }) => code.id).sort()).toEqual(
+      [first.id, second.id].sort(),
+    );
+  });
+
   it("gives two events with the same title separate Event Teams", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);
@@ -130,6 +159,7 @@ describe("onboarding handlers", () => {
 
     expect(result.success).toBe(true);
     expect(result.alreadyRedeemed).toBe(false);
+    expect(result.organizationId).toBe(org.id);
     expect(result.organizationName).toBe(org.name);
     expect(result.eventName).toBe("Meetup");
 
@@ -222,6 +252,7 @@ describe("onboarding handlers", () => {
     });
 
     expect(again.alreadyRedeemed).toBe(true);
+    expect(again.organizationId).toBe(org.id);
 
     const drifted = await services.services.db.query.session.findFirst({
       where: eq(schema.session.userId, newcomer.userId),

@@ -1,5 +1,5 @@
 import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
-import { CaretRightIcon, GearIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, GearIcon, InfoIcon } from "@phosphor-icons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { pluginPath } from "@/app";
@@ -101,6 +101,16 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={pathname === "/about" || pathname === "/skill"}
+              tooltip={translate("footer.about")}
+              render={<Link to="/about" data-testid="sidebar-nav-about" />}
+            >
+              <InfoIcon />
+              <span>{translate("footer.about")}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               isActive={pathname.startsWith("/settings")}

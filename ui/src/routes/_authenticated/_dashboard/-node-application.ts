@@ -91,12 +91,16 @@ export function resolveActiveOrganizationLabel(
   );
 }
 
+export function isApprovedOrganization(organization: { status?: string | null }) {
+  return (organization.status ?? "active") === "active";
+}
+
 export function getDefaultOrganizationId(
   activeOrgId: string | null,
-  organizations: Array<{ id: string }>,
+  organizations: Array<{ id: string; status?: string | null }>,
 ) {
   if (activeOrgId) return null;
-  return organizations[0]?.id ?? null;
+  return organizations.find(isApprovedOrganization)?.id ?? null;
 }
 
 export function canSubmitNodeApplication({

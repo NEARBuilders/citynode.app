@@ -13,8 +13,10 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useAppTranslation } from "@/i18n/runtime";
+import { ApplyCreateOrganization } from "./-apply-create-organization";
+import { isApprovedOrganization } from "./-node-application";
 
-type OrganizationOption = { id: string; name: string };
+type OrganizationOption = { id: string; name: string; status?: string | null };
 
 export function ApplyOrganizationStep({
   organizations,
@@ -40,28 +42,24 @@ export function ApplyOrganizationStep({
       </p>
     );
   }
-  if (organizations.length === 0) {
+  const approved = organizations.filter(isApprovedOrganization);
+  const waiting = organizations.find((organization) => organization.status === "pending");
+  if (approved.length === 0 && waiting) {
     return (
-      <div className="flex flex-col items-start gap-4">
-        <p className="text-sm text-muted-foreground">{t("apply.organization.required")}</p>
-        <Button
-          className="w-full sm:w-auto"
-          nativeButton={false}
-          render={<Link to="/orgs" />}
-          data-testid="apply.create-org"
-        >
-          {t("apply.organization.create")}
-          <ArrowRightIcon data-icon="inline-end" />
-        </Button>
-      </div>
+      <p className="text-sm text-muted-foreground" data-testid="apply.org-waiting">
+        {t("apply.organization.waiting", { name: waiting.name })}
+      </p>
     );
+  }
+  if (approved.length === 0) {
+    return <ApplyCreateOrganization />;
   }
   return (
     <div className="flex flex-col gap-4">
       <Field className="sm:max-w-sm">
         <FieldLabel htmlFor="apply-organization">{t("apply.organization.as")}</FieldLabel>
         <Select
-          items={organizations.map((organization) => ({
+          items={approved.map((organization) => ({
             label: organization.name,
             value: organization.id,
           }))}
@@ -75,7 +73,7 @@ export function ApplyOrganizationStep({
             <SelectValue placeholder={t("apply.organization.choose")} />
           </SelectTrigger>
           <SelectContent>
-            {organizations.map((organization) => (
+            {approved.map((organization) => (
               <SelectItem key={organization.id} value={organization.id}>
                 {organization.name}
               </SelectItem>
@@ -127,6 +125,24 @@ export function ApplyDaoStep({
   const t = useAppTranslation();
   return (
     <div className="flex flex-col items-start gap-4">
+      <div
+        className="flex flex-col gap-2 text-sm text-muted-foreground"
+        data-testid="apply.dao-explainer"
+      >
+        <p>{t("apply.dao.what")}</p>
+        <p>
+          {t("apply.dao.none")}{" "}
+          <a
+            className="text-foreground underline underline-offset-4"
+            href="https://trezu.app/create"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="apply.dao-create"
+          >
+            {t("apply.dao.create")}
+          </a>
+        </p>
+      </div>
       <div className="w-full">
         <ConnectDao onVerified={onDaoVerified} purpose="apply" variant="plain" />
       </div>
