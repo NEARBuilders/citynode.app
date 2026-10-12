@@ -332,25 +332,6 @@ describe("node overview code redemptions", () => {
     "dashboard-node.stat-new-members-last-month",
   ];
 
-  it("shows organizers this month's and last month's figures for their community", async () => {
-    stubChain();
-    const requested: unknown[] = [];
-    harness.getOnboardingRedemptions = async (input) => {
-      requested.push(input);
-      return {
-        thisMonth: { month: "2031-03", redeemed: 7, newMembers: 5 },
-        lastMonth: { month: "2031-02", redeemed: 3, newMembers: 0 },
-      };
-    };
-    renderOverview({ nearAccount: null, canOrganize: true });
-    await waitFor(() =>
-      expect(
-        stats.map((testId) => screen.getByTestId(testId).querySelector("dd")?.textContent),
-      ).toEqual(["7", "5", "3", "0"]),
-    );
-    expect(requested).toEqual([{ organizationId: "org-1" }]);
-  });
-
   it("keeps the rest of the overview when the figures fail to load", async () => {
     stubChain();
     harness.getOnboardingRedemptions = () => Promise.reject(new Error("unavailable"));

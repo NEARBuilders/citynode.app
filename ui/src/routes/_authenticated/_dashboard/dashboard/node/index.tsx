@@ -51,6 +51,33 @@ function Stat({ label, value, testId }: { label: string; value: string; testId: 
   );
 }
 
+const REDEMPTION_STATS = [
+  {
+    label: "dashboard.redeemedThisMonth",
+    month: "thisMonth",
+    figure: "redeemed",
+    testId: "dashboard-node.stat-redeemed-this-month",
+  },
+  {
+    label: "dashboard.newMembersThisMonth",
+    month: "thisMonth",
+    figure: "newMembers",
+    testId: "dashboard-node.stat-new-members-this-month",
+  },
+  {
+    label: "dashboard.redeemedLastMonth",
+    month: "lastMonth",
+    figure: "redeemed",
+    testId: "dashboard-node.stat-redeemed-last-month",
+  },
+  {
+    label: "dashboard.newMembersLastMonth",
+    month: "lastMonth",
+    figure: "newMembers",
+    testId: "dashboard-node.stat-new-members-last-month",
+  },
+] as const;
+
 function NodeOverview() {
   const translate = useAppTranslation();
   const {
@@ -153,68 +180,54 @@ function NodeOverview() {
         }
       />
       {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
-      <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-        <Stat
-          label={translate("community.upcoming")}
-          value={activities.isSuccess && liveCount !== null ? String(liveCount) : "—"}
-          testId="dashboard-node.stat-events"
-        />
-        <Stat
-          label={translate("common.validators")}
-          value={String(summary.validators.length)}
-          testId="dashboard-node.stat-validators"
-        />
-        <Stat
-          label={translate("dashboard.subcommunities")}
-          value={String(summary.children.length)}
-          testId="dashboard-node.stat-children"
-        />
-        <Stat
-          label={translate("common.staking")}
-          value={
-            summary.stakingValidators.validators.length === 0
-              ? "—"
-              : stakingIsInherited
-                ? translate("dashboard.stakingInherited")
-                : translate("dashboard.stakingOwn")
-          }
-          testId="dashboard-node.stat-staking"
-        />
-        {canOrganize &&
-          (redemptions.isError ? (
-            <div
-              className="col-span-2 sm:col-span-4"
-              data-testid="dashboard-node.redemptions-error"
-            >
-              <p className="text-sm text-muted-foreground">
-                {translate("dashboard.redemptionsFailed")}
-              </p>
-            </div>
-          ) : (
-            <>
+      <div className="flex flex-col gap-6">
+        <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+          <Stat
+            label={translate("community.upcoming")}
+            value={activities.isSuccess && liveCount !== null ? String(liveCount) : "—"}
+            testId="dashboard-node.stat-events"
+          />
+          <Stat
+            label={translate("common.validators")}
+            value={String(summary.validators.length)}
+            testId="dashboard-node.stat-validators"
+          />
+          <Stat
+            label={translate("dashboard.subcommunities")}
+            value={String(summary.children.length)}
+            testId="dashboard-node.stat-children"
+          />
+          <Stat
+            label={translate("common.staking")}
+            value={
+              summary.stakingValidators.validators.length === 0
+                ? "—"
+                : stakingIsInherited
+                  ? translate("dashboard.stakingInherited")
+                  : translate("dashboard.stakingOwn")
+            }
+            testId="dashboard-node.stat-staking"
+          />
+          {canOrganize &&
+            !redemptions.isError &&
+            REDEMPTION_STATS.map(({ label, month, figure, testId }) => (
               <Stat
-                label={translate("dashboard.redeemedThisMonth")}
-                value={redemptions.data ? String(redemptions.data.thisMonth.redeemed) : "—"}
-                testId="dashboard-node.stat-redeemed-this-month"
+                key={testId}
+                label={translate(label)}
+                value={redemptions.data ? String(redemptions.data[month][figure]) : "—"}
+                testId={testId}
               />
-              <Stat
-                label={translate("dashboard.newMembersThisMonth")}
-                value={redemptions.data ? String(redemptions.data.thisMonth.newMembers) : "—"}
-                testId="dashboard-node.stat-new-members-this-month"
-              />
-              <Stat
-                label={translate("dashboard.redeemedLastMonth")}
-                value={redemptions.data ? String(redemptions.data.lastMonth.redeemed) : "—"}
-                testId="dashboard-node.stat-redeemed-last-month"
-              />
-              <Stat
-                label={translate("dashboard.newMembersLastMonth")}
-                value={redemptions.data ? String(redemptions.data.lastMonth.newMembers) : "—"}
-                testId="dashboard-node.stat-new-members-last-month"
-              />
-            </>
-          ))}
-      </dl>
+            ))}
+        </dl>
+        {canOrganize && redemptions.isError && (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="dashboard-node.redemptions-error"
+          >
+            {translate("dashboard.redemptionsFailed")}
+          </p>
+        )}
+      </div>
 
       {daoOwned && canManage && pendingConfig && orgSlug && (
         <Item variant="outline" data-testid="dashboard-node.pending-config-proposal">
