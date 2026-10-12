@@ -101,6 +101,39 @@ describe("events-area organizers", () => {
     }
   });
 
+  it("lists only events to an events-team member, and everything to owners", async () => {
+    const { id, org, node, owner } = await community();
+    const draftEvent = await owner.saveDiscoveryActivity(eventInput(node.id));
+    const social = (status: "draft" | "published") => ({
+      ownerNodeId: node.id,
+      nodeIds: [node.id],
+      kind: "social" as const,
+      title: `Owner ${status} update`,
+      summary: "Owner-only post",
+      url: `https://example.com/social/${crypto.randomUUID()}`,
+      source: "Community",
+      publishedAt: new Date().toISOString(),
+      startsAt: null,
+      endsAt: null,
+      timezone: "UTC",
+      venue: "",
+      status,
+    });
+    const draftPost = await owner.saveDiscoveryActivity(social("draft"));
+    const publishedPost = await owner.saveDiscoveryActivity(social("published"));
+
+    const organizer = await getPluginClient(memberWithTeam(`organizer-${id}`, org, ["events"]));
+    const listed = await organizer.listDiscoveryActivities({ nodeId: node.id });
+    expect(listed.map((activity) => activity.id)).toEqual([draftEvent.id]);
+
+    const ownerIds = (await owner.listDiscoveryActivities({ nodeId: node.id })).map(
+      (activity) => activity.id,
+    );
+    expect(ownerIds).toEqual(
+      expect.arrayContaining([draftEvent.id, draftPost.id, publishedPost.id]),
+    );
+  });
+
   it("keeps community settings and social updates with owners and admins", async () => {
     const { id, org, node, owner } = await community();
     const organizer = await getPluginClient(memberWithTeam(`organizer-${id}`, org, ["events"]));
