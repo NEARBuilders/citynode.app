@@ -185,7 +185,7 @@ it("derives coordinates from location via Nominatim and skips when already geoco
   expect(failed).toMatchObject({
     latitude: null,
     longitude: null,
-    geocodeHint: expect.stringContaining("Map lookup is unavailable"),
+    geocodeHint: "unavailable",
   });
   vi.unstubAllGlobals();
 });
@@ -257,6 +257,44 @@ it("publishes attributed activity, shares events and removes cancelled evidence"
     active: false,
     updates: [],
   });
+});
+
+it("lets members read their community's scheduled events but not drafts or hidden ones", async () => {
+  const { node, editor, member } = await fixture();
+  const now = Date.now();
+  const base = {
+    ownerNodeId: node.id,
+    nodeIds: [node.id],
+    kind: "event" as const,
+    summary: "Meet the builders",
+    source: "Community",
+    publishedAt: new Date(now).toISOString(),
+    startsAt: new Date(now + 86400000).toISOString(),
+    endsAt: new Date(now + 90000000).toISOString(),
+    timezone: "Asia/Karachi",
+    venue: "Online",
+  };
+  const live = await editor.saveDiscoveryActivity({
+    ...base,
+    title: "Community meetup",
+    url: `https://example.com/members/${node.id}/meetup`,
+    status: "published",
+  });
+  const draft = await editor.saveDiscoveryActivity({
+    ...base,
+    title: "Planning session",
+    url: `https://example.com/members/${node.id}/planning`,
+    status: "draft",
+  });
+  expect((await editor.listDiscoveryActivities({ nodeId: node.id })).map((a) => a.id)).toEqual(
+    expect.arrayContaining([live.id, draft.id]),
+  );
+  expect((await member.listDiscoveryActivities({ nodeId: node.id })).map((a) => a.id)).toEqual([
+    live.id,
+  ]);
+  await expect(
+    (await getPluginClient(authedContext("outsider"))).listDiscoveryActivities({ nodeId: node.id }),
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
 });
 
 it("uses original dates at activity boundaries and never inherits freshness", async () => {

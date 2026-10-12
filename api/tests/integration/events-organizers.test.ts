@@ -140,21 +140,33 @@ describe("events-area organizers", () => {
     await expect(owner.saveDiscoveryActivity(social)).resolves.toMatchObject({ kind: "social" });
   });
 
-  it("refuses members without the events area and events teams of other organizations", async () => {
+  it("keeps members without the events area to published items and refuses other organizations", async () => {
     const { id, org, node, owner } = await community();
     const draft = await owner.saveDiscoveryActivity(eventInput(node.id));
-    const refused = [
+    const published = await owner.saveDiscoveryActivity(
+      eventInput(node.id, { status: "published" }),
+    );
+    const members = [
       await getPluginClient(orgContext(`plain-${id}`, org, "member")),
       await getPluginClient(memberWithTeam(`treasury-${id}`, org, ["finance", "stake"])),
       await getPluginClient(
         memberWithTeam(`ops-${id}`, org, ["node-operations"], { active: true }),
       ),
-      await getPluginClient(memberWithTeam(`elsewhere-${id}`, `other-${org}`, ["events"])),
     ];
-    for (const client of refused) {
-      await expect(client.listDiscoveryActivities({ nodeId: node.id })).rejects.toMatchObject({
-        code: "FORBIDDEN",
-      });
+    const outsider = await getPluginClient(
+      memberWithTeam(`elsewhere-${id}`, `other-${org}`, ["events"]),
+    );
+    for (const client of members) {
+      const ids = (await client.listDiscoveryActivities({ nodeId: node.id })).map(
+        (activity) => activity.id,
+      );
+      expect(ids).toContain(published.id);
+      expect(ids).not.toContain(draft.id);
+    }
+    await expect(outsider.listDiscoveryActivities({ nodeId: node.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    for (const client of [...members, outsider]) {
       await expect(client.saveDiscoveryActivity(eventInput(node.id))).rejects.toMatchObject({
         code: "FORBIDDEN",
       });

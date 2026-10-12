@@ -56,6 +56,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "准备好开始开发了吗？",
   ],
   "community.addLink": ["Add link", "Añadir enlace", "Ajouter un lien", "添加链接"],
+  "community.addLocation": [
+    "Add a location",
+    "Añadir una ubicación",
+    "Ajouter un lieu",
+    "添加地点",
+  ],
   "community.all": [
     "All communities",
     "Todas las comunidades",
@@ -118,6 +124,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "{name} est à la une",
     "{name}已被推荐",
   ],
+  "community.geocodeUnavailable": [
+    "The profile was saved, but the map service is down right now, so there's no pin yet. Save again later to add it.",
+    "El perfil se guardó, pero el servicio de mapas no está disponible ahora, así que aún no hay marcador. Vuelve a guardar más tarde.",
+    "Le profil a été enregistré, mais le service de carte est indisponible pour le moment : pas encore d’épingle. Enregistrez à nouveau plus tard.",
+    "资料已保存，但地图服务暂时不可用，因此还没有地图标记。请稍后重新保存。",
+  ],
   "community.geocodeHint": [
     "The profile was saved, but the location could not be found on the map. Check the address and save again.",
     "El perfil se guardó, pero no se encontró la ubicación en el mapa. Comprueba la dirección y vuelve a guardar.",
@@ -147,6 +159,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Los eventos publicados aparecen cuando tu perfil es público.",
     "Les événements publiés apparaissent lorsque votre profil est public.",
     "资料公开后，已发布活动才会显示。",
+  ],
+  "community.hiddenMapHint": [
+    "Visitors can't find your community or its events yet.",
+    "Los visitantes aún no pueden encontrar tu comunidad ni sus eventos.",
+    "Les visiteurs ne peuvent pas encore trouver votre communauté ni ses événements.",
+    "访客暂时无法找到你的社区及其活动。",
   ],
   "community.historyDraft": [
     "Saved as a draft",
@@ -252,6 +270,24 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Elle a peut-être été déplacée ou n'est pas encore configurée.",
     "社区可能已移动，或尚未设置。",
   ],
+  "community.notOnExplore": [
+    "Not on Explore",
+    "No aparece en Explorar",
+    "Absente d’Explorer",
+    "未在探索页面显示",
+  ],
+  "community.notOnMap": [
+    "On Explore, but not on the map",
+    "En Explorar, pero no en el mapa",
+    "Dans Explorer, mais absente de la carte",
+    "已在探索页面显示，但未标记在地图上",
+  ],
+  "community.notOnMapHint": [
+    "Add a location so visitors can find you on the map.",
+    "Añade una ubicación para que los visitantes te encuentren en el mapa.",
+    "Ajoutez un lieu pour que les visiteurs vous trouvent sur la carte.",
+    "添加地点，方便访客在地图上找到你。",
+  ],
   "community.offMap": [
     "Not on the map",
     "Fuera del mapa",
@@ -259,7 +295,18 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "尚未标记在地图上",
   ],
   "community.onMap": ["On the map", "En el mapa", "Sur la carte", "已标记在地图上"],
-  "community.openProfile": ["Open profile", "Abrir perfil", "Ouvrir le profil", "打开资料"],
+  "community.pendingDeletionHint": [
+    "This community is being deleted.",
+    "Esta comunidad se está eliminando.",
+    "Cette communauté est en cours de suppression.",
+    "此社区正在删除中。",
+  ],
+  "community.pendingHint": [
+    "This community is waiting for approval.",
+    "Esta comunidad está pendiente de aprobación.",
+    "Cette communauté attend d’être approuvée.",
+    "此社区正在等待审核。",
+  ],
   "community.profile": ["Profile", "Perfil", "Profil", "资料"],
   "community.profileExample": [
     "Who is this community for? What do you do together?",
@@ -273,6 +320,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Perfil guardado y publicado en Explorar",
     "Profil enregistré et publié dans Explorer",
     "资料已保存并发布至探索页面",
+  ],
+  "community.publishProfile": [
+    "Publish your profile",
+    "Publica tu perfil",
+    "Publier votre profil",
+    "发布你的资料",
   ],
   "community.recentlyActive": [
     "Recently active",
@@ -323,6 +376,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Dejar de destacar",
     "Retirer de la une",
     "取消推荐",
+  ],
+  "community.suspendedHint": [
+    "This community is suspended, so it and its events are hidden.",
+    "Esta comunidad está suspendida, por lo que tanto ella como sus eventos están ocultos.",
+    "Cette communauté est suspendue : elle et ses événements sont masqués.",
+    "此社区已被暂停，社区及其活动均已隐藏。",
   ],
   "community.unfeaturedNamed": [
     "{name} is no longer featured",
@@ -866,17 +925,17 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "在 trezu.app 投票",
   ],
   "stake.unlockNotice": [
-    "Unlocks for withdrawal after about a day.",
-    "Se podrá retirar después de aproximadamente un día.",
-    "Le retrait sera possible après environ un jour.",
-    "约一天后可解锁提取。",
+    "Unlocks for withdrawal after about 2–3 days.",
+    "Se podrá retirar después de unos 2–3 días.",
+    "Le retrait sera possible après environ 2 à 3 jours.",
+    "约 2–3 天后可解锁提取。",
   ],
   "stake.unstaked": ["Unstaked", "Sin delegar", "Hors staking", "已解除质押"],
   "stake.unstakeHint": [
-    "To unstake, use the wallet you staked from; unstaked NEAR unlocks after about a day. Unstaking more restarts the wait for everything already unstaked.",
-    "Para retirar tu delegación, usa la billetera con la que delegaste; los NEAR retirados se desbloquean en aproximadamente un día. Si retiras más, la espera se reinicia para todo lo ya retirado.",
-    "Pour retirer votre staking, utilisez le portefeuille avec lequel vous avez staké ; les NEAR retirés sont disponibles après environ un jour. Retirer davantage relance l'attente pour tout ce qui a déjà été retiré.",
-    "如需解除质押，请使用质押时的钱包；解除质押的 NEAR 约一天后解锁。再次解除质押会重新开始所有已解除质押 NEAR 的等待时间。",
+    "To unstake, use the wallet you staked from; unstaked NEAR unlocks after about 2–3 days. Unstaking more restarts the wait for everything already unstaked.",
+    "Para retirar tu delegación, usa la billetera con la que delegaste; los NEAR retirados se desbloquean en unos 2–3 días. Si retiras más, la espera se reinicia para todo lo ya retirado.",
+    "Pour retirer votre staking, utilisez le portefeuille avec lequel vous avez staké ; les NEAR retirés sont disponibles après environ 2 à 3 jours. Retirer davantage relance l'attente pour tout ce qui a déjà été retiré.",
+    "如需解除质押，请使用质押时的钱包；解除质押的 NEAR 约 2–3 天后解锁。再次解除质押会重新开始所有已解除质押 NEAR 的等待时间。",
   ],
   "stake.unstakeGuide": [
     "How unstaking works",
@@ -891,10 +950,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "在此质押即支持该社区，你本人不会获得奖励。",
   ],
   "stake.unstakeProposal": [
-    "Creates a treasury proposal. Rewards are already included; the NEAR unlocks after about a day.",
-    "Crea una propuesta de tesorería. Las recompensas ya están incluidas; los NEAR se desbloquean en aproximadamente un día.",
-    "Crée une proposition de trésorerie. Les récompenses sont incluses ; les NEAR seront disponibles après environ un jour.",
-    "创建金库提案，金额已包含奖励，NEAR 约一天后解锁。",
+    "Creates a treasury proposal. Rewards are already included; the NEAR unlocks after about 2–3 days.",
+    "Crea una propuesta de tesorería. Las recompensas ya están incluidas; los NEAR se desbloquean en unos 2–3 días.",
+    "Crée une proposition de trésorerie. Les récompenses sont incluses ; les NEAR seront disponibles après environ 2 à 3 jours.",
+    "创建金库提案，金额已包含奖励，NEAR 约 2–3 天后解锁。",
   ],
   "stake.unstakeProposed": [
     "Unstake proposed",
@@ -909,10 +968,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "只有 NEAR 验证节点可以接受 NEAR 质押。",
   ],
   "stake.withdrawDelay": [
-    "Withdraw to {account} in about a day.",
-    "Retira a {account} en aproximadamente un día.",
-    "Retirez vers {account} dans environ un jour.",
-    "约一天后可提取至 {account}。",
+    "Withdraw to {account} in about 2–3 days.",
+    "Retira a {account} en unos 2–3 días.",
+    "Retirez vers {account} dans environ 2 à 3 jours.",
+    "约 2–3 天后可提取至 {account}。",
   ],
   "stake.withdrawProposal": [
     "Creates a treasury proposal to move unstaked NEAR back to the team.",
@@ -931,5 +990,47 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Devuelve los NEAR a {account}.",
     "Restitue les NEAR à {account}.",
     "将 NEAR 转回 {account}。",
+  ],
+  "payout.stepUnstake": [
+    "Step 1 of 2 · Unstake from the pool (a treasury vote)",
+    "Paso 1 de 2 · Retirar del pool (votación de la tesorería)",
+    "Étape 1 sur 2 · Retirer du pool (vote de la trésorerie)",
+    "第 1 步，共 2 步 · 从质押池解除质押（金库投票）",
+  ],
+  "payout.stepWithdraw": [
+    "Step 2 of 2 · Withdraw to the treasury (a second vote)",
+    "Paso 2 de 2 · Retirar a la tesorería (segunda votación)",
+    "Étape 2 sur 2 · Retirer vers la trésorerie (second vote)",
+    "第 2 步，共 2 步 · 提取到金库（第二次投票）",
+  ],
+  "payout.stepWithdrawWaiting": [
+    "Step 2 of 2 · Withdraw to the treasury, once the NEAR unlocks",
+    "Paso 2 de 2 · Retirar a la tesorería cuando se desbloqueen los NEAR",
+    "Étape 2 sur 2 · Retirer vers la trésorerie une fois les NEAR débloqués",
+    "第 2 步，共 2 步 · NEAR 解锁后提取到金库",
+  ],
+  "payout.approvals": [
+    "Proposal #{id}: {approved} of {required} approvals.",
+    "Propuesta #{id}: {approved} de {required} aprobaciones.",
+    "Proposition n°{id} : {approved} approbation(s) sur {required}.",
+    "提案 #{id}：已获 {approved}/{required} 个批准。",
+  ],
+  "payout.votingCloses": [
+    "Voting closes {date}.",
+    "La votación cierra el {date}.",
+    "Le vote se termine le {date}.",
+    "投票将于 {date} 截止。",
+  ],
+  "payout.unlockSince": [
+    "Unstake proposed {date}. NEAR usually unlocks 2–3 days after the vote passes; then propose the withdraw.",
+    "Retiro propuesto el {date}. Los NEAR suelen desbloquearse 2–3 días después de aprobarse la votación; luego propón la retirada.",
+    "Retrait proposé le {date}. Les NEAR sont généralement débloqués 2 à 3 jours après l’adoption du vote ; proposez ensuite le retrait.",
+    "解除质押提案于 {date} 提出。NEAR 通常在投票通过后 2–3 天解锁，届时再发起提取提案。",
+  ],
+  "payout.poolStats": [
+    "The pool holds {total} from {count} stakers · {fee} fee.",
+    "El pool tiene {total} de {count} participantes · comisión {fee}.",
+    "Le pool détient {total} de {count} stakers · frais de {fee}.",
+    "质押池共有 {count} 位质押者的 {total} · 费率 {fee}。",
   ],
 });

@@ -28,6 +28,13 @@ const pageSchema = z.object({
   next_cursor: z.string().optional(),
 });
 
+export function describeLumaFailure(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  return error.cause === undefined
+    ? error.message
+    : `${error.message} (${describeLumaFailure(error.cause)})`;
+}
+
 export function createLumaCalendars(keys: string) {
   const apiKeys = [
     ...new Set(
@@ -44,11 +51,12 @@ export function createLumaCalendars(keys: string) {
         signal: AbortSignal.timeout(8000),
         redirect: "error",
       });
-      if (!response.ok) throw new Error("Luma unavailable");
+      if (!response.ok) throw new Error(`Luma responded with HTTP ${response.status}`);
       return await response.json();
-    } catch {
+    } catch (cause) {
       throw new ORPCError("BAD_REQUEST", {
         message: "Luma is unavailable. Check the calendar connection and try again.",
+        cause,
       });
     }
   }
@@ -61,7 +69,7 @@ export function createLumaCalendars(keys: string) {
     );
     return {
       entries: result.flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])),
-      unavailableCount: result.filter((r) => r.status === "rejected").length,
+      failures: result.flatMap((r) => (r.status === "rejected" ? [r.reason] : [])),
     };
   }
   return {
@@ -69,15 +77,18 @@ export function createLumaCalendars(keys: string) {
       const result = await registry();
       return {
         calendars: result.entries.map((entry) => entry.calendar),
-        unavailableCount: result.unavailableCount,
+        unavailableCount: result.failures.length,
       };
     },
     snapshot: async (calendarId: string) => {
-      const { entries } = await registry();
+      const { entries, failures } = await registry();
       const entry = entries.find((entry) => entry.calendar.id === calendarId);
       if (!entry)
         throw new ORPCError("BAD_REQUEST", {
           message: "This Luma calendar is not connected or is unavailable.",
+          cause: failures.length
+            ? new AggregateError(failures, failures.map(describeLumaFailure).join("; "))
+            : undefined,
         });
       const events: z.infer<typeof eventSchema>[] = [];
       const cursors = new Set<string>();

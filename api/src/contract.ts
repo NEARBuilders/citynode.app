@@ -383,6 +383,11 @@ export const contract = oc.router({
     .input(z.object({ accountId: z.string() }))
     .output(PublicTenantSchema.nullable()),
 
+  resolveTenantById: oc
+    .route({ method: "GET", path: "/tenants/id/{tenantId}" })
+    .input(z.object({ tenantId: z.string() }))
+    .output(PublicTenantSchema.nullable()),
+
   resolveTenantByOrgId: oc
     .route({ method: "GET", path: "/tenants/org/{orgId}" })
     .input(z.object({ orgId: z.string() }))

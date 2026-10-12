@@ -40,7 +40,7 @@ export function useShellNav(
   pluginNav?: { items: Parameters<typeof pluginNavToSidebar>[0] },
 ) {
   const translate = useAppTranslation();
-  const { user, activeOrg } = useIdentity();
+  const { user, activeOrg, organizations, isOrganizationsLoading } = useIdentity();
   const signedIn = Boolean(user);
   const { data: workspace = resolveTeamWorkspace(null) } = useTeamWorkspace(signedIn);
   const canCurate = useCanCurate(signedIn && !isAdmin);
@@ -49,7 +49,9 @@ export function useShellNav(
   const builtin = buildNavItems(
     {
       activeOrgSlug: activeOrg?.slug ?? null,
+      hasOrganization: isOrganizationsLoading || organizations.length > 0,
       canManageOrganization: workspace.canManageOrganization ?? false,
+      canOrganizeEvents: workspace.teams.some((team) => team.areas.includes("events")),
       canCurate,
       isAdmin,
     },

@@ -104,3 +104,9 @@ export async function requireTeamArea({
     throw redirect({ to: "/dashboard", search: { restricted: areas[0] } });
   }
 }
+
+export function canOrganizeEvents(context: AuthRequestContext | null | undefined): boolean {
+  if (canManageCommunity(context)) return true;
+  if (!context?.organization?.member?.role) return false;
+  return (context.organization.teams ?? []).some((team) => team.areas.includes("events"));
+}

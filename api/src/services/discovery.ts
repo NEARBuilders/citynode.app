@@ -25,7 +25,7 @@ import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
 import { resolveTeamAccess } from "../team-access-policy";
 import { type GeocodeService, GeocodeTag, shouldGeocodeProfile } from "./discovery-geocode";
-import { createLumaCalendars } from "./discovery-luma";
+import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";
 
 const EVENTS_AREA: FeatureArea = "events";
@@ -54,7 +54,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     return Effect.void;
   }
 
-  function authorize(nodeId: string, context: AuthContext, area?: FeatureArea) {
+  function nodeAccess(nodeId: string, context: AuthContext, area?: FeatureArea) {
     return Effect.gen(function* () {
       if (!context.userId || !context.user) {
         return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
@@ -69,18 +69,23 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       if (!record) {
         return yield* Effect.fail(new ORPCError("NOT_FOUND"));
       }
-      if (context.user.role === "admin") return record;
+      if (context.user.role === "admin") return { record, level: "editor" as const };
       const org = context.organization;
-      if (!record.tenant.orgId || org?.activeOrganizationId !== record.tenant.orgId) {
-        return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+      const role = org?.member?.role ?? "";
+      if (!record.tenant.orgId || org?.activeOrganizationId !== record.tenant.orgId || !role) {
+        return { record, level: null };
       }
-      const role = org.member?.role ?? "";
       const granted =
         ["owner", "admin"].includes(role) ||
-        (!!role &&
-          !!area &&
-          resolveTeamAccess(context).teams.some((team) => team.areas.includes(area)));
-      if (!granted) {
+        (!!area && resolveTeamAccess(context).teams.some((team) => team.areas.includes(area)));
+      return { record, level: granted ? ("editor" as const) : ("member" as const) };
+    });
+  }
+
+  function authorize(nodeId: string, context: AuthContext, area?: FeatureArea) {
+    return Effect.gen(function* () {
+      const { record, level } = yield* nodeAccess(nodeId, context, area);
+      if (level !== "editor") {
         return yield* Effect.fail(new ORPCError("FORBIDDEN"));
       }
       return record;
@@ -344,7 +349,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             .where(eq(discoveryActivities.canonicalUrl, data.url));
           if (duplicate && duplicate.id !== data.id)
             throw new ORPCError("BAD_REQUEST", {
-              message: "This source URL already has an activity",
+              message: `"${duplicate.data.title}" already uses this link. Give each event its own page link, like its Luma or Meetup page.`,
             });
           await tx
             .insert(discoveryActivities)
@@ -518,6 +523,11 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       for (const connection of due) {
         const retryAt = yield* Clock.currentTimeMillis;
         yield* syncLuma(connection).pipe(
+          Effect.tapError((error) =>
+            Effect.logWarning(
+              `[Discovery] Luma sync failed for node ${connection.nodeId} calendar ${connection.calendarId}: ${describeLumaFailure(error)}`,
+            ),
+          ),
           Effect.catch(() =>
             query(() =>
               db
@@ -940,11 +950,17 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     activities: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context, EVENTS_AREA);
+        const { level } = yield* nodeAccess(nodeId, context, EVENTS_AREA);
+        if (!level) {
+          return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+        }
         const rows = yield* query(() =>
           db.select().from(discoveryActivities).where(eq(discoveryActivities.ownerNodeId, nodeId)),
         );
-        return rows.map((r) => r.data);
+        const activities = rows.map((r) => r.data);
+        return level === "editor"
+          ? activities
+          : activities.filter((activity) => activity.status !== "draft" && !activity.luma?.hidden);
       }),
     eventOrganization: (eventId: string) =>
       Effect.gen(function* () {
@@ -1023,10 +1039,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               latitude: null,
               longitude: null,
               geocodedLocation: null,
-              geocodeHint:
-                geocoded.reason === "not_found"
-                  ? "Couldn't place that location on the map. Try a clearer city or venue name."
-                  : "Map lookup is unavailable right now. Your profile was saved without a pin.",
+              geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
             };
           }
         }

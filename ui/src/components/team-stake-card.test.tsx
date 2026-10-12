@@ -11,7 +11,13 @@ import { englishAppMessages } from "@/i18n/catalogs";
 import { render } from "@/i18n/test-render";
 import type { StakePoolStatus } from "@/lib/queries/stake-pool";
 import { teamPoolCall } from "@/lib/team-unstake";
-import { canSeeTeamStake, TeamStakeCard, teamPoolPhase, teamPoolState } from "./team-stake-card";
+import {
+  canSeeTeamStake,
+  payoutSteps,
+  TeamStakeCard,
+  teamPoolPhase,
+  teamPoolState,
+} from "./team-stake-card";
 
 const target = {
   teamAccountId: "india.sputnik-dao.near",
@@ -1405,5 +1411,19 @@ describe("TeamStakeCard pool state", () => {
       "No staking pool is linked to this community yet.",
     );
     expect(screen.queryByText("Link a team treasury to see its stake here.")).toBeNull();
+  });
+});
+
+describe("payout steps", () => {
+  const states = (...args: Parameters<typeof payoutSteps>) =>
+    payoutSteps(...args).map((step) => step.state);
+  const t = (id: string) => id as never;
+
+  it("walks unstake, the unlock wait and withdraw as two steps", () => {
+    expect(states("unstake", null, t)).toEqual(["pending", "pending"]);
+    expect(states("proposal-pending", "unstake", t)).toEqual(["running", "pending"]);
+    expect(states("pending-release", null, t)).toEqual(["success", "pending"]);
+    expect(states("withdraw", null, t)).toEqual(["success", "pending"]);
+    expect(states("proposal-pending", "withdraw", t)).toEqual(["success", "running"]);
   });
 });
