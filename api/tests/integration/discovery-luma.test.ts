@@ -248,3 +248,56 @@ it("imports Luma events hidden and lets org admins show or hide them across sync
     ),
   ).toMatchObject({ status: "published" });
 });
+
+it("logs why a background Luma sync failed on the server", async () => {
+  const realFetch = globalThis.fetch;
+  let status = 200;
+  vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.origin !== "https://public-api.luma.com") return realFetch(input, init);
+    if (status !== 200) return new Response("Unavailable", { status });
+    return Response.json(
+      url.pathname === "/v1/calendars/get"
+        ? { id: "cal-failing", name: "Failing", url: "https://luma.com/failing" }
+        : { entries: [], has_more: false },
+    );
+  });
+  const provisioner = await getPluginClient(
+    daoContext("luma-fail-owner", "luma-fail-org", "luma-fail.near"),
+  );
+  const tenant = await provisioner.createTenant({
+    name: "Luma failing node",
+    accountId: "luma-fail.near",
+  });
+  const node = await provisioner.createNode({
+    name: "Luma failing city",
+    slug: "luma-failing-city",
+    kind: "city",
+    tenantId: tenant.id,
+  });
+  const editor = await getPluginClient(orgContext("luma-fail-owner", "luma-fail-org"));
+  await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-failing" });
+  status = 503;
+  const logged: string[] = [];
+  const capture = (...args: unknown[]) => {
+    logged.push(args.map(String).join(" "));
+  };
+  const spies = [
+    vi.spyOn(console, "log").mockImplementation(capture),
+    vi.spyOn(console, "error").mockImplementation(capture),
+  ];
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60_000);
+  try {
+    await (await getPluginClient()).listDiscovery({});
+    await expect
+      .poll(async () => (await editor.listDiscoveryLumaCalendars({ nodeId: node.id })).connection)
+      .toMatchObject({ error: expect.stringContaining("temporarily unavailable") });
+    expect(logged.join("\n")).toContain(
+      `Luma sync failed for node ${node.id} calendar cal-failing`,
+    );
+    expect(logged.join("\n")).toContain("HTTP 503");
+  } finally {
+    clock.mockRestore();
+    for (const spy of spies) spy.mockRestore();
+  }
+});

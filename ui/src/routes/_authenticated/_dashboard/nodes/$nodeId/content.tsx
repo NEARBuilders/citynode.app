@@ -13,12 +13,15 @@ import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { CommunityHeader, ensureCommunityHeaderData } from "../../dashboard/node/-community-header";
 
 type ContentTab = "events" | "onboarding" | "bulletin";
+type ContentSearch = { tab?: ContentTab; review?: "imports" };
 
 const TABS: readonly ContentTab[] = ["events", "onboarding", "bulletin"];
 
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
-  validateSearch: (search: Record<string, unknown>): { tab?: ContentTab } =>
-    TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {},
+  validateSearch: (search: Record<string, unknown>): ContentSearch => ({
+    ...(TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {}),
+    ...(search.review === "imports" ? { review: "imports" as const } : {}),
+  }),
   loaderDeps: ({ search }) => ({ tab: search.tab ?? "events" }),
   loader: async ({ context, params, deps }) => {
     const { queryClient, apiClient } = context;
@@ -51,7 +54,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
 
 function CommunityContent() {
   const { nodeId } = Route.useParams();
-  const { tab = "events" } = Route.useSearch();
+  const { tab = "events", review } = Route.useSearch();
   const { auth } = Route.useRouteContext();
   const api = useApiClient();
   const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
@@ -72,6 +75,7 @@ function CommunityContent() {
       ) : (
         <EventsEditor
           nodeId={nodeId}
+          reviewImports={review === "imports"}
           profileLink={
             tenantId ? (
               <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
