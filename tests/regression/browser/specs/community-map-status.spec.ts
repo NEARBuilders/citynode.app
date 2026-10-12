@@ -9,6 +9,7 @@ import {
   useCookieHeader,
 } from "../helpers/auth-session";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
+import { injectAdminCookies } from "../helpers/seeded";
 
 test.use({ trace: "on" });
 
@@ -79,7 +80,7 @@ test.describe("community map status", () => {
 
     await openOverview(page, suspended.orgId, suspended.nodeId);
     await expect(status).toHaveAttribute("data-state", "inactive", { timeout: 15000 });
-    await expect(status).toHaveAttribute("data-status", "suspended");
+    await expect(status).toHaveAttribute("data-tenant-status", "suspended");
     await expect(action).toBeVisible();
     await expect(viewExplore).toHaveCount(0);
     await action.click();
@@ -90,6 +91,25 @@ test.describe("community map status", () => {
       { waitUntil: "commit" },
     );
     await expect(page.getByTestId("tenant.danger-zone")).toBeVisible({ timeout: 15000 });
+
+    const eventsStatus = page.getByTestId("content-map-status");
+    await page.goto(`/nodes/${suspended.nodeId}/content`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(eventsStatus).toHaveAttribute("data-state", "inactive", { timeout: 15000 });
+    await expect(eventsStatus).toHaveAttribute("data-tenant-status", "suspended");
+    await expect(page.getByTestId("content-map-status-action")).toBeVisible();
+
+    const adminContext = await browser.newContext({ baseURL: baseUrl });
+    const adminPage = await adminContext.newPage();
+    await injectAdminCookies(adminPage);
+    await adminPage.goto(`/nodes/${suspended.nodeId}/content`, { waitUntil: "domcontentloaded" });
+    await waitForApp(adminPage);
+    await expect(adminPage.getByTestId("content-map-status")).toHaveAttribute(
+      "data-tenant-status",
+      "suspended",
+      { timeout: 15000 },
+    );
+    await adminContext.close();
 
     await openOverview(page, hidden.orgId, hidden.nodeId);
     await expect(status).toHaveAttribute("data-state", "hidden", { timeout: 15000 });
@@ -108,7 +128,6 @@ test.describe("community map status", () => {
 
     await page.goto(`/nodes/${hidden.nodeId}/content`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    const eventsStatus = page.getByTestId("content-map-status");
     await expect(eventsStatus).toHaveAttribute("data-state", "hidden", { timeout: 15000 });
     await expect(page.getByTestId("content-map-status-action")).toBeVisible();
     await expect(viewExplore).toHaveCount(0);

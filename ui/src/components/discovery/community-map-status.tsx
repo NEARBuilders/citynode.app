@@ -6,53 +6,63 @@ import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemMedia } from "@/components/ui/item";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
-import { communityMapStatus, type MapStatus, type TenantStatus } from "@/lib/community-map-status";
+import {
+  communityMapStatus,
+  type InactiveTenantStatus,
+  type MapStatus,
+  type TenantStatus,
+} from "@/lib/community-map-status";
 import { discoveryNodeQueryOptions } from "./event-visibility";
+
+type NoticeKey = InactiveTenantStatus | "hidden" | "noPin";
 
 type Notice = { icon: Icon; title: AppMessageId; hint: AppMessageId; action?: AppMessageId };
 
-const inactiveHints: Record<Exclude<TenantStatus, "active">, AppMessageId> = {
-  suspended: "community.suspendedHint",
-  pending: "community.pendingHint",
-  pending_deletion: "community.pendingDeletionHint",
+const notices: Record<NoticeKey, Notice> = {
+  suspended: {
+    icon: WarningCircleIcon,
+    title: "community.notOnExplore",
+    hint: "community.suspendedHint",
+    action: "nav.communitySettings",
+  },
+  pending: {
+    icon: WarningCircleIcon,
+    title: "community.notOnExplore",
+    hint: "community.pendingHint",
+  },
+  pending_deletion: {
+    icon: WarningCircleIcon,
+    title: "community.notOnExplore",
+    hint: "community.pendingDeletionHint",
+  },
+  hidden: {
+    icon: EyeSlashIcon,
+    title: "community.hidden",
+    hint: "community.hiddenMapHint",
+    action: "community.publishProfile",
+  },
+  noPin: {
+    icon: MapPinIcon,
+    title: "community.notOnMap",
+    hint: "community.notOnMapHint",
+    action: "community.addLocation",
+  },
 };
 
-function notice(status: MapStatus, hiddenHint: AppMessageId): Notice | null {
-  if (status.state === "inactive")
-    return {
-      icon: WarningCircleIcon,
-      title: "community.notOnExplore",
-      hint: inactiveHints[status.status],
-      action: status.status === "suspended" ? "nav.communitySettings" : undefined,
-    };
-  if (status.state === "hidden")
-    return {
-      icon: EyeSlashIcon,
-      title: "community.hidden",
-      hint: hiddenHint,
-      action: "community.publishProfile",
-    };
-  if (status.state === "noPin")
-    return {
-      icon: MapPinIcon,
-      title: "community.notOnMap",
-      hint: "community.notOnMapHint",
-      action: "community.addLocation",
-    };
-  return null;
+function noticeKey(status: MapStatus): NoticeKey | null {
+  if (status.state === "inactive") return status.tenantStatus;
+  return status.state === "onMap" ? null : status.state;
 }
 
 export function CommunityMapStatus({
   nodeId,
   tenantStatus,
-  published,
   settingsLink,
-  hiddenHint = "community.hiddenMapHint",
+  hiddenHint,
   testId,
 }: {
   nodeId: string;
-  tenantStatus: TenantStatus | null | undefined;
-  published?: boolean;
+  tenantStatus: TenantStatus | undefined;
   settingsLink?: ReactElement;
   hiddenHint?: AppMessageId;
   testId: string;
@@ -63,24 +73,25 @@ export function CommunityMapStatus({
   const status = communityMapStatus({
     tenantStatus,
     listing: listing.isSuccess ? listing.data : undefined,
-    published,
   });
-  const content = status && notice(status, hiddenHint);
-  if (!status || !content) return null;
-  const { icon: StatusIcon, title, hint, action } = content;
+  const key = status && noticeKey(status);
+  if (!status || !key) return null;
+  const { icon: StatusIcon, title, hint, action } = notices[key];
   return (
     <Item
       variant="outline"
       data-testid={testId}
       data-state={status.state}
-      data-status={status.state === "inactive" ? status.status : undefined}
+      data-tenant-status={status.state === "inactive" ? status.tenantStatus : undefined}
     >
       <ItemMedia variant="icon">
         <StatusIcon />
       </ItemMedia>
       <ItemContent className="min-w-0">
         <p className="text-sm leading-snug font-medium">{translate(title)}</p>
-        <p className="text-sm text-muted-foreground">{translate(hint)}</p>
+        <p className="text-sm text-muted-foreground">
+          {translate(key === "hidden" && hiddenHint ? hiddenHint : hint)}
+        </p>
       </ItemContent>
       {action && settingsLink && (
         <ItemActions className="basis-full sm:basis-auto">

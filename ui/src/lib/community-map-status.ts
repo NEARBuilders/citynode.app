@@ -1,30 +1,29 @@
-export type TenantStatus = "active" | "pending" | "suspended" | "pending_deletion";
+import type { ApiClient } from "@/app";
+
+export type TenantStatus = Awaited<ReturnType<ApiClient["resolveTenantByOrgId"]>>["status"];
+
+export type InactiveTenantStatus = Exclude<TenantStatus, "active">;
 
 export type MapStatus =
-  | { state: "inactive"; status: Exclude<TenantStatus, "active"> }
+  | { state: "inactive"; tenantStatus: InactiveTenantStatus }
   | { state: "hidden" }
   | { state: "noPin" }
   | { state: "onMap" };
 
-export type MapListing = { latitude: number | null; longitude: number | null } | null;
+type MapListing = { latitude: number | null; longitude: number | null } | null;
 
 export function communityMapStatus({
   tenantStatus,
   listing,
-  published,
 }: {
-  tenantStatus: TenantStatus | null | undefined;
+  tenantStatus: TenantStatus | undefined;
   listing: MapListing | undefined;
-  published?: boolean;
 }): MapStatus | null {
   if (tenantStatus === undefined) return null;
-  if (tenantStatus !== null && tenantStatus !== "active")
-    return { state: "inactive", status: tenantStatus };
+  if (tenantStatus !== "active") return { state: "inactive", tenantStatus };
   if (listing === undefined) return null;
-  if (listing)
-    return listing.latitude === null || listing.longitude === null
-      ? { state: "noPin" }
-      : { state: "onMap" };
-  if (tenantStatus === "active" || published === false) return { state: "hidden" };
-  return null;
+  if (!listing) return { state: "hidden" };
+  return listing.latitude === null || listing.longitude === null
+    ? { state: "noPin" }
+    : { state: "onMap" };
 }

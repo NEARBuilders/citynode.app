@@ -13,7 +13,7 @@ export function EventsEditor({
   reviewImports,
 }: {
   nodeId: string;
-  tenantStatus: TenantStatus | null | undefined;
+  tenantStatus: TenantStatus | undefined;
   profileLink?: ReactElement;
   reviewImports?: boolean;
 }) {
@@ -25,7 +25,6 @@ export function EventsEditor({
         <CommunityMapStatus
           nodeId={nodeId}
           tenantStatus={tenantStatus}
-          published={profile.data?.published ?? false}
           settingsLink={profileLink}
           hiddenHint="community.hiddenHint"
           testId="content-map-status"

@@ -134,7 +134,7 @@ function NodeOverview() {
     <div className="flex flex-col gap-12">
       <CommunityMapStatus
         nodeId={selectedNode.id}
-        tenantStatus={tenant?.status ?? null}
+        tenantStatus={tenant?.status}
         testId="dashboard-node.map-status"
         settingsLink={
           canManage && tenant ? (

@@ -8,10 +8,9 @@ import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { EventsEditor } from "@/components/discovery/events-editor";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
-import type { TenantStatus } from "@/lib/community-map-status";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
-import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import {
   CommunityHeader,
   communityAuthContextQueryOptions,
@@ -37,9 +36,14 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
         ? [
             queryClient.prefetchQuery(discoveryProfileQueryOptions(apiClient, params.nodeId)),
             queryClient.prefetchQuery(activitiesQueryOptions(apiClient, params.nodeId)),
-            queryClient.prefetchQuery(
-              tenantByOrgQueryOptions(apiClient, context.auth.activeOrganizationId ?? ""),
-            ),
+            queryClient
+              .ensureQueryData(nodeByIdQueryOptions(apiClient, params.nodeId))
+              .then((node) =>
+                node?.tenantId
+                  ? queryClient.prefetchQuery(tenantByIdQueryOptions(apiClient, node.tenantId))
+                  : undefined,
+              )
+              .catch(() => undefined),
           ]
         : []),
     ]);
@@ -67,16 +71,15 @@ function CommunityContent() {
   const { auth } = Route.useRouteContext();
   const api = useApiClient();
   const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
-  const orgTenant = useQuery(tenantByOrgQueryOptions(api, auth.activeOrganizationId ?? ""));
+  const tenant = useQuery(tenantByIdQueryOptions(api, tenantId ?? ""));
   const authContext = useQuery(
     communityAuthContextQueryOptions(api, auth.activeOrganizationId ?? null),
   );
   const orgRole = authContext.data?.organization?.member?.role;
-  const canManage = auth.isAdmin || orgRole === "owner" || orgRole === "admin";
-  const tenantStatus = resolveTenantStatus(
-    tenantId,
-    auth.activeOrganizationId ? orgTenant : { isPending: false, data: null },
-  );
+  const managesTenant =
+    tenant.data?.orgId === auth.activeOrganizationId &&
+    (orgRole === "owner" || orgRole === "admin");
+  const canManage = auth.isAdmin || managesTenant;
 
   return (
     <PageContainer variant="wide">
@@ -95,7 +98,7 @@ function CommunityContent() {
         <EventsEditor
           nodeId={nodeId}
           reviewImports={review === "imports"}
-          tenantStatus={tenantStatus}
+          tenantStatus={tenant.data?.status}
           profileLink={
             tenantId && canManage ? (
               <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
@@ -105,12 +108,4 @@ function CommunityContent() {
       )}
     </PageContainer>
   );
-}
-
-function resolveTenantStatus(
-  tenantId: string | null | undefined,
-  orgTenant: { isPending: boolean; data: { id: string; status: TenantStatus } | null | undefined },
-): TenantStatus | null | undefined {
-  if (!tenantId || orgTenant.isPending) return undefined;
-  return orgTenant.data?.id === tenantId ? orgTenant.data.status : null;
 }
