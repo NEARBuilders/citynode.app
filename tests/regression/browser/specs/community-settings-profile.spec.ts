@@ -77,4 +77,29 @@ test.describe("community settings profile", () => {
 
     expectNoHydrationFailure(pageErrors);
   });
+
+  test("a failed profile load offers a retry instead of the locked state", async ({ page }) => {
+    const pageErrors = collectErrors(page);
+    const unique = `profile-retry-${process.pid}-${Date.now().toString(36)}`;
+    const tenant = await seedTenant({
+      subdomain: unique,
+      name: `Retry ${unique}`,
+      accountId: `${unique}.near`,
+      orgId: loadSeedData().orgAID,
+    });
+    const node = await seedNode({ tenantId: tenant.id, slug: unique, name: `Retry ${unique}` });
+    await injectCookies(page);
+    await page.route("**/*getDiscoveryProfile*", (route) => route.abort());
+
+    await page.goto(`/tenant/${tenant.id}?nodeId=${node.id}`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByTestId("community-load-error")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("community-cannot-edit")).toHaveCount(0);
+
+    await page.unroute("**/*getDiscoveryProfile*");
+    await page.getByTestId("community-load-error-retry").click();
+    await expect(page.getByTestId("discovery-profile-form")).toBeVisible({ timeout: 15000 });
+
+    expectNoHydrationFailure(pageErrors);
+  });
 });

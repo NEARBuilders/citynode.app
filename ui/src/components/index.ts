@@ -47,7 +47,6 @@ export {
   type StepState,
   useStepper,
 } from "./stepper";
-export { TeamStakeCard } from "./team-stake-card";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";
 export {

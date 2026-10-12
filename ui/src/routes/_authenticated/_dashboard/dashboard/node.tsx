@@ -25,6 +25,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         stakingSourceNode: null,
         canReview: false,
         canManage: false,
+        inFinanceTeam: false,
         emptyReason: "no-org" as const,
       };
     }
@@ -41,6 +42,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         stakingSourceNode: null,
         canReview: false,
         canManage: false,
+        inFinanceTeam: false,
         emptyReason: "no-tenant" as const,
       };
     }
@@ -58,6 +60,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         stakingSourceNode: null,
         canReview: false,
         canManage: false,
+        inFinanceTeam: false,
         emptyReason: "no-node" as const,
       };
     }
@@ -78,6 +81,8 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
     context.queryClient.setQueryData(nodeQueryKeys.byId(selectedNode.id), selectedNode);
     const orgRole = authContext?.organization?.member?.role;
     const canManage = canReview || orgRole === "owner" || orgRole === "admin";
+    const inFinanceTeam =
+      authContext?.organization?.teams?.some((team) => team.areas.includes("finance")) ?? false;
 
     return {
       tenant,
@@ -87,6 +92,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       stakingSourceNode,
       canReview,
       canManage,
+      inFinanceTeam,
       emptyReason: null,
     };
   },

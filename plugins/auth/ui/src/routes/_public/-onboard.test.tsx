@@ -14,6 +14,7 @@ import { Route as OnboardRoute } from "./onboard";
 
 const harness = vi.hoisted(() => ({
   session: null as { user: { id: string; name: string } } | null,
+  sessionGate: null as Promise<never> | null,
   getOnboardingCodeInfo: vi.fn(),
   redeemOnboardingCode: vi.fn(),
   clipboardWriteText: vi.fn(async () => undefined),
@@ -22,7 +23,10 @@ const harness = vi.hoisted(() => ({
 vi.mock("everything-dev/ui/auth", () => ({
   sessionQueryOptions: () => ({
     queryKey: ["session"],
-    queryFn: async () => harness.session,
+    queryFn: async () => {
+      await harness.sessionGate;
+      return harness.session;
+    },
   }),
   refreshSessionCache: vi.fn(async () => harness.session),
   createAccountWithPasskey: vi.fn(),
@@ -87,6 +91,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   harness.session = null;
+  harness.sessionGate = null;
 });
 
 describe("onboard join flow", () => {
@@ -154,6 +159,70 @@ describe("onboard join flow", () => {
     const buildButton = await screen.findByTestId("onboard.build-button");
     expect(buildButton.getAttribute("href")).toBe("/build");
     expect(screen.queryByTestId("build.prompts")).toBeNull();
+  });
+
+  it("shows a returning member the joined state for a code that has since expired", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, expired: true });
+    let resolveRedeem: (value: unknown) => void = () => undefined;
+    harness.redeemOnboardingCode.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRedeem = resolve;
+      }),
+    );
+
+    renderOnboard();
+
+    await waitFor(() => expect(harness.redeemOnboardingCode).toHaveBeenCalledWith({ code: CODE }));
+    expect(screen.getByTestId("onboard.loading")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
+
+    resolveRedeem({ organizationName: "Example Community", eventName: "Launch Night" });
+
+    expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
+  });
+
+  it("shows a signed-in visitor who never joined that a used-up code is unavailable", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, usedUp: true });
+    harness.redeemOnboardingCode.mockRejectedValue(new Error("reached its limit"));
+
+    renderOnboard();
+
+    expect((await screen.findByTestId("onboard.unavailable")).textContent).toBeTruthy();
+    expect(screen.queryByTestId("onboard.error")).toBeNull();
+  });
+
+  it("keeps a revoked code unavailable without waiting on the join", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, revoked: true });
+    harness.redeemOnboardingCode.mockReturnValue(new Promise(() => undefined));
+
+    renderOnboard();
+
+    expect(await screen.findByTestId("onboard.unavailable")).toBeTruthy();
+  });
+
+  it("keeps an expired code on loading until the session is known", async () => {
+    harness.sessionGate = new Promise(() => undefined);
+    harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, expired: true });
+
+    renderOnboard();
+
+    await expect(
+      screen.findByTestId("onboard.unavailable", undefined, { timeout: 300 }),
+    ).rejects.toThrow();
+    expect(screen.getByTestId("onboard.loading")).toBeTruthy();
+  });
+
+  it("shows a signed-out visitor that an expired code is unavailable", async () => {
+    harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, expired: true });
+
+    renderOnboard();
+
+    expect(await screen.findByTestId("onboard.unavailable")).toBeTruthy();
+    expect(harness.redeemOnboardingCode).not.toHaveBeenCalled();
   });
 
   it("copies the desktop pairing link from the continue card", async () => {

@@ -1,17 +1,14 @@
 import { MegaphoneIcon } from "@phosphor-icons/react";
 import { cn } from "cn";
-import type { ClientRuntimeConfig } from "everything-dev/types";
 import { Markdown } from "@/components/markdown";
-import { UnderConstruction } from "@/components/under-construction";
 import { useAppTranslation } from "@/i18n/runtime";
 
 interface BulletinProps {
   content: string;
   className?: string;
-  runtimeConfig?: Partial<ClientRuntimeConfig>;
 }
 
-export function Bulletin({ content, className, runtimeConfig }: BulletinProps) {
+export function Bulletin({ content, className }: BulletinProps) {
   const translate = useAppTranslation();
   const trimmed = content.trim();
   if (!trimmed) return null;
@@ -34,13 +31,6 @@ export function Bulletin({ content, className, runtimeConfig }: BulletinProps) {
         variant="compact"
         className="[&_blockquote]:text-info-muted-foreground [&_del]:text-info-muted-foreground [&_h1]:text-info-muted-foreground [&_h2]:text-info-muted-foreground [&_h3]:text-info-muted-foreground [&_h4]:text-info-muted-foreground [&_li]:text-info-muted-foreground [&_p]:text-info-muted-foreground [&_strong]:text-info-muted-foreground"
       />
-      <div className="flex justify-end border-t border-info-muted-foreground/15 pt-3">
-        <UnderConstruction
-          label={translate("bulletin.features")}
-          tooltip={translate("bulletin.description")}
-          runtimeConfig={runtimeConfig}
-        />
-      </div>
     </section>
   );
 }

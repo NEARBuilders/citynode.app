@@ -22,8 +22,13 @@ vi.mock("everything-dev/integrity", () => ({
   verifySriForUrl: verifySriForUrlMock,
 }));
 
-const { FederationLifecycle, loadRouterModule, loadUiComposeModule, loadUiRouteConfig } =
-  await import("../../src/services/federation.server");
+const {
+  FederationLifecycle,
+  loadCoreUiRouteConfig,
+  loadRouterModule,
+  loadUiComposeModule,
+  loadUiRouteConfig,
+} = await import("../../src/services/federation.server");
 
 let disposeLifecycle: (() => Promise<void>) | undefined;
 
@@ -269,6 +274,21 @@ describe("ui expose loads (routeConfig / compose)", () => {
       "http://localhost:4113/remoteEntry.server.js",
     );
     expect(verifySriForUrlMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a routeConfig expose that is missing routeConfigLoaders, for plugin and core ui", async () => {
+    loadRemoteMock.mockResolvedValue({ meta: true });
+
+    await expect(
+      Effect.runPromise(
+        loadUiRouteConfig(uiEntry({ ssrUrl: "http://localhost:4113" }), "development"),
+      ),
+    ).rejects.toThrow(/routeConfigLoaders/);
+    await expect(
+      Effect.runPromise(
+        loadCoreUiRouteConfig(uiEntry({ ssrUrl: "http://localhost:4114" }), "development"),
+      ),
+    ).rejects.toThrow(/routeConfigLoaders/);
   });
 
   it("loads the core compose module without default-unwrap (named constructTree)", async () => {

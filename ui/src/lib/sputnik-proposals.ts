@@ -56,7 +56,7 @@ export interface SputnikProposal {
 
 export interface SputnikRole {
   name: string;
-  kind: { Group?: string[] } | string;
+  kind: { Group?: string[]; Member?: string } | string;
   permissions?: string[];
   vote_policy?: Record<string, { threshold?: string | [number, number] }>;
 }
@@ -64,6 +64,7 @@ export interface SputnikRole {
 export interface SputnikPolicy {
   roles: SputnikRole[];
   default_vote_policy?: { threshold?: string | [number, number] };
+  proposal_period?: string;
 }
 
 /** Reads the most recent proposals, newest first. */
@@ -87,13 +88,64 @@ export async function fetchDaoProposals(
   }
 }
 
-export async function fetchSputnikPolicy(daoAccountId: string): Promise<SputnikPolicy | null> {
-  if (!daoAccountId) return null;
-  try {
-    return (await getNear().view<SputnikPolicy>(daoAccountId, "get_policy", {})) ?? null;
-  } catch {
-    return null;
+export async function readDaoProposalsSince(
+  daoAccountId: string,
+  sinceNs: bigint,
+  pageSize = 100,
+  maxIds = 2000,
+): Promise<SputnikProposal[]> {
+  if (!daoAccountId) return [];
+  const last = Number(
+    (await getNear().view<number>(daoAccountId, "get_last_proposal_id", {})) ?? 0,
+  );
+  const floor = Math.max(0, last - maxIds);
+  const proposals: SputnikProposal[] = [];
+  for (let end = last; end > floor; ) {
+    const fromIndex = Math.max(floor, end - pageSize);
+    const batch =
+      (await getNear().view<SputnikProposal[]>(daoAccountId, "get_proposals", {
+        from_index: fromIndex,
+        limit: end - fromIndex,
+      })) ?? [];
+    proposals.push(...batch);
+    if (batch.some((proposal) => BigInt(proposal.submission_time) < sinceNs)) {
+      return proposals.sort((a, b) => b.id - a.id);
+    }
+    end = fromIndex;
   }
+  if (floor > 0) {
+    throw new Error(
+      `Proposal ID range beyond the newest ${maxIds} IDs in ${daoAccountId} not read`,
+    );
+  }
+  return proposals.sort((a, b) => b.id - a.id);
+}
+
+export async function readChainTimeNs(): Promise<bigint> {
+  const block = await getNear().rpc.getBlock({ finality: "final" });
+  return BigInt(block.header.timestamp_nanosec);
+}
+
+export async function readDelegationBalance(
+  daoAccountId: string,
+  accountId: string,
+): Promise<bigint> {
+  const balance = await getNear().view<string>(daoAccountId, "delegation_balance_of", {
+    account_id: accountId,
+  });
+  if (typeof balance !== "string" || !/^\d+$/.test(balance)) {
+    throw new Error(`Unreadable delegation balance for ${accountId} in ${daoAccountId}`);
+  }
+  return BigInt(balance);
+}
+
+export async function readSputnikPolicy(daoAccountId: string): Promise<SputnikPolicy | null> {
+  if (!daoAccountId) return null;
+  return (await getNear().view<SputnikPolicy>(daoAccountId, "get_policy", {})) ?? null;
+}
+
+export async function fetchSputnikPolicy(daoAccountId: string): Promise<SputnikPolicy | null> {
+  return readSputnikPolicy(daoAccountId).catch(() => null);
 }
 
 export function roleMembers(role: SputnikRole): string[] {
@@ -114,9 +166,24 @@ function permits(permissions: string[] | undefined, action: string): boolean {
   );
 }
 
-function accountInRoles(roles: SputnikRole[], accountId: string): boolean {
+function memberThreshold(role: SputnikRole): bigint | null {
+  if (typeof role.kind !== "object" || !role.kind || typeof role.kind.Member !== "string") {
+    return null;
+  }
+  return /^\d+$/.test(role.kind.Member) ? BigInt(role.kind.Member) : null;
+}
+
+function accountInRoles(
+  roles: SputnikRole[],
+  accountId: string,
+  delegationBalance: bigint | undefined,
+): boolean {
   return roles.some((role) => {
     if (role.kind === "Everyone") return true;
+    const threshold = memberThreshold(role);
+    if (threshold !== null) {
+      return delegationBalance !== undefined ? delegationBalance >= threshold : threshold === 0n;
+    }
     return roleMembers(role).includes(accountId);
   });
 }
@@ -136,17 +203,29 @@ export function proposerRoles(policy: SputnikPolicy | null | undefined): Sputnik
 export function canAccountPropose(
   policy: SputnikPolicy | null | undefined,
   accountId: string | null,
+  delegationBalance?: bigint,
 ): boolean {
   if (!accountId) return false;
-  return accountInRoles(proposerRoles(policy), accountId);
+  return accountInRoles(proposerRoles(policy), accountId, delegationBalance);
 }
 
 export function canAccountApprove(
   policy: SputnikPolicy | null | undefined,
   accountId: string | null,
+  delegationBalance?: bigint,
 ): boolean {
   if (!accountId) return false;
-  return accountInRoles(approverRoles(policy), accountId);
+  return accountInRoles(approverRoles(policy), accountId, delegationBalance);
+}
+
+export function needsDelegationBalance(
+  policy: SputnikPolicy | null | undefined,
+  accountId: string | null,
+): boolean {
+  if (!accountId || canAccountPropose(policy, accountId)) return false;
+  return [...proposerRoles(policy), ...approverRoles(policy)].some(
+    (role) => (memberThreshold(role) ?? 0n) > 0n,
+  );
 }
 
 export interface ApprovalThreshold {
@@ -281,22 +360,40 @@ export const CONFIG_WRITE_PLAN: DaoPlan = {
 
 /** True when a pending DAO proposal carries out the given plan. */
 export function proposalMatchesPlan(proposal: SputnikProposal, plan: DaoPlan): boolean {
-  const kind = proposal.kind as {
-    FunctionCall?: { receiver_id: string; actions: SputnikFunctionCallAction[] };
-    Transfer?: { receiver_id: string };
-  };
   if (plan.kind === "transfer") {
+    const kind = proposal.kind as { Transfer?: { receiver_id: string } };
     return kind.Transfer?.receiver_id === plan.receiverId;
   }
-  if (!kind.FunctionCall) return false;
-  if (plan.receiverId !== ANY_RECEIVER && kind.FunctionCall.receiver_id !== plan.receiverId) {
-    return false;
-  }
-  return kind.FunctionCall.actions.some((action) => action.method_name === plan.methodName);
+  return proposalCallsMethod(proposal, plan.receiverId, [plan.methodName]);
+}
+
+export function proposalCallsMethod(
+  proposal: SputnikProposal,
+  receiverId: string,
+  methodNames: readonly string[],
+): boolean {
+  const call = (
+    proposal.kind as {
+      FunctionCall?: { receiver_id: string; actions: SputnikFunctionCallAction[] };
+    }
+  ).FunctionCall;
+  if (!call) return false;
+  if (receiverId !== ANY_RECEIVER && call.receiver_id !== receiverId) return false;
+  return call.actions.some((action) => methodNames.includes(action.method_name));
 }
 
 export function isPendingProposal(proposal: SputnikProposal): boolean {
   return proposal.status === "InProgress";
+}
+
+export function isOpenProposal(
+  proposal: SputnikProposal,
+  policy: Pick<SputnikPolicy, "proposal_period"> | null | undefined,
+  chainNowNs: bigint,
+): boolean {
+  if (proposal.status !== "InProgress" && proposal.status !== "Failed") return false;
+  if (!policy?.proposal_period) return true;
+  return BigInt(proposal.submission_time) + BigInt(policy.proposal_period) >= chainNowNs;
 }
 
 export function findPendingProposalForPlan(

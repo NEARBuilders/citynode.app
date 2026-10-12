@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { APP_LOCALES, type AppTranslator } from "./catalogs";
-import { AppActionError, appErrorMessage } from "./error-message";
+import {
+  AppActionError,
+  appErrorMessage,
+  isPermissionError,
+  isSessionError,
+} from "./error-message";
 import { translateAppMessage } from "./runtime";
 
 describe("localized action failures", () => {
@@ -32,6 +37,24 @@ describe("localized action failures", () => {
       expect(appErrorMessage({ status: 403 }, t)).toBe(t("error.permission"));
       expect(appErrorMessage({ status: 409 }, t)).toBe(t("error.conflict"));
       expect(appErrorMessage({ code: "ACTION_REJECTED" }, t)).toBe(t("wallet.cancelled"));
+    }
+  });
+
+  it("tells expired sessions, denied access and other failures apart", () => {
+    expect(isSessionError({ code: "UNAUTHORIZED" })).toBe(true);
+    expect(isSessionError({ status: 401 })).toBe(true);
+    expect(isPermissionError({ code: "FORBIDDEN" })).toBe(true);
+    expect(isPermissionError({ status: 403 })).toBe(true);
+    expect(isSessionError({ status: 403 })).toBe(false);
+    expect(isPermissionError({ status: 401 })).toBe(false);
+    for (const failure of [
+      { status: 500, code: "INTERNAL_SERVER_ERROR" },
+      { code: "BAD_REQUEST", status: 400 },
+      new TypeError("Failed to fetch"),
+      null,
+    ]) {
+      expect(isSessionError(failure)).toBe(false);
+      expect(isPermissionError(failure)).toBe(false);
     }
   });
 });

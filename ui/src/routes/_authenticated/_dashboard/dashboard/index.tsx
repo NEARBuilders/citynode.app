@@ -69,7 +69,6 @@ function Home() {
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const { restricted } = Route.useSearch();
-  const { runtimeConfig } = Route.useRouteContext();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const nearAccountId = useNearAccount();
   const activeOrgId = session?.session?.activeOrganizationId ?? "";
@@ -164,9 +163,7 @@ function Home() {
       />
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
-          {typeof bulletin === "string" && bulletin.trim() && (
-            <Bulletin content={bulletin} runtimeConfig={runtimeConfig} />
-          )}
+          {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
           {pending.length > 0 && (
             <section className="flex flex-col gap-6">
               <SectionHeader title={translate("org.invitations")} />
