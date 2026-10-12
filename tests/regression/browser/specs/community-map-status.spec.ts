@@ -1,59 +1,18 @@
 import { execFileSync } from "node:child_process";
-import { type BrowserContext, expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 import { seedDiscoveryProfile, seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
+import {
+  authFetch,
+  FETCH_TIMEOUT_MS,
+  signInAnonymously,
+  useCookieHeader,
+} from "../helpers/auth-session";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
 
 test.use({ trace: "on" });
 
 const { baseUrl } = computeRegressionEnv();
-const FETCH_TIMEOUT_MS = 15_000;
-
-async function authFetch(path: string, cookie: string, body?: unknown) {
-  const response = await fetch(`${baseUrl}/api/auth${path}`, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { "content-type": "application/json", origin: baseUrl, cookie },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new Error(`${path} failed: ${response.status} ${await response.text()}`);
-  }
-  return response;
-}
-
-async function signInAnonymously() {
-  const response = await fetch(`${baseUrl}/api/auth/sign-in/anonymous`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: baseUrl },
-    body: JSON.stringify({}),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`anonymous sign-in failed: ${response.status}`);
-  return response.headers
-    .getSetCookie()
-    .map((cookie) => cookie.split(";")[0])
-    .join("; ");
-}
-
-async function useCookieHeader(context: BrowserContext, cookieHeader: string) {
-  const url = new URL(baseUrl);
-  await context.addCookies(
-    cookieHeader.split("; ").map((pair) => {
-      const index = pair.indexOf("=");
-      return {
-        name: pair.slice(0, index),
-        value: pair.slice(index + 1),
-        domain: url.hostname,
-        path: "/",
-        httpOnly: true,
-        secure: url.protocol === "https:",
-        sameSite: "Lax" as const,
-      };
-    }),
-  );
-}
-
 type Profile = { published: boolean; latitude?: number; longitude?: number };
 
 async function seedCommunity(
