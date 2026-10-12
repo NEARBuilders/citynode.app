@@ -92,6 +92,9 @@ async function seedTeamMember() {
 
   const memberCookie = await signInAnonymously();
   const session = await (await authFetch("/get-session", memberCookie)).json();
+  execFileSync("bun", ["tests/regression/lib/verify-test-emails.ts", session.user.id], {
+    timeout: FETCH_TIMEOUT_MS,
+  });
   const invitation = await (
     await authFetch("/organization/invite-member", ownerCookie, {
       email: session.user.email,
