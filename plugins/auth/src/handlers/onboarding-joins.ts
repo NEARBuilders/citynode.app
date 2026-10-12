@@ -1,12 +1,14 @@
 import type { Implementer } from "@orpc/server";
 import { eq } from "drizzle-orm";
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import type { ContractType } from "../contract";
 import * as schema from "../db/schema";
 import type { createRequireAuth } from "../middleware";
 import {
   countOrganizationRedemptions,
+  currentMonthWindow,
   monthWindow,
+  previousMonthWindow,
   redeemedWithin,
   redemptionCounts,
 } from "../onboarding-redemption-counts";
@@ -29,7 +31,7 @@ export function createOnboardingJoinHandlers(
         return yield* Effect.fail(errors.FORBIDDEN({ message: "Requires role: admin" }));
       }
       const services = yield* AuthServicesTag;
-      const window = monthWindow(input.month);
+      const window = monthWindow(input.month, new Date());
       const inMonth = redeemedWithin(window);
       const [organizations, [totals]] = yield* Effect.tryPromise({
         try: () =>
@@ -60,25 +62,34 @@ export function createOnboardingJoinHandlers(
       errors,
     }) {
       const services = yield* AuthServicesTag;
-      const { organizationId } = yield* Effect.tryPromise({
-        try: () => requireOrganizerContext(services, context, input.organizationId),
-        catch: (error) => {
-          const failure = toORPCError(error);
-          if (failure.code === "FORBIDDEN") return errors.FORBIDDEN({ message: failure.message });
-          if (failure.code === "BAD_REQUEST") {
-            return errors.BAD_REQUEST({ message: failure.message });
-          }
-          return failure;
-        },
-      });
-      const [thisMonth, lastMonth] = yield* Effect.tryPromise({
-        try: () =>
-          Promise.all([
-            countOrganizationRedemptions(services.db, organizationId, monthWindow()),
-            countOrganizationRedemptions(services.db, organizationId, monthWindow(undefined, -1)),
-          ]),
-        catch: toORPCError,
-      });
+      const organizer = yield* Effect.result(
+        Effect.tryPromise({
+          try: () =>
+            requireOrganizerContext(
+              services,
+              context,
+              input.organizationId,
+              "view code redemptions",
+            ),
+          catch: toORPCError,
+        }),
+      );
+      if (Result.isFailure(organizer)) {
+        const { code, message } = organizer.failure;
+        if (code === "UNAUTHORIZED") return yield* Effect.fail(errors.UNAUTHORIZED({ message }));
+        if (code === "FORBIDDEN") return yield* Effect.fail(errors.FORBIDDEN({ message }));
+        if (code === "NOT_FOUND") return yield* Effect.fail(errors.NOT_FOUND({ message }));
+        if (code === "BAD_REQUEST") return yield* Effect.fail(errors.BAD_REQUEST({ message }));
+        return yield* Effect.die(organizer.failure);
+      }
+      const { organizationId } = organizer.success;
+      const now = new Date();
+      const [thisMonth, lastMonth] = yield* Effect.tryPromise(() =>
+        Promise.all([
+          countOrganizationRedemptions(services.db, organizationId, currentMonthWindow(now)),
+          countOrganizationRedemptions(services.db, organizationId, previousMonthWindow(now)),
+        ]),
+      ).pipe(Effect.orDie);
       return { thisMonth, lastMonth };
     }),
   };

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as schema from "../../src/db/schema";
 import {
   addTestMember,
@@ -11,18 +11,19 @@ import {
 
 let setup: Awaited<ReturnType<typeof createTestServices>>;
 
+const now = new Date("2031-01-15T12:00:00.000Z");
+const thisMonthStart = Date.UTC(2031, 0, 1);
+const lastMonthStart = Date.UTC(2030, 11, 1);
+
 beforeAll(async () => {
+  vi.useFakeTimers({ toFake: ["Date"], now });
   setup = await createTestServices();
 }, 30000);
 
 afterAll(async () => {
+  vi.useRealTimers();
   await setup.driver.close();
 }, 30000);
-
-const now = new Date();
-const thisMonthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
-const lastMonthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
-const monthLabel = (time: number) => new Date(time).toISOString().slice(0, 7);
 const hours = (start: number, count: number) => new Date(start + count * 3_600_000);
 
 async function createCode(organizationId: string, createdBy: string, eventId: string | null) {
@@ -113,8 +114,8 @@ describe("getOnboardingRedemptions", () => {
     });
 
     expect(result).toEqual({
-      thisMonth: { month: monthLabel(thisMonthStart), redeemed: 3, newMembers: 2 },
-      lastMonth: { month: monthLabel(lastMonthStart), redeemed: 2, newMembers: 1 },
+      thisMonth: { month: "2031-01", redeemed: 3, newMembers: 2 },
+      lastMonth: { month: "2030-12", redeemed: 2, newMembers: 1 },
     });
   }, 30000);
 
@@ -131,8 +132,8 @@ describe("getOnboardingRedemptions", () => {
     });
 
     expect(result).toEqual({
-      thisMonth: { month: monthLabel(thisMonthStart), redeemed: 0, newMembers: 0 },
-      lastMonth: { month: monthLabel(lastMonthStart), redeemed: 0, newMembers: 0 },
+      thisMonth: { month: "2031-01", redeemed: 0, newMembers: 0 },
+      lastMonth: { month: "2030-12", redeemed: 0, newMembers: 0 },
     });
   });
 
@@ -161,7 +162,10 @@ describe("getOnboardingRedemptions", () => {
         input: { organizationId: organization.id },
         context: { reqHeaders: member.reqHeaders },
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringMatching(/organizers/i) });
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringMatching(/organizers .* can view code redemptions$/i),
+    });
   });
 
   it("rejects an organizer of another organization", async () => {

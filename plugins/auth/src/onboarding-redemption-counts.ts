@@ -4,14 +4,24 @@ import type { PluginServices } from "./service-types";
 
 export type MonthWindow = { month: string; start: Date; end: Date };
 
-export function monthWindow(month?: string, offset = 0): MonthWindow {
-  const now = new Date();
-  const [year, monthIndex] = month
-    ? [Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1]
-    : [now.getUTCFullYear(), now.getUTCMonth()];
-  const start = new Date(Date.UTC(year, monthIndex + offset, 1));
-  const end = new Date(Date.UTC(year, monthIndex + offset + 1, 1));
+function utcMonthWindow(year: number, monthIndex: number): MonthWindow {
+  const start = new Date(Date.UTC(year, monthIndex, 1));
+  const end = new Date(Date.UTC(year, monthIndex + 1, 1));
   return { month: start.toISOString().slice(0, 7), start, end };
+}
+
+export function currentMonthWindow(now: Date): MonthWindow {
+  return utcMonthWindow(now.getUTCFullYear(), now.getUTCMonth());
+}
+
+export function previousMonthWindow(now: Date): MonthWindow {
+  return utcMonthWindow(now.getUTCFullYear(), now.getUTCMonth() - 1);
+}
+
+export function monthWindow(month: string | undefined, now: Date): MonthWindow {
+  return month
+    ? utcMonthWindow(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1)
+    : currentMonthWindow(now);
 }
 
 export function redeemedWithin(window: MonthWindow) {
