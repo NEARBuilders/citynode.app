@@ -810,6 +810,36 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Proposez un City Node que votre organisation gérera.",
     "提出由你的组织运营的城市节点。",
   ],
+  "dashboard.newMembersLastMonth": [
+    "New members last month",
+    "Nuevos miembros el mes pasado",
+    "Nouveaux membres le mois dernier",
+    "上月新成员",
+  ],
+  "dashboard.newMembersThisMonth": [
+    "New members this month",
+    "Nuevos miembros este mes",
+    "Nouveaux membres ce mois-ci",
+    "本月新成员",
+  ],
+  "dashboard.redeemedLastMonth": [
+    "Redeemed a code last month",
+    "Canjearon un código el mes pasado",
+    "Ont utilisé un code le mois dernier",
+    "上月兑换代码人数",
+  ],
+  "dashboard.redeemedThisMonth": [
+    "Redeemed a code this month",
+    "Canjearon un código este mes",
+    "Ont utilisé un code ce mois-ci",
+    "本月兑换代码人数",
+  ],
+  "dashboard.redemptionsFailed": [
+    "Couldn't load code redemptions",
+    "No se pudieron cargar los canjes de códigos",
+    "Impossible de charger les utilisations de codes",
+    "无法加载兑换代码人数",
+  ],
   "dashboard.rejected": ["Rejected", "Rechazado", "Rejeté", "已拒绝"],
   "dashboard.rejectHint": [
     "The submitter will see it as rejected. This can't be undone.",

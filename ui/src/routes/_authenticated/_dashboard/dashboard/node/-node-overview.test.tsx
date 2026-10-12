@@ -17,6 +17,7 @@ const POOL = "example.poolv1.near";
 const harness = vi.hoisted(() => ({
   nearAccount: null as string | null,
   routeContext: {} as Record<string, unknown>,
+  getOnboardingRedemptions: (() => Promise.resolve(null)) as (input: unknown) => Promise<unknown>,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -32,7 +33,10 @@ vi.mock("@/app", () => ({
   buildTenantUrl: (label: string, gatewayId: string) => `https://${label}.${gatewayId}`,
   getActiveRuntime: () => ({ gatewayId: "citynode.app" }),
   useApiClient: () => ({
-    auth: { getDao: async () => ({ daoAccountId: DAO, daoNetwork: "mainnet" }) },
+    auth: {
+      getDao: async () => ({ daoAccountId: DAO, daoNetwork: "mainnet" }),
+      getOnboardingRedemptions: (input: unknown) => harness.getOnboardingRedemptions(input),
+    },
     listDiscoveryActivities: async () => [],
   }),
   useAuthClient: () => ({
@@ -117,11 +121,13 @@ function renderOverview({
   nearAccount,
   canManage = false,
   inFinanceTeam = false,
+  canOrganize = false,
   network = "mainnet",
 }: {
   nearAccount: string | null;
   canManage?: boolean;
   inFinanceTeam?: boolean;
+  canOrganize?: boolean;
   network?: "mainnet" | "testnet";
 }) {
   harness.nearAccount = nearAccount;
@@ -150,6 +156,7 @@ function renderOverview({
     auth: { activeOrganizationId: "org-1" },
     canManage,
     inFinanceTeam,
+    canOrganize,
   };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
@@ -314,5 +321,57 @@ describe("node overview team area gating", () => {
     expect(await gate("/dashboard/node", null)).toBe("allowed");
     expect(await gate("/dashboard/node", "team-ops")).toBe("allowed");
     expect(await gate("/dashboard/node/proposals", "team-ops")).toBe("allowed");
+  });
+});
+
+describe("node overview code redemptions", () => {
+  const stats = [
+    "dashboard-node.stat-redeemed-this-month",
+    "dashboard-node.stat-new-members-this-month",
+    "dashboard-node.stat-redeemed-last-month",
+    "dashboard-node.stat-new-members-last-month",
+  ];
+
+  it("shows organizers this month's and last month's figures for their community", async () => {
+    stubChain();
+    const requested: unknown[] = [];
+    harness.getOnboardingRedemptions = async (input) => {
+      requested.push(input);
+      return {
+        thisMonth: { month: "2031-03", redeemed: 7, newMembers: 5 },
+        lastMonth: { month: "2031-02", redeemed: 3, newMembers: 0 },
+      };
+    };
+    renderOverview({ nearAccount: null, canOrganize: true });
+    await waitFor(() =>
+      expect(
+        stats.map((testId) => screen.getByTestId(testId).querySelector("dd")?.textContent),
+      ).toEqual(["7", "5", "3", "0"]),
+    );
+    expect(requested).toEqual([{ organizationId: "org-1" }]);
+  });
+
+  it("keeps the rest of the overview when the figures fail to load", async () => {
+    stubChain();
+    harness.getOnboardingRedemptions = () => Promise.reject(new Error("unavailable"));
+    renderOverview({ nearAccount: null, canOrganize: true });
+    expect((await screen.findByTestId("dashboard-node.redemptions-error")).textContent).toBe(
+      "Couldn't load code redemptions",
+    );
+    expect(screen.getByTestId("node-validators")).toBeTruthy();
+    for (const testId of stats) expect(screen.queryByTestId(testId)).toBeNull();
+  });
+
+  it("neither shows nor requests the figures for other members", async () => {
+    stubChain();
+    const requested: unknown[] = [];
+    harness.getOnboardingRedemptions = async (input) => {
+      requested.push(input);
+      return null;
+    };
+    renderOverview({ nearAccount: null, canManage: true });
+    await screen.findByTestId("node-validators");
+    for (const testId of stats) expect(screen.queryByTestId(testId)).toBeNull();
+    expect(requested).toEqual([]);
   });
 });

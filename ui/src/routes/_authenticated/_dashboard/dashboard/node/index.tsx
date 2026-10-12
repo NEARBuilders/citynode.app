@@ -29,6 +29,7 @@ import {
 import { useAppTranslation } from "@/i18n/runtime";
 import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
+import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
@@ -61,6 +62,7 @@ function NodeOverview() {
     auth,
     canManage,
     inFinanceTeam,
+    canOrganize,
   } = Route.useRouteContext();
   const apiClient = useApiClient();
   const orgId = tenant?.orgId ?? auth.activeOrganizationId;
@@ -83,6 +85,10 @@ function NodeOverview() {
   });
   const visibilityContext = useVisibilityContext(nodeId);
   const { now } = visibilityContext;
+  const redemptions = useQuery({
+    ...onboardingRedemptionsQueryOptions(apiClient, orgId ?? ""),
+    enabled: !!canOrganize && !!orgId,
+  });
   const daoOwned = !!tenant && tenant.ownerKind === "dao";
   const pendingConfigQuery = useQuery({
     queryKey: ["dashboard-node", "pending-config-proposal", tenant?.accountId],
@@ -174,6 +180,40 @@ function NodeOverview() {
           }
           testId="dashboard-node.stat-staking"
         />
+        {canOrganize &&
+          (redemptions.isError ? (
+            <div
+              className="col-span-2 sm:col-span-4"
+              data-testid="dashboard-node.redemptions-error"
+            >
+              <p className="text-sm text-muted-foreground">
+                {translate("dashboard.redemptionsFailed")}
+              </p>
+            </div>
+          ) : (
+            <>
+              <Stat
+                label={translate("dashboard.redeemedThisMonth")}
+                value={redemptions.data ? String(redemptions.data.thisMonth.redeemed) : "—"}
+                testId="dashboard-node.stat-redeemed-this-month"
+              />
+              <Stat
+                label={translate("dashboard.newMembersThisMonth")}
+                value={redemptions.data ? String(redemptions.data.thisMonth.newMembers) : "—"}
+                testId="dashboard-node.stat-new-members-this-month"
+              />
+              <Stat
+                label={translate("dashboard.redeemedLastMonth")}
+                value={redemptions.data ? String(redemptions.data.lastMonth.redeemed) : "—"}
+                testId="dashboard-node.stat-redeemed-last-month"
+              />
+              <Stat
+                label={translate("dashboard.newMembersLastMonth")}
+                value={redemptions.data ? String(redemptions.data.lastMonth.newMembers) : "—"}
+                testId="dashboard-node.stat-new-members-last-month"
+              />
+            </>
+          ))}
       </dl>
 
       {daoOwned && canManage && pendingConfig && orgSlug && (
