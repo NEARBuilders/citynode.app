@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getNextSteps, type NextStepsState } from "./-next-steps";
+import {
+  getNextSteps,
+  getNodeSetupSteps,
+  type NextStepsState,
+  type NodeSetupState,
+} from "./-next-steps";
 
 const base: NextStepsState = {
   isAnonymous: false,
@@ -24,9 +29,9 @@ describe("home next steps", () => {
     );
   });
 
-  it("sends a user without organizations to create one", () => {
+  it("sends a user without organizations straight to starting a community", () => {
     expect(ids({ organizationCount: 0, activeOrganizationName: null })).toEqual([
-      "create-org",
+      "start-community",
       "stake",
       "explore",
     ]);
@@ -53,13 +58,64 @@ describe("home next steps", () => {
     ]);
   });
 
-  it("adds Community settings for owners and the admin queue for admins", () => {
+  it("adds payouts for owners", () => {
     expect(
-      ids({
-        community: { name: "Harbor City", tenantId: "t1" },
-        canManageCommunity: true,
-        isAdmin: true,
-      }),
-    ).toEqual(["open-community", "community-settings", "admin", "stake"]);
+      ids({ community: { name: "Harbor City", tenantId: "t1" }, canManageCommunity: true }),
+    ).toEqual(["open-community", "payouts", "stake"]);
+  });
+
+  it("leads admins with launching a node and the review queue", () => {
+    expect(ids({ organizationCount: 0, activeOrganizationName: null, isAdmin: true })).toEqual([
+      "launch-node",
+      "admin",
+      "stake",
+      "explore",
+    ]);
+  });
+});
+
+describe("node setup checklist", () => {
+  const profile: NonNullable<NodeSetupState["profile"]> = {
+    published: true,
+    latitude: 6.5,
+    summary: "Builders in Lagos",
+    channels: [{}],
+  };
+
+  it("starts with every step open for a fresh node", () => {
+    expect(
+      getNodeSetupSteps({ profile: null, eventCount: 0, onboardingCodeCount: 0 }).map(
+        (step) => step.done,
+      ),
+    ).toEqual([false, false, false, false]);
+  });
+
+  it("only counts the map pin once the profile is published with coordinates", () => {
+    const map = (overrides: Partial<typeof profile>) =>
+      getNodeSetupSteps({
+        profile: { ...profile, ...overrides },
+        eventCount: 0,
+        onboardingCodeCount: 0,
+      })[0];
+    expect(map({}).done).toBe(true);
+    expect(map({ published: false }).done).toBe(false);
+    expect(map({ latitude: null }).done).toBe(false);
+  });
+
+  it("needs both a description and a social link for the profile step", () => {
+    const step = (overrides: Partial<typeof profile>) =>
+      getNodeSetupSteps({
+        profile: { ...profile, ...overrides },
+        eventCount: 0,
+        onboardingCodeCount: 0,
+      })[1];
+    expect(step({}).done).toBe(true);
+    expect(step({ summary: "  " }).done).toBe(false);
+    expect(step({ channels: [] }).done).toBe(false);
+  });
+
+  it("ticks events and QR codes off from activity", () => {
+    const steps = getNodeSetupSteps({ profile, eventCount: 2, onboardingCodeCount: 1 });
+    expect(steps.every((step) => step.done)).toBe(true);
   });
 });

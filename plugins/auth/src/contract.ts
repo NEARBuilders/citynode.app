@@ -233,6 +233,12 @@ const onboardingCodeSummarySchema = z.object({
   createdAt: z.date(),
 });
 
+const onboardingRedemptionMonthSchema = z.object({
+  month: z.string(),
+  redeemed: z.number().int().nonnegative(),
+  newMembers: z.number().int().nonnegative(),
+});
+
 const daoOutputSchema = z.object({
   daoAccountId: z.string().nullable(),
   daoNetwork: z.enum(["mainnet", "testnet"]).nullable(),
@@ -855,6 +861,17 @@ export const contract = oc.router({
     )
     .errors(Errors),
 
+  getOnboardingRedemptions: oc
+    .route({ method: "GET", path: "/v1/auth/onboarding/redemptions" })
+    .input(z.object({ organizationId: z.string().optional() }))
+    .output(
+      z.object({
+        thisMonth: onboardingRedemptionMonthSchema,
+        lastMonth: onboardingRedemptionMonthSchema,
+      }),
+    )
+    .errors(Errors),
+
   getOnboardingCodeInfo: oc
     .route({ method: "GET", path: "/v1/auth/onboarding/info" })
     .input(z.object({ code: z.string().min(1) }))
@@ -880,6 +897,7 @@ export const contract = oc.router({
       z.object({
         success: z.boolean(),
         alreadyRedeemed: z.boolean(),
+        organizationId: z.string(),
         organizationName: z.string(),
         eventName: z.string(),
       }),

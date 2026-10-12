@@ -680,6 +680,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return publicTenant;
       }),
 
+      resolveTenantById: builder.resolveTenantById.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const tenant = yield* services.tenants.resolveTenantById(input.tenantId);
+        if (!tenant) return null;
+        const { ownerUserId: _ownerUserId, ...publicTenant } = tenant;
+        return publicTenant;
+      }),
+
       resolveTenantByOrgId: builder.resolveTenantByOrgId.effect(function* ({ input, errors }) {
         const services = yield* ApiServices;
         const tenant = yield* services.tenants.resolveTenantByOrgId(input.orgId);
