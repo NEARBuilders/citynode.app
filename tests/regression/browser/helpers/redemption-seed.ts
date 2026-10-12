@@ -1,14 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import * as authSchema from "../../../../plugins/auth/src/db/schema.ts";
-import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
-import { computeRegressionEnv } from "../../lib/regression-env.mjs";
+import { openAuthDatabase } from "./onboarding-seed.ts";
 
 export async function seedOrganizationRedemptions(organizationId: string): Promise<void> {
-  const regressionEnv = computeRegressionEnv();
-  const { test, db, close } = await createAuthTestInstance({
-    authDatabaseUrl: regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "",
-    secret: regressionEnv.authSecret,
-  });
+  const { test, db, close } = await openAuthDatabase();
   try {
     const unique = randomUUID().slice(0, 8);
     const saveUser = (label: string) =>
