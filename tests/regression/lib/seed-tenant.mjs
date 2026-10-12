@@ -150,6 +150,92 @@ export async function seedNode(input) {
   }
 }
 
+async function withApiTable(table, run) {
+  const root = findRepoRoot();
+  if (!root) throw new Error("bos.config.json not found in any parent directory");
+  const resolved = computeRegressionEnv({ repoRoot: root });
+  const url = resolved.dbUrls.API_DATABASE_URL;
+  if (!url) throw new Error("API_DATABASE_URL is not configured for this workspace");
+  const client = new pg.Client(parsePostgresUrl(url));
+  await client.connect();
+  try {
+    const located = await client.query(
+      "SELECT table_schema FROM information_schema.tables WHERE table_name = $1 AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema LIMIT 1",
+      [table],
+    );
+    const schema = located.rows[0]?.table_schema;
+    if (!schema)
+      throw new Error(`${table} table not found in api database — did API migrations run?`);
+    await client.query(`SET search_path TO "${schema}", public`);
+    return await run(client);
+  } finally {
+    await client.end();
+  }
+}
+
+export async function seedDiscoveryProfile(input) {
+  const { nodeId, published } = input;
+  if (!nodeId) throw new Error("seedDiscoveryProfile requires nodeId");
+  const data = {
+    nodeId,
+    summary: "",
+    location: "",
+    region: "",
+    latitude: null,
+    longitude: null,
+    channels: [],
+    published: Boolean(published),
+  };
+  return withApiTable("discovery_profiles", async (client) => {
+    await client.query(
+      "INSERT INTO discovery_profiles (node_id, data) VALUES ($1, $2::jsonb) ON CONFLICT (node_id) DO UPDATE SET data = EXCLUDED.data",
+      [nodeId, JSON.stringify(data)],
+    );
+    return data;
+  });
+}
+
+export async function seedDiscoveryActivity(input) {
+  const { nodeId, title, status, startsAt, endsAt, luma } = input;
+  if (!nodeId) throw new Error("seedDiscoveryActivity requires nodeId");
+  const publishedAt = input.publishedAt ?? new Date(Date.now() - 60_000).toISOString();
+  const id = randomId();
+  const url = `https://example.com/regression/${id}`;
+  const data = {
+    id,
+    ownerNodeId: nodeId,
+    nodeIds: [nodeId],
+    kind: "event",
+    title,
+    summary: "",
+    url,
+    source: luma ? "Luma · Regression" : "Regression",
+    publishedAt,
+    startsAt,
+    endsAt,
+    timezone: "UTC",
+    venue: "Online",
+    status,
+    ...(luma
+      ? {
+          luma: {
+            calendarId: "cal-regression",
+            eventId: `evt-${id}`,
+            syncedAt: new Date().toISOString(),
+            ...luma,
+          },
+        }
+      : {}),
+  };
+  return withApiTable("discovery_activities", async (client) => {
+    await client.query(
+      "INSERT INTO discovery_activities (id, owner_node_id, canonical_url, data) VALUES ($1, $2, $3, $4::jsonb)",
+      [id, nodeId, url, JSON.stringify(data)],
+    );
+    return data;
+  });
+}
+
 const thisFile = path.resolve(fileURLToPath(import.meta.url));
 if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) {
   const payload = process.argv[2];
