@@ -861,6 +861,7 @@ export const contract = oc.router({
       z.object({
         success: z.boolean(),
         alreadyRedeemed: z.boolean(),
+        organizationId: z.string(),
         organizationName: z.string(),
         eventName: z.string(),
       }),
