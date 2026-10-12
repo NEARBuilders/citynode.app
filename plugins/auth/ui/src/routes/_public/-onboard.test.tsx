@@ -188,7 +188,7 @@ describe("onboard join flow", () => {
   it("shows a signed-in visitor who never joined that a used-up code is unavailable", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, usedUp: true });
-    harness.redeemOnboardingCode.mockRejectedValue(new Error("reached its limit"));
+    harness.redeemOnboardingCode.mockRejectedValue({ data: { reason: "code_used_up" } });
 
     renderOnboard();
 
@@ -295,6 +295,34 @@ describe("onboard join flow", () => {
     fireEvent.click(screen.getByTestId("onboard.retry-button"));
     expect(await screen.findByTestId("onboard.success")).toBeTruthy();
   });
+
+  it.each(["expired", "usedUp"] as const)(
+    "retries a network failure while joining a %s code instead of asking for a new link",
+    async (flag) => {
+      harness.session = { user: { id: "user-1", name: "Grace" } };
+      harness.getOnboardingCodeInfo.mockResolvedValue({
+        ...info,
+        expired: flag === "expired",
+        usedUp: flag === "usedUp",
+      });
+      harness.redeemOnboardingCode
+        .mockRejectedValueOnce(new Error("Failed to fetch"))
+        .mockResolvedValue({
+          organizationName: "Chicago Builders",
+          eventName: "Launch Night",
+        });
+
+      renderOnboard();
+
+      expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
+      expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
+      expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
+      expect(screen.queryByText("Ask the organizer for a new link")).toBeNull();
+
+      fireEvent.click(screen.getByTestId("onboard.retry-button"));
+      expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+    },
+  );
 
   it.each([
     ["organization_not_active", "This community isn't open yet", "onboard.explore-button"],

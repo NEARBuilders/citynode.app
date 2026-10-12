@@ -949,7 +949,7 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "auth.onboard.joinUnavailable": [
     "Couldn't join right now",
-    "No se pudo unir ahora",
+    "No pudiste unirte ahora",
     "Impossible de rejoindre pour le moment",
     "现在无法加入",
   ],
@@ -980,7 +980,7 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "auth.onboard.invitationUsedUp": [
     "This invitation has been used up",
     "Esta invitación se ha agotado",
-    "Cette invitation a été utilisée",
+    "Cette invitation est épuisée",
     "此邀请已用完",
   ],
   "auth.onboard.invitationInvalid": [

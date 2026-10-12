@@ -309,6 +309,20 @@ function OnboardContent() {
     );
   }
 
+  if (redeemError === "network") {
+    return (
+      <StatusPanel
+        title={translate("auth.onboard.joinUnavailable")}
+        testId="onboard.error"
+        action="retry"
+        onRetry={() => {
+          redeemingRef.current = false;
+          setRedeemError(null);
+        }}
+      />
+    );
+  }
+
   if (info.revoked || info.expired || info.usedUp) {
     return (
       <StatusPanel
