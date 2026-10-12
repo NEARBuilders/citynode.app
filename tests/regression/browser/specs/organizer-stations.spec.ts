@@ -93,7 +93,11 @@ test.describe("organizer onboarding stations", () => {
 
     await page.goto(`/nodes/${community.nodeId}/content`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await expect(page.getByTestId("community-cannot-edit")).toBeVisible({ timeout: 15000 });
+    await page.waitForURL(/\/dashboard\?restricted=owners/, {
+      timeout: 15000,
+      waitUntil: "commit",
+    });
+    await expect(page.getByTestId("workspace-restricted-notice")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("discovery-new-event")).toHaveCount(0);
 
     expectNoHydrationFailure(pageErrors);
