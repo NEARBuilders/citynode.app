@@ -116,7 +116,9 @@ test.describe("owner event visibility", () => {
     ).toBeVisible({ timeout: 15000 });
     await page.waitForURL(new RegExp(`/nodes/${node.id}/content`), { waitUntil: "commit" });
 
-    await expect(page.getByTestId("content-not-published")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("content-map-status")).toHaveAttribute("data-state", "hidden", {
+      timeout: 15000,
+    });
     const badge = (id: string) => page.getByTestId(`event-visibility-${id}`);
     await expect(badge(events.live.id)).toHaveAttribute("data-state", "published");
     await expect(badge(events.draft.id)).toHaveAttribute("data-state", "draft");
@@ -141,7 +143,9 @@ test.describe("owner event visibility", () => {
 
     await seedDiscoveryProfile({ nodeId: node.id, published: true });
     await openEvents(page, node.id);
-    await expect(page.getByTestId("content-not-published")).toHaveCount(0);
+    await expect(page.getByTestId("content-map-status")).toHaveAttribute("data-state", "noPin", {
+      timeout: 15000,
+    });
     await expect(badge(events.live.id)).toHaveAttribute("data-state", "live", { timeout: 15000 });
     await expect(badge(events.hiddenImport.id)).toHaveAttribute("data-state", "live");
     await expect(badge(events.draft.id)).toHaveAttribute("data-state", "draft");

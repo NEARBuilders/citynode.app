@@ -33,7 +33,7 @@ test.describe("community events", () => {
 
     await expect(page.getByTestId("community-cannot-edit")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("discovery-new-event")).toHaveCount(0);
-    await expect(page.getByTestId("content-not-published")).toHaveCount(0);
+    await expect(page.getByTestId("content-map-status")).toHaveCount(0);
 
     await page.getByTestId("community-cannot-edit-overview").click();
     await page.waitForURL(/\/dashboard\/node/, { waitUntil: "commit" });
@@ -53,7 +53,9 @@ test.describe("community events", () => {
     await page.waitForURL(new RegExp(`/nodes/${node.id}/content`), { waitUntil: "commit" });
 
     await expect(page.getByTestId("content.heading")).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId("content-not-published")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("content-map-status")).toHaveAttribute("data-state", "hidden", {
+      timeout: 15000,
+    });
     await expect(page.getByTestId("discovery-new-event")).toBeVisible({ timeout: 15000 });
 
     expectNoHydrationFailure(pageErrors);
@@ -71,7 +73,7 @@ test.describe("community events", () => {
     await waitForApp(page);
 
     await expect(page.getByTestId("discovery-new-event")).toBeVisible({ timeout: 15000 });
-    expect(await page.getByTestId("content-not-published").isVisible()).toBe(true);
+    expect(await page.getByTestId("content-map-status").isVisible()).toBe(true);
 
     expectNoHydrationFailure(pageErrors);
   });

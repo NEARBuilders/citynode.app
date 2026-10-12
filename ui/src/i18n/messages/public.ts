@@ -56,6 +56,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "准备好开始开发了吗？",
   ],
   "community.addLink": ["Add link", "Añadir enlace", "Ajouter un lien", "添加链接"],
+  "community.addLocation": [
+    "Add a location",
+    "Añadir una ubicación",
+    "Ajouter un lieu",
+    "添加地点",
+  ],
   "community.all": [
     "All communities",
     "Todas las comunidades",
@@ -147,6 +153,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Los eventos publicados aparecen cuando tu perfil es público.",
     "Les événements publiés apparaissent lorsque votre profil est public.",
     "资料公开后，已发布活动才会显示。",
+  ],
+  "community.hiddenMapHint": [
+    "Visitors can't find your community or its events yet.",
+    "Los visitantes aún no pueden encontrar tu comunidad ni sus eventos.",
+    "Les visiteurs ne peuvent pas encore trouver votre communauté ni ses événements.",
+    "访客暂时无法找到你的社区及其活动。",
   ],
   "community.historyDraft": [
     "Saved as a draft",
@@ -252,6 +264,24 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Elle a peut-être été déplacée ou n'est pas encore configurée.",
     "社区可能已移动，或尚未设置。",
   ],
+  "community.notOnExplore": [
+    "Not on Explore",
+    "No aparece en Explorar",
+    "Absente d’Explorer",
+    "未在探索页面显示",
+  ],
+  "community.notOnMap": [
+    "On Explore, but not on the map",
+    "En Explorar, pero no en el mapa",
+    "Dans Explorer, mais absente de la carte",
+    "已在探索页面显示，但未标记在地图上",
+  ],
+  "community.notOnMapHint": [
+    "Add a location so visitors can find you on the map.",
+    "Añade una ubicación para que los visitantes te encuentren en el mapa.",
+    "Ajoutez un lieu pour que les visiteurs vous trouvent sur la carte.",
+    "添加地点，方便访客在地图上找到你。",
+  ],
   "community.offMap": [
     "Not on the map",
     "Fuera del mapa",
@@ -259,7 +289,18 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "尚未标记在地图上",
   ],
   "community.onMap": ["On the map", "En el mapa", "Sur la carte", "已标记在地图上"],
-  "community.openProfile": ["Open profile", "Abrir perfil", "Ouvrir le profil", "打开资料"],
+  "community.pendingDeletionHint": [
+    "This community is being deleted.",
+    "Esta comunidad se está eliminando.",
+    "Cette communauté est en cours de suppression.",
+    "此社区正在删除中。",
+  ],
+  "community.pendingHint": [
+    "This community is waiting for approval.",
+    "Esta comunidad está pendiente de aprobación.",
+    "Cette communauté attend d’être approuvée.",
+    "此社区正在等待审核。",
+  ],
   "community.profile": ["Profile", "Perfil", "Profil", "资料"],
   "community.profileExample": [
     "Who is this community for? What do you do together?",
@@ -273,6 +314,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Perfil guardado y publicado en Explorar",
     "Profil enregistré et publié dans Explorer",
     "资料已保存并发布至探索页面",
+  ],
+  "community.publishProfile": [
+    "Publish your profile",
+    "Publica tu perfil",
+    "Publier votre profil",
+    "发布你的资料",
   ],
   "community.recentlyActive": [
     "Recently active",
@@ -323,6 +370,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Dejar de destacar",
     "Retirer de la une",
     "取消推荐",
+  ],
+  "community.suspendedHint": [
+    "This community is suspended, so it and its events are hidden.",
+    "Esta comunidad está suspendida, por lo que tanto ella como sus eventos están ocultos.",
+    "Cette communauté est suspendue : elle et ses événements sont masqués.",
+    "此社区已被暂停，社区及其活动均已隐藏。",
   ],
   "community.unfeaturedNamed": [
     "{name} is no longer featured",
