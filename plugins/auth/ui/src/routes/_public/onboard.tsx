@@ -166,7 +166,7 @@ function OnboardContent() {
     return (
       <AuthPanel
         icon={<CheckCircleIcon />}
-        title={translate("auth.onboard.youreIn")}
+        title={translate("auth.onboard.readyBuild")}
         titleTestId="onboard.heading"
         description={joinedLine}
       >
@@ -174,10 +174,10 @@ function OnboardContent() {
           size="lg"
           className="w-full"
           nativeButton={false}
-          render={<Link to="/dashboard/node" />}
-          data-testid="onboard.community-button"
+          render={<Link to="/build" />}
+          data-testid="onboard.build-button"
         >
-          {translate("auth.onboard.openCommunity", { organization: redeemed.organizationName })}
+          {translate("auth.onboard.buildPrompts")}
         </Button>
         {communityPage && (
           <Button

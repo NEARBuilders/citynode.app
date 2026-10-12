@@ -153,16 +153,16 @@ describe("onboard join flow", () => {
     expect(screen.queryByTestId("onboard.display-name")).toBeNull();
   });
 
-  it("points the done state at the community the attendee just joined", async () => {
+  it("points the done state at the build page", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
     harness.redeemOnboardingCode.mockResolvedValue(joined);
 
     renderOnboard();
 
-    const communityButton = await screen.findByTestId("onboard.community-button");
-    expect(communityButton.getAttribute("href")).toBe("/dashboard/node");
-    expect(communityButton.textContent).toContain("Chicago Builders");
+    const buildButton = await screen.findByTestId("onboard.build-button");
+    expect(buildButton.getAttribute("href")).toBe("/build");
+    expect(screen.queryByTestId("build.prompts")).toBeNull();
   });
 
   it("shows a returning member the joined state for a code that has since expired", async () => {

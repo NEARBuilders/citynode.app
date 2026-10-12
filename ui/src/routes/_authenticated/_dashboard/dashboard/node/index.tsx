@@ -89,7 +89,6 @@ function NodeOverview() {
     tenant,
     auth,
     canManage,
-    canOrganize,
     inFinanceTeam,
     canOrganize,
   } = Route.useRouteContext();
@@ -270,7 +269,7 @@ function NodeOverview() {
         <SectionHeader
           title={translate("dashboard.comingUp")}
           action={
-            canOrganize ? (
+            canManage || canOrganize ? (
               <Button
                 size="sm"
                 nativeButton={false}
@@ -300,7 +299,7 @@ function NodeOverview() {
           <p className="text-sm text-muted-foreground">
             {activities.isError
               ? translate("dashboard.eventsOwnerHint")
-              : canOrganize
+              : canManage || canOrganize
                 ? translate("dashboard.noEventsHint")
                 : translate("dashboard.noEventsMemberHint")}
           </p>
