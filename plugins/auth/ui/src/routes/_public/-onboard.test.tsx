@@ -7,7 +7,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
 import { Route as OnboardRoute } from "./onboard";
@@ -18,6 +18,9 @@ const harness = vi.hoisted(() => ({
   getOnboardingCodeInfo: vi.fn(),
   redeemOnboardingCode: vi.fn(),
   detectNearAccount: vi.fn(async () => null as { accountId?: string | null } | null),
+  resolveTenantByOrgId: vi.fn(),
+  listNodes: vi.fn(),
+  getDiscoveryNode: vi.fn(),
   clipboardWriteText: vi.fn(async () => undefined),
 }));
 
@@ -42,6 +45,12 @@ vi.mock("everything-dev/ui/auth", () => ({
 vi.mock("better-near-auth/client", () => ({ isPasskeyWalletAvailable: () => true }));
 
 const CODE = "valid-code-12345";
+const joined = {
+  organizationId: "org-1",
+  organizationName: "Chicago Builders",
+  eventName: "Launch Night",
+};
+
 const info = {
   organizationName: "Chicago Builders",
   eventName: "Launch Night",
@@ -70,6 +79,9 @@ function renderOnboard() {
           getOnboardingCodeInfo: harness.getOnboardingCodeInfo,
           redeemOnboardingCode: harness.redeemOnboardingCode,
         },
+        resolveTenantByOrgId: harness.resolveTenantByOrgId,
+        listNodes: harness.listNodes,
+        getDiscoveryNode: harness.getDiscoveryNode,
       },
       runtimeConfig: { networkId: "mainnet", runtime: { gatewayId: "citynode.app" } },
     },
@@ -82,6 +94,7 @@ function renderOnboard() {
 }
 
 beforeEach(() => {
+  harness.resolveTenantByOrgId.mockRejectedValue(new Error("NOT_FOUND"));
   Object.defineProperty(navigator, "clipboard", {
     value: { writeText: harness.clipboardWriteText },
     configurable: true,
@@ -113,10 +126,7 @@ describe("onboard join flow", () => {
   it("asks an unnamed returning member for a name, then shows the done state", async () => {
     harness.session = { user: { id: "user-1", name: "Passkey user" } };
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
-    harness.redeemOnboardingCode.mockResolvedValue({
-      organizationName: "Chicago Builders",
-      eventName: "Launch Night",
-    });
+    harness.redeemOnboardingCode.mockResolvedValue(joined);
 
     renderOnboard();
 
@@ -137,10 +147,7 @@ describe("onboard join flow", () => {
   it("skips the name step for a returning member who already chose a name", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
-    harness.redeemOnboardingCode.mockResolvedValue({
-      organizationName: "Chicago Builders",
-      eventName: "Launch Night",
-    });
+    harness.redeemOnboardingCode.mockResolvedValue(joined);
 
     renderOnboard();
 
@@ -151,10 +158,7 @@ describe("onboard join flow", () => {
   it("points the done state at the build page", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
-    harness.redeemOnboardingCode.mockResolvedValue({
-      organizationName: "Chicago Builders",
-      eventName: "Launch Night",
-    });
+    harness.redeemOnboardingCode.mockResolvedValue(joined);
 
     renderOnboard();
 
@@ -179,7 +183,7 @@ describe("onboard join flow", () => {
     expect(screen.getByTestId("onboard.loading")).toBeTruthy();
     expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
 
-    resolveRedeem({ organizationName: "Example Community", eventName: "Launch Night" });
+    resolveRedeem({ ...joined, organizationName: "Example Community" });
 
     expect(await screen.findByTestId("onboard.success")).toBeTruthy();
     expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
@@ -230,10 +234,7 @@ describe("onboard join flow", () => {
   it("copies the desktop pairing link from the continue card", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
-    harness.redeemOnboardingCode.mockResolvedValue({
-      organizationName: "Chicago Builders",
-      eventName: "Launch Night",
-    });
+    harness.redeemOnboardingCode.mockResolvedValue(joined);
 
     renderOnboard();
 
@@ -348,5 +349,100 @@ describe("onboard join flow", () => {
       expect(screen.queryByTestId("onboard.explore-button")).toBeNull();
       expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
     }
+  });
+});
+
+describe("onboard community link", () => {
+  function joinAsNamedMember() {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode.mockResolvedValue(joined);
+  }
+
+  function communityWithNodes(nodes: unknown[]) {
+    harness.resolveTenantByOrgId.mockResolvedValue({ id: "tenant-1" });
+    harness.listNodes.mockResolvedValue(nodes);
+    harness.getDiscoveryNode.mockResolvedValue({ id: "node-a" });
+  }
+
+  it("links to the community's public page below the primary build button", async () => {
+    joinAsNamedMember();
+    communityWithNodes([{ id: "node-a", slug: "chicago", name: "Chicago", parentId: null }]);
+
+    renderOnboard();
+
+    const link = await screen.findByTestId("onboard.community-link");
+    expect(link.getAttribute("href")).toBe("/n/chicago");
+    expect(link.textContent).toContain("See Chicago Builders");
+    expect(harness.resolveTenantByOrgId).toHaveBeenCalledWith({ orgId: "org-1" });
+    expect(harness.listNodes).toHaveBeenCalledWith({ tenantId: "tenant-1" });
+    const build = screen.getByTestId("onboard.build-button");
+    expect(build.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("uses the node My community opens first and keeps its parent", async () => {
+    joinAsNamedMember();
+    communityWithNodes([
+      { id: "node-z", slug: "zeta", name: "Zeta", parentId: null },
+      { id: "node-a", slug: "alpha", name: "Alpha", parentId: "parent-1" },
+    ]);
+
+    renderOnboard();
+
+    const link = await screen.findByTestId("onboard.community-link");
+    expect(link.getAttribute("href")).toBe("/n/alpha?parentId=parent-1");
+    expect(harness.getDiscoveryNode).toHaveBeenCalledWith({ nodeId: "node-a" });
+  });
+
+  type Lookup = "resolveTenantByOrgId" | "listNodes" | "getDiscoveryNode";
+  const failures: Array<[string, Lookup, () => void]> = [
+    ["the organization has no tenant", "resolveTenantByOrgId", () => undefined],
+    ["the tenant has no nodes", "listNodes", () => communityWithNodes([])],
+    [
+      "the community has no public page",
+      "getDiscoveryNode",
+      () => {
+        communityWithNodes([{ id: "node-a", slug: "chicago", name: "Chicago", parentId: null }]);
+        harness.getDiscoveryNode.mockResolvedValue(null);
+      },
+    ],
+    [
+      "a lookup fails on the network",
+      "listNodes",
+      () => {
+        communityWithNodes([{ id: "node-a", slug: "chicago", name: "Chicago", parentId: null }]);
+        harness.listNodes.mockRejectedValue(new TypeError("Failed to fetch"));
+      },
+    ],
+    [
+      "the node My community opens comes back without a slug",
+      "listNodes",
+      () =>
+        communityWithNodes([
+          { id: "node-a", name: "Alpha", parentId: null },
+          { id: "node-b", slug: "beta", name: "Beta", parentId: null },
+        ]),
+    ],
+  ];
+
+  it.each(failures)("shows no link and no error when %s", async (_case, lastLookup, arrange) => {
+    joinAsNamedMember();
+    arrange();
+
+    renderOnboard();
+
+    expect(await screen.findByTestId("onboard.build-button")).toBeTruthy();
+    const lookup = harness[lastLookup];
+    await waitFor(() => expect(lookup).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.allSettled(lookup.mock.results.map((result) => result.value));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByTestId("onboard.community-link")).toBeNull();
+    expect(harness.getDiscoveryNode.mock.calls.length > 0).toBe(lastLookup === "getDiscoveryNode");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByTestId("onboard.success")).toBeTruthy();
+    expect(screen.getByTestId("onboard.continue-on-computer")).toBeTruthy();
+    expect(screen.getByTestId("onboard.home-button")).toBeTruthy();
   });
 });

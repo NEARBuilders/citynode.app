@@ -277,6 +277,7 @@ export function TenantDetailContent({
     <PageContainer variant="wide">
       {header}
       <div className="flex w-full max-w-5xl flex-col gap-10 sm:gap-12">
+        {node && (isAdmin || isPlatformAdmin) && <TenantProfile nodeId={node.id} />}
         <TenantDetails
           tenant={tenant}
           hostname={hostname}
@@ -295,7 +296,6 @@ export function TenantDetailContent({
             onNameChange: setName,
           }}
         />
-        {node && (isAdmin || isPlatformAdmin) && <TenantProfile nodeId={node.id} />}
         <TenantLiveSite
           tenant={tenant}
           hostname={hostname}

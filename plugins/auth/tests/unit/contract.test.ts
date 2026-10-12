@@ -20,6 +20,22 @@ function reasonSchema(code: "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND") {
   return data as z.ZodType<{ reason: string }>;
 }
 
+async function validateRedeemOutput(value: unknown) {
+  const schemas = contract.redeemOnboardingCode["~orpc"].outputSchemas ?? [];
+  if (schemas.length === 0) throw new Error("redeemOnboardingCode declares no output schema");
+  const results = await Promise.all(schemas.map((schema) => schema["~standard"].validate(value)));
+  const issues = results.flatMap((result) => result.issues ?? []);
+  return { issues: issues.length > 0 ? issues : undefined };
+}
+
+const redeemed = {
+  success: true,
+  alreadyRedeemed: false,
+  organizationId: "org-1",
+  organizationName: "Example Community",
+  eventName: "Launch Night",
+};
+
 describe("redeemOnboardingCode contract errors", () => {
   it("declares exactly the seven join-failure reasons", () => {
     expect(onboardingRedeemReasons).toEqual(declaredReasons);
@@ -35,5 +51,18 @@ describe("redeemOnboardingCode contract errors", () => {
       expect(schema.parse({ reason })).toEqual({ reason });
     }
     expect(() => schema.parse({ reason: "not_a_reason" })).toThrow();
+  });
+});
+
+describe("redeemOnboardingCode contract", () => {
+  it("returns the organization the person joined", async () => {
+    const result = await validateRedeemOutput(redeemed);
+    expect(result.issues).toBeUndefined();
+  });
+
+  it("rejects a result without the organization", async () => {
+    const { organizationId: _omitted, ...withoutOrganization } = redeemed;
+    const result = await validateRedeemOutput(withoutOrganization);
+    expect(result.issues?.length).toBeGreaterThan(0);
   });
 });

@@ -14,6 +14,7 @@ export function CommunityNav({
   nodeId,
   tenantId,
   canManage,
+  canOrganize = canManage,
   allowedAreas = null,
   replace = false,
   testIds = {},
@@ -22,6 +23,7 @@ export function CommunityNav({
   nodeId: string;
   tenantId?: string | null;
   canManage?: boolean;
+  canOrganize?: boolean;
   allowedAreas?: readonly FeatureArea[] | null;
   replace?: boolean;
   testIds?: Partial<Record<CommunityNavSection, string>>;
@@ -34,32 +36,36 @@ export function CommunityNav({
       path: "/dashboard/node",
       link: <Link to="/dashboard/node" search={{ nodeId }} />,
     },
-    {
-      value: "content",
-      label: translate("events.title"),
-      path: `/nodes/${nodeId}/content`,
-      link: (
-        <Link
-          to="/nodes/$nodeId/content"
-          params={{ nodeId }}
-          search={{ tab: "events" }}
-          replace={replace}
-        />
-      ),
-    },
-    {
-      value: "onboarding",
-      label: translate("org.onboarding"),
-      path: `/nodes/${nodeId}/content`,
-      link: (
-        <Link
-          to="/nodes/$nodeId/content"
-          params={{ nodeId }}
-          search={{ tab: "onboarding" }}
-          replace={replace}
-        />
-      ),
-    },
+    ...(canOrganize
+      ? [
+          {
+            value: "content" as const,
+            label: translate("events.title"),
+            path: `/nodes/${nodeId}/content`,
+            link: (
+              <Link
+                to="/nodes/$nodeId/content"
+                params={{ nodeId }}
+                search={{ tab: "events" }}
+                replace={replace}
+              />
+            ),
+          },
+          {
+            value: "onboarding" as const,
+            label: translate("org.onboarding"),
+            path: `/nodes/${nodeId}/content`,
+            link: (
+              <Link
+                to="/nodes/$nodeId/content"
+                params={{ nodeId }}
+                search={{ tab: "onboarding" }}
+                replace={replace}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       value: "proposals",
       label: translate("common.proposals"),

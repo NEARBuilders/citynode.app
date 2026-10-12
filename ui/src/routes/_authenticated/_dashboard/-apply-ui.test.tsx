@@ -322,7 +322,7 @@ describe("apply route submission", () => {
     expect(stepStatus("details")).toBe("current");
   });
 
-  it("opens the organization step first when there is no active organization", async () => {
+  it("asks for the community name first when there is no organization", async () => {
     harness.routeContext = {
       auth: { activeOrganizationId: null },
       runtimeConfig: TEST_RUNTIME_CONFIG,
@@ -333,7 +333,8 @@ describe("apply route submission", () => {
     renderApply();
 
     expect(stepStatus("organization")).toBe("current");
-    expect(await screen.findByRole("link", { name: /Create organization/ })).toBeTruthy();
+    expect(await screen.findByLabelText("Community name")).toBeTruthy();
+    expect(screen.getByTestId("apply.create-org")).toHaveProperty("disabled", true);
     expect(screen.queryByRole("button", { name: "verify DAO" })).toBeNull();
   });
 });
