@@ -31,7 +31,7 @@ test.describe("community settings profile", () => {
 
     await page.goto(`/nodes/${second.id}/content`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await page.getByTestId("content-open-profile").click();
+    await page.getByTestId("content-map-status-action").click();
     await page.waitForURL(
       (url) =>
         url.pathname === `/tenant/${tenant.id}` && url.searchParams.get("nodeId") === second.id,

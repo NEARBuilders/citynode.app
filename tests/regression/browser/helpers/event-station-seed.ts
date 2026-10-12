@@ -3,7 +3,9 @@ import { eq } from "drizzle-orm";
 import * as authSchema from "../../../../plugins/auth/src/db/schema.ts";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
-import { seedDiscoveryEvent, seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
+import { seedDiscoveryActivity, seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
+
+const HOUR = 3_600_000;
 
 type Cookie = Awaited<
   ReturnType<Awaited<ReturnType<typeof createAuthTestInstance>>["test"]["login"]>
@@ -65,7 +67,14 @@ export async function seedEventStationCommunity(): Promise<EventStationCommunity
     });
     const node = await seedNode({ tenantId: tenant.id, slug, name: `Station City ${unique}` });
     const eventTitle = `Regression Station Night ${unique}`;
-    const event = await seedDiscoveryEvent({ nodeId: node.id, title: eventTitle });
+    const now = Date.now();
+    const event = await seedDiscoveryActivity({
+      nodeId: node.id,
+      title: eventTitle,
+      status: "published",
+      startsAt: new Date(now + 24 * HOUR).toISOString(),
+      endsAt: new Date(now + 27 * HOUR).toISOString(),
+    });
 
     return {
       nodeId: node.id,

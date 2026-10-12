@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
 import { PageContainer } from "@/components";
 import { activitiesQueryOptions } from "@/components/discovery/activity-form";
@@ -11,7 +11,7 @@ import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { isOnboardingOrganizer } from "@/lib/onboarding-codes";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
-import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import {
   CommunityHeader,
   communityAuthContextQueryOptions,
@@ -19,12 +19,20 @@ import {
 } from "../../dashboard/node/-community-header";
 
 type ContentTab = "events" | "onboarding" | "bulletin";
+type ContentSearch = { tab?: ContentTab; review?: "imports" };
 
 const TABS: readonly ContentTab[] = ["events", "onboarding", "bulletin"];
 
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
-  validateSearch: (search: Record<string, unknown>): { tab?: ContentTab } =>
-    TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {},
+  validateSearch: (search: Record<string, unknown>): ContentSearch => ({
+    ...(TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {}),
+    ...(search.review === "imports" ? { review: "imports" as const } : {}),
+  }),
+  beforeLoad: ({ context, search }) => {
+    if (search.tab === "bulletin" && !context.canManageCommunity) {
+      throw redirect({ to: "/dashboard", search: { restricted: "owners" } });
+    }
+  },
   loaderDeps: ({ search }) => ({ tab: search.tab ?? "events" }),
   loader: async ({ context, params, deps }) => {
     const { queryClient, apiClient } = context;
@@ -34,9 +42,14 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
         ? [
             queryClient.prefetchQuery(discoveryProfileQueryOptions(apiClient, params.nodeId)),
             queryClient.prefetchQuery(activitiesQueryOptions(apiClient, params.nodeId)),
-            queryClient.prefetchQuery(
-              tenantByOrgQueryOptions(apiClient, context.auth.activeOrganizationId ?? ""),
-            ),
+            queryClient
+              .ensureQueryData(nodeByIdQueryOptions(apiClient, params.nodeId))
+              .then((node) =>
+                node?.tenantId
+                  ? queryClient.prefetchQuery(tenantByIdQueryOptions(apiClient, node.tenantId))
+                  : undefined,
+              )
+              .catch(() => undefined),
           ]
         : []),
     ]);
@@ -60,15 +73,21 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
 
 function CommunityContent() {
   const { nodeId } = Route.useParams();
-  const { tab = "events" } = Route.useSearch();
+  const { tab = "events", review } = Route.useSearch();
   const { auth } = Route.useRouteContext();
   const api = useApiClient();
   const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
-  const authContext = useQuery(communityAuthContextQueryOptions(api, auth.activeOrganizationId));
-  const activeTenantId = useQuery(tenantByOrgQueryOptions(api, auth.activeOrganizationId ?? ""))
-    .data?.id;
+  const tenant = useQuery(tenantByIdQueryOptions(api, tenantId ?? ""));
+  const authContext = useQuery(
+    communityAuthContextQueryOptions(api, auth.activeOrganizationId ?? null),
+  );
+  const orgRole = authContext.data?.organization?.member?.role;
+  const managesTenant =
+    tenant.data?.orgId === auth.activeOrganizationId &&
+    (orgRole === "owner" || orgRole === "admin");
+  const canManage = auth.isAdmin || managesTenant;
   const canOnboard =
-    !!tenantId && activeTenantId === tenantId && isOnboardingOrganizer(authContext.data);
+    tenant.data?.orgId === auth.activeOrganizationId && isOnboardingOrganizer(authContext.data);
 
   return (
     <PageContainer variant="wide">
@@ -86,9 +105,12 @@ function CommunityContent() {
       ) : (
         <EventsEditor
           nodeId={nodeId}
+          reviewImports={review === "imports"}
+          tenantStatus={tenant.data?.status}
+          canManage={canManage}
           canOnboard={canOnboard}
           profileLink={
-            tenantId ? (
+            tenantId && canManage ? (
               <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
             ) : undefined
           }

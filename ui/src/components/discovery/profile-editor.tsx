@@ -36,6 +36,12 @@ function validateProfile(profile: Profile): AppMessageId | null {
   return null;
 }
 
+export function geocodeHintMessage(hint: string) {
+  return hint === "unavailable" || hint.startsWith("Map lookup is unavailable")
+    ? "community.geocodeUnavailable"
+    : "community.geocodeHint";
+}
+
 export function discoveryProfileQueryOptions(api: ApiClient, nodeId: string) {
   return queryOptions({
     queryKey: ["discovery-profile", nodeId],
@@ -98,7 +104,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
       setValidationError(null);
       setProfile(saved);
       if (saved.geocodeHint) {
-        toast.warning(translate("community.geocodeHint"));
+        toast.warning(translate(geocodeHintMessage(saved.geocodeHint)));
       } else {
         toast.success(
           saved.published
@@ -214,7 +220,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
               data-testid="discovery-profile-geocode-hint"
               className="text-sm text-muted-foreground"
             >
-              {translate("community.geocodeHint")}
+              {translate(geocodeHintMessage(profile.geocodeHint))}
             </p>
           ) : null}
         </FieldGroup>

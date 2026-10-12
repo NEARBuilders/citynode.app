@@ -30,6 +30,7 @@ export async function seedTenant(input) {
     allowBackendOverrides = false,
     allowSsr = false,
     ownerKind = "platform",
+    status = "active",
   } = input;
 
   const root = findRepoRoot();
@@ -83,7 +84,7 @@ export async function seedTenant(input) {
         accountId,
         orgId,
         name,
-        "active",
+        status,
         ownerKind,
         allowUiOverrides,
         allowBackendOverrides,
@@ -150,54 +151,92 @@ export async function seedNode(input) {
   }
 }
 
-export async function seedDiscoveryProfile(input) {
-  const { nodeId, published = true, summary = "" } = input;
-  if (!nodeId) throw new Error("seedDiscoveryProfile requires nodeId");
-
+async function withApiTable(table, run) {
   const root = findRepoRoot();
   if (!root) throw new Error("bos.config.json not found in any parent directory");
   const resolved = computeRegressionEnv({ repoRoot: root });
   const url = resolved.dbUrls.API_DATABASE_URL;
   if (!url) throw new Error("API_DATABASE_URL is not configured for this workspace");
-  const target = parsePostgresUrl(url);
-
-  const client = new pg.Client({
-    host: target.host,
-    port: target.port,
-    user: target.user,
-    password: target.password,
-    database: target.database,
-  });
+  const client = new pg.Client(parsePostgresUrl(url));
   await client.connect();
   try {
     const located = await client.query(
-      "SELECT table_schema FROM information_schema.tables WHERE table_name = 'discovery_profiles' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema LIMIT 1",
+      "SELECT table_schema FROM information_schema.tables WHERE table_name = $1 AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema LIMIT 1",
+      [table],
     );
     const schema = located.rows[0]?.table_schema;
     if (!schema)
-      throw new Error(
-        "discovery_profiles table not found in api database — did API migrations run?",
-      );
+      throw new Error(`${table} table not found in api database — did API migrations run?`);
     await client.query(`SET search_path TO "${schema}", public`);
+    return await run(client);
+  } finally {
+    await client.end();
+  }
+}
 
-    const data = {
-      nodeId,
-      summary,
-      location: "",
-      region: "",
-      latitude: null,
-      longitude: null,
-      channels: [],
-      published,
-    };
+export async function seedDiscoveryProfile(input) {
+  const { nodeId, published, latitude = null, longitude = null } = input;
+  if (!nodeId) throw new Error("seedDiscoveryProfile requires nodeId");
+  if ((latitude === null) !== (longitude === null))
+    throw new Error("seedDiscoveryProfile requires both coordinates or neither");
+  const data = {
+    nodeId,
+    summary: "",
+    location: input.location ?? (latitude === null ? "" : "Regression City"),
+    region: "",
+    latitude,
+    longitude,
+    channels: [],
+    published: Boolean(published),
+  };
+  return withApiTable("discovery_profiles", async (client) => {
     await client.query(
       "INSERT INTO discovery_profiles (node_id, data) VALUES ($1, $2::jsonb) ON CONFLICT (node_id) DO UPDATE SET data = EXCLUDED.data",
       [nodeId, JSON.stringify(data)],
     );
     return data;
-  } finally {
-    await client.end();
-  }
+  });
+}
+
+export async function seedDiscoveryActivity(input) {
+  const { nodeId, title, status, startsAt, endsAt, luma } = input;
+  if (!nodeId) throw new Error("seedDiscoveryActivity requires nodeId");
+  const publishedAt = input.publishedAt ?? new Date(Date.now() - 60_000).toISOString();
+  const id = randomId();
+  const url = `https://example.com/regression/${id}`;
+  const data = {
+    id,
+    ownerNodeId: nodeId,
+    nodeIds: [nodeId],
+    kind: "event",
+    title,
+    summary: "",
+    url,
+    source: luma ? "Luma · Regression" : "Regression",
+    publishedAt,
+    startsAt,
+    endsAt,
+    timezone: "UTC",
+    venue: "Online",
+    status,
+    ...(luma
+      ? {
+          luma: {
+            calendarId: "cal-regression",
+            eventId: `evt-${id}`,
+            syncedAt: new Date().toISOString(),
+            ...luma,
+          },
+        }
+      : {}),
+  };
+  return withApiTable("discovery_activities", async (client) => {
+    await client.query(
+      "INSERT INTO discovery_activities (id, owner_node_id, canonical_url, data) VALUES ($1, $2, $3, $4::jsonb)",
+      [id, nodeId, url, JSON.stringify(data)],
+    );
+    return data;
+  });
 }
 
 const thisFile = path.resolve(fileURLToPath(import.meta.url));
@@ -216,64 +255,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) {
       console.error(`[seed-tenant] ${error instanceof Error ? error.message : String(error)}`);
       process.exit(1);
     });
-}
-
-export async function seedDiscoveryEvent(input) {
-  const { nodeId, title, startsInHours = 24, durationHours = 3 } = input;
-  if (!nodeId || !title) throw new Error("seedDiscoveryEvent requires nodeId and title");
-
-  const root = findRepoRoot();
-  if (!root) throw new Error("bos.config.json not found in any parent directory");
-  const resolved = computeRegressionEnv({ repoRoot: root });
-  const url = resolved.dbUrls.API_DATABASE_URL;
-  if (!url) throw new Error("API_DATABASE_URL is not configured for this workspace");
-  const target = parsePostgresUrl(url);
-
-  const client = new pg.Client({
-    host: target.host,
-    port: target.port,
-    user: target.user,
-    password: target.password,
-    database: target.database,
-  });
-  await client.connect();
-  try {
-    const located = await client.query(
-      "SELECT table_schema FROM information_schema.tables WHERE table_name = 'discovery_activities' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema LIMIT 1",
-    );
-    const schema = located.rows[0]?.table_schema;
-    if (!schema)
-      throw new Error(
-        "discovery_activities table not found in api database — did API migrations run?",
-      );
-    await client.query(`SET search_path TO "${schema}", public`);
-
-    const id = randomId();
-    const canonicalUrl = `https://example.com/regression-events/${id}`;
-    const now = Date.now();
-    const hour = 3_600_000;
-    const data = {
-      id,
-      ownerNodeId: nodeId,
-      nodeIds: [nodeId],
-      kind: "event",
-      title,
-      summary: "Regression fixture event",
-      url: canonicalUrl,
-      source: "Regression",
-      publishedAt: new Date(now).toISOString(),
-      startsAt: new Date(now + startsInHours * hour).toISOString(),
-      endsAt: new Date(now + (startsInHours + durationHours) * hour).toISOString(),
-      timezone: "UTC",
-      venue: "Regression Hall",
-      status: "published",
-    };
-    await client.query(
-      "INSERT INTO discovery_activities (id, owner_node_id, canonical_url, data) VALUES ($1, $2, $3, $4::jsonb)",
-      [id, nodeId, canonicalUrl, JSON.stringify(data)],
-    );
-    return data;
-  } finally {
-    await client.end();
-  }
 }

@@ -20,3 +20,12 @@ export function onboardingJoinsQueryOptions(apiClient: ApiClient, month: string)
     staleTime: 30 * 1000,
   });
 }
+
+export function onboardingRedemptionsQueryOptions(apiClient: ApiClient, organizationId: string) {
+  return queryOptions({
+    queryKey: ["onboarding-redemptions", organizationId] as const,
+    queryFn: () => apiClient.auth.getOnboardingRedemptions({ organizationId }),
+    staleTime: 30 * 1000,
+    retry: false,
+  });
+}

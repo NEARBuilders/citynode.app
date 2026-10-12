@@ -3,7 +3,7 @@ import { Trans } from "everything-dev/ui/i18n";
 import { useAppTranslation } from "@/i18n/runtime";
 import { FEATURE_AREA_MESSAGES, type FeatureArea } from "@/lib/feature-areas";
 
-export function RestrictedAreaNotice({ area }: { area: FeatureArea | "admin" }) {
+export function RestrictedAreaNotice({ area }: { area: FeatureArea | "admin" | "owners" }) {
   const translate = useAppTranslation();
   return (
     <div
@@ -12,7 +12,9 @@ export function RestrictedAreaNotice({ area }: { area: FeatureArea | "admin" }) 
       data-testid="workspace-restricted-notice"
     >
       <LockSimpleIcon className="size-4 shrink-0" />
-      {area === "admin" ? (
+      {area === "owners" ? (
+        <p>{translate("workspace.ownersOnly")}</p>
+      ) : area === "admin" ? (
         <p>
           <Trans
             id="workspace.adminOnly"

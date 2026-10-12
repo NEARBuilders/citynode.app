@@ -72,6 +72,35 @@ describe("onboarding handlers", () => {
     expect(second.eventId).toBe(launch.eventId);
   });
 
+  it("starts a new station with its own join limit while the event's first one is still live", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const meetup = eventOf("Meetup");
+
+    const first = await handlers.onboarding.createOnboardingCode({
+      input: { ...meetup, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const second = await handlers.onboarding.createOnboardingCode({
+      input: { ...meetup, organizationId: org.id, maxUses: 5 },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+
+    expect(second.id).not.toBe(first.id);
+    expect(second.code).not.toBe(first.code);
+    expect(second.maxUses).toBe(5);
+    expect(second.teamId).toBe(first.teamId);
+
+    const listed = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    expect(listed.map((code: { id: string }) => code.id).sort()).toEqual(
+      [first.id, second.id].sort(),
+    );
+  });
+
   it("gives two events with the same title separate Event Teams", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);
@@ -727,7 +756,7 @@ describe("onboarding organizers", () => {
 });
 
 describe("listing one event's onboarding codes", () => {
-  it("finds an event's live code older than the organization's 20 newest codes", async () => {
+  it("finds an event's live code older than the organization's 100 newest codes", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);
     const handlers = createTestHandlers(services.services);
@@ -740,7 +769,7 @@ describe("listing one event's onboarding codes", () => {
       .update(schema.onboardingCode)
       .set({ createdAt: new Date(Date.now() - 3_600_000) })
       .where(eq(schema.onboardingCode.id, live.id));
-    for (let index = 0; index < 20; index++) {
+    for (let index = 0; index < 100; index++) {
       await handlers.onboarding.createOnboardingCode({
         input: { ...eventOf(`Meetup ${index}`), organizationId: org.id },
         context: { reqHeaders: owner.reqHeaders },
@@ -756,12 +785,12 @@ describe("listing one event's onboarding codes", () => {
       context: { reqHeaders: owner.reqHeaders },
     });
 
-    expect(newest).toHaveLength(20);
+    expect(newest).toHaveLength(100);
     expect(newest.some((code: { id: string }) => code.id === live.id)).toBe(false);
     expect(forEvent.map((code: { id: string }) => code.id)).toEqual([live.id]);
   });
 
-  it("lists every code of an event with more than 20, so an older live one is found", async () => {
+  it("lists every code of an event, so an older live one isn't hidden by the cap", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);
     const handlers = createTestHandlers(services.services);
@@ -774,7 +803,7 @@ describe("listing one event's onboarding codes", () => {
       .update(schema.onboardingCode)
       .set({ createdAt: new Date(Date.now() - 3_600_000) })
       .where(eq(schema.onboardingCode.id, live.id));
-    for (let index = 0; index < 21; index++) {
+    for (let index = 0; index < 100; index++) {
       const closed = await handlers.onboarding.createOnboardingCode({
         input: { ...launch, organizationId: org.id },
         context: { reqHeaders: owner.reqHeaders },
@@ -790,7 +819,7 @@ describe("listing one event's onboarding codes", () => {
       context: { reqHeaders: owner.reqHeaders },
     });
 
-    expect(listed).toHaveLength(22);
+    expect(listed).toHaveLength(101);
     expect(listed.at(-1)!.id).toBe(live.id);
     expect(listed.filter((code: { revokedAt: Date | null }) => !code.revokedAt)).toHaveLength(1);
   });
