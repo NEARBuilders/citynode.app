@@ -297,33 +297,33 @@ describe("onboard join flow", () => {
     expect(await screen.findByTestId("onboard.success")).toBeTruthy();
   });
 
-  it.each(["expired", "usedUp"] as const)(
-    "retries a network failure while joining a %s code instead of asking for a new link",
-    async (flag) => {
-      harness.session = { user: { id: "user-1", name: "Grace" } };
-      harness.getOnboardingCodeInfo.mockResolvedValue({
-        ...info,
-        expired: flag === "expired",
-        usedUp: flag === "usedUp",
+  it.each([
+    "expired",
+    "usedUp",
+  ] as const)("retries a network failure while joining a %s code instead of asking for a new link", async (flag) => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue({
+      ...info,
+      expired: flag === "expired",
+      usedUp: flag === "usedUp",
+    });
+    harness.redeemOnboardingCode
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValue({
+        organizationName: "Chicago Builders",
+        eventName: "Launch Night",
       });
-      harness.redeemOnboardingCode
-        .mockRejectedValueOnce(new Error("Failed to fetch"))
-        .mockResolvedValue({
-          organizationName: "Chicago Builders",
-          eventName: "Launch Night",
-        });
 
-      renderOnboard();
+    renderOnboard();
 
-      expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
-      expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
-      expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
-      expect(screen.queryByText("Ask the organizer for a new link")).toBeNull();
+    expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
+    expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
+    expect(screen.queryByText("Ask the organizer for a new link")).toBeNull();
 
-      fireEvent.click(screen.getByTestId("onboard.retry-button"));
-      expect(await screen.findByTestId("onboard.success")).toBeTruthy();
-    },
-  );
+    fireEvent.click(screen.getByTestId("onboard.retry-button"));
+    expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+  });
 
   it.each([
     ["organization_not_active", "This community isn't open yet", "onboard.explore-button"],
