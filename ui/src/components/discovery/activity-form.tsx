@@ -27,8 +27,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
-import { HiddenProfileNotice } from "./hidden-profile-notice";
-import { discoveryProfileQueryOptions } from "./profile-editor";
+import { saveConfirmation } from "@/lib/event-visibility";
+import { discoveryNodeQueryOptions } from "./event-visibility";
 
 export type Activity = Awaited<ReturnType<ApiClient["saveDiscoveryActivity"]>>;
 export type ActivityDraft = Parameters<ApiClient["saveDiscoveryActivity"]>[0];
@@ -101,12 +101,10 @@ export function ActivityForm({
   nodeId,
   initial,
   imported,
-  canManage = true,
 }: {
   nodeId: string;
   initial: ActivityDraft;
   imported?: Activity["luma"];
-  canManage?: boolean;
 }) {
   const translate = useAppTranslation();
   const api = useApiClient();
@@ -117,19 +115,16 @@ export function ActivityForm({
     queryKey: ["discovery-editor-nodes"],
     queryFn: () => api.listNodes({}),
   });
-  const profile = useQuery(discoveryProfileQueryOptions(api, nodeId));
   const backToEvents = () =>
     navigate({ to: "/nodes/$nodeId/content", params: { nodeId }, search: { tab: "events" } });
   const save = useMutation({
     mutationFn: (input: ActivityDraft) => api.saveDiscoveryActivity(input),
     onSuccess: async (saved) => {
-      if (saved.status !== "published") {
-        toast.success(translate("events.savedDraft"));
-      } else if (profile.isSuccess && !profile.data?.published) {
-        toast.warning(translate("events.publishedHidden"));
-      } else {
-        toast.success(translate("events.publishedExplore"));
-      }
+      const communityPublic = await client
+        .fetchQuery({ ...discoveryNodeQueryOptions(api, nodeId), staleTime: 0 })
+        .then((node) => node !== null)
+        .catch(() => null);
+      toast.success(translate(saveConfirmation(saved, { communityPublic, now: Date.now() })));
       await client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });
@@ -314,9 +309,6 @@ export function ActivityForm({
           </SelectContent>
         </Select>
       </Field>
-      {draft.status === "published" && (
-        <HiddenProfileNotice nodeId={nodeId} canManage={canManage} />
-      )}
       {save.isError && (
         <p role="alert" className="text-sm text-destructive">
           {appErrorMessage(save.error, translate)}

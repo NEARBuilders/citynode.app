@@ -3,6 +3,7 @@ import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import { Badge, Button, PageHeader, Skeleton } from "@/components";
+import { discoveryNodeQueryOptions } from "@/components/discovery/event-visibility";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,7 @@ export async function ensureCommunityHeaderData(
   const { queryClient, apiClient } = context;
   const [node] = await Promise.all([
     queryClient.ensureQueryData(nodeByIdQueryOptions(apiClient, nodeId)).catch(() => null),
+    queryClient.prefetchQuery(discoveryNodeQueryOptions(apiClient, nodeId)),
     queryClient
       .ensureQueryData(
         communityAuthContextQueryOptions(apiClient, context.auth.activeOrganizationId),
@@ -96,6 +98,8 @@ export function CommunityHeader({
   const canOrganize = canManage || canOrganizeEvents(authContext.data);
   const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
   const workspace = useQuery(teamWorkspaceQueryOptions(api));
+  const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
+  const listed = listing.isSuccess && listing.data !== null;
 
   const siteUrl = node && gateway ? buildTenantUrl(node.slug, gateway) : null;
 
@@ -184,11 +188,12 @@ export function CommunityHeader({
                 </SelectContent>
               </Select>
             )}
-            {nodeId && (
+            {nodeId && listed && (
               <Button
                 variant="outline"
                 nativeButton={false}
                 render={<Link to="/explore" search={{ node: nodeId }} />}
+                data-testid="community-header.view-explore"
               >
                 {translate("dashboard.viewExplore")}
                 <ArrowUpRightIcon />

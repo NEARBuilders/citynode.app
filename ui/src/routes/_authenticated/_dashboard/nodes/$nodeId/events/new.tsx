@@ -39,7 +39,6 @@ function NewActivity() {
   const translate = useAppTranslation();
   const { nodeId } = Route.useParams();
   const { kind = "event" } = Route.useSearch();
-  const { canManageCommunity } = Route.useRouteContext();
   const isEvent = kind === "event";
   return (
     <ActivityFormPage
@@ -50,12 +49,7 @@ function NewActivity() {
       }
       headerTestId="activity-form.heading"
     >
-      <ActivityForm
-        key={kind}
-        nodeId={nodeId}
-        initial={blankActivity(nodeId, kind)}
-        canManage={canManageCommunity}
-      />
+      <ActivityForm key={kind} nodeId={nodeId} initial={blankActivity(nodeId, kind)} />
     </ActivityFormPage>
   );
 }

@@ -7,17 +7,15 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
-import {
-  Badge,
-  Bulletin,
-  Button,
-  LocalDate,
-  NodeValidatorTable,
-  SectionHeader,
-} from "@/components";
+import { Bulletin, Button, LocalDate, NodeValidatorTable, SectionHeader } from "@/components";
+import { CommunityMapStatus } from "@/components/discovery/community-map-status";
 import { EventDate, upcomingEvents } from "@/components/discovery/event-onboarding";
+import {
+  EventVisibilityBadge,
+  ImportsWaiting,
+  useVisibilityContext,
+} from "@/components/discovery/event-visibility";
 import { TeamStakeCard, useCanSeeTeamStake } from "@/components/team-stake-card";
 import {
   Item,
@@ -29,6 +27,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
+import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
@@ -66,7 +65,6 @@ function NodeOverview() {
     inFinanceTeam,
   } = Route.useRouteContext();
   const apiClient = useApiClient();
-  const [now] = useState(() => Date.now());
   const orgId = tenant?.orgId ?? auth.activeOrganizationId;
   const nodeId = selectedNode?.id ?? "";
   const daoQuery = useQuery({
@@ -85,6 +83,8 @@ function NodeOverview() {
     enabled: !!nodeId,
     retry: false,
   });
+  const visibilityContext = useVisibilityContext(nodeId);
+  const { now } = visibilityContext;
   const daoOwned = !!tenant && tenant.ownerKind === "dao";
   const pendingConfigQuery = useQuery({
     queryKey: ["dashboard-node", "pending-config-proposal", tenant?.accountId],
@@ -115,19 +115,44 @@ function NodeOverview() {
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
   const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
   const upcoming = upcomingEvents(activities.data ?? [], now);
-  const contentLink = (tab: "onboarding") => (
-    <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} search={{ tab }} />
+  const liveCount =
+    visibilityContext.communityPublic === null
+      ? null
+      : upcoming.filter((event) => eventVisibility(event, visibilityContext) === "live").length;
+  const waitingCount = (activities.data ?? []).filter((event) =>
+    isWaitingImport(event, now),
+  ).length;
+  const onboardingLink = (
+    <Link
+      to="/nodes/$nodeId/content"
+      params={{ nodeId: selectedNode.id }}
+      search={{ tab: "onboarding" }}
+    />
   );
 
   const bulletin = selectedNode.metadata?.bulletin;
 
   return (
     <div className="flex flex-col gap-12">
+      <CommunityMapStatus
+        nodeId={selectedNode.id}
+        tenantStatus={tenant?.status}
+        testId="dashboard-node.map-status"
+        settingsLink={
+          canManage && tenant ? (
+            <Link
+              to="/tenant/$tenantId"
+              params={{ tenantId: tenant.id }}
+              search={{ nodeId: selectedNode.id }}
+            />
+          ) : undefined
+        }
+      />
       {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         <Stat
           label={translate("community.upcoming")}
-          value={activities.isSuccess ? String(upcoming.length) : "—"}
+          value={activities.isSuccess && liveCount !== null ? String(liveCount) : "—"}
           testId="dashboard-node.stat-events"
         />
         <Stat
@@ -207,6 +232,17 @@ function NodeOverview() {
             ) : undefined
           }
         />
+        <ImportsWaiting
+          count={waitingCount}
+          testId="dashboard-node.imports-waiting"
+          link={
+            <Link
+              to="/nodes/$nodeId/content"
+              params={{ nodeId: selectedNode.id }}
+              search={{ tab: "events", review: "imports" }}
+            />
+          }
+        />
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {activities.isError
@@ -223,11 +259,9 @@ function NodeOverview() {
                   <EventDate value={event.startsAt} />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
-                  <ItemTitle>
+                  <ItemTitle className="flex-wrap">
                     {event.title}
-                    {event.status === "draft" && (
-                      <Badge variant="secondary">{translate("events.draft")}</Badge>
-                    )}
+                    <EventVisibilityBadge activity={event} context={visibilityContext} />
                   </ItemTitle>
                   <ItemDescription>
                     {event.startsAt && <LocalDate value={event.startsAt} format="datetime" />}
@@ -240,7 +274,7 @@ function NodeOverview() {
                       size="sm"
                       variant="outline"
                       nativeButton={false}
-                      render={contentLink("onboarding")}
+                      render={onboardingLink}
                       aria-label={translate("station.onboardingNamed", {
                         event: event.title ?? "",
                       })}

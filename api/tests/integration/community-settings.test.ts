@@ -49,10 +49,15 @@ describe("community settings authorization", () => {
     }
     const publicClient = await getPluginClient();
     await expect(publicClient.listTenants()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-    const publicTenant = await publicClient.resolveTenant({ accountId: tenant.accountId });
-    expect(publicTenant).toMatchObject({ id: tenant.id });
-    for (const key of ["ownerUserId", "allowUiOverrides", "allowBackendOverrides", "allowSsr"]) {
-      expect(publicTenant).not.toHaveProperty(key);
+    for (const publicTenant of [
+      await publicClient.resolveTenant({ accountId: tenant.accountId }),
+      await publicClient.resolveTenantById({ tenantId: tenant.id }),
+    ]) {
+      expect(publicTenant).toMatchObject({ id: tenant.id, status: tenant.status });
+      for (const key of ["ownerUserId", "allowUiOverrides", "allowBackendOverrides", "allowSsr"]) {
+        expect(publicTenant).not.toHaveProperty(key);
+      }
     }
+    expect(await publicClient.resolveTenantById({ tenantId: crypto.randomUUID() })).toBeNull();
   });
 });
