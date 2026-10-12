@@ -72,7 +72,7 @@ describe("onboarding handlers", () => {
     expect(second.eventId).toBe(launch.eventId);
   });
 
-  it("hands back the live code for an event instead of opening a second station", async () => {
+  it("starts a new station with its own join limit while the event's first one is still live", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);
     const handlers = createTestHandlers(services.services);
@@ -82,22 +82,23 @@ describe("onboarding handlers", () => {
       input: { ...meetup, organizationId: org.id },
       context: { reqHeaders: owner.reqHeaders },
     });
-    const again = await handlers.onboarding.createOnboardingCode({
-      input: { ...meetup, organizationId: org.id },
+    const second = await handlers.onboarding.createOnboardingCode({
+      input: { ...meetup, organizationId: org.id, maxUses: 5 },
       context: { reqHeaders: owner.reqHeaders },
     });
-    expect(again.id).toBe(first.id);
-    expect(again.code).toBe(first.code);
 
-    await handlers.onboarding.revokeOnboardingCode({
-      input: { codeId: first.id, organizationId: org.id },
+    expect(second.id).not.toBe(first.id);
+    expect(second.code).not.toBe(first.code);
+    expect(second.maxUses).toBe(5);
+    expect(second.teamId).toBe(first.teamId);
+
+    const listed = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id },
       context: { reqHeaders: owner.reqHeaders },
     });
-    const reopened = await handlers.onboarding.createOnboardingCode({
-      input: { ...meetup, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    expect(reopened.id).not.toBe(first.id);
+    expect(listed.map((code: { id: string }) => code.id).sort()).toEqual(
+      [first.id, second.id].sort(),
+    );
   });
 
   it("gives two events with the same title separate Event Teams", async () => {

@@ -186,33 +186,6 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           });
         }
 
-        const existing = await services.db
-          .select()
-          .from(schema.onboardingCode)
-          .where(
-            and(
-              eq(schema.onboardingCode.organizationId, organizationId),
-              eq(schema.onboardingCode.eventId, eventId),
-              sql`${schema.onboardingCode.revokedAt} is null`,
-            ),
-          )
-          .orderBy(desc(schema.onboardingCode.createdAt));
-        const reusable = existing.find((row) => row.encryptedCode && codeState(row) === "active");
-        if (reusable?.encryptedCode) {
-          const [current] =
-            reusable.eventName === eventName
-              ? [reusable]
-              : await services.db
-                  .update(schema.onboardingCode)
-                  .set({ eventName, updatedAt: now })
-                  .where(eq(schema.onboardingCode.id, reusable.id))
-                  .returning();
-          return {
-            ...toSummary(current ?? reusable),
-            code: await services.onboardingCodeCipher.decrypt(reusable.encryptedCode),
-          };
-        }
-
         const teamId = await resolveEventTeamId(services.db, organizationId, eventId, eventName);
         const code = generateCode();
         const [row] = await services.db
