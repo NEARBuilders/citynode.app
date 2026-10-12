@@ -1,4 +1,9 @@
 import {
+  type InferOutput,
+  type OnboardingRedeemReason,
+  onboardingRedeemReasonSchema,
+} from "@everything-dev/auth-plugin/contract";
+import {
   ArrowRightIcon,
   CheckCircleIcon,
   CheckIcon,
@@ -26,13 +31,12 @@ import {
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 import type { LoginMessageId } from "@/i18n/catalogs";
-import { useLoginTranslation } from "@/i18n/runtime";
+import { LoginI18nProvider, useLoginTranslation } from "@/i18n/runtime";
 import { findCommunityPage } from "@/lib/community-page";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { DisplayNameStep } from "./-display-name-step";
 import { OnboardSignUp } from "./-onboard-sign-up";
 import "../../styles.css";
-import { LoginI18nProvider } from "@/i18n/runtime";
 
 type SearchParams = {
   code?: string;
@@ -52,26 +56,14 @@ export const Route = createFileRoute("/_public/onboard")({
   component: OnboardPage,
 });
 
-type Redeemed = { organizationId: string; organizationName: string; eventName: string };
+type Redeemed = InferOutput<"redeemOnboardingCode">;
+type RedeemFailure = OnboardingRedeemReason | "network";
+type StatusAction = "retry" | "explore" | "ask-organizer";
 
 const PASSKEY_DEFAULT_NAME = "Passkey user";
 
-const redeemReasons = [
-  "organization_not_active",
-  "organization_full",
-  "code_revoked",
-  "code_expired",
-  "code_used_up",
-  "code_not_found",
-  "organization_not_found",
-] as const;
-
-type RedeemReason = (typeof redeemReasons)[number];
-type RedeemFailure = RedeemReason | "network";
-type StatusAction = "retry" | "explore" | "ask-organizer";
-
 const redeemCopy: Record<
-  RedeemReason,
+  OnboardingRedeemReason,
   { title: LoginMessageId; action: Exclude<StatusAction, "retry"> }
 > = {
   organization_not_active: { title: "auth.onboard.communityNotOpen", action: "explore" },
@@ -84,15 +76,11 @@ const redeemCopy: Record<
 };
 
 function redeemFailureOf(error: unknown): RedeemFailure {
-  if (!error || typeof error !== "object") return "network";
-  const data = "data" in error ? error.data : undefined;
-  const reason =
-    data && typeof data === "object" && data && "reason" in data
-      ? (data as { reason: unknown }).reason
-      : undefined;
-  return typeof reason === "string" && (redeemReasons as readonly string[]).includes(reason)
-    ? (reason as RedeemReason)
-    : "network";
+  if (!error || typeof error !== "object" || !("data" in error)) return "network";
+  const data = error.data;
+  if (!data || typeof data !== "object" || !("reason" in data)) return "network";
+  const parsed = onboardingRedeemReasonSchema.safeParse(data.reason);
+  return parsed.success ? parsed.data : "network";
 }
 
 function hasChosenName(accountCreated: boolean, name: string | undefined | null): boolean {
@@ -159,11 +147,7 @@ function OnboardContent() {
     void apiClient.auth
       .redeemOnboardingCode({ code })
       .then((result: Redeemed) => {
-        setRedeemed({
-          organizationId: result.organizationId,
-          organizationName: result.organizationName,
-          eventName: result.eventName,
-        });
+        setRedeemed(result);
         toast.success(
           translate("auth.onboard.joinedToast", { organization: result.organizationName }),
         );
@@ -372,10 +356,7 @@ function OnboardContent() {
   }
 
   if (redeemError) {
-    const copy =
-      redeemError === "network"
-        ? { title: "auth.onboard.joinUnavailable" as const, action: "retry" as const }
-        : redeemCopy[redeemError];
+    const copy = redeemCopy[redeemError];
     return (
       <StatusPanel
         title={translate(copy.title)}
@@ -384,10 +365,6 @@ function OnboardContent() {
         }
         testId="onboard.error"
         action={copy.action}
-        onRetry={() => {
-          redeemingRef.current = false;
-          setRedeemError(null);
-        }}
       />
     );
   }

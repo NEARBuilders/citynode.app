@@ -33,6 +33,7 @@ export const onboardingRedeemReasons = [
 ] as const;
 
 export const onboardingRedeemReasonSchema = z.enum(onboardingRedeemReasons);
+export type OnboardingRedeemReason = z.infer<typeof onboardingRedeemReasonSchema>;
 const onboardingRedeemErrorData = z.object({ reason: onboardingRedeemReasonSchema });
 const onboardingRedeemErrors = {
   UNAUTHORIZED: Errors.UNAUTHORIZED,

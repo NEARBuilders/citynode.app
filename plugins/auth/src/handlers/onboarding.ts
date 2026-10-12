@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { Context } from "effect";
-import type { onboardingRedeemReasons } from "../contract";
+import type { OnboardingRedeemReason } from "../contract";
 import * as schema from "../db/schema";
 import {
   createOrganizationMembershipPolicy,
@@ -11,10 +11,8 @@ import {
 import { AuthServicesTag, type PluginServices } from "../service-types";
 import { createHeaders, getActiveOrganizationId, parseTeamAreas, safeAuthApi } from "../utils";
 
-type RedeemReason = (typeof onboardingRedeemReasons)[number];
-
 const redeemFailures: Record<
-  RedeemReason,
+  OnboardingRedeemReason,
   { code: "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND"; message: string }
 > = {
   organization_not_active: {
@@ -32,7 +30,7 @@ const redeemFailures: Record<
   organization_not_found: { code: "BAD_REQUEST", message: "Organization not found" },
 };
 
-function throwRedeem(reason: RedeemReason): never {
+function throwRedeem(reason: OnboardingRedeemReason): never {
   const failure = redeemFailures[reason];
   throw new ORPCError(failure.code, { message: failure.message, data: { reason } });
 }
