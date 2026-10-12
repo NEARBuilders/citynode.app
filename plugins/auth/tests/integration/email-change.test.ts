@@ -190,29 +190,88 @@ describe("email code endpoints", () => {
       expect(response.status, path).toBe(404);
     }
   });
+});
 
-  it("refuses to promise a code in production when no email provider is configured", async () => {
-    const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
-    try {
-      const auth = createAuthInstance(
-        {
-          secret: process.env.BETTER_AUTH_SECRET!,
-          baseUrl: "http://localhost:3000",
-          siwn: { recipient: "test.near" },
-        },
-        services.services.db,
-      );
-      const user = await placeholderUser();
-      await expect(
-        auth.api.requestEmailChangeEmailOTP({
-          headers: user.headers,
-          body: { newEmail: `nowhere-${id()}@example.com` },
-        }),
-      ).rejects.toThrow(/Email isn't set up/);
-    } finally {
-      process.env.NODE_ENV = previous;
-    }
+describe("without an email provider", () => {
+  function authWithoutProvider() {
+    return createAuthInstance(
+      {
+        secret: process.env.BETTER_AUTH_SECRET!,
+        baseUrl: "http://localhost:3000",
+        siwn: { recipient: "test.near" },
+      },
+      services.services.db,
+    );
+  }
+
+  it("saves the address straight away but unverified, with no code step", async () => {
+    const auth = authWithoutProvider();
+    const user = await placeholderUser();
+    const address = `noprovider-${id()}@example.com`;
+    const sentBefore = services.outbox.length;
+
+    const result = await auth.api.requestEmailChangeEmailOTP({
+      headers: user.headers,
+      body: { newEmail: address },
+    });
+
+    expect(result).toEqual({ success: true, verificationRequired: false });
+    const stored = await storedUser(user.userId);
+    expect(stored?.email).toBe(address);
+    expect(stored?.emailVerified).toBe(false);
+    expect(services.outbox.length).toBe(sentBefore);
+    await expect(
+      auth.api.changeEmailEmailOTP({
+        headers: user.headers,
+        body: { newEmail: `other-${id()}@example.com`, otp: "123456" },
+      }),
+    ).rejects.toThrow(/No confirmation code was sent/);
+  });
+
+  it("does not let the unverified address accept an invitation sent to it", async () => {
+    const auth = authWithoutProvider();
+    const user = await placeholderUser();
+    const address = `unproven-${id()}@example.com`;
+    const { org, invite } = await inviteTo(address);
+
+    await auth.api.requestEmailChangeEmailOTP({
+      headers: user.headers,
+      body: { newEmail: address },
+    });
+
+    expect((await storedUser(user.userId))?.email).toBe(address);
+    await expect(acceptInvite(user, invite.id)).rejects.toThrow();
+    expect(await membership(org.id, user.userId)).toBeUndefined();
+  });
+
+  it("gives the same answer for an address another account holds, and changes neither account", async () => {
+    const auth = authWithoutProvider();
+    const holderAddress = `holder-${id()}@example.com`;
+    const holder = await createTestUser(services.services, { email: holderAddress });
+    const user = await placeholderUser();
+
+    const result = await auth.api.requestEmailChangeEmailOTP({
+      headers: user.headers,
+      body: { newEmail: holderAddress },
+    });
+
+    expect(result).toEqual({ success: true, verificationRequired: false });
+    expect((await storedUser(user.userId))?.email).toBe(user.email);
+    const storedHolder = await storedUser(holder.userId);
+    expect(storedHolder?.email).toBe(holderAddress);
+    expect(storedHolder?.emailVerified).toBe(true);
+  });
+
+  it("still keeps an account's verified real email from being swapped", async () => {
+    const auth = authWithoutProvider();
+    const user = await createTestUser(services.services);
+
+    await expect(
+      auth.api.requestEmailChangeEmailOTP({
+        headers: user.headers,
+        body: { newEmail: `swap-${id()}@example.com` },
+      }),
+    ).rejects.toThrow(/already verified/);
   });
 });
 

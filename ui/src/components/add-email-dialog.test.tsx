@@ -94,17 +94,22 @@ describe("AddEmailDialog", () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
-  it("says when the server can't send email instead of asking for a code", async () => {
-    harness.fetch.mockResolvedValue({ data: null, error: { status: 503 } });
-    renderDialog();
+  it("saves and closes without a code step when the server needs no code", async () => {
+    harness.fetch.mockResolvedValue({
+      data: { success: true, verificationRequired: false },
+      error: null,
+    });
+    const { onOpenChange } = renderDialog();
 
     fireEvent.change(await screen.findByTestId("add-email.input"), {
       target: { value: "grace@example.com" },
     });
     fireEvent.click(screen.getByTestId("add-email.save"));
 
-    expect(await screen.findByText(/isn't set up on this server/)).toBeTruthy();
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(harness.refreshSessionCache).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("add-email.code-step")).toBeNull();
+    expect(harness.fetch).toHaveBeenCalledTimes(1);
   });
 
   it("lets the person go back and use a different address", async () => {

@@ -21,8 +21,6 @@ interface AddEmailDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type FetchError = { status?: number } | null | undefined;
-
 const CODE_LENGTH = 6;
 
 export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
@@ -43,23 +41,33 @@ export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
     }
   }, [open]);
 
+  const saved = async () => {
+    await refreshSessionCache(auth, queryClient);
+    toast.success(translate("auth.common.emailSaved"));
+    onOpenChange(false);
+  };
+
   const sendCode = useMutation({
     mutationFn: async (newEmail: string) => {
-      const { error: apiError } = await auth.$fetch("/email-otp/request-email-change", {
-        method: "POST",
-        body: { newEmail },
-      });
+      const { data, error: apiError } = await auth.$fetch<{ verificationRequired?: boolean }>(
+        "/email-otp/request-email-change",
+        { method: "POST", body: { newEmail } },
+      );
       if (apiError) throw apiError;
-      return newEmail;
+      return { newEmail, verificationRequired: data?.verificationRequired !== false };
     },
-    onSuccess: (newEmail) => {
+    onSuccess: async ({ newEmail, verificationRequired }) => {
+      if (!verificationRequired) {
+        await saved();
+        return;
+      }
       if (pendingEmail === newEmail) toast.success(translate("auth.email.codeResent"));
       setPendingEmail(newEmail);
       setCode("");
       setError(null);
     },
-    onError: (apiError: FetchError) => {
-      setError(apiError?.status === 503 ? "auth.email.unavailable" : "auth.email.sendError");
+    onError: () => {
+      setError("auth.email.sendError");
     },
   });
 
@@ -71,11 +79,7 @@ export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
       });
       if (apiError) throw apiError;
     },
-    onSuccess: async () => {
-      await refreshSessionCache(auth, queryClient);
-      toast.success(translate("auth.common.emailSaved"));
-      onOpenChange(false);
-    },
+    onSuccess: saved,
     onError: () => {
       setError("auth.email.codeError");
     },
@@ -221,8 +225,8 @@ export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
               </Button>
               <Button type="submit" disabled={busy || !email.trim()} data-testid="add-email.save">
                 {sendCode.isPending
-                  ? translate("auth.email.sending")
-                  : translate("auth.email.sendCode")}
+                  ? translate("auth.common.saving")
+                  : translate("auth.common.continue")}
               </Button>
             </DialogFooter>
           </form>

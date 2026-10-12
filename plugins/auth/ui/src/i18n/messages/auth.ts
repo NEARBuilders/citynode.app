@@ -22,10 +22,10 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "you@example.com",
   ],
   "auth.email.privacy": [
-    "We'll send a code to confirm it's yours. We won't share it.",
-    "Te enviaremos un código para confirmar que es tuyo. No lo compartiremos.",
-    "Nous vous enverrons un code pour confirmer qu’elle est à vous. Nous ne la partagerons pas.",
-    "我们会发送验证码确认邮箱属于你，不会分享此信息。",
+    "We won't share it.",
+    "No lo compartiremos.",
+    "Nous ne la partagerons pas.",
+    "我们不会分享此信息。",
   ],
   "auth.common.cancel": ["Cancel", "Cancelar", "Annuler", "取消"],
   "auth.common.saving": ["Saving…", "Guardando…", "Enregistrement…", "正在保存…"],
@@ -1027,8 +1027,6 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Impossible d’enregistrer votre adresse e-mail. Réessayez.",
     "无法保存邮箱，请重试。",
   ],
-  "auth.email.sendCode": ["Send code", "Enviar código", "Envoyer le code", "发送验证码"],
-  "auth.email.sending": ["Sending…", "Enviando…", "Envoi…", "正在发送…"],
   "auth.email.checkTitle": [
     "Check your email",
     "Revisa tu correo",
@@ -1084,12 +1082,6 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "No se pudo enviar el código. Inténtalo de nuevo.",
     "Impossible d’envoyer le code. Réessayez.",
     "无法发送验证码，请重试。",
-  ],
-  "auth.email.unavailable": [
-    "Email isn't set up on this server yet, so we can't send a code.",
-    "El correo aún no está configurado en este servidor, así que no podemos enviar un código.",
-    "L’e-mail n’est pas encore configuré sur ce serveur : impossible d’envoyer un code.",
-    "此服务器尚未配置邮件，无法发送验证码。",
   ],
   "auth.passkey.offer": [
     "Add a passkey on this device",

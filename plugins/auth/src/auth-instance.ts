@@ -292,10 +292,7 @@ export function createAuthInstance(
   const emailConfig = config.email;
   const deliverEmail: EmailTransport =
     options?.deliverEmail ?? ((message) => sendEmail(message, emailApiKey, emailConfig?.from));
-  const canSendEmail =
-    !!options?.deliverEmail ||
-    (!!emailApiKey && !!emailConfig?.from) ||
-    process.env.NODE_ENV !== "production";
+  const emailProviderConfigured = !!options?.deliverEmail || (!!emailApiKey && !!emailConfig?.from);
   const passkeyOptions = resolvePasskeyRelyingPartyOptions(config);
   const twilioConfig = config.phoneNumber?.twilio;
   const githubConfig = config.socialProviders?.github;
@@ -370,7 +367,7 @@ export function createAuthInstance(
         },
       }),
       passkeySignUp({ network }),
-      emailChangePolicy({ canSendEmail }),
+      emailChangePolicy({ emailProviderConfigured }),
       emailOTP({
         expiresIn: 600,
         allowedAttempts: 5,
@@ -497,7 +494,7 @@ export function createAuthInstance(
             subject: `Invitation to join ${data.organization.name}`,
             text: `You've been invited by ${inviter} to join ${data.organization.name}.\n\nClick here to accept: ${inviteLink}`,
           });
-          if (!delivered && (emailApiKey || process.env.NODE_ENV === "production")) {
+          if (!delivered && emailProviderConfigured) {
             throw new APIError("SERVICE_UNAVAILABLE", {
               message:
                 "The invitation was saved, but the email couldn't be sent. Try Resend from the Invitations tab.",
