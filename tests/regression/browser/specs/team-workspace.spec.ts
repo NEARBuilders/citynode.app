@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   authFetch,
   FETCH_TIMEOUT_MS,
+  markEmailVerified,
   refreshSessionCookies,
   signInAnonymously,
   useCookieHeader,
@@ -31,9 +32,7 @@ async function seedTeamMember() {
 
   const memberCookie = await signInAnonymously();
   const session = await (await authFetch("/get-session", memberCookie)).json();
-  execFileSync("bun", ["tests/regression/lib/verify-test-emails.ts", session.user.id], {
-    timeout: FETCH_TIMEOUT_MS,
-  });
+  markEmailVerified(session.user.id);
   const invitation = await (
     await authFetch("/organization/invite-member", ownerCookie, {
       email: session.user.email,

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import type { BrowserContext } from "@playwright/test";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 
@@ -18,6 +19,12 @@ export async function authFetch(path: string, cookie: string, body?: unknown) {
     throw new Error(`${path} failed: ${response.status} ${await response.text()}`);
   }
   return response;
+}
+
+export function markEmailVerified(userId: string) {
+  execFileSync("bun", ["tests/regression/lib/verify-test-emails.ts", userId], {
+    timeout: FETCH_TIMEOUT_MS,
+  });
 }
 
 export async function signInAnonymously() {
