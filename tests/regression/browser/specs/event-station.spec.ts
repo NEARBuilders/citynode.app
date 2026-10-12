@@ -75,18 +75,6 @@ test.describe("an event's onboarding button opens its station", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
-  test("a member who isn't an organizer gets no onboarding button", async ({ page }) => {
-    await page.context().addCookies(community.cookies.member);
-
-    await openOverview(page, community);
-    await expect(page.getByTestId("dashboard-node.add-event")).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId(`dashboard-node.open-station-${community.eventId}`)).toHaveCount(
-      0,
-    );
-
-    expectNoHydrationFailure(pageErrors);
-  });
-
   test("a platform admin who isn't a member sees the event without its onboarding button", async ({
     page,
   }) => {
@@ -97,6 +85,22 @@ test.describe("an event's onboarding button opens its station", () => {
     await expect(page.getByTestId(`dashboard-node.open-station-${community.eventId}`)).toHaveCount(
       0,
     );
+
+    await openContentTab(page, community, "events");
+    await expect(page.getByTestId(`discovery-edit-activity-${community.eventId}`)).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(
+      page.getByRole("button", { name: `More for ${community.eventTitle}` }),
+    ).toHaveCount(0);
+
+    expectNoHydrationFailure(pageErrors);
+  });
+
+  test("an organizer of another organization gets no Events-tab menu for this community", async ({
+    page,
+  }) => {
+    await page.context().addCookies(community.cookies.otherOrganizer);
 
     await openContentTab(page, community, "events");
     await expect(page.getByTestId(`discovery-edit-activity-${community.eventId}`)).toBeVisible({

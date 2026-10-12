@@ -87,11 +87,11 @@ describe("ActivityEditor", () => {
 
     const member = renderEditor(false);
     await screen.findByTestId("discovery-edit-activity-e1");
-    expect(screen.queryByLabelText(/Launch Night/, { selector: "[aria-haspopup]" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "More for Launch Night" })).toBeNull();
     member.unmount();
 
     renderEditor(true);
     await screen.findByTestId("discovery-edit-activity-e1");
-    expect(screen.getByLabelText(/Launch Night/, { selector: "[aria-haspopup]" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "More for Launch Night" })).toBeTruthy();
   });
 });

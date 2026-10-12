@@ -761,6 +761,40 @@ describe("listing one event's onboarding codes", () => {
     expect(forEvent.map((code: { id: string }) => code.id)).toEqual([live.id]);
   });
 
+  it("lists every code of an event with more than 20, so an older live one is found", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const launch = eventOf("Launch Night");
+    const live = await handlers.onboarding.createOnboardingCode({
+      input: { ...launch, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await services.services.db
+      .update(schema.onboardingCode)
+      .set({ createdAt: new Date(Date.now() - 3_600_000) })
+      .where(eq(schema.onboardingCode.id, live.id));
+    for (let index = 0; index < 21; index++) {
+      const closed = await handlers.onboarding.createOnboardingCode({
+        input: { ...launch, organizationId: org.id },
+        context: { reqHeaders: owner.reqHeaders },
+      });
+      await handlers.onboarding.revokeOnboardingCode({
+        input: { codeId: closed.id, organizationId: org.id },
+        context: { reqHeaders: owner.reqHeaders },
+      });
+    }
+
+    const listed = await handlers.onboarding.listOnboardingCodes({
+      input: { organizationId: org.id, eventId: launch.eventId },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+
+    expect(listed).toHaveLength(22);
+    expect(listed.at(-1)!.id).toBe(live.id);
+    expect(listed.filter((code: { revokedAt: Date | null }) => !code.revokedAt)).toHaveLength(1);
+  });
+
   it("lists only that event's codes, newest first, including closed ones", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);

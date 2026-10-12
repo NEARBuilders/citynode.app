@@ -11,6 +11,7 @@ import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { isOnboardingOrganizer } from "@/lib/onboarding-codes";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
+import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import {
   CommunityHeader,
   communityAuthContextQueryOptions,
@@ -33,6 +34,9 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
         ? [
             queryClient.prefetchQuery(discoveryProfileQueryOptions(apiClient, params.nodeId)),
             queryClient.prefetchQuery(activitiesQueryOptions(apiClient, params.nodeId)),
+            queryClient.prefetchQuery(
+              tenantByOrgQueryOptions(apiClient, context.auth.activeOrganizationId ?? ""),
+            ),
           ]
         : []),
     ]);
@@ -61,6 +65,10 @@ function CommunityContent() {
   const api = useApiClient();
   const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
   const authContext = useQuery(communityAuthContextQueryOptions(api, auth.activeOrganizationId));
+  const activeTenantId = useQuery(tenantByOrgQueryOptions(api, auth.activeOrganizationId ?? ""))
+    .data?.id;
+  const canOnboard =
+    !!tenantId && activeTenantId === tenantId && isOnboardingOrganizer(authContext.data);
 
   return (
     <PageContainer variant="wide">
@@ -78,7 +86,7 @@ function CommunityContent() {
       ) : (
         <EventsEditor
           nodeId={nodeId}
-          canOnboard={isOnboardingOrganizer(authContext.data)}
+          canOnboard={canOnboard}
           profileLink={
             tenantId ? (
               <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />

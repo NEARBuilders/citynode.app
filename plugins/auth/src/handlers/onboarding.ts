@@ -224,7 +224,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           input.organizationId,
         );
 
-        const rows = await services.db
+        const query = services.db
           .select()
           .from(schema.onboardingCode)
           .where(
@@ -233,8 +233,8 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
               input.eventId ? eq(schema.onboardingCode.eventId, input.eventId) : undefined,
             ),
           )
-          .orderBy(desc(schema.onboardingCode.createdAt))
-          .limit(20);
+          .orderBy(desc(schema.onboardingCode.createdAt));
+        const rows = input.eventId ? await query : await query.limit(20);
         return rows.map(toSummary);
       }),
 

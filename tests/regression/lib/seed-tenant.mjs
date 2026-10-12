@@ -217,3 +217,63 @@ if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) {
       process.exit(1);
     });
 }
+
+export async function seedDiscoveryEvent(input) {
+  const { nodeId, title, startsInHours = 24, durationHours = 3 } = input;
+  if (!nodeId || !title) throw new Error("seedDiscoveryEvent requires nodeId and title");
+
+  const root = findRepoRoot();
+  if (!root) throw new Error("bos.config.json not found in any parent directory");
+  const resolved = computeRegressionEnv({ repoRoot: root });
+  const url = resolved.dbUrls.API_DATABASE_URL;
+  if (!url) throw new Error("API_DATABASE_URL is not configured for this workspace");
+  const target = parsePostgresUrl(url);
+
+  const client = new pg.Client({
+    host: target.host,
+    port: target.port,
+    user: target.user,
+    password: target.password,
+    database: target.database,
+  });
+  await client.connect();
+  try {
+    const located = await client.query(
+      "SELECT table_schema FROM information_schema.tables WHERE table_name = 'discovery_activities' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema LIMIT 1",
+    );
+    const schema = located.rows[0]?.table_schema;
+    if (!schema)
+      throw new Error(
+        "discovery_activities table not found in api database — did API migrations run?",
+      );
+    await client.query(`SET search_path TO "${schema}", public`);
+
+    const id = randomId();
+    const canonicalUrl = `https://example.com/regression-events/${id}`;
+    const now = Date.now();
+    const hour = 3_600_000;
+    const data = {
+      id,
+      ownerNodeId: nodeId,
+      nodeIds: [nodeId],
+      kind: "event",
+      title,
+      summary: "Regression fixture event",
+      url: canonicalUrl,
+      source: "Regression",
+      publishedAt: new Date(now).toISOString(),
+      startsAt: new Date(now + startsInHours * hour).toISOString(),
+      endsAt: new Date(now + (startsInHours + durationHours) * hour).toISOString(),
+      timezone: "UTC",
+      venue: "Regression Hall",
+      status: "published",
+    };
+    await client.query(
+      "INSERT INTO discovery_activities (id, owner_node_id, canonical_url, data) VALUES ($1, $2, $3, $4::jsonb)",
+      [id, nodeId, canonicalUrl, JSON.stringify(data)],
+    );
+    return data;
+  } finally {
+    await client.end();
+  }
+}
