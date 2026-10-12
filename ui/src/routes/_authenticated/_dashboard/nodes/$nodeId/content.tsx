@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { PageContainer } from "@/components";
 import { activitiesQueryOptions } from "@/components/discovery/activity-form";
 import { BulletinEditor } from "@/components/discovery/bulletin-editor";
@@ -16,6 +16,11 @@ const TABS: readonly ContentTab[] = ["events", "onboarding", "bulletin"];
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
   validateSearch: (search: Record<string, unknown>): { tab?: ContentTab } =>
     TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {},
+  beforeLoad: ({ context, search }) => {
+    if (search.tab === "bulletin" && !context.canManageCommunity) {
+      throw redirect({ to: "/dashboard", search: { restricted: "owners" } });
+    }
+  },
   loaderDeps: ({ search }) => ({ tab: search.tab ?? "events" }),
   loader: async ({ context, params, deps }) => {
     const { queryClient, apiClient } = context;
@@ -49,7 +54,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
 function CommunityContent() {
   const { nodeId } = Route.useParams();
   const { tab = "events" } = Route.useSearch();
-  const { auth } = Route.useRouteContext();
+  const { auth, canManageCommunity } = Route.useRouteContext();
 
   return (
     <PageContainer variant="wide">
@@ -65,7 +70,7 @@ function CommunityContent() {
       ) : tab === "bulletin" ? (
         <BulletinEditor nodeId={nodeId} />
       ) : (
-        <EventsEditor nodeId={nodeId} />
+        <EventsEditor nodeId={nodeId} canManage={canManageCommunity} />
       )}
     </PageContainer>
   );

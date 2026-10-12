@@ -52,7 +52,7 @@ import { EventTimeline } from "./event-timeline";
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
 
-export function ActivityEditor({ nodeId }: { nodeId: string }) {
+export function ActivityEditor({ nodeId, canPost = true }: { nodeId: string; canPost?: boolean }) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const api = useApiClient();
@@ -124,7 +124,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             : translate("events.hide")}
         </Button>
       )}
-      {a.luma ? (
+      {a.kind !== "event" && !canPost ? null : a.luma ? (
         <Button
           size="sm"
           variant="ghost"
@@ -193,21 +193,23 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             <CalendarDotsIcon />
             {translate("events.add")}
           </Button>
-          <Button
-            data-testid="discovery-new-social"
-            variant="outline"
-            nativeButton={false}
-            render={
-              <Link
-                to="/nodes/$nodeId/events/new"
-                params={{ nodeId }}
-                search={{ kind: "social" }}
-              />
-            }
-          >
-            <ChatCircleIcon />
-            {translate("events.sharePost")}
-          </Button>
+          {canPost && (
+            <Button
+              data-testid="discovery-new-social"
+              variant="outline"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/nodes/$nodeId/events/new"
+                  params={{ nodeId }}
+                  search={{ kind: "social" }}
+                />
+              }
+            >
+              <ChatCircleIcon />
+              {translate("events.sharePost")}
+            </Button>
+          )}
         </div>
         <Button
           variant="ghost"

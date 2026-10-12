@@ -7,7 +7,13 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { discoveryProfileQueryOptions } from "./profile-editor";
 
-export function HiddenProfileNotice({ nodeId }: { nodeId: string }) {
+export function HiddenProfileNotice({
+  nodeId,
+  canManage = true,
+}: {
+  nodeId: string;
+  canManage?: boolean;
+}) {
   const translate = useAppTranslation();
   const api = useApiClient();
   const profile = useQuery(discoveryProfileQueryOptions(api, nodeId));
@@ -21,7 +27,7 @@ export function HiddenProfileNotice({ nodeId }: { nodeId: string }) {
     >
       <EyeSlashIcon className="size-4 shrink-0" />
       <span className="min-w-0 flex-1">{translate("events.profileHiddenNotice")}</span>
-      {tenantId && (
+      {tenantId && canManage && (
         <Button
           size="sm"
           variant="outline"

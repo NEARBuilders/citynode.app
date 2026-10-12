@@ -38,6 +38,7 @@ export const Route = createFileRoute(
 function EditActivity() {
   const translate = useAppTranslation();
   const { nodeId, activityId } = Route.useParams();
+  const { canManageCommunity } = Route.useRouteContext();
   const api = useApiClient();
   const list = useQuery(activitiesQueryOptions(api, nodeId));
   const activity = list.data?.find((item) => item.id === activityId);
@@ -120,7 +121,13 @@ function EditActivity() {
       }
       headerTestId="activity-form.heading"
     >
-      <ActivityForm key={activity.id} nodeId={nodeId} initial={activity} imported={imported} />
+      <ActivityForm
+        key={activity.id}
+        nodeId={nodeId}
+        initial={activity}
+        imported={imported}
+        canManage={canManageCommunity}
+      />
     </ActivityFormPage>
   );
 }

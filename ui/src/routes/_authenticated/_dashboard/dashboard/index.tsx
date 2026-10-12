@@ -26,6 +26,7 @@ import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
+import { canManageCommunity } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
@@ -33,7 +34,6 @@ import { getNextSteps, getNodeSetupSteps } from "./-next-steps";
 import { NextStepsList } from "./-next-steps-list";
 import { NodeSetupChecklist } from "./-node-setup-checklist";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
-import { canManageCommunity } from "./node/-node-access";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
   validateSearch: (
@@ -111,8 +111,7 @@ function Home() {
   });
 
   const user = session?.user;
-  const orgRole = authContext.data?.organization?.member?.role;
-  const canManage = canManageCommunity(user?.role, orgRole);
+  const canManage = user?.role === "admin" || canManageCommunity(authContext.data);
   const node = nodes.data?.[0] ?? null;
   const nodeId = node?.id ?? "";
   const profile = useQuery({

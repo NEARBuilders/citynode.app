@@ -29,10 +29,10 @@ export interface TeamWorkspace {
 }
 
 const ROUTE_AREAS: Array<{ path: string; exact?: boolean; areas: FeatureArea[] }> = [
-  { path: "/dashboard/node", exact: true, areas: ["node-operations", "finance"] },
+  { path: "/dashboard/node", exact: true, areas: ["node-operations", "finance", "events"] },
   { path: "/dashboard/node", areas: ["node-operations"] },
   { path: "/tenant", areas: ["node-operations"] },
-  { path: "/nodes", areas: ["node-operations"] },
+  { path: "/nodes", areas: ["node-operations", "events"] },
   { path: "/stake", areas: ["stake"] },
 ];
 
@@ -51,6 +51,11 @@ export function resolveTeamWorkspace(
     allowedAreas: activeTeam && !bypass ? activeTeam.areas.filter(isFeatureArea) : null,
     canManageOrganization: bypass,
   };
+}
+
+export function canManageCommunity(context: AuthRequestContext | null | undefined): boolean {
+  const orgRole = context?.organization?.member?.role;
+  return context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
 }
 
 export function areasForPath(pathname: string): FeatureArea[] | null {
@@ -98,4 +103,10 @@ export async function requireTeamArea({
   if (workspace && !isPathAllowed(workspace, location.pathname)) {
     throw redirect({ to: "/dashboard", search: { restricted: areas[0] } });
   }
+}
+
+export function canOrganizeEvents(context: AuthRequestContext | null | undefined): boolean {
+  if (canManageCommunity(context)) return true;
+  if (!context?.organization?.member?.role) return false;
+  return (context.organization.teams ?? []).some((team) => team.areas.includes("events"));
 }

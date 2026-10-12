@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { canManageCommunity, canOrganizeEvents } from "@/lib/team-workspace";
 import { communityAuthContextQueryOptions } from "../dashboard/node/-community-header";
-import { canManageCommunity } from "../dashboard/node/-node-access";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId")({
   beforeLoad: async ({ context }) => {
@@ -9,9 +9,11 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId")
         communityAuthContextQueryOptions(context.apiClient, context.auth.activeOrganizationId),
       )
       .catch(() => null);
-    if (!canManageCommunity(context.auth.user?.role, authContext?.organization?.member?.role)) {
+    const canManage = context.auth.user?.role === "admin" || canManageCommunity(authContext);
+    if (!canManage && !canOrganizeEvents(authContext)) {
       throw redirect({ to: "/dashboard", search: { restricted: "owners" } });
     }
+    return { canManageCommunity: canManage };
   },
   component: Outlet,
 });

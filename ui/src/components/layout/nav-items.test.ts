@@ -49,6 +49,13 @@ describe("sidebar navigation", () => {
     expect(slugs({ hasOrganization: true, canManageOrganization: true })).toContain("orgs");
   });
 
+  it("keeps the organization in reach of events organizers so they can start onboarding there", () => {
+    const slugs = (context: Parameters<typeof buildNavItems>[0]) =>
+      filterSidebarByRole(buildNavItems(context), "member").map(navSlug);
+    expect(slugs({ hasOrganization: true, canOrganizeEvents: true })).toContain("orgs");
+    expect(slugs({ hasOrganization: true, canOrganizeEvents: false })).not.toContain("orgs");
+  });
+
   it("offers Start a community instead of My community to people without one", () => {
     const tos = (context: Parameters<typeof buildNavItems>[0], role: "member" | "admin") =>
       filterSidebarByRole(buildNavItems(context), role).map((item) => item.to);

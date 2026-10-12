@@ -51,6 +51,7 @@ export function useShellNav(
       activeOrgSlug: activeOrg?.slug ?? null,
       hasOrganization: isOrganizationsLoading || organizations.length > 0,
       canManageOrganization: workspace.canManageOrganization ?? false,
+      canOrganizeEvents: workspace.teams.some((team) => team.areas.includes("events")),
       canCurate,
       isAdmin,
     },

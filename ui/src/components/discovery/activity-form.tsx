@@ -101,10 +101,12 @@ export function ActivityForm({
   nodeId,
   initial,
   imported,
+  canManage = true,
 }: {
   nodeId: string;
   initial: ActivityDraft;
   imported?: Activity["luma"];
+  canManage?: boolean;
 }) {
   const translate = useAppTranslation();
   const api = useApiClient();
@@ -312,7 +314,9 @@ export function ActivityForm({
           </SelectContent>
         </Select>
       </Field>
-      {draft.status === "published" && <HiddenProfileNotice nodeId={nodeId} />}
+      {draft.status === "published" && (
+        <HiddenProfileNotice nodeId={nodeId} canManage={canManage} />
+      )}
       {save.isError && (
         <p role="alert" className="text-sm text-destructive">
           {appErrorMessage(save.error, translate)}

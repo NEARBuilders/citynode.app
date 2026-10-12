@@ -62,6 +62,7 @@ function NodeOverview() {
     tenant,
     auth,
     canManage,
+    canOrganize,
     inFinanceTeam,
   } = Route.useRouteContext();
   const apiClient = useApiClient();
@@ -191,7 +192,7 @@ function NodeOverview() {
         <SectionHeader
           title={translate("dashboard.comingUp")}
           action={
-            canManage ? (
+            canOrganize ? (
               <Button
                 size="sm"
                 nativeButton={false}
@@ -210,7 +211,7 @@ function NodeOverview() {
           <p className="text-sm text-muted-foreground">
             {activities.isError
               ? translate("dashboard.eventsOwnerHint")
-              : canManage
+              : canOrganize
                 ? translate("dashboard.noEventsHint")
                 : translate("dashboard.noEventsMemberHint")}
           </p>
@@ -233,7 +234,7 @@ function NodeOverview() {
                     {event.venue ? ` · ${event.venue}` : ""}
                   </ItemDescription>
                 </ItemContent>
-                {canManage && (
+                {canOrganize && (
                   <ItemActions>
                     <Button
                       size="sm"

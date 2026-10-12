@@ -55,6 +55,7 @@ export interface NavContext {
   activeOrgSlug?: string | null;
   hasOrganization?: boolean;
   canManageOrganization?: boolean;
+  canOrganizeEvents?: boolean;
   canCurate?: boolean;
   isAdmin?: boolean;
 }
@@ -163,7 +164,7 @@ export function buildNavItems(
             roleRequired: "member" as const,
             section: "organization" as const,
           },
-          ...(context.canManageOrganization || context.isAdmin
+          ...(context.canManageOrganization || context.canOrganizeEvents || context.isAdmin
             ? [
                 {
                   icon: UsersThreeIcon,

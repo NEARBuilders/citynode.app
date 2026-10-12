@@ -4,8 +4,9 @@ import { Button, EmptyState, PageContainer } from "@/components";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
+import { canManageCommunity, canOrganizeEvents } from "@/lib/team-workspace";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
-import { canManageCommunity, hasNodeProposalReviewPermission } from "./node/-node-access";
+import { hasNodeProposalReviewPermission } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
 
 type NodeDashboardSearch = { nodeId?: string };
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         stakingSourceNode: null,
         canReview: false,
         canManage: false,
+        canOrganize: false,
         inFinanceTeam: false,
         emptyReason: "no-org" as const,
       };
@@ -42,6 +44,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         stakingSourceNode: null,
         canReview: false,
         canManage: false,
+        canOrganize: false,
         inFinanceTeam: false,
         emptyReason: "no-tenant" as const,
       };
@@ -60,6 +63,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         stakingSourceNode: null,
         canReview: false,
         canManage: false,
+        canOrganize: false,
         inFinanceTeam: false,
         emptyReason: "no-node" as const,
       };
@@ -79,8 +83,8 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       .catch(() => null);
     context.queryClient.setQueryData(nodeQueryKeys.tenant(tenant.id), nodes);
     context.queryClient.setQueryData(nodeQueryKeys.byId(selectedNode.id), selectedNode);
-    const orgRole = authContext?.organization?.member?.role;
-    const canManage = canManageCommunity(context.auth.user?.role, orgRole);
+    const canManage = canReview || canManageCommunity(authContext);
+    const canOrganize = canManage || canOrganizeEvents(authContext);
     const inFinanceTeam =
       authContext?.organization?.teams?.some((team) => team.areas.includes("finance")) ?? false;
 
@@ -92,6 +96,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       stakingSourceNode,
       canReview,
       canManage,
+      canOrganize,
       inFinanceTeam,
       emptyReason: null,
     };

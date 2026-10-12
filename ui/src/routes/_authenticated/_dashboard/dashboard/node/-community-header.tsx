@@ -13,9 +13,12 @@ import {
 import { useAppTranslation } from "@/i18n/runtime";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
-import { teamWorkspaceQueryOptions } from "@/lib/team-workspace";
+import {
+  canManageCommunity,
+  canOrganizeEvents,
+  teamWorkspaceQueryOptions,
+} from "@/lib/team-workspace";
 import { CommunityNav, type CommunityNavSection } from "./-community-nav";
-import { canManageCommunity } from "./-node-access";
 
 type CommunityNode = NonNullable<Awaited<ReturnType<ApiClient["getNode"]>>>;
 
@@ -89,7 +92,8 @@ export function CommunityHeader({
 
   const authContext = useQuery(communityAuthContextQueryOptions(api, activeOrganizationId));
   const orgRole = authContext.data?.organization?.member?.role;
-  const canManage = canManageCommunity(auth?.isAdmin ? "admin" : null, orgRole);
+  const canManage = !!auth?.isAdmin || canManageCommunity(authContext.data);
+  const canOrganize = canManage || canOrganizeEvents(authContext.data);
   const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
   const workspace = useQuery(teamWorkspaceQueryOptions(api));
 
@@ -199,6 +203,7 @@ export function CommunityHeader({
           nodeId={nodeId}
           tenantId={node?.tenantId}
           canManage={canManage}
+          canOrganize={canOrganize}
           allowedAreas={workspace.data?.allowedAreas ?? null}
           replace={replace}
           testIds={testIds}
