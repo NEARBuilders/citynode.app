@@ -90,7 +90,7 @@ export function pendingProposalCountQueryOptions(apiClient: ApiClient) {
   return queryOptions({
     queryKey: proposalReviewQueryKeys.pendingCount(),
     queryFn: () =>
-      apiClient.proposals.getProposals({ lifecycleStatus: "actionable" as const, limit: 1 }),
+      apiClient.proposals.getProposals({ lifecycleStatus: "needs_review" as const, limit: 1 }),
     staleTime: 15 * 1000,
   });
 }
@@ -100,7 +100,7 @@ export function adminProposalListQueryOptions(apiClient: ApiClient, filter: Prop
     queryKey: proposalReviewQueryKeys.list(filter),
     queryFn: ({ pageParam }) =>
       apiClient.proposals.getProposals({
-        ...(filter === "pending" && { lifecycleStatus: "actionable" as const }),
+        ...(filter === "pending" && { lifecycleStatus: "needs_review" as const }),
         ...(filter !== "all" && filter !== "pending" && { reviewStatus: filter }),
         limit: 50,
         ...(pageParam !== undefined && { cursor: pageParam }),

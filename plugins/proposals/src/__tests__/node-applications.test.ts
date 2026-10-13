@@ -39,7 +39,9 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
         when: 1791763200000,
         hash: "node-application-apply-steps-test",
         tag: "node-application-apply-steps-test",
-        sql: [applyStepsSource.trim()],
+        sql: applyStepsSource
+          .split("--> statement-breakpoint")
+          .map((statement) => statement.trim()),
       },
     ],
   };

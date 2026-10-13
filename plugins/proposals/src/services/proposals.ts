@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, count, desc, eq, ilike, inArray, lte, notInArray, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, lte, notInArray, or, sql } from "drizzle-orm";
 import { Clock, Context, DateTime, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import { proposalAuditLog, proposalSubmissions, proposals } from "../db/schema";
@@ -8,7 +8,7 @@ type ReviewStatus = "pending" | "approved" | "rejected" | "removed";
 type ApplyStatus = "not_started" | "applying" | "applied" | "failed";
 type RemoveStatus = "not_started" | "removing" | "removed" | "failed";
 type ResubmissionPolicy = "rejected-only" | "rejected-or-removed";
-type ApplyStepStatus = "completed" | "waiting";
+type ApplyStepStatus = "started" | "waiting" | "completed";
 type ApplyStep = { status: ApplyStepStatus; resourceId: string | null; recordedAt: string };
 const SYSTEM_ACTOR = "system";
 const SYSTEM_ACTOR_LABEL = "System";
@@ -32,6 +32,17 @@ function lifecycleTimedOut(updatedAt: Date | string): boolean {
   return Date.now() - new Date(updatedAt).getTime() >= LIFECYCLE_TIMEOUT_MS;
 }
 
+function applyStalled(row: {
+  applyStatus: string;
+  updatedAt: Date | string;
+  applyActivityAt?: Date | string | null;
+}): boolean {
+  if (row.applyStatus !== "applying") return false;
+  const updated = new Date(row.updatedAt).getTime();
+  const active = row.applyActivityAt ? new Date(row.applyActivityAt).getTime() : 0;
+  return lifecycleTimedOut(new Date(Math.max(updated, active)));
+}
+
 function serialize(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
@@ -52,7 +63,10 @@ function parseApplySteps(value: string | null | undefined): Record<string, Apply
   for (const [name, step] of Object.entries(parsed)) {
     if (!step || typeof step !== "object") continue;
     const { status, resourceId, recordedAt } = step as Record<string, unknown>;
-    if ((status !== "completed" && status !== "waiting") || typeof recordedAt !== "string") {
+    if (
+      (status !== "started" && status !== "waiting" && status !== "completed") ||
+      typeof recordedAt !== "string"
+    ) {
       continue;
     }
     steps[name] = {
@@ -118,7 +132,7 @@ async function loadProposal(db: any, pluginId: string, entityId: string) {
     removeError: (row.removeError as string) ?? null,
     appliedResourceId: row.appliedResourceId ?? null,
     applySteps: parseApplySteps(row.applySteps),
-    applyTimedOut: row.applyStatus === "applying" && lifecycleTimedOut(row.updatedAt),
+    applyTimedOut: applyStalled(row),
     submissionCount,
     appliedAt: toIsoString(row.appliedAt),
     removedAt: toIsoString(row.removedAt),
@@ -212,6 +226,8 @@ export class ProposalService extends Context.Service<
       step: string;
       status: ApplyStepStatus;
       resourceId?: string;
+      actorId: string;
+      actor?: { name?: string; email?: string };
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
     markRemoved: (input: {
       pluginId: string;
@@ -228,7 +244,7 @@ export class ProposalService extends Context.Service<
       pluginId?: string;
       entityId?: string;
       reviewStatus?: ReviewStatus;
-      lifecycleStatus?: "actionable";
+      lifecycleStatus?: "actionable" | "needs_review";
       query?: string;
       limit?: number;
       cursor?: string;
@@ -512,8 +528,7 @@ export const ProposalServiceLive = Layer.effect(
 
           const retrying =
             existing.reviewStatus === "approved" &&
-            (existing.applyStatus === "failed" ||
-              (existing.applyStatus === "applying" && lifecycleTimedOut(existing.updatedAt)));
+            (existing.applyStatus === "failed" || applyStalled(existing));
           if (existing.reviewStatus !== "pending" && !retrying) {
             return yield* Effect.fail(
               new ORPCError("BAD_REQUEST", { message: "Only pending proposals can be approved" }),
@@ -530,6 +545,7 @@ export const ProposalServiceLive = Layer.effect(
                   applyStatus: "applying",
                   rejectionReason: null,
                   applyError: null,
+                  applyActivityAt: now,
                   updatedAt: now,
                 })
                 .where(
@@ -601,6 +617,8 @@ export const ProposalServiceLive = Layer.effect(
                   applyStatus: "not_started",
                   rejectionReason: reason,
                   applyError: null,
+                  applySteps: null,
+                  applyActivityAt: null,
                   updatedAt: now,
                 })
                 .where(
@@ -903,19 +921,29 @@ export const ProposalServiceLive = Layer.effect(
               if (existing.reviewStatus !== "approved" || existing.applyStatus !== "applying") {
                 return "inactive" as const;
               }
+              const activityAt = new Date(recordedAt);
               const steps = parseApplySteps(existing.applySteps);
               const previous = steps[input.step];
-              const resourceId = input.resourceId ?? previous?.resourceId ?? null;
+              const resourceId =
+                input.resourceId ??
+                (input.status === "completed" || previous?.status === input.status
+                  ? previous?.resourceId
+                  : null) ??
+                null;
               if (
                 previous?.status === "completed" ||
                 (previous?.status === input.status && previous.resourceId === resourceId)
               ) {
+                await tx
+                  .update(proposals)
+                  .set({ applyActivityAt: activityAt })
+                  .where(eq(proposals.id, existing.id));
                 return "unchanged" as const;
               }
               steps[input.step] = { status: input.status, resourceId, recordedAt };
               await tx
                 .update(proposals)
-                .set({ applySteps: serialize(steps) })
+                .set({ applySteps: serialize(steps), applyActivityAt: activityAt })
                 .where(eq(proposals.id, existing.id));
               await appendAudit(
                 tx,
@@ -923,8 +951,8 @@ export const ProposalServiceLive = Layer.effect(
                 input.pluginId,
                 input.entityId,
                 "apply_step_recorded",
-                SYSTEM_ACTOR,
-                SYSTEM_ACTOR_LABEL,
+                input.actorId,
+                actorLabel(input.actor),
                 { step: input.step, status: input.status, resourceId },
               );
               return "recorded" as const;
@@ -1075,24 +1103,33 @@ export const ProposalServiceLive = Layer.effect(
           if (input.pluginId) conditions.push(eq(proposals.pluginId, input.pluginId));
           if (input.entityId) conditions.push(eq(proposals.entityId, input.entityId));
           if (input.reviewStatus) conditions.push(eq(proposals.reviewStatus, input.reviewStatus));
-          if (input.lifecycleStatus === "actionable") {
+          if (input.lifecycleStatus) {
             const lifecycleCutoff = DateTime.toDateUtc(
               DateTime.makeUnsafe((yield* Clock.currentTimeMillis) - LIFECYCLE_TIMEOUT_MS),
             );
-            conditions.push(
-              or(
-                eq(proposals.reviewStatus, "pending"),
-                eq(proposals.applyStatus, "failed"),
-                eq(proposals.removeStatus, "failed"),
-                and(
-                  eq(proposals.applyStatus, "applying"),
-                  lte(proposals.updatedAt, lifecycleCutoff),
-                ),
-                and(
-                  eq(proposals.removeStatus, "removing"),
-                  lte(proposals.updatedAt, lifecycleCutoff),
+            const applyNeedsAction = [
+              eq(proposals.reviewStatus, "pending"),
+              and(eq(proposals.reviewStatus, "approved"), eq(proposals.applyStatus, "failed")),
+              and(
+                eq(proposals.reviewStatus, "approved"),
+                eq(proposals.applyStatus, "applying"),
+                lte(
+                  sql`greatest(${proposals.updatedAt}, coalesce(${proposals.applyActivityAt}, ${proposals.updatedAt}))`,
+                  lifecycleCutoff,
                 ),
               ),
+            ];
+            conditions.push(
+              input.lifecycleStatus === "needs_review"
+                ? or(...applyNeedsAction)
+                : or(
+                    ...applyNeedsAction,
+                    eq(proposals.removeStatus, "failed"),
+                    and(
+                      eq(proposals.removeStatus, "removing"),
+                      lte(proposals.updatedAt, lifecycleCutoff),
+                    ),
+                  ),
             );
           }
           if (input.query) {

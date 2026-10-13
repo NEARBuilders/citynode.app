@@ -7,7 +7,7 @@ const ReviewStatus = z.enum(["pending", "approved", "rejected", "removed"]);
 const ApplyStatus = z.enum(["not_started", "applying", "applied", "failed"]);
 const RemoveStatus = z.enum(["not_started", "removing", "removed", "failed"]);
 const ApplyStepName = z.string().regex(/^[a-z][a-z0-9_-]{0,49}$/);
-const ApplyStepStatus = z.enum(["completed", "waiting"]);
+const ApplyStepStatus = z.enum(["started", "waiting", "completed"]);
 const ExpectedProposalVersion = z.object({
   pluginId: z.string(),
   entityId: z.string(),
@@ -236,7 +236,7 @@ export const contract = oc.router({
         pluginId: z.string().optional(),
         entityId: z.string().optional(),
         reviewStatus: ReviewStatus.optional(),
-        lifecycleStatus: z.literal("actionable").optional(),
+        lifecycleStatus: z.enum(["actionable", "needs_review"]).optional(),
         query: z.string().trim().min(1).max(200).optional(),
         limit: z.number().int().min(1).max(100).optional(),
         cursor: z.string().optional(),

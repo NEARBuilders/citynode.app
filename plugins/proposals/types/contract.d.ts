@@ -3,6 +3,7 @@ import { z } from "zod";
 export declare const ApplyStepSchema: z.ZodObject<{
     status: z.ZodEnum<{
         completed: "completed";
+        started: "started";
         waiting: "waiting";
     }>;
     resourceId: z.ZodNullable<z.ZodString>;
@@ -41,6 +42,7 @@ export declare const ProposalSchema: z.ZodObject<{
     applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
         status: z.ZodEnum<{
             completed: "completed";
+            started: "started";
             waiting: "waiting";
         }>;
         resourceId: z.ZodNullable<z.ZodString>;
@@ -118,6 +120,7 @@ export declare const ProposalReviewHistoryEntrySchema: z.ZodObject<{
         applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
             status: z.ZodEnum<{
                 completed: "completed";
+                started: "started";
                 waiting: "waiting";
             }>;
             resourceId: z.ZodNullable<z.ZodString>;
@@ -213,6 +216,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -291,6 +295,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -355,6 +360,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -445,6 +451,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -534,6 +541,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -623,6 +631,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -713,6 +722,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -803,6 +813,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -860,6 +871,7 @@ export declare const contract: {
         step: z.ZodString;
         status: z.ZodEnum<{
             completed: "completed";
+            started: "started";
             waiting: "waiting";
         }>;
         resourceId: z.ZodOptional<z.ZodString>;
@@ -897,6 +909,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -986,6 +999,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -1076,6 +1090,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -1136,7 +1151,10 @@ export declare const contract: {
             rejected: "rejected";
             removed: "removed";
         }>>;
-        lifecycleStatus: z.ZodOptional<z.ZodLiteral<"actionable">>;
+        lifecycleStatus: z.ZodOptional<z.ZodEnum<{
+            actionable: "actionable";
+            needs_review: "needs_review";
+        }>>;
         query: z.ZodOptional<z.ZodString>;
         limit: z.ZodOptional<z.ZodNumber>;
         cursor: z.ZodOptional<z.ZodString>;
@@ -1174,6 +1192,7 @@ export declare const contract: {
             applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                 status: z.ZodEnum<{
                     completed: "completed";
+                    started: "started";
                     waiting: "waiting";
                 }>;
                 resourceId: z.ZodNullable<z.ZodString>;
@@ -1333,6 +1352,7 @@ export declare const contract: {
                 applySteps: z.ZodRecord<z.ZodString, z.ZodObject<{
                     status: z.ZodEnum<{
                         completed: "completed";
+                        started: "started";
                         waiting: "waiting";
                     }>;
                     resourceId: z.ZodNullable<z.ZodString>;

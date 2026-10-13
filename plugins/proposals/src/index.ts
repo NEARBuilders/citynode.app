@@ -303,9 +303,16 @@ export default createPlugin({
         return { data: result };
       }),
 
-      recordApplyStep: builder.recordApplyStep.use(requireAdmin).effect(function* ({ input }) {
+      recordApplyStep: builder.recordApplyStep.use(requireAdmin).effect(function* ({
+        input,
+        context,
+      }) {
         const proposal = yield* ProposalService;
-        const result = yield* proposal.recordApplyStep(input);
+        const result = yield* proposal.recordApplyStep({
+          ...input,
+          actorId: context.userId!,
+          actor: context.user ?? undefined,
+        });
         yield* publishProposalEvent("apply_step_recorded", result);
         return { data: result };
       }),
