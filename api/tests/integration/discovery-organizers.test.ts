@@ -132,7 +132,7 @@ describe("events-area organizers", () => {
     }
   });
 
-  it("lets an events-team member connect Luma, see hidden imports, approve them and disconnect", async () => {
+  it("lets an events-team member connect Luma, see hidden imports, approve them, but not disconnect", async () => {
     stubLuma();
     const { id, org, node } = await community();
     const organizer = await getPluginClient(memberWithTeam(`organizer-${id}`, org, ["events"]));
@@ -152,7 +152,9 @@ describe("events-area organizers", () => {
         show: true,
       }),
     ).toMatchObject({ status: "published", luma: { hidden: false } });
-    await expect(organizer.disconnectDiscoveryLuma({ nodeId: node.id })).resolves.toBeDefined();
+    await expect(organizer.disconnectDiscoveryLuma({ nodeId: node.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 
   it("keeps community settings and social updates with owners and admins", async () => {
