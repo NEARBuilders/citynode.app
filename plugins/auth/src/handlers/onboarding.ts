@@ -224,12 +224,17 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           input.organizationId,
         );
 
-        const rows = await services.db
+        const query = services.db
           .select()
           .from(schema.onboardingCode)
-          .where(eq(schema.onboardingCode.organizationId, organizationId))
-          .orderBy(desc(schema.onboardingCode.createdAt))
-          .limit(100);
+          .where(
+            and(
+              eq(schema.onboardingCode.organizationId, organizationId),
+              input.eventId ? eq(schema.onboardingCode.eventId, input.eventId) : undefined,
+            ),
+          )
+          .orderBy(desc(schema.onboardingCode.createdAt));
+        const rows = input.eventId ? await query : await query.limit(100);
         return rows.map(toSummary);
       }),
 

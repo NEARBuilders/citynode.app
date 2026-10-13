@@ -2,7 +2,6 @@ import {
   ArrowSquareOutIcon,
   CalendarDotsIcon,
   HourglassMediumIcon,
-  QrCodeIcon,
   TreeStructureIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,7 +9,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import { Bulletin, Button, LocalDate, NodeValidatorTable, SectionHeader } from "@/components";
 import { CommunityMapStatus } from "@/components/discovery/community-map-status";
-import { EventDate, upcomingEvents } from "@/components/discovery/event-onboarding";
+import {
+  EventDate,
+  OpenEventStationButton,
+  upcomingEvents,
+} from "@/components/discovery/event-onboarding";
 import {
   EventVisibilityBadge,
   ImportsWaiting,
@@ -154,13 +157,6 @@ function NodeOverview() {
   const waitingCount = (activities.data ?? []).filter((event) =>
     isWaitingImport(event, now),
   ).length;
-  const onboardingLink = (
-    <Link
-      to="/nodes/$nodeId/content"
-      params={{ nodeId: selectedNode.id }}
-      search={{ tab: "onboarding" }}
-    />
-  );
 
   const bulletin = selectedNode.metadata?.bulletin;
 
@@ -322,18 +318,7 @@ function NodeOverview() {
                 </ItemContent>
                 {canOrganize && (
                   <ItemActions>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      nativeButton={false}
-                      render={onboardingLink}
-                      aria-label={translate("station.onboardingNamed", {
-                        event: event.title ?? "",
-                      })}
-                    >
-                      <QrCodeIcon />
-                      <span className="hidden sm:inline">{translate("org.onboarding")}</span>
-                    </Button>
+                    <OpenEventStationButton event={event} organizationId={orgId} />
                   </ItemActions>
                 )}
               </Item>
