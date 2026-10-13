@@ -654,18 +654,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Créer une organisation",
     "创建组织",
   ],
-  "dashboard.createOrgFirst": [
-    "Create an organization first",
-    "Crea primero una organización",
-    "Créez d'abord une organisation",
-    "请先创建组织",
-  ],
-  "dashboard.createOrgFirstHint": [
-    "Communities are run by organizations. Start one, then start a community.",
-    "Las comunidades las gestionan organizaciones. Crea una y después una comunidad.",
-    "Les communautés sont gérées par des organisations. Créez-en une, puis lancez une communauté.",
-    "社区由组织运营，请先创建组织，再创建社区。",
-  ],
   "dashboard.description": [
     "Pick up where you left off.",
     "Continúa donde lo dejaste.",

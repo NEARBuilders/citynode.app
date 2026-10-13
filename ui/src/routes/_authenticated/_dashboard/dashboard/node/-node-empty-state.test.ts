@@ -2,17 +2,11 @@ import { describe, expect, it } from "vitest";
 import { getNodeEmptyStateContent } from "./-node-empty-state";
 
 describe("My community empty state", () => {
-  it("sends members without an organization to organization creation", () => {
-    expect(getNodeEmptyStateContent("no-org", false)).toMatchObject({
-      actionLabel: "Create organization",
-      actionTo: "/orgs/new",
-    });
-  });
-
   it.each([
     { reason: "no-org", canCreateNode: true },
     { reason: "no-tenant", canCreateNode: true },
     { reason: "no-node", canCreateNode: true },
+    { reason: "no-org", canCreateNode: false },
     { reason: "no-tenant", canCreateNode: false },
     { reason: "no-node", canCreateNode: false },
   ] as const)("sends $reason (admin: $canCreateNode) to the application", (scenario) => {
@@ -21,7 +15,12 @@ describe("My community empty state", () => {
     );
   });
 
-  it("does not mention an organization to admins who have none selected", () => {
+  it("does not mention an organization to viewers who have none selected", () => {
+    expect(getNodeEmptyStateContent("no-org", false)).toMatchObject({
+      title: "No community yet",
+      description: "Apply to run a City Node for your area. We'll walk you through each step.",
+      actionLabel: "Start a community",
+    });
     expect(getNodeEmptyStateContent("no-org", true).title).toBe("No community yet");
   });
 
