@@ -48,7 +48,7 @@ import { buildEventTimeline } from "@/lib/event-timeline";
 import { isWaitingImport } from "@/lib/event-visibility";
 import { type Activity, activitiesQueryOptions } from "./activity-form";
 import { DiscoveryLoadError } from "./discovery-load-error";
-import { useStartOnboarding } from "./event-onboarding";
+import { useOpenEventStation } from "./event-onboarding";
 import { EventTimeline } from "./event-timeline";
 import { EventVisibilityBadge, ImportsWaiting, useVisibilityContext } from "./event-visibility";
 import { LumaImport } from "./luma-import";
@@ -58,10 +58,12 @@ export function ActivityEditor({
   nodeId,
   reviewImports = false,
   canPost = true,
+  canOnboard = false,
 }: {
   nodeId: string;
   reviewImports?: boolean;
   canPost?: boolean;
+  canOnboard?: boolean;
 }) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
@@ -82,7 +84,7 @@ export function ActivityEditor({
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
     "UTC",
   );
-  const startOnboarding = useStartOnboarding();
+  const openStation = useOpenEventStation();
   const visibility = useMutation({
     mutationFn: ({ activityId, show }: { activityId: string; show: boolean }) =>
       api.setDiscoveryLumaVisibility({ nodeId, activityId, show }),
@@ -171,7 +173,7 @@ export function ActivityEditor({
           {translate("common.edit")}
         </Button>
       )}
-      {a.kind === "event" && a.status !== "cancelled" && (
+      {canOnboard && a.kind === "event" && a.status !== "cancelled" && (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -187,8 +189,8 @@ export function ActivityEditor({
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               data-testid={`activity-editor.start-onboarding-${a.id}`}
-              disabled={startOnboarding.isPending}
-              onClick={() => startOnboarding.mutate({ eventId: a.id })}
+              disabled={openStation.isPending}
+              onClick={() => openStation.mutate({ eventId: a.id })}
             >
               <QrCodeIcon />
               {translate("events.startOnboarding")}
@@ -357,7 +359,7 @@ export function ActivityEditor({
             <DialogTitle>{translate("events.importLuma")}</DialogTitle>
             <DialogDescription>{translate("events.lumaDescription")}</DialogDescription>
           </DialogHeader>
-          <LumaImport nodeId={nodeId} />
+          <LumaImport nodeId={nodeId} canDisconnect={canPost} />
         </DialogContent>
       </Dialog>
     </section>
