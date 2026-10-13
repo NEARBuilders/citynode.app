@@ -80,6 +80,7 @@ function ProposalDetailPage() {
   const proposalQuery = useQuery({
     ...adminProposalDetailQueryOptions(apiClient, proposalId, pluginId, entityId),
     refetchInterval: applyingHere ? 2000 : false,
+    refetchIntervalInBackground: true,
   });
   const reviewHistoryQuery = useQuery(proposalReviewHistoryQueryOptions(apiClient, pluginId));
 
