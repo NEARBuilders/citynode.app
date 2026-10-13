@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getGatewayId, useApiClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
-import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import { AppActionError, appErrorMessage } from "@/i18n/error-message";
@@ -13,7 +12,6 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
-import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -22,17 +20,15 @@ import { type ApplyStepId, resolveApplySteps } from "./-apply-flow";
 import { useApplicationForm } from "./-apply-form";
 import { loadNodeApplicationParents } from "./-apply-loader";
 import { ApplyNodeFields } from "./-apply-node-fields";
-import { ApplyDaoStep, ApplyNearStep, ApplyOrganizationStep } from "./-apply-prerequisites";
+import { ApplyDaoStep, ApplyNearStep } from "./-apply-prerequisites";
 import { ApplyStep } from "./-apply-step";
 import { ApplySubmit } from "./-apply-submit";
 import { ApplySubmitted } from "./-apply-submitted";
 import {
   canSubmitNodeApplication,
-  getDefaultOrganizationId,
   myNodeApplicationsQueryOptions,
   type NodeApplicationValues,
   proposeNodeApplication,
-  resolveActiveOrganizationLabel,
 } from "./-node-application";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
@@ -71,12 +67,10 @@ function ApplyPage() {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const initialRootNodes = Route.useLoaderData();
-  const { auth, runtimeConfig } = Route.useRouteContext();
+  const { runtimeConfig } = Route.useRouteContext();
   const gatewayId = getGatewayId(runtimeConfig);
-  const activeOrgId = auth.activeOrganizationId;
   const nearAccountId = useNearAccount();
   const daoConnection = useDaoConnection();
-  const attemptedDefaultOrgId = useRef<string | null>(null);
   const slugManuallyEdited = useRef(false);
   const [rootParentId, setRootParentId] = useState(initialRootNodes[0]?.id ?? "");
   const [submittedProposalId, setSubmittedProposalId] = useState<string | null>(null);
@@ -87,19 +81,32 @@ function ApplyPage() {
     ({ daoAccountId }: { daoAccountId: string }) => setVerifiedDaoAccountId(daoAccountId),
     [],
   );
+  const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
+  const existingApplication = submittedProposalId
+    ? myApplications.data?.data.find((proposal) => proposal.id === submittedProposalId)
+    : myApplications.data?.data[0];
+  const existingPayload = existingApplication?.payload as
+    | { orgId?: unknown; name?: unknown; slug?: unknown }
+    | undefined;
+  const retainedOrgId = (slug: string) =>
+    existingApplication?.reviewStatus === "rejected" &&
+    existingPayload?.slug === slug &&
+    typeof existingPayload.orgId === "string"
+      ? existingPayload.orgId
+      : null;
 
   const submitMutation = useMutation({
     mutationFn: async (values: NodeApplicationValues) => {
       if (!gatewayId) {
         throw new AppActionError("apply.error.gateway");
       }
-      if (!activeOrgId) throw new AppActionError("apply.error.organization");
       if (!nearAccountId) throw new AppActionError("apply.error.near");
       if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
         throw new AppActionError("apply.error.dao");
       }
+      const orgId = retainedOrgId(values.slug);
       return proposeNodeApplication(apiClient, values, {
-        orgId: activeOrgId,
+        ...(orgId ? { orgId } : {}),
         daoAccountId: daoConnection.daoAccountId,
         submitterAccountId: nearAccountId,
       });
@@ -121,25 +128,10 @@ function ApplyPage() {
   const form = useApplicationForm((values) => submitMutation.mutateAsync(values));
   const formValues = useSelector(form.store, (state) => state.values);
   const hostname = formValues.slug && gatewayId ? `${formValues.slug}.${gatewayId}` : "";
+  const legacyOrgId = retainedOrgId(formValues.slug);
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
-  const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
-  const existingApplication = submittedProposalId
-    ? myApplications.data?.data.find((proposal) => proposal.id === submittedProposalId)
-    : myApplications.data?.data[0];
   const rootNodes = queriedRootNodes ?? initialRootNodes;
-  const { data: organizations = [] } = useQuery(organizationsQueryOptions(apiClient));
-  const defaultOrgId = getDefaultOrganizationId(activeOrgId, organizations);
-  const switchOrganization = useSwitchOrganization();
-  const displayedOrgId =
-    activeOrgId ?? (switchOrganization.isError ? null : (defaultOrgId ?? null));
-  const activeOrganizationLabel = resolveActiveOrganizationLabel(displayedOrgId, organizations, t);
-
-  useEffect(() => {
-    if (!defaultOrgId || attemptedDefaultOrgId.current === defaultOrgId) return;
-    attemptedDefaultOrgId.current = defaultOrgId;
-    switchOrganization.mutate(defaultOrgId);
-  }, [defaultOrgId, switchOrganization.mutate]);
   useEffect(() => {
     if (verifiedDaoAccountId && verifiedDaoAccountId !== daoConnection.daoAccountId) {
       setVerifiedDaoAccountId(null);
@@ -154,25 +146,27 @@ function ApplyPage() {
     ...bindingPreflightQueryOptions(apiClient, hostname),
     enabled: !!hostname,
   });
+  const { data: organizationSlug, isFetching: organizationSlugLoading } = useQuery({
+    queryKey: ["apply-organization-slug", formValues.slug],
+    queryFn: () => apiClient.auth.checkSlug({ slug: formValues.slug }),
+    enabled: !!formValues.slug && !legacyOrgId,
+  });
+  const organizationSlugAvailable = !!legacyOrgId || organizationSlug?.status === true;
 
   const canSubmit = canSubmitNodeApplication({
     values: formValues,
-    orgId: activeOrgId,
     daoAccountId:
       verifiedDaoAccountId === daoConnection.daoAccountId ? daoConnection.daoAccountId : null,
     submitterAccountId: nearAccountId,
     hostnameAvailable: preflight?.hostname.available === true,
-    preflightLoading,
+    organizationSlugAvailable,
+    preflightLoading: preflightLoading || organizationSlugLoading,
     submitting: submitMutation.isPending,
   });
 
-  const orgDone = !!displayedOrgId && !!activeOrgId;
   const daoVerified =
     !!daoConnection.daoAccountId && verifiedDaoAccountId === daoConnection.daoAccountId;
-  const steps = resolveApplySteps(
-    { organization: orgDone, near: !!nearAccountId, dao: daoVerified },
-    reopenedStep,
-  );
+  const steps = resolveApplySteps({ near: !!nearAccountId, dao: daoVerified }, reopenedStep);
 
   if (nearAccountId && myApplications.isError && !submittedProposalId) {
     return (
@@ -190,9 +184,7 @@ function ApplyPage() {
       <ApplySubmitted
         proposalId={existingApplication?.id ?? submittedProposalId ?? ""}
         name={
-          typeof (existingApplication?.payload as { name?: unknown } | undefined)?.name === "string"
-            ? (existingApplication?.payload as { name: string }).name
-            : formValues.name.trim()
+          typeof existingPayload?.name === "string" ? existingPayload.name : formValues.name.trim()
         }
         reviewStatus={existingApplication?.reviewStatus ?? "pending"}
         applyStatus={existingApplication?.applyStatus ?? "not_started"}
@@ -226,25 +218,8 @@ function ApplyPage() {
       />
       <ol className="flex flex-col" data-testid="apply.steps">
         <ApplyStep
-          id="organization"
-          number={1}
-          title={t("apply.step.organization")}
-          status={steps.status("organization")}
-          summary={activeOrganizationLabel}
-          onChange={() => setReopenedStep("organization")}
-        >
-          <ApplyOrganizationStep
-            organizations={organizations}
-            displayedOrgId={displayedOrgId}
-            activating={!activeOrgId && !!defaultOrgId && !switchOrganization.isError}
-            switching={switchOrganization.isPending}
-            onSwitch={(organizationId) => switchOrganization.mutate(organizationId)}
-            onContinue={() => setReopenedStep(null)}
-          />
-        </ApplyStep>
-        <ApplyStep
           id="near"
-          number={2}
+          number={1}
           title={t("apply.step.near")}
           status={steps.status("near")}
           summary={nearAccountId}
@@ -253,7 +228,7 @@ function ApplyPage() {
         </ApplyStep>
         <ApplyStep
           id="dao"
-          number={3}
+          number={2}
           title={t("apply.step.dao")}
           status={steps.status("dao")}
           summary={daoConnection.daoAccountId}
@@ -267,7 +242,7 @@ function ApplyPage() {
         </ApplyStep>
         <ApplyStep
           id="details"
-          number={4}
+          number={3}
           title={t("apply.step.details")}
           status={steps.status("details")}
           last
@@ -286,7 +261,8 @@ function ApplyPage() {
                 gatewayId={gatewayId}
                 hostname={hostname}
                 preflight={preflight}
-                preflightLoading={preflightLoading}
+                preflightLoading={preflightLoading || organizationSlugLoading}
+                organizationSlugAvailable={legacyOrgId ? true : organizationSlug?.status}
                 rootNodes={rootNodes}
                 rootParentId={rootParentId}
                 setRootParentId={setRootParentId}

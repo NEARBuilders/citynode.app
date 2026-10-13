@@ -44,12 +44,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "about.skill": ["Agent skill", "Habilidad del agente", "Compétence de l'agent", "助手技能"],
   "about.source": ["Source code", "Código fuente", "Code source", "源码"],
   "about.title": ["About", "Acerca de", "À propos", "关于"],
-  "application.activeOrg": [
-    "Active organization",
-    "Organización activa",
-    "Organisation active",
-    "当前组织",
-  ],
   "application.countryParentError": [
     "country cannot have a parent",
     "un país no puede tener una comunidad superior",
@@ -1793,30 +1787,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Tesorería {dao} vinculada",
     "Trésorerie {dao} liée",
     "已关联金库 {dao}",
-  ],
-  "apply.organization.nameLabel": [
-    "Community name",
-    "Nombre de la comunidad",
-    "Nom de la communauté",
-    "社区名称",
-  ],
-  "apply.organization.namePlaceholder": [
-    "Lagos Builders",
-    "Lagos Builders",
-    "Lagos Builders",
-    "Lagos Builders",
-  ],
-  "apply.organization.nameHint": [
-    "This creates your community's organization. An admin approves it first; you'll continue your application here once it's approved.",
-    "Esto crea la organización de tu comunidad. Un administrador la aprueba primero; continuarás tu solicitud aquí cuando esté aprobada.",
-    "Cela crée l’organisation de votre communauté. Un administrateur l’approuve d’abord ; vous poursuivrez votre candidature ici une fois approuvée.",
-    "这将创建你社区的组织。管理员会先批准它，批准后你可以在这里继续申请。",
-  ],
-  "apply.organization.waiting": [
-    "{name} is waiting for an admin to approve it. Come back here once it's approved to finish your application.",
-    "{name} está esperando la aprobación de un administrador. Vuelve aquí cuando esté aprobada para terminar tu solicitud.",
-    "{name} attend l’approbation d’un administrateur. Revenez ici une fois approuvée pour terminer votre candidature.",
-    "{name} 正在等待管理员批准。批准后回到这里完成申请。",
   ],
   "apply.dao.what": [
     "A DAO is a shared wallet your team controls together. It owns the community and its staking rewards, so no single person holds the keys.",

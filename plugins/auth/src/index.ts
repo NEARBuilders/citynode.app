@@ -10,6 +10,7 @@ import { authSecretsSchema, authVariablesSchema } from "./config-schemas";
 import { contract } from "./contract";
 import { DatabaseLive, DatabaseTag } from "./db/layer";
 import { createApiKeyHandlers } from "./handlers/api-keys";
+import { createCommunityOrganizationHandlers } from "./handlers/community-organizations";
 import { createInvitationHandlers } from "./handlers/invitations";
 import { createMemberHandlers } from "./handlers/members";
 import { createNearHandlers } from "./handlers/near";
@@ -74,6 +75,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       ...createSessionHandlers(builder),
       ...createOrganizationHandlers(builder, requireAuth),
       ...createOrganizationRequestHandlers(builder, requireAuth),
+      ...createCommunityOrganizationHandlers(builder),
       ...createMemberHandlers(builder, requireAuth),
       ...createInvitationHandlers(builder, requireAuth),
       ...createApiKeyHandlers(builder, requireAuth),

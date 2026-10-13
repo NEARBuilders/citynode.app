@@ -40,7 +40,6 @@ const payload = {
   name: "Chicago",
   slug: "chicago",
   motivation: "Serve the community",
-  orgId: "org-1",
   accountId: "dao.sputnik-dao.near",
 };
 
@@ -75,7 +74,7 @@ describe.sequential("node applications", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  function client(account: string, orgId = "org-1") {
+  function client(account: string, orgId: string | null = "org-1") {
     return loaded.createClient({
       userId: `user-${account}`,
       user: user(`user-${account}`),
@@ -96,7 +95,14 @@ describe.sequential("node applications", () => {
       client("alice.near", "other-org").propose({
         pluginId: "node",
         entityId: "wrong-org",
-        payload: { ...payload, slug: "wrong-org" },
+        payload: { ...payload, slug: "wrong-org", orgId: "org-1" },
+      }),
+    ).rejects.toThrow(/organization/);
+    await expect(
+      client("alice.near").propose({
+        pluginId: "node",
+        entityId: "existing-org",
+        payload: { ...payload, slug: "existing-org", orgId: "org-1" },
       }),
     ).rejects.toThrow(/organization/);
     await expect(
@@ -109,7 +115,24 @@ describe.sequential("node applications", () => {
       payload,
     });
     expect(result.data.createdBy).toBe("alice.near");
-    expect(result.data.payload).toMatchObject({ submitterAccountId: "alice.near" });
+    expect(result.data.payload).toMatchObject({
+      submitterAccountId: "alice.near",
+      applicantUserId: "user-alice.near",
+    });
+  });
+
+  it("accepts an eligible applicant without an organization and stamps their user identity", async () => {
+    const result = await client("alice.near", null).propose({
+      pluginId: "node",
+      entityId: "madison",
+      payload: { ...payload, slug: "madison", applicantUserId: "spoofed" },
+    });
+    expect(result.data.payload).toMatchObject({
+      slug: "madison",
+      applicantUserId: "user-alice.near",
+      submitterAccountId: "alice.near",
+    });
+    expect(result.data.payload).not.toHaveProperty("orgId");
   });
 
   it("blocks duplicate pending submissions and another applicant's slug collision", async () => {
@@ -129,8 +152,9 @@ describe.sequential("node applications", () => {
       }),
     ).rejects.toThrow(/another applicant/);
     const mine = await client("alice.near").getMyNodeApplications();
-    expect(mine.data).toHaveLength(1);
-    expect(mine.data[0]?.payload).toMatchObject({ motivation: "Serve the community" });
+    expect(mine.data.find((proposal) => proposal.entityId === "chicago")?.payload).toMatchObject({
+      motivation: "Serve the community",
+    });
     expect((await client("bob.near").getMyNodeApplications()).data).toHaveLength(0);
   });
 
@@ -199,14 +223,15 @@ describe.sequential("node applications", () => {
         entityId: "chicago",
         payload: { ...payload, orgId: "org-2" },
       }),
-    ).rejects.toThrow(/another organization/);
-    const revised = await client("alice.near").propose({
+    ).rejects.toThrow(/existing organization/);
+    const revised = await client("alice.near", null).propose({
       pluginId: "node",
       entityId: "chicago",
       payload: { ...payload, motivation: "Expanded plan" },
     });
     expect(revised.data.reviewStatus).toBe("pending");
     expect(revised.data.payload).toMatchObject({ motivation: "Expanded plan" });
+    expect(revised.data.payload).not.toHaveProperty("orgId");
     expect(revised.data.createdBy).toBe("alice.near");
     expect(revised.data.submissionCount).toBe(2);
 

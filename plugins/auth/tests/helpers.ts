@@ -8,6 +8,7 @@ import { createDatabaseDriver } from "../src/db";
 import { loadMigrations, migrate } from "../src/db/migrate";
 import * as schema from "../src/db/schema";
 import { createApiKeyHandlers } from "../src/handlers/api-keys";
+import { createCommunityOrganizationHandlers } from "../src/handlers/community-organizations";
 import { createInvitationHandlers } from "../src/handlers/invitations";
 import { createMemberHandlers } from "../src/handlers/members";
 import { createNearHandlers } from "../src/handlers/near";
@@ -298,6 +299,7 @@ export function createTestHandlers(services: PluginServices) {
     requestBuilder,
     createRequireAuth(requestBuilder),
   );
+  const communityHandlers = createCommunityOrganizationHandlers(requestBuilder);
   const joinHandlers = createOnboardingJoinHandlers(
     requestBuilder,
     createRequireAuth(requestBuilder),
@@ -332,6 +334,15 @@ export function createTestHandlers(services: PluginServices) {
         context: { reqHeaders?: Record<string, string> };
       }) =>
         call(requestHandlers.reviewOrganization, opts.input, {
+          context: { ...opts.context, "effect/context": effectContext },
+        }),
+    },
+    communityOrganizations: {
+      provisionCommunityOrganization: (opts: {
+        input: InferInput<"provisionCommunityOrganization">;
+        context: { reqHeaders?: Record<string, string> };
+      }) =>
+        call(communityHandlers.provisionCommunityOrganization, opts.input, {
           context: { ...opts.context, "effect/context": effectContext },
         }),
     },

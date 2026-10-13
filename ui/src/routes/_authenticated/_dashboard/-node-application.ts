@@ -50,9 +50,9 @@ export const nodeApplicationSchema = createNodeApplicationSchema(translateEnglis
 export const nodeProposalPayloadSchema = z
   .object({
     ...nodeApplicationFields,
-    orgId: z.string().min(1),
+    orgId: z.string().min(1).optional(),
     accountId: z.string().regex(nearAccountIdPattern),
-    submitterAccountId: z.string().regex(nearAccountIdPattern),
+    submitterAccountId: z.string().regex(nearAccountIdPattern).optional(),
   })
   .superRefine(validateParent);
 
@@ -65,11 +65,11 @@ export function generateNodeApplicationSlug(value: string) {
 
 export function buildNodeProposalPayload(
   values: NodeApplicationValues,
-  identity: { orgId: string; daoAccountId: string; submitterAccountId: string },
+  identity: { orgId?: string; daoAccountId: string; submitterAccountId: string },
 ): NodeProposalPayload {
   return nodeProposalPayloadSchema.parse({
     ...values,
-    orgId: identity.orgId,
+    ...(identity.orgId ? { orgId: identity.orgId } : {}),
     accountId: identity.daoAccountId,
     submitterAccountId: identity.submitterAccountId,
   });
@@ -79,53 +79,29 @@ export function parseNodeProposalPayload(payload: unknown): NodeProposalPayload 
   return nodeProposalPayloadSchema.parse(payload);
 }
 
-export function resolveActiveOrganizationLabel(
-  activeOrgId: string | null,
-  organizations: Array<{ id: string; name: string }>,
-  t: AppTranslator = translateEnglishAppMessage,
-) {
-  if (!activeOrgId) return "";
-  return (
-    organizations.find((organization) => organization.id === activeOrgId)?.name ??
-    t("application.activeOrg")
-  );
-}
-
-export function isApprovedOrganization(organization: { status?: string | null }) {
-  return (organization.status ?? "active") === "active";
-}
-
-export function getDefaultOrganizationId(
-  activeOrgId: string | null,
-  organizations: Array<{ id: string; status?: string | null }>,
-) {
-  if (activeOrgId) return null;
-  return organizations.find(isApprovedOrganization)?.id ?? null;
-}
-
 export function canSubmitNodeApplication({
   values,
-  orgId,
   daoAccountId,
   submitterAccountId,
   hostnameAvailable,
+  organizationSlugAvailable,
   preflightLoading = false,
   submitting = false,
 }: {
   values: NodeApplicationValues;
-  orgId: string | null;
   daoAccountId: string | null;
   submitterAccountId: string | null;
   hostnameAvailable: boolean;
+  organizationSlugAvailable: boolean;
   preflightLoading?: boolean;
   submitting?: boolean;
 }) {
   return (
-    !!orgId &&
     !!daoAccountId &&
     !!submitterAccountId &&
     nodeApplicationSchema.safeParse(values).success &&
     hostnameAvailable &&
+    organizationSlugAvailable &&
     !preflightLoading &&
     !submitting
   );
@@ -134,7 +110,7 @@ export function canSubmitNodeApplication({
 export function proposeNodeApplication(
   apiClient: ApiClient,
   values: NodeApplicationValues,
-  identity: { orgId: string; daoAccountId: string; submitterAccountId: string },
+  identity: { orgId?: string; daoAccountId: string; submitterAccountId: string },
 ) {
   const payload = buildNodeProposalPayload(values, identity);
   return apiClient.proposals.propose({

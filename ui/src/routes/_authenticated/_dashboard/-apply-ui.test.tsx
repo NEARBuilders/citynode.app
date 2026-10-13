@@ -16,6 +16,7 @@ type ApplyApiClient = {
   listRootNodes: ReturnType<typeof vi.fn>;
   listChildren: ReturnType<typeof vi.fn>;
   bindingPreflight: ReturnType<typeof vi.fn>;
+  auth: { checkSlug: ReturnType<typeof vi.fn> };
   proposals: { propose: ReturnType<typeof vi.fn>; getMyNodeApplications: ReturnType<typeof vi.fn> };
 };
 
@@ -126,6 +127,7 @@ function createApiClient(): ApplyApiClient {
     bindingPreflight: vi.fn().mockResolvedValue({
       hostname: { available: true, format: "valid" },
     }),
+    auth: { checkSlug: vi.fn().mockResolvedValue({ status: true }) },
     proposals: {
       propose: vi.fn().mockResolvedValue({ data: { id: "proposal-1" } }),
       getMyNodeApplications: vi.fn().mockResolvedValue({ data: [] }),
@@ -215,7 +217,6 @@ describe("apply route submission", () => {
     });
     renderApply(queryClient);
 
-    expect(stepStatus("organization")).toBe("complete");
     expect(stepStatus("near")).toBe("complete");
     expect(stepStatus("dao")).toBe("current");
     expect(stepStatus("details")).toBe("upcoming");
@@ -237,7 +238,6 @@ describe("apply route submission", () => {
           name: "Chicago",
           slug: "chicago",
           motivation: "Serve the local community.",
-          orgId: "org-1",
           accountId: "dao.sputnik",
           submitterAccountId: "applicant.near",
         },
@@ -322,19 +322,79 @@ describe("apply route submission", () => {
     expect(stepStatus("details")).toBe("current");
   });
 
-  it("asks for the community name first when there is no organization", async () => {
+  it("does not carry an earlier application's organization into a new application", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus: "approved",
+          applyStatus: "applied",
+          rejectionReason: null,
+          payload: { name: "Springfield", slug: "springfield", orgId: "legacy-org" },
+        },
+      ],
+    });
+    renderApply();
+    fireEvent.click(await screen.findByTestId("apply.new"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await fillValidApplication();
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).not.toHaveProperty(
+      "orgId",
+    );
+    expect(harness.apiClient?.auth.checkSlug).toHaveBeenCalledWith({ slug: "chicago" });
+  });
+
+  it("keeps the organization when revising a rejected legacy application", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus: "rejected",
+          applyStatus: "not_started",
+          rejectionReason: "More detail needed",
+          payload: {
+            kind: "country",
+            parentId: null,
+            name: "Chicago",
+            slug: "chicago",
+            motivation: "Serve the local community.",
+            orgId: "legacy-org",
+          },
+        },
+      ],
+    });
+    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: false });
+    renderApply();
+    fireEvent.click(await screen.findByTestId("apply.revise"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await fillValidApplication();
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
+      slug: "chicago",
+      orgId: "legacy-org",
+    });
+  });
+
+  it("starts with the NEAR account when there is no active organization", async () => {
     harness.routeContext = {
       auth: { activeOrganizationId: null },
       runtimeConfig: TEST_RUNTIME_CONFIG,
     };
-    harness.authClient = {
-      organization: { list: vi.fn().mockResolvedValue({ data: [], error: null }) },
-    };
+    harness.nearAccount = null;
     renderApply();
 
-    expect(stepStatus("organization")).toBe("current");
-    expect(await screen.findByLabelText("Community name")).toBeTruthy();
-    expect(screen.getByTestId("apply.create-org")).toHaveProperty("disabled", true);
+    expect(stepStatus("near")).toBe("current");
+    expect(screen.queryByTestId("apply.step-organization")).toBeNull();
+    expect(await screen.findByRole("link", { name: /Link NEAR account/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "verify DAO" })).toBeNull();
   });
 });
