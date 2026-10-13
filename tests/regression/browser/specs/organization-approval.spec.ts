@@ -24,8 +24,8 @@ test("passkey signup creates an active personal organization and can sign in aga
   });
   try {
     await page.goto("/login", { waitUntil: "domcontentloaded" });
-    await page.getByTestId("login.create-account-link").click();
-    await page.getByTestId("login.create-account-button").click();
+    await page.getByTestId("login-create-account-link").click();
+    await page.getByTestId("login-create-account-button").click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 20000, waitUntil: "commit" });
     const signedUp = await (await context.request.get("/api/auth/get-session")).json();
     expect(signedUp.user.id).toBeTruthy();
@@ -50,7 +50,7 @@ test("passkey signup creates an active personal organization and can sign in aga
       PublicKeyCredential.isConditionalMediationAvailable = async () => false;
     });
     await page.goto("/login", { waitUntil: "domcontentloaded" });
-    await page.getByTestId("login.passkey-button").click();
+    await page.getByTestId("login-passkey-button").click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 20000, waitUntil: "commit" });
     expect((await (await context.request.get("/api/auth/get-session")).json()).user.id).toBe(
       signedUp.user.id,

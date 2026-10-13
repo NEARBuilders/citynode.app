@@ -1,10 +1,10 @@
-export const applyStepIds = ["organization", "near", "dao", "details"] as const;
+export const applyStepIds = ["near", "dao", "details"] as const;
 
 export type ApplyStepId = (typeof applyStepIds)[number];
 export type ApplyStepStatus = "complete" | "current" | "upcoming";
 
 export function resolveApplySteps(
-  done: { organization: boolean; near: boolean; dao: boolean },
+  done: { near: boolean; dao: boolean },
   reopened: ApplyStepId | null,
 ) {
   const complete: Record<ApplyStepId, boolean> = { ...done, details: false };

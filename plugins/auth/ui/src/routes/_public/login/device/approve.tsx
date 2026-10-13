@@ -1,6 +1,6 @@
 import { CheckCircleIcon, DevicesIcon, KeyIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -40,7 +40,8 @@ function DeviceApprovePage() {
   const navigate = useNavigate();
   const auth = useAuthClient();
   const { data: session } = useQuery(sessionQueryOptions(auth));
-  const { user_code, pubKey, contract, account: configAccount, source } = Route.useSearch();
+  const search = Route.useSearch();
+  const { user_code, pubKey, contract, account: configAccount, source } = search;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<LoginMessageId | null>(null);
   const [approved, setApproved] = useState(false);
@@ -81,7 +82,7 @@ function DeviceApprovePage() {
   });
 
   if (!session?.user) {
-    return <NavigateToLogin userCode={user_code} />;
+    return <NavigateToLogin search={search} />;
   }
 
   const isDelegateMode = !!pubKey && !!contract;
@@ -99,7 +100,10 @@ function DeviceApprovePage() {
         return;
       }
     }
-    const { error: approveError } = await auth.device.approve({ userCode: user_code });
+    const approveError = await auth.device.approve({ userCode: user_code }).then(
+      ({ error }) => error,
+      (thrown: unknown) => thrown,
+    );
     setPending(false);
     if (approveError) {
       setError("auth.pair.approveFailed");
@@ -117,8 +121,16 @@ function DeviceApprovePage() {
   const handleDeny = async () => {
     if (!user_code) return;
     setPending(true);
-    await auth.device.deny({ userCode: user_code });
+    setError(null);
+    const denyError = await auth.device.deny({ userCode: user_code }).then(
+      ({ error }) => error,
+      (thrown: unknown) => thrown,
+    );
     setPending(false);
+    if (denyError) {
+      setError("auth.pair.denyFailed");
+      return;
+    }
     toast.info(translate("auth.pair.denied"));
     void navigate({ to: "/", replace: true });
   };
@@ -128,7 +140,7 @@ function DeviceApprovePage() {
       <AuthPanel
         icon={<CheckCircleIcon />}
         title={translate("auth.pair.returnTerminal")}
-        titleTestId="device.approved-heading"
+        titleTestId="device-approved-heading"
         description={translate("auth.pair.credentialReceived")}
       />
     );
@@ -142,7 +154,7 @@ function DeviceApprovePage() {
           ? translate("auth.pair.approvePublish")
           : translate("auth.pair.approveSignIn")
       }
-      titleTestId="device.approve-heading"
+      titleTestId="device-approve-heading"
       description={
         isDelegateMode
           ? translate("auth.pair.publishDescription")
@@ -154,7 +166,7 @@ function DeviceApprovePage() {
           <span className="text-sm text-muted-foreground">{translate("auth.pair.checkCode")}</span>
           <span
             className="font-mono text-3xl font-semibold tracking-widest break-all text-foreground"
-            data-testid="device.approve-code"
+            data-testid="device-approve-code"
           >
             {user_code}
           </span>
@@ -162,7 +174,7 @@ function DeviceApprovePage() {
       ) : (
         <p
           className="text-center text-sm text-muted-foreground"
-          data-testid="device.approve-missing-code"
+          data-testid="device-approve-missing-code"
         >
           {translate("auth.pair.noCode")}
         </p>
@@ -179,14 +191,14 @@ function DeviceApprovePage() {
           </div>
           <p
             className="break-all font-mono text-xs text-foreground"
-            data-testid="device.approve-pubkey"
+            data-testid="device-approve-pubkey"
           >
             {pubKey}
           </p>
           {configAccount && signedInAccountId && signedInAccountId !== configAccount && (
             <p
               className="text-sm wrap-anywhere text-warning-muted-foreground"
-              data-testid="device.account-mismatch"
+              data-testid="device-account-mismatch"
             >
               {translate("auth.pair.accountMismatch", {
                 signedIn: signedInAccountId,
@@ -198,7 +210,7 @@ function DeviceApprovePage() {
       )}
 
       {error && (
-        <p className="text-center text-sm text-destructive" data-testid="device.approve-error">
+        <p className="text-center text-sm text-destructive" data-testid="device-approve-error">
           {translate(error)}
         </p>
       )}
@@ -211,7 +223,7 @@ function DeviceApprovePage() {
             className="w-full"
             onClick={handleApprove}
             disabled={pending}
-            data-testid="device.approve-button"
+            data-testid="device-approve-button"
           >
             {pending && <Spinner data-icon="inline-start" />}
             {isDelegateMode ? translate("auth.pair.approveKey") : translate("auth.common.approve")}
@@ -223,7 +235,7 @@ function DeviceApprovePage() {
             className="w-full"
             onClick={handleDeny}
             disabled={pending}
-            data-testid="device.deny-button"
+            data-testid="device-deny-button"
           >
             {translate("auth.common.deny")}
           </Button>
@@ -233,15 +245,16 @@ function DeviceApprovePage() {
   );
 }
 
-function NavigateToLogin({ userCode }: { userCode?: string }) {
+function NavigateToLogin({ search }: { search: SearchParams }) {
   const translate = useLoginTranslation();
   const navigate = useNavigate();
-  const target = userCode ? `/login/device?user_code=${userCode}` : "/login/device";
+  const router = useRouter();
+  const target = router.buildLocation({ to: "/login/device", search }).href;
   return (
     <AuthPanel
       icon={<DevicesIcon />}
       title={translate("auth.pair.signInToApprove")}
-      titleTestId="device.approve-heading"
+      titleTestId="device-approve-heading"
       description={translate("auth.pair.signInHint")}
     >
       <Button
@@ -249,7 +262,7 @@ function NavigateToLogin({ userCode }: { userCode?: string }) {
         size="lg"
         className="w-full"
         onClick={() => void navigate({ to: "/login", search: { redirect: target } })}
-        data-testid="device.approve-signin-button"
+        data-testid="device-approve-signin-button"
       >
         {translate("auth.pair.signInContinue")}
       </Button>

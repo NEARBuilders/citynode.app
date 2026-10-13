@@ -117,9 +117,18 @@ function LoginPageContent() {
   const [unsupported, setUnsupported] = useState(false);
 
   useEffect(() => {
-    void auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
-      if (result?.accountId) setDetectedAccount(result.accountId);
-    });
+    let active = true;
+    auth.near
+      .detectNearAccount()
+      .then((result: { accountId?: string | null } | null) => {
+        if (active) setDetectedAccount(result?.accountId ?? null);
+      })
+      .catch(() => {
+        if (active) setDetectedAccount(null);
+      });
+    return () => {
+      active = false;
+    };
   }, [auth.near]);
 
   const handleSuccess = async (message: string) => {
@@ -224,7 +233,7 @@ function LoginPageContent() {
           size="sm"
           onClick={() => void handleNear(true)}
           disabled={pending !== null}
-          data-testid="login.switch-wallet-button"
+          data-testid="login-switch-wallet-button"
         >
           {t("auth.login.near.useAnother")}
         </Button>
@@ -266,7 +275,7 @@ function LoginPageContent() {
               variant="link"
               size="sm"
               onClick={() => setView("sign-in")}
-              data-testid="login.signin-link"
+              data-testid="login-signin-link"
             >
               {t("auth.login.signIn")}
             </Button>
@@ -280,7 +289,7 @@ function LoginPageContent() {
             className="w-full"
             onClick={() => void handleCreate()}
             disabled={pending !== null}
-            data-testid="login.create-account-button"
+            data-testid="login-create-account-button"
           >
             {pending === "create" ? (
               <Spinner data-icon="inline-start" />
@@ -290,7 +299,7 @@ function LoginPageContent() {
             {t("auth.login.create.action")}
           </Button>
           {unsupported && (
-            <div className="flex flex-col gap-4" data-testid="login.unsupported-authenticator">
+            <div className="flex flex-col gap-4" data-testid="login-unsupported-authenticator">
               <p className="text-center text-sm text-muted-foreground">
                 {t("auth.login.create.unsupported")}
               </p>
@@ -316,7 +325,7 @@ function LoginPageContent() {
             variant="link"
             size="sm"
             onClick={() => setView("create")}
-            data-testid="login.create-account-link"
+            data-testid="login-create-account-link"
           >
             {t("auth.login.create.link")}
           </Button>
@@ -324,7 +333,7 @@ function LoginPageContent() {
       }
     >
       {banned && (
-        <p className="text-center text-sm text-destructive" data-testid="login.banned">
+        <p className="text-center text-sm text-destructive" data-testid="login-banned">
           {t("auth.login.suspended")}
         </p>
       )}
@@ -340,7 +349,7 @@ function LoginPageContent() {
               name="username"
               autoComplete="username webauthn"
               placeholder={t("auth.login.passkey.savedPlaceholder")}
-              data-testid="login.passkey-autofill"
+              data-testid="login-passkey-autofill"
             />
           </Field>
         )}
@@ -350,7 +359,7 @@ function LoginPageContent() {
           className="w-full"
           onClick={() => void handlePasskey()}
           disabled={pending !== null}
-          data-testid="login.passkey-button"
+          data-testid="login-passkey-button"
         >
           {pending === "passkey" ? (
             <Spinner data-icon="inline-start" />
@@ -362,7 +371,7 @@ function LoginPageContent() {
         {passkeyMissing && (
           <p
             className="text-center text-sm text-muted-foreground"
-            data-testid="login.no-passkey-hint"
+            data-testid="login-no-passkey-hint"
           >
             {isDesktop
               ? t("auth.login.passkey.missingDesktop")
@@ -381,7 +390,7 @@ function LoginPageContent() {
             className="w-full"
             onClick={() => setView("phone")}
             disabled={pending !== null}
-            data-testid="login.device-button"
+            data-testid="login-device-button"
           >
             <DeviceMobileIcon data-icon="inline-start" />
             {t("auth.login.phone.action")}

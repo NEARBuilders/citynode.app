@@ -44,12 +44,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "about.skill": ["Agent skill", "Habilidad del agente", "Compétence de l'agent", "助手技能"],
   "about.source": ["Source code", "Código fuente", "Code source", "源码"],
   "about.title": ["About", "Acerca de", "À propos", "关于"],
-  "application.activeOrg": [
-    "Active organization",
-    "Organización activa",
-    "Organisation active",
-    "当前组织",
-  ],
   "application.countryParentError": [
     "country cannot have a parent",
     "un país no puede tener una comunidad superior",
@@ -1752,10 +1746,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "setup.qr.action": ["Create QR code", "Crear código QR", "Créer le QR code", "创建二维码"],
   "workspace.ownersOnly": [
-    "Only community owners and admins can manage events, QR check-in and the profile. Ask an owner to make you an admin.",
-    "Solo los propietarios y administradores pueden gestionar eventos, el registro con QR y el perfil. Pide a un propietario que te haga administrador.",
-    "Seuls les propriétaires et administrateurs gèrent les événements, l’accueil par QR et le profil. Demandez à un propriétaire de vous nommer administrateur.",
-    "只有社区所有者和管理员可以管理活动、二维码签到和资料。请联系所有者将你设为管理员。",
+    "Only community owners, admins and members of a team with the Events area can manage events and QR check-in, and only owners and admins can change the profile. Ask an owner to add you to an events team or make you an admin.",
+    "Solo los propietarios, administradores y miembros de un equipo con el área de Eventos pueden gestionar eventos y el registro con QR, y solo los propietarios y administradores pueden cambiar el perfil. Pide a un propietario que te añada a un equipo de eventos o te haga administrador.",
+    "Seuls les propriétaires, administrateurs et membres d’une équipe ayant accès au domaine Événements gèrent les événements et l’accueil par QR, et seuls les propriétaires et administrateurs modifient le profil. Demandez à un propriétaire de vous ajouter à une équipe Événements ou de vous nommer administrateur.",
+    "只有社区所有者、管理员以及拥有活动功能区权限的团队成员可以管理活动和二维码签到，只有所有者和管理员可以更改资料。请联系所有者将你加入活动团队或设为管理员。",
   ],
   "community.yourRole": [
     "Your role: {role}",
@@ -1786,30 +1780,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Tesorería {dao} vinculada",
     "Trésorerie {dao} liée",
     "已关联金库 {dao}",
-  ],
-  "apply.organization.nameLabel": [
-    "Community name",
-    "Nombre de la comunidad",
-    "Nom de la communauté",
-    "社区名称",
-  ],
-  "apply.organization.namePlaceholder": [
-    "Lagos Builders",
-    "Lagos Builders",
-    "Lagos Builders",
-    "Lagos Builders",
-  ],
-  "apply.organization.nameHint": [
-    "This creates your community's organization. An admin approves it first; you'll continue your application here once it's approved.",
-    "Esto crea la organización de tu comunidad. Un administrador la aprueba primero; continuarás tu solicitud aquí cuando esté aprobada.",
-    "Cela crée l’organisation de votre communauté. Un administrateur l’approuve d’abord ; vous poursuivrez votre candidature ici une fois approuvée.",
-    "这将创建你社区的组织。管理员会先批准它，批准后你可以在这里继续申请。",
-  ],
-  "apply.organization.waiting": [
-    "{name} is waiting for an admin to approve it. Come back here once it's approved to finish your application.",
-    "{name} está esperando la aprobación de un administrador. Vuelve aquí cuando esté aprobada para terminar tu solicitud.",
-    "{name} attend l’approbation d’un administrateur. Revenez ici une fois approuvée pour terminer votre candidature.",
-    "{name} 正在等待管理员批准。批准后回到这里完成申请。",
   ],
   "apply.dao.what": [
     "A DAO is a shared wallet your team controls together. It owns the community and its staking rewards, so no single person holds the keys.",

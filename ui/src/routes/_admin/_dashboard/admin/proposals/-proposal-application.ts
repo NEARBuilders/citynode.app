@@ -22,20 +22,61 @@ const proposalApplicationHandlers = {
   node: async ({ apiClient, proposal, gatewayId, baseAccount, publishTenantConfig }) => {
     const payload = parseNodeProposalPayload(proposal.payload);
     const hostname = `${payload.slug}.${gatewayId}`;
-    const node = await apiClient.applyNodeProposal({
-      ...payload,
+    const node = await apiClient.applyCommunityProposal({
+      proposalId: proposal.id,
+      entityId: proposal.entityId,
       hostname,
     });
-    await publishTenantConfig({
-      daoAccountId: payload.accountId,
-      gatewayId,
-      baseAccount,
-      hostname,
-      title: payload.name,
-    });
+    const expected = { accountId: payload.accountId, gatewayId, hostname, title: payload.name };
+    const published = () => isTenantConfigPublished(apiClient, expected);
+    if (!(await published())) {
+      try {
+        await publishTenantConfig({
+          daoAccountId: payload.accountId,
+          gatewayId,
+          baseAccount,
+          hostname,
+          title: payload.name,
+        });
+      } catch (error) {
+        if (!(await waitForTenantConfig(published))) throw error;
+      }
+    }
     return { id: node.nodeId, label: "Node" };
   },
 } satisfies Record<string, ProposalApplicationHandler>;
+
+const PUBLISH_CHECK_ATTEMPTS = 3;
+const PUBLISH_CHECK_INTERVAL_MS = 2000;
+
+async function isTenantConfigPublished(
+  apiClient: ApiClient,
+  expected: { accountId: string; gatewayId: string; hostname: string; title: string },
+) {
+  try {
+    const app = await apiClient.registry.getRegistryApp({
+      accountId: expected.accountId,
+      gatewayId: expected.gatewayId,
+    });
+    return (
+      app.data.domain?.toLowerCase() === expected.hostname.toLowerCase() &&
+      app.data.resolvedConfig.title === expected.title
+    );
+  } catch (error) {
+    if (error && typeof error === "object" && Reflect.get(error, "code") === "NOT_FOUND") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function waitForTenantConfig(published: () => Promise<boolean>) {
+  for (let attempt = 0; attempt < PUBLISH_CHECK_ATTEMPTS; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, PUBLISH_CHECK_INTERVAL_MS));
+    if (await published().catch(() => false)) return true;
+  }
+  return false;
+}
 
 function applicationHandler(pluginId: string): ProposalApplicationHandler | undefined {
   return proposalApplicationHandlers[pluginId as keyof typeof proposalApplicationHandlers];
@@ -88,6 +129,13 @@ export async function approveAndApplyProposal({
       reviewedProposal = failed.data;
       onProposalChange?.(reviewedProposal);
     } catch {}
+    if (
+      error &&
+      typeof error === "object" &&
+      (Reflect.get(error, "code") === "CONFLICT" || Reflect.get(error, "status") === 409)
+    ) {
+      throw new AppActionError("proposal.resourceConflict");
+    }
     throw new AppActionError("proposal.partiallyApplied");
   }
 
