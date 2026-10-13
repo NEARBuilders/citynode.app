@@ -88,8 +88,11 @@ function DeviceVerifyPage() {
       return;
     }
     setError(null);
-    checkedRef.current = null;
-    setAttempt((value) => value + 1);
+    if (cleaned === user_code) {
+      checkedRef.current = null;
+      setAttempt((value) => value + 1);
+      return;
+    }
     void navigate({
       to: "/login/device",
       search: { user_code: cleaned, pubKey, contract, account, network, source },

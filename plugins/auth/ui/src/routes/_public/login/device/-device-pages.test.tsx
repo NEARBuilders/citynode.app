@@ -121,6 +121,25 @@ describe("device code verification", () => {
     expect(harness.device).toHaveBeenCalledOnce();
   });
 
+  it("checks only the newly entered code after an invalid one", async () => {
+    harness.session = { user: { id: "user-1" } };
+    harness.device.mockResolvedValue({ data: null, error: { status: 400 } });
+
+    renderAt("/login/device?user_code=ABCD2345");
+    await screen.findByTestId("device-verify-error");
+    fireEvent.change(screen.getByTestId("device-user-code-input"), {
+      target: { value: "WXYZ6789" },
+    });
+    fireEvent.click(screen.getByTestId("device-verify-button"));
+
+    await waitFor(() => expect(harness.device).toHaveBeenCalledTimes(2));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+    expect(harness.device.mock.calls).toEqual([
+      [{ query: { user_code: "ABCD2345" } }],
+      [{ query: { user_code: "WXYZ6789" } }],
+    ]);
+  });
+
   it("rejects a malformed code without calling the server", async () => {
     harness.session = { user: { id: "user-1" } };
 
