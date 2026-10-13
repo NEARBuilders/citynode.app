@@ -16,7 +16,7 @@ import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard
 import { ApplicationProgressList } from "@/routes/_authenticated/_dashboard/-application-progress-list";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 import { BackLink } from "../-admin-ui";
-import { approveAndApplyProposal } from "./-proposal-application";
+import { approveAndApplyProposal, keptResources, rejectProposal } from "./-proposal-application";
 import type { Proposal } from "./-proposal-columns";
 import {
   adminProposalDetailQueryOptions,
@@ -109,13 +109,12 @@ function ProposalDetailPage() {
         );
       }
       if (action === "reject") {
-        const rejected = await apiClient.proposals.reject({
-          pluginId: proposal.pluginId,
-          entityId: proposal.entityId,
-          expectedUpdatedAt: proposal.updatedAt,
+        const rejected = await rejectProposal({
+          apiClient,
+          proposal,
           reason: reason?.trim() ?? "",
         });
-        return { action, proposal: rejected.data };
+        return { action, proposal: rejected.proposal, kept: keptResources(rejected.released) };
       }
 
       const reviewedProposal = await approveAndApplyProposal({
@@ -128,15 +127,26 @@ function ProposalDetailPage() {
         onProposalChange: (nextProposal) =>
           queryClient.setQueryData(proposalQueryKey, nextProposal),
       });
-      return { action, proposal: reviewedProposal };
+      return { action, proposal: reviewedProposal, kept: [] };
     },
-    onSuccess: async ({ action, proposal }) => {
+    onSuccess: async ({ action, proposal, kept }) => {
       toast.success(
         action === "reject"
           ? translate("admin.proposalRejected")
           : proposal.applyStatus === "applied"
             ? translate("admin.proposalApprovedCreated")
             : translate("admin.proposalApproved"),
+        kept.length > 0
+          ? {
+              description: translate(
+                kept.length === 2
+                  ? "admin.proposal.keptBoth"
+                  : kept[0] === "organization"
+                    ? "admin.proposal.keptOrganization"
+                    : "admin.proposal.keptCommunity",
+              ),
+            }
+          : undefined,
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),

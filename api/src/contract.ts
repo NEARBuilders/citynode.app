@@ -531,6 +531,28 @@ export const contract = oc.router({
       },
     }),
 
+  releaseCommunityProposal: oc
+    .route({ method: "POST", path: "/nodes/community-proposals/release" })
+    .input(
+      z.object({
+        proposalId: z.string().min(1),
+        entityId: z.string().min(1),
+      }),
+    )
+    .output(
+      z.object({
+        community: z.object({
+          released: z.boolean(),
+          keptReason: z.enum(["not_found", "in_use"]).nullable(),
+        }),
+        organization: z.object({
+          released: z.boolean(),
+          keptReason: z.enum(["not_found", "in_use", "existing"]).nullable(),
+        }),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
+
   applyCommunityProposal: oc
     .route({ method: "POST", path: "/nodes/community-proposals/apply" })
     .input(

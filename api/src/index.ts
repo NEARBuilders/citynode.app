@@ -345,6 +345,71 @@ export default createPlugin.withPlugins<PluginsClient>()({
       },
     );
 
+    const approvedCommunityProposal = (
+      context: {
+        reqHeaders?: ConstructorParameters<typeof Headers>[0];
+        userId?: string | null;
+        user?: AuthContext["user"];
+      },
+      input: { proposalId: string; entityId: string },
+    ) =>
+      Effect.gen(function* () {
+        const proposalsPlugin = plugins.proposals;
+        const authPlugin = plugins.auth;
+        if (!proposalsPlugin || !authPlugin) {
+          return yield* Effect.fail(
+            new ORPCError("INTERNAL_SERVER_ERROR", {
+              message: "The proposals or auth plugin is not available",
+            }),
+          );
+        }
+        const reqHeaders = Object.fromEntries(new Headers(context.reqHeaders).entries());
+        // In-process plugin clients need the verified reviewer context; headers alone are not rehydrated.
+        const reviewerContext = {
+          reqHeaders,
+          userId: context.userId ?? context.user?.id,
+          user: context.user,
+        };
+        const proposalsClient = proposalsPlugin.client(reviewerContext);
+        const listed = yield* Effect.tryPromise({
+          try: () =>
+            proposalsClient.getProposals({
+              pluginId: "node",
+              entityId: input.entityId,
+              limit: 1,
+            }),
+          catch: (error) =>
+            error instanceof ORPCError
+              ? error
+              : new ORPCError("INTERNAL_SERVER_ERROR", {
+                  message: "Could not load the approved application",
+                }),
+        });
+        const proposal = listed.data.find((item) => item.id === input.proposalId);
+        if (!proposal) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", { message: "Application not found" }),
+          );
+        }
+        if (proposal.reviewStatus !== "approved") {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", { message: "The application is not approved" }),
+          );
+        }
+        const parsed = NodeProposalPayloadSchema.safeParse(proposal.payload);
+        if (!parsed.success || parsed.data.slug !== proposal.entityId) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", { message: "Invalid saved community application" }),
+          );
+        }
+        return {
+          proposal,
+          payload: parsed.data,
+          proposalsClient,
+          auth: authPlugin.client(reviewerContext),
+        };
+      });
+
     const router = {
       trackDiscovery: builder.trackDiscovery.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
@@ -846,48 +911,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
             errors.FORBIDDEN({ message: "Platform admin required", data: {} }),
           );
         }
-        const proposalsPlugin = plugins.proposals;
-        const authPlugin = plugins.auth;
-        if (!proposalsPlugin || !authPlugin) {
-          return yield* Effect.fail(
-            new ORPCError("INTERNAL_SERVER_ERROR", {
-              message: "The proposals or auth plugin is not available",
-            }),
-          );
-        }
-        const reqHeaders = Object.fromEntries(new Headers(context.reqHeaders).entries());
-        // In-process plugin clients need the verified reviewer context; headers alone are not rehydrated.
-        const reviewerContext = {
-          reqHeaders,
-          userId: context.userId ?? context.user?.id,
-          user: context.user,
-        };
-        const proposalsClient = proposalsPlugin.client(reviewerContext);
-        const listed = yield* Effect.tryPromise({
-          try: () =>
-            proposalsClient.getProposals({
-              pluginId: "node",
-              entityId: input.entityId,
-              limit: 1,
-            }),
-          catch: (error) =>
-            error instanceof ORPCError
-              ? error
-              : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: "Could not load the approved application",
-                }),
-        });
-        const proposal = listed.data.find((item) => item.id === input.proposalId);
-        if (!proposal) {
-          return yield* Effect.fail(
-            new ORPCError("NOT_FOUND", { message: "Application not found" }),
-          );
-        }
-        if (proposal.reviewStatus !== "approved") {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", { message: "The application is not approved" }),
-          );
-        }
+        const { proposal, payload, proposalsClient, auth } = yield* approvedCommunityProposal(
+          context,
+          input,
+        );
         if (proposal.applyStatus !== "applying") {
           return yield* Effect.fail(
             new ORPCError("BAD_REQUEST", {
@@ -912,13 +939,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
                     message: "Could not record the application's setup progress",
                   }),
           });
-        const parsed = NodeProposalPayloadSchema.safeParse(proposal.payload);
-        if (!parsed.success || parsed.data.slug !== proposal.entityId) {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", { message: "Invalid saved community application" }),
-          );
-        }
-        const payload = parsed.data;
         if (payload.submitterAccountId && payload.submitterAccountId !== proposal.createdBy) {
           return yield* Effect.fail(
             new ORPCError("CONFLICT", {
@@ -934,7 +954,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("BAD_REQUEST", { message: "Hostname does not match the community slug" }),
           );
         }
-        const auth = authPlugin.client(reviewerContext);
         const organization = yield* Effect.tryPromise({
           try: () =>
             auth.provisionCommunityOrganization({
@@ -966,6 +985,56 @@ export default createPlugin.withPlugins<PluginsClient>()({
         });
         yield* recordStep("community", community.nodeId);
         return community;
+      }),
+
+      releaseCommunityProposal: builder.releaseCommunityProposal.effect(function* ({
+        input,
+        context,
+        errors,
+      }) {
+        if (!context.userId && !context.user?.id) {
+          return yield* Effect.fail(
+            errors.UNAUTHORIZED({
+              message: "Authentication required",
+              data: { apiKeyProvided: Boolean(context.apiKey) },
+            }),
+          );
+        }
+        if (context.user?.role !== "admin") {
+          return yield* Effect.fail(
+            errors.FORBIDDEN({ message: "Platform admin required", data: {} }),
+          );
+        }
+        const { proposal, payload, auth } = yield* approvedCommunityProposal(context, input);
+        if (proposal.applyStatus !== "failed") {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "Only an application whose setup failed can have its resources removed",
+            }),
+          );
+        }
+        const services = yield* ApiServices;
+        const community = yield* services.tenants.releaseNodeProposal({
+          proposalId: proposal.id,
+          accountId: payload.accountId,
+          orgId: payload.orgId ?? `community-${proposal.id}`,
+        });
+        if (payload.orgId) {
+          return {
+            community,
+            organization: { released: false, keptReason: "existing" as const },
+          };
+        }
+        const organization = yield* Effect.tryPromise({
+          try: () => auth.releaseCommunityOrganization({ proposalId: proposal.id }),
+          catch: (error) =>
+            error instanceof ORPCError
+              ? error
+              : new ORPCError("INTERNAL_SERVER_ERROR", {
+                  message: "Could not remove the community organization",
+                }),
+        });
+        return { community, organization };
       }),
 
       listNodes: builder.listNodes.effect(function* ({ input }) {

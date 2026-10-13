@@ -109,7 +109,12 @@ export function ProposalReviewActions({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{translate("admin.proposal.rejectTitle")}</DialogTitle>
-            <DialogDescription>{translate("admin.proposal.reasonSaved")}</DialogDescription>
+            <DialogDescription>
+              {translate("admin.proposal.reasonSaved")}
+              {isRetry && isNodeProposal && (
+                <span className="mt-2 block">{translate("admin.proposal.rejectReleases")}</span>
+              )}
+            </DialogDescription>
           </DialogHeader>
           <Field>
             <FieldLabel htmlFor="rejection-reason">{translate("admin.proposal.reason")}</FieldLabel>

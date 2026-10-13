@@ -411,6 +411,17 @@ export const contract = oc.router({
     .output(organizationInfoSchema)
     .errors(Errors),
 
+  releaseCommunityOrganization: oc
+    .route({ method: "POST", path: "/v1/auth/admin/community-organizations/release" })
+    .input(z.object({ proposalId: z.string().min(1) }))
+    .output(
+      z.object({
+        released: z.boolean(),
+        keptReason: z.enum(["not_found", "in_use"]).nullable(),
+      }),
+    )
+    .errors(Errors),
+
   createOrganization: oc
     .route({ method: "POST", path: "/v1/auth/organizations" })
     .input(

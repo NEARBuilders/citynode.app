@@ -514,6 +514,30 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "继续设置",
   ],
   "admin.proposal.resume": ["Resume", "Reanudar", "Reprendre", "继续"],
+  "admin.proposal.rejectReleases": [
+    "Rejecting also removes the organization and community this application created, so the applicant can apply again with the same name. An organization that existed before, or that other people already use, is kept. Published DAO settings are not removed.",
+    "Al rechazarla también se eliminan la organización y la comunidad que creó esta solicitud, para que el solicitante pueda volver a solicitar con el mismo nombre. Se conserva una organización que ya existía o que otras personas ya usan. La configuración del DAO publicada no se elimina.",
+    "Le rejet supprime aussi l’organisation et la communauté créées par cette demande, afin que le demandeur puisse refaire une demande avec le même nom. Une organisation qui existait déjà, ou que d’autres personnes utilisent, est conservée. Les paramètres de la DAO déjà publiés ne sont pas supprimés.",
+    "拒绝后还会删除此申请创建的组织和社区，以便申请人可以使用相同名称重新申请。之前已存在或已有其他人使用的组织会被保留。已发布的 DAO 设置不会被删除。",
+  ],
+  "admin.proposal.keptOrganization": [
+    "The organization was kept because it existed before the application or other people use it.",
+    "Se conservó la organización porque ya existía antes de la solicitud o la usan otras personas.",
+    "L’organisation a été conservée, car elle existait avant la demande ou d’autres personnes l’utilisent.",
+    "该组织已保留，因为它在申请前已存在或已有其他人使用。",
+  ],
+  "admin.proposal.keptCommunity": [
+    "The community was kept because other communities are already under it.",
+    "Se conservó la comunidad porque ya tiene otras comunidades debajo.",
+    "La communauté a été conservée, car d’autres communautés en dépendent déjà.",
+    "该社区已保留，因为其下已有其他社区。",
+  ],
+  "admin.proposal.keptBoth": [
+    "The organization and community were kept because they are already in use.",
+    "Se conservaron la organización y la comunidad porque ya están en uso.",
+    "L’organisation et la communauté ont été conservées, car elles sont déjà utilisées.",
+    "该组织和社区已保留，因为它们已在使用中。",
+  ],
   "admin.proposal.resuming": ["Resuming…", "Reanudando…", "Reprise…", "正在继续…"],
   "admin.proposal.setupFailed": [
     "Setup failed",

@@ -7,6 +7,11 @@ const provision = vi.fn(
   }),
 );
 
+const releaseOrganization = vi.fn(async (_input: { proposalId: string }) => ({
+  released: true,
+  keptReason: null,
+}));
+
 type RecordedStep = { entityId: string; step: string; status: string; resourceId?: string };
 const recordApplyStep = vi.fn(async (_input: RecordedStep) => ({}));
 
@@ -69,6 +74,10 @@ describe("approved community proposal provisioning", () => {
           provisionCommunityOrganization: async (input: Parameters<typeof provision>[0]) => {
             if (context?.user?.role !== "admin") throw new Error("Reviewer context missing");
             return provision(input);
+          },
+          releaseCommunityOrganization: async (input: { proposalId: string }) => {
+            if (context?.user?.role !== "admin") throw new Error("Reviewer context missing");
+            return releaseOrganization(input);
           },
         }),
         router: {},
@@ -280,5 +289,62 @@ describe("approved community proposal provisioning", () => {
     expect(
       (await admin.listTenants()).filter((item) => item.accountId === "seattle.sputnik-dao.near"),
     ).toHaveLength(1);
+  });
+
+  it("removes a failed application's community and organization so it can be applied again", async () => {
+    proposals.set("lagos", savedProposal("prop-lagos", "lagos"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = { proposalId: "prop-lagos", entityId: "lagos", hostname: "lagos.citynode.app" };
+    await admin.applyCommunityProposal(input);
+    const release = { proposalId: "prop-lagos", entityId: "lagos" };
+
+    await expect(admin.releaseCommunityProposal(release)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    proposals.set("lagos", savedProposal("prop-lagos", "lagos", { applyStatus: "failed" }));
+    const member = await getPluginClient(authedContext("ordinary-reviewer"));
+    await expect(member.releaseCommunityProposal(release)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+
+    releaseOrganization.mockClear();
+    expect(await admin.releaseCommunityProposal(release)).toEqual({
+      community: { released: true, keptReason: null },
+      organization: { released: true, keptReason: null },
+    });
+    expect(releaseOrganization).toHaveBeenCalledWith({ proposalId: "prop-lagos" });
+    expect(
+      (await admin.listTenants()).some((item) => item.accountId === "lagos.sputnik-dao.near"),
+    ).toBe(false);
+
+    proposals.set("lagos", savedProposal("prop-lagos", "lagos"));
+    const reapplied = await admin.applyCommunityProposal(input);
+    expect(await admin.getNode({ nodeId: reapplied.nodeId })).toMatchObject({ slug: "lagos" });
+  });
+
+  it("keeps an organization that existed before the application", async () => {
+    proposals.set(
+      "accra",
+      savedProposal("prop-accra", "accra", { orgId: "legacy-accra", applyStatus: "applying" }),
+    );
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    await admin.applyCommunityProposal({
+      proposalId: "prop-accra",
+      entityId: "accra",
+      hostname: "accra.citynode.app",
+    });
+    proposals.set(
+      "accra",
+      savedProposal("prop-accra", "accra", { orgId: "legacy-accra", applyStatus: "failed" }),
+    );
+    releaseOrganization.mockClear();
+
+    expect(
+      await admin.releaseCommunityProposal({ proposalId: "prop-accra", entityId: "accra" }),
+    ).toEqual({
+      community: { released: true, keptReason: null },
+      organization: { released: false, keptReason: "existing" },
+    });
+    expect(releaseOrganization).not.toHaveBeenCalled();
   });
 });

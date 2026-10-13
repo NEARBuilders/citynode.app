@@ -41,7 +41,7 @@ const proposalApplicationHandlers = {
     });
     const expected = { accountId: payload.accountId, gatewayId, hostname, title: payload.name };
     const published = () => isTenantConfigPublished(apiClient, expected);
-    const recordPublication = (status: "completed" | "waiting", resourceId?: string) =>
+    const recordPublication = (status: "started" | "waiting" | "completed", resourceId?: string) =>
       apiClient.proposals.recordApplyStep({
         pluginId: proposal.pluginId,
         entityId: proposal.entityId,
@@ -58,6 +58,10 @@ const proposalApplicationHandlers = {
     if (!(await published())) {
       await stopIfDaoVoteOpen();
       let publishError: unknown = null;
+      await recordPublication("started");
+      const heartbeat = setInterval(() => {
+        void recordPublication("started").catch(() => undefined);
+      }, PUBLISH_HEARTBEAT_MS);
       try {
         await publishTenantConfig({
           daoAccountId: payload.accountId,
@@ -68,6 +72,8 @@ const proposalApplicationHandlers = {
         });
       } catch (error) {
         publishError = error;
+      } finally {
+        clearInterval(heartbeat);
       }
       if (!(await waitForTenantConfig(published))) {
         await stopIfDaoVoteOpen();
@@ -80,6 +86,7 @@ const proposalApplicationHandlers = {
 } satisfies Record<string, ProposalApplicationHandler>;
 
 const PUBLISH_CHECK_ATTEMPTS = 3;
+const PUBLISH_HEARTBEAT_MS = 60_000;
 const PUBLISH_CHECK_INTERVAL_MS = 2000;
 
 async function isTenantConfigPublished(
@@ -202,6 +209,46 @@ export async function approveAndApplyProposal({
   }
 
   return reviewedProposal;
+}
+
+export type ReleasedResources = Awaited<ReturnType<ApiClient["releaseCommunityProposal"]>>;
+
+export async function rejectProposal({
+  apiClient,
+  proposal,
+  reason,
+}: {
+  apiClient: ApiClient;
+  proposal: ProposalApplicationInput & Pick<Proposal, "id" | "reviewStatus" | "applyStatus">;
+  reason: string;
+}) {
+  const released =
+    proposal.pluginId === "node" &&
+    proposal.reviewStatus === "approved" &&
+    proposal.applyStatus === "failed"
+      ? await apiClient.releaseCommunityProposal({
+          proposalId: proposal.id,
+          entityId: proposal.entityId,
+        })
+      : null;
+  const rejected = await apiClient.proposals.reject({
+    pluginId: proposal.pluginId,
+    entityId: proposal.entityId,
+    expectedUpdatedAt: proposal.updatedAt,
+    reason,
+  });
+  return { proposal: rejected.data, released };
+}
+
+export function keptResources(released: ReleasedResources | null) {
+  if (!released) return [];
+  return [
+    ...(released.community.keptReason === "in_use" ? (["community"] as const) : []),
+    ...(released.organization.keptReason === "in_use" ||
+    released.organization.keptReason === "existing"
+      ? (["organization"] as const)
+      : []),
+  ];
 }
 
 export function errorMessage(error: unknown) {

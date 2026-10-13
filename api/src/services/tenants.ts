@@ -111,6 +111,16 @@ export interface ApplyNodeProposalInput {
   proposalId?: string;
 }
 
+export type ProposalResourceInput = Pick<
+  ApplyNodeProposalInput,
+  "proposalId" | "accountId" | "orgId"
+>;
+
+export interface ReleaseNodeProposalResult {
+  released: boolean;
+  keptReason: "not_found" | "in_use" | null;
+}
+
 export interface TenantsService {
   listAllTenants: TenantEffect<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): TenantEffect<TenantRecord[]>;
@@ -126,6 +136,7 @@ export interface TenantsService {
   resolveBindingByHostname(hostname: string): TenantEffect<TenantBindingRecord | null>;
   createTenant(input: TenantInput): TenantEffect<TenantRecord>;
   applyNodeProposal(input: ApplyNodeProposalInput): TenantEffect<{ nodeId: string }>;
+  releaseNodeProposal(input: ProposalResourceInput): TenantEffect<ReleaseNodeProposalResult>;
   updateTenant(
     id: string,
     input: Partial<
@@ -150,7 +161,7 @@ type TenantRow = typeof tenantsTable.$inferSelect;
 type BindingRow = typeof domainBindingsTable.$inferSelect;
 async function findProposalNode(
   db: Pick<Database, "select">,
-  input: ApplyNodeProposalInput,
+  input: ProposalResourceInput,
 ): Promise<string | null> {
   if (!input.proposalId) return null;
   const linked = await db
@@ -654,6 +665,39 @@ export const TenantsLive = Layer.effect(
             return { tenant: toTenantRecord(tenant), binding: toBindingRecord(binding) };
           }),
         ),
+
+      releaseNodeProposal: (input) =>
+        Effect.tryPromise({
+          try: () =>
+            db.transaction(async (tx): Promise<ReleaseNodeProposalResult> => {
+              const nodeId = await findProposalNode(tx, input);
+              if (!nodeId) return { released: false, keptReason: "not_found" };
+              const [node] = await tx
+                .select({ tenantId: nodesTable.tenantId })
+                .from(nodesTable)
+                .where(eq(nodesTable.id, nodeId))
+                .limit(1);
+              if (!node?.tenantId) return { released: false, keptReason: "not_found" };
+              const [children, tenantNodes] = await Promise.all([
+                tx
+                  .select({ id: nodesTable.id })
+                  .from(nodesTable)
+                  .where(eq(nodesTable.parentId, nodeId))
+                  .limit(1),
+                tx
+                  .select({ id: nodesTable.id })
+                  .from(nodesTable)
+                  .where(eq(nodesTable.tenantId, node.tenantId))
+                  .limit(2),
+              ]);
+              if (children.length > 0 || tenantNodes.length > 1) {
+                return { released: false, keptReason: "in_use" };
+              }
+              await tx.delete(tenantsTable).where(eq(tenantsTable.id, node.tenantId));
+              return { released: true, keptReason: null };
+            }),
+          catch: toOrpcError,
+        }),
 
       applyNodeProposal: (input) =>
         Effect.tryPromise({

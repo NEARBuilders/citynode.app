@@ -16,11 +16,13 @@ Approval moves a proposal to `approved`/`applying`. Each setup step is recorded 
 | --- | --- | --- |
 | `organization` | API, after the auth plugin provisions it | organization ID |
 | `community` | API, after the tenant, node and binding exist | node ID |
-| `publication` | admin browser, after the registry serves the DAO's config | DAO proposal ID while a vote is open |
+| `publication` | admin browser: `started` before asking the DAO, `waiting` while a DAO vote is open, `completed` once the registry serves the DAO's config | DAO proposal ID while a vote is open |
 
-Recording a step does not change `updatedAt`, so the admin's optimistic version stays valid. A completed step is never downgraded, and repeating a step writes nothing. `markApplied` completes the application. The admin proposal page and the applicant's `/apply` status show these steps from the saved record.
+Recording a step does not change `updatedAt`, so the admin's optimistic version stays valid, but it refreshes `applyActivityAt`. A completed step is never downgraded. Repeating a step writes no audit entry and only refreshes the activity time. Steps the admin's request records are credited to that admin in the audit log. `markApplied` completes the application. The admin proposal page and the applicant's `/apply` status show these steps from the saved record, and the admin page refreshes them every two seconds during a run.
 
-A failed apply (`applyStatus: failed`) and one left `applying` for more than five minutes (`applyTimedOut`) appear on the admin Proposals **Pending** tab with a "Setup failed" or "Setup stalled" badge. **Resume** goes through `approve`, which accepts only those two states and compares `updatedAt`, so only one of several concurrent resumes proceeds. The resumed run reuses the organization and node, then checks publication before proposing anything to the DAO:
+A run counts as stalled (`applyTimedOut`) after five minutes without activity. While the browser waits on a DAO signature, it re-records `publication: started` every minute, so a slow Trezu signature is not mistaken for a stalled run. If the tab closes, the heartbeat stops and the run becomes stalled five minutes later.
+
+A failed apply (`applyStatus: failed`) and a stalled run appear on the admin Proposals **Pending** tab (`lifecycleStatus: needs_review`) with a "Setup failed", "Setup stalled" or "Waiting for DAO vote" badge. Failed removals are not listed there, because the app has no removal flow to retry them. **Resume** goes through `approve`, which accepts only those two states and compares `updatedAt`, so only one of several concurrent resumes proceeds. The resumed run reuses the organization and node, then checks publication before proposing anything to the DAO:
 
 1. If the registry already serves the expected domain and title, publication is recorded as complete.
 2. Otherwise, if the DAO has an open `__fastdata_kv` proposal, publication is recorded as waiting on that proposal and setup stops until the DAO votes. No second DAO proposal is created.
@@ -28,3 +30,13 @@ A failed apply (`applyStatus: failed`) and one left `applying` for more than fiv
 4. Only when the config is unpublished and no DAO proposal is open is a new one submitted.
 
 If the final `markApplied` write fails, the browser records the failure so the application can be resumed immediately; the resumed run finds every step complete and only finalizes it. Trezu may show the executed FastKV proposal as failed because the namespace account has no contract; the registry check is what counts.
+
+## Rejecting a failed setup
+
+Rejecting an approved application whose setup failed first removes the resources it created, then rejects it, so the applicant can apply again with the same name and slug. Removal runs only for `applyStatus: failed`, and only for resources linked to the application:
+
+- The tenant (with its node and domain binding) found by the application link is deleted, unless other communities are already under that node or the tenant has other nodes.
+- The `community-<proposal ID>` organization (with its memberships, teams and invitations) is deleted only if its members are the applicant and the first reviewing admin, and it has no pending invitations or onboarding codes. An organization from a legacy application (`orgId`) existed before and is never deleted.
+- Published DAO settings stay in FastKV; a later approval of the same application finds them in the registry.
+
+If removal fails, the application is not rejected. Rejection clears the recorded setup steps.

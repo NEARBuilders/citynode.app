@@ -345,6 +345,13 @@ export function createTestHandlers(services: PluginServices) {
         call(communityHandlers.provisionCommunityOrganization, opts.input, {
           context: { ...opts.context, "effect/context": effectContext },
         }),
+      releaseCommunityOrganization: (opts: {
+        input: InferInput<"releaseCommunityOrganization">;
+        context: { reqHeaders?: Record<string, string> };
+      }) =>
+        call(communityHandlers.releaseCommunityOrganization, opts.input, {
+          context: { ...opts.context, "effect/context": effectContext },
+        }),
     },
     onboardingJoins: {
       listOnboardingJoins: (opts: {

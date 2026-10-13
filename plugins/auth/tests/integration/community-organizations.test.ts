@@ -157,6 +157,113 @@ describe("community organization provisioning", () => {
     ).toHaveLength(3);
   });
 
+  it("releases an unused organization so the applicant can reuse its slug", async () => {
+    const handlers = createTestHandlers(setup.services).communityOrganizations;
+    const input = {
+      ...request,
+      proposalId: "prop-community-faro",
+      name: "Faro",
+      slug: "faro",
+      proposerUserId: proposer.userId,
+    };
+    const created = await handlers.provisionCommunityOrganization({
+      input,
+      context: { reqHeaders: admin.reqHeaders },
+    });
+
+    await expect(
+      handlers.releaseCommunityOrganization({
+        input: { proposalId: input.proposalId },
+        context: { reqHeaders: proposer.reqHeaders },
+      }),
+    ).rejects.toThrow();
+    expect(
+      await handlers.releaseCommunityOrganization({
+        input: { proposalId: input.proposalId },
+        context: { reqHeaders: admin.reqHeaders },
+      }),
+    ).toEqual({ released: true, keptReason: null });
+    expect(
+      await setup.services.db.query.organization.findFirst({
+        where: eq(schema.organization.id, created.id),
+      }),
+    ).toBeUndefined();
+    expect(
+      await setup.services.db.query.member.findMany({
+        where: eq(schema.member.organizationId, created.id),
+      }),
+    ).toHaveLength(0);
+    expect(
+      await setup.services.db.query.team.findMany({
+        where: eq(schema.team.organizationId, created.id),
+      }),
+    ).toHaveLength(0);
+
+    const again = await handlers.provisionCommunityOrganization({
+      input,
+      context: { reqHeaders: admin.reqHeaders },
+    });
+    expect(again).toMatchObject({ id: created.id, slug: "faro", status: "active" });
+  });
+
+  it("keeps an organization that someone else already joined", async () => {
+    const handlers = createTestHandlers(setup.services).communityOrganizations;
+    const input = {
+      ...request,
+      proposalId: "prop-community-braga",
+      name: "Braga",
+      slug: "braga",
+      proposerUserId: proposer.userId,
+    };
+    const created = await handlers.provisionCommunityOrganization({
+      input,
+      context: { reqHeaders: admin.reqHeaders },
+    });
+    await setup.services.db.insert(schema.member).values({
+      id: crypto.randomUUID(),
+      organizationId: created.id,
+      userId: outsider.userId,
+      role: "member",
+      createdAt: new Date(),
+    });
+
+    expect(
+      await handlers.releaseCommunityOrganization({
+        input: { proposalId: input.proposalId },
+        context: { reqHeaders: admin.reqHeaders },
+      }),
+    ).toEqual({ released: false, keptReason: "in_use" });
+    expect(
+      await setup.services.db.query.organization.findFirst({
+        where: eq(schema.organization.id, created.id),
+      }),
+    ).toBeTruthy();
+  });
+
+  it("never releases an organization that existed before the application", async () => {
+    const legacy = await createTestOrg(setup.services, proposer.userId, {
+      name: "Coimbra Group",
+      slug: "coimbra-group",
+    });
+    const handlers = createTestHandlers(setup.services).communityOrganizations;
+    await handlers.provisionCommunityOrganization({
+      input: { ...request, proposalId: "prop-coimbra", legacyOrgId: legacy.id },
+      context: { reqHeaders: admin.reqHeaders },
+    });
+
+    expect(
+      await handlers.releaseCommunityOrganization({
+        input: { proposalId: "prop-coimbra" },
+        context: { reqHeaders: admin.reqHeaders },
+      }),
+    ).toEqual({ released: false, keptReason: "not_found" });
+    expect(
+      await setup.services.db.query.organization.findFirst({
+        where: eq(schema.organization.id, legacy.id),
+      }),
+    ).toBeTruthy();
+  });
+
   it("rejects a community slug already held by an unrelated organization", async () => {
     const existing = await createTestOrg(setup.services, outsider.userId, {
       name: "Existing Boston",

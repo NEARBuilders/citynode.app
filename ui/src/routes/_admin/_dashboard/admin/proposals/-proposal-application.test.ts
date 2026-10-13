@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@/app";
-import { approveAndApplyProposal } from "./-proposal-application";
+import { approveAndApplyProposal, keptResources, rejectProposal } from "./-proposal-application";
 
 function proposal(pluginId: string, payload: unknown = {}) {
   return {
@@ -450,5 +450,102 @@ describe("proposal application dispatcher", () => {
     expect(api.proposals.markApplyFailed).toHaveBeenCalledWith(
       expect.objectContaining({ error: "Proposals unavailable" }),
     );
+  });
+
+  it("keeps a long DAO signature visibly active while it is open", async () => {
+    vi.useFakeTimers();
+    const api = client(proposal("node", nodePayload));
+    let finishPublish: () => void = () => undefined;
+    const publishTenantConfig = vi.fn(
+      () => new Promise<void>((resolve) => (finishPublish = resolve)),
+    );
+
+    const result = approveAndApplyProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      gatewayId: "citynode.app",
+      baseAccount: "everything.near",
+      publishTenantConfig,
+      findOpenTenantConfigProposal: noOpenProposal,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(publishTenantConfig).toHaveBeenCalledOnce();
+    const started = () =>
+      api.proposals.recordApplyStep.mock.calls.filter(([call]) => call.status === "started").length;
+    expect(started()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
+    expect(started()).toBe(7);
+
+    finishPublish();
+    await vi.runAllTimersAsync();
+    expect((await result).applyStatus).toBe("applied");
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    expect(started()).toBe(7);
+  });
+});
+
+describe("rejecting a community application", () => {
+  function rejectClient() {
+    return {
+      releaseCommunityProposal: vi.fn().mockResolvedValue({
+        community: { released: true, keptReason: null },
+        organization: { released: false, keptReason: "in_use" },
+      }),
+      proposals: {
+        reject: vi.fn().mockResolvedValue({ data: { reviewStatus: "rejected" } }),
+      },
+    };
+  }
+
+  it("removes a failed setup's resources before rejecting it", async () => {
+    const api = rejectClient();
+    const failed = {
+      ...proposal("node", nodePayload),
+      reviewStatus: "approved" as const,
+      applyStatus: "failed" as const,
+    };
+    const result = await rejectProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: failed,
+      reason: "Duplicate community",
+    });
+
+    expect(api.releaseCommunityProposal).toHaveBeenCalledWith({
+      proposalId: "proposal-id",
+      entityId: "chicago",
+    });
+    expect(api.releaseCommunityProposal.mock.invocationCallOrder[0]).toBeLessThan(
+      api.proposals.reject.mock.invocationCallOrder[0]!,
+    );
+    expect(keptResources(result.released)).toEqual(["organization"]);
+  });
+
+  it("does not touch resources when rejecting a pending application", async () => {
+    const api = rejectClient();
+    await rejectProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      reason: "Not enough detail",
+    });
+    expect(api.releaseCommunityProposal).not.toHaveBeenCalled();
+    expect(api.proposals.reject).toHaveBeenCalledOnce();
+  });
+
+  it("does not reject when removing the resources fails", async () => {
+    const api = rejectClient();
+    api.releaseCommunityProposal.mockRejectedValue(new Error("Auth unavailable"));
+    await expect(
+      rejectProposal({
+        apiClient: api as unknown as ApiClient,
+        proposal: {
+          ...proposal("node", nodePayload),
+          reviewStatus: "approved" as const,
+          applyStatus: "failed" as const,
+        },
+        reason: "Duplicate community",
+      }),
+    ).rejects.toThrow("Auth unavailable");
+    expect(api.proposals.reject).not.toHaveBeenCalled();
   });
 });
