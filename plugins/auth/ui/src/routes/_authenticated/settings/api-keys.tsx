@@ -40,6 +40,7 @@ import { authErrorMessage } from "@/i18n/error-message";
 import { translateLoginMessage, useLoginTranslation } from "@/i18n/runtime";
 import { ApiKeyCreateDialog, type ApiKeyFormValues } from "./-api-key-create-dialog";
 import { ApiKeyRevealDialog, type CreatedApiKey } from "./-api-key-reveal-dialog";
+import { SessionUnavailable } from "./-components/session-unavailable";
 
 export const Route = createFileRoute("/_authenticated/settings/api-keys")({
   head: ({ match }) => ({
@@ -87,8 +88,8 @@ function ApiKeysSettings() {
   const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const { data: session } = useQuery(sessionQueryOptions(auth));
-  const user = session?.user;
+  const sessionQuery = useQuery(sessionQueryOptions(auth));
+  const user = sessionQuery.data?.user;
   const [creating, setCreating] = useState(false);
   const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKey | null>(null);
   const [keyToDelete, setKeyToDelete] = useState<ApiKeyItem | null>(null);
@@ -151,7 +152,7 @@ function ApiKeysSettings() {
     },
   });
 
-  if (!user) return null;
+  if (!user) return <SessionUnavailable query={sessionQuery} />;
 
   const hasKeys = apiKeys.length > 0;
 

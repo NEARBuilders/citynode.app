@@ -55,7 +55,7 @@ test.describe("CSR compose", () => {
     }, manifestUrl);
     expect(entryStatus, `auth mf-manifest at ${manifestUrl}`).toBe(200);
 
-    await page.getByTestId("login.language-select").click();
+    await page.getByTestId("login-language-select").click();
     await page.getByRole("option", { name: "Español", exact: true }).click();
     await expect(signInHeading).toHaveText("Inicia sesión en CityNode");
     await expect(page.getByTestId("application-startup-error")).toHaveCount(0);
@@ -82,13 +82,13 @@ test.describe("CSR compose", () => {
     await page.goto("/login", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    const selector = page.getByTestId("login.language-select");
+    const selector = page.getByTestId("login-language-select");
     await expect(selector).toBeVisible({ timeout: 15000 });
     await selector.click();
     await page.getByRole("option", { name: "Español", exact: true }).click();
 
     await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión en CityNode");
-    await expect(page.getByTestId("login.device-button")).toHaveText(
+    await expect(page.getByTestId("login-device-button")).toHaveText(
       "Iniciar sesión con tu teléfono",
     );
     await expect(page.locator("html")).toHaveAttribute("lang", "es");
@@ -100,7 +100,7 @@ test.describe("CSR compose", () => {
     await waitForApp(page);
 
     await expect(
-      page.getByTestId("login.language-select").getByText("Español", { exact: true }),
+      page.getByTestId("login-language-select").getByText("Español", { exact: true }),
     ).toBeVisible();
     await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión en CityNode");
   });

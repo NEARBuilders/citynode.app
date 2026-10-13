@@ -978,6 +978,36 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ce code est invalide ou a expiré. Demandez-en un nouveau.",
     "此验证码无效或已过期，请索取新验证码。",
   ],
+  "auth.pair.denyFailed": [
+    "Could not deny this request. Try again.",
+    "No se pudo rechazar esta solicitud. Inténtalo de nuevo.",
+    "Impossible de refuser cette demande. Réessayez.",
+    "无法拒绝此请求，请重试。",
+  ],
+  "auth.security.walletStillConnected": [
+    "Signed out. Your NEAR wallet is still connected in this browser.",
+    "Sesión cerrada. Tu cartera NEAR sigue conectada en este navegador.",
+    "Déconnecté. Votre portefeuille NEAR est toujours connecté dans ce navigateur.",
+    "已退出登录。你的 NEAR 钱包在此浏览器中仍处于连接状态。",
+  ],
+  "auth.settings.sessionLoadFailed": [
+    "Couldn't load your account",
+    "No se pudo cargar tu cuenta",
+    "Impossible de charger votre compte",
+    "无法加载你的账户",
+  ],
+  "auth.settings.signedOut": [
+    "You're signed out",
+    "Has cerrado sesión",
+    "Vous êtes déconnecté",
+    "你已退出登录",
+  ],
+  "auth.settings.signedOutHint": [
+    "Sign in again to manage your settings.",
+    "Vuelve a iniciar sesión para gestionar tu configuración.",
+    "Reconnectez-vous pour gérer vos paramètres.",
+    "请重新登录以管理你的设置。",
+  ],
   "auth.keys.headerHint": [
     "For MCP clients and scripts. Send it as the <header>x-api-key</header> header.",
     "Para clientes MCP y scripts. Envíala en la cabecera <header>x-api-key</header>.",

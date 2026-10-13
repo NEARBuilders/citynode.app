@@ -7,7 +7,7 @@ export function LoginLanguageSelector({
   id,
   className = "min-w-32",
   size = "sm",
-  testId = "login.language-select",
+  testId = "login-language-select",
 }: Pick<ComponentProps<typeof SelectTrigger>, "id" | "className" | "size"> & {
   testId?: string;
 } = {}) {

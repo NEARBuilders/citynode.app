@@ -15,7 +15,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 
-export function LumaImport({ nodeId }: { nodeId: string }) {
+export function LumaImport({
+  nodeId,
+  canDisconnect = true,
+}: {
+  nodeId: string;
+  canDisconnect?: boolean;
+}) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const api = useApiClient();
@@ -146,7 +152,7 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
           {translate("calendar.disconnectError")}
         </p>
       )}
-      {connection && (
+      {connection && canDisconnect && (
         <Button
           variant="ghost"
           size="sm"

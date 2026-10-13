@@ -7,6 +7,7 @@ import { SectionHeader } from "@/components/layout/section-header";
 import { useLoginTranslation } from "@/i18n/runtime";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNetworkId } from "@/lib/use-network-id";
+import { SessionUnavailable } from "./-components/session-unavailable";
 import { EmailMethod } from "./-email-method";
 import { NearMethod } from "./-near-method";
 import { PasskeysMethod } from "./-passkeys-method";
@@ -18,12 +19,12 @@ export const Route = createFileRoute("/_authenticated/settings/auth-methods")({
 function AuthMethodsSettings() {
   const translate = useLoginTranslation();
   const auth = useAuthClient();
-  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const user = session?.user;
+  const sessionQuery = useQuery<SessionData | null>(sessionQueryOptions(auth));
+  const user = sessionQuery.data?.user;
   const networkId = useNetworkId();
   const [addEmailOpen, setAddEmailOpen] = useState(false);
 
-  if (!user) return null;
+  if (!user) return <SessionUnavailable query={sessionQuery} />;
 
   const emailIsSynthetic = isSyntheticEmail(user.email);
   const showEmailMethod = !user.isAnonymous;

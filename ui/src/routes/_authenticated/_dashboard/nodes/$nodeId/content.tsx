@@ -8,6 +8,7 @@ import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { EventsEditor } from "@/components/discovery/events-editor";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
+import { isOnboardingOrganizer } from "@/lib/onboarding-codes";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
@@ -85,6 +86,8 @@ function CommunityContent() {
     tenant.data?.orgId === auth.activeOrganizationId &&
     (orgRole === "owner" || orgRole === "admin");
   const canManage = auth.isAdmin || managesTenant;
+  const canOnboard =
+    tenant.data?.orgId === auth.activeOrganizationId && isOnboardingOrganizer(authContext.data);
 
   return (
     <PageContainer variant="wide">
@@ -105,6 +108,7 @@ function CommunityContent() {
           reviewImports={review === "imports"}
           tenantStatus={tenant.data?.status}
           canManage={canManage}
+          canOnboard={canOnboard}
           profileLink={
             tenantId && canManage ? (
               <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
