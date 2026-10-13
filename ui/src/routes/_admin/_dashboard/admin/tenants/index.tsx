@@ -2,7 +2,7 @@ import {
   BuildingsIcon,
   CaretRightIcon,
   MagnifyingGlassIcon,
-  PlusIcon,
+  TrayIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -35,7 +35,7 @@ import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { humanize, ListSkeleton, tenantStatusTone } from "../-admin-ui";
-import { filterTenants } from "./-tenant-wizard";
+import { filterTenants } from "./-tenant-records";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Tenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
@@ -160,11 +160,11 @@ function AdminTenants() {
           total > 0 ? (
             <Button
               nativeButton={false}
-              render={<Link to="/admin/tenants/new" />}
-              data-testid="admin-tenants-create"
+              render={<Link to="/admin/proposals" search={{ status: "pending" }} />}
+              data-testid="admin-tenants-review-applications"
             >
-              <PlusIcon />
-              {translate("admin.site.new")}
+              <TrayIcon />
+              {translate("admin.site.reviewApplications")}
             </Button>
           ) : undefined
         }
@@ -232,9 +232,12 @@ function AdminTenants() {
             title={translate("admin.site.empty")}
             description={translate("admin.site.emptyHint")}
             action={
-              <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
-                <PlusIcon />
-                {translate("admin.site.new")}
+              <Button
+                nativeButton={false}
+                render={<Link to="/admin/proposals" search={{ status: "pending" }} />}
+              >
+                <TrayIcon />
+                {translate("admin.site.reviewApplications")}
               </Button>
             }
           />

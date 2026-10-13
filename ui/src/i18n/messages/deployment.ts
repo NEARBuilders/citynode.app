@@ -7,23 +7,11 @@ export const deploymentMessages = createMessageCatalogs(["en", "es", "fr", "zh"]
     "Examiner les demandes de nouvelles organisations",
     "审核新组织申请",
   ],
-  "orgApproval.siteRequiresApproval": [
-    "Sites belong to an approved organization. Request one below, then continue once a platform admin approves it.",
-    "Los sitios pertenecen a una organización aprobada. Solicita una abajo y continúa cuando un administrador de la plataforma la apruebe.",
-    "Les sites appartiennent à une organisation approuvée. Faites une demande ci-dessous, puis continuez après l’approbation d’un administrateur de la plateforme.",
-    "站点属于已获批准的组织。请在下方申请，平台管理员批准后即可继续。",
-  ],
   "orgApproval.request": [
     "Request organization",
     "Solicitar organización",
     "Demander une organisation",
     "申请组织",
-  ],
-  "orgApproval.submitted": [
-    "Organization submitted for approval",
-    "Organización enviada para aprobación",
-    "Organisation soumise pour approbation",
-    "组织已提交，等待批准",
   ],
   "orgApproval.submittedNamed": [
     "Organization “{name}” submitted for approval",

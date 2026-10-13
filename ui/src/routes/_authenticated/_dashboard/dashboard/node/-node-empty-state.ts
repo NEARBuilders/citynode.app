@@ -8,7 +8,7 @@ export function getNodeEmptyStateContent(
   canCreateNode: boolean,
   t: AppTranslator = translateEnglishAppMessage,
 ) {
-  if (reason === "no-org") {
+  if (reason === "no-org" && !canCreateNode) {
     return {
       title: t("dashboard.createOrgFirst"),
       description: t("dashboard.createOrgFirstHint"),
@@ -18,9 +18,9 @@ export function getNodeEmptyStateContent(
   }
 
   return {
-    title: t("dashboard.noCommunity"),
+    title: reason === "no-org" ? t("tenant.noCommunity") : t("dashboard.noCommunity"),
     description: canCreateNode ? t("dashboard.createNodeHint") : t("dashboard.proposeNodeHint"),
     actionLabel: canCreateNode ? t("common.createCommunity") : t("dashboard.startCommunity"),
-    actionTo: canCreateNode ? ("/admin/tenants/new" as const) : ("/apply" as const),
+    actionTo: "/apply" as const,
   };
 }

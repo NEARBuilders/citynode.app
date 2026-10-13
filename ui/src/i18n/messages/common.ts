@@ -98,12 +98,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "l’identifiant est requis",
     "请输入标识",
   ],
-  "application.tenantNameRequired": [
-    "tenant name is required",
-    "el nombre del sitio es obligatorio",
-    "le nom du site est requis",
-    "请输入站点名称",
-  ],
   "breadcrumb.label": ["breadcrumb", "ruta de navegación", "fil d'Ariane", "导航路径"],
   "bulletin.dashboard": [
     "Dashboard bulletin",
@@ -263,8 +257,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.backHome": ["Back home", "Volver al inicio", "Retour à l'accueil", "返回首页"],
   "common.balance": ["Balance", "Saldo", "Solde", "余额"],
   "common.cancel": ["Cancel", "Cancelar", "Annuler", "取消"],
-  "common.change": ["Change", "Cambiar", "Modifier", "更改"],
-  "common.checkAgain": ["Check again", "Comprobar de nuevo", "Vérifier à nouveau", "再次检查"],
   "common.checking": ["Checking…", "Comprobando…", "Vérification…", "正在检查…"],
   "common.choose": ["Choose", "Elegir", "Choisir", "选择"],
   "common.city": ["City", "Ciudad", "Ville", "城市"],
@@ -651,10 +643,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "社区配置更改（例如自定义界面包）正在等待 DAO 批准。",
   ],
   "dashboard.createNodeHint": [
-    "Create a City Node for this organization.",
-    "Crea un City Node para esta organización.",
-    "Créez un City Node pour cette organisation.",
-    "为此组织创建城市节点。",
+    "Apply for the community with its DAO, then approve the application in Admin.",
+    "Solicita la comunidad con su DAO y luego aprueba la solicitud en Administración.",
+    "Demandez la communauté avec sa DAO, puis approuvez la demande dans Administration.",
+    "使用其 DAO 申请社区，然后在管理中批准该申请。",
   ],
   "dashboard.createOrg": [
     "Create an organization",
@@ -1639,10 +1631,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "启动新节点",
   ],
   "dashboard.launchNodeHint": [
-    "Create a community site and hand it to its DAO.",
-    "Crea el sitio de una comunidad y entrégalo a su DAO.",
-    "Créez le site d’une communauté et confiez-le à son DAO.",
-    "创建社区站点并移交给其 DAO。",
+    "Apply for the community with its DAO, then approve it in Proposals.",
+    "Solicita la comunidad con su DAO y luego apruébala en Propuestas.",
+    "Demandez la communauté avec sa DAO, puis approuvez-la dans Propositions.",
+    "使用其 DAO 申请社区，然后在提案中批准。",
   ],
   "ownerActions.title": ["Run your node", "Gestiona tu nodo", "Gérer votre nœud", "运营你的节点"],
   "ownerActions.eventHint": [

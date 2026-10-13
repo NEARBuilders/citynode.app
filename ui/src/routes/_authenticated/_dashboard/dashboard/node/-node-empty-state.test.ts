@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getNodeEmptyStateContent } from "./-node-empty-state";
 
 describe("My community empty state", () => {
-  it("sends viewers without an organization to organization creation", () => {
+  it("sends members without an organization to organization creation", () => {
     expect(getNodeEmptyStateContent("no-org", false)).toMatchObject({
       actionLabel: "Create organization",
       actionTo: "/orgs/new",
@@ -10,13 +10,24 @@ describe("My community empty state", () => {
   });
 
   it.each([
-    { reason: "no-tenant", canCreateNode: true, actionTo: "/admin/tenants/new" },
-    { reason: "no-node", canCreateNode: true, actionTo: "/admin/tenants/new" },
-    { reason: "no-tenant", canCreateNode: false, actionTo: "/apply" },
-    { reason: "no-node", canCreateNode: false, actionTo: "/apply" },
-  ] as const)("sends $reason (admin: $canCreateNode) to $actionTo", (scenario) => {
+    { reason: "no-org", canCreateNode: true },
+    { reason: "no-tenant", canCreateNode: true },
+    { reason: "no-node", canCreateNode: true },
+    { reason: "no-tenant", canCreateNode: false },
+    { reason: "no-node", canCreateNode: false },
+  ] as const)("sends $reason (admin: $canCreateNode) to the application", (scenario) => {
     expect(getNodeEmptyStateContent(scenario.reason, scenario.canCreateNode).actionTo).toBe(
-      scenario.actionTo,
+      "/apply",
+    );
+  });
+
+  it("does not mention an organization to admins who have none selected", () => {
+    expect(getNodeEmptyStateContent("no-org", true).title).toBe("No community yet");
+  });
+
+  it("tells admins to launch by approving their own application", () => {
+    expect(getNodeEmptyStateContent("no-node", true).description).toBe(
+      "Apply for the community with its DAO, then approve the application in Admin.",
     );
   });
 
