@@ -359,7 +359,7 @@ export function ActivityEditor({
             <DialogTitle>{translate("events.importLuma")}</DialogTitle>
             <DialogDescription>{translate("events.lumaDescription")}</DialogDescription>
           </DialogHeader>
-          <LumaImport nodeId={nodeId} />
+          <LumaImport nodeId={nodeId} canDisconnect={canPost} />
         </DialogContent>
       </Dialog>
     </section>

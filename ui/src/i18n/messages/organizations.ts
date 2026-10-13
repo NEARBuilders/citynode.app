@@ -462,6 +462,12 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Créez-en une ci-dessus pour regrouper les personnes par activité.",
     "在上方创建团队，按职责组织成员。",
   ],
+  "org.noCommunityEvents": [
+    "This organization has no community yet, so there are no events to onboard for.",
+    "Esta organización aún no tiene comunidad, así que no hay eventos para incorporar personas.",
+    "Cette organisation n'a pas encore de communauté, il n'y a donc aucun événement pour inscrire des personnes.",
+    "此组织还没有社区，因此没有可用于加入的活动。",
+  ],
   "org.notFound": [
     "Organization not found",
     "Organización no encontrada",
@@ -475,12 +481,6 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "组织不存在，或你不是成员。",
   ],
   "org.onboarding": ["Onboarding", "Incorporación", "Inscription", "加入流程"],
-  "org.openCommunity": [
-    "Open My community",
-    "Abrir Mi comunidad",
-    "Ouvrir Ma communauté",
-    "打开我的社区",
-  ],
   "org.openStation": ["Open station", "Abrir punto", "Ouvrir le point", "打开站点"],
   "org.organizersDescription": [
     "Owners, admins and members of a team with the Events area.",
@@ -507,6 +507,13 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "待处理（{count}）",
   ],
   "org.personal": ["Personal", "Personal", "Personnel", "个人"],
+  "org.pickEvent": ["Event", "Evento", "Événement", "活动"],
+  "org.pickEventPlaceholder": [
+    "Choose an upcoming event",
+    "Elige un próximo evento",
+    "Choisissez un événement à venir",
+    "选择即将举行的活动",
+  ],
   "org.removeMember": [
     "Remove from organization",
     "Eliminar de la organización",
@@ -549,10 +556,16 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "加入站点",
   ],
   "org.stationsDescription": [
-    "Start one from an event in My community; people who scan it join.",
-    "Inicia uno desde un evento en Mi comunidad; quienes lo escaneen se unen.",
-    "Créez-en un depuis un événement dans Ma communauté ; les personnes qui le scannent s'inscrivent.",
-    "从“我的社区”的活动中创建站点，扫码即可加入。",
+    "Pick an upcoming event to start a station; people who scan it join.",
+    "Elige un próximo evento para iniciar un punto; quienes lo escaneen se unen.",
+    "Choisissez un événement à venir pour créer un point ; les personnes qui le scannent s'inscrivent.",
+    "选择一个即将举行的活动来创建站点，扫码即可加入。",
+  ],
+  "org.switchToStartStation": [
+    "Switch to this organization to start a station.",
+    "Cambia a esta organización para iniciar un punto.",
+    "Passez à cette organisation pour créer un point.",
+    "切换到此组织后即可创建站点。",
   ],
   "org.switching": ["Switching…", "Cambiando…", "Changement en cours…", "正在切换…"],
   "org.team": ["Team", "Equipo", "Équipe", "团队"],

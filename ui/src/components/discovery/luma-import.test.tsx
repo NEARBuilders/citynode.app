@@ -132,3 +132,36 @@ describe("LumaImport", () => {
     ]);
   });
 });
+
+describe("LumaImport disconnect", () => {
+  async function renderConnected(canDisconnect?: boolean) {
+    api.listDiscoveryLumaCalendars.mockResolvedValue({
+      calendars: [{ id: "cal-1", name: "City Events" }],
+      connection: {
+        calendarId: "cal-1",
+        calendarName: "City Events",
+        syncedAt: new Date().toISOString(),
+        error: null,
+      },
+      unavailableCount: 0,
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <LumaImport nodeId="node-1" canDisconnect={canDisconnect} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(api.listDiscoveryLumaCalendars).toHaveBeenCalled());
+  }
+
+  it("offers owners and admins the disconnect action", async () => {
+    await renderConnected();
+    expect(await screen.findByTestId("discovery-luma-disconnect")).toBeTruthy();
+  });
+
+  it("hides disconnect from members who can't manage the community", async () => {
+    await renderConnected(false);
+    await screen.findByText(/City Events/);
+    expect(screen.queryByTestId("discovery-luma-disconnect")).toBeNull();
+  });
+});
