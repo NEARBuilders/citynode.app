@@ -45,15 +45,13 @@ export function TenantPublishedConfig({
   hostname,
   gatewayId,
   baseAccount,
-  canManage,
-  needsActiveOrg,
+  activation,
 }: {
   tenant: TenantRecord;
   hostname: string | null;
   gatewayId: string;
   baseAccount: string;
-  canManage: boolean;
-  needsActiveOrg: boolean;
+  activation: { isPending: boolean; onActivate: () => void } | null;
 }) {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
@@ -112,7 +110,7 @@ export function TenantPublishedConfig({
   const [showBundle, setShowBundle] = useState(false);
 
   const tenantUrl = hostname ? buildTenantUrl(hostname, gatewayId) : null;
-  const editable = canManage && tenant.status === "active";
+  const editable = tenant.status === "active";
   const daoConnected =
     connection.status === "connected" && connection.daoAccountId === tenantAccount;
   const path: PublishPath = daoOwned ? (daoConnected ? "dao" : "member") : "platform";
@@ -216,14 +214,13 @@ export function TenantPublishedConfig({
   };
 
   const busy = proposeMutation.isPending || verifying || computing;
-  const blockReason = !canManage
-    ? translate("nodeConfig.ownerPermission")
-    : tenant.status !== "active"
+  const blockReason =
+    tenant.status !== "active"
       ? translate("nodeConfig.communityStatusNamed", {
           status: presentationLabel(tenant.status, translate),
         })
-      : needsActiveOrg
-        ? translate("homepage.activate")
+      : activation
+        ? translate("tenant.activateToPublish")
         : !parsedDraft.success
           ? (parsedDraft.error.issues[0]?.message ?? translate("nodeConfig.fixFormSentence"))
           : path === "member" && !nearAccountId
@@ -405,6 +402,18 @@ export function TenantPublishedConfig({
           >
             {blockReason}
           </span>
+        )}
+        {activation && tenant.status === "active" && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={activation.onActivate}
+            disabled={activation.isPending}
+            data-testid="tenant-published-config-activate"
+          >
+            {activation.isPending ? <Spinner /> : null}
+            {translate(activation.isPending ? "org.switching" : "org.makeActive")}
+          </Button>
         )}
       </div>
 

@@ -12,6 +12,7 @@ import {
 import { PageContainer, Skeleton } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
+import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
@@ -64,6 +65,7 @@ export function TenantDetailContent({
   const [name, setName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const nearAccountId = useNearAccount();
+  const switchOrg = useSwitchOrganization();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId;
   const parentAccount = getAccount(runtimeConfig);
 
@@ -316,11 +318,15 @@ export function TenantDetailContent({
             hostname={hostname}
             gatewayId={gatewayId}
             baseAccount={parentAccount}
-            canManage
-            needsActiveOrg={
+            activation={
               !isPlatformAdmin &&
-              !!tenant.orgId &&
+              tenant.orgId &&
               session?.session?.activeOrganizationId !== tenant.orgId
+                ? {
+                    isPending: switchOrg.isPending,
+                    onActivate: () => tenant.orgId && switchOrg.mutate(tenant.orgId),
+                  }
+                : null
             }
           />
         )}

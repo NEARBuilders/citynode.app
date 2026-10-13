@@ -166,12 +166,6 @@ export const deploymentMessages = createMessageCatalogs(["en", "es", "fr", "zh"]
     "Proposer une modification de la page d’accueil",
     "提议修改主页",
   ],
-  "homepage.activate": [
-    "Make this organization active to propose a new homepage.",
-    "Activa esta organización para proponer una nueva página de inicio.",
-    "Activez cette organisation pour proposer une nouvelle page d’accueil.",
-    "请将此组织设为当前组织以提议新主页。",
-  ],
   "homepage.mainnet": [
     "Switch your NEAR wallet to mainnet to propose.",
     "Cambia tu billetera NEAR a la red principal para proponer.",

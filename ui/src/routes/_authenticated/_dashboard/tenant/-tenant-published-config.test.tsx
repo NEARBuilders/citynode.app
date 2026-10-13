@@ -116,7 +116,10 @@ function tenantRecord(overrides: Record<string, unknown> = {}) {
 }
 
 function renderSection(
-  options: { tenant?: Record<string, unknown>; canManage?: boolean; needsActiveOrg?: boolean } = {},
+  options: {
+    tenant?: Record<string, unknown>;
+    activation?: { isPending: boolean; onActivate: () => void } | null;
+  } = {},
 ) {
   harness.getRegistryApp.mockResolvedValue({
     data: { resolvedConfig: { title: "Chicago Node", description: "Chicago builders" } },
@@ -129,8 +132,7 @@ function renderSection(
         hostname="chicago.citynode.app"
         gatewayId="citynode.app"
         baseAccount="v1.citynode.near"
-        canManage={options.canManage ?? true}
-        needsActiveOrg={options.needsActiveOrg ?? false}
+        activation={options.activation ?? null}
       />
     </QueryClientProvider>,
   );
@@ -281,28 +283,30 @@ describe("TenantPublishedConfig", () => {
     );
   });
 
-  it("locks the editor for people who can't manage the community", async () => {
+  it("offers to make the community's organization active before publishing", async () => {
+    const onActivate = vi.fn();
     mockChain({ policy: policy(["alice.near"]) });
-    renderSection({ canManage: false });
+    renderSection({ activation: { isPending: false, onActivate } });
 
-    await expectBlocked("Only owners and admins can change the config.");
+    await expectBlocked("Make this community's organization active to publish changes.");
     expect((screen.getByTestId("tenant-published-config-title") as HTMLInputElement).disabled).toBe(
-      true,
+      false,
     );
-    expect(
-      (screen.getByTestId("tenant-published-config-description") as HTMLInputElement).disabled,
-    ).toBe(true);
+    const activate = screen.getByTestId("tenant-published-config-activate") as HTMLButtonElement;
+    expect(activate.textContent).toContain("Make active");
+    fireEvent.click(activate);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows no activation button once the organization is active", async () => {
+    mockChain({ policy: policy(["alice.near"]) });
+    renderSection();
+
+    await screen.findByTestId("tenant-published-config-title");
+    expect(screen.queryByTestId("tenant-published-config-activate")).toBeNull();
   });
 
   it.each([
-    {
-      name: "an inactive organization",
-      options: { needsActiveOrg: true },
-      account: "alice.near",
-      network: "mainnet",
-      members: ["alice.near"],
-      reason: "Make this organization active to propose a new homepage.",
-    },
     {
       name: "a suspended community",
       options: { tenant: { status: "suspended" } },

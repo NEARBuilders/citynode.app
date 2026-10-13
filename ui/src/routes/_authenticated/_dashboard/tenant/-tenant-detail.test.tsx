@@ -63,6 +63,8 @@ type Harness = {
     organization: {
       list: ReturnType<typeof vi.fn>;
       listMembers: ReturnType<typeof vi.fn>;
+      setActive: ReturnType<typeof vi.fn>;
+      setActiveTeam: ReturnType<typeof vi.fn>;
     };
   };
   daoConnection: { status: "idle"; daoAccountId: null };
@@ -134,8 +136,14 @@ vi.mock("./-tenant-profile", () => ({
 }));
 
 vi.mock("./-tenant-published-config", () => ({
-  TenantPublishedConfig: ({ needsActiveOrg }: { needsActiveOrg: boolean }) => (
-    <div data-testid="tenant-published-config" data-needs-active-org={String(needsActiveOrg)} />
+  TenantPublishedConfig: ({ activation }: { activation: { onActivate: () => void } | null }) => (
+    <div data-testid="tenant-published-config" data-needs-active-org={String(!!activation)}>
+      {activation && (
+        <button type="button" onClick={activation.onActivate}>
+          Make active
+        </button>
+      )}
+    </div>
   ),
 }));
 
@@ -221,6 +229,8 @@ function createHarness({
         data: { members: [{ userId: USER_ID, role }] },
         error: null,
       })),
+      setActive: vi.fn(async () => ({ data: null, error: null })),
+      setActiveTeam: vi.fn(async () => ({ data: null, error: null })),
     },
     near: {
       getGasKeyScope: vi.fn(async () => ({ data: { enabled: false }, error: null })),
@@ -533,6 +543,10 @@ describe("tenant detail mutations", () => {
 
     const editor = await screen.findByTestId("tenant-published-config");
     expect(editor.getAttribute("data-needs-active-org")).toBe("true");
+    fireEvent.click(within(editor).getByRole("button", { name: "Make active" }));
+    await waitFor(() =>
+      expect(current.auth.organization.setActive).toHaveBeenCalledWith({ organizationId: ORG_ID }),
+    );
   });
 
   it("hides the profile editor from a personal owner the profile API would reject", async () => {

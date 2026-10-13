@@ -67,12 +67,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Utilisez une empreinte d’intégrité sha384-… en base64.",
     "请使用 base64 编码的 sha384-… 完整性哈希。",
   ],
-  "nodeConfig.ownerPermission": [
-    "Only owners and admins can change the config.",
-    "Solo los propietarios y administradores pueden cambiar la configuración.",
-    "Seuls les propriétaires et les administrateurs peuvent modifier la configuration.",
-    "只有所有者和管理员可以修改配置。",
-  ],
   "nodeConfig.proposeAnyway": [
     "Propose anyway",
     "Proponer de todos modos",
@@ -164,6 +158,12 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Paquete de interfaz personalizado",
     "Bundle d'interface personnalisé",
     "自定义界面包",
+  ],
+  "tenant.activateToPublish": [
+    "Make this community's organization active to publish changes.",
+    "Activa la organización de esta comunidad para publicar cambios.",
+    "Définissez l’organisation de cette communauté comme active pour publier des modifications.",
+    "将此社区的组织设为当前组织后即可发布更改。",
   ],
   "tenant.customize": ["Customize", "Personalizar", "Personnaliser", "自定义"],
   "tenant.daoChangesHint": [
