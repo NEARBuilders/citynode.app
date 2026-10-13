@@ -778,12 +778,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Proposez un City Node pour {name}.",
     "为 {name} 提出城市节点。",
   ],
-  "dashboard.proposeNodeHint": [
-    "Propose a City Node for your organization to run.",
-    "Propón un City Node para que tu organización lo gestione.",
-    "Proposez un City Node que votre organisation gérera.",
-    "提出由你的组织运营的城市节点。",
-  ],
   "dashboard.newMembersLastMonth": [
     "New members last month",
     "Nuevos miembros el mes pasado",
@@ -1319,7 +1313,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "nav.newProposal": ["New proposal", "Nueva propuesta", "Nouvelle proposition", "新建提案"],
   "nav.newRelayer": ["New relayer", "Nuevo relayer", "Nouveau relais", "新建中继服务"],
-  "nav.newSite": ["New site", "Nuevo sitio", "Nouveau site", "新建站点"],
   "nav.newSystem": ["New system", "Nuevo sistema", "Nouveau système", "新建系统"],
   "nav.onboarding": ["Onboarding", "Incorporación", "Inscription", "加入引导"],
   "nav.onboardingStation": [

@@ -11,11 +11,7 @@ export function getNodeEmptyStateContent(
   const hasOrganization = reason !== "no-org";
   return {
     title: hasOrganization ? t("dashboard.noCommunity") : t("tenant.noCommunity"),
-    description: canCreateNode
-      ? t("dashboard.createNodeHint")
-      : hasOrganization
-        ? t("dashboard.proposeNodeHint")
-        : t("dashboard.startCommunityHint"),
+    description: canCreateNode ? t("dashboard.createNodeHint") : t("dashboard.startCommunityHint"),
     actionLabel: canCreateNode ? t("common.createCommunity") : t("dashboard.startCommunity"),
     actionTo: "/apply" as const,
   };

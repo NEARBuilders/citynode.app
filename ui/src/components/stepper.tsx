@@ -1,5 +1,4 @@
 import { CheckIcon, CircleIcon, XCircleIcon } from "@phosphor-icons/react";
-import { useCallback, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
@@ -59,42 +58,4 @@ export function StepList({ steps }: { steps: Step[] }) {
       ))}
     </>
   );
-}
-
-export function useStepper(
-  stepLabels: readonly { id?: string; label: string; blocking?: boolean }[],
-) {
-  const [steps, setSteps] = useState<Step[]>(() =>
-    stepLabels.map((s) => ({ ...s, state: "pending" })),
-  );
-
-  const updateStep = useCallback((index: number, state: StepState, error?: AppMessageId) => {
-    setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, state, error } : s)));
-  }, []);
-
-  const resetSteps = useCallback(() => {
-    setSteps(stepLabels.map((s) => ({ ...s, state: "pending" as StepState })));
-  }, [stepLabels]);
-
-  const runStep = useCallback(
-    async <T,>(index: number, fn: () => Promise<T>): Promise<T | undefined> => {
-      updateStep(index, "running");
-      try {
-        const value = await fn();
-        updateStep(index, "success");
-        return value;
-      } catch {
-        updateStep(index, "failed", "error.action");
-        return undefined;
-      }
-    },
-    [updateStep],
-  );
-
-  return {
-    steps: steps.map((step, index) => ({ ...step, label: stepLabels[index]?.label ?? step.label })),
-    updateStep,
-    resetSteps,
-    runStep,
-  };
 }

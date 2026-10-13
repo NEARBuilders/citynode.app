@@ -30,7 +30,10 @@ describe("My community empty state", () => {
     );
   });
 
-  it("offers members Start a community", () => {
-    expect(getNodeEmptyStateContent("no-node", false).actionLabel).toBe("Start a community");
+  it("offers members Start a community without proposing it for their organization", () => {
+    expect(getNodeEmptyStateContent("no-node", false)).toMatchObject({
+      description: "Apply to run a City Node for your area. We'll walk you through each step.",
+      actionLabel: "Start a community",
+    });
   });
 });
