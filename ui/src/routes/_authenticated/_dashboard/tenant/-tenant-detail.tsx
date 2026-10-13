@@ -33,6 +33,7 @@ import {
   publishPersistedTenantChange,
 } from "./-tenant-mutations";
 import { TenantProfile } from "./-tenant-profile";
+import { TenantPublishedConfig } from "./-tenant-published-config";
 import { TenantUnavailable } from "./-tenant-unavailable";
 
 export function selectTenantNode<T extends { id: string; name: string }>(
@@ -309,6 +310,20 @@ export function TenantDetailContent({
           )}
           {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
         </TenantLiveSite>
+        {(isAdmin || isPlatformAdmin) && (
+          <TenantPublishedConfig
+            tenant={tenant}
+            hostname={hostname}
+            gatewayId={gatewayId}
+            baseAccount={parentAccount}
+            canManage
+            needsActiveOrg={
+              !isPlatformAdmin &&
+              !!tenant.orgId &&
+              session?.session?.activeOrganizationId !== tenant.orgId
+            }
+          />
+        )}
         <TenantNodeValidators tenantId={tenant.id} canManage={isAdmin} />
         <TenantDangerZone
           tenant={tenant}

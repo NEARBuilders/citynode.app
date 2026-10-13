@@ -16,6 +16,7 @@ const harness = vi.hoisted(() => ({
   tenants: {} as Record<string, unknown>,
   listOrganizations: vi.fn(),
   resolveTenantByOrgId: vi.fn(),
+  listMembers: vi.fn(),
 }));
 
 vi.mock("@/app", async () => ({
@@ -26,6 +27,7 @@ vi.mock("@/app", async () => ({
   }),
   useAuthClient: () => ({
     getSession: async () => ({ data: harness.session }),
+    organization: { listMembers: harness.listMembers },
   }),
 }));
 
@@ -33,16 +35,16 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({
     to,
     params,
-    search,
+    hash,
     children,
     ...rest
   }: {
     to: string;
-    params: { slug: string };
-    search: { tab: string };
+    params: { tenantId: string };
+    hash: string;
     children?: ReactNode;
   }) => (
-    <a href={`${to.replace("$slug", params.slug)}?tab=${search.tab}`} {...rest}>
+    <a href={`${to.replace("$tenantId", params.tenantId)}#${hash}`} {...rest}>
       {children}
     </a>
   ),
@@ -52,8 +54,16 @@ function setup(options: {
   signedIn: boolean;
   orgs?: { id: string; slug: string; status?: "active" | "pending" | "rejected" }[];
   tenants?: Record<string, TenantResult>;
+  orgRole?: "owner" | "admin" | "member";
+  platformRole?: "admin" | "user";
 }) {
-  harness.session = options.signedIn ? { user: { id: "u1", isAnonymous: false } } : null;
+  harness.session = options.signedIn
+    ? { user: { id: "u1", isAnonymous: false, role: options.platformRole ?? "user" } }
+    : null;
+  harness.listMembers.mockResolvedValue({
+    data: { members: [{ userId: "u1", role: options.orgRole ?? "owner" }] },
+    error: null,
+  });
   harness.listOrganizations.mockResolvedValue(
     (options.orgs ?? []).map((org) => ({ status: "active", ...org })),
   );
@@ -81,6 +91,7 @@ async function settle() {
 beforeEach(() => {
   harness.listOrganizations.mockReset();
   harness.resolveTenantByOrgId.mockReset();
+  harness.listMembers.mockReset();
 });
 
 afterEach(cleanup);
@@ -98,17 +109,48 @@ describe("ProposeHomepageCta", () => {
     expect(harness.resolveTenantByOrgId).not.toHaveBeenCalled();
   });
 
-  it("links an owning DAO organization member to the homepage tab", async () => {
+  it.each([
+    "owner",
+    "admin",
+  ] as const)("links an owning organization %s to the published config in Community settings", async (orgRole) => {
     setup({
       signedIn: true,
       orgs: [{ id: "org-1", slug: "chicago-org" }],
       tenants: { "org-1": { id: TENANT_ID, ownerKind: "dao" } },
+      orgRole,
     });
     renderCta();
 
     const link = await screen.findByTestId("node-page.propose-homepage");
-    expect(link.getAttribute("href")).toBe("/orgs/chicago-org?tab=homepage");
+    expect(link.getAttribute("href")).toBe(`/tenant/${TENANT_ID}#published-config`);
     expect(link.textContent).toContain("Propose homepage change");
+  });
+
+  it("shows the button to a platform admin in the owning organization", async () => {
+    setup({
+      signedIn: true,
+      orgs: [{ id: "org-1", slug: "chicago-org" }],
+      tenants: { "org-1": { id: TENANT_ID, ownerKind: "dao" } },
+      orgRole: "member",
+      platformRole: "admin",
+    });
+    renderCta();
+
+    expect(await screen.findByTestId("node-page.propose-homepage")).toBeTruthy();
+  });
+
+  it("stays hidden for a plain member of the owning organization", async () => {
+    setup({
+      signedIn: true,
+      orgs: [{ id: "org-1", slug: "chicago-org" }],
+      tenants: { "org-1": { id: TENANT_ID, ownerKind: "dao" } },
+      orgRole: "member",
+    });
+    renderCta();
+
+    await waitFor(() => expect(harness.listMembers).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByTestId("node-page.propose-homepage")).toBeNull();
   });
 
   it("stays hidden and queries nothing when signed out", async () => {

@@ -1,4 +1,5 @@
-import { PencilSimpleIcon, SignOutIcon, TrashIcon } from "@phosphor-icons/react";
+import { GearSixIcon, PencilSimpleIcon, SignOutIcon, TrashIcon } from "@phosphor-icons/react";
+import { Link } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
 import { useState } from "react";
 import type { Organization } from "@/app";
@@ -24,6 +25,7 @@ export function OrganizationOverview({
   onLeave,
   onSwitch,
   org,
+  settingsTenantId,
 }: {
   canDelete: boolean;
   memberCount: number;
@@ -38,6 +40,7 @@ export function OrganizationOverview({
   onLeave: () => void;
   onSwitch: () => void;
   org: Organization;
+  settingsTenantId?: string;
 }) {
   const translate = useAppTranslation();
   const [confirming, setConfirming] = useState<PendingConfirm>(null);
@@ -77,6 +80,17 @@ export function OrganizationOverview({
             {!isActive && (
               <Button onClick={onSwitch} disabled={isSwitching} data-testid="org-make-active">
                 {translate(isSwitching ? "org.switching" : "org.makeActive")}
+              </Button>
+            )}
+            {settingsTenantId && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link to="/tenant/$tenantId" params={{ tenantId: settingsTenantId }} />}
+                data-testid="org-community-settings"
+              >
+                <GearSixIcon />
+                {translate("tenant.settings")}
               </Button>
             )}
             {hasMenu && (

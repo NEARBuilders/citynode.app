@@ -8,7 +8,7 @@ import {
   type SputnikPolicy,
   type SputnikProposal,
 } from "@/lib/sputnik-proposals";
-import { TENANT_CONFIG_REFETCH_MS } from "./-use-org-tenant-config";
+import { TENANT_CONFIG_REFETCH_MS } from "./-use-published-config";
 
 export interface PendingConfigProposal {
   proposal: SputnikProposal | null;

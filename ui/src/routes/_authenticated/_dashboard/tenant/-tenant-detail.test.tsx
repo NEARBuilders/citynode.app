@@ -133,6 +133,12 @@ vi.mock("./-tenant-profile", () => ({
   TenantProfile: () => <div data-testid="tenant-profile" />,
 }));
 
+vi.mock("./-tenant-published-config", () => ({
+  TenantPublishedConfig: ({ needsActiveOrg }: { needsActiveOrg: boolean }) => (
+    <div data-testid="tenant-published-config" data-needs-active-org={String(needsActiveOrg)} />
+  ),
+}));
+
 function makeTenant(status: TenantStatus = "active", name = "Original tenant"): Tenant {
   return {
     id: TENANT_ID,
@@ -315,7 +321,7 @@ const runtimeConfig: RouterContext["runtimeConfig"] = {
   },
 };
 
-function renderTenant(current: Harness) {
+function renderTenant(current: Harness, session: unknown = { user: { id: USER_ID } }) {
   harness.current = current;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -325,7 +331,7 @@ function renderTenant(current: Harness) {
   queryClient.setQueryData(nodeQueryKeys.tenant(TENANT_ID), current.server.nodes);
   queryClient.setQueryData(tenantQueryKeys.bindings(TENANT_ID), current.server.bindings);
   queryClient.setQueryData(["organizations"], [{ id: ORG_ID, slug: "tenant-org" }]);
-  queryClient.setQueryData(["session"], { user: { id: USER_ID } });
+  queryClient.setQueryData(["session"], session);
 
   render(
     <QueryClientProvider client={queryClient}>
@@ -505,6 +511,28 @@ describe("tenant detail mutations", () => {
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
     expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
     expect(screen.queryByTestId("tenant-profile")).toBeNull();
+    expect(screen.queryByTestId("tenant-published-config")).toBeNull();
+  });
+
+  it.each([
+    "owner",
+    "admin",
+  ] as const)("shows the published config editor to an organization %s", async (role) => {
+    renderTenant(createHarness({ role }), {
+      user: { id: USER_ID },
+      session: { activeOrganizationId: ORG_ID },
+    });
+
+    const editor = await screen.findByTestId("tenant-published-config");
+    expect(editor.getAttribute("data-needs-active-org")).toBe("false");
+  });
+
+  it("asks an owner to make the community's organization active before publishing", async () => {
+    const current = createHarness();
+    renderTenant(current);
+
+    const editor = await screen.findByTestId("tenant-published-config");
+    expect(editor.getAttribute("data-needs-active-org")).toBe("true");
   });
 
   it("hides the profile editor from a personal owner the profile API would reject", async () => {
@@ -514,6 +542,7 @@ describe("tenant detail mutations", () => {
 
     await screen.findByText("Original tenant");
     expect(screen.queryByTestId("tenant-profile")).toBeNull();
+    expect(screen.queryByTestId("tenant-published-config")).toBeNull();
   });
 });
 

@@ -33,13 +33,13 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
 import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
-import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
   CONFIG_WRITE_PLAN,
   fetchDaoProposals,
   findPendingProposalForPlan,
 } from "@/lib/sputnik-proposals";
+import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
 import { OwnerActions } from "./-owner-actions";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
@@ -130,11 +130,6 @@ function NodeOverview() {
     enabled: daoOwned && canManage && !!tenant?.accountId,
     refetchInterval: 15_000,
   });
-  const orgsQuery = useQuery({
-    ...organizationsQueryOptions(apiClient),
-    enabled: daoOwned && canManage && !!orgId,
-    staleTime: 30_000,
-  });
   const teamStake = resolveTeamStakeTarget({
     daoAccountId: daoQuery.data?.daoAccountId,
     tenantAccountId: tenant?.accountId,
@@ -145,7 +140,6 @@ function NodeOverview() {
   if (!selectedNode || !summary) return null;
 
   const pendingConfig = pendingConfigQuery.data ?? null;
-  const orgSlug = orgsQuery.data?.find((org) => org.id === orgId)?.slug ?? null;
 
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
   const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
@@ -234,7 +228,7 @@ function NodeOverview() {
         />
       )}
 
-      {daoOwned && canManage && pendingConfig && orgSlug && (
+      {daoOwned && canManage && pendingConfig && tenant && (
         <Item variant="outline" data-testid="dashboard-node.pending-config-proposal">
           <ItemMedia variant="icon">
             <HourglassMediumIcon />
@@ -251,7 +245,12 @@ function NodeOverview() {
               variant="outline"
               nativeButton={false}
               render={
-                <Link to="/orgs/$slug" params={{ slug: orgSlug }} search={{ tab: "node-config" }} />
+                <Link
+                  to="/tenant/$tenantId"
+                  params={{ tenantId: tenant.id }}
+                  search={{ nodeId: selectedNode.id }}
+                  hash={PUBLISHED_CONFIG_SECTION_ID}
+                />
               }
               data-testid="dashboard-node.pending-config-open"
             >

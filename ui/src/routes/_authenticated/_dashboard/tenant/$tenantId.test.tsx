@@ -31,6 +31,10 @@ vi.mock("./-tenant-profile", () => ({
   ),
 }));
 
+vi.mock("./-tenant-published-config", () => ({
+  TenantPublishedConfig: () => <div data-testid="tenant-published-config" />,
+}));
+
 vi.mock("./-node-validators", () => ({
   TenantNodeValidators: ({ tenantId }: { tenantId: string }) => (
     <div data-testid="tenant-node-validators">{tenantId}</div>
