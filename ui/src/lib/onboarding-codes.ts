@@ -1,5 +1,6 @@
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
+import type { AuthRequestContext } from "@/lib/auth";
 
 export type OnboardingCodeState = "active" | "expired" | "revoked" | "used-up";
 
@@ -11,6 +12,15 @@ export function onboardingCodeState(
   if (new Date(code.expiresAt).getTime() < now) return "expired";
   if (code.usedCount >= code.maxUses) return "used-up";
   return "active";
+}
+
+export function isOnboardingOrganizer(context: AuthRequestContext | null | undefined): boolean {
+  const role = context?.organization?.member?.role;
+  if (!role) return false;
+  if (role === "owner" || role === "admin") return true;
+  return (context?.organization?.teams ?? []).some((team: { areas: string[] }) =>
+    team.areas.includes("events"),
+  );
 }
 
 export function formatRemaining(

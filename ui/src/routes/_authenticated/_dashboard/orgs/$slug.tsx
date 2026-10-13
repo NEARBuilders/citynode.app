@@ -418,7 +418,7 @@ function OrganizationDetail() {
           onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
           teams={teamsState.teams}
         />
-        {canOrganize && <OnboardingTab apiClient={apiClient} orgId={orgId} />}
+        {canOrganize && <OnboardingTab apiClient={apiClient} orgId={orgId} isActive={isActive} />}
         <ApiKeysTab
           apiKeys={apiKeys}
           canManageMembers={canManageMembers}

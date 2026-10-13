@@ -77,9 +77,13 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
     mutationFn: async () => {
       const { error } = await auth.signOut();
       if (error) throw new Error(error.message || "Failed to sign out");
-      await auth.near.disconnect().catch(() => {});
+      return auth.near.disconnect().then(
+        () => true,
+        () => false,
+      );
     },
-    onSuccess: async () => {
+    onSuccess: async (walletDisconnected) => {
+      if (!walletDisconnected) toast.warning(translate("auth.security.walletStillConnected"));
       await clearAuthenticatedQueries(queryClient);
       await navigate({ to: "/", replace: true });
     },

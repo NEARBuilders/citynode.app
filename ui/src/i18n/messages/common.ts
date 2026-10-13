@@ -1753,10 +1753,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "setup.qr.action": ["Create QR code", "Crear código QR", "Créer le QR code", "创建二维码"],
   "workspace.ownersOnly": [
-    "Only community owners and admins can manage events, QR check-in and the profile. Ask an owner to make you an admin.",
-    "Solo los propietarios y administradores pueden gestionar eventos, el registro con QR y el perfil. Pide a un propietario que te haga administrador.",
-    "Seuls les propriétaires et administrateurs gèrent les événements, l’accueil par QR et le profil. Demandez à un propriétaire de vous nommer administrateur.",
-    "只有社区所有者和管理员可以管理活动、二维码签到和资料。请联系所有者将你设为管理员。",
+    "Only community owners, admins and members of a team with the Events area can manage events and QR check-in, and only owners and admins can change the profile. Ask an owner to add you to an events team or make you an admin.",
+    "Solo los propietarios, administradores y miembros de un equipo con el área de Eventos pueden gestionar eventos y el registro con QR, y solo los propietarios y administradores pueden cambiar el perfil. Pide a un propietario que te añada a un equipo de eventos o te haga administrador.",
+    "Seuls les propriétaires, administrateurs et membres d’une équipe ayant accès au domaine Événements gèrent les événements et l’accueil par QR, et seuls les propriétaires et administrateurs modifient le profil. Demandez à un propriétaire de vous ajouter à une équipe Événements ou de vous nommer administrateur.",
+    "只有社区所有者、管理员以及拥有活动功能区权限的团队成员可以管理活动和二维码签到，只有所有者和管理员可以更改资料。请联系所有者将你加入活动团队或设为管理员。",
   ],
   "community.yourRole": [
     "Your role: {role}",

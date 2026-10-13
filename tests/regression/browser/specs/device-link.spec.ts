@@ -13,14 +13,14 @@ test.describe("Device Link", () => {
     const desktopPage = await desktop.newPage();
     await desktopPage.goto("/login", { waitUntil: "domcontentloaded" });
     await waitForApp(desktopPage);
-    await desktopPage.getByTestId("login.device-button").click();
-    const desktopCode = desktopPage.getByTestId("device.user-code");
+    await desktopPage.getByTestId("login-device-button").click();
+    const desktopCode = desktopPage.getByTestId("device-user-code");
     await expect(desktopCode).toHaveText(/^[A-Z2-9]{8}$/, { timeout: 15000 });
     const userCode = (await desktopCode.textContent())?.trim() ?? "";
 
     await page.goto(`/login/device?user_code=${userCode}`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await page.getByTestId("device.signin-redirect-button").click();
+    await page.getByTestId("device-signin-redirect-button").click();
 
     await page.waitForURL(/\/login\?/, { timeout: 15000, waitUntil: "commit" });
     const loginUrl = new URL(page.url());
@@ -33,8 +33,8 @@ test.describe("Device Link", () => {
 
     await page.waitForURL(/\/login\/device\/approve/, { timeout: 15000, waitUntil: "commit" });
     expect(new URL(page.url()).searchParams.get("user_code")).toBe(userCode);
-    await expect(page.getByTestId("device.approve-heading")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId("device.approve-code")).toContainText(userCode);
+    await expect(page.getByTestId("device-approve-heading")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("device-approve-code")).toContainText(userCode);
 
     expectNoHydrationFailure(pageErrors);
     await desktop.close();

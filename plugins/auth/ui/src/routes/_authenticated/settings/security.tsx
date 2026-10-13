@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
+import { SessionUnavailable } from "./-components/session-unavailable";
 import { SecurityTab } from "./-security-tab";
 
 export const Route = createFileRoute("/_authenticated/settings/security")({
@@ -9,10 +10,10 @@ export const Route = createFileRoute("/_authenticated/settings/security")({
 
 function SecuritySettings() {
   const auth = useAuthClient();
-  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const user = session?.user;
+  const sessionQuery = useQuery<SessionData | null>(sessionQueryOptions(auth));
+  const user = sessionQuery.data?.user;
 
-  if (!user) return null;
+  if (!user) return <SessionUnavailable query={sessionQuery} />;
 
   return <SecurityTab user={user} />;
 }

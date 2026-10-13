@@ -55,14 +55,15 @@ export function parseMaxJoins(value: string): number | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 500) : undefined;
 }
 
-export function useStartOnboarding(organizationId?: string | null) {
+function useStationMutation<Variables>(
+  organizationId: string | null | undefined,
+  mutationFn: (variables: Variables) => Promise<{ id: string }>,
+) {
   const translate = useAppTranslation();
-  const api = useApiClient();
   const navigate = useNavigate();
   const location = useLocation();
   return useMutation({
-    mutationFn: ({ eventId, maxUses }: { eventId: string; maxUses?: number }) =>
-      api.createEventOnboardingCode({ eventId, ...(maxUses ? { maxUses } : {}) }),
+    mutationFn,
     onSuccess: (code) =>
       navigate({
         to: "/onboarding/station/$codeId",
@@ -71,6 +72,51 @@ export function useStartOnboarding(organizationId?: string | null) {
       }),
     onError: (error: Error) => toast.error(appErrorMessage(error, translate, "station.startError")),
   });
+}
+
+export function useStartOnboarding(organizationId?: string | null) {
+  const api = useApiClient();
+  return useStationMutation(
+    organizationId,
+    ({ eventId, maxUses }: { eventId: string; maxUses?: number }) =>
+      api.createEventOnboardingCode({ eventId, ...(maxUses ? { maxUses } : {}) }),
+  );
+}
+
+export function useOpenEventStation(organizationId?: string | null) {
+  const api = useApiClient();
+  return useStationMutation(organizationId, async ({ eventId }: { eventId: string }) => {
+    const codes = await api.auth.listOnboardingCodes({
+      eventId,
+      ...(organizationId ? { organizationId } : {}),
+    });
+    const live = codes.find((code) => onboardingCodeState(code) === "active");
+    return live ?? api.createEventOnboardingCode({ eventId });
+  });
+}
+
+export function OpenEventStationButton({
+  event,
+  organizationId,
+}: {
+  event: DiscoveryActivity;
+  organizationId?: string | null;
+}) {
+  const translate = useAppTranslation();
+  const open = useOpenEventStation(organizationId);
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      data-testid={`dashboard-node.open-station-${event.id}`}
+      aria-label={translate("station.onboardingNamed", { event: event.title ?? "" })}
+      disabled={open.isPending}
+      onClick={() => open.mutate({ eventId: event.id })}
+    >
+      <QrCodeIcon />
+      <span className="hidden sm:inline">{translate("org.onboarding")}</span>
+    </Button>
+  );
 }
 
 export function EventDate({ value, timeZone }: { value: string | null; timeZone?: string }) {

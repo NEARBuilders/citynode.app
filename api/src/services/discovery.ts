@@ -69,16 +69,17 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       if (!record) {
         return yield* Effect.fail(new ORPCError("NOT_FOUND"));
       }
-      if (context.user.role === "admin") return { record, level: "editor" as const };
+      if (context.user.role === "admin") return { record, level: "editor" as const, manager: true };
       const org = context.organization;
       const role = org?.member?.role ?? "";
       if (!record.tenant.orgId || org?.activeOrganizationId !== record.tenant.orgId || !role) {
-        return { record, level: null };
+        return { record, level: null, manager: false };
       }
+      const manager = ["owner", "admin"].includes(role);
       const granted =
-        ["owner", "admin"].includes(role) ||
+        manager ||
         (!!area && resolveTeamAccess(context).teams.some((team) => team.areas.includes(area)));
-      return { record, level: granted ? ("editor" as const) : ("member" as const) };
+      return { record, level: granted ? ("editor" as const) : ("member" as const), manager };
     });
   }
 
@@ -587,7 +588,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     disconnectLuma: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context, EVENTS_AREA);
+        yield* authorize(nodeId, context);
         yield* query(() =>
           db.transaction(async (tx) => {
             await tx.select().from(nodes).where(eq(nodes.id, nodeId)).for("update");
@@ -950,7 +951,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     activities: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        const { level } = yield* nodeAccess(nodeId, context, EVENTS_AREA);
+        const { level, manager } = yield* nodeAccess(nodeId, context, EVENTS_AREA);
         if (!level) {
           return yield* Effect.fail(new ORPCError("FORBIDDEN"));
         }
@@ -958,9 +959,11 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           db.select().from(discoveryActivities).where(eq(discoveryActivities.ownerNodeId, nodeId)),
         );
         const activities = rows.map((r) => r.data);
-        return level === "editor"
-          ? activities
-          : activities.filter((activity) => activity.status !== "draft" && !activity.luma?.hidden);
+        if (manager) return activities;
+        if (level === "editor") return activities.filter((activity) => activity.kind === "event");
+        return activities.filter(
+          (activity) => activity.status !== "draft" && !activity.luma?.hidden,
+        );
       }),
     eventOrganization: (eventId: string) =>
       Effect.gen(function* () {

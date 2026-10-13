@@ -9,12 +9,14 @@ import { discoveryProfileQueryOptions } from "./profile-editor";
 export function EventsEditor({
   nodeId,
   tenantStatus,
+  canOnboard,
   profileLink,
   reviewImports,
   canManage = true,
 }: {
   nodeId: string;
   tenantStatus: TenantStatus | undefined;
+  canOnboard?: boolean;
   profileLink?: ReactElement;
   reviewImports?: boolean;
   canManage?: boolean;
@@ -32,7 +34,12 @@ export function EventsEditor({
           testId="content-map-status"
         />
       )}
-      <ActivityEditor nodeId={nodeId} reviewImports={reviewImports} canPost={canManage} />
+      <ActivityEditor
+        nodeId={nodeId}
+        reviewImports={reviewImports}
+        canPost={canManage}
+        canOnboard={canOnboard}
+      />
     </div>
   );
 }
