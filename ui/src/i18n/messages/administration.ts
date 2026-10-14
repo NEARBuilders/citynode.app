@@ -742,12 +742,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
   "admin.runtime": ["This runtime", "Este entorno", "Cet environnement", "此运行环境"],
   "admin.showNamed": ["Show {label}", "Mostrar {label}", "Afficher {label}", "显示{label}"],
   "admin.site.daoAccount": ["DAO account", "Cuenta DAO", "Compte DAO", "DAO 账户"],
-  "admin.site.deployedAt": [
-    "Tenant deployed at {hostname}",
-    "Sitio desplegado en {hostname}",
-    "Site déployé sur {hostname}",
-    "站点已部署到 {hostname}",
-  ],
   "admin.site.empty": [
     "No sites yet",
     "Aún no hay sitios",
@@ -790,24 +784,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Essayez un autre état ou une autre recherche.",
     "请尝试其他状态或搜索词。",
   ],
-  "admin.site.orgCreated": [
-    "Organization created — continue with the wizard",
-    "Organización creada: continúa con el asistente",
-    "Organisation créée : poursuivez l'assistant",
-    "组织已创建，请继续设置流程",
-  ],
-  "admin.site.orgRequired": [
-    "Sites belong to an organization.",
-    "Los sitios pertenecen a una organización.",
-    "Les sites appartiennent à une organisation.",
-    "站点属于组织。",
-  ],
-  "admin.site.parentRequired": [
-    "parent is required",
-    "se requiere una comunidad superior",
-    "une communauté parente est requise",
-    "需要上级社区",
-  ],
   "admin.site.reviewApplications": [
     "Review applications",
     "Revisar solicitudes",
@@ -820,12 +796,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Buscar nombre, identificador o DAO",
     "Rechercher par nom, identifiant ou DAO",
     "搜索名称、标识或 DAO",
-  ],
-  "admin.site.trezuInstructions": [
-    "Sign in to trezu.app as {account} to approve, or wait for the council, then check again.",
-    "Inicia sesión en trezu.app como {account} para aprobar, o espera al consejo y vuelve a comprobar.",
-    "Connectez-vous à trezu.app en tant que {account} pour approuver, ou attendez le conseil, puis vérifiez à nouveau.",
-    "以 {account} 登录 trezu.app 进行批准，或等待理事会处理后再次检查。",
   ],
   "admin.sitesDescription": [
     "Deployments and their DAOs",

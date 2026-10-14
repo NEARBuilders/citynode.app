@@ -4,6 +4,7 @@ import {
   filterTenants,
   resolveOrgSlug,
   resolvePrimaryHostname,
+  type Tenant,
 } from "./-tenant-records";
 
 describe("classifyTenantKey", () => {
@@ -54,7 +55,7 @@ describe("resolveOrgSlug", () => {
   const orgs = [
     { id: "org-1", slug: "test" },
     { id: "org-2", slug: "chicago" },
-    { id: "org-3", slug: null },
+    { id: "org-3", slug: "" },
   ];
 
   it("matches the org id and returns its slug", () => {
@@ -72,7 +73,7 @@ describe("resolveOrgSlug", () => {
 });
 
 describe("filterTenants", () => {
-  const tenants = [
+  const tenants: Pick<Tenant, "id" | "name" | "accountId" | "status">[] = [
     { id: "t1", name: "Chicago", accountId: "chicago.sputnik-dao.near", status: "active" },
     { id: "t2", name: "Lahore", accountId: "lhr.sputnik-dao.near", status: "pending_deletion" },
     { id: "t3", name: "Berlin", accountId: "berlin.near", status: "suspended" },

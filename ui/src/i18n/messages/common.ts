@@ -648,12 +648,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Demandez la communauté avec sa DAO, puis approuvez la demande dans Administration.",
     "使用其 DAO 申请社区，然后在管理中批准该申请。",
   ],
-  "dashboard.createOrg": [
-    "Create an organization",
-    "Crear una organización",
-    "Créer une organisation",
-    "创建组织",
-  ],
   "dashboard.description": [
     "Pick up where you left off.",
     "Continúa donde lo dejaste.",
@@ -771,12 +765,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Proponer una subcomunidad",
     "Proposer une sous-communauté",
     "提出子社区",
-  ],
-  "dashboard.proposeNamed": [
-    "Propose a City Node for {name}.",
-    "Propón un City Node para {name}.",
-    "Proposez un City Node pour {name}.",
-    "为 {name} 提出城市节点。",
   ],
   "dashboard.newMembersLastMonth": [
     "New members last month",
