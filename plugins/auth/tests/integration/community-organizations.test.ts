@@ -1,6 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema";
+import { DEFAULT_TEAMS } from "../../src/default-teams";
+import { serializeTeamAreas } from "../../src/utils";
 import { createTestHandlers, createTestOrg, createTestServices, createTestUser } from "../helpers";
 
 describe("community organization provisioning", () => {
@@ -96,6 +98,65 @@ describe("community organization provisioning", () => {
         where: eq(schema.team.organizationId, first.id),
       }),
     ).toHaveLength(2);
+  });
+
+  it("launches an admin's own application with the same organization shape", async () => {
+    const adminAccountId = "community-admin.near";
+    await setup.services.db.insert(schema.nearAccount).values({
+      id: crypto.randomUUID(),
+      userId: admin.userId,
+      accountId: adminAccountId,
+      network: "mainnet",
+      publicKey: "ed25519:community-admin-test",
+      isPrimary: true,
+      createdAt: new Date(),
+    });
+    const provision = createTestHandlers(setup.services).communityOrganizations
+      .provisionCommunityOrganization;
+    const input = {
+      proposalId: "prop-community-lagos",
+      name: "Lagos",
+      slug: "lagos",
+      proposerAccountId: adminAccountId,
+      proposerUserId: admin.userId,
+    };
+    const organization = await provision({ input, context: { reqHeaders: admin.reqHeaders } });
+    expect(organization).toMatchObject({
+      id: "community-prop-community-lagos",
+      status: "active",
+      requestedBy: admin.userId,
+    });
+    const members = await setup.services.db.query.member.findMany({
+      where: eq(schema.member.organizationId, organization.id),
+    });
+    expect(members.map(({ userId, role }) => ({ userId, role }))).toEqual([
+      { userId: admin.userId, role: "owner" },
+    ]);
+    const teams = await setup.services.db.query.team.findMany({
+      where: eq(schema.team.organizationId, organization.id),
+    });
+    expect(
+      teams
+        .map(({ name, metadata }) => ({ name, metadata }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    ).toEqual(
+      DEFAULT_TEAMS.map(({ name, areas }) => ({
+        name,
+        metadata: serializeTeamAreas([...areas]),
+      })).sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    const repeated = await provision({ input, context: { reqHeaders: admin.reqHeaders } });
+    expect(repeated.id).toBe(organization.id);
+    expect(
+      await setup.services.db.query.member.findMany({
+        where: eq(schema.member.organizationId, organization.id),
+      }),
+    ).toHaveLength(1);
+    expect(
+      await setup.services.db.query.team.findMany({
+        where: eq(schema.team.organizationId, organization.id),
+      }),
+    ).toHaveLength(DEFAULT_TEAMS.length);
   });
 
   it("rejects a community slug already held by an unrelated organization", async () => {

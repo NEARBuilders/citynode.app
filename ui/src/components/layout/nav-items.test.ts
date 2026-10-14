@@ -286,7 +286,7 @@ describe("breadcrumbs", () => {
     ).toEqual(["My community", "Onboarding"]);
     expect(labels("/tenant/t1")).toEqual(["My community", "Community settings"]);
     expect(labels("/settings/api-keys")).toEqual(["Settings", "API keys"]);
-    expect(labels("/admin/tenants/new")).toEqual(["Admin", "Sites", "New site"]);
+    expect(labels("/admin/proposals/new")).toEqual(["Admin", "Proposals", "New proposal"]);
     expect(labels("/apply")).toEqual(["Start a community"]);
   });
 

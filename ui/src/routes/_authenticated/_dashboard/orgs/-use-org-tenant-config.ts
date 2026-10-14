@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { type ApiClient, useApiClient } from "@/app";
 import { tenantBindingsQueryOptions, tenantQueryKeys } from "@/lib/queries/tenants";
-import { resolvePrimaryHostname } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
+import { resolvePrimaryHostname } from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
 
 export const TENANT_CONFIG_REFETCH_MS = 15_000;
 

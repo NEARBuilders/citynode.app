@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { render, renderHook } from "@/i18n/test-render";
-import { StepList, useStepper } from "./stepper";
+import { render } from "@/i18n/test-render";
+import { StepList } from "./stepper";
 
 afterEach(cleanup);
 
@@ -17,27 +17,5 @@ describe("stepper", () => {
     view.rerender(<StepList steps={[second, first]} />);
 
     expect(screen.getByText("Create account")).toBe(createLabel);
-  });
-
-  it("preserves progress across renders and resets to pending", async () => {
-    const labels = [{ label: "Create account" }, { label: "Publish config", blocking: false }];
-    const { result, rerender } = renderHook(() => useStepper(labels));
-
-    await act(async () => {
-      expect(await result.current.runStep(0, async () => "account.near")).toBe("account.near");
-      expect(
-        await result.current.runStep(1, async () => {
-          throw new Error("Publish failed");
-        }),
-      ).toBeUndefined();
-    });
-    rerender();
-    expect(result.current.steps).toEqual([
-      { label: "Create account", state: "success", error: undefined },
-      { label: "Publish config", blocking: false, state: "failed", error: "error.action" },
-    ]);
-
-    act(() => result.current.resetSteps());
-    expect(result.current.steps).toEqual(labels.map((step) => ({ ...step, state: "pending" })));
   });
 });

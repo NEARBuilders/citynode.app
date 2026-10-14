@@ -22,7 +22,7 @@ import { useNearAccount } from "@/lib/use-near-account";
 import {
   resolveOrgSlug,
   resolvePrimaryHostname,
-} from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
+} from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
 import { CommunityHeader } from "../dashboard/node/-community-header";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
