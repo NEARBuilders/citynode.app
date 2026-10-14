@@ -57,7 +57,7 @@ function stepLink(step: NextStep) {
     case "payouts":
       return <Link to="/dashboard/node" hash="payouts" />;
     case "launch-node":
-      return <Link to="/admin/tenants/new" />;
+      return <Link to="/apply" />;
     case "admin":
       return <Link to="/admin/proposals" />;
     case "stake":

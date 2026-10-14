@@ -2,7 +2,7 @@ import {
   BuildingsIcon,
   CaretRightIcon,
   MagnifyingGlassIcon,
-  PlusIcon,
+  TrayIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -35,10 +35,7 @@ import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { humanize, ListSkeleton, tenantStatusTone } from "../-admin-ui";
-import { filterTenants } from "./-tenant-wizard";
-
-type ApiClient = ReturnType<typeof useApiClient>;
-type Tenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
+import { filterTenants, type Tenant } from "./-tenant-records";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/")({
   loader: async ({ context }) => {
@@ -72,6 +69,20 @@ const STATUS_FILTER_LABELS: Record<StatusFilter, AppMessageId> = {
   pending: "label.pending",
   suspended: "label.suspended",
 };
+
+function ReviewApplicationsButton(props: { "data-testid"?: string }) {
+  const translate = useAppTranslation();
+  return (
+    <Button
+      nativeButton={false}
+      render={<Link to="/admin/proposals" search={{ status: "pending" }} />}
+      {...props}
+    >
+      <TrayIcon />
+      {translate("admin.site.reviewApplications")}
+    </Button>
+  );
+}
 
 function AdminTenants() {
   const translate = useAppTranslation();
@@ -158,14 +169,7 @@ function AdminTenants() {
         description={translate("admin.site.listDescription")}
         actions={
           total > 0 ? (
-            <Button
-              nativeButton={false}
-              render={<Link to="/admin/tenants/new" />}
-              data-testid="admin-tenants-create"
-            >
-              <PlusIcon />
-              {translate("admin.site.new")}
-            </Button>
+            <ReviewApplicationsButton data-testid="admin-tenants-review-applications" />
           ) : undefined
         }
         headerTestId="admin-tenants.heading"
@@ -231,12 +235,7 @@ function AdminTenants() {
             icon={BuildingsIcon}
             title={translate("admin.site.empty")}
             description={translate("admin.site.emptyHint")}
-            action={
-              <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
-                <PlusIcon />
-                {translate("admin.site.new")}
-              </Button>
-            }
+            action={<ReviewApplicationsButton />}
           />
         ) : tenants.length === 0 ? (
           <EmptyState

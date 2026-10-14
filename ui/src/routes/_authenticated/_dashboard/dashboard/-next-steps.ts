@@ -90,7 +90,7 @@ export function getNextSteps(
     steps.push({
       id: "start-community",
       title: t("dashboard.startCommunity"),
-      description: t("dashboard.proposeNamed", { name: state.activeOrganizationName }),
+      description: t("dashboard.startCommunityHint"),
       actionLabel: t("dashboard.startCommunity"),
     });
   } else {

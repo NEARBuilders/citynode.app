@@ -520,18 +520,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Saisissez d'abord l'URL du bundle SSR",
     "请先输入 SSR 包 URL",
   ],
-  "tenant.stepDoneNamed": [
-    "Step {number}, done: {title}",
-    "Paso {number}, completado: {title}",
-    "Étape {number}, terminée : {title}",
-    "第 {number} 步，已完成：{title}",
-  ],
-  "tenant.stepNamed": [
-    "Step {number}: {title}",
-    "Paso {number}: {title}",
-    "Étape {number} : {title}",
-    "第 {number} 步：{title}",
-  ],
   "tenant.suspend": ["Suspend", "Suspender", "Suspendre", "暂停"],
   "tenant.suspendCommunity": [
     "Suspend community",

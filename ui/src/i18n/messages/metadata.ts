@@ -87,18 +87,6 @@ export const metadataMessages = createMessageCatalogs(["en", "es", "fr", "zh"], 
     "创建新组织。",
   ],
   "meta.newPost": ["New post", "Nueva publicación", "Nouvelle publication", "新建帖子"],
-  "meta.newSiteAdmin": [
-    "New site · Admin",
-    "Nuevo sitio · Administración",
-    "Nouveau site · Administration",
-    "新建站点 · 管理",
-  ],
-  "meta.newSiteDescription": [
-    "Create a new tenant, node, and domain binding.",
-    "Crea un sitio, un nodo y una vinculación de dominio.",
-    "Créez un site, un nœud et une liaison de domaine.",
-    "创建站点、节点及域名绑定。",
-  ],
   "meta.organization": ["Organization", "Organización", "Organisation", "组织"],
   "meta.organizationDescription": [
     "Members, teams and settings for an organization.",

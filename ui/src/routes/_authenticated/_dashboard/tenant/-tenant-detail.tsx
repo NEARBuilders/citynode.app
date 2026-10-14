@@ -24,7 +24,7 @@ import { useNearAccount } from "@/lib/use-near-account";
 import {
   resolveOrgSlug,
   resolvePrimaryHostname,
-} from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
+} from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
 import { CommunityHeader } from "../dashboard/node/-community-header";
 import { useOrgMemberRole } from "../orgs/-organization-members";
 import { TenantNodeValidators } from "./-node-validators";
