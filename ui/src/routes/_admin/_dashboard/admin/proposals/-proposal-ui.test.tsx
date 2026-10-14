@@ -186,6 +186,30 @@ describe("proposal review UI seams", () => {
     expect(onApprove).toHaveBeenCalledOnce();
   });
 
+  it("offers only Resume for a stalled setup that is still applying", () => {
+    const onApprove = vi.fn();
+    render(
+      <ProposalReviewActions
+        isPending={false}
+        isRetry
+        canReject={false}
+        isNodeProposal
+        proposalDaoAccountId="dao.sputnik-dao.near"
+        daoIsVerified
+        rejectionReason=""
+        isReviewing={false}
+        onDaoVerified={vi.fn()}
+        onRejectionReasonChange={vi.fn()}
+        onApprove={onApprove}
+        onReject={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    expect(onApprove).toHaveBeenCalledOnce();
+  });
+
   it("lists failed and stalled setups with a resume action", () => {
     const failed: Proposal = {
       ...proposal,

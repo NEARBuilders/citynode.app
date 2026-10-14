@@ -20,6 +20,7 @@ import { approveAndApplyProposal, keptResources, rejectProposal } from "./-propo
 import type { Proposal } from "./-proposal-columns";
 import {
   adminProposalDetailQueryOptions,
+  proposalCanBeRejected,
   proposalReviewHistoryQueryOptions,
   proposalReviewQueryKeys,
   proposalTitle,
@@ -249,6 +250,7 @@ function ProposalDetailPage() {
                 <ProposalReviewActions
                   isPending={isPending}
                   isRetry={isRetry}
+                  canReject={proposalCanBeRejected(proposal)}
                   applyError={proposal.applyError}
                   isNodeProposal={proposal.pluginId === "node"}
                   proposalDaoAccountId={proposalDaoAccountId}

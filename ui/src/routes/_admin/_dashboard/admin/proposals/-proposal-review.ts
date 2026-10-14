@@ -64,6 +64,16 @@ export function proposalNeedsAction(proposal: SetupStatusInput) {
   return proposal.reviewStatus === "pending" || communitySetupNeedsAttention(proposal);
 }
 
+/** A stalled setup is still applying, and the server refuses to reject it until it fails. */
+export function proposalCanBeRejected(
+  proposal: Pick<SetupStatusInput, "reviewStatus" | "applyStatus">,
+) {
+  return (
+    proposal.reviewStatus === "pending" ||
+    (proposal.reviewStatus === "approved" && proposal.applyStatus === "failed")
+  );
+}
+
 interface ProposalIdentity {
   pluginId: string;
   entityId: string;

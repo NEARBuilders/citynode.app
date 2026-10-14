@@ -19,6 +19,7 @@ import { useAppTranslation } from "@/i18n/runtime";
 interface ProposalReviewActionsProps {
   isPending: boolean;
   isRetry?: boolean;
+  canReject?: boolean;
   applyError?: string | null;
   isNodeProposal: boolean;
   proposalDaoAccountId: string | null;
@@ -34,6 +35,7 @@ interface ProposalReviewActionsProps {
 export function ProposalReviewActions({
   isPending,
   isRetry = false,
+  canReject = true,
   applyError,
   isNodeProposal,
   proposalDaoAccountId,
@@ -89,14 +91,16 @@ export function ProposalReviewActions({
                 ? translate("admin.proposal.resume")
                 : translate("common.approve")}
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => setRejecting(true)}
-            disabled={isReviewing}
-            data-testid="admin-proposal-reject"
-          >
-            {translate("common.reject")}
-          </Button>
+          {canReject && (
+            <Button
+              variant="ghost"
+              onClick={() => setRejecting(true)}
+              disabled={isReviewing}
+              data-testid="admin-proposal-reject"
+            >
+              {translate("common.reject")}
+            </Button>
+          )}
         </div>
         {!daoIsVerified && (
           <p className="text-sm text-muted-foreground">
