@@ -59,6 +59,18 @@ export const NodeProposalPayloadSchema = z
 
 export type NodeProposalPayload = z.infer<typeof NodeProposalPayloadSchema>;
 
+/** Setup steps recorded on an approved community application, in the order they run. */
+export const CommunitySetupStepSchema = z.enum(["organization", "community", "publication"]);
+
+export type CommunitySetupStep = z.infer<typeof CommunitySetupStepSchema>;
+
+const ReleaseKeptReasonSchema = z.enum(["not_found", "in_use"]);
+
+export const ReleasedCommunitySchema = z.object({
+  released: z.boolean(),
+  keptReason: ReleaseKeptReasonSchema.nullable(),
+});
+
 export const EventOnboardingCodeSchema = z.object({
   id: z.string(),
   code: z.string(),
@@ -530,6 +542,26 @@ export const contract = oc.router({
         message: "Node proposal resources already exist",
       },
     }),
+
+  releaseCommunityProposal: oc
+    .route({ method: "POST", path: "/nodes/community-proposals/release" })
+    .input(
+      z.object({
+        proposalId: z.string().min(1),
+        entityId: z.string().min(1),
+        expectedUpdatedAt: z.iso.datetime(),
+      }),
+    )
+    .output(
+      z.object({
+        community: ReleasedCommunitySchema,
+        organization: z.object({
+          released: z.boolean(),
+          keptReason: z.enum([...ReleaseKeptReasonSchema.options, "existing"]).nullable(),
+        }),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
 
   applyCommunityProposal: oc
     .route({ method: "POST", path: "/nodes/community-proposals/apply" })

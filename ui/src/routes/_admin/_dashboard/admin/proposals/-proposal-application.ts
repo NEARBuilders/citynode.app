@@ -1,25 +1,36 @@
 import type { ApiClient } from "@/app";
 import { AppActionError } from "@/i18n/error-message";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
+import type { Proposal } from "@/lib/queries/proposals";
 import type { DaoTenantPublishInput } from "@/lib/tenant-deploy";
 import { parseNodeProposalPayload } from "@/routes/_authenticated/_dashboard/-node-application";
-
-type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
-export type Proposal = ProposalResult["data"][number];
 
 type ProposalApplicationInput = Pick<Proposal, "pluginId" | "entityId" | "payload" | "updatedAt">;
 
 type AppliedResource = { id: string; label: string };
+type ApplyStepStatus = Parameters<ApiClient["proposals"]["recordApplyStep"]>[0]["status"];
 export type TenantConfigPublisher = (input: DaoTenantPublishInput) => Promise<unknown>;
+export type OpenTenantConfigProposalFinder = (
+  daoAccountId: string,
+) => Promise<{ id: number } | null>;
 type ProposalApplicationHandler = (input: {
   apiClient: ApiClient;
   proposal: Proposal;
   gatewayId: string;
   baseAccount: string;
   publishTenantConfig: TenantConfigPublisher;
+  findOpenTenantConfigProposal: OpenTenantConfigProposalFinder;
 }) => Promise<AppliedResource>;
 
 const proposalApplicationHandlers = {
-  node: async ({ apiClient, proposal, gatewayId, baseAccount, publishTenantConfig }) => {
+  node: async ({
+    apiClient,
+    proposal,
+    gatewayId,
+    baseAccount,
+    publishTenantConfig,
+    findOpenTenantConfigProposal,
+  }) => {
     const payload = parseNodeProposalPayload(proposal.payload);
     const hostname = `${payload.slug}.${gatewayId}`;
     const node = await apiClient.applyCommunityProposal({
@@ -29,7 +40,40 @@ const proposalApplicationHandlers = {
     });
     const expected = { accountId: payload.accountId, gatewayId, hostname, title: payload.name };
     const published = () => isTenantConfigPublished(apiClient, expected);
+    const recordPublication = (status: ApplyStepStatus, resourceId?: string) =>
+      apiClient.proposals.recordApplyStep({
+        pluginId: proposal.pluginId,
+        entityId: proposal.entityId,
+        step: "publication",
+        status,
+        ...(resourceId ? { resourceId } : {}),
+      });
+    const stopIfDaoVoteOpen = async () => {
+      const open = await findOpenTenantConfigProposal(payload.accountId);
+      if (!open) return;
+      await recordPublication("waiting", String(open.id));
+      throw new AppActionError("proposal.publicationAwaitingVote", { id: open.id });
+    };
     if (!(await published())) {
+      await stopIfDaoVoteOpen();
+      let publishError: unknown = null;
+      let heartbeatStopped = false;
+      await recordPublication("started");
+      // Trezu keeps publishing pending until the DAO vote executes, so once the vote is open
+      // record it and let the setup go idle; anyone can resume it after the vote.
+      const heartbeat = setInterval(() => {
+        void (async () => {
+          const open = await findOpenTenantConfigProposal(payload.accountId).catch(() => null);
+          if (heartbeatStopped) return;
+          if (open) {
+            heartbeatStopped = true;
+            clearInterval(heartbeat);
+            await recordPublication("waiting", String(open.id));
+            return;
+          }
+          await recordPublication("started");
+        })().catch(() => undefined);
+      }, PUBLISH_HEARTBEAT_MS);
       try {
         await publishTenantConfig({
           daoAccountId: payload.accountId,
@@ -39,14 +83,23 @@ const proposalApplicationHandlers = {
           title: payload.name,
         });
       } catch (error) {
-        if (!(await waitForTenantConfig(published))) throw error;
+        publishError = error;
+      } finally {
+        heartbeatStopped = true;
+        clearInterval(heartbeat);
+      }
+      if (!(await waitForTenantConfig(published))) {
+        await stopIfDaoVoteOpen();
+        throw publishError ?? new AppActionError("proposal.publicationUnconfirmed");
       }
     }
+    await recordPublication("completed");
     return { id: node.nodeId, label: "Node" };
   },
 } satisfies Record<string, ProposalApplicationHandler>;
 
 const PUBLISH_CHECK_ATTEMPTS = 3;
+const PUBLISH_HEARTBEAT_MS = 60_000;
 const PUBLISH_CHECK_INTERVAL_MS = 2000;
 
 async function isTenantConfigPublished(
@@ -88,6 +141,7 @@ export async function approveAndApplyProposal({
   gatewayId,
   baseAccount,
   publishTenantConfig,
+  findOpenTenantConfigProposal,
   onProposalChange,
 }: {
   apiClient: ApiClient;
@@ -95,6 +149,7 @@ export async function approveAndApplyProposal({
   gatewayId: string;
   baseAccount: string;
   publishTenantConfig: TenantConfigPublisher;
+  findOpenTenantConfigProposal: OpenTenantConfigProposalFinder;
   onProposalChange?: (proposal: Proposal) => void;
 }) {
   const approved = await apiClient.proposals.approve({
@@ -115,6 +170,7 @@ export async function approveAndApplyProposal({
         gatewayId,
         baseAccount,
         publishTenantConfig,
+        findOpenTenantConfigProposal,
       });
     }
   } catch (error) {
@@ -129,6 +185,7 @@ export async function approveAndApplyProposal({
       reviewedProposal = failed.data;
       onProposalChange?.(reviewedProposal);
     } catch {}
+    if (error instanceof AppActionError) throw error;
     if (
       error &&
       typeof error === "object" &&
@@ -150,13 +207,67 @@ export async function approveAndApplyProposal({
     });
     reviewedProposal = applied.data;
     onProposalChange?.(reviewedProposal);
-  } catch {
+  } catch (error) {
+    try {
+      const failed = await apiClient.proposals.markApplyFailed({
+        pluginId: reviewedProposal.pluginId,
+        entityId: reviewedProposal.entityId,
+        expectedUpdatedAt: reviewedProposal.updatedAt,
+        error: errorMessage(error),
+      });
+      reviewedProposal = failed.data;
+      onProposalChange?.(reviewedProposal);
+    } catch {}
     throw new AppActionError("proposal.finalizationFailedNamed", { id: resource.id });
   }
 
   return reviewedProposal;
 }
 
+export type ReleasedResources = Awaited<ReturnType<ApiClient["releaseCommunityProposal"]>>;
+
+export async function rejectProposal({
+  apiClient,
+  proposal,
+  reason,
+}: {
+  apiClient: ApiClient;
+  proposal: ProposalApplicationInput & Pick<Proposal, "id" | "reviewStatus" | "applyStatus">;
+  reason: string;
+}) {
+  const released =
+    proposal.pluginId === "node" &&
+    proposal.reviewStatus === "approved" &&
+    proposal.applyStatus === "failed"
+      ? await apiClient.releaseCommunityProposal({
+          proposalId: proposal.id,
+          entityId: proposal.entityId,
+          expectedUpdatedAt: proposal.updatedAt,
+        })
+      : null;
+  const rejected = await apiClient.proposals.reject({
+    pluginId: proposal.pluginId,
+    entityId: proposal.entityId,
+    expectedUpdatedAt: proposal.updatedAt,
+    reason,
+  });
+  return { proposal: rejected.data, released };
+}
+
+export function keptResources(released: ReleasedResources | null) {
+  if (!released) return [];
+  return [
+    ...(released.community.keptReason === "in_use" ? (["community"] as const) : []),
+    ...(released.organization.keptReason === "in_use" ||
+    released.organization.keptReason === "existing"
+      ? (["organization"] as const)
+      : []),
+  ];
+}
+
 export function errorMessage(error: unknown) {
+  if (error instanceof AppActionError) {
+    return translateEnglishAppMessage(error.messageId, error.values);
+  }
   return error instanceof Error ? error.message : String(error);
 }

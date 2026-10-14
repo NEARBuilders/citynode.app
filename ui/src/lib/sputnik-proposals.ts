@@ -67,25 +67,29 @@ export interface SputnikPolicy {
   proposal_period?: string;
 }
 
+/** Reads the most recent proposals, newest first, failing when the DAO cannot be read. */
+export async function readRecentDaoProposals(
+  daoAccountId: string,
+  window = 25,
+): Promise<SputnikProposal[]> {
+  if (!daoAccountId) return [];
+  const last = await getNear().view<number>(daoAccountId, "get_last_proposal_id", {});
+  const total = Number(last ?? 0);
+  if (!total) return [];
+  const fromIndex = Math.max(0, total - window);
+  const proposals = await getNear().view<SputnikProposal[]>(daoAccountId, "get_proposals", {
+    from_index: fromIndex,
+    limit: window,
+  });
+  return [...(proposals ?? [])].sort((a, b) => b.id - a.id);
+}
+
 /** Reads the most recent proposals, newest first. */
 export async function fetchDaoProposals(
   daoAccountId: string,
   window = 25,
 ): Promise<SputnikProposal[]> {
-  if (!daoAccountId) return [];
-  try {
-    const last = await getNear().view<number>(daoAccountId, "get_last_proposal_id", {});
-    const total = Number(last ?? 0);
-    if (!total) return [];
-    const fromIndex = Math.max(0, total - window);
-    const proposals = await getNear().view<SputnikProposal[]>(daoAccountId, "get_proposals", {
-      from_index: fromIndex,
-      limit: window,
-    });
-    return [...(proposals ?? [])].sort((a, b) => b.id - a.id);
-  } catch {
-    return [];
-  }
+  return readRecentDaoProposals(daoAccountId, window).catch(() => []);
 }
 
 export async function readDaoProposalsSince(

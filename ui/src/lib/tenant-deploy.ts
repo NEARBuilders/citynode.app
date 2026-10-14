@@ -9,10 +9,13 @@ import {
 } from "./dao-connect";
 import { trySendWithGasKey } from "./gas-key";
 import {
+  CONFIG_WRITE_PLAN,
   canAccountPropose,
   type DaoPlan,
   fetchSputnikPolicy,
+  findPendingProposalForPlan,
   proposeAsSession,
+  readRecentDaoProposals,
   type SessionWallet,
 } from "./sputnik-proposals";
 
@@ -49,6 +52,10 @@ export async function publishDaoTenantConfig(
     gas: prepared.data.gas,
     attachedDeposit: prepared.data.attachedDeposit,
   });
+}
+
+export async function findOpenTenantConfigProposal(daoAccountId: string) {
+  return findPendingProposalForPlan(await readRecentDaoProposals(daoAccountId), CONFIG_WRITE_PLAN);
 }
 
 export type TenantConfigPublishMode = "platform" | "dao";

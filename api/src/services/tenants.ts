@@ -1,8 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, not, notLike, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, not, notLike, or, sql } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer } from "effect";
+import type { z } from "zod";
+import type { ReleasedCommunitySchema } from "../contract";
+import type { Database } from "../db/index";
 import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
@@ -108,8 +111,14 @@ export interface ApplyNodeProposalInput {
   hostname: string;
   poolAccountId?: string;
   proposalId?: string;
-  legacyOrgId?: string;
 }
+
+export type ProposalResourceInput = Pick<
+  ApplyNodeProposalInput,
+  "proposalId" | "accountId" | "orgId"
+>;
+
+export type ReleaseNodeProposalResult = z.infer<typeof ReleasedCommunitySchema>;
 
 export interface TenantsService {
   listAllTenants: TenantEffect<TenantRecord[]>;
@@ -126,6 +135,7 @@ export interface TenantsService {
   resolveBindingByHostname(hostname: string): TenantEffect<TenantBindingRecord | null>;
   createTenant(input: TenantInput): TenantEffect<TenantRecord>;
   applyNodeProposal(input: ApplyNodeProposalInput): TenantEffect<{ nodeId: string }>;
+  releaseNodeProposal(input: { proposalId: string }): TenantEffect<ReleaseNodeProposalResult>;
   updateTenant(
     id: string,
     input: Partial<
@@ -148,30 +158,45 @@ export class TenantsTag extends Context.Service<TenantsTag, TenantsService>()("a
 
 type TenantRow = typeof tenantsTable.$inferSelect;
 type BindingRow = typeof domainBindingsTable.$inferSelect;
-type NodeRow = typeof nodesTable.$inferSelect;
+async function findLinkedProposalNode(
+  db: Pick<Database, "select">,
+  proposalId: string,
+): Promise<string | null> {
+  const linked = await db
+    .select({ id: nodesTable.id })
+    .from(nodesTable)
+    .where(
+      and(
+        sql`${nodesTable.metadata}->>'communityProposalId' = ${proposalId}`,
+        not(isNull(nodesTable.tenantId)),
+      ),
+    )
+    .limit(1);
+  return linked[0]?.id ?? null;
+}
 
-function matchingProposalNode(
-  input: ApplyNodeProposalInput,
-  tenant: TenantRow | undefined,
-  node: NodeRow | undefined,
-  binding: BindingRow | undefined,
-): string | null {
-  if (
-    !input.proposalId ||
-    tenant?.accountId !== input.accountId ||
-    tenant.orgId !== input.orgId ||
-    tenant.name !== input.name ||
-    tenant.ownerKind !== "dao" ||
-    node?.tenantId !== tenant.id ||
-    node.parentId !== input.parentId ||
-    node.name !== input.name ||
-    nodeKindOf(node.metadata) !== input.kind ||
-    (!input.legacyOrgId && node.metadata.communityProposalId !== input.proposalId) ||
-    binding?.tenantId !== tenant.id
-  ) {
-    return null;
-  }
-  return node.id;
+/** Resumes onto the proposal's node, or onto a legacy one matched by its DAO and organization. */
+async function findProposalNode(
+  db: Pick<Database, "select">,
+  input: ProposalResourceInput,
+): Promise<string | null> {
+  if (!input.proposalId) return null;
+  const linked = await findLinkedProposalNode(db, input.proposalId);
+  if (linked) return linked;
+  const owned = await db
+    .select({ id: nodesTable.id })
+    .from(nodesTable)
+    .innerJoin(tenantsTable, eq(nodesTable.tenantId, tenantsTable.id))
+    .where(
+      and(
+        eq(tenantsTable.accountId, input.accountId),
+        eq(tenantsTable.orgId, input.orgId),
+        eq(tenantsTable.ownerKind, "dao"),
+        isNull(tenantsTable.deletedAt),
+      ),
+    )
+    .limit(1);
+  return owned[0]?.id ?? null;
 }
 
 function toTenantRecord(row: TenantRow): TenantRecord {
@@ -649,11 +674,49 @@ export const TenantsLive = Layer.effect(
           }),
         ),
 
+      releaseNodeProposal: (input) =>
+        Effect.tryPromise({
+          try: () =>
+            db.transaction(async (tx): Promise<ReleaseNodeProposalResult> => {
+              // Only a node this proposal created; never the legacy DAO-and-organization match.
+              const nodeId = await findLinkedProposalNode(tx, input.proposalId);
+              if (!nodeId) return { released: false, keptReason: "not_found" };
+              const [node] = await tx
+                .select({ tenantId: nodesTable.tenantId })
+                .from(nodesTable)
+                .where(eq(nodesTable.id, nodeId))
+                .limit(1);
+              if (!node?.tenantId) return { released: false, keptReason: "not_found" };
+              const [children, tenantNodes] = await Promise.all([
+                tx
+                  .select({ id: nodesTable.id })
+                  .from(nodesTable)
+                  .where(eq(nodesTable.parentId, nodeId))
+                  .limit(1),
+                tx
+                  .select({ id: nodesTable.id })
+                  .from(nodesTable)
+                  .where(eq(nodesTable.tenantId, node.tenantId))
+                  .limit(2),
+              ]);
+              if (children.length > 0 || tenantNodes.length > 1) {
+                return { released: false, keptReason: "in_use" };
+              }
+              await tx.delete(tenantsTable).where(eq(tenantsTable.id, node.tenantId));
+              return { released: true, keptReason: null };
+            }),
+          catch: toOrpcError,
+        }),
+
       applyNodeProposal: (input) =>
         Effect.tryPromise({
           try: async () => {
             try {
               return await db.transaction(async (tx) => {
+                const proposalNodeId = await findProposalNode(tx, input);
+                if (proposalNodeId) {
+                  return { nodeId: proposalNodeId };
+                }
                 const [existingTenant, existingNode, existingBinding] = await Promise.all([
                   tx
                     .select()
@@ -668,18 +731,6 @@ export const TenantsLive = Layer.effect(
                     .limit(1),
                 ]);
 
-                const tenantMatch = existingTenant[0];
-                const nodeMatch = existingNode[0];
-                const bindingMatch = existingBinding[0];
-                const matchedNodeId = matchingProposalNode(
-                  input,
-                  tenantMatch,
-                  nodeMatch,
-                  bindingMatch,
-                );
-                if (matchedNodeId) {
-                  return { nodeId: matchedNodeId };
-                }
                 if (existingTenant.length > 0) {
                   throw new ORPCError("CONFLICT", {
                     message: "Tenant with this accountId already exists",
@@ -790,20 +841,7 @@ export const TenantsLive = Layer.effect(
               });
             } catch (error) {
               if (input.proposalId && isUniqueViolation(error)) {
-                const [tenants, nodes, bindings] = await Promise.all([
-                  db
-                    .select()
-                    .from(tenantsTable)
-                    .where(eq(tenantsTable.accountId, input.accountId))
-                    .limit(1),
-                  db.select().from(nodesTable).where(eq(nodesTable.slug, input.slug)).limit(1),
-                  db
-                    .select()
-                    .from(domainBindingsTable)
-                    .where(eq(domainBindingsTable.hostname, input.hostname))
-                    .limit(1),
-                ]);
-                const nodeId = matchingProposalNode(input, tenants[0], nodes[0], bindings[0]);
+                const nodeId = await findProposalNode(db, input);
                 if (nodeId) return { nodeId };
               }
               throw error;

@@ -100,6 +100,172 @@ describe("community organization provisioning", () => {
     ).toHaveLength(2);
   });
 
+  it("reuses the application's organization after it was renamed", async () => {
+    const provision = createTestHandlers(setup.services).communityOrganizations
+      .provisionCommunityOrganization;
+    const input = {
+      ...request,
+      proposalId: "prop-community-lisbon",
+      name: "Lisbon",
+      slug: "lisbon",
+      proposerUserId: proposer.userId,
+    };
+    const created = await provision({ input, context: { reqHeaders: admin.reqHeaders } });
+    await setup.services.db
+      .update(schema.organization)
+      .set({ name: "Lisboa Builders", slug: "lisboa-builders" })
+      .where(eq(schema.organization.id, created.id));
+
+    const retried = await provision({ input, context: { reqHeaders: admin.reqHeaders } });
+    expect(retried).toMatchObject({
+      id: created.id,
+      name: "Lisboa Builders",
+      slug: "lisboa-builders",
+      status: "active",
+    });
+    expect(
+      await setup.services.db.query.organization.findMany({
+        where: eq(schema.organization.slug, "lisbon"),
+      }),
+    ).toHaveLength(0);
+  });
+
+  it("creates one organization when approvals provision it concurrently", async () => {
+    const provision = createTestHandlers(setup.services).communityOrganizations
+      .provisionCommunityOrganization;
+    const input = {
+      ...request,
+      proposalId: "prop-community-porto",
+      name: "Porto",
+      slug: "porto",
+      proposerUserId: proposer.userId,
+    };
+    const results = await Promise.all([
+      provision({ input, context: { reqHeaders: admin.reqHeaders } }),
+      provision({ input, context: { reqHeaders: admin.reqHeaders } }),
+    ]);
+    expect(new Set(results.map((organization) => organization.id))).toEqual(
+      new Set([`community-${input.proposalId}`]),
+    );
+    expect(
+      await setup.services.db.query.member.findMany({
+        where: eq(schema.member.organizationId, `community-${input.proposalId}`),
+      }),
+    ).toHaveLength(2);
+    expect(
+      await setup.services.db.query.team.findMany({
+        where: eq(schema.team.organizationId, `community-${input.proposalId}`),
+      }),
+    ).toHaveLength(3);
+  });
+
+  it("releases an unused organization so the applicant can reuse its slug", async () => {
+    const handlers = createTestHandlers(setup.services).communityOrganizations;
+    const input = {
+      ...request,
+      proposalId: "prop-community-faro",
+      name: "Faro",
+      slug: "faro",
+      proposerUserId: proposer.userId,
+    };
+    const created = await handlers.provisionCommunityOrganization({
+      input,
+      context: { reqHeaders: admin.reqHeaders },
+    });
+
+    await expect(
+      handlers.releaseCommunityOrganization({
+        input: { proposalId: input.proposalId },
+        context: { reqHeaders: proposer.reqHeaders },
+      }),
+    ).rejects.toThrow();
+    expect(
+      await handlers.releaseCommunityOrganization({
+        input: { proposalId: input.proposalId },
+        context: { reqHeaders: admin.reqHeaders },
+      }),
+    ).toEqual({ released: true, keptReason: null });
+    expect(
+      await setup.services.db.query.organization.findFirst({
+        where: eq(schema.organization.id, created.id),
+      }),
+    ).toBeUndefined();
+    expect(
+      await setup.services.db.query.member.findMany({
+        where: eq(schema.member.organizationId, created.id),
+      }),
+    ).toHaveLength(0);
+    expect(
+      await setup.services.db.query.team.findMany({
+        where: eq(schema.team.organizationId, created.id),
+      }),
+    ).toHaveLength(0);
+
+    const again = await handlers.provisionCommunityOrganization({
+      input,
+      context: { reqHeaders: admin.reqHeaders },
+    });
+    expect(again).toMatchObject({ id: created.id, slug: "faro", status: "active" });
+  });
+
+  it("keeps an organization that someone else already joined", async () => {
+    const handlers = createTestHandlers(setup.services).communityOrganizations;
+    const input = {
+      ...request,
+      proposalId: "prop-community-braga",
+      name: "Braga",
+      slug: "braga",
+      proposerUserId: proposer.userId,
+    };
+    const created = await handlers.provisionCommunityOrganization({
+      input,
+      context: { reqHeaders: admin.reqHeaders },
+    });
+    await setup.services.db.insert(schema.member).values({
+      id: crypto.randomUUID(),
+      organizationId: created.id,
+      userId: outsider.userId,
+      role: "member",
+      createdAt: new Date(),
+    });
+
+    expect(
+      await handlers.releaseCommunityOrganization({
+        input: { proposalId: input.proposalId },
+        context: { reqHeaders: admin.reqHeaders },
+      }),
+    ).toEqual({ released: false, keptReason: "in_use" });
+    expect(
+      await setup.services.db.query.organization.findFirst({
+        where: eq(schema.organization.id, created.id),
+      }),
+    ).toBeTruthy();
+  });
+
+  it("never releases an organization that existed before the application", async () => {
+    const legacy = await createTestOrg(setup.services, proposer.userId, {
+      name: "Coimbra Group",
+      slug: "coimbra-group",
+    });
+    const handlers = createTestHandlers(setup.services).communityOrganizations;
+    await handlers.provisionCommunityOrganization({
+      input: { ...request, proposalId: "prop-coimbra", legacyOrgId: legacy.id },
+      context: { reqHeaders: admin.reqHeaders },
+    });
+
+    expect(
+      await handlers.releaseCommunityOrganization({
+        input: { proposalId: "prop-coimbra" },
+        context: { reqHeaders: admin.reqHeaders },
+      }),
+    ).toEqual({ released: false, keptReason: "not_found" });
+    expect(
+      await setup.services.db.query.organization.findFirst({
+        where: eq(schema.organization.id, legacy.id),
+      }),
+    ).toBeTruthy();
+  });
+
   it("launches an admin's own application with the same organization shape", async () => {
     const adminAccountId = "community-admin.near";
     await setup.services.db.insert(schema.nearAccount).values({

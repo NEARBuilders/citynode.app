@@ -1,5 +1,5 @@
 import { GavelIcon } from "@phosphor-icons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -10,14 +10,17 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
+import type { Proposal } from "@/lib/queries/proposals";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
-import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
+import { findOpenTenantConfigProposal, publishDaoTenantConfig } from "@/lib/tenant-deploy";
+import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
+import { ApplicationProgressList } from "@/routes/_authenticated/_dashboard/-application-progress-list";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 import { BackLink } from "../-admin-ui";
-import { approveAndApplyProposal } from "./-proposal-application";
-import type { Proposal } from "./-proposal-columns";
+import { approveAndApplyProposal, keptResources, rejectProposal } from "./-proposal-application";
 import {
   adminProposalDetailQueryOptions,
+  proposalCanBeRejected,
   proposalReviewHistoryQueryOptions,
   proposalReviewQueryKeys,
   proposalTitle,
@@ -74,9 +77,12 @@ function ProposalDetailPage() {
     [],
   );
   const proposalQueryKey = proposalReviewQueryKeys.detail(proposalId, pluginId, entityId);
-  const proposalQuery = useQuery(
-    adminProposalDetailQueryOptions(apiClient, proposalId, pluginId, entityId),
-  );
+  const applyingHere = useIsMutating({ mutationKey: proposalQueryKey }) > 0;
+  const proposalQuery = useQuery({
+    ...adminProposalDetailQueryOptions(apiClient, proposalId, pluginId, entityId),
+    refetchInterval: applyingHere ? 2000 : false,
+    refetchIntervalInBackground: true,
+  });
   const reviewHistoryQuery = useQuery(proposalReviewHistoryQueryOptions(apiClient, pluginId));
 
   useEffect(() => {
@@ -89,6 +95,7 @@ function ProposalDetailPage() {
   }, [daoConnection.daoAccountId, daoConnection.status, verifiedDaoAccountId]);
 
   const reviewMutation = useMutation({
+    mutationKey: proposalQueryKey,
     mutationFn: async ({
       proposal,
       action,
@@ -104,13 +111,12 @@ function ProposalDetailPage() {
         );
       }
       if (action === "reject") {
-        const rejected = await apiClient.proposals.reject({
-          pluginId: proposal.pluginId,
-          entityId: proposal.entityId,
-          expectedUpdatedAt: proposal.updatedAt,
+        const rejected = await rejectProposal({
+          apiClient,
+          proposal,
           reason: reason?.trim() ?? "",
         });
-        return { action, proposal: rejected.data };
+        return { action, proposal: rejected.proposal, kept: keptResources(rejected.released) };
       }
 
       const reviewedProposal = await approveAndApplyProposal({
@@ -119,18 +125,30 @@ function ProposalDetailPage() {
         gatewayId,
         baseAccount,
         publishTenantConfig: (input) => publishDaoTenantConfig(apiClient, input),
+        findOpenTenantConfigProposal,
         onProposalChange: (nextProposal) =>
           queryClient.setQueryData(proposalQueryKey, nextProposal),
       });
-      return { action, proposal: reviewedProposal };
+      return { action, proposal: reviewedProposal, kept: [] };
     },
-    onSuccess: async ({ action, proposal }) => {
+    onSuccess: async ({ action, proposal, kept }) => {
       toast.success(
         action === "reject"
           ? translate("admin.proposalRejected")
           : proposal.applyStatus === "applied"
             ? translate("admin.proposalApprovedCreated")
             : translate("admin.proposalApproved"),
+        kept.length > 0
+          ? {
+              description: translate(
+                kept.length === 2
+                  ? "admin.proposal.keptBoth"
+                  : kept[0] === "organization"
+                    ? "admin.proposal.keptOrganization"
+                    : "admin.proposal.keptCommunity",
+              ),
+            }
+          : undefined,
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),
@@ -191,7 +209,8 @@ function ProposalDetailPage() {
 
   const proposal = proposalQuery.data;
   const isPending = proposal.reviewStatus === "pending";
-  const isRetry = proposal.reviewStatus === "approved" && proposal.applyStatus === "failed";
+  const isRetry = communitySetupNeedsAttention(proposal);
+  const publicationRecorded = proposal.applySteps.publication?.status === "completed";
   const parsedNodePayload =
     proposal.pluginId === "node" ? nodeProposalPayloadSchema.safeParse(proposal.payload) : null;
   const proposalDaoAccountId = parsedNodePayload?.success ? parsedNodePayload.data.accountId : null;
@@ -219,15 +238,23 @@ function ProposalDetailPage() {
         </div>
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <Card>
-            <CardContent className="p-5 sm:p-6">
+            <CardContent className="flex flex-col gap-8 p-5 sm:p-6">
+              {proposal.pluginId === "node" && (
+                <ApplicationProgressList
+                  proposal={proposal}
+                  daoAccountId={proposalDaoAccountId}
+                  showResources
+                />
+              )}
               {isPending || isRetry ? (
                 <ProposalReviewActions
                   isPending={isPending}
                   isRetry={isRetry}
+                  canReject={proposalCanBeRejected(proposal)}
                   applyError={proposal.applyError}
                   isNodeProposal={proposal.pluginId === "node"}
                   proposalDaoAccountId={proposalDaoAccountId}
-                  daoIsVerified={daoIsVerified}
+                  daoIsVerified={daoIsVerified || (isRetry && publicationRecorded)}
                   rejectionReason={rejectionReason}
                   isReviewing={reviewMutation.isPending}
                   onDaoVerified={handleDaoVerified}

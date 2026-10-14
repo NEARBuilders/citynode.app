@@ -1,12 +1,12 @@
 import type { WithEffectContext } from "@orpc/experimental-effect";
 import { type Implementer, ORPCError } from "@orpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { Effect } from "effect";
 import type { AuthContextShape } from "everything-dev/api";
 import type { ContractType } from "../contract";
 import * as schema from "../db/schema";
 import { provisionDefaultTeams } from "../default-teams";
-import { AuthServicesTag } from "../service-types";
+import { AuthServicesTag, type PluginServices } from "../service-types";
 import { createHeaders, tryJsonParse } from "../utils";
 
 type CommunityContext = AuthContextShape &
@@ -14,6 +14,34 @@ type CommunityContext = AuthContextShape &
 
 function conflict(message: string) {
   return new ORPCError("CONFLICT", { message });
+}
+
+type AdminErrors = {
+  UNAUTHORIZED: (input: { message: string; data: Record<string, never> }) => ORPCError<any, any>;
+  FORBIDDEN: (input: { message: string; data: Record<string, never> }) => ORPCError<any, any>;
+};
+
+function reviewingAdmin(services: PluginServices, context: CommunityContext, errors: AdminErrors) {
+  return Effect.gen(function* () {
+    const sessionUser =
+      context.userId && context.user
+        ? { id: context.userId, role: context.user.role }
+        : (yield* Effect.tryPromise({
+            try: () => services.auth.api.getSession({ headers: createHeaders(context.reqHeaders) }),
+            catch: (cause) =>
+              new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "Could not read the reviewing session",
+                cause,
+              }),
+          }))?.user;
+    if (!sessionUser?.id) {
+      return yield* Effect.fail(errors.UNAUTHORIZED({ message: "Sign in first", data: {} }));
+    }
+    if (sessionUser.role !== "admin") {
+      return yield* Effect.fail(errors.FORBIDDEN({ message: "Platform admin required", data: {} }));
+    }
+    return sessionUser.id;
+  });
 }
 
 export function createCommunityOrganizationHandlers(
@@ -26,27 +54,7 @@ export function createCommunityOrganizationHandlers(
       errors,
     }) {
       const services = yield* AuthServicesTag;
-      const sessionUser =
-        context.userId && context.user
-          ? { id: context.userId, role: context.user.role }
-          : (yield* Effect.tryPromise({
-              try: () =>
-                services.auth.api.getSession({ headers: createHeaders(context.reqHeaders) }),
-              catch: (cause) =>
-                new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: "Could not read the reviewing session",
-                  cause,
-                }),
-            }))?.user;
-      const reviewerId = sessionUser?.id;
-      if (!reviewerId) {
-        return yield* Effect.fail(errors.UNAUTHORIZED({ message: "Sign in first", data: {} }));
-      }
-      if (sessionUser.role !== "admin") {
-        return yield* Effect.fail(
-          errors.FORBIDDEN({ message: "Platform admin required", data: {} }),
-        );
-      }
+      const reviewerId = yield* reviewingAdmin(services, context, errors);
       return yield* Effect.tryPromise({
         try: () =>
           services.db.transaction(async (tx) => {
@@ -107,12 +115,6 @@ export function createCommunityOrganizationHandlers(
                 (!created && metadata.communityProposalId !== input.proposalId))
             ) {
               throw conflict("The saved community organization belongs to another applicant");
-            }
-            if (
-              !input.legacyOrgId &&
-              (organization.slug !== input.slug || organization.name !== input.name)
-            ) {
-              throw conflict("The saved community organization does not match this application");
             }
             const [proposerMember] = await tx
               .select()
@@ -206,6 +208,62 @@ export function createCommunityOrganizationHandlers(
             ? error
             : new ORPCError("INTERNAL_SERVER_ERROR", {
                 message: "Could not provision the community organization",
+                cause: error,
+              }),
+      });
+    }),
+    releaseCommunityOrganization: builder.releaseCommunityOrganization.effect(function* ({
+      input,
+      context,
+      errors,
+    }) {
+      const services = yield* AuthServicesTag;
+      yield* reviewingAdmin(services, context, errors);
+      return yield* Effect.tryPromise({
+        try: () =>
+          services.db.transaction(async (tx) => {
+            const organizationId = `community-${input.proposalId}`;
+            const [organization] = await tx
+              .select()
+              .from(schema.organization)
+              .where(eq(schema.organization.id, organizationId))
+              .for("update");
+            const metadata = tryJsonParse<Record<string, unknown>>(organization?.metadata) ?? {};
+            if (!organization || metadata.communityProposalId !== input.proposalId) {
+              return { released: false, keptReason: "not_found" as const };
+            }
+            const provisioned = new Set(
+              [organization.requestedBy, metadata.communityReviewerId].filter(
+                (id): id is string => typeof id === "string",
+              ),
+            );
+            const members = await tx
+              .select({ userId: schema.member.userId })
+              .from(schema.member)
+              .where(eq(schema.member.organizationId, organizationId));
+            const [invitations] = await tx
+              .select({ count: count() })
+              .from(schema.invitation)
+              .where(eq(schema.invitation.organizationId, organizationId));
+            const [codes] = await tx
+              .select({ count: count() })
+              .from(schema.onboardingCode)
+              .where(eq(schema.onboardingCode.organizationId, organizationId));
+            if (
+              members.some((member) => !provisioned.has(member.userId)) ||
+              (invitations?.count ?? 0) > 0 ||
+              (codes?.count ?? 0) > 0
+            ) {
+              return { released: false, keptReason: "in_use" as const };
+            }
+            await tx.delete(schema.organization).where(eq(schema.organization.id, organizationId));
+            return { released: true, keptReason: null };
+          }),
+        catch: (error) =>
+          error instanceof ORPCError
+            ? error
+            : new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "Could not release the community organization",
                 cause: error,
               }),
       });

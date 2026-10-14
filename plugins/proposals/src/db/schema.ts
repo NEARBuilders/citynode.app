@@ -17,6 +17,8 @@ export const proposals = pgTable(
     applyError: text("apply_error"),
     removeError: text("remove_error"),
     appliedResourceId: text("applied_resource_id"),
+    applySteps: text("apply_steps"),
+    applyActivityAt: timestamp("apply_activity_at", { mode: "date", withTimezone: true }),
     appliedAt: timestamp("applied_at", { mode: "date", withTimezone: true }),
     removedAt: timestamp("removed_at", { mode: "date", withTimezone: true }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),

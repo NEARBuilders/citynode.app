@@ -1,6 +1,6 @@
 import { CaretRightIcon, GavelIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Badge, Button, EmptyState, LocalDate } from "@/components";
+import { Button, EmptyState, LocalDate } from "@/components";
 import { DataTable, type DataTableColumnDef } from "@/components/data-table";
 import {
   Item,
@@ -11,14 +11,10 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
-import { humanize, ListSkeleton } from "../-admin-ui";
-import type { Proposal } from "./-proposal-columns";
-import {
-  type ProposalReviewFilter,
-  proposalReviewStatusVariant,
-  proposalTitle,
-  proposalTypeLabel,
-} from "./-proposal-review";
+import type { Proposal } from "@/lib/queries/proposals";
+import { ListSkeleton } from "../-admin-ui";
+import { ProposalStatusCell } from "./-proposal-columns";
+import { type ProposalReviewFilter, proposalTitle, proposalTypeLabel } from "./-proposal-review";
 
 interface ProposalListStateProps {
   activeFilter: ProposalReviewFilter;
@@ -107,9 +103,7 @@ export function ProposalListState({
               </ItemDescription>
             </ItemContent>
             <ItemActions>
-              <Badge variant={proposalReviewStatusVariant(proposal.reviewStatus)}>
-                {humanize(proposal.reviewStatus, translate)}
-              </Badge>
+              <ProposalStatusCell proposal={proposal} t={translate} />
               <CaretRightIcon className="size-4 text-muted-foreground" />
             </ItemActions>
           </Item>
