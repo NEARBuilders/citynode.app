@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { Context } from "effect";
-import type { OnboardingRedeemReason } from "../contract";
+import {
+  type OnboardingRedeemFailureCode,
+  type OnboardingRedeemReason,
+  onboardingRedeemFailures,
+} from "../contract";
 import * as schema from "../db/schema";
 import {
   createOrganizationMembershipPolicy,
@@ -11,28 +15,27 @@ import {
 import { AuthServicesTag, type PluginServices } from "../service-types";
 import { createHeaders, getActiveOrganizationId, parseTeamAreas, safeAuthApi } from "../utils";
 
-const redeemFailures: Record<
-  OnboardingRedeemReason,
-  { code: "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND"; message: string }
-> = {
-  organization_not_active: {
-    code: "FORBIDDEN",
-    message: "Organization requires platform-admin approval",
-  },
-  organization_full: {
-    code: "FORBIDDEN",
-    message: "This organization is full, so no more members can join",
-  },
-  code_revoked: { code: "FORBIDDEN", message: "This onboarding code was revoked" },
-  code_expired: { code: "BAD_REQUEST", message: "This onboarding code has expired" },
-  code_used_up: { code: "FORBIDDEN", message: "This onboarding code has reached its limit" },
-  code_not_found: { code: "NOT_FOUND", message: "Onboarding code not found" },
-  organization_not_found: { code: "BAD_REQUEST", message: "Organization not found" },
+const redeemMessages: Record<OnboardingRedeemReason, string> = {
+  organization_not_active: "Organization requires platform-admin approval",
+  organization_full: "This organization is full, so no more members can join",
+  code_revoked: "This onboarding code was revoked",
+  code_expired: "This onboarding code has expired",
+  code_used_up: "This onboarding code has reached its limit",
+  code_not_found: "Onboarding code not found",
+  organization_not_found: "Organization not found",
 };
 
+const redeemCodeByReason = Object.fromEntries(
+  Object.entries(onboardingRedeemFailures).flatMap(([code, failure]) =>
+    failure.data.shape.reason.options.map((reason) => [reason, code]),
+  ),
+) as Record<OnboardingRedeemReason, OnboardingRedeemFailureCode>;
+
 function throwRedeem(reason: OnboardingRedeemReason): never {
-  const failure = redeemFailures[reason];
-  throw new ORPCError(failure.code, { message: failure.message, data: { reason } });
+  throw new ORPCError(redeemCodeByReason[reason], {
+    message: redeemMessages[reason],
+    data: { reason },
+  });
 }
 
 const DEFAULT_MAX_USES = 300;

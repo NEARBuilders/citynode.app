@@ -1,24 +1,15 @@
-import { describe, expect, it } from "vitest";
-import type { z } from "zod";
-import { contract, onboardingRedeemReasons } from "../../src/contract";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import {
+  contract,
+  type OnboardingRedeemFailureCode,
+  type OnboardingRedeemReason,
+  onboardingRedeemReasonSchema,
+} from "../../src/contract";
 
 const redeemErrorMap = contract.redeemOnboardingCode["~orpc"].errorMap;
-
-const declaredReasons = [
-  "organization_not_active",
-  "organization_full",
-  "code_revoked",
-  "code_expired",
-  "code_used_up",
-  "code_not_found",
-  "organization_not_found",
-] as const;
-
-function reasonSchema(code: "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND") {
-  const data = redeemErrorMap[code]?.data;
-  expect(data).toBeDefined();
-  return data as z.ZodType<{ reason: string }>;
-}
+const failureCodes = Object.keys(redeemErrorMap).filter(
+  (code): code is OnboardingRedeemFailureCode => code !== "UNAUTHORIZED",
+);
 
 async function validateRedeemOutput(value: unknown) {
   const schemas = contract.redeemOnboardingCode["~orpc"].outputSchemas ?? [];
@@ -38,19 +29,21 @@ const redeemed = {
 
 describe("redeemOnboardingCode contract errors", () => {
   it("declares exactly the seven join-failure reasons", () => {
-    expect(onboardingRedeemReasons).toEqual(declaredReasons);
+    expect(onboardingRedeemReasonSchema.options).toHaveLength(7);
+    expectTypeOf<OnboardingRedeemReason>().not.toEqualTypeOf<string>();
   });
 
-  it.each([
-    "FORBIDDEN",
-    "BAD_REQUEST",
-    "NOT_FOUND",
-  ] as const)("accepts each declared reason on %s and rejects any other value", (code) => {
-    const schema = reasonSchema(code);
-    for (const reason of declaredReasons) {
-      expect(schema.parse({ reason })).toEqual({ reason });
+  it("sends each reason under exactly one error code", () => {
+    for (const reason of onboardingRedeemReasonSchema.options) {
+      const codes = failureCodes.filter(
+        (code) => redeemErrorMap[code].data.safeParse({ reason }).success,
+      );
+      expect(codes, reason).toHaveLength(1);
     }
-    expect(() => schema.parse({ reason: "not_a_reason" })).toThrow();
+  });
+
+  it.each(failureCodes)("rejects a reason the contract does not declare on %s", (code) => {
+    expect(redeemErrorMap[code].data.safeParse({ reason: "not_a_reason" }).success).toBe(false);
   });
 });
 

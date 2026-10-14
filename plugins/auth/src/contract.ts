@@ -22,34 +22,31 @@ const Errors = {
   },
 };
 
-export const onboardingRedeemReasons = [
-  "organization_not_active",
-  "organization_full",
-  "code_revoked",
-  "code_expired",
-  "code_used_up",
-  "code_not_found",
-  "organization_not_found",
-] as const;
+function onboardingRedeemFailure<const T extends readonly [string, ...string[]]>(
+  status: number,
+  reasons: T,
+) {
+  return { status, data: z.object({ reason: z.enum(reasons) }) };
+}
 
-export const onboardingRedeemReasonSchema = z.enum(onboardingRedeemReasons);
-export type OnboardingRedeemReason = z.infer<typeof onboardingRedeemReasonSchema>;
-const onboardingRedeemErrorData = z.object({ reason: onboardingRedeemReasonSchema });
-const onboardingRedeemErrors = {
-  UNAUTHORIZED: Errors.UNAUTHORIZED,
-  FORBIDDEN: {
-    status: 403,
-    data: onboardingRedeemErrorData,
-  },
-  BAD_REQUEST: {
-    status: 400,
-    data: onboardingRedeemErrorData,
-  },
-  NOT_FOUND: {
-    status: 404,
-    data: onboardingRedeemErrorData,
-  },
+/** Why joining failed, under the one error code each reason is sent with. */
+export const onboardingRedeemFailures = {
+  FORBIDDEN: onboardingRedeemFailure(403, [
+    "organization_not_active",
+    "organization_full",
+    "code_revoked",
+    "code_used_up",
+  ]),
+  BAD_REQUEST: onboardingRedeemFailure(400, ["code_expired", "organization_not_found"]),
+  NOT_FOUND: onboardingRedeemFailure(404, ["code_not_found"]),
 };
+
+export type OnboardingRedeemFailureCode = keyof typeof onboardingRedeemFailures;
+
+export const onboardingRedeemReasonSchema = z.enum(
+  Object.values(onboardingRedeemFailures).flatMap((failure) => failure.data.shape.reason.options),
+);
+export type OnboardingRedeemReason = z.infer<typeof onboardingRedeemReasonSchema>;
 
 const nearIdentitySchema = z.object({
   accountId: z.string(),
@@ -912,7 +909,7 @@ export const contract = oc.router({
         eventName: z.string(),
       }),
     )
-    .errors(onboardingRedeemErrors),
+    .errors({ UNAUTHORIZED: Errors.UNAUTHORIZED, ...onboardingRedeemFailures }),
 
   // ── API Keys ───────────────────────────────────────────────────────
 
