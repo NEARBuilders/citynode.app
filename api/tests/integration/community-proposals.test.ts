@@ -17,6 +17,7 @@ const recordApplyStep = vi.fn(async (_input: RecordedStep) => ({}));
 
 const proposals = new Map<string, Record<string, unknown>>();
 const applicant = "community-applicant.near";
+const savedAt = "2026-09-10T00:00:00.000Z";
 
 function savedProposal(
   id: string,
@@ -27,12 +28,14 @@ function savedProposal(
     submitterAccountId?: string;
     status?: string;
     applyStatus?: string;
+    updatedAt?: string;
   },
 ) {
   return {
     id,
     pluginId: "node",
     entityId: slug,
+    updatedAt: options?.updatedAt ?? savedAt,
     createdBy: options?.createdBy ?? applicant,
     reviewStatus: options?.status ?? "approved",
     applyStatus: options?.applyStatus ?? "applying",
@@ -296,7 +299,7 @@ describe("approved community proposal provisioning", () => {
     const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
     const input = { proposalId: "prop-lagos", entityId: "lagos", hostname: "lagos.citynode.app" };
     await admin.applyCommunityProposal(input);
-    const release = { proposalId: "prop-lagos", entityId: "lagos" };
+    const release = { proposalId: "prop-lagos", entityId: "lagos", expectedUpdatedAt: savedAt };
 
     await expect(admin.releaseCommunityProposal(release)).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -322,6 +325,36 @@ describe("approved community proposal provisioning", () => {
     expect(await admin.getNode({ nodeId: reapplied.nodeId })).toMatchObject({ slug: "lagos" });
   });
 
+  it("refuses to remove resources after another admin resumed the setup", async () => {
+    proposals.set("nairobi", savedProposal("prop-nairobi", "nairobi"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    await admin.applyCommunityProposal({
+      proposalId: "prop-nairobi",
+      entityId: "nairobi",
+      hostname: "nairobi.citynode.app",
+    });
+    proposals.set(
+      "nairobi",
+      savedProposal("prop-nairobi", "nairobi", {
+        applyStatus: "applying",
+        updatedAt: "2026-09-10T00:05:00.000Z",
+      }),
+    );
+    releaseOrganization.mockClear();
+
+    await expect(
+      admin.releaseCommunityProposal({
+        proposalId: "prop-nairobi",
+        entityId: "nairobi",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/changed/) });
+    expect(releaseOrganization).not.toHaveBeenCalled();
+    expect(
+      (await admin.listTenants()).some((item) => item.accountId === "nairobi.sputnik-dao.near"),
+    ).toBe(true);
+  });
+
   it("keeps an organization that existed before the application", async () => {
     proposals.set(
       "accra",
@@ -340,7 +373,11 @@ describe("approved community proposal provisioning", () => {
     releaseOrganization.mockClear();
 
     expect(
-      await admin.releaseCommunityProposal({ proposalId: "prop-accra", entityId: "accra" }),
+      await admin.releaseCommunityProposal({
+        proposalId: "prop-accra",
+        entityId: "accra",
+        expectedUpdatedAt: savedAt,
+      }),
     ).toEqual({
       community: { released: true, keptReason: null },
       organization: { released: false, keptReason: "existing" },

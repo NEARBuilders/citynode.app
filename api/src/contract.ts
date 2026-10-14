@@ -537,6 +537,7 @@ export const contract = oc.router({
       z.object({
         proposalId: z.string().min(1),
         entityId: z.string().min(1),
+        expectedUpdatedAt: z.iso.datetime(),
       }),
     )
     .output(

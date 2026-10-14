@@ -987,55 +987,48 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return community;
       }),
 
-      releaseCommunityProposal: builder.releaseCommunityProposal.effect(function* ({
-        input,
-        context,
-        errors,
-      }) {
-        if (!context.userId && !context.user?.id) {
-          return yield* Effect.fail(
-            errors.UNAUTHORIZED({
-              message: "Authentication required",
-              data: { apiKeyProvided: Boolean(context.apiKey) },
-            }),
-          );
-        }
-        if (context.user?.role !== "admin") {
-          return yield* Effect.fail(
-            errors.FORBIDDEN({ message: "Platform admin required", data: {} }),
-          );
-        }
-        const { proposal, payload, auth } = yield* approvedCommunityProposal(context, input);
-        if (proposal.applyStatus !== "failed") {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", {
-              message: "Only an application whose setup failed can have its resources removed",
-            }),
-          );
-        }
-        const services = yield* ApiServices;
-        const community = yield* services.tenants.releaseNodeProposal({
-          proposalId: proposal.id,
-          accountId: payload.accountId,
-          orgId: payload.orgId ?? `community-${proposal.id}`,
-        });
-        if (payload.orgId) {
-          return {
-            community,
-            organization: { released: false, keptReason: "existing" as const },
-          };
-        }
-        const organization = yield* Effect.tryPromise({
-          try: () => auth.releaseCommunityOrganization({ proposalId: proposal.id }),
-          catch: (error) =>
-            error instanceof ORPCError
-              ? error
-              : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: "Could not remove the community organization",
-                }),
-        });
-        return { community, organization };
-      }),
+      releaseCommunityProposal: builder.releaseCommunityProposal
+        .use(requireAdmin)
+        .effect(function* ({ input, context }) {
+          const { proposal, payload, auth } = yield* approvedCommunityProposal(context, input);
+          // Refuse if another admin resumed the setup after this admin loaded it.
+          if (proposal.updatedAt !== input.expectedUpdatedAt) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", {
+                message: "This proposal changed. Refresh and try again.",
+              }),
+            );
+          }
+          if (proposal.applyStatus !== "failed") {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", {
+                message: "Only an application whose setup failed can have its resources removed",
+              }),
+            );
+          }
+          const services = yield* ApiServices;
+          const community = yield* services.tenants.releaseNodeProposal({
+            proposalId: proposal.id,
+            accountId: payload.accountId,
+            orgId: payload.orgId ?? `community-${proposal.id}`,
+          });
+          if (payload.orgId) {
+            return {
+              community,
+              organization: { released: false, keptReason: "existing" as const },
+            };
+          }
+          const organization = yield* Effect.tryPromise({
+            try: () => auth.releaseCommunityOrganization({ proposalId: proposal.id }),
+            catch: (error) =>
+              error instanceof ORPCError
+                ? error
+                : new ORPCError("INTERNAL_SERVER_ERROR", {
+                    message: "Could not remove the community organization",
+                  }),
+          });
+          return { community, organization };
+        }),
 
       listNodes: builder.listNodes.effect(function* ({ input }) {
         const services = yield* ApiServices;

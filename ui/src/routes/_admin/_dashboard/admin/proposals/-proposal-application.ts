@@ -243,6 +243,7 @@ export async function rejectProposal({
       ? await apiClient.releaseCommunityProposal({
           proposalId: proposal.id,
           entityId: proposal.entityId,
+          expectedUpdatedAt: proposal.updatedAt,
         })
       : null;
   const rejected = await apiClient.proposals.reject({

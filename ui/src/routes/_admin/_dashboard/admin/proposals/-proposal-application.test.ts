@@ -558,6 +558,7 @@ describe("rejecting a community application", () => {
     expect(api.releaseCommunityProposal).toHaveBeenCalledWith({
       proposalId: "proposal-id",
       entityId: "chicago",
+      expectedUpdatedAt: "2026-09-03T00:00:00.000Z",
     });
     expect(api.releaseCommunityProposal.mock.invocationCallOrder[0]).toBeLessThan(
       api.proposals.reject.mock.invocationCallOrder[0]!,
