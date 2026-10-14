@@ -1,6 +1,8 @@
 import { ORPCError } from "@orpc/server";
 import { and, count, desc, eq, ilike, inArray, lte, notInArray, or, sql } from "drizzle-orm";
 import { Clock, Context, DateTime, Effect, Layer } from "effect";
+import type { z } from "zod";
+import { ApplyStepSchema, type InferInput } from "../contract";
 import { DatabaseTag } from "../db/layer";
 import { proposalAuditLog, proposalSubmissions, proposals } from "../db/schema";
 
@@ -8,8 +10,7 @@ type ReviewStatus = "pending" | "approved" | "rejected" | "removed";
 type ApplyStatus = "not_started" | "applying" | "applied" | "failed";
 type RemoveStatus = "not_started" | "removing" | "removed" | "failed";
 type ResubmissionPolicy = "rejected-only" | "rejected-or-removed";
-type ApplyStepStatus = "started" | "waiting" | "completed";
-type ApplyStep = { status: ApplyStepStatus; resourceId: string | null; recordedAt: string };
+type ApplyStep = z.infer<typeof ApplyStepSchema>;
 const SYSTEM_ACTOR = "system";
 const SYSTEM_ACTOR_LABEL = "System";
 const LIFECYCLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -32,6 +33,7 @@ function lifecycleTimedOut(updatedAt: Date | string): boolean {
   return Date.now() - new Date(updatedAt).getTime() >= LIFECYCLE_TIMEOUT_MS;
 }
 
+// Mirrored in SQL by getProposals' lifecycleStatus filter; both use LIFECYCLE_TIMEOUT_MS.
 function applyStalled(row: {
   applyStatus: string;
   updatedAt: Date | string;
@@ -61,19 +63,8 @@ function parseApplySteps(value: string | null | undefined): Record<string, Apply
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
   const steps: Record<string, ApplyStep> = {};
   for (const [name, step] of Object.entries(parsed)) {
-    if (!step || typeof step !== "object") continue;
-    const { status, resourceId, recordedAt } = step as Record<string, unknown>;
-    if (
-      (status !== "started" && status !== "waiting" && status !== "completed") ||
-      typeof recordedAt !== "string"
-    ) {
-      continue;
-    }
-    steps[name] = {
-      status,
-      resourceId: typeof resourceId === "string" ? resourceId : null,
-      recordedAt,
-    };
+    const result = ApplyStepSchema.safeParse(step);
+    if (result.success) steps[name] = result.data;
   }
   return steps;
 }
@@ -220,15 +211,12 @@ export class ProposalService extends Context.Service<
       expectedUpdatedAt: string;
       error: string;
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
-    recordApplyStep: (input: {
-      pluginId: string;
-      entityId: string;
-      step: string;
-      status: ApplyStepStatus;
-      resourceId?: string;
-      actorId: string;
-      actor?: { name?: string; email?: string };
-    }) => Effect.Effect<any, ORPCError<string, unknown>>;
+    recordApplyStep: (
+      input: InferInput<"recordApplyStep"> & {
+        actorId: string;
+        actor?: { name?: string; email?: string };
+      },
+    ) => Effect.Effect<any, ORPCError<string, unknown>>;
     markRemoved: (input: {
       pluginId: string;
       entityId: string;
@@ -240,18 +228,13 @@ export class ProposalService extends Context.Service<
       expectedUpdatedAt: string;
       error: string;
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
-    getProposals: (input: {
-      pluginId?: string;
-      entityId?: string;
-      reviewStatus?: ReviewStatus;
-      lifecycleStatus?: "actionable" | "needs_review";
-      query?: string;
-      limit?: number;
-      cursor?: string;
-      privatePluginIds?: string[];
-      viewerId?: string;
-      isAdmin?: boolean;
-    }) => Effect.Effect<any, ORPCError<string, unknown>>;
+    getProposals: (
+      input: InferInput<"getProposals"> & {
+        privatePluginIds?: string[];
+        viewerId?: string;
+        isAdmin?: boolean;
+      },
+    ) => Effect.Effect<any, ORPCError<string, unknown>>;
     getMyNodeApplications: (actorId: string) => Effect.Effect<any[], ORPCError<string, unknown>>;
     getProposalCount: (input: {
       pluginId: string;
@@ -1104,6 +1087,7 @@ export const ProposalServiceLive = Layer.effect(
           if (input.entityId) conditions.push(eq(proposals.entityId, input.entityId));
           if (input.reviewStatus) conditions.push(eq(proposals.reviewStatus, input.reviewStatus));
           if (input.lifecycleStatus) {
+            // Same stall rule as applyStalled, in SQL so the filtered page is accurate.
             const lifecycleCutoff = DateTime.toDateUtc(
               DateTime.makeUnsafe((yield* Clock.currentTimeMillis) - LIFECYCLE_TIMEOUT_MS),
             );

@@ -1,4 +1,5 @@
 import "@orpc/openapi/extensions/route";
+import type { InferContractRouterInputs, InferContractRouterOutputs } from "@orpc/contract";
 import { eventIterator, oc } from "@orpc/contract";
 import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
 import { z } from "zod";
@@ -346,3 +347,8 @@ export const contract = oc.router({
 });
 
 export type ContractType = typeof contract;
+
+export type InferOutput<K extends keyof InferContractRouterOutputs<ContractType>> =
+  InferContractRouterOutputs<ContractType>[K];
+export type InferInput<K extends keyof InferContractRouterInputs<ContractType>> =
+  InferContractRouterInputs<ContractType>[K];
