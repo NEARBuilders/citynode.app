@@ -4,8 +4,11 @@ Community settings are available only to the community's organization owners and
 admins, personal tenant owners, and platform admins. The server filters
 `listTenants` accordingly and checks the same policy for private binding reads and
 binding changes. The `/tenant/$tenantId` route checks a fresh server response
-before loading the settings page. Organization Community and Homepage tabs are
-hidden and cannot be selected by regular members, even with a direct tab URL.
+before loading the settings page. The community's published config (homepage and
+node config) is edited in that same Community settings page; the organization page
+links owners and admins there (switching to the organization first when it is not
+active), and the retired `?tab=homepage` / `?tab=node-config` URLs redirect there
+for them and to the Members tab for everyone else.
 Public community discovery, staking, and hostname resolution remain available;
 public tenant responses omit ownership and override permission settings. The
 public host-routing manifest still includes the runtime flags needed to serve
