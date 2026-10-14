@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
@@ -17,6 +17,8 @@ const harness = vi.hoisted(() => ({
   listOrganizations: vi.fn(),
   resolveTenantByOrgId: vi.fn(),
   listMembers: vi.fn(),
+  switchOrganization: vi.fn(),
+  navigate: vi.fn(),
 }));
 
 vi.mock("@/app", async () => ({
@@ -31,7 +33,12 @@ vi.mock("@/app", async () => ({
   }),
 }));
 
+vi.mock("@/components/layout/use-switch-organization", () => ({
+  useSwitchOrganization: () => ({ mutateAsync: harness.switchOrganization, isPending: false }),
+}));
+
 vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => harness.navigate,
   Link: ({
     to,
     params,
@@ -56,9 +63,16 @@ function setup(options: {
   tenants?: Record<string, TenantResult>;
   orgRole?: "owner" | "admin" | "member";
   platformRole?: "admin" | "user";
+  activeOrgId?: string | null;
 }) {
   harness.session = options.signedIn
-    ? { user: { id: "u1", isAnonymous: false, role: options.platformRole ?? "user" } }
+    ? {
+        user: { id: "u1", isAnonymous: false, role: options.platformRole ?? "user" },
+        session: {
+          activeOrganizationId:
+            options.activeOrgId === undefined ? options.orgs?.[0]?.id : options.activeOrgId,
+        },
+      }
     : null;
   harness.listMembers.mockResolvedValue({
     data: { members: [{ userId: "u1", role: options.orgRole ?? "owner" }] },
@@ -92,6 +106,8 @@ beforeEach(() => {
   harness.listOrganizations.mockReset();
   harness.resolveTenantByOrgId.mockReset();
   harness.listMembers.mockReset();
+  harness.switchOrganization.mockReset();
+  harness.navigate.mockReset();
 });
 
 afterEach(cleanup);
@@ -124,6 +140,63 @@ describe("ProposeHomepageCta", () => {
     const link = await screen.findByTestId("node-page.propose-homepage");
     expect(link.getAttribute("href")).toBe(`/tenant/${TENANT_ID}#published-config`);
     expect(link.textContent).toContain("Propose homepage change");
+  });
+
+  it("makes a non-active owning organization active before opening Community settings", async () => {
+    setup({
+      signedIn: true,
+      orgs: [{ id: "org-1", slug: "chicago-org" }],
+      tenants: { "org-1": { id: TENANT_ID, ownerKind: "dao" } },
+      activeOrgId: "org-other",
+    });
+    harness.switchOrganization.mockResolvedValue(undefined);
+    renderCta();
+
+    fireEvent.click(await screen.findByTestId("node-page.propose-homepage"));
+
+    await waitFor(() =>
+      expect(harness.navigate).toHaveBeenCalledWith({
+        to: "/tenant/$tenantId",
+        params: { tenantId: TENANT_ID },
+        hash: "published-config",
+      }),
+    );
+    expect(harness.switchOrganization).toHaveBeenCalledWith("org-1");
+    expect(harness.switchOrganization.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.navigate.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("stays put when making the owning organization active fails", async () => {
+    setup({
+      signedIn: true,
+      orgs: [{ id: "org-1", slug: "chicago-org" }],
+      tenants: { "org-1": { id: TENANT_ID, ownerKind: "dao" } },
+      activeOrgId: null,
+    });
+    harness.switchOrganization.mockRejectedValue(new Error("forbidden"));
+    renderCta();
+
+    fireEvent.click(await screen.findByTestId("node-page.propose-homepage"));
+
+    await waitFor(() => expect(harness.switchOrganization).toHaveBeenCalledWith("org-1"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.navigate).not.toHaveBeenCalled();
+  });
+
+  it("links a platform admin straight to Community settings without switching", async () => {
+    setup({
+      signedIn: true,
+      orgs: [{ id: "org-1", slug: "chicago-org" }],
+      tenants: { "org-1": { id: TENANT_ID, ownerKind: "dao" } },
+      platformRole: "admin",
+      activeOrgId: "org-other",
+    });
+    renderCta();
+
+    const link = await screen.findByTestId("node-page.propose-homepage");
+    expect(link.getAttribute("href")).toBe(`/tenant/${TENANT_ID}#published-config`);
+    expect(harness.switchOrganization).not.toHaveBeenCalled();
   });
 
   it("shows the button to a platform admin in the owning organization", async () => {

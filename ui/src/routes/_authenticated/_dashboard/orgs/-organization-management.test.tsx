@@ -236,6 +236,35 @@ describe("organization management controls", () => {
     expect(onDelete).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    false,
+    true,
+  ])("opens Community settings of a non-active organization through its switch handler (switching: %s)", (isSwitching) => {
+    const onOpenSettings = vi.fn();
+    render(
+      <OrganizationOverview
+        canDelete
+        isDeleting={false}
+        isActive={false}
+        isPersonal={false}
+        isLeaving={false}
+        isSwitching={isSwitching}
+        memberCount={2}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onLeave={vi.fn()}
+        onOpenSettings={onOpenSettings}
+        onSwitch={vi.fn()}
+        org={organization}
+        settingsTenantId="tenant-1"
+      />,
+    );
+    const button = screen.getByTestId("org-community-settings");
+    expect(button.getAttribute("href")).toBeNull();
+    fireEvent.click(button);
+    expect(onOpenSettings).toHaveBeenCalledTimes(isSwitching ? 0 : 1);
+  });
+
   it("does not offer invitations from a personal organization", () => {
     renderInvitations({ canManageMembers: true, isPersonal: true });
     expect(screen.queryByPlaceholderText("email@example.com")).toBeNull();

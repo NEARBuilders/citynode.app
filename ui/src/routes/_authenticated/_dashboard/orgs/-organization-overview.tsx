@@ -23,6 +23,7 @@ export function OrganizationOverview({
   onDelete,
   onEdit,
   onLeave,
+  onOpenSettings,
   onSwitch,
   org,
   settingsTenantId,
@@ -38,6 +39,8 @@ export function OrganizationOverview({
   onDelete: () => void;
   onEdit: () => void;
   onLeave: () => void;
+  /** Opens Community settings when a plain link can't (the organization isn't active yet). */
+  onOpenSettings?: () => void;
   onSwitch: () => void;
   org: Organization;
   settingsTenantId?: string;
@@ -82,17 +85,28 @@ export function OrganizationOverview({
                 {translate(isSwitching ? "org.switching" : "org.makeActive")}
               </Button>
             )}
-            {settingsTenantId && (
-              <Button
-                variant="outline"
-                nativeButton={false}
-                render={<Link to="/tenant/$tenantId" params={{ tenantId: settingsTenantId }} />}
-                data-testid="org-community-settings"
-              >
-                <GearSixIcon />
-                {translate("tenant.settings")}
-              </Button>
-            )}
+            {settingsTenantId &&
+              (onOpenSettings ? (
+                <Button
+                  variant="outline"
+                  onClick={onOpenSettings}
+                  disabled={isSwitching}
+                  data-testid="org-community-settings"
+                >
+                  <GearSixIcon />
+                  {translate("tenant.settings")}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  nativeButton={false}
+                  render={<Link to="/tenant/$tenantId" params={{ tenantId: settingsTenantId }} />}
+                  data-testid="org-community-settings"
+                >
+                  <GearSixIcon />
+                  {translate("tenant.settings")}
+                </Button>
+              ))}
             {hasMenu && (
               <RowMenu label={translate("org.actions")} testId="org-actions-menu">
                 {canEdit && (

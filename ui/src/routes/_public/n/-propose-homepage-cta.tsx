@@ -9,6 +9,7 @@ import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isCommunitySettingsRole } from "@/lib/team-workspace";
 import { useOrgMemberRole } from "../../_authenticated/_dashboard/orgs/-organization-members";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../_authenticated/_dashboard/tenant/-published-config-section";
+import { useOpenCommunitySettings } from "../../_authenticated/_dashboard/tenant/-use-open-community-settings";
 
 export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
   const translate = useAppTranslation();
@@ -39,8 +40,31 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
 
   const role = useOrgMemberRole(owningOrg?.id, session?.user?.id);
   const canManage = session?.user?.role === "admin" || isCommunitySettingsRole(role);
+  const settings = useOpenCommunitySettings();
 
   if (!owningOrg || !tenantId || !canManage) return null;
+
+  const label = (
+    <>
+      <HouseIcon />
+      {translate("homepage.change")}
+    </>
+  );
+
+  if (settings.needsSwitch(owningOrg.id)) {
+    return (
+      <Button
+        variant="outline"
+        disabled={settings.isPending}
+        onClick={() =>
+          void settings.open({ orgId: owningOrg.id, tenantId, hash: PUBLISHED_CONFIG_SECTION_ID })
+        }
+        data-testid="node-page.propose-homepage"
+      >
+        {label}
+      </Button>
+    );
+  }
 
   return (
     <Button
@@ -55,8 +79,7 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
         />
       }
     >
-      <HouseIcon />
-      {translate("homepage.change")}
+      {label}
     </Button>
   );
 }

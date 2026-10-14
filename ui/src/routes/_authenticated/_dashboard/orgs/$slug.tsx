@@ -7,7 +7,7 @@ import {
   stripSearchParams,
   useRouter,
 } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { type SessionData, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
@@ -31,6 +31,7 @@ import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isCommunitySettingsRole } from "@/lib/team-workspace";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../tenant/-published-config-section";
+import { useOpenCommunitySettings } from "../tenant/-use-open-community-settings";
 import {
   ApiKeysTab,
   type CreatedOrganizationApiKey,
@@ -172,6 +173,11 @@ function OrganizationDetail() {
   ).length;
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
+  const communitySettings = useOpenCommunitySettings();
+  const openSettings =
+    settingsTenantId && communitySettings.needsSwitch(orgId)
+      ? () => void communitySettings.open({ orgId, tenantId: settingsTenantId })
+      : undefined;
 
   const [pendingTeamDeleteId, setPendingTeamDeleteId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -283,11 +289,10 @@ function OrganizationDetail() {
     }
     const target = legacySettingsTarget({ canViewSettings, tenantId: tenantQuery.data?.id });
     return target.to === "settings" ? (
-      <Navigate
-        to="/tenant/$tenantId"
-        params={{ tenantId: target.tenantId }}
-        hash={PUBLISHED_CONFIG_SECTION_ID}
-        replace
+      <LegacySettingsRedirect
+        orgId={orgId}
+        tenantId={target.tenantId}
+        onFailed={() => setActiveTab("members")}
       />
     ) : (
       <Navigate to="/orgs/$slug" params={{ slug: orgSlug }} search={{ tab: "members" }} replace />
@@ -302,7 +307,7 @@ function OrganizationDetail() {
         isActive={isActive}
         isPersonal={isPersonal}
         isLeaving={leaveOrgMutation.isPending}
-        isSwitching={switchOrg.isPending}
+        isSwitching={switchOrg.isPending || communitySettings.isPending}
         memberCount={members.length}
         myRole={myMembership?.role}
         onDelete={() => deleteOrgMutation.mutate()}
@@ -312,6 +317,7 @@ function OrganizationDetail() {
           setIsEditing(true);
         }}
         onLeave={() => leaveOrgMutation.mutate()}
+        onOpenSettings={openSettings}
         onSwitch={() => switchOrg.mutate(orgId)}
         org={org}
         settingsTenantId={settingsTenantId}
@@ -426,6 +432,37 @@ function OrganizationDetail() {
           onDismiss={() => setCreatedApiKey(null)}
         />
       </Tabs>
+    </PageContainer>
+  );
+}
+
+/**
+ * Sends a retired settings tab to Community settings, making the organization
+ * active first when it isn't (see useOpenCommunitySettings).
+ */
+function LegacySettingsRedirect({
+  orgId,
+  tenantId,
+  onFailed,
+}: {
+  orgId: string;
+  tenantId: string;
+  onFailed: () => void;
+}) {
+  const { open } = useOpenCommunitySettings();
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void open({ orgId, tenantId, hash: PUBLISHED_CONFIG_SECTION_ID, replace: true }).then(
+      (opened) => {
+        if (!opened) onFailed();
+      },
+    );
+  }, [open, orgId, tenantId, onFailed]);
+  return (
+    <PageContainer variant="wide">
+      <Skeleton className="h-64 w-full" />
     </PageContainer>
   );
 }
