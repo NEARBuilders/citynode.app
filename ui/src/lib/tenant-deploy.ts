@@ -68,7 +68,7 @@ export interface TenantConfigPublishInput {
 
 type AuthClientShape = Pick<ReturnType<typeof useAuthClient>, "near">;
 
-function networkForAccount(accountId: string): "mainnet" | "testnet" {
+export function networkForAccount(accountId: string): "mainnet" | "testnet" {
   return accountId.endsWith(".testnet") ? "testnet" : "mainnet";
 }
 

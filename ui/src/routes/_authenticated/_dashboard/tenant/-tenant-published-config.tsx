@@ -28,7 +28,12 @@ import { describeDaoError, useDaoConnection } from "@/lib/dao-connect";
 import { presentationLabel } from "@/lib/presentation-label";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
 import { canAccountPropose, trezuDaoUrl, waitFor } from "@/lib/sputnik-proposals";
-import { proposeTenantConfigAsMember, publishTenantConfigForMode } from "@/lib/tenant-deploy";
+import {
+  networkForAccount,
+  proposeTenantConfigAsMember,
+  publishTenantConfigForMode,
+  type TenantConfigPublishMode,
+} from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
 import { ConfigField } from "./-config-field";
 import { CustomUiBundleFields } from "./-custom-ui-bundle-fields";
@@ -38,7 +43,7 @@ import type { TenantRecord } from "./-tenant-types";
 import { usePendingConfigProposal } from "./-use-pending-config-proposal";
 import { usePublishedConfig } from "./-use-published-config";
 
-type PublishPath = "dao" | "member" | "platform";
+type PublishPath = TenantConfigPublishMode | "member";
 
 export function TenantPublishedConfig({
   tenant,
@@ -115,8 +120,7 @@ export function TenantPublishedConfig({
     connection.status === "connected" && connection.daoAccountId === tenantAccount;
   const path: PublishPath = daoOwned ? (daoConnected ? "dao" : "member") : "platform";
   const ownsWallet =
-    nearAccountId === tenantAccount &&
-    activeNetwork === (tenantAccount.endsWith(".testnet") ? "testnet" : "mainnet");
+    nearAccountId === tenantAccount && activeNetwork === networkForAccount(tenantAccount);
 
   const configMatchesDraft = (resolved: Record<string, unknown> | null | undefined) =>
     !!resolved &&

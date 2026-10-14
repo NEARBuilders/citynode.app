@@ -57,7 +57,8 @@ vi.mock("@/lib/use-near-account", () => ({
   useNearAccount: () => "wallet.near",
 }));
 
-vi.mock("@/lib/tenant-deploy", () => ({
+vi.mock("@/lib/tenant-deploy", async () => ({
+  ...(await vi.importActual<object>("@/lib/tenant-deploy")),
   publishTenantConfigForMode: vi.fn(async () => undefined),
 }));
 

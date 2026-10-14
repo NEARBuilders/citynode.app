@@ -1,14 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ApiClient, useApiClient } from "@/app";
 
 export const TENANT_CONFIG_REFETCH_MS = 15_000;
 
-type RegistryAppResult = Awaited<ReturnType<ApiClient["registry"]["getRegistryApp"]>>["data"];
-
-export function usePublishedConfig(accountId: string, gatewayId: string) {
-  const apiClient = useApiClient();
-
-  const registryQuery = useQuery({
+function publishedConfigQueryOptions(apiClient: ApiClient, accountId: string, gatewayId: string) {
+  return queryOptions({
     queryKey: ["node-config", "registry-app", accountId, gatewayId],
     queryFn: async () => {
       try {
@@ -18,15 +14,21 @@ export function usePublishedConfig(accountId: string, gatewayId: string) {
         return null;
       }
     },
+  });
+}
+
+export function usePublishedConfig(accountId: string, gatewayId: string) {
+  const apiClient = useApiClient();
+  const queryClient = useQueryClient();
+  const options = publishedConfigQueryOptions(apiClient, accountId, gatewayId);
+
+  const registryQuery = useQuery({
+    ...options,
     enabled: !!accountId && !!gatewayId,
     refetchInterval: TENANT_CONFIG_REFETCH_MS,
   });
 
-  const fetchPublishedNow = (): Promise<RegistryAppResult | null> =>
-    apiClient.registry
-      .getRegistryApp({ accountId, gatewayId })
-      .then((result) => result.data ?? null)
-      .catch(() => null);
+  const fetchPublishedNow = () => queryClient.fetchQuery({ ...options, staleTime: 0 });
 
   return {
     registryQuery,

@@ -45,7 +45,8 @@ vi.mock("@/lib/dao-connect", async () => ({
   useDaoConnection: () => harness.connection,
 }));
 
-vi.mock("@/lib/tenant-deploy", () => ({
+vi.mock("@/lib/tenant-deploy", async () => ({
+  ...(await vi.importActual<object>("@/lib/tenant-deploy")),
   proposeTenantConfigAsMember: (...args: unknown[]) => harness.proposeTenantConfigAsMember(...args),
   publishTenantConfigForMode: (...args: unknown[]) => harness.publishTenantConfigForMode(...args),
 }));
