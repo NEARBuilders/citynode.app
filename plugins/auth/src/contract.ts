@@ -20,7 +20,37 @@ const Errors = {
     status: 400,
     message: "Invalid request",
   },
+  CONFLICT: {
+    status: 409,
+    message: "Resource conflict",
+  },
 };
+
+function onboardingRedeemFailure<const T extends readonly [string, ...string[]]>(
+  status: number,
+  reasons: T,
+) {
+  return { status, data: z.object({ reason: z.enum(reasons) }) };
+}
+
+/** Why joining failed, under the one error code each reason is sent with. */
+export const onboardingRedeemFailures = {
+  FORBIDDEN: onboardingRedeemFailure(403, [
+    "organization_not_active",
+    "organization_full",
+    "code_revoked",
+    "code_used_up",
+  ]),
+  BAD_REQUEST: onboardingRedeemFailure(400, ["code_expired", "organization_not_found"]),
+  NOT_FOUND: onboardingRedeemFailure(404, ["code_not_found"]),
+};
+
+export type OnboardingRedeemFailureCode = keyof typeof onboardingRedeemFailures;
+
+export const onboardingRedeemReasonSchema = z.enum(
+  Object.values(onboardingRedeemFailures).flatMap((failure) => failure.data.shape.reason.options),
+);
+export type OnboardingRedeemReason = z.infer<typeof onboardingRedeemReasonSchema>;
 
 const nearIdentitySchema = z.object({
   accountId: z.string(),
@@ -229,6 +259,12 @@ const onboardingCodeSummarySchema = z.object({
   createdAt: z.date(),
 });
 
+const onboardingRedemptionMonthSchema = z.object({
+  month: z.string(),
+  redeemed: z.number().int().nonnegative(),
+  newMembers: z.number().int().nonnegative(),
+});
+
 const daoOutputSchema = z.object({
   daoAccountId: z.string().nullable(),
   daoNetwork: z.enum(["mainnet", "testnet"]).nullable(),
@@ -384,6 +420,32 @@ export const contract = oc.router({
       ]),
     )
     .output(organizationInfoSchema)
+    .errors(Errors),
+
+  provisionCommunityOrganization: oc
+    .route({ method: "POST", path: "/v1/auth/admin/community-organizations" })
+    .input(
+      z.object({
+        proposalId: z.string().min(1),
+        name: z.string().trim().min(1),
+        slug: z.string().regex(/^[a-z0-9-]+$/),
+        proposerAccountId: z.string().min(1),
+        proposerUserId: z.string().optional(),
+        legacyOrgId: z.string().optional(),
+      }),
+    )
+    .output(organizationInfoSchema)
+    .errors(Errors),
+
+  releaseCommunityOrganization: oc
+    .route({ method: "POST", path: "/v1/auth/admin/community-organizations/release" })
+    .input(z.object({ proposalId: z.string().min(1) }))
+    .output(
+      z.object({
+        released: z.boolean(),
+        keptReason: z.enum(["not_found", "in_use"]).nullable(),
+      }),
+    )
     .errors(Errors),
 
   createOrganization: oc
@@ -759,6 +821,7 @@ export const contract = oc.router({
     .input(
       z.object({
         organizationId: z.string().optional(),
+        eventId: z.string().min(1).max(200).optional(),
       }),
     )
     .output(z.array(onboardingCodeSummarySchema))
@@ -808,6 +871,45 @@ export const contract = oc.router({
     )
     .errors(Errors),
 
+  listOnboardingJoins: oc
+    .route({ method: "GET", path: "/v1/auth/admin/onboarding/joins" })
+    .input(
+      z.object({
+        month: z
+          .string()
+          .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+          .optional(),
+      }),
+    )
+    .output(
+      z.object({
+        month: z.string(),
+        totals: z.object({
+          redeemed: z.number().int().nonnegative(),
+          newMembers: z.number().int().nonnegative(),
+        }),
+        organizations: z.array(
+          z.object({
+            organizationId: z.string(),
+            redeemed: z.number().int().nonnegative(),
+            newMembers: z.number().int().nonnegative(),
+          }),
+        ),
+      }),
+    )
+    .errors(Errors),
+
+  getOnboardingRedemptions: oc
+    .route({ method: "GET", path: "/v1/auth/onboarding/redemptions" })
+    .input(z.object({ organizationId: z.string().optional() }))
+    .output(
+      z.object({
+        thisMonth: onboardingRedemptionMonthSchema,
+        lastMonth: onboardingRedemptionMonthSchema,
+      }),
+    )
+    .errors(Errors),
+
   getOnboardingCodeInfo: oc
     .route({ method: "GET", path: "/v1/auth/onboarding/info" })
     .input(z.object({ code: z.string().min(1) }))
@@ -833,11 +935,12 @@ export const contract = oc.router({
       z.object({
         success: z.boolean(),
         alreadyRedeemed: z.boolean(),
+        organizationId: z.string(),
         organizationName: z.string(),
         eventName: z.string(),
       }),
     )
-    .errors(Errors),
+    .errors({ UNAUTHORIZED: Errors.UNAUTHORIZED, ...onboardingRedeemFailures }),
 
   // ── API Keys ───────────────────────────────────────────────────────
 

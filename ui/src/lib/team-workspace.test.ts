@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@/app";
 import type { AuthRequestContext } from "@/lib/auth";
 import {
-  areaForPath,
+  areasForPath,
+  canManageCommunity,
+  canOrganizeEvents,
+  isCommunitySettingsRole,
   isPathAllowed,
   resolveTeamWorkspace,
   teamWorkspaceQueryOptions,
@@ -94,13 +97,15 @@ describe("resolveTeamWorkspace", () => {
 
 describe("route areas", () => {
   it("maps dashboard sections to feature areas", () => {
-    expect(areaForPath("/dashboard/node")).toBe("node-operations");
-    expect(areaForPath("/dashboard/node/proposals")).toBe("node-operations");
-    expect(areaForPath("/tenant/abc")).toBe("node-operations");
-    expect(areaForPath("/stake")).toBe("stake");
-    expect(areaForPath("/dashboard")).toBeNull();
-    expect(areaForPath("/orgs/acme")).toBeNull();
-    expect(areaForPath("/stakeholders")).toBeNull();
+    expect(areasForPath("/dashboard/node")).toEqual(["node-operations", "finance", "events"]);
+    expect(areasForPath("/dashboard/node/")).toEqual(["node-operations", "finance", "events"]);
+    expect(areasForPath("/dashboard/node/proposals")).toEqual(["node-operations"]);
+    expect(areasForPath("/tenant/abc")).toEqual(["node-operations"]);
+    expect(areasForPath("/stake")).toEqual(["stake"]);
+    expect(areasForPath("/dashboard")).toBeNull();
+    expect(areasForPath("/orgs/acme")).toBeNull();
+    expect(areasForPath("/stakeholders")).toBeNull();
+    expect(areasForPath("/dashboard/nodes")).toBeNull();
   });
 
   it("blocks sections outside the active team's areas only", () => {
@@ -108,9 +113,79 @@ describe("route areas", () => {
     const open = resolveTeamWorkspace(context({}));
 
     expect(isPathAllowed(restricted, "/stake")).toBe(true);
-    expect(isPathAllowed(restricted, "/dashboard/node")).toBe(false);
+    expect(isPathAllowed(restricted, "/dashboard/node/proposals")).toBe(false);
     expect(isPathAllowed(restricted, "/dashboard")).toBe(true);
     expect(isPathAllowed(open, "/dashboard/node")).toBe(true);
+  });
+
+  it("lets a Finance-active member open the community overview and nothing else under it", () => {
+    const treasury = resolveTeamWorkspace(context({ activeTeamId: "team-fin" }));
+
+    expect(isPathAllowed(treasury, "/dashboard/node")).toBe(true);
+    expect(isPathAllowed(treasury, "/dashboard/node/")).toBe(true);
+    expect(isPathAllowed(treasury, "/dashboard/node/proposals")).toBe(false);
+    expect(isPathAllowed(treasury, "/dashboard/node/proposals/7")).toBe(false);
+    expect(isPathAllowed(treasury, "/nodes/node-1/content")).toBe(false);
+    expect(isPathAllowed(treasury, "/tenant/tenant-1")).toBe(false);
+  });
+
+  it("keeps the whole community section open to a Node operations team", () => {
+    const operations = resolveTeamWorkspace(context({ activeTeamId: "team-ops" }));
+
+    expect(isPathAllowed(operations, "/dashboard/node")).toBe(true);
+    expect(isPathAllowed(operations, "/dashboard/node/proposals")).toBe(true);
+    expect(isPathAllowed(operations, "/tenant/tenant-1")).toBe(true);
+  });
+
+  it("opens the community overview, events and onboarding to an events team", () => {
+    const events = { id: "team-events", name: "Events", areas: ["events"] };
+    const workspace = resolveTeamWorkspace(context({ activeTeamId: events.id, teams: [events] }));
+
+    expect(isPathAllowed(workspace, "/dashboard/node")).toBe(true);
+    expect(isPathAllowed(workspace, "/nodes/node-1/content")).toBe(true);
+    expect(isPathAllowed(workspace, "/nodes/node-1/events/new")).toBe(true);
+    expect(isPathAllowed(workspace, "/dashboard/node/proposals")).toBe(false);
+    expect(isPathAllowed(workspace, "/tenant/tenant-1")).toBe(false);
+  });
+
+  it("closes the community overview to a team without a community area", () => {
+    const staking = { id: "team-stake", name: "Staking", areas: ["stake"] };
+    const workspace = resolveTeamWorkspace(context({ activeTeamId: staking.id, teams: [staking] }));
+
+    expect(isPathAllowed(workspace, "/dashboard/node")).toBe(false);
+    expect(isPathAllowed(workspace, "/nodes/node-1/content")).toBe(false);
+  });
+});
+
+describe("community permissions", () => {
+  const events = { id: "team-events", name: "Community", areas: ["events"] };
+
+  it("keeps community management with owners, admins and platform admins", () => {
+    expect(canManageCommunity(context({ orgRole: "owner" }))).toBe(true);
+    expect(canManageCommunity(context({ orgRole: "member", userRole: "admin" }))).toBe(true);
+    expect(canManageCommunity(context({ teams: [events] }))).toBe(false);
+  });
+
+  it.each([
+    ["owner", true],
+    ["admin", true],
+    ["member", false],
+    [null, false],
+    [undefined, false],
+  ])("treats the %s organization role as a community settings role: %s", (role, expected) => {
+    expect(isCommunitySettingsRole(role)).toBe(expected);
+  });
+
+  it("lets members of an events team organize events whether or not the team is active", () => {
+    expect(canOrganizeEvents(context({ teams: [events] }))).toBe(true);
+    expect(canOrganizeEvents(context({ teams: [events], activeTeamId: events.id }))).toBe(true);
+    expect(canOrganizeEvents(context({ orgRole: "owner", teams: [] }))).toBe(true);
+  });
+
+  it("does not let members without the events area organize events", () => {
+    expect(canOrganizeEvents(context({}))).toBe(false);
+    expect(canOrganizeEvents(context({ teams: [] }))).toBe(false);
+    expect(canOrganizeEvents(null)).toBe(false);
   });
 });
 

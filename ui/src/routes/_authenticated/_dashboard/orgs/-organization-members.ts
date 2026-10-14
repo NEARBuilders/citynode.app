@@ -1,10 +1,40 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { AuthClient } from "@/app";
+import { type AuthClient, useAuthClient } from "@/app";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { MemberCardMember } from "./-member-card";
 import { orgMembersQueryKey } from "./-organization-query-keys";
+
+async function fetchOrgMembers(auth: AuthClient, orgId: string) {
+  const { data, error } = await auth.organization.listMembers({
+    query: { organizationId: orgId },
+  });
+  if (error) throw new Error(error.message);
+  return data?.members ?? [];
+}
+
+export type OrgMember = Awaited<ReturnType<typeof fetchOrgMembers>>[number];
+
+export function orgMembersQueryOptions(auth: AuthClient, orgId: string) {
+  return queryOptions({
+    queryKey: orgMembersQueryKey(orgId),
+    queryFn: () => fetchOrgMembers(auth, orgId),
+  });
+}
+
+/** The given user's role in the organization, once its members have loaded. */
+export function useOrgMemberRole(
+  orgId: string | null | undefined,
+  userId: string | null | undefined,
+): OrgMember["role"] | undefined {
+  const auth = useAuthClient();
+  const { data: members } = useQuery({
+    ...orgMembersQueryOptions(auth, orgId ?? ""),
+    enabled: !!orgId && !!userId,
+  });
+  return members?.find((member) => member.userId === userId)?.role;
+}
 
 export function useOrganizationMemberActions(auth: AuthClient, orgId: string) {
   const translate = useAppTranslation();

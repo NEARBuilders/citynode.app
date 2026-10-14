@@ -23,6 +23,7 @@ import { authErrorMessage } from "@/i18n/error-message";
 import { LoginLanguageSelector } from "@/i18n/language-selector";
 import { useLoginTranslation } from "@/i18n/runtime";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
+import { SessionUnavailable } from "./session-unavailable";
 
 type ProfileUser = {
   id: string;
@@ -35,11 +36,11 @@ type ProfileUser = {
 export function ProfileSettings() {
   const translate = useLoginTranslation();
   const auth = useAuthClient();
-  const { data: session } = useQuery(sessionQueryOptions(auth));
-  const user = session?.user;
+  const sessionQuery = useQuery(sessionQueryOptions(auth));
+  const user = sessionQuery.data?.user;
   const [addEmailOpen, setAddEmailOpen] = useState(false);
 
-  if (!user) return null;
+  if (!user) return <SessionUnavailable query={sessionQuery} />;
 
   const emailIsSynthetic = isSyntheticEmail(user.email);
   const showAddEmailPrompt = !user.isAnonymous && emailIsSynthetic;

@@ -32,6 +32,10 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
     new URL("../db/migrations/0001_legacy_lifecycle_repair.sql", import.meta.url),
     "utf8",
   );
+  const applyStepsSource = await readFile(
+    new URL("../db/migrations/0003_apply_steps.sql", import.meta.url),
+    "utf8",
+  );
   return {
     default: [
       {
@@ -47,6 +51,15 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
         hash: "proposals-legacy-lifecycle-repair-test",
         tag: "proposals-legacy-lifecycle-repair-test",
         sql: repairSource.split("--> statement-breakpoint").map((statement) => statement.trim()),
+      },
+      {
+        idx: 3,
+        when: 1791763200000,
+        hash: "proposals-apply-steps-test",
+        tag: "proposals-apply-steps-test",
+        sql: applyStepsSource
+          .split("--> statement-breakpoint")
+          .map((statement) => statement.trim()),
       },
     ],
   };
@@ -697,6 +710,302 @@ describe.sequential("Proposals plugin", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("keeps recorded setup steps across failed applies and retries", async () => {
+    const input = {
+      pluginId: "builders",
+      entityId: "resumable-application.near",
+      payload: { name: "Resumable Application" },
+      idempotencyKey: "resumable-application",
+    };
+    const step = { pluginId: input.pluginId, entityId: input.entityId };
+    const proposed = await aliceClient().propose(input);
+
+    await expect(
+      adminClient().recordApplyStep({ ...step, step: "organization", status: "completed" }),
+    ).rejects.toThrow("Setup steps can only be recorded while an approved proposal is applying");
+
+    const applying = await adminClient().approve({
+      ...step,
+      expectedUpdatedAt: proposed.data.updatedAt,
+    });
+    await expect(
+      aliceClient().recordApplyStep({ ...step, step: "organization", status: "completed" }),
+    ).rejects.toThrow();
+
+    const organization = await adminClient().recordApplyStep({
+      ...step,
+      step: "organization",
+      status: "completed",
+      resourceId: "org-1",
+    });
+    expect(organization.data.updatedAt).toBe(applying.data.updatedAt);
+    expect(organization.data.applySteps.organization).toMatchObject({
+      status: "completed",
+      resourceId: "org-1",
+    });
+
+    await adminClient().recordApplyStep({
+      ...step,
+      step: "publication",
+      status: "waiting",
+      resourceId: "7",
+    });
+    const downgraded = await adminClient().recordApplyStep({
+      ...step,
+      step: "organization",
+      status: "waiting",
+    });
+    expect(downgraded.data.applySteps.organization?.status).toBe("completed");
+
+    const failed = await adminClient().markApplyFailed({
+      ...step,
+      expectedUpdatedAt: applying.data.updatedAt,
+      error: "DAO vote pending",
+    });
+    await expect(
+      adminClient().recordApplyStep({ ...step, step: "community", status: "completed" }),
+    ).rejects.toThrow("Setup steps can only be recorded while an approved proposal is applying");
+
+    const retries = await Promise.allSettled([
+      adminClient().approve({ ...step, expectedUpdatedAt: failed.data.updatedAt }),
+      adminClient().approve({ ...step, expectedUpdatedAt: failed.data.updatedAt }),
+    ]);
+    expect(retries.filter((retry) => retry.status === "fulfilled")).toHaveLength(1);
+    const retried = retries.find((retry) => retry.status === "fulfilled")!.value.data;
+    expect(retried.applyStatus).toBe("applying");
+    expect(retried.applySteps).toMatchObject({
+      organization: { status: "completed", resourceId: "org-1" },
+      publication: { status: "waiting", resourceId: "7" },
+    });
+
+    await adminClient().recordApplyStep({
+      ...step,
+      step: "publication",
+      status: "completed",
+    });
+    const repeated = await adminClient().recordApplyStep({
+      ...step,
+      step: "publication",
+      status: "completed",
+    });
+    expect(repeated.data.applySteps.publication).toMatchObject({
+      status: "completed",
+      resourceId: "7",
+    });
+    const audit = await adminClient().getAuditLog({ ...step, limit: 100 });
+    expect(audit.data.filter((entry) => entry.action === "apply_step_recorded")).toHaveLength(3);
+
+    const applied = await adminClient().markApplied({
+      ...step,
+      expectedUpdatedAt: retried.updatedAt,
+      appliedResourceId: "node-1",
+    });
+    expect(applied.data.applyStatus).toBe("applied");
+    expect(Object.keys(applied.data.applySteps)).toEqual(["organization", "publication"]);
+  });
+
+  it("clears recorded setup steps when a rejected proposal is revised", async () => {
+    const input = {
+      pluginId: "builders",
+      entityId: "revised-setup.near",
+      payload: { name: "Revised Setup" },
+      idempotencyKey: "revised-setup",
+    };
+    const step = { pluginId: input.pluginId, entityId: input.entityId };
+    const proposed = await aliceClient().propose(input);
+    const applying = await adminClient().approve({
+      ...step,
+      expectedUpdatedAt: proposed.data.updatedAt,
+    });
+    await adminClient().recordApplyStep({ ...step, step: "organization", status: "completed" });
+    const failed = await adminClient().markApplyFailed({
+      ...step,
+      expectedUpdatedAt: applying.data.updatedAt,
+      error: "Tenant creation failed",
+    });
+    await adminClient().reject({
+      ...step,
+      expectedUpdatedAt: failed.data.updatedAt,
+      reason: "Choose another slug",
+    });
+
+    const revised = await aliceClient().propose({ ...input, idempotencyKey: "revised-setup-2" });
+    expect(revised.data.reviewStatus).toBe("pending");
+    expect(revised.data.applySteps).toEqual({});
+  });
+
+  it("reports when an applying proposal has stalled", async () => {
+    const startedAt = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(startedAt);
+    try {
+      const input = {
+        pluginId: "builders",
+        entityId: "timed-out-application.near",
+        payload: { name: "Timed Out" },
+        idempotencyKey: "timed-out-application",
+      };
+      const proposed = await aliceClient().propose(input);
+      const applying = await adminClient().approve({
+        pluginId: input.pluginId,
+        entityId: input.entityId,
+        expectedUpdatedAt: proposed.data.updatedAt,
+      });
+      expect(applying.data.applyTimedOut).toBe(false);
+
+      vi.setSystemTime(startedAt + 5 * 60 * 1000 + 10);
+      const listed = await adminClient().getProposals({
+        pluginId: input.pluginId,
+        entityId: input.entityId,
+      });
+      expect(listed.data[0]?.applyTimedOut).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a run that is still recording progress out of the stalled queue", async () => {
+    const startedAt = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(startedAt);
+    try {
+      const input = {
+        pluginId: "builders",
+        entityId: "slow-signature.near",
+        payload: { name: "Slow Signature" },
+        idempotencyKey: "slow-signature",
+      };
+      const step = { pluginId: input.pluginId, entityId: input.entityId };
+      const proposed = await aliceClient().propose(input);
+      const applying = await adminClient().approve({
+        ...step,
+        expectedUpdatedAt: proposed.data.updatedAt,
+      });
+
+      vi.setSystemTime(startedAt + 4 * 60 * 1000);
+      await adminClient().recordApplyStep({ ...step, step: "publication", status: "started" });
+      vi.setSystemTime(startedAt + 8 * 60 * 1000);
+      const heartbeat = await adminClient().recordApplyStep({
+        ...step,
+        step: "publication",
+        status: "started",
+      });
+      expect(heartbeat.data.updatedAt).toBe(applying.data.updatedAt);
+
+      vi.setSystemTime(startedAt + 12 * 60 * 1000);
+      const running = await adminClient().getProposals({
+        ...step,
+        lifecycleStatus: "needs_review",
+      });
+      expect(running.data).toHaveLength(0);
+      await expect(
+        adminClient().approve({ ...step, expectedUpdatedAt: applying.data.updatedAt }),
+      ).rejects.toThrow("Only pending proposals can be approved");
+
+      vi.setSystemTime(startedAt + 13 * 60 * 1000 + 10);
+      const stalled = await adminClient().getProposals({
+        ...step,
+        lifecycleStatus: "needs_review",
+      });
+      expect(stalled.data[0]?.applyTimedOut).toBe(true);
+      const resumed = await adminClient().approve({
+        ...step,
+        expectedUpdatedAt: applying.data.updatedAt,
+      });
+      expect(resumed.data.applyStatus).toBe("applying");
+      expect(resumed.data.applyTimedOut).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("credits recorded setup steps to the admin who ran them", async () => {
+    const input = {
+      pluginId: "builders",
+      entityId: "credited-step.near",
+      payload: { name: "Credited Step" },
+      idempotencyKey: "credited-step",
+    };
+    const step = { pluginId: input.pluginId, entityId: input.entityId };
+    const proposed = await aliceClient().propose(input);
+    await adminClient().approve({ ...step, expectedUpdatedAt: proposed.data.updatedAt });
+    await adminClient().recordApplyStep({ ...step, step: "publication", status: "completed" });
+
+    const audit = await adminClient().getAuditLog({ ...step, limit: 100 });
+    const recorded = audit.data.find((entry) => entry.action === "apply_step_recorded");
+    expect(recorded).toMatchObject({ actor: "admin", actorLabel: "admin" });
+  });
+
+  it("limits the review queue to applications an admin can act on", async () => {
+    const removalInput = {
+      pluginId: "builders",
+      entityId: "failed-removal-review.near",
+      payload: { name: "Failed Removal" },
+      idempotencyKey: "failed-removal-review",
+    };
+    const removal = { pluginId: removalInput.pluginId, entityId: removalInput.entityId };
+    const proposed = await aliceClient().propose(removalInput);
+    const approved = await adminClient().approve({
+      ...removal,
+      expectedUpdatedAt: proposed.data.updatedAt,
+    });
+    const applied = await adminClient().markApplied({
+      ...removal,
+      expectedUpdatedAt: approved.data.updatedAt,
+    });
+    const removing = await adminClient().remove({
+      ...removal,
+      expectedUpdatedAt: applied.data.updatedAt,
+    });
+    await adminClient().markRemoveFailed({
+      ...removal,
+      expectedUpdatedAt: removing.data.updatedAt,
+      error: "Could not remove",
+    });
+
+    const review = await adminClient().getProposals({
+      pluginId: "builders",
+      lifecycleStatus: "needs_review",
+      limit: 100,
+    });
+    const actionable = await adminClient().getProposals({
+      pluginId: "builders",
+      lifecycleStatus: "actionable",
+      limit: 100,
+    });
+    expect(review.data.map((proposal) => proposal.entityId)).not.toContain(removal.entityId);
+    expect(actionable.data.map((proposal) => proposal.entityId)).toContain(removal.entityId);
+    expect(review.data.every((proposal) => proposal.removeStatus !== "failed")).toBe(true);
+  });
+
+  it("clears recorded setup steps when an application is rejected", async () => {
+    const input = {
+      pluginId: "builders",
+      entityId: "rejected-setup.near",
+      payload: { name: "Rejected Setup" },
+      idempotencyKey: "rejected-setup",
+    };
+    const step = { pluginId: input.pluginId, entityId: input.entityId };
+    const proposed = await aliceClient().propose(input);
+    const applying = await adminClient().approve({
+      ...step,
+      expectedUpdatedAt: proposed.data.updatedAt,
+    });
+    await adminClient().recordApplyStep({ ...step, step: "organization", status: "completed" });
+    const failed = await adminClient().markApplyFailed({
+      ...step,
+      expectedUpdatedAt: applying.data.updatedAt,
+      error: "Tenant creation failed",
+    });
+    const rejected = await adminClient().reject({
+      ...step,
+      expectedUpdatedAt: failed.data.updatedAt,
+      reason: "Duplicate community",
+    });
+    expect(rejected.data.applySteps).toEqual({});
+    expect(rejected.data.applyTimedOut).toBe(false);
   });
 
   it("provides admins with reviewer history", async () => {

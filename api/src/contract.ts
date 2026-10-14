@@ -34,10 +34,11 @@ export const NodeProposalPayloadSchema = z
       .min(1)
       .regex(/^[a-z0-9-]+$/),
     parentId: z.string().nullable(),
-    orgId: z.string().min(1),
+    orgId: z.string().min(1).optional(),
     motivation: z.string().trim().min(1),
     accountId: z.string().min(1),
-    submitterAccountId: z.string().min(1),
+    submitterAccountId: z.string().min(1).optional(),
+    applicantUserId: z.string().min(1).optional(),
   })
   .superRefine((value, context) => {
     if (value.kind === "country" && value.parentId !== null) {
@@ -57,6 +58,18 @@ export const NodeProposalPayloadSchema = z
   });
 
 export type NodeProposalPayload = z.infer<typeof NodeProposalPayloadSchema>;
+
+/** Setup steps recorded on an approved community application, in the order they run. */
+export const CommunitySetupStepSchema = z.enum(["organization", "community", "publication"]);
+
+export type CommunitySetupStep = z.infer<typeof CommunitySetupStepSchema>;
+
+const ReleaseKeptReasonSchema = z.enum(["not_found", "in_use"]);
+
+export const ReleasedCommunitySchema = z.object({
+  released: z.boolean(),
+  keptReason: ReleaseKeptReasonSchema.nullable(),
+});
 
 export const EventOnboardingCodeSchema = z.object({
   id: z.string(),
@@ -383,6 +396,11 @@ export const contract = oc.router({
     .input(z.object({ accountId: z.string() }))
     .output(PublicTenantSchema.nullable()),
 
+  resolveTenantById: oc
+    .route({ method: "GET", path: "/tenants/id/{tenantId}" })
+    .input(z.object({ tenantId: z.string() }))
+    .output(PublicTenantSchema.nullable()),
+
   resolveTenantByOrgId: oc
     .route({ method: "GET", path: "/tenants/org/{orgId}" })
     .input(z.object({ orgId: z.string() }))
@@ -506,7 +524,9 @@ export const contract = oc.router({
   applyNodeProposal: oc
     .route({ method: "POST", path: "/nodes/proposals/apply" })
     .input(
-      NodeProposalPayloadSchema.extend({
+      NodeProposalPayloadSchema.safeExtend({
+        orgId: z.string().min(1),
+        submitterAccountId: z.string().min(1),
         hostname: z.string().min(1),
         poolAccountId: z.string().min(1).optional(),
       }),
@@ -521,6 +541,44 @@ export const contract = oc.router({
         status: 409,
         message: "Node proposal resources already exist",
       },
+    }),
+
+  releaseCommunityProposal: oc
+    .route({ method: "POST", path: "/nodes/community-proposals/release" })
+    .input(
+      z.object({
+        proposalId: z.string().min(1),
+        entityId: z.string().min(1),
+        expectedUpdatedAt: z.iso.datetime(),
+      }),
+    )
+    .output(
+      z.object({
+        community: ReleasedCommunitySchema,
+        organization: z.object({
+          released: z.boolean(),
+          keptReason: z.enum([...ReleaseKeptReasonSchema.options, "existing"]).nullable(),
+        }),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
+
+  applyCommunityProposal: oc
+    .route({ method: "POST", path: "/nodes/community-proposals/apply" })
+    .input(
+      z.object({
+        proposalId: z.string().min(1),
+        entityId: z.string().min(1),
+        hostname: z.string().min(1),
+      }),
+    )
+    .output(z.object({ nodeId: z.string() }))
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      BAD_REQUEST,
+      NOT_FOUND,
+      CONFLICT: { status: 409, message: "Community resources conflict" },
     }),
 
   listNodes: oc

@@ -1,4 +1,6 @@
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
+import { AppActionError } from "@/i18n/error-message";
 import {
   maxMinusOneNear,
   parseUnstakeAmount,
@@ -62,15 +64,18 @@ describe("team pool action proposal", () => {
       connect: vi.fn().mockResolvedValue("india.sputnik-dao.near"),
       disconnect: vi.fn().mockResolvedValue(undefined),
     };
-    await proposeTeamPoolAction({
-      teamAccountId: "india.sputnik-dao.near",
-      poolAccountId: "city-node-4.pool.near",
-      method: "unstake",
-      amountYocto: 1_000_000_000_000_000_000_000_000n,
-      maxAmountYocto: staked,
-      authAccountId: "itexpert120-contra.near",
-      connection,
-    });
+    await Effect.runPromise(
+      proposeTeamPoolAction({
+        teamAccountId: "india.sputnik-dao.near",
+        poolAccountId: "city-node-4.pool.near",
+        method: "unstake",
+        amountYocto: 1_000_000_000_000_000_000_000_000n,
+        maxAmountYocto: staked,
+        authAccountId: "itexpert120-contra.near",
+        connection,
+        beforeSign: Effect.void,
+      }),
+    );
     expect(connection.disconnect).toHaveBeenCalled();
     expect(connection.connect).toHaveBeenCalledWith({
       authAccountId: "itexpert120-contra.near",
@@ -90,19 +95,62 @@ describe("team pool action proposal", () => {
       connect: vi.fn(),
       disconnect: vi.fn(),
     };
-    await proposeTeamPoolAction({
-      teamAccountId: "india.sputnik-dao.near",
-      poolAccountId: "city-node-4.pool.near",
-      method: "withdraw",
-      amountYocto: unstaked,
-      maxAmountYocto: unstaked,
-      authAccountId: null,
-      connection,
-    });
+    await Effect.runPromise(
+      proposeTeamPoolAction({
+        teamAccountId: "india.sputnik-dao.near",
+        poolAccountId: "city-node-4.pool.near",
+        method: "withdraw",
+        amountYocto: unstaked,
+        maxAmountYocto: unstaked,
+        authAccountId: null,
+        connection,
+        beforeSign: Effect.void,
+      }),
+    );
     expect(connection.connect).not.toHaveBeenCalled();
     expect(signAsDaoTransaction).toHaveBeenCalledWith(
       "india.sputnik-dao.near",
       teamPoolCall("city-node-4.pool.near", "withdraw", unstaked),
     );
+  });
+
+  it("checks the pool again after connecting Trezu, and once more as it signs", async () => {
+    vi.mocked(verifyDaoAccount).mockResolvedValue(false);
+    vi.mocked(signAsDaoTransaction)
+      .mockReset()
+      .mockResolvedValue({} as never);
+    const order: string[] = [];
+    const connection = {
+      daoAccountId: null,
+      connect: vi.fn(async () => {
+        order.push("connect");
+        return "india.sputnik-dao.near";
+      }),
+      disconnect: vi.fn(),
+    };
+    const propose = <E>(assertStillAllowed: Effect.Effect<void, E>) =>
+      proposeTeamPoolAction({
+        teamAccountId: "india.sputnik-dao.near",
+        poolAccountId: "city-node-4.pool.near",
+        method: "unstake",
+        amountYocto: staked,
+        maxAmountYocto: staked,
+        authAccountId: "itexpert120-contra.near",
+        connection,
+        beforeSign: Effect.sync(() => order.push("check")).pipe(Effect.andThen(assertStillAllowed)),
+      });
+    const blocked = new AppActionError("stake.proposalPending");
+    const failed = await Effect.runPromise(
+      Effect.flip(
+        propose(Effect.sync(() => order.push("assert")).pipe(Effect.andThen(Effect.fail(blocked)))),
+      ),
+    );
+    expect(failed).toBe(blocked);
+    expect(order).toEqual(["connect", "check", "assert"]);
+    expect(signAsDaoTransaction).not.toHaveBeenCalled();
+    order.length = 0;
+    await Effect.runPromise(propose(Effect.asVoid(Effect.sync(() => order.push("assert")))));
+    expect(order).toEqual(["connect", "check", "assert"]);
+    expect(signAsDaoTransaction).toHaveBeenCalledTimes(1);
   });
 });

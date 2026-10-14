@@ -9,10 +9,13 @@ import {
 } from "./dao-connect";
 import { trySendWithGasKey } from "./gas-key";
 import {
+  CONFIG_WRITE_PLAN,
   canAccountPropose,
   type DaoPlan,
   fetchSputnikPolicy,
+  findPendingProposalForPlan,
   proposeAsSession,
+  readRecentDaoProposals,
   type SessionWallet,
 } from "./sputnik-proposals";
 
@@ -51,6 +54,10 @@ export async function publishDaoTenantConfig(
   });
 }
 
+export async function findOpenTenantConfigProposal(daoAccountId: string) {
+  return findPendingProposalForPlan(await readRecentDaoProposals(daoAccountId), CONFIG_WRITE_PLAN);
+}
+
 export type TenantConfigPublishMode = "platform" | "dao";
 
 export interface TenantConfigPublishInput {
@@ -68,7 +75,7 @@ export interface TenantConfigPublishInput {
 
 type AuthClientShape = Pick<ReturnType<typeof useAuthClient>, "near">;
 
-function networkForAccount(accountId: string): "mainnet" | "testnet" {
+export function networkForAccount(accountId: string): "mainnet" | "testnet" {
   return accountId.endsWith(".testnet") ? "testnet" : "mainnet";
 }
 

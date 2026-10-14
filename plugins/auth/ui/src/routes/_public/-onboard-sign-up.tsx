@@ -21,9 +21,11 @@ type Mode = "create" | "existing";
 export function OnboardSignUp({
   networkId,
   onAccountCreated,
+  onSignedIn,
 }: {
   networkId: PasskeyWalletNetwork;
   onAccountCreated: () => void;
+  onSignedIn: () => void;
 }) {
   const translate = useLoginTranslation();
   const auth = useAuthClient();
@@ -36,9 +38,12 @@ export function OnboardSignUp({
   const walletAvailable = isPasskeyWalletAvailable(networkId);
 
   useEffect(() => {
-    void auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
-      if (result?.accountId) setDetectedAccount(result.accountId);
-    });
+    void auth.near
+      .detectNearAccount()
+      .then((result: { accountId?: string | null } | null) => {
+        if (result?.accountId) setDetectedAccount(result.accountId);
+      })
+      .catch(() => undefined);
   }, [auth.near]);
 
   const handleCreate = async () => {
@@ -49,6 +54,7 @@ export function OnboardSignUp({
         markAddEmailPromptPending();
         onAccountCreated();
         await refreshSessionCache(auth, queryClient);
+        onSignedIn();
         setPending(null);
       },
       onError: (error) => {
@@ -65,6 +71,7 @@ export function OnboardSignUp({
     await signInWithPasskey(auth, {
       onSuccess: async () => {
         await refreshSessionCache(auth, queryClient);
+        onSignedIn();
         setPending(null);
       },
       onError: () => {
@@ -81,6 +88,7 @@ export function OnboardSignUp({
       await auth.signIn.near({
         onSuccess: async () => {
           await refreshSessionCache(auth, queryClient);
+          onSignedIn();
           setPending(null);
         },
         onError: () => {

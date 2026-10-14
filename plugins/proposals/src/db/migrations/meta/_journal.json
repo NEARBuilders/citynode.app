@@ -22,6 +22,13 @@
       "when": 1788542000000,
       "tag": "0002_scrub_actor_email_labels",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791763200000,
+      "tag": "0003_apply_steps",
+      "breakpoints": true
     }
   ]
 }

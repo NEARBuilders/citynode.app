@@ -32,6 +32,8 @@ export const stakePoolQueryKeys = {
   },
   account: (accountId: string, network: string, stakerAccountId: string) =>
     [...stakePoolQueryKeys.pool(accountId, network), "account", stakerAccountId] as const,
+  status: (accountId: string, network: string) =>
+    [...stakePoolQueryKeys.pool(accountId, network), "status"] as const,
 };
 
 export interface StakePoolValidator {
@@ -46,16 +48,25 @@ export function toNetwork(value: string | null | undefined): Network | undefined
   return value === "mainnet" || value === "testnet" ? value : undefined;
 }
 
+export function resolveTeamAccountId(input: {
+  daoAccountId?: string | null;
+  tenantAccountId?: string | null;
+  tenantOwnerKind?: string | null;
+}) {
+  return (
+    input.daoAccountId?.trim() ||
+    (input.tenantOwnerKind === "dao" ? input.tenantAccountId?.trim() : "") ||
+    ""
+  );
+}
+
 export function resolveTeamStakeTarget(input: {
   daoAccountId?: string | null;
   tenantAccountId?: string | null;
   tenantOwnerKind?: string | null;
   validators: readonly StakePoolValidator[];
 }) {
-  const teamAccountId =
-    input.daoAccountId?.trim() ||
-    (input.tenantOwnerKind === "dao" ? input.tenantAccountId?.trim() : "") ||
-    "";
+  const teamAccountId = resolveTeamAccountId(input);
   if (!teamAccountId) return null;
   const pool = input.validators.find((validator) => validator.isDefault) ?? input.validators[0];
   if (!pool?.accountId) return null;
@@ -118,6 +129,60 @@ export function stakePoolStatsQueryOptions(options: PoolOptions) {
 
 export type TeamStakeTarget = NonNullable<ReturnType<typeof resolveTeamStakeTarget>>;
 
+const validatorListSchema = z.array(z.object({ account_id: z.string() }));
+const validatorSetSchema = z.object({
+  current_validators: validatorListSchema,
+  next_validators: validatorListSchema,
+});
+
+export interface StakePoolStatus {
+  ownerId: string;
+  feeNumerator: number;
+  feeDenominator: number;
+  stakingPaused: boolean;
+  validatorSet: "current" | "next" | "none";
+}
+
+export async function readStakePoolStatus({
+  accountId,
+  authClient,
+  network = "mainnet",
+}: PoolOptions): Promise<StakePoolStatus> {
+  const near = authClient.near.getNearClient(network);
+  const [owner, fee, paused, validators] = await Promise.all([
+    near.view(accountId, "get_owner_id", {}),
+    near.view(accountId, "get_reward_fee_fraction", {}),
+    near.view(accountId, "is_staking_paused", {}),
+    near.rpc.call("validators", [null]),
+  ]);
+  const { numerator, denominator } = feeSchema.parse(fee);
+  const set = validatorSetSchema.parse(validators);
+  const inSet = (list: z.infer<typeof validatorListSchema>) =>
+    list.some((validator) => validator.account_id === accountId);
+  return {
+    ownerId: z.string().min(1).parse(owner),
+    feeNumerator: numerator,
+    feeDenominator: denominator,
+    stakingPaused: z.boolean().parse(paused),
+    validatorSet: inSet(set.current_validators)
+      ? "current"
+      : inSet(set.next_validators)
+        ? "next"
+        : "none",
+  };
+}
+
+export function stakePoolStatusQueryOptions(options: PoolOptions) {
+  const { accountId, network = "mainnet" } = options;
+  return queryOptions({
+    queryKey: stakePoolQueryKeys.status(accountId, network),
+    enabled: canReadPool(options),
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: () => readStakePoolStatus(options),
+  });
+}
+
 export interface StakePoolAccountView {
   accountId: string;
   stakedBalance: bigint;
@@ -125,43 +190,54 @@ export interface StakePoolAccountView {
   canWithdraw: boolean;
 }
 
-export function stakePoolAccountQueryOptions(options: {
+interface StakePoolAccountOptions {
   poolAccountId: string;
   stakerAccountId: string;
   authClient: AuthClient;
   network?: Network;
   protocol?: string;
-}) {
-  const { poolAccountId, stakerAccountId, authClient, network = "mainnet" } = options;
+}
+
+export async function readStakePoolAccount({
+  poolAccountId,
+  stakerAccountId,
+  authClient,
+  network = "mainnet",
+}: StakePoolAccountOptions): Promise<StakePoolAccountView> {
+  const raw = await callViewFunction(
+    authClient,
+    poolAccountId,
+    "get_account",
+    { account_id: stakerAccountId },
+    network,
+  );
+  const account = z
+    .object({
+      account_id: z.string().min(1),
+      staked_balance: balanceSchema,
+      unstaked_balance: balanceSchema,
+      can_withdraw: z.boolean(),
+    })
+    .parse(raw);
+  return {
+    accountId: account.account_id,
+    stakedBalance: account.staked_balance,
+    unstakedBalance: account.unstaked_balance,
+    canWithdraw: account.can_withdraw,
+  };
+}
+
+export function stakePoolAccountQueryOptions(
+  options: StakePoolAccountOptions & { syncedTo?: number },
+) {
+  const { poolAccountId, stakerAccountId, network = "mainnet", syncedTo } = options;
+  const accountKey = stakePoolQueryKeys.account(poolAccountId, network, stakerAccountId);
   return queryOptions({
-    queryKey: stakePoolQueryKeys.account(poolAccountId, network, stakerAccountId),
+    queryKey: syncedTo === undefined ? accountKey : [...accountKey, syncedTo],
     enabled: canReadPool({ ...options, accountId: poolAccountId }) && !!stakerAccountId,
     staleTime: 5 * 60_000,
     retry: false,
-    queryFn: async () => {
-      const raw = await callViewFunction(
-        authClient,
-        poolAccountId,
-        "get_account",
-        { account_id: stakerAccountId },
-        network,
-      );
-      const account = z
-        .object({
-          account_id: z.string().min(1),
-          staked_balance: balanceSchema,
-          unstaked_balance: balanceSchema,
-          can_withdraw: z.boolean(),
-        })
-        .parse(raw);
-      const view: StakePoolAccountView = {
-        accountId: account.account_id,
-        stakedBalance: account.staked_balance,
-        unstakedBalance: account.unstaked_balance,
-        canWithdraw: account.can_withdraw,
-      };
-      return view;
-    },
+    queryFn: () => readStakePoolAccount(options),
   });
 }
 
@@ -227,6 +303,20 @@ export function formatNearBalance(balance: bigint, locale = "en") {
     new Intl.NumberFormat(locale).formatToParts(1.1).find((part) => part.type === "decimal")
       ?.value ?? ".";
   return `${whole}${fraction ? `${decimal}${fraction}` : ""} NEAR`;
+}
+
+export function isFullCommission(numerator: number, denominator: number) {
+  return denominator > 0 && numerator >= denominator;
+}
+
+export function formatPoolFeeTenths(numerator: number, denominator: number, locale = "en") {
+  const tenths = Math.min(
+    Math.round((numerator / denominator) * 1000),
+    numerator < denominator ? 999 : 1000,
+  );
+  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(
+    tenths / 1000,
+  );
 }
 
 export function formatPoolFee(numerator: number, denominator: number, locale = "en") {

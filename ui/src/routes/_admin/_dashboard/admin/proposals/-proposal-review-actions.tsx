@@ -18,6 +18,9 @@ import { useAppTranslation } from "@/i18n/runtime";
 
 interface ProposalReviewActionsProps {
   isPending: boolean;
+  isRetry?: boolean;
+  canReject?: boolean;
+  applyError?: string | null;
   isNodeProposal: boolean;
   proposalDaoAccountId: string | null;
   daoIsVerified: boolean;
@@ -31,6 +34,9 @@ interface ProposalReviewActionsProps {
 
 export function ProposalReviewActions({
   isPending,
+  isRetry = false,
+  canReject = true,
+  applyError,
   isNodeProposal,
   proposalDaoAccountId,
   daoIsVerified,
@@ -43,11 +49,21 @@ export function ProposalReviewActions({
 }: ProposalReviewActionsProps) {
   const translate = useAppTranslation();
   const [rejecting, setRejecting] = useState(false);
-  if (!isPending) return null;
+  if (!isPending && !isRetry) return null;
 
   return (
     <div className="flex flex-col gap-6" data-testid="admin-proposal-decision">
-      <h2 className="text-xl font-semibold">{translate("admin.proposal.decision")}</h2>
+      <h2 className="text-xl font-semibold">
+        {isRetry ? translate("admin.proposal.retryApply") : translate("admin.proposal.decision")}
+      </h2>
+      {isRetry && applyError && (
+        <p className="text-sm wrap-anywhere text-destructive" role="alert">
+          {applyError}
+        </p>
+      )}
+      {isRetry && (
+        <p className="text-sm text-muted-foreground">{translate("admin.proposal.resumeHint")}</p>
+      )}
 
       {isNodeProposal && (
         <div className="flex flex-col gap-3">
@@ -69,19 +85,27 @@ export function ProposalReviewActions({
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <Button onClick={onApprove} disabled={isReviewing} data-testid="admin-proposal-approve">
             <CheckIcon />
-            {isReviewing ? translate("admin.proposal.approving") : translate("common.approve")}
+            {isReviewing
+              ? translate(isRetry ? "admin.proposal.resuming" : "admin.proposal.approving")
+              : isRetry
+                ? translate("admin.proposal.resume")
+                : translate("common.approve")}
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => setRejecting(true)}
-            disabled={isReviewing}
-            data-testid="admin-proposal-reject"
-          >
-            {translate("common.reject")}
-          </Button>
+          {canReject && (
+            <Button
+              variant="ghost"
+              onClick={() => setRejecting(true)}
+              disabled={isReviewing}
+              data-testid="admin-proposal-reject"
+            >
+              {translate("common.reject")}
+            </Button>
+          )}
         </div>
         {!daoIsVerified && (
-          <p className="text-sm text-muted-foreground">{translate("admin.proposal.daoHint")}</p>
+          <p className="text-sm text-muted-foreground">
+            {translate(isRetry ? "admin.proposal.retryDaoHint" : "admin.proposal.daoHint")}
+          </p>
         )}
       </div>
 
@@ -89,7 +113,12 @@ export function ProposalReviewActions({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{translate("admin.proposal.rejectTitle")}</DialogTitle>
-            <DialogDescription>{translate("admin.proposal.reasonSaved")}</DialogDescription>
+            <DialogDescription>
+              {translate("admin.proposal.reasonSaved")}
+              {isRetry && isNodeProposal && (
+                <span className="mt-2 block">{translate("admin.proposal.rejectReleases")}</span>
+              )}
+            </DialogDescription>
           </DialogHeader>
           <Field>
             <FieldLabel htmlFor="rejection-reason">{translate("admin.proposal.reason")}</FieldLabel>

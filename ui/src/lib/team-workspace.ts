@@ -28,11 +28,12 @@ export interface TeamWorkspace {
   canManageOrganization?: boolean;
 }
 
-const ROUTE_AREAS: Array<{ prefix: string; area: FeatureArea }> = [
-  { prefix: "/dashboard/node", area: "node-operations" },
-  { prefix: "/tenant", area: "node-operations" },
-  { prefix: "/nodes", area: "node-operations" },
-  { prefix: "/stake", area: "stake" },
+const ROUTE_AREAS: Array<{ path: string; exact?: boolean; areas: FeatureArea[] }> = [
+  { path: "/dashboard/node", exact: true, areas: ["node-operations", "finance", "events"] },
+  { path: "/dashboard/node", areas: ["node-operations"] },
+  { path: "/tenant", areas: ["node-operations"] },
+  { path: "/nodes", areas: ["node-operations", "events"] },
+  { path: "/stake", areas: ["stake"] },
 ];
 
 export const teamWorkspaceQueryKey = ["team-workspace"] as const;
@@ -42,8 +43,7 @@ export function resolveTeamWorkspace(
 ): TeamWorkspace {
   const teams: WorkspaceTeam[] = [...(context?.organization?.teams ?? [])];
   const activeTeam = teams.find((team) => team.id === context?.organization?.activeTeamId) ?? null;
-  const orgRole = context?.organization?.member?.role;
-  const bypass = context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
+  const bypass = canManageCommunity(context);
   return {
     teams,
     activeTeam,
@@ -52,17 +52,39 @@ export function resolveTeamWorkspace(
   };
 }
 
-export function areaForPath(pathname: string): FeatureArea | null {
-  const match = ROUTE_AREAS.find(
-    ({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+/** Organization roles that manage the community's settings (mirrors the API's rule). */
+export function isCommunitySettingsRole(
+  role: string | null | undefined,
+): role is "owner" | "admin" {
+  return role === "owner" || role === "admin";
+}
+
+export function canManageCommunity(context: AuthRequestContext | null | undefined): boolean {
+  return (
+    context?.user?.role === "admin" || isCommunitySettingsRole(context?.organization?.member?.role)
   );
-  return match?.area ?? null;
+}
+
+export function areasForPath(pathname: string): FeatureArea[] | null {
+  const match = ROUTE_AREAS.find(({ path, exact }) =>
+    exact
+      ? pathname === path || pathname === `${path}/`
+      : pathname === path || pathname.startsWith(`${path}/`),
+  );
+  return match?.areas ?? null;
+}
+
+export function areasAllowPath(
+  allowedAreas: readonly FeatureArea[] | null,
+  pathname: string,
+): boolean {
+  const areas = areasForPath(pathname);
+  if (!areas || !allowedAreas) return true;
+  return areas.some((area) => allowedAreas.includes(area));
 }
 
 export function isPathAllowed(workspace: TeamWorkspace, pathname: string): boolean {
-  const area = areaForPath(pathname);
-  if (!area || !workspace.allowedAreas) return true;
-  return workspace.allowedAreas.includes(area);
+  return areasAllowPath(workspace.allowedAreas, pathname);
 }
 
 export function teamWorkspaceQueryOptions(apiClient: ApiClient) {
@@ -80,12 +102,18 @@ export async function requireTeamArea({
   context: { apiClient: ApiClient; queryClient: QueryClient };
   location: { pathname: string };
 }) {
-  const area = areaForPath(location.pathname);
-  if (!area) return;
+  const areas = areasForPath(location.pathname);
+  if (!areas) return;
   const workspace = await context.queryClient
     .ensureQueryData(teamWorkspaceQueryOptions(context.apiClient))
     .catch(() => null);
   if (workspace && !isPathAllowed(workspace, location.pathname)) {
-    throw redirect({ to: "/dashboard", search: { restricted: area } });
+    throw redirect({ to: "/dashboard", search: { restricted: areas[0] } });
   }
+}
+
+export function canOrganizeEvents(context: AuthRequestContext | null | undefined): boolean {
+  if (canManageCommunity(context)) return true;
+  if (!context?.organization?.member?.role) return false;
+  return (context.organization.teams ?? []).some((team) => team.areas.includes("events"));
 }

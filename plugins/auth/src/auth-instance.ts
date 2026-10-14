@@ -7,6 +7,7 @@ import {
   admin,
   anonymous,
   deviceAuthorization,
+  emailOTP,
   organization,
   phoneNumber,
 } from "better-auth/plugins";
@@ -20,6 +21,7 @@ import {
 import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
 import { eq, gt } from "drizzle-orm";
 import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
+import { emailChangePolicy, UNUSED_EMAIL_OTP_PATHS } from "./email-change-policy";
 import { organizationApproval } from "./organization-approval";
 import {
   createPasskeySignUpUser,
@@ -65,7 +67,7 @@ import {
   normalizeNearAccountId,
 } from "./near-invitations";
 import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
-import { setEmail } from "./set-email";
+import { isSyntheticEmail } from "./synthetic-email";
 
 export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPluginOptions & {
   recipients: { mainnet: string; testnet: string };
@@ -156,11 +158,20 @@ export function buildSiwnOptions(config: AuthConfig): Parameters<typeof siwn>[0]
   };
 }
 
+export interface EmailMessage {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}
+
+export type EmailTransport = (message: EmailMessage) => Promise<boolean>;
+
 async function sendEmail(
-  { to, subject, text, html }: { to: string; subject: string; text: string; html?: string },
+  { to, subject, text, html }: EmailMessage,
   emailApiKey?: string,
   from?: string,
-) {
+): Promise<boolean> {
   try {
     if (!emailApiKey || !from) {
       throw new Error("no email API key or from address configured");
@@ -177,6 +188,7 @@ async function sendEmail(
       const errorText = await res.text();
       throw new Error(`Resend error ${res.status}: ${errorText}`);
     }
+    return true;
   } catch (err) {
     console.log(`\n📧 [Email Preview — ${err instanceof Error ? err.message : "send failed"}] ===`);
     console.log(`To: ${to}`);
@@ -188,6 +200,7 @@ async function sendEmail(
       console.log(`\n[HTML version available but not shown in console]`);
     }
     console.log(`================================================================\n`);
+    return false;
   }
 }
 
@@ -273,9 +286,13 @@ export function createAuthInstance(
   config: AuthConfig,
   db: AuthDatabase,
   secrets?: { email?: { resend?: string } },
+  options?: { deliverEmail?: EmailTransport },
 ) {
   const emailApiKey = secrets?.email?.resend;
   const emailConfig = config.email;
+  const deliverEmail: EmailTransport =
+    options?.deliverEmail ?? ((message) => sendEmail(message, emailApiKey, emailConfig?.from));
+  const emailProviderConfigured = !!options?.deliverEmail || (!!emailApiKey && !!emailConfig?.from);
   const passkeyOptions = resolvePasskeyRelyingPartyOptions(config);
   const twilioConfig = config.phoneNumber?.twilio;
   const githubConfig = config.socialProviders?.github;
@@ -299,6 +316,7 @@ export function createAuthInstance(
     trustedOrigins: config.trustedOrigins?.length ? config.trustedOrigins : undefined,
     secret: config.secret,
     baseURL: config.baseUrl,
+    disabledPaths: UNUSED_EMAIL_OTP_PATHS,
     user: {
       additionalFields: {
         locale: { type: "string", required: false, input: true },
@@ -349,12 +367,26 @@ export function createAuthInstance(
         },
       }),
       passkeySignUp({ network }),
-      setEmail(),
+      emailChangePolicy({ emailProviderConfigured }),
+      emailOTP({
+        expiresIn: 600,
+        allowedAttempts: 5,
+        storeOTP: "hashed",
+        changeEmail: { enabled: true },
+        sendVerificationOTP: async ({ email, otp }) => {
+          await deliverEmail({
+            to: email,
+            subject: "Your email confirmation code",
+            text: `Your confirmation code is ${otp}. It expires in 10 minutes.\n\nIf you didn't ask to add this email address, you can ignore this message.`,
+          });
+        },
+      }),
       organizationApproval(db),
       organization({
         ac: orgAc,
         roles: orgRoles,
         membershipLimit: membershipPolicy.limit,
+        requireEmailVerificationOnInvitation: true,
         teams: {
           enabled: true,
           defaultTeam: { enabled: false },
@@ -454,15 +486,20 @@ export function createAuthInstance(
         async sendInvitationEmail(data) {
           if (isNearInvitation(data.invitation)) return;
           const inviteLink = `${config.baseUrl}/orgs/invites/${data.id}`;
-          await sendEmail(
-            {
-              to: data.email,
-              subject: `Invitation to join ${data.organization.name}`,
-              text: `You've been invited by ${data.inviter.user.name} (${data.inviter.user.email}) to join ${data.organization.name}.\n\nClick here to accept: ${inviteLink}`,
-            },
-            emailApiKey,
-            emailConfig?.from,
-          );
+          const inviter = isSyntheticEmail(data.inviter.user.email)
+            ? data.inviter.user.name
+            : `${data.inviter.user.name} (${data.inviter.user.email})`;
+          const delivered = await deliverEmail({
+            to: data.email,
+            subject: `Invitation to join ${data.organization.name}`,
+            text: `You've been invited by ${inviter} to join ${data.organization.name}.\n\nClick here to accept: ${inviteLink}`,
+          });
+          if (!delivered && emailProviderConfigured) {
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message:
+                "The invitation was saved, but the email couldn't be sent. Try Resend from the Invitations tab.",
+            });
+          }
         },
       }),
       nearInvitations(db, membershipPolicy),
@@ -503,15 +540,11 @@ export function createAuthInstance(
       enabled: true,
       requireEmailVerification: true,
       sendResetPassword: async ({ user, url }) => {
-        await sendEmail(
-          {
-            to: user.email,
-            subject: "Reset your password",
-            text: `Click the link to reset your password: ${url}`,
-          },
-          emailApiKey,
-          emailConfig?.from,
-        );
+        await deliverEmail({
+          to: user.email,
+          subject: "Reset your password",
+          text: `Click the link to reset your password: ${url}`,
+        });
       },
     },
     databaseHooks: {

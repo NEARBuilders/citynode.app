@@ -2,7 +2,8 @@ import { ArrowSquareOutIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
-import { Button, PageHeader, Skeleton } from "@/components";
+import { Badge, Button, PageHeader, Skeleton } from "@/components";
+import { discoveryNodeQueryOptions } from "@/components/discovery/event-visibility";
 import {
   Select,
   SelectContent,
@@ -13,6 +14,11 @@ import {
 import { useAppTranslation } from "@/i18n/runtime";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import {
+  canManageCommunity,
+  canOrganizeEvents,
+  teamWorkspaceQueryOptions,
+} from "@/lib/team-workspace";
 import { CommunityNav, type CommunityNavSection } from "./-community-nav";
 
 type CommunityNode = NonNullable<Awaited<ReturnType<ApiClient["getNode"]>>>;
@@ -36,6 +42,7 @@ export async function ensureCommunityHeaderData(
   const { queryClient, apiClient } = context;
   const [node] = await Promise.all([
     queryClient.ensureQueryData(nodeByIdQueryOptions(apiClient, nodeId)).catch(() => null),
+    queryClient.prefetchQuery(discoveryNodeQueryOptions(apiClient, nodeId)),
     queryClient
       .ensureQueryData(
         communityAuthContextQueryOptions(apiClient, context.auth.activeOrganizationId),
@@ -87,7 +94,12 @@ export function CommunityHeader({
 
   const authContext = useQuery(communityAuthContextQueryOptions(api, activeOrganizationId));
   const orgRole = authContext.data?.organization?.member?.role;
-  const canManage = auth?.isAdmin || orgRole === "owner" || orgRole === "admin";
+  const canManage = !!auth?.isAdmin || canManageCommunity(authContext.data);
+  const canOrganize = canManage || canOrganizeEvents(authContext.data);
+  const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
+  const workspace = useQuery(teamWorkspaceQueryOptions(api));
+  const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
+  const listed = listing.isSuccess && listing.data !== null;
 
   const siteUrl = node && gateway ? buildTenantUrl(node.slug, gateway) : null;
 
@@ -122,9 +134,16 @@ export function CommunityHeader({
         description={
           node ? (
             <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-base">
-              <span className="capitalize">
-                {presentationLabel(node.kind ?? "member", translate)}
-              </span>
+              {viewerRole && (
+                <Badge variant="secondary" data-testid="community-viewer-role">
+                  {translate("community.yourRole", {
+                    role: presentationLabel(viewerRole, translate),
+                  })}
+                </Badge>
+              )}
+              {node.kind && (
+                <span className="capitalize">{presentationLabel(node.kind, translate)}</span>
+              )}
               {siteUrl && (
                 <a
                   href={siteUrl}
@@ -169,11 +188,12 @@ export function CommunityHeader({
                 </SelectContent>
               </Select>
             )}
-            {nodeId && (
+            {nodeId && listed && (
               <Button
                 variant="outline"
                 nativeButton={false}
                 render={<Link to="/explore" search={{ node: nodeId }} />}
+                data-testid="community-header.view-explore"
               >
                 {translate("dashboard.viewExplore")}
                 <ArrowUpRightIcon />
@@ -188,6 +208,8 @@ export function CommunityHeader({
           nodeId={nodeId}
           tenantId={node?.tenantId}
           canManage={canManage}
+          canOrganize={canOrganize}
+          allowedAreas={workspace.data?.allowedAreas ?? null}
           replace={replace}
           testIds={testIds}
         />

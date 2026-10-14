@@ -43,21 +43,36 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useClientValue } from "@/hooks";
 import type { AppTranslator } from "@/i18n/catalogs";
-import { translateEnglishAppMessage, useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { buildEventTimeline } from "@/lib/event-timeline";
+import { isWaitingImport } from "@/lib/event-visibility";
 import { type Activity, activitiesQueryOptions } from "./activity-form";
-import { useStartOnboarding } from "./event-onboarding";
+import { DiscoveryLoadError } from "./discovery-load-error";
+import { useOpenEventStation } from "./event-onboarding";
 import { EventTimeline } from "./event-timeline";
+import { EventVisibilityBadge, ImportsWaiting, useVisibilityContext } from "./event-visibility";
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
 
-export function ActivityEditor({ nodeId }: { nodeId: string }) {
+export function ActivityEditor({
+  nodeId,
+  reviewImports = false,
+  canPost = true,
+  canOnboard = false,
+}: {
+  nodeId: string;
+  reviewImports?: boolean;
+  canPost?: boolean;
+  canOnboard?: boolean;
+}) {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const api = useApiClient();
   const client = useQueryClient();
   const [lumaOpen, setLumaOpen] = useState(false);
   const list = useQuery({ ...activitiesQueryOptions(api, nodeId), refetchInterval: 30_000 });
+  const visibilityContext = useVisibilityContext(nodeId);
+  const { now } = visibilityContext;
   const luma = useQuery({
     queryKey: ["discovery-luma-calendars", nodeId],
     queryFn: () => api.listDiscoveryLumaCalendars({ nodeId }),
@@ -69,7 +84,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
     "UTC",
   );
-  const startOnboarding = useStartOnboarding();
+  const openStation = useOpenEventStation();
   const visibility = useMutation({
     mutationFn: ({ activityId, show }: { activityId: string; show: boolean }) =>
       api.setDiscoveryLumaVisibility({ nodeId, activityId, show }),
@@ -83,24 +98,36 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     },
     onError: (error) => toast.error(error.message),
   });
-  if (list.isError)
+  if (list.isPending)
     return (
-      <EmptyState
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-10 w-48" />
+        {["a", "b", "c"].map((key) => (
+          <Skeleton key={key} className="h-20 w-full" />
+        ))}
+      </div>
+    );
+  if (list.isError && !list.data)
+    return (
+      <DiscoveryLoadError
+        error={list.error}
+        nodeId={nodeId}
         icon={CalendarDotsIcon}
         title={translate("events.loadListError")}
-        description={translate("events.connectionHint")}
-        action={
-          <Button variant="outline" onClick={() => list.refetch()}>
-            {translate("common.retry")}
-          </Button>
-        }
+        onRetry={() => list.refetch()}
       />
     );
-  const events = list.data?.filter((a) => a.kind === "event") ?? [];
-  const posts = list.data?.filter((a) => a.kind !== "event") ?? [];
+  const allEvents = list.data?.filter((a) => a.kind === "event") ?? [];
+  const waiting = allEvents.filter((a) => isWaitingImport(a, now));
+  const events = reviewImports ? waiting : allEvents;
+  const posts = reviewImports ? [] : (list.data?.filter((a) => a.kind !== "event") ?? []);
   const timeline =
     events.length > 0
-      ? buildEventTimeline(events, { now: new Date(), timeZone: viewerTimeZone, locale }, translate)
+      ? buildEventTimeline(
+          events,
+          { now: new Date(now), timeZone: viewerTimeZone, locale },
+          translate,
+        )
       : null;
   const rowActions = (a: Activity) => (
     <div className="flex items-center gap-1">
@@ -117,7 +144,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             : translate("events.hide")}
         </Button>
       )}
-      {a.luma ? (
+      {a.kind !== "event" && !canPost ? null : a.luma ? (
         <Button
           size="sm"
           variant="ghost"
@@ -146,7 +173,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           {translate("common.edit")}
         </Button>
       )}
-      {a.kind === "event" && a.status !== "cancelled" && (
+      {canOnboard && a.kind === "event" && a.status !== "cancelled" && (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -162,8 +189,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               data-testid={`activity-editor.start-onboarding-${a.id}`}
-              disabled={startOnboarding.isPending}
-              onClick={() => startOnboarding.mutate({ eventId: a.id })}
+              disabled={openStation.isPending}
+              onClick={() => openStation.mutate({ eventId: a.id })}
             >
               <QrCodeIcon />
               {translate("events.startOnboarding")}
@@ -186,21 +213,23 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             <CalendarDotsIcon />
             {translate("events.add")}
           </Button>
-          <Button
-            data-testid="discovery-new-social"
-            variant="outline"
-            nativeButton={false}
-            render={
-              <Link
-                to="/nodes/$nodeId/events/new"
-                params={{ nodeId }}
-                search={{ kind: "social" }}
-              />
-            }
-          >
-            <ChatCircleIcon />
-            {translate("events.sharePost")}
-          </Button>
+          {canPost && (
+            <Button
+              data-testid="discovery-new-social"
+              variant="outline"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/nodes/$nodeId/events/new"
+                  params={{ nodeId }}
+                  search={{ kind: "social" }}
+                />
+              }
+            >
+              <ChatCircleIcon />
+              {translate("events.sharePost")}
+            </Button>
+          )}
         </div>
         <Button
           variant="ghost"
@@ -218,13 +247,43 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           )}
         </Button>
       </div>
-      {list.isPending && (
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-10 w-48" />
-          {["a", "b", "c"].map((key) => (
-            <Skeleton key={key} className="h-20 w-full" />
-          ))}
+      {reviewImports ? (
+        <div
+          className="flex flex-wrap items-center gap-3 text-sm"
+          data-testid="activity-editor.reviewing-imports"
+        >
+          <span
+            className="text-muted-foreground"
+            data-testid="activity-editor.reviewing-imports-hint"
+          >
+            {list.isSuccess && waiting.length === 0
+              ? translate("events.noImportsWaiting")
+              : translate("events.importsWaitingHint")}
+          </span>
+          <Button
+            variant="link"
+            size="xs"
+            nativeButton={false}
+            data-testid="activity-editor.show-all"
+            render={
+              <Link to="/nodes/$nodeId/content" params={{ nodeId }} search={{ tab: "events" }} />
+            }
+          >
+            {translate("events.showAll")}
+          </Button>
         </div>
+      ) : (
+        <ImportsWaiting
+          count={waiting.length}
+          testId="activity-editor.imports-waiting"
+          link={
+            <Link
+              to="/nodes/$nodeId/content"
+              params={{ nodeId }}
+              search={{ tab: "events", review: "imports" }}
+            />
+          }
+        />
       )}
       {list.data?.length === 0 && (
         <EmptyState
@@ -262,7 +321,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                   timeZone={viewerTimeZone}
                   badges={(a) => (
                     <>
-                      <Badge variant={statusVariant(a)}>{statusLabel(a, translate)}</Badge>
+                      <EventVisibilityBadge activity={a} context={visibilityContext} />
                       {a.luma && <Badge variant="outline">Luma</Badge>}
                     </>
                   )}
@@ -282,7 +341,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                 <ItemContent>
                   <ItemTitle className="flex-wrap">
                     <span className="min-w-0 truncate">{a.title}</span>
-                    <Badge variant={statusVariant(a)}>{statusLabel(a, translate)}</Badge>
+                    <EventVisibilityBadge activity={a} context={visibilityContext} />
                   </ItemTitle>
                   <ItemDescription>
                     <LocalDate value={a.publishedAt} format="relative" />
@@ -300,22 +359,11 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             <DialogTitle>{translate("events.importLuma")}</DialogTitle>
             <DialogDescription>{translate("events.lumaDescription")}</DialogDescription>
           </DialogHeader>
-          <LumaImport nodeId={nodeId} />
+          <LumaImport nodeId={nodeId} canDisconnect={canPost} />
         </DialogContent>
       </Dialog>
     </section>
   );
-}
-function statusVariant(activity: Activity) {
-  if (activity.status === "published") return "success" as const;
-  if (activity.status === "cancelled") return "destructive" as const;
-  return "secondary" as const;
-}
-function statusLabel(activity: Activity, t: AppTranslator = translateEnglishAppMessage) {
-  if (activity.luma && activity.status === "draft") return t("events.hidden");
-  if (activity.status === "draft") return t("events.draft");
-  if (activity.status === "cancelled") return t("events.cancelled");
-  return t("events.published");
 }
 function eventDateKey(activity: Activity) {
   if (!activity.startsAt) return "undated";

@@ -1,4 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
+import type { ApiClient } from "@/app";
+
+export type Proposal = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>["data"][number];
 
 export const proposalReviewQueryKeys = {
   all: ["admin-proposals"] as const,

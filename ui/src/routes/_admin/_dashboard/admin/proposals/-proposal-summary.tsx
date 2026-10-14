@@ -1,13 +1,14 @@
 import { CheckCircleIcon, WarningCircleIcon, XCircleIcon } from "@phosphor-icons/react";
 import { Badge, InfoRow, LocalDate, SectionHeader } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
+import type { Proposal } from "@/lib/queries/proposals";
 import { humanize, RawJson, RawJsonDisclosure } from "../-admin-ui";
 import { NodeProposalDetails } from "./-node-proposal-details";
-import type { Proposal } from "./-proposal-columns";
-import { proposalReviewStatusVariant } from "./-proposal-review";
+import { proposalReviewStatusVariant, proposalSetupStatus } from "./-proposal-review";
 
 export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
   const translate = useAppTranslation();
+  const setup = proposalSetupStatus(proposal, translate);
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Badge
@@ -16,10 +17,16 @@ export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
       >
         {humanize(proposal.reviewStatus, translate)}
       </Badge>
-      {proposal.applyStatus !== "not_started" && (
-        <Badge variant={proposal.applyStatus === "applied" ? "success" : "outline"}>
-          {humanize(proposal.applyStatus, translate)}
+      {setup ? (
+        <Badge variant={setup.variant} data-testid="admin-proposal-setup-status">
+          {setup.label}
         </Badge>
+      ) : (
+        proposal.applyStatus !== "not_started" && (
+          <Badge variant={proposal.applyStatus === "applied" ? "success" : "outline"}>
+            {humanize(proposal.applyStatus, translate)}
+          </Badge>
+        )
       )}
     </div>
   );
@@ -104,6 +111,7 @@ export function ProposalOutcome({ proposal }: { proposal: Proposal }) {
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <span className="min-w-0 wrap-anywhere">
             {translate("proposal.applyFailedDescription")}
+            <span className="mt-1 block">{proposal.applyError}</span>
           </span>
         </div>
       )}

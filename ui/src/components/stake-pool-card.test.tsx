@@ -60,6 +60,31 @@ function renderCard(pool = validator) {
 }
 
 describe("StakePoolCard", () => {
+  it("says staking at a 100% commission pool supports the community and earns the staker nothing", async () => {
+    stubPoolViews({
+      get_total_staked_balance: "1000000000000000000000000",
+      get_reward_fee_fraction: { numerator: 100, denominator: 100 },
+      get_number_of_accounts: 1,
+      get_accounts: [],
+    });
+    renderCard();
+    expect((await screen.findByTestId("stake.full-commission")).textContent).toContain(
+      "Staking here supports this community; you won't earn rewards yourself.",
+    );
+  });
+
+  it("keeps the standard fee display for pools below 100% commission", async () => {
+    stubPoolViews({
+      get_total_staked_balance: "1000000000000000000000000",
+      get_reward_fee_fraction: { numerator: 7, denominator: 100 },
+      get_number_of_accounts: 1,
+      get_accounts: [],
+    });
+    renderCard();
+    expect(await screen.findByText("7%")).toBeTruthy();
+    expect(screen.queryByTestId("stake.full-commission")).toBeNull();
+  });
+
   it.each([
     "stats",
     "accounts",

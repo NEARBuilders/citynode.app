@@ -23,13 +23,9 @@ describe("Bulletin", () => {
     expect(html).toContain("Safe.");
   });
 
-  it("includes the under-construction footer link", () => {
-    const html = renderToStaticMarkup(
-      <Bulletin
-        content="More is coming."
-        runtimeConfig={{ repository: "https://github.com/example/example" }}
-      />,
-    );
-    expect(html).toContain("In progress");
+  it("shows only the community's announcement, with no platform badge", () => {
+    const html = renderToStaticMarkup(<Bulletin content="More is coming." />);
+    expect(html).toContain("More is coming.");
+    expect(html).not.toContain("In progress");
   });
 });
