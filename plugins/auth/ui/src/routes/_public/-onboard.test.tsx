@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  type OnboardingRedeemFailureCode,
+  type OnboardingRedeemReason,
+  onboardingRedeemFailures,
+} from "@everything-dev/auth-plugin/contract";
+import { createORPCErrorFromJson } from "@orpc/client";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
   createRootRouteWithContext,
@@ -8,6 +14,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { refreshSessionCache, signInWithPasskey } from "everything-dev/ui/auth";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
 import { Route as OnboardRoute } from "./onboard";
@@ -17,6 +24,7 @@ const harness = vi.hoisted(() => ({
   sessionGate: null as Promise<never> | null,
   getOnboardingCodeInfo: vi.fn(),
   redeemOnboardingCode: vi.fn(),
+  detectNearAccount: vi.fn(async () => null as { accountId?: string | null } | null),
   resolveTenantByOrgId: vi.fn(),
   listNodes: vi.fn(),
   getDiscoveryNode: vi.fn(),
@@ -36,7 +44,7 @@ vi.mock("everything-dev/ui/auth", () => ({
   signInWithPasskey: vi.fn(),
   isUnsupportedAuthenticatorError: () => false,
   useAuthClient: () => ({
-    near: { detectNearAccount: async () => null },
+    near: { detectNearAccount: harness.detectNearAccount },
     updateUser: vi.fn(async () => ({ error: null })),
   }),
 }));
@@ -44,6 +52,28 @@ vi.mock("everything-dev/ui/auth", () => ({
 vi.mock("better-near-auth/client", () => ({ isPasskeyWalletAvailable: () => true }));
 
 const CODE = "valid-code-12345";
+
+function definedError(code: string, data?: { reason: OnboardingRedeemReason }) {
+  return createORPCErrorFromJson({ defined: true, code, message: code, data });
+}
+
+function joinFailure(reason: OnboardingRedeemReason) {
+  const codes = Object.keys(onboardingRedeemFailures) as OnboardingRedeemFailureCode[];
+  const code = codes.find(
+    (candidate) => onboardingRedeemFailures[candidate].data.safeParse({ reason }).success,
+  );
+  return definedError(code ?? "BAD_REQUEST", { reason });
+}
+
+async function settleRedeem() {
+  await waitFor(() => expect(harness.redeemOnboardingCode).toHaveBeenCalled());
+  await act(async () => {
+    await Promise.allSettled(
+      harness.redeemOnboardingCode.mock.results.map((result) => result.value),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
 const joined = {
   organizationId: "org-1",
   organizationName: "Chicago Builders",
@@ -102,9 +132,11 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  focusManager.setFocused(undefined);
   vi.clearAllMocks();
   harness.session = null;
   harness.sessionGate = null;
+  harness.detectNearAccount.mockResolvedValue(null);
 });
 
 describe("onboard join flow", () => {
@@ -190,7 +222,7 @@ describe("onboard join flow", () => {
   it("shows a signed-in visitor who never joined that a used-up code is unavailable", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, usedUp: true });
-    harness.redeemOnboardingCode.mockRejectedValue(new Error("reached its limit"));
+    harness.redeemOnboardingCode.mockRejectedValue(joinFailure("code_used_up"));
 
     renderOnboard();
 
@@ -243,6 +275,183 @@ describe("onboard join flow", () => {
         "http://localhost:3000/login?method=phone",
       ),
     );
+  });
+
+  it("shows Retry when the invitation lookup fails instead of spinning", async () => {
+    harness.getOnboardingCodeInfo.mockRejectedValue(new Error("offline"));
+
+    renderOnboard();
+
+    expect(await screen.findByText("Couldn't load this invitation")).toBeTruthy();
+    expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.loading")).toBeNull();
+  });
+
+  it("retries a failed invitation lookup", async () => {
+    harness.getOnboardingCodeInfo
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(info);
+
+    renderOnboard();
+    fireEvent.click(await screen.findByTestId("onboard.retry-button"));
+
+    expect(await screen.findByTestId("onboard.invite")).toBeTruthy();
+  });
+
+  it("shows the loading state while a first failed invitation lookup retries", async () => {
+    harness.getOnboardingCodeInfo
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockReturnValue(new Promise(() => undefined));
+
+    renderOnboard();
+    fireEvent.click(await screen.findByTestId("onboard.retry-button"));
+
+    expect(await screen.findByTestId("onboard.loading")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.load-error")).toBeNull();
+  });
+
+  it("disables Retry while a failed invitation refresh retries", async () => {
+    harness.getOnboardingCodeInfo
+      .mockResolvedValueOnce(info)
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockReturnValue(new Promise(() => undefined));
+
+    renderOnboard();
+    expect(await screen.findByTestId("onboard.invite")).toBeTruthy();
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    const retry = await screen.findByTestId("onboard.retry-button");
+    expect(retry.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(retry);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("onboard.retry-button").hasAttribute("disabled")).toBe(true),
+    );
+    expect(harness.getOnboardingCodeInfo).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not throw when the NEAR account check fails", async () => {
+    harness.detectNearAccount.mockRejectedValue(new Error("rpc down"));
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+
+    renderOnboard();
+
+    expect(await screen.findByTestId("onboard.invite")).toBeTruthy();
+  });
+
+  it("retries a network failure while joining instead of asking for a new link", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValue({
+        organizationName: "Chicago Builders",
+        eventName: "Launch Night",
+      });
+
+    renderOnboard();
+
+    expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
+    expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
+    expect(screen.queryByText("Ask the organizer for a new link")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("onboard.retry-button"));
+    expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+  });
+
+  it.each([
+    "expired",
+    "usedUp",
+  ] as const)("retries a network failure while joining a %s code instead of asking for a new link", async (flag) => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue({
+      ...info,
+      expired: flag === "expired",
+      usedUp: flag === "usedUp",
+    });
+    harness.redeemOnboardingCode
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValue({
+        organizationName: "Chicago Builders",
+        eventName: "Launch Night",
+      });
+
+    renderOnboard();
+
+    expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
+    expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
+    expect(screen.queryByText("Ask the organizer for a new link")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("onboard.retry-button"));
+    expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+  });
+
+  it("keeps a revoked code unavailable when joining fails on the network", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, revoked: true });
+    harness.redeemOnboardingCode.mockRejectedValue(new Error("Failed to fetch"));
+
+    renderOnboard();
+    await settleRedeem();
+
+    expect(screen.getByTestId("onboard.unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
+    expect(screen.queryByText("Couldn't join right now")).toBeNull();
+  });
+
+  it("sends a member whose session lapsed back to sign in, then joins", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode
+      .mockRejectedValueOnce(definedError("UNAUTHORIZED"))
+      .mockResolvedValue(joined);
+    vi.mocked(signInWithPasskey).mockImplementation(async (_auth, options) => {
+      await options?.onSuccess?.();
+    });
+
+    renderOnboard();
+
+    expect(await screen.findByTestId("onboard.create-account-button")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
+    expect(screen.queryByTestId("onboard.error")).toBeNull();
+    expect(refreshSessionCache).toHaveBeenCalled();
+    expect(harness.redeemOnboardingCode).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("onboard.existing-account-button"));
+    fireEvent.click(await screen.findByTestId("onboard.passkey-signin-button"));
+
+    expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+    expect(harness.redeemOnboardingCode).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["organization_not_active", "This community isn't open yet", "onboard.explore-button"],
+    ["organization_full", "This community is full", "onboard.explore-button"],
+    ["code_revoked", "This invitation was turned off", null],
+    ["code_expired", "This invitation has expired", null],
+    ["code_used_up", "This invitation has been used up", null],
+    ["code_not_found", "This invitation isn't valid", null],
+    ["organization_not_found", "This invitation isn't valid", null],
+  ] as const)("shows %s with its next step", async (reason, title, actionTestId) => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode.mockRejectedValue(joinFailure(reason));
+
+    renderOnboard();
+
+    expect(await screen.findByText(title)).toBeTruthy();
+    if (actionTestId) {
+      expect(screen.getByTestId(actionTestId)).toBeTruthy();
+      expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
+    } else {
+      expect(screen.getByText("Ask the organizer for a new link")).toBeTruthy();
+      expect(screen.queryByTestId("onboard.explore-button")).toBeNull();
+      expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
+    }
   });
 });
 

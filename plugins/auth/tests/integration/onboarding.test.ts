@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema";
 import {
@@ -306,7 +306,10 @@ describe("onboarding handlers", () => {
         input: { code: code.code },
         context: { reqHeaders: second.reqHeaders },
       }),
-    ).rejects.toThrow(/reached its limit/i);
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      data: { reason: "code_used_up" },
+    });
 
     const member = await services.services.db.query.member.findFirst({
       where: and(eq(schema.member.userId, second.userId), eq(schema.member.organizationId, org.id)),
@@ -535,7 +538,10 @@ describe("onboarding handlers", () => {
         input: { code: expired.code },
         context: { reqHeaders: late.reqHeaders },
       }),
-    ).rejects.toThrow(/expired/i);
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      data: { reason: "code_expired" },
+    });
 
     const revoked = await handlers.onboarding.createOnboardingCode({
       input: { ...eventOf("Cancelled"), organizationId: org.id },
@@ -550,7 +556,10 @@ describe("onboarding handlers", () => {
         input: { code: revoked.code },
         context: { reqHeaders: late.reqHeaders },
       }),
-    ).rejects.toThrow(/revoked/i);
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      data: { reason: "code_revoked" },
+    });
   });
 
   it("rejects unknown codes and reports status flags publicly", async () => {
@@ -563,6 +572,16 @@ describe("onboarding handlers", () => {
       context: {},
     });
     expect(unknown).toBeNull();
+    const stranger = await createTestUser(services.services, { email: undefined });
+    await expect(
+      handlers.onboarding.redeemOnboardingCode({
+        input: { code: "not-a-real-code" },
+        context: { reqHeaders: stranger.reqHeaders },
+      }),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      data: { reason: "code_not_found" },
+    });
 
     const code = await handlers.onboarding.createOnboardingCode({
       input: { ...eventOf("Info Event"), organizationId: org.id },
@@ -1004,9 +1023,65 @@ describe("onboarding into a full organization", () => {
           input: { code: code.code },
           context: { reqHeaders: attendee.reqHeaders },
         }),
-      ).rejects.toThrow(/organization is full/i);
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        data: { reason: "organization_full" },
+      });
     } finally {
       await full.driver.close();
     }
   }, 30000);
+});
+
+describe("redeemOnboardingCode organization causes", () => {
+  it("returns organization_not_active when the organization is pending", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Pending Hall"), organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await services.services.db
+      .update(schema.organization)
+      .set({ status: "pending" })
+      .where(eq(schema.organization.id, org.id));
+    const attendee = await createTestUser(services.services, { email: undefined });
+
+    await expect(
+      handlers.onboarding.redeemOnboardingCode({
+        input: { code: code.code },
+        context: { reqHeaders: attendee.reqHeaders },
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      data: { reason: "organization_not_active" },
+    });
+  });
+
+  it("returns organization_not_found when the organization row is missing", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Gone Hall"), organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await services.services.db.execute(sql`SET session_replication_role = replica`);
+    await services.services.db
+      .delete(schema.organization)
+      .where(eq(schema.organization.id, org.id));
+    await services.services.db.execute(sql`SET session_replication_role = DEFAULT`);
+    const attendee = await createTestUser(services.services, { email: undefined });
+
+    await expect(
+      handlers.onboarding.redeemOnboardingCode({
+        input: { code: code.code },
+        context: { reqHeaders: attendee.reqHeaders },
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      data: { reason: "organization_not_found" },
+    });
+  });
 });

@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { Context } from "effect";
+import {
+  type OnboardingRedeemFailureCode,
+  type OnboardingRedeemReason,
+  onboardingRedeemFailures,
+} from "../contract";
 import * as schema from "../db/schema";
 import {
   createOrganizationMembershipPolicy,
@@ -9,6 +14,29 @@ import {
 } from "../organization-membership-policy";
 import { AuthServicesTag, type PluginServices } from "../service-types";
 import { createHeaders, getActiveOrganizationId, parseTeamAreas, safeAuthApi } from "../utils";
+
+const redeemMessages: Record<OnboardingRedeemReason, string> = {
+  organization_not_active: "Organization requires platform-admin approval",
+  organization_full: "This organization is full, so no more members can join",
+  code_revoked: "This onboarding code was revoked",
+  code_expired: "This onboarding code has expired",
+  code_used_up: "This onboarding code has reached its limit",
+  code_not_found: "Onboarding code not found",
+  organization_not_found: "Organization not found",
+};
+
+const redeemCodeByReason = Object.fromEntries(
+  Object.entries(onboardingRedeemFailures).flatMap(([code, failure]) =>
+    failure.data.shape.reason.options.map((reason) => [reason, code]),
+  ),
+) as Record<OnboardingRedeemReason, OnboardingRedeemFailureCode>;
+
+function throwRedeem(reason: OnboardingRedeemReason): never {
+  throw new ORPCError(redeemCodeByReason[reason], {
+    message: redeemMessages[reason],
+    data: { reason },
+  });
+}
 
 const DEFAULT_MAX_USES = 300;
 const DEFAULT_EXPIRES_IN_HOURS = 24;
@@ -390,22 +418,23 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           where: eq(schema.onboardingCode.codeHash, hashCode(input.code)),
         });
         if (!codeRow) {
-          throw new ORPCError("NOT_FOUND", { message: "Onboarding code not found" });
+          throwRedeem("code_not_found");
         }
 
         const organization = await services.db.query.organization.findFirst({
           where: eq(schema.organization.id, codeRow.organizationId),
         });
-        const organizationName = organization?.name ?? "";
-        if (organization?.status !== "active") {
-          throw new ORPCError("FORBIDDEN", {
-            message: "Organization requires platform-admin approval",
-          });
+        if (!organization) {
+          throwRedeem("organization_not_found");
+        }
+        const organizationName = organization.name;
+        if (organization.status !== "active") {
+          throwRedeem("organization_not_active");
         }
 
         const state = codeState(codeRow);
         if (state === "revoked") {
-          throw new ORPCError("FORBIDDEN", { message: "This onboarding code was revoked" });
+          throwRedeem("code_revoked");
         }
 
         const already = await services.db.query.onboardingRedemption.findFirst({
@@ -432,12 +461,10 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
         }
 
         if (state === "expired") {
-          throw new ORPCError("BAD_REQUEST", { message: "This onboarding code has expired" });
+          throwRedeem("code_expired");
         }
         if (state === "used-up") {
-          throw new ORPCError("FORBIDDEN", {
-            message: "This onboarding code has reached its limit",
-          });
+          throwRedeem("code_used_up");
         }
 
         await services.db.transaction(async (tx) => {
@@ -447,7 +474,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             .where(eq(schema.organization.id, codeRow.organizationId))
             .for("update");
           if (!orgRow) {
-            throw new ORPCError("BAD_REQUEST", { message: "Organization not found" });
+            throwRedeem("organization_not_found");
           }
 
           const existingMember = await tx.query.member.findFirst({
@@ -462,9 +489,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
               .from(schema.member)
               .where(eq(schema.member.organizationId, codeRow.organizationId));
             if (!membershipPolicyOf(services).hasCapacity(memberCount)) {
-              throw new ORPCError("FORBIDDEN", {
-                message: "This organization is full, so no more members can join",
-              });
+              throwRedeem("organization_full");
             }
             await tx.insert(schema.member).values({
               id: crypto.randomUUID(),
@@ -512,9 +537,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             )
             .returning();
           if (!updated) {
-            throw new ORPCError("FORBIDDEN", {
-              message: "This onboarding code has reached its limit",
-            });
+            throwRedeem("code_used_up");
           }
 
           await tx.insert(schema.onboardingRedemption).values({
