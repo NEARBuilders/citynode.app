@@ -15,8 +15,11 @@ export default App({
     "Decentralized city nodes on NEAR — each city is a tenant with its own validator pool you can stake to.",
   "repository": "https://github.com/NEARBuilders/citynode.app",
   "staging": { "domain": "testnet.citynode.app", "account": "v1.citynode.testnet" },
-  // CI settings: runtime image name, Railway service.
+  // CI settings: runtime image (the base runtime's floating prerelease-train
+  // image — deploys are image-backed `railway redeploy --from-source` legs,
+  // no local build), Railway service.
   "ci": {
+    "image": "ghcr.io/nearbuilders/everything-dev:rc",
     "railway": {
       "service": "app"
     }

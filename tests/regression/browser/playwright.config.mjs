@@ -1,0 +1,66 @@
+import { fileURLToPath } from "node:url";
+import { defineConfig } from "@playwright/test";
+import { computeRegressionEnv } from "../lib/regression-env.mjs";
+
+const stallWatchdog = fileURLToPath(new URL("./helpers/stall-watchdog.mjs", import.meta.url));
+const mode = process.env.REGRESSION_MODE ?? "dev:ssr";
+const command = `pnpm run regression:${mode}`;
+
+const regressionEnv = computeRegressionEnv();
+
+const derivedEnv = {
+  ...regressionEnv.dbUrls,
+  CORS_ORIGIN: regressionEnv.baseUrl,
+  BETTER_AUTH_SECRET: regressionEnv.authSecret,
+  RATE_LIMIT_WINDOW_MS: "1000",
+  RATE_LIMIT_MAX: "100",
+  BODY_LIMIT_MAX: "65536",
+  CI: "true",
+};
+
+const webServerEnv = Object.fromEntries(
+  Object.entries(derivedEnv).filter(([key]) => process.env[key] === undefined),
+);
+
+export default defineConfig({
+  testDir: "./specs",
+  timeout: 60000,
+  fullyParallel: false,
+  workers: 1,
+  // One retry per failed test. Retries were zeroed when a degradation wedge
+  // behind a starving fixture showed up as flaky-then-passed clusters that
+  // doubled wall time (ADR 0009); that fixture's resource profile is fixed.
+  // With ~10 parallel CI jobs sharing the runner, a single slow SSR compose
+  // (e.g. theme.spec reload timing out in waitForApp) still turns a green
+  // run red — one bounded retry is cheaper than a full CI re-run.
+  retries: 1,
+  reporter: [["list"], [stallWatchdog]],
+  globalSetup: "./helpers/global-setup.ts",
+  use: {
+    browserName: "chromium",
+    headless: true,
+    baseURL: regressionEnv.baseUrl,
+    trace: "retain-on-failure",
+  },
+  webServer: {
+    command,
+    url: `${regressionEnv.baseUrl}/health`,
+    reuseExistingServer: false,
+    // The pnpm-based image build + container boot outgrew the bun-era 2m
+    // budget; 5m keeps headroom (an early exit still fails the webServer).
+    timeout: 300_000,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: webServerEnv,
+  },
+  projects: [
+    {
+      // Consumer repo: the local `bos dev` stack (base host remote from the
+      // extends chain, local ui/api/auth/plugins) runs the FULL citynode
+      // suite. Image-level validation is the deploy train's smoke gate —
+      // the parent Dockerfile's regression fixture target is not buildable
+      // here, so there are no start:* projects.
+      name: "dev:ssr",
+    },
+  ],
+});

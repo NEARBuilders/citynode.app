@@ -7,6 +7,13 @@ allowBuilds:
   esbuild: true
   sharp: true
 
+overrides:
+  # Upstream publish leak (rc.5–rc.7): everything-dev ships a workspace:^ dep
+  # on @everything-dev/upload-app, a monorepo-private package never published
+  # to npm. The `-` drops the dep at resolution; remove this once the RC train
+  # fixes the packaging.
+  "@everything-dev/upload-app": "-"
+
 catalog:
   react: 19.2.4
   react-dom: 19.2.4
@@ -31,8 +38,8 @@ catalog:
   "@better-auth/api-key": 1.6.25
   "@better-auth/passkey": 1.6.25
   better-near-auth: ^2.0.0-rc.0
-  every-plugin: ^3.0.0-rc.0
-  everything-dev: ^2.0.0-rc.1
+  every-plugin: ^3.0.0-rc.4
+  everything-dev: ^2.0.0-rc.7
   typescript: ^7.0.2
   vitest: ^4.1.8
   "@libsql/client": 0.17.0
@@ -80,5 +87,5 @@ catalog:
 
 minimumReleaseAgeExclude:
   - better-near-auth@2.0.0-rc.0
-  - every-plugin@3.0.0-rc.0
-  - everything-dev@2.0.0-rc.1
+  - every-plugin@3.0.0-rc.4
+  - everything-dev@2.0.0-rc.7

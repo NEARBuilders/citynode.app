@@ -19,7 +19,7 @@ async function seedTeamMember() {
       slug: `team-workspace-${suffix}`,
     })
   ).json();
-  execFileSync("bun", ["tests/regression/lib/approve-test-organizations.ts", org.id], {
+  execFileSync("pnpm", ["exec", "tsx", "tests/regression/lib/approve-test-organizations.ts", org.id], {
     timeout: FETCH_TIMEOUT_MS,
   });
   const team = await (
@@ -59,7 +59,7 @@ test.describe("team workspace", () => {
         slug: `workspace-refresh-${suffix}`,
       })
     ).json();
-    execFileSync("bun", ["tests/regression/lib/approve-test-organizations.ts", org.id], {
+    execFileSync("pnpm", ["exec", "tsx", "tests/regression/lib/approve-test-organizations.ts", org.id], {
       timeout: FETCH_TIMEOUT_MS,
     });
     const team = await (

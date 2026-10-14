@@ -243,7 +243,7 @@ const thisFile = path.resolve(fileURLToPath(import.meta.url));
 if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) {
   const payload = process.argv[2];
   if (!payload) {
-    console.error("usage: bun tests/regression/lib/seed-tenant.mjs '<json>'");
+    console.error("usage: node tests/regression/lib/seed-tenant.mjs '<json>'");
     process.exit(1);
   }
   seedTenant(JSON.parse(payload))
