@@ -483,6 +483,50 @@ describe("proposal application dispatcher", () => {
     await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
     expect(started()).toBe(7);
   });
+
+  it("records the open DAO vote and stops the heartbeat while publishing waits on it", async () => {
+    vi.useFakeTimers();
+    const api = client(proposal("node", nodePayload));
+    let finishPublish: () => void = () => undefined;
+    const publishTenantConfig = vi.fn(
+      () => new Promise<void>((resolve) => (finishPublish = resolve)),
+    );
+    const findOpenTenantConfigProposal = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 9 });
+
+    const result = approveAndApplyProposal({
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      gatewayId: "citynode.app",
+      baseAccount: "everything.near",
+      publishTenantConfig,
+      findOpenTenantConfigProposal,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const publicationCalls = () =>
+      api.proposals.recordApplyStep.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.step === "publication");
+
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+    expect(publicationCalls().map((call) => call.status)).toEqual([
+      "started",
+      "started",
+      "waiting",
+    ]);
+    expect(publicationCalls().at(-1)).toMatchObject({ resourceId: "9" });
+
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    expect(publicationCalls()).toHaveLength(3);
+
+    finishPublish();
+    await vi.runAllTimersAsync();
+    expect((await result).applyStatus).toBe("applied");
+    expect(publicationCalls().at(-1)).toMatchObject({ status: "completed" });
+  });
 });
 
 describe("rejecting a community application", () => {

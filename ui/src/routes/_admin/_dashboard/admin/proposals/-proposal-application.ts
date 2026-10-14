@@ -58,9 +58,22 @@ const proposalApplicationHandlers = {
     if (!(await published())) {
       await stopIfDaoVoteOpen();
       let publishError: unknown = null;
+      let heartbeatStopped = false;
       await recordPublication("started");
+      // Trezu keeps publishing pending until the DAO vote executes, so once the vote is open
+      // record it and let the setup go idle; anyone can resume it after the vote.
       const heartbeat = setInterval(() => {
-        void recordPublication("started").catch(() => undefined);
+        void (async () => {
+          const open = await findOpenTenantConfigProposal(payload.accountId).catch(() => null);
+          if (heartbeatStopped) return;
+          if (open) {
+            heartbeatStopped = true;
+            clearInterval(heartbeat);
+            await recordPublication("waiting", String(open.id));
+            return;
+          }
+          await recordPublication("started");
+        })().catch(() => undefined);
       }, PUBLISH_HEARTBEAT_MS);
       try {
         await publishTenantConfig({
@@ -73,6 +86,7 @@ const proposalApplicationHandlers = {
       } catch (error) {
         publishError = error;
       } finally {
+        heartbeatStopped = true;
         clearInterval(heartbeat);
       }
       if (!(await waitForTenantConfig(published))) {
