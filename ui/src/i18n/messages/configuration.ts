@@ -569,18 +569,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Créez une communauté avec son propre site, ses événements et son staking.",
     "创建社区，拥有专属站点、活动和质押功能。",
   ],
-  "tenant.stepDoneNamed": [
-    "Step {number}, done: {title}",
-    "Paso {number}, completado: {title}",
-    "Étape {number}, terminée : {title}",
-    "第 {number} 步，已完成：{title}",
-  ],
-  "tenant.stepNamed": [
-    "Step {number}: {title}",
-    "Paso {number}: {title}",
-    "Étape {number} : {title}",
-    "第 {number} 步：{title}",
-  ],
   "tenant.suspend": ["Suspend", "Suspender", "Suspendre", "暂停"],
   "tenant.suspendCommunity": [
     "Suspend community",

@@ -34,7 +34,7 @@ export function crumbsFor(
 
   const ADMIN_SECTIONS: Record<
     string,
-    { label: string; detail: string; edit: AppMessageId; create: AppMessageId }
+    { label: string; detail: string; edit: AppMessageId; create?: AppMessageId }
   > = {
     nodes: {
       label: t("common.communities"),
@@ -52,7 +52,6 @@ export function crumbsFor(
       label: t("nav.sites"),
       detail: t("nav.site"),
       edit: "nav.editSite",
-      create: "nav.newSite",
     },
     relayer: {
       label: t("nav.relayer"),
@@ -138,7 +137,11 @@ export function crumbsFor(
           { label: section.detail, to: `/admin/${second}/${third}` },
           page(t(section.edit)),
         ];
-      return [ADMIN, sectionCrumb, page(third === "new" ? t(section.create) : section.detail)];
+      return [
+        ADMIN,
+        sectionCrumb,
+        page(third === "new" && section.create ? t(section.create) : section.detail),
+      ];
     }
     case "settings": {
       const section = second ? SETTINGS_SECTIONS[second] : undefined;
