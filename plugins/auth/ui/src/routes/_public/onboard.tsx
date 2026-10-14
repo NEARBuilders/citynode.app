@@ -119,7 +119,9 @@ function OnboardContent() {
   const [nameDone, setNameDone] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [redeemError, setRedeemError] = useState<RedeemFailure | null>(null);
+  const [signInAgain, setSignInAgain] = useState(false);
   const redeemingRef = useRef(false);
+  const signedIn = !!session?.user && !signInAgain;
 
   const copyPairLink = async (url: string) => {
     try {
@@ -133,7 +135,7 @@ function OnboardContent() {
   };
 
   useEffect(() => {
-    if (!session?.user || !code || redeemingRef.current || redeemed || redeemError) return;
+    if (!signedIn || !code || redeemingRef.current || redeemed || redeemError) return;
     redeemingRef.current = true;
     void safe(apiClient.auth.redeemOnboardingCode({ code })).then(
       ({ data, definedError, isSuccess }) => {
@@ -145,14 +147,16 @@ function OnboardContent() {
           void refreshSessionCache(auth, queryClient);
           return;
         }
-        setRedeemError(
-          definedError && definedError.code !== "UNAUTHORIZED"
-            ? definedError.data.reason
-            : "network",
-        );
+        if (definedError?.code === "UNAUTHORIZED") {
+          redeemingRef.current = false;
+          setSignInAgain(true);
+          void refreshSessionCache(auth, queryClient);
+          return;
+        }
+        setRedeemError(definedError ? definedError.data.reason : "network");
       },
     );
-  }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient, translate]);
+  }, [signedIn, code, redeemed, redeemError, auth, apiClient, queryClient, translate]);
 
   if (redeemed) {
     const joinedLine = (
@@ -285,6 +289,7 @@ function OnboardContent() {
         title={translate("auth.onboard.loadFailed")}
         testId="onboard.load-error"
         action="retry"
+        retrying={infoQuery.isFetching}
         onRetry={() => {
           void infoQuery.refetch();
         }}
@@ -292,7 +297,7 @@ function OnboardContent() {
     );
   }
 
-  const awaitingJoin = sessionPending || (!!session?.user && !redeemError);
+  const awaitingJoin = sessionPending || (signedIn && !redeemError);
   const closedForNewcomers = !!info && !info.revoked && (info.expired || info.usedUp);
 
   if (info === undefined || (closedForNewcomers && awaitingJoin)) {
@@ -320,7 +325,7 @@ function OnboardContent() {
     );
   }
 
-  if (redeemError === "network") {
+  if (redeemError === "network" && !info.revoked) {
     return (
       <StatusPanel
         title={translate("auth.onboard.joinUnavailable")}
@@ -351,7 +356,7 @@ function OnboardContent() {
     );
   }
 
-  if (redeemError) {
+  if (redeemError && redeemError !== "network") {
     const copy = redeemCopy[redeemError];
     return (
       <StatusPanel
@@ -365,7 +370,7 @@ function OnboardContent() {
     );
   }
 
-  if (session?.user) {
+  if (signedIn) {
     return (
       <AuthPanel
         icon={<TicketIcon />}
@@ -407,6 +412,7 @@ function OnboardContent() {
       <OnboardSignUp
         networkId={runtimeConfig?.networkId ?? "mainnet"}
         onAccountCreated={() => setAccountCreated(true)}
+        onSignedIn={() => setSignInAgain(false)}
       />
     </AuthPanel>
   );
@@ -417,12 +423,14 @@ function StatusPanel({
   description,
   testId,
   action,
+  retrying = false,
   onRetry,
 }: {
   title: string;
   description?: string;
   testId: string;
   action: StatusAction;
+  retrying?: boolean;
   onRetry?: () => void;
 }) {
   const translate = useLoginTranslation();
@@ -440,8 +448,10 @@ function StatusPanel({
           size="lg"
           className="w-full"
           onClick={onRetry}
+          disabled={retrying}
           data-testid="onboard.retry-button"
         >
+          {retrying ? <Spinner data-icon="inline-start" /> : null}
           {translate("auth.common.retry")}
         </Button>
       ) : action === "explore" ? (

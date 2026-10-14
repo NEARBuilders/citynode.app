@@ -5,7 +5,7 @@ import {
   onboardingRedeemFailures,
 } from "@everything-dev/auth-plugin/contract";
 import { createORPCErrorFromJson } from "@orpc/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
   createRootRouteWithContext,
@@ -14,6 +14,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { refreshSessionCache, signInWithPasskey } from "everything-dev/ui/auth";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
 import { Route as OnboardRoute } from "./onboard";
@@ -64,6 +65,15 @@ function joinFailure(reason: OnboardingRedeemReason) {
   return definedError(code ?? "BAD_REQUEST", { reason });
 }
 
+async function settleRedeem() {
+  await waitFor(() => expect(harness.redeemOnboardingCode).toHaveBeenCalled());
+  await act(async () => {
+    await Promise.allSettled(
+      harness.redeemOnboardingCode.mock.results.map((result) => result.value),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
 const joined = {
   organizationId: "org-1",
   organizationName: "Chicago Builders",
@@ -122,6 +132,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  focusManager.setFocused(undefined);
   vi.clearAllMocks();
   harness.session = null;
   harness.sessionGate = null;
@@ -287,6 +298,41 @@ describe("onboard join flow", () => {
     expect(await screen.findByTestId("onboard.invite")).toBeTruthy();
   });
 
+  it("shows the loading state while a first failed invitation lookup retries", async () => {
+    harness.getOnboardingCodeInfo
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockReturnValue(new Promise(() => undefined));
+
+    renderOnboard();
+    fireEvent.click(await screen.findByTestId("onboard.retry-button"));
+
+    expect(await screen.findByTestId("onboard.loading")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.load-error")).toBeNull();
+  });
+
+  it("disables Retry while a failed invitation refresh retries", async () => {
+    harness.getOnboardingCodeInfo
+      .mockResolvedValueOnce(info)
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockReturnValue(new Promise(() => undefined));
+
+    renderOnboard();
+    expect(await screen.findByTestId("onboard.invite")).toBeTruthy();
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    const retry = await screen.findByTestId("onboard.retry-button");
+    expect(retry.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(retry);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("onboard.retry-button").hasAttribute("disabled")).toBe(true),
+    );
+    expect(harness.getOnboardingCodeInfo).toHaveBeenCalledTimes(3);
+  });
+
   it("does not throw when the NEAR account check fails", async () => {
     harness.detectNearAccount.mockRejectedValue(new Error("rpc down"));
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
@@ -342,6 +388,44 @@ describe("onboard join flow", () => {
 
     fireEvent.click(screen.getByTestId("onboard.retry-button"));
     expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+  });
+
+  it("keeps a revoked code unavailable when joining fails on the network", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, revoked: true });
+    harness.redeemOnboardingCode.mockRejectedValue(new Error("Failed to fetch"));
+
+    renderOnboard();
+    await settleRedeem();
+
+    expect(screen.getByTestId("onboard.unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
+    expect(screen.queryByText("Couldn't join right now")).toBeNull();
+  });
+
+  it("sends a member whose session lapsed back to sign in, then joins", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode
+      .mockRejectedValueOnce(definedError("UNAUTHORIZED"))
+      .mockResolvedValue(joined);
+    vi.mocked(signInWithPasskey).mockImplementation(async (_auth, options) => {
+      await options?.onSuccess?.();
+    });
+
+    renderOnboard();
+
+    expect(await screen.findByTestId("onboard.create-account-button")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
+    expect(screen.queryByTestId("onboard.error")).toBeNull();
+    expect(refreshSessionCache).toHaveBeenCalled();
+    expect(harness.redeemOnboardingCode).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("onboard.existing-account-button"));
+    fireEvent.click(await screen.findByTestId("onboard.passkey-signin-button"));
+
+    expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+    expect(harness.redeemOnboardingCode).toHaveBeenCalledTimes(2);
   });
 
   it.each([
