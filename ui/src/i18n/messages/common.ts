@@ -249,7 +249,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "common.address": ["Address", "Dirección", "Adresse", "地址"],
   "common.admin": ["Admin", "Administración", "Administration", "管理"],
-  "common.allowed": ["Allowed", "Permitido", "Autorisé", "已允许"],
   "common.amount": ["Amount", "Cantidad", "Montant", "金额"],
   "common.application": ["Application", "Solicitud", "Demande", "申请"],
   "common.approve": ["Approve", "Aprobar", "Approuver", "批准"],
@@ -1550,12 +1549,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "无法验证 DAO 成员身份。请重试。",
   ],
   "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
-  "wallet.sessionAccount": [
-    "the session wallet",
-    "la cartera de la sesión",
-    "le portefeuille de la session",
-    "当前会话钱包",
-  ],
   "wallet.treasury": ["the treasury", "la tesorería", "la trésorerie", "资金库"],
   "workspace.adminOnly": [
     "{area} is only for platform admins.",

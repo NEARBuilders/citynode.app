@@ -11,7 +11,7 @@ test.use({ trace: "on" });
 test.describe("node page propose homepage CTA", () => {
   let ownedNode: Awaited<ReturnType<typeof seedNode>>;
   let unrelatedNode: Awaited<ReturnType<typeof seedNode>>;
-  let orgSlug: string;
+  let ownedTenantId: string;
 
   test.beforeAll(async ({ browser }) => {
     const { orgAName } = loadAdminSeedData();
@@ -23,7 +23,6 @@ test.describe("node page propose homepage CTA", () => {
     const organizations = (await response.json()) as { id: string; name: string; slug: string }[];
     const orgA = organizations.find((org) => org.name === orgAName || org.slug === orgAName);
     if (!orgA) throw new Error(`admin organization ${orgAName} not found`);
-    orgSlug = orgA.slug;
     await context.close();
 
     const unique = `${process.pid}-${Date.now().toString(36)}`;
@@ -34,6 +33,7 @@ test.describe("node page propose homepage CTA", () => {
       orgId: orgA.id,
       ownerKind: "dao",
     });
+    ownedTenantId = ownedTenant.id;
     ownedNode = await seedNode({
       tenantId: ownedTenant.id,
       slug: `homepage-cta-${unique}`,
@@ -83,7 +83,7 @@ test.describe("node page propose homepage CTA", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
-  test("owning organization members open the homepage tab from the button", async ({ page }) => {
+  test("owning organization owners open the published config from the button", async ({ page }) => {
     const pageErrors = collectErrors(page);
     await injectAdminCookies(page);
 
@@ -94,11 +94,13 @@ test.describe("node page propose homepage CTA", () => {
     await expect(button).toBeVisible({ timeout: 15000 });
     await button.click();
 
-    await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}\\?tab=homepage`), {
+    await page.waitForURL(
+      (url) => url.pathname === `/tenant/${ownedTenantId}` && url.hash === "#published-config",
+      { timeout: 15000, waitUntil: "commit" },
+    );
+    await expect(page.getByTestId("tenant.section.published-config")).toBeVisible({
       timeout: 15000,
-      waitUntil: "commit",
     });
-    await expect(page.getByTestId("orgs-tab-homepage")).toHaveAttribute("aria-selected", "true");
     expectNoHydrationFailure(pageErrors);
   });
 });

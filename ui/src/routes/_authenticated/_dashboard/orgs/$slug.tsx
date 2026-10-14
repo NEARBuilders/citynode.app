@@ -1,17 +1,16 @@
 import { BankIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, stripSearchParams, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import {
+  createFileRoute,
+  Link,
+  Navigate,
+  stripSearchParams,
+  useRouter,
+} from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import {
-  getAccount,
-  getActiveRuntime,
-  type SessionData,
-  sessionQueryOptions,
-  useApiClient,
-  useAuthClient,
-} from "@/app";
+import { type SessionData, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import {
   Button,
   EmptyState,
@@ -19,7 +18,6 @@ import {
   PageHeader,
   Skeleton,
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components";
@@ -30,50 +28,45 @@ import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
+import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { isCommunitySettingsRole } from "@/lib/team-workspace";
+import { PUBLISHED_CONFIG_SECTION_ID } from "../tenant/-published-config-section";
+import { useOpenCommunitySettings } from "../tenant/-use-open-community-settings";
 import {
   ApiKeysTab,
   type CreatedOrganizationApiKey,
   type OrganizationApiKey,
 } from "./-api-keys-tab";
-import { HomepageTab } from "./-homepage-tab";
 import { InvitationsTab } from "./-invitations-tab";
+import {
+  isLegacySettingsTab,
+  LEGACY_SETTINGS_TABS,
+  legacySettingsTarget,
+} from "./-legacy-settings-tab";
 import { MembersTab } from "./-members-tab";
-import { NodeConfigTab } from "./-node-config";
 import { OnboardingTab } from "./-onboarding-tab";
 import { useOrganizationApiKeyActions } from "./-organization-api-keys";
 import { OrganizationEditForm } from "./-organization-edit-form";
 import { useOrganizationInvitationActions } from "./-organization-invitations";
-import { useOrganizationMemberActions } from "./-organization-members";
+import { orgMembersQueryOptions, useOrganizationMemberActions } from "./-organization-members";
 import { OrganizationOverview } from "./-organization-overview";
-import {
-  orgApiKeysQueryKey,
-  orgInvitationsQueryKey,
-  orgMembersQueryKey,
-} from "./-organization-query-keys";
+import { orgApiKeysQueryKey, orgInvitationsQueryKey } from "./-organization-query-keys";
 import { useOrganizationSettings } from "./-organization-settings";
 import { useOrganizationTeams } from "./-organization-teams";
 import { TeamsTab } from "./-teams-tab";
 
-type AuthClientType = import("@/app").AuthClient;
 type ApiClientType = import("@/app").ApiClient;
-type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMembers"]>>;
-type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
 type InvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listInvitations"]>>[number];
 
-const ORGANIZATION_TABS = [
-  "members",
-  "teams",
-  "invitations",
-  "onboard",
-  "apikeys",
-  "node-config",
-  "homepage",
-] as const;
+const ORGANIZATION_TABS = ["members", "teams", "invitations", "onboard", "apikeys"] as const;
 
 type OrganizationTab = (typeof ORGANIZATION_TABS)[number];
 
 const organizationSearchSchema = z.object({
-  tab: z.enum(ORGANIZATION_TABS).default("members").catch("members"),
+  tab: z
+    .enum([...ORGANIZATION_TABS, ...LEGACY_SETTINGS_TABS])
+    .default("members")
+    .catch("members"),
 });
 
 function isOrganizationTab(value: unknown): value is OrganizationTab {
@@ -129,9 +122,6 @@ function OrganizationDetail() {
   const { tab: requestedTab } = Route.useSearch();
   const auth = useAuthClient();
   const apiClient = useApiClient();
-  const { runtimeConfig } = Route.useRouteContext();
-  const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "";
-  const baseAccount = getAccount(runtimeConfig);
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery(
     organizationsQueryOptions(apiClient),
@@ -140,18 +130,11 @@ function OrganizationDetail() {
   const orgId = org?.id ?? "";
   const activeOrgId = session?.session?.activeOrganizationId;
   const isActive = orgId === activeOrgId;
-  const members =
-    useQuery({
-      queryKey: orgMembersQueryKey(orgId),
-      queryFn: async (): Promise<MemberItem[]> => {
-        const { data, error } = await auth.organization.listMembers({
-          query: { organizationId: orgId },
-        });
-        if (error) throw new Error(error.message);
-        return (data?.members ?? []) as MemberItem[];
-      },
-      enabled: !!orgId && org?.status === "active",
-    }).data ?? [];
+  const membersQuery = useQuery({
+    ...orgMembersQueryOptions(auth, orgId),
+    enabled: !!orgId && org?.status === "active",
+  });
+  const members = membersQuery.data ?? [];
   const invitations =
     useQuery({
       queryKey: orgInvitationsQueryKey(orgId),
@@ -173,9 +156,14 @@ function OrganizationDetail() {
       enabled: !!orgId && org?.status === "active",
     }).data ?? [];
   const myMembership = members.find((member) => member.userId === session?.user?.id);
-  const canManageMembers = myMembership?.role === "owner" || myMembership?.role === "admin";
+  const canManageMembers = isCommunitySettingsRole(myMembership?.role);
   const canViewSettings = canManageMembers || session?.user?.role === "admin";
   const isOwner = myMembership?.role === "owner";
+  const tenantQuery = useQuery({
+    ...tenantByOrgQueryOptions(apiClient, orgId),
+    enabled: !!orgId && org?.status === "active" && canViewSettings,
+  });
+  const settingsTenantId = canViewSettings ? tenantQuery.data?.id : undefined;
   const workspace = useTeamWorkspace(isActive).data;
   const canOrganize =
     canManageMembers ||
@@ -185,6 +173,11 @@ function OrganizationDetail() {
   ).length;
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
+  const communitySettings = useOpenCommunitySettings();
+  const openSettings =
+    settingsTenantId && communitySettings.needsSwitch(orgId)
+      ? () => void communitySettings.open({ orgId, tenantId: settingsTenantId })
+      : undefined;
 
   const [pendingTeamDeleteId, setPendingTeamDeleteId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -220,11 +213,7 @@ function OrganizationDetail() {
     },
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
-  const activeTab =
-    (requestedTab === "onboard" && !canOrganize) ||
-    (["node-config", "homepage"].includes(requestedTab) && !canViewSettings)
-      ? "members"
-      : requestedTab;
+  const activeTab = requestedTab === "onboard" && !canOrganize ? "members" : requestedTab;
   const setActiveTab = (value: unknown) => {
     if (!isOrganizationTab(value) || value === activeTab) return;
     void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
@@ -290,6 +279,26 @@ function OrganizationDetail() {
     );
   }
 
+  if (isLegacySettingsTab(requestedTab)) {
+    if (!membersQuery.isFetched || (canViewSettings && !tenantQuery.isFetched)) {
+      return (
+        <PageContainer variant="wide">
+          <Skeleton className="h-64 w-full" />
+        </PageContainer>
+      );
+    }
+    const target = legacySettingsTarget({ canViewSettings, tenantId: tenantQuery.data?.id });
+    return target.to === "settings" ? (
+      <LegacySettingsRedirect
+        orgId={orgId}
+        tenantId={target.tenantId}
+        onFailed={() => setActiveTab("members")}
+      />
+    ) : (
+      <Navigate to="/orgs/$slug" params={{ slug: orgSlug }} search={{ tab: "members" }} replace />
+    );
+  }
+
   return (
     <PageContainer variant="wide">
       <OrganizationOverview
@@ -298,7 +307,7 @@ function OrganizationDetail() {
         isActive={isActive}
         isPersonal={isPersonal}
         isLeaving={leaveOrgMutation.isPending}
-        isSwitching={switchOrg.isPending}
+        isSwitching={switchOrg.isPending || communitySettings.isPending}
         memberCount={members.length}
         myRole={myMembership?.role}
         onDelete={() => deleteOrgMutation.mutate()}
@@ -308,8 +317,10 @@ function OrganizationDetail() {
           setIsEditing(true);
         }}
         onLeave={() => leaveOrgMutation.mutate()}
+        onOpenSettings={openSettings}
         onSwitch={() => switchOrg.mutate(orgId)}
         org={org}
+        settingsTenantId={settingsTenantId}
       />
       {isOwner && (
         <OrganizationEditForm
@@ -347,16 +358,6 @@ function OrganizationDetail() {
               {translate("org.apiKeys")}
               <TabCount value={apiKeys.length} />
             </TabsTrigger>
-            {canViewSettings && (
-              <TabsTrigger value="node-config" data-testid="orgs-tab-node-config">
-                {translate("common.community")}
-              </TabsTrigger>
-            )}
-            {canViewSettings && (
-              <TabsTrigger value="homepage" data-testid="orgs-tab-homepage">
-                {translate("homepage.title")}
-              </TabsTrigger>
-            )}
           </TabsList>
         </div>
         <MembersTab
@@ -430,29 +431,38 @@ function OrganizationDetail() {
           onDelete={(keyId) => deleteApiKeyMutation.mutate(keyId)}
           onDismiss={() => setCreatedApiKey(null)}
         />
-        {canViewSettings && (
-          <TabsContent value="node-config" className="flex flex-col gap-6 pt-6">
-            <NodeConfigTab
-              orgId={orgId}
-              gatewayId={gatewayId}
-              baseAccount={baseAccount}
-              canManage={canViewSettings}
-              isPlatformAdmin={session?.user?.role === "admin"}
-            />
-          </TabsContent>
-        )}
-        {canViewSettings && (
-          <TabsContent value="homepage" className="flex flex-col gap-6 pt-6">
-            <HomepageTab
-              orgId={orgId}
-              gatewayId={gatewayId}
-              baseAccount={baseAccount}
-              canManage={canViewSettings}
-              isActive={isActive}
-            />
-          </TabsContent>
-        )}
       </Tabs>
+    </PageContainer>
+  );
+}
+
+/**
+ * Sends a retired settings tab to Community settings, making the organization
+ * active first when it isn't (see useOpenCommunitySettings).
+ */
+function LegacySettingsRedirect({
+  orgId,
+  tenantId,
+  onFailed,
+}: {
+  orgId: string;
+  tenantId: string;
+  onFailed: () => void;
+}) {
+  const { open } = useOpenCommunitySettings();
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void open({ orgId, tenantId, hash: PUBLISHED_CONFIG_SECTION_ID, replace: true }).then(
+      (opened) => {
+        if (!opened) onFailed();
+      },
+    );
+  }, [open, orgId, tenantId, onFailed]);
+  return (
+    <PageContainer variant="wide">
+      <Skeleton className="h-64 w-full" />
     </PageContainer>
   );
 }

@@ -63,6 +63,8 @@ type Harness = {
     organization: {
       list: ReturnType<typeof vi.fn>;
       listMembers: ReturnType<typeof vi.fn>;
+      setActive: ReturnType<typeof vi.fn>;
+      setActiveTeam: ReturnType<typeof vi.fn>;
     };
   };
   daoConnection: { status: "idle"; daoAccountId: null };
@@ -100,7 +102,8 @@ vi.mock("@/lib/dao-connect", () => ({
   useDaoConnection: () => harness.current?.daoConnection,
 }));
 
-vi.mock("@/lib/tenant-deploy", () => ({
+vi.mock("@/lib/tenant-deploy", async () => ({
+  ...(await vi.importActual<object>("@/lib/tenant-deploy")),
   publishTenantConfigForMode: (...args: unknown[]) => harness.current?.publish(...args),
 }));
 
@@ -131,6 +134,18 @@ vi.mock("./-node-validators", () => ({
 
 vi.mock("./-tenant-profile", () => ({
   TenantProfile: () => <div data-testid="tenant-profile" />,
+}));
+
+vi.mock("./-tenant-published-config", () => ({
+  TenantPublishedConfig: ({ activation }: { activation: { onActivate: () => void } | null }) => (
+    <div data-testid="tenant-published-config" data-needs-active-org={String(!!activation)}>
+      {activation && (
+        <button type="button" onClick={activation.onActivate}>
+          Make active
+        </button>
+      )}
+    </div>
+  ),
 }));
 
 function makeTenant(status: TenantStatus = "active", name = "Original tenant"): Tenant {
@@ -215,6 +230,8 @@ function createHarness({
         data: { members: [{ userId: USER_ID, role }] },
         error: null,
       })),
+      setActive: vi.fn(async () => ({ data: null, error: null })),
+      setActiveTeam: vi.fn(async () => ({ data: null, error: null })),
     },
     near: {
       getGasKeyScope: vi.fn(async () => ({ data: { enabled: false }, error: null })),
@@ -315,7 +332,7 @@ const runtimeConfig: RouterContext["runtimeConfig"] = {
   },
 };
 
-function renderTenant(current: Harness) {
+function renderTenant(current: Harness, session: unknown = { user: { id: USER_ID } }) {
   harness.current = current;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -325,7 +342,7 @@ function renderTenant(current: Harness) {
   queryClient.setQueryData(nodeQueryKeys.tenant(TENANT_ID), current.server.nodes);
   queryClient.setQueryData(tenantQueryKeys.bindings(TENANT_ID), current.server.bindings);
   queryClient.setQueryData(["organizations"], [{ id: ORG_ID, slug: "tenant-org" }]);
-  queryClient.setQueryData(["session"], { user: { id: USER_ID } });
+  queryClient.setQueryData(["session"], session);
 
   render(
     <QueryClientProvider client={queryClient}>
@@ -505,6 +522,32 @@ describe("tenant detail mutations", () => {
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
     expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
     expect(screen.queryByTestId("tenant-profile")).toBeNull();
+    expect(screen.queryByTestId("tenant-published-config")).toBeNull();
+  });
+
+  it.each([
+    "owner",
+    "admin",
+  ] as const)("shows the published config editor to an organization %s", async (role) => {
+    renderTenant(createHarness({ role }), {
+      user: { id: USER_ID },
+      session: { activeOrganizationId: ORG_ID },
+    });
+
+    const editor = await screen.findByTestId("tenant-published-config");
+    expect(editor.getAttribute("data-needs-active-org")).toBe("false");
+  });
+
+  it("asks an owner to make the community's organization active before publishing", async () => {
+    const current = createHarness();
+    renderTenant(current);
+
+    const editor = await screen.findByTestId("tenant-published-config");
+    expect(editor.getAttribute("data-needs-active-org")).toBe("true");
+    fireEvent.click(within(editor).getByRole("button", { name: "Make active" }));
+    await waitFor(() =>
+      expect(current.auth.organization.setActive).toHaveBeenCalledWith({ organizationId: ORG_ID }),
+    );
   });
 
   it("hides the profile editor from a personal owner the profile API would reject", async () => {
@@ -514,6 +557,7 @@ describe("tenant detail mutations", () => {
 
     await screen.findByText("Original tenant");
     expect(screen.queryByTestId("tenant-profile")).toBeNull();
+    expect(screen.queryByTestId("tenant-published-config")).toBeNull();
   });
 });
 

@@ -12,11 +12,13 @@ import {
 import { PageContainer, Skeleton } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
+import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
+import { isCommunitySettingsRole } from "@/lib/team-workspace";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
@@ -24,6 +26,7 @@ import {
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
 import { CommunityHeader } from "../dashboard/node/-community-header";
+import { useOrgMemberRole } from "../orgs/-organization-members";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
 import { TenantDetails } from "./-tenant-details";
@@ -33,6 +36,7 @@ import {
   publishPersistedTenantChange,
 } from "./-tenant-mutations";
 import { TenantProfile } from "./-tenant-profile";
+import { TenantPublishedConfig } from "./-tenant-published-config";
 import { TenantUnavailable } from "./-tenant-unavailable";
 
 export function selectTenantNode<T extends { id: string; name: string }>(
@@ -63,6 +67,7 @@ export function TenantDetailContent({
   const [name, setName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const nearAccountId = useNearAccount();
+  const switchOrg = useSwitchOrganization();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId;
   const parentAccount = getAccount(runtimeConfig);
 
@@ -92,19 +97,6 @@ export function TenantDetailContent({
 
   const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
 
-  const { data: members = [] } = useQuery({
-    queryKey: ["org-members", tenant?.orgId],
-    queryFn: async () => {
-      if (!tenant?.orgId) return [];
-      const { data, error } = await auth.organization.listMembers({
-        query: { organizationId: tenant.orgId },
-      });
-      if (error) throw new Error(error.message);
-      return (data?.members ?? []) as Array<{ userId: string; role: string }>;
-    },
-    enabled: !!tenant?.orgId,
-  });
-
   const { data: session } = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
@@ -114,11 +106,10 @@ export function TenantDetailContent({
     staleTime: 60 * 1000,
   });
 
+  const memberRole = useOrgMemberRole(tenant?.orgId, session?.user?.id);
   const isPlatformAdmin = session?.user?.role === "admin";
-  const isOwner = members.some((m) => m.userId === session?.user?.id && m.role === "owner");
-  const isAdmin = members.some(
-    (m) => m.userId === session?.user?.id && (m.role === "admin" || m.role === "owner"),
-  );
+  const isOwner = memberRole === "owner";
+  const isAdmin = isCommunitySettingsRole(memberRole);
   const isDaoOwned = tenant?.ownerKind === "dao";
 
   const publishMode: TenantConfigPublishMode = isDaoOwned ? "dao" : "platform";
@@ -309,6 +300,24 @@ export function TenantDetailContent({
           )}
           {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
         </TenantLiveSite>
+        {(isAdmin || isPlatformAdmin) && (
+          <TenantPublishedConfig
+            tenant={tenant}
+            hostname={hostname}
+            gatewayId={gatewayId}
+            baseAccount={parentAccount}
+            activation={
+              !isPlatformAdmin &&
+              tenant.orgId &&
+              session?.session?.activeOrganizationId !== tenant.orgId
+                ? {
+                    isPending: switchOrg.isPending,
+                    onActivate: () => tenant.orgId && switchOrg.mutate(tenant.orgId),
+                  }
+                : null
+            }
+          />
+        )}
         <TenantNodeValidators tenantId={tenant.id} canManage={isAdmin} />
         <TenantDangerZone
           tenant={tenant}

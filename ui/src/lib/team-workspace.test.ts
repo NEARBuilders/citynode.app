@@ -6,6 +6,7 @@ import {
   areasForPath,
   canManageCommunity,
   canOrganizeEvents,
+  isCommunitySettingsRole,
   isPathAllowed,
   resolveTeamWorkspace,
   teamWorkspaceQueryOptions,
@@ -163,6 +164,16 @@ describe("community permissions", () => {
     expect(canManageCommunity(context({ orgRole: "owner" }))).toBe(true);
     expect(canManageCommunity(context({ orgRole: "member", userRole: "admin" }))).toBe(true);
     expect(canManageCommunity(context({ teams: [events] }))).toBe(false);
+  });
+
+  it.each([
+    ["owner", true],
+    ["admin", true],
+    ["member", false],
+    [null, false],
+    [undefined, false],
+  ])("treats the %s organization role as a community settings role: %s", (role, expected) => {
+    expect(isCommunitySettingsRole(role)).toBe(expected);
   });
 
   it("lets members of an events team organize events whether or not the team is active", () => {

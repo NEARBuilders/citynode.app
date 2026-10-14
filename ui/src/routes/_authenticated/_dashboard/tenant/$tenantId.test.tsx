@@ -31,6 +31,10 @@ vi.mock("./-tenant-profile", () => ({
   ),
 }));
 
+vi.mock("./-tenant-published-config", () => ({
+  TenantPublishedConfig: () => <div data-testid="tenant-published-config" />,
+}));
+
 vi.mock("./-node-validators", () => ({
   TenantNodeValidators: ({ tenantId }: { tenantId: string }) => (
     <div data-testid="tenant-node-validators">{tenantId}</div>
@@ -53,7 +57,8 @@ vi.mock("@/lib/use-near-account", () => ({
   useNearAccount: () => "wallet.near",
 }));
 
-vi.mock("@/lib/tenant-deploy", () => ({
+vi.mock("@/lib/tenant-deploy", async () => ({
+  ...(await vi.importActual<object>("@/lib/tenant-deploy")),
   publishTenantConfigForMode: vi.fn(async () => undefined),
 }));
 

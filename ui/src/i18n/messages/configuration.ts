@@ -31,12 +31,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Connectez votre portefeuille NEAR pour publier.",
     "连接 NEAR 钱包以发布。",
   ],
-  "nodeConfig.customUi": [
-    "Custom UI",
-    "Interfaz personalizada",
-    "Interface personnalisée",
-    "自定义界面",
-  ],
   "nodeConfig.daoVote": [
     "DAO · changes go live by vote",
     "DAO · los cambios se activan por votación",
@@ -73,31 +67,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Utilisez une empreinte d’intégrité sha384-… en base64.",
     "请使用 base64 编码的 sha384-… 完整性哈希。",
   ],
-  "nodeConfig.metadataOnly": [
-    "Metadata only",
-    "Solo metadatos",
-    "Métadonnées uniquement",
-    "仅元数据",
-  ],
-  "nodeConfig.notBound": ["Not bound yet", "Sin vincular todavía", "Pas encore lié", "尚未绑定"],
-  "nodeConfig.ownerPermission": [
-    "Only owners and admins can change the config.",
-    "Solo los propietarios y administradores pueden cambiar la configuración.",
-    "Seuls les propriétaires et les administrateurs peuvent modifier la configuration.",
-    "只有所有者和管理员可以修改配置。",
-  ],
-  "nodeConfig.pendingApprovalsNamed": [
-    "Proposal #{id} · {count, plural, one {# approval} other {# approvals}}",
-    "Propuesta #{id} · {count, plural, one {# aprobación} other {# aprobaciones}}",
-    "Proposition nº {id} · {count, plural, one {# approbation} other {# approbations}}",
-    "提案 #{id} · {count, plural, other {# 项批准}}",
-  ],
-  "nodeConfig.pendingThresholdNamed": [
-    "Proposal #{id} · {approved}/{required} approvals",
-    "Propuesta #{id} · {approved}/{required} aprobaciones",
-    "Proposition nº {id} · {approved}/{required} approbations",
-    "提案 #{id} · 已获 {approved}/{required} 项批准",
-  ],
   "nodeConfig.proposeAnyway": [
     "Propose anyway",
     "Proponer de todos modos",
@@ -109,12 +78,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Publicar de todos modos",
     "Publier quand même",
     "仍然发布",
-  ],
-  "nodeConfig.serverRendering": [
-    "Server rendering",
-    "Renderizado en servidor",
-    "Rendu serveur",
-    "服务器渲染",
   ],
   "nodeConfig.ssrPairRequired": [
     "An SSR bundle needs both its URL and its integrity hash.",
@@ -195,6 +158,12 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Paquete de interfaz personalizado",
     "Bundle d'interface personnalisé",
     "自定义界面包",
+  ],
+  "tenant.activateToPublish": [
+    "Make this community's organization active to publish changes.",
+    "Activa la organización de esta comunidad para publicar cambios.",
+    "Définissez l’organisation de cette communauté comme active pour publier des modifications.",
+    "将此社区的组织设为当前组织后即可发布更改。",
   ],
   "tenant.customize": ["Customize", "Personalizar", "Personnaliser", "自定义"],
   "tenant.daoChangesHint": [
@@ -343,12 +312,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Passerelle non configurée",
     "网关未配置",
   ],
-  "tenant.noGatewayDescription": [
-    "The active runtime declares no gateway, so community config can't be resolved here.",
-    "El entorno activo no declara una puerta de enlace, por lo que no se puede resolver la configuración de la comunidad aquí.",
-    "L'environnement actif ne déclare aucune passerelle ; la configuration de la communauté ne peut pas être résolue ici.",
-    "当前运行环境未声明网关，因此无法在此获取社区配置。",
-  ],
   "tenant.noNode": [
     "No node is attached to this community yet.",
     "Aún no hay un nodo vinculado a esta comunidad.",
@@ -405,12 +368,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Pendiente de eliminación",
     "Suppression en attente",
     "等待删除",
-  ],
-  "tenant.pendingProposal": [
-    "Pending proposal",
-    "Propuesta pendiente",
-    "Proposition en attente",
-    "待处理提案",
   ],
   "tenant.platform": ["Platform", "Plataforma", "Plateforme", "平台"],
   "tenant.proposalSubmitted": [
@@ -562,12 +519,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Introduce primero la URL del paquete SSR",
     "Saisissez d'abord l'URL du bundle SSR",
     "请先输入 SSR 包 URL",
-  ],
-  "tenant.startHint": [
-    "Start a community to get its own site, events and staking.",
-    "Crea una comunidad con su propio sitio, eventos y delegación.",
-    "Créez une communauté avec son propre site, ses événements et son staking.",
-    "创建社区，拥有专属站点、活动和质押功能。",
   ],
   "tenant.suspend": ["Suspend", "Suspender", "Suspendre", "暂停"],
   "tenant.suspendCommunity": [
