@@ -1009,8 +1009,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const services = yield* ApiServices;
           const community = yield* services.tenants.releaseNodeProposal({
             proposalId: proposal.id,
-            accountId: payload.accountId,
-            orgId: payload.orgId ?? `community-${proposal.id}`,
           });
           if (payload.orgId) {
             return {

@@ -136,7 +136,7 @@ export interface TenantsService {
   resolveBindingByHostname(hostname: string): TenantEffect<TenantBindingRecord | null>;
   createTenant(input: TenantInput): TenantEffect<TenantRecord>;
   applyNodeProposal(input: ApplyNodeProposalInput): TenantEffect<{ nodeId: string }>;
-  releaseNodeProposal(input: ProposalResourceInput): TenantEffect<ReleaseNodeProposalResult>;
+  releaseNodeProposal(input: { proposalId: string }): TenantEffect<ReleaseNodeProposalResult>;
   updateTenant(
     id: string,
     input: Partial<
@@ -159,22 +159,31 @@ export class TenantsTag extends Context.Service<TenantsTag, TenantsService>()("a
 
 type TenantRow = typeof tenantsTable.$inferSelect;
 type BindingRow = typeof domainBindingsTable.$inferSelect;
-async function findProposalNode(
+async function findLinkedProposalNode(
   db: Pick<Database, "select">,
-  input: ProposalResourceInput,
+  proposalId: string,
 ): Promise<string | null> {
-  if (!input.proposalId) return null;
   const linked = await db
     .select({ id: nodesTable.id })
     .from(nodesTable)
     .where(
       and(
-        sql`${nodesTable.metadata}->>'communityProposalId' = ${input.proposalId}`,
+        sql`${nodesTable.metadata}->>'communityProposalId' = ${proposalId}`,
         not(isNull(nodesTable.tenantId)),
       ),
     )
     .limit(1);
-  if (linked[0]) return linked[0].id;
+  return linked[0]?.id ?? null;
+}
+
+/** Resumes onto the proposal's node, or onto a legacy one matched by its DAO and organization. */
+async function findProposalNode(
+  db: Pick<Database, "select">,
+  input: ProposalResourceInput,
+): Promise<string | null> {
+  if (!input.proposalId) return null;
+  const linked = await findLinkedProposalNode(db, input.proposalId);
+  if (linked) return linked;
   const owned = await db
     .select({ id: nodesTable.id })
     .from(nodesTable)
@@ -670,7 +679,8 @@ export const TenantsLive = Layer.effect(
         Effect.tryPromise({
           try: () =>
             db.transaction(async (tx): Promise<ReleaseNodeProposalResult> => {
-              const nodeId = await findProposalNode(tx, input);
+              // Only a node this proposal created; never the legacy DAO-and-organization match.
+              const nodeId = await findLinkedProposalNode(tx, input.proposalId);
               if (!nodeId) return { released: false, keptReason: "not_found" };
               const [node] = await tx
                 .select({ tenantId: nodesTable.tenantId })

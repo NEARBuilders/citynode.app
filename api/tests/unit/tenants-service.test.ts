@@ -466,4 +466,27 @@ describe("TenantsService — domain bindings", () => {
       await runService(layer, (svc) => svc.resolveTenantByAccountId("lusitania.sputnik-dao.near")),
     ).toBeNull();
   });
+
+  it("never releases a community the application only matched by its DAO and organization", async () => {
+    const layer = freshLayer();
+    const existing = {
+      kind: "country" as const,
+      name: "Helvetia",
+      slug: "helvetia",
+      parentId: null,
+      orgId: "legacy-helvetia",
+      accountId: "helvetia.sputnik-dao.near",
+      hostname: "helvetia.citynode.app",
+    };
+    const created = await runService(layer, (svc) => svc.applyNodeProposal(existing));
+    const legacy = { ...existing, proposalId: "prop-helvetia" };
+    expect(await runService(layer, (svc) => svc.applyNodeProposal(legacy))).toEqual(created);
+
+    expect(
+      await runService(layer, (svc) => svc.releaseNodeProposal({ proposalId: "prop-helvetia" })),
+    ).toEqual({ released: false, keptReason: "not_found" });
+    expect(
+      await runService(layer, (svc) => svc.resolveTenantByAccountId("helvetia.sputnik-dao.near")),
+    ).not.toBeNull();
+  });
 });
