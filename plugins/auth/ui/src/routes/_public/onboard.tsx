@@ -1,8 +1,5 @@
-import {
-  type InferOutput,
-  type OnboardingRedeemReason,
-  onboardingRedeemReasonSchema,
-} from "@everything-dev/auth-plugin/contract";
+import type { OnboardingRedeemReason } from "@everything-dev/auth-plugin/contract";
+import { safe } from "@orpc/client";
 import {
   ArrowRightIcon,
   CheckCircleIcon,
@@ -30,6 +27,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import type { RouterContext } from "@/context";
 import type { LoginMessageId } from "@/i18n/catalogs";
 import { LoginI18nProvider, useLoginTranslation } from "@/i18n/runtime";
 import { findCommunityPage } from "@/lib/community-page";
@@ -56,7 +54,6 @@ export const Route = createFileRoute("/_public/onboard")({
   component: OnboardPage,
 });
 
-type Redeemed = InferOutput<"redeemOnboardingCode">;
 type RedeemFailure = OnboardingRedeemReason | "network";
 type StatusAction = "retry" | "explore" | "ask-organizer";
 
@@ -74,14 +71,6 @@ const redeemCopy: Record<
   code_not_found: { title: "auth.onboard.invitationInvalid", action: "ask-organizer" },
   organization_not_found: { title: "auth.onboard.invitationInvalid", action: "ask-organizer" },
 };
-
-function redeemFailureOf(error: unknown): RedeemFailure {
-  if (!error || typeof error !== "object" || !("data" in error)) return "network";
-  const data = error.data;
-  if (!data || typeof data !== "object" || !("reason" in data)) return "network";
-  const parsed = onboardingRedeemReasonSchema.safeParse(data.reason);
-  return parsed.success ? parsed.data : "network";
-}
 
 function hasChosenName(accountCreated: boolean, name: string | undefined | null): boolean {
   return !accountCreated && !!name && name !== PASSKEY_DEFAULT_NAME;
@@ -105,7 +94,7 @@ function OnboardContent() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const code = sanitizeCode(Route.useSearch().code);
-  const { apiClient, runtimeConfig } = Route.useRouteContext();
+  const { apiClient, runtimeConfig }: RouterContext = Route.useRouteContext();
   const { data: session, isPending: sessionPending } = useQuery(sessionQueryOptions(auth));
   const infoQuery = useQuery({
     queryKey: ["onboarding-info", code],
@@ -118,7 +107,9 @@ function OnboardContent() {
   const info = infoQuery.data;
 
   const [accountCreated, setAccountCreated] = useState(false);
-  const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
+  const [redeemed, setRedeemed] = useState<Awaited<
+    ReturnType<typeof apiClient.auth.redeemOnboardingCode>
+  > | null>(null);
   const { data: communityPage } = useQuery({
     queryKey: ["onboarding-community-page", redeemed?.organizationId],
     queryFn: () => findCommunityPage(apiClient, redeemed?.organizationId ?? ""),
@@ -144,18 +135,23 @@ function OnboardContent() {
   useEffect(() => {
     if (!session?.user || !code || redeemingRef.current || redeemed || redeemError) return;
     redeemingRef.current = true;
-    void apiClient.auth
-      .redeemOnboardingCode({ code })
-      .then((result: Redeemed) => {
-        setRedeemed(result);
-        toast.success(
-          translate("auth.onboard.joinedToast", { organization: result.organizationName }),
+    void safe(apiClient.auth.redeemOnboardingCode({ code })).then(
+      ({ data, definedError, isSuccess }) => {
+        if (isSuccess) {
+          setRedeemed(data);
+          toast.success(
+            translate("auth.onboard.joinedToast", { organization: data.organizationName }),
+          );
+          void refreshSessionCache(auth, queryClient);
+          return;
+        }
+        setRedeemError(
+          definedError && definedError.code !== "UNAUTHORIZED"
+            ? definedError.data.reason
+            : "network",
         );
-        void refreshSessionCache(auth, queryClient);
-      })
-      .catch((error: unknown) => {
-        setRedeemError(redeemFailureOf(error));
-      });
+      },
+    );
   }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient, translate]);
 
   if (redeemed) {

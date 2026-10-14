@@ -1,4 +1,10 @@
 // @vitest-environment jsdom
+import {
+  type OnboardingRedeemFailureCode,
+  type OnboardingRedeemReason,
+  onboardingRedeemFailures,
+} from "@everything-dev/auth-plugin/contract";
+import { createORPCErrorFromJson } from "@orpc/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -45,6 +51,19 @@ vi.mock("everything-dev/ui/auth", () => ({
 vi.mock("better-near-auth/client", () => ({ isPasskeyWalletAvailable: () => true }));
 
 const CODE = "valid-code-12345";
+
+function definedError(code: string, data?: { reason: OnboardingRedeemReason }) {
+  return createORPCErrorFromJson({ defined: true, code, message: code, data });
+}
+
+function joinFailure(reason: OnboardingRedeemReason) {
+  const codes = Object.keys(onboardingRedeemFailures) as OnboardingRedeemFailureCode[];
+  const code = codes.find(
+    (candidate) => onboardingRedeemFailures[candidate].data.safeParse({ reason }).success,
+  );
+  return definedError(code ?? "BAD_REQUEST", { reason });
+}
+
 const joined = {
   organizationId: "org-1",
   organizationName: "Chicago Builders",
@@ -192,7 +211,7 @@ describe("onboard join flow", () => {
   it("shows a signed-in visitor who never joined that a used-up code is unavailable", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, usedUp: true });
-    harness.redeemOnboardingCode.mockRejectedValue({ data: { reason: "code_used_up" } });
+    harness.redeemOnboardingCode.mockRejectedValue(joinFailure("code_used_up"));
 
     renderOnboard();
 
@@ -336,7 +355,7 @@ describe("onboard join flow", () => {
   ] as const)("shows %s with its next step", async (reason, title, actionTestId) => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
-    harness.redeemOnboardingCode.mockRejectedValue({ data: { reason } });
+    harness.redeemOnboardingCode.mockRejectedValue(joinFailure(reason));
 
     renderOnboard();
 
