@@ -274,6 +274,13 @@ describe("breadcrumbs", () => {
       { label: "Administración", to: "/admin" },
       { label: "Organizaciones" },
     ]);
+    expect(crumbsFor("/onboarding/station/abc", {}, translate)).toEqual([
+      { label: "Punto de incorporación" },
+    ]);
+    expect(crumbsFor("/admin/tenants", {}, translate)).toEqual([
+      { label: "Administración", to: "/admin" },
+      { label: "Dominios" },
+    ]);
   });
 
   it("names pages instead of echoing path segments", () => {
@@ -287,7 +294,7 @@ describe("breadcrumbs", () => {
     expect(labels("/tenant/t1")).toEqual(["My community", "Community settings"]);
     expect(labels("/settings/profile")).toEqual(["Settings", "Your profile"]);
     expect(labels("/settings/api-keys")).toEqual(["Settings", "API keys"]);
-    expect(labels("/admin/tenants")).toEqual(["Admin", "Domains and sites"]);
+    expect(labels("/admin/tenants")).toEqual(["Admin", "Domains"]);
     expect(labels("/onboarding/station/abc")).toEqual(["Station"]);
     expect(labels("/admin/proposals/new")).toEqual(["Admin", "Proposals", "New proposal"]);
     expect(labels("/apply")).toEqual(["Start a community"]);
