@@ -269,12 +269,6 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ce code d'inscription a atteint sa limite. Demandez-en un nouveau à l'organisateur.",
     "此加入代码已达到使用上限，请向组织者索取新代码。",
   ],
-  "auth.onboard.joinFailed": [
-    "Could not join",
-    "No se pudo unir",
-    "Impossible de rejoindre",
-    "无法加入",
-  ],
   "auth.onboard.adding": [
     "Adding you to {event}…",
     "Añadiéndote a {event}…",
@@ -940,12 +934,6 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "{event} con <organization>{organization}</organization>",
     "{event} avec <organization>{organization}</organization>",
     "与 <organization>{organization}</organization> 一起参加 {event}",
-  ],
-  "auth.onboard.joinError": [
-    "Could not join this organization. Ask the organizer for a new link.",
-    "No se pudo unirte a esta organización. Pide un nuevo enlace al organizador.",
-    "Impossible de rejoindre cette organisation. Demandez un nouveau lien à l’organisateur.",
-    "无法加入此组织，请向组织者索取新链接。",
   ],
   "auth.onboard.loadFailed": [
     "Couldn't load this invitation",
