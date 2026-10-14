@@ -3,6 +3,8 @@ import { resolveTxt } from "node:dns/promises";
 import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, isNull, not, notLike, or, sql } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer } from "effect";
+import type { z } from "zod";
+import type { ReleasedCommunitySchema } from "../contract";
 import type { Database } from "../db/index";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -116,10 +118,7 @@ export type ProposalResourceInput = Pick<
   "proposalId" | "accountId" | "orgId"
 >;
 
-export interface ReleaseNodeProposalResult {
-  released: boolean;
-  keptReason: "not_found" | "in_use" | null;
-}
+export type ReleaseNodeProposalResult = z.infer<typeof ReleasedCommunitySchema>;
 
 export interface TenantsService {
   listAllTenants: TenantEffect<TenantRecord[]>;

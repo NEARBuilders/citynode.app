@@ -1,8 +1,6 @@
-import type { ApiClient } from "@/app";
+import type { Proposal } from "@/lib/queries/proposals";
 
-type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
-type Proposal = ProposalResult["data"][number];
-
+// Mirrors CommunitySetupStepSchema in the API contract, which the typed ApiClient doesn't expose.
 export const COMMUNITY_SETUP_STEPS = ["organization", "community", "publication"] as const;
 
 export type CommunitySetupStep = (typeof COMMUNITY_SETUP_STEPS)[number];

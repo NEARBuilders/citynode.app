@@ -5,7 +5,12 @@ import { buildScopedContext, createPlugin } from "every-plugin";
 import { createAuthMiddleware } from "everything-dev/api";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { z } from "zod";
-import { contract, type EventOnboardingCodeSchema, NodeProposalPayloadSchema } from "./contract";
+import {
+  type CommunitySetupStep,
+  contract,
+  type EventOnboardingCodeSchema,
+  NodeProposalPayloadSchema,
+} from "./contract";
 import { DatabaseLive } from "./db/layer";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import { ContextSchema } from "./lib/context";
@@ -922,7 +927,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
-        const recordStep = (step: "organization" | "community", resourceId: string) =>
+        const recordStep = (step: CommunitySetupStep, resourceId: string) =>
           Effect.tryPromise({
             try: () =>
               proposalsClient.recordApplyStep({

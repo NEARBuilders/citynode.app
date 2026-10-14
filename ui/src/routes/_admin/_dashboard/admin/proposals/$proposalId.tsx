@@ -10,6 +10,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
+import type { Proposal } from "@/lib/queries/proposals";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
 import { findOpenTenantConfigProposal, publishDaoTenantConfig } from "@/lib/tenant-deploy";
 import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
@@ -17,7 +18,6 @@ import { ApplicationProgressList } from "@/routes/_authenticated/_dashboard/-app
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 import { BackLink } from "../-admin-ui";
 import { approveAndApplyProposal, keptResources, rejectProposal } from "./-proposal-application";
-import type { Proposal } from "./-proposal-columns";
 import {
   adminProposalDetailQueryOptions,
   proposalCanBeRejected,

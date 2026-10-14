@@ -1,9 +1,9 @@
 import { CheckCircleIcon, WarningCircleIcon, XCircleIcon } from "@phosphor-icons/react";
 import { Badge, InfoRow, LocalDate, SectionHeader } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
+import type { Proposal } from "@/lib/queries/proposals";
 import { humanize, RawJson, RawJsonDisclosure } from "../-admin-ui";
 import { NodeProposalDetails } from "./-node-proposal-details";
-import type { Proposal } from "./-proposal-columns";
 import { proposalReviewStatusVariant, proposalSetupStatus } from "./-proposal-review";
 
 export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {

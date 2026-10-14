@@ -1,15 +1,14 @@
 import type { ApiClient } from "@/app";
 import { AppActionError } from "@/i18n/error-message";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
+import type { Proposal } from "@/lib/queries/proposals";
 import type { DaoTenantPublishInput } from "@/lib/tenant-deploy";
 import { parseNodeProposalPayload } from "@/routes/_authenticated/_dashboard/-node-application";
-
-type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
-export type Proposal = ProposalResult["data"][number];
 
 type ProposalApplicationInput = Pick<Proposal, "pluginId" | "entityId" | "payload" | "updatedAt">;
 
 type AppliedResource = { id: string; label: string };
+type ApplyStepStatus = Parameters<ApiClient["proposals"]["recordApplyStep"]>[0]["status"];
 export type TenantConfigPublisher = (input: DaoTenantPublishInput) => Promise<unknown>;
 export type OpenTenantConfigProposalFinder = (
   daoAccountId: string,
@@ -41,7 +40,7 @@ const proposalApplicationHandlers = {
     });
     const expected = { accountId: payload.accountId, gatewayId, hostname, title: payload.name };
     const published = () => isTenantConfigPublished(apiClient, expected);
-    const recordPublication = (status: "started" | "waiting" | "completed", resourceId?: string) =>
+    const recordPublication = (status: ApplyStepStatus, resourceId?: string) =>
       apiClient.proposals.recordApplyStep({
         pluginId: proposal.pluginId,
         entityId: proposal.entityId,

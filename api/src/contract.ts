@@ -59,6 +59,18 @@ export const NodeProposalPayloadSchema = z
 
 export type NodeProposalPayload = z.infer<typeof NodeProposalPayloadSchema>;
 
+/** Setup steps recorded on an approved community application, in the order they run. */
+export const CommunitySetupStepSchema = z.enum(["organization", "community", "publication"]);
+
+export type CommunitySetupStep = z.infer<typeof CommunitySetupStepSchema>;
+
+const ReleaseKeptReasonSchema = z.enum(["not_found", "in_use"]);
+
+export const ReleasedCommunitySchema = z.object({
+  released: z.boolean(),
+  keptReason: ReleaseKeptReasonSchema.nullable(),
+});
+
 export const EventOnboardingCodeSchema = z.object({
   id: z.string(),
   code: z.string(),
@@ -542,13 +554,10 @@ export const contract = oc.router({
     )
     .output(
       z.object({
-        community: z.object({
-          released: z.boolean(),
-          keptReason: z.enum(["not_found", "in_use"]).nullable(),
-        }),
+        community: ReleasedCommunitySchema,
         organization: z.object({
           released: z.boolean(),
-          keptReason: z.enum(["not_found", "in_use", "existing"]).nullable(),
+          keptReason: z.enum([...ReleaseKeptReasonSchema.options, "existing"]).nullable(),
         }),
       }),
     )

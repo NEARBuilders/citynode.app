@@ -11,8 +11,9 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
+import type { Proposal } from "@/lib/queries/proposals";
 import { ListSkeleton } from "../-admin-ui";
-import { type Proposal, ProposalStatusCell } from "./-proposal-columns";
+import { ProposalStatusCell } from "./-proposal-columns";
 import { type ProposalReviewFilter, proposalTitle, proposalTypeLabel } from "./-proposal-review";
 
 interface ProposalListStateProps {

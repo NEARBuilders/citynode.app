@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import type { useApiClient } from "@/app";
 import { Badge, Button, LocalDate } from "@/components";
 import type { DataTableColumnDef } from "@/components/data-table";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
+import type { Proposal } from "@/lib/queries/proposals";
 import { humanize } from "../-admin-ui";
 import {
   proposalNeedsAction,
@@ -12,10 +12,6 @@ import {
   proposalTitle,
   proposalTypeLabel,
 } from "./-proposal-review";
-
-type ApiClient = ReturnType<typeof useApiClient>;
-type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
-export type Proposal = ProposalResult["data"][number];
 
 export function ProposalLink({ proposal, className }: { proposal: Proposal; className?: string }) {
   const translate = useAppTranslation();
