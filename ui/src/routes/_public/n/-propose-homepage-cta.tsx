@@ -6,7 +6,8 @@ import { Button } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
-import { orgMembersQueryKey } from "../../_authenticated/_dashboard/orgs/-organization-query-keys";
+import { isCommunitySettingsRole } from "@/lib/team-workspace";
+import { useOrgMemberRole } from "../../_authenticated/_dashboard/orgs/-organization-members";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../_authenticated/_dashboard/tenant/-published-config-section";
 
 export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
@@ -36,19 +37,8 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
       })
     : undefined;
 
-  const { data: members = [] } = useQuery({
-    queryKey: orgMembersQueryKey(owningOrg?.id ?? ""),
-    queryFn: async () => {
-      const { data, error } = await auth.organization.listMembers({
-        query: { organizationId: owningOrg?.id ?? "" },
-      });
-      if (error) throw new Error(error.message);
-      return (data?.members ?? []) as Array<{ userId: string; role: string }>;
-    },
-    enabled: !!owningOrg,
-  });
-  const role = members.find((member) => member.userId === session?.user?.id)?.role;
-  const canManage = session?.user?.role === "admin" || role === "owner" || role === "admin";
+  const role = useOrgMemberRole(owningOrg?.id, session?.user?.id);
+  const canManage = session?.user?.role === "admin" || isCommunitySettingsRole(role);
 
   if (!owningOrg || !tenantId || !canManage) return null;
 

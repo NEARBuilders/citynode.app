@@ -18,6 +18,7 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
+import { isCommunitySettingsRole } from "@/lib/team-workspace";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
@@ -25,6 +26,7 @@ import {
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
 import { CommunityHeader } from "../dashboard/node/-community-header";
+import { useOrgMemberRole } from "../orgs/-organization-members";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
 import { TenantDetails } from "./-tenant-details";
@@ -95,19 +97,6 @@ export function TenantDetailContent({
 
   const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
 
-  const { data: members = [] } = useQuery({
-    queryKey: ["org-members", tenant?.orgId],
-    queryFn: async () => {
-      if (!tenant?.orgId) return [];
-      const { data, error } = await auth.organization.listMembers({
-        query: { organizationId: tenant.orgId },
-      });
-      if (error) throw new Error(error.message);
-      return (data?.members ?? []) as Array<{ userId: string; role: string }>;
-    },
-    enabled: !!tenant?.orgId,
-  });
-
   const { data: session } = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
@@ -117,11 +106,10 @@ export function TenantDetailContent({
     staleTime: 60 * 1000,
   });
 
+  const memberRole = useOrgMemberRole(tenant?.orgId, session?.user?.id);
   const isPlatformAdmin = session?.user?.role === "admin";
-  const isOwner = members.some((m) => m.userId === session?.user?.id && m.role === "owner");
-  const isAdmin = members.some(
-    (m) => m.userId === session?.user?.id && (m.role === "admin" || m.role === "owner"),
-  );
+  const isOwner = memberRole === "owner";
+  const isAdmin = isCommunitySettingsRole(memberRole);
   const isDaoOwned = tenant?.ownerKind === "dao";
 
   const publishMode: TenantConfigPublishMode = isDaoOwned ? "dao" : "platform";

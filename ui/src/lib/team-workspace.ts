@@ -43,8 +43,7 @@ export function resolveTeamWorkspace(
 ): TeamWorkspace {
   const teams: WorkspaceTeam[] = [...(context?.organization?.teams ?? [])];
   const activeTeam = teams.find((team) => team.id === context?.organization?.activeTeamId) ?? null;
-  const orgRole = context?.organization?.member?.role;
-  const bypass = context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
+  const bypass = canManageCommunity(context);
   return {
     teams,
     activeTeam,
@@ -53,9 +52,17 @@ export function resolveTeamWorkspace(
   };
 }
 
+/** Organization roles that manage the community's settings (mirrors the API's rule). */
+export function isCommunitySettingsRole(
+  role: string | null | undefined,
+): role is "owner" | "admin" {
+  return role === "owner" || role === "admin";
+}
+
 export function canManageCommunity(context: AuthRequestContext | null | undefined): boolean {
-  const orgRole = context?.organization?.member?.role;
-  return context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
+  return (
+    context?.user?.role === "admin" || isCommunitySettingsRole(context?.organization?.member?.role)
+  );
 }
 
 export function areasForPath(pathname: string): FeatureArea[] | null {

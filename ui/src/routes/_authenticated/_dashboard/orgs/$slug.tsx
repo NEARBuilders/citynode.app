@@ -29,6 +29,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { pageTitle } from "@/lib/page-title";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { isCommunitySettingsRole } from "@/lib/team-workspace";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../tenant/-published-config-section";
 import {
   ApiKeysTab,
@@ -46,21 +47,14 @@ import { OnboardingTab } from "./-onboarding-tab";
 import { useOrganizationApiKeyActions } from "./-organization-api-keys";
 import { OrganizationEditForm } from "./-organization-edit-form";
 import { useOrganizationInvitationActions } from "./-organization-invitations";
-import { useOrganizationMemberActions } from "./-organization-members";
+import { orgMembersQueryOptions, useOrganizationMemberActions } from "./-organization-members";
 import { OrganizationOverview } from "./-organization-overview";
-import {
-  orgApiKeysQueryKey,
-  orgInvitationsQueryKey,
-  orgMembersQueryKey,
-} from "./-organization-query-keys";
+import { orgApiKeysQueryKey, orgInvitationsQueryKey } from "./-organization-query-keys";
 import { useOrganizationSettings } from "./-organization-settings";
 import { useOrganizationTeams } from "./-organization-teams";
 import { TeamsTab } from "./-teams-tab";
 
-type AuthClientType = import("@/app").AuthClient;
 type ApiClientType = import("@/app").ApiClient;
-type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMembers"]>>;
-type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
 type InvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listInvitations"]>>[number];
 
 const ORGANIZATION_TABS = ["members", "teams", "invitations", "onboard", "apikeys"] as const;
@@ -136,14 +130,7 @@ function OrganizationDetail() {
   const activeOrgId = session?.session?.activeOrganizationId;
   const isActive = orgId === activeOrgId;
   const membersQuery = useQuery({
-    queryKey: orgMembersQueryKey(orgId),
-    queryFn: async (): Promise<MemberItem[]> => {
-      const { data, error } = await auth.organization.listMembers({
-        query: { organizationId: orgId },
-      });
-      if (error) throw new Error(error.message);
-      return (data?.members ?? []) as MemberItem[];
-    },
+    ...orgMembersQueryOptions(auth, orgId),
     enabled: !!orgId && org?.status === "active",
   });
   const members = membersQuery.data ?? [];
@@ -168,7 +155,7 @@ function OrganizationDetail() {
       enabled: !!orgId && org?.status === "active",
     }).data ?? [];
   const myMembership = members.find((member) => member.userId === session?.user?.id);
-  const canManageMembers = myMembership?.role === "owner" || myMembership?.role === "admin";
+  const canManageMembers = isCommunitySettingsRole(myMembership?.role);
   const canViewSettings = canManageMembers || session?.user?.role === "admin";
   const isOwner = myMembership?.role === "owner";
   const tenantQuery = useQuery({
