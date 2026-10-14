@@ -6,6 +6,7 @@ import { Button } from "@/components";
 import { useClientValue } from "@/hooks";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
+import { pageTitle } from "@/lib/page-title";
 import { returnPath } from "@/lib/return-path";
 import { OnboardingStation } from "./-onboarding-station";
 
@@ -19,10 +20,13 @@ export const Route = createFileRoute("/_authenticated/onboarding/station/$codeId
   head: ({ match }) => ({
     meta: [
       {
-        title: translateAppMessage(
-          "nav.onboardingStation",
-          undefined,
-          resolveAppLocale(undefined, match.context.locale),
+        title: pageTitle(
+          translateAppMessage(
+            "station.title",
+            undefined,
+            resolveAppLocale(undefined, match.context.locale),
+          ),
+          match.context.runtimeConfig,
         ),
       },
     ],

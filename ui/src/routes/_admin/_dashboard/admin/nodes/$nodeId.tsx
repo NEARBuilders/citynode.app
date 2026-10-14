@@ -46,7 +46,7 @@ const TAB_LABELS: Record<NodeDetailTab, AppMessageId> = {
   overview: "common.overview",
   validators: "common.validators",
   domains: "admin.domain.title",
-  profile: "nav.profile",
+  profile: "community.profile",
 };
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({

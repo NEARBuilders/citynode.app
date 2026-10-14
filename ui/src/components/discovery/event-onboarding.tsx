@@ -114,7 +114,7 @@ export function OpenEventStationButton({
       onClick={() => open.mutate({ eventId: event.id })}
     >
       <QrCodeIcon />
-      <span className="hidden sm:inline">{translate("org.onboarding")}</span>
+      <span className="hidden sm:inline">{translate("org.openStation")}</span>
     </Button>
   );
 }

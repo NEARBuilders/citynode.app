@@ -57,6 +57,18 @@ afterEach(() => {
 });
 
 describe("OpenEventStationButton", () => {
+  it("labels the overview button Open station for that event", () => {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <OpenEventStationButton event={event} organizationId="org-1" />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId("dashboard-node.open-station-event-1")).toBeTruthy();
+    expect(screen.getByLabelText("Open station for Launch Night")).toBeTruthy();
+    expect(screen.getByText("Open station")).toBeTruthy();
+  });
+
   it("opens the event's newest live station instead of starting another", async () => {
     api.auth.listOnboardingCodes.mockResolvedValue([
       code("revoked", { revokedAt: new Date() }),

@@ -307,7 +307,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Cette communauté attend d’être approuvée.",
     "此社区正在等待审核。",
   ],
-  "community.profile": ["Profile", "Perfil", "Profil", "资料"],
+  "community.profile": [
+    "Community profile",
+    "Perfil de la comunidad",
+    "Profil de la communauté",
+    "社区资料",
+  ],
   "community.profileExample": [
     "Who is this community for? What do you do together?",
     "¿A quién se dirige esta comunidad? ¿Qué hacéis juntos?",

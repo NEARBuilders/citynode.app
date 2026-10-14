@@ -480,8 +480,13 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Elle n'existe pas ou vous n'en êtes pas membre.",
     "组织不存在，或你不是成员。",
   ],
-  "org.onboarding": ["Onboarding", "Incorporación", "Inscription", "加入流程"],
-  "org.openStation": ["Open station", "Abrir punto", "Ouvrir le point", "打开站点"],
+  "org.onboarding": ["Stations", "Puntos de incorporación", "Points d'inscription", "加入站点"],
+  "org.openStation": [
+    "Open station",
+    "Abrir punto de incorporación",
+    "Ouvrir le point d'inscription",
+    "打开站点",
+  ],
   "org.organizersDescription": [
     "Owners, admins and members of a team with the Events area.",
     "Propietarios, administradores y miembros de un equipo con el área de Eventos.",
@@ -549,12 +554,7 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "撤销此站点？",
   ],
   "org.role": ["Role", "Rol", "Rôle", "角色"],
-  "org.stations": [
-    "Onboarding stations",
-    "Puntos de incorporación",
-    "Points d'inscription",
-    "加入站点",
-  ],
+  "org.stations": ["Stations", "Puntos de incorporación", "Points d'inscription", "加入站点"],
   "org.stationsDescription": [
     "Pick an upcoming event to start a station; people who scan it join.",
     "Elige un próximo evento para iniciar un punto; quienes lo escaneen se unen.",
