@@ -1,4 +1,5 @@
 import { ORPCError } from "@orpc/server";
+import { AuthApiError } from "./services/domain-errors";
 export function toError(e: unknown): Error {
   if (typeof e === "object" && e !== null && "message" in e) {
     return new Error(String(e.message));
@@ -62,8 +63,39 @@ export function getActiveTeamId(session: unknown): string | null {
   return null;
 }
 
-export function toORPCError(error: unknown) {
-  if (error instanceof ORPCError) return error;
+export function memberRoleOf(result: unknown): string | null {
+  if (typeof result === "string") return result;
+  if (result && typeof result === "object" && "role" in result) {
+    const role = (result as { role: unknown }).role;
+    if (typeof role === "string") return role;
+  }
+  return null;
+}
+
+export function sessionUserExtras(user: unknown): {
+  isAnonymous: boolean | null;
+  locale: string | null;
+} {
+  if (!user || typeof user !== "object") return { isAnonymous: null, locale: null };
+  const extras = user as { isAnonymous?: unknown; locale?: unknown };
+  return {
+    isAnonymous: typeof extras.isAnonymous === "boolean" ? extras.isAnonymous : null,
+    locale: typeof extras.locale === "string" ? extras.locale : null,
+  };
+}
+
+function mapAuthError(error: unknown): {
+  code: string;
+  message: string;
+  data: Record<string, unknown>;
+} {
+  if (error instanceof ORPCError) {
+    return {
+      code: error.code,
+      message: error.message,
+      data: (error.data as Record<string, unknown>) ?? {},
+    };
+  }
   if (error && typeof error === "object") {
     const apiError = error as {
       status?: number | string;
@@ -78,21 +110,57 @@ export function toORPCError(error: unknown) {
           ? apiError.status
           : undefined;
     if (status) {
-      const statusMap: Record<number, string> = {
-        400: "BAD_REQUEST",
-        401: "UNAUTHORIZED",
-        403: "FORBIDDEN",
-        404: "NOT_FOUND",
-        500: "INTERNAL_SERVER_ERROR",
-        503: "SERVICE_UNAVAILABLE",
+      const statusMap: Record<
+        number,
+        {
+          code:
+            | "BAD_REQUEST"
+            | "UNAUTHORIZED"
+            | "FORBIDDEN"
+            | "NOT_FOUND"
+            | "INTERNAL_SERVER_ERROR"
+            | "SERVICE_UNAVAILABLE";
+          data: Record<string, unknown>;
+        }
+      > = {
+        400: { code: "BAD_REQUEST", data: {} },
+        401: { code: "UNAUTHORIZED", data: { apiKeyProvided: false } },
+        403: { code: "FORBIDDEN", data: {} },
+        404: { code: "NOT_FOUND", data: {} },
+        500: { code: "INTERNAL_SERVER_ERROR", data: {} },
+        503: { code: "SERVICE_UNAVAILABLE", data: { maintenanceWindow: false } },
       };
-      return new ORPCError(statusMap[status] || "INTERNAL_SERVER_ERROR", {
+      const mapped = statusMap[status] ?? {
+        code: "INTERNAL_SERVER_ERROR" as const,
+        data: {},
+      };
+      return {
+        code: mapped.code,
         message: apiError.message || "Auth API error",
-      });
+        data: mapped.data,
+      };
     }
   }
-  return new ORPCError("INTERNAL_SERVER_ERROR", {
+  return {
+    code: "INTERNAL_SERVER_ERROR",
     message: error instanceof Error ? error.message : "Auth API error",
+    data: {},
+  };
+}
+
+export function toORPCError(error: unknown) {
+  if (error instanceof ORPCError) return error;
+  const mapped = mapAuthError(error);
+  return new ORPCError(mapped.code, { message: mapped.message, data: mapped.data });
+}
+
+export function toAuthApiError(error: unknown): AuthApiError {
+  const mapped = mapAuthError(error);
+  return new AuthApiError({
+    code: mapped.code,
+    data: mapped.data,
+    message: mapped.message,
+    cause: error,
   });
 }
 
@@ -132,46 +200,44 @@ export interface EmailVisibilityContext {
   reqHeaders?: HeaderInput;
 }
 
-export interface OrgPermissionServices {
-  auth: {
-    api: {
-      hasPermission: (args: {
-        headers: Headers;
-        body: { organizationId?: string; permissions: Record<string, string[]> };
-      }) => Promise<{ success: boolean }>;
-    };
+export interface OrgPermissionAuth {
+  api: {
+    hasPermission: (args: {
+      headers: Headers;
+      body: { organizationId?: string; permissions: Record<string, string[]> };
+    }) => Promise<{ success: boolean }>;
   };
 }
 
 export interface OrgPermissionResult {
   permitted: boolean;
-  failure?: ORPCError<string, unknown>;
+  failure?: AuthApiError;
 }
 
 export async function hasOrgPermission(
-  services: OrgPermissionServices,
+  auth: OrgPermissionAuth,
   context: EmailVisibilityContext,
   organizationId: string | undefined,
   permissions: Record<string, string[]>,
 ): Promise<OrgPermissionResult> {
   if (context.user?.role === "admin") return { permitted: true };
   try {
-    const result = await services.auth.api.hasPermission({
+    const result = await auth.api.hasPermission({
       headers: createHeaders(context.reqHeaders),
       body: { organizationId, permissions },
     });
     return { permitted: result.success === true };
   } catch (error) {
-    return { permitted: false, failure: toORPCError(error) };
+    return { permitted: false, failure: toAuthApiError(error) };
   }
 }
 
 export async function canReadMemberEmails(
-  services: OrgPermissionServices,
+  auth: OrgPermissionAuth,
   context: EmailVisibilityContext,
   organizationId?: string,
 ): Promise<boolean> {
-  const { permitted } = await hasOrgPermission(services, context, organizationId, {
+  const { permitted } = await hasOrgPermission(auth, context, organizationId, {
     email: ["read"],
   });
   return permitted;

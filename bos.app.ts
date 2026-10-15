@@ -27,6 +27,7 @@ export default App({
     path: "api",
     variables: {
       platformAccount: "v1.citynode.near",
+      domain: "citynode.app",
       gatewayDomains: "citynode.app,testnet.citynode.app",
     },
     secrets: ["API_DATABASE_URL", "LUMA_CALENDAR_API_KEYS"],

@@ -8,7 +8,7 @@ describe("team access policy", () => {
     null,
     "stale-team",
   ])("does not restrict an unresolved active team: %s", (activeTeamId) => {
-    const finance = { id: "finance", name: "Finance", areas: ["finance"] };
+    const finance = { id: "finance", name: "Finance", areas: ["finance"], permissions: {} };
     expect(resolveTeamAccess({ organization: { teams: [finance], activeTeamId } })).toEqual({
       teams: [finance],
       activeTeam: null,
@@ -31,7 +31,7 @@ describe("team access policy", () => {
     { userRole: "user", orgRole: "admin" },
     { userRole: "admin", orgRole: "member" },
   ])("leaves $userRole / $orgRole unrestricted", ({ userRole, orgRole }) => {
-    const finance = { id: "finance", name: "Finance", areas: ["finance"] };
+    const finance = { id: "finance", name: "Finance", areas: ["finance"], permissions: {} };
     expect(
       resolveTeamAccess({
         user: { role: userRole },
@@ -45,7 +45,12 @@ describe("team access policy", () => {
   });
 
   it("grants a member only recognized areas of their selected team", () => {
-    const finance = { id: "finance", name: "Finance", areas: ["finance", "unknown-area"] };
+    const finance = {
+      id: "finance",
+      name: "Finance",
+      areas: ["finance", "unknown-area"],
+      permissions: {},
+    };
 
     expect(
       resolveTeamAccess({
@@ -70,7 +75,12 @@ describe("createRequireTeamArea", () => {
   function member(
     orgRole: string,
     organization: {
-      teams?: Array<{ id: string; name: string; areas: string[] }>;
+      teams?: Array<{
+        id: string;
+        name: string;
+        areas: string[];
+        permissions: Record<string, string[]>;
+      }>;
       activeTeamId?: string | null;
     },
     userRole?: string,
@@ -99,8 +109,13 @@ describe("createRequireTeamArea", () => {
     };
   }
 
-  const ops = { id: "team-ops", name: "Node Operator", areas: ["node-operations"] };
-  const finance = { id: "team-finance", name: "Finance", areas: ["finance"] };
+  const ops = {
+    id: "team-ops",
+    name: "Node Operator",
+    areas: ["node-operations"],
+    permissions: {},
+  };
+  const finance = { id: "team-finance", name: "Finance", areas: ["finance"], permissions: {} };
 
   it("allows a member whose active team is granted the area", async () => {
     await expect(

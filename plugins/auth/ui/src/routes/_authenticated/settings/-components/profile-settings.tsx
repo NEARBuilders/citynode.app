@@ -19,11 +19,10 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import { authErrorMessage } from "@/i18n/error-message";
+import type { LoginLocale } from "@/i18n/catalogs";
 import { LoginLanguageSelector } from "@/i18n/language-selector";
-import { useLoginTranslation } from "@/i18n/runtime";
+import { LoginI18nProvider } from "@/i18n/runtime";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
-import { SessionUnavailable } from "./session-unavailable";
 
 type ProfileUser = {
   id: string;
@@ -34,13 +33,12 @@ type ProfileUser = {
 };
 
 export function ProfileSettings() {
-  const translate = useLoginTranslation();
   const auth = useAuthClient();
-  const sessionQuery = useQuery(sessionQueryOptions(auth));
-  const user = sessionQuery.data?.user;
+  const { data: session } = useQuery(sessionQueryOptions(auth));
+  const user = session?.user;
   const [addEmailOpen, setAddEmailOpen] = useState(false);
 
-  if (!user) return <SessionUnavailable query={sessionQuery} />;
+  if (!user) return null;
 
   const emailIsSynthetic = isSyntheticEmail(user.email);
   const showAddEmailPrompt = !user.isAnonymous && emailIsSynthetic;
@@ -49,8 +47,8 @@ export function ProfileSettings() {
     <>
       <section className="flex flex-col gap-6">
         <SectionHeader
-          title={translate("auth.settings.profile")}
-          description={translate("auth.profile.description")}
+          title="Profile"
+          description="How organizers and members see you."
           sectionTestId="settings.profile-heading"
         />
         {user.isAnonymous && (
@@ -59,8 +57,10 @@ export function ProfileSettings() {
               <WarningIcon />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>{translate("auth.profile.temporaryAccount")}</ItemTitle>
-              <ItemDescription>{translate("auth.profile.recoverHint")}</ItemDescription>
+              <ItemTitle>Temporary account</ItemTitle>
+              <ItemDescription>
+                Add a passkey or NEAR wallet so you can sign in again.
+              </ItemDescription>
             </ItemContent>
             <ItemActions className="w-full sm:w-auto">
               <Button
@@ -69,7 +69,7 @@ export function ProfileSettings() {
                 nativeButton={false}
                 render={<Link to="/settings/auth-methods" />}
               >
-                {translate("auth.profile.addMethod")}
+                Add sign-in method
               </Button>
             </ItemActions>
           </Item>
@@ -80,8 +80,10 @@ export function ProfileSettings() {
               <EnvelopeIcon />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>{translate("auth.email.add")}</ItemTitle>
-              <ItemDescription>{translate("auth.profile.emailHint")}</ItemDescription>
+              <ItemTitle>Add your email</ItemTitle>
+              <ItemDescription>
+                Sign in from another device and recover your account.
+              </ItemDescription>
             </ItemContent>
             <ItemActions className="w-full sm:w-auto">
               <Button
@@ -89,39 +91,49 @@ export function ProfileSettings() {
                 onClick={() => setAddEmailOpen(true)}
                 data-testid="settings.add-email-button"
               >
-                {translate("auth.email.add")}
+                Add email
               </Button>
             </ItemActions>
           </Item>
         )}
         <DisplayNameForm key={user.name ?? ""} user={user} />
       </section>
-      <LanguageSettings />
+      <LanguageSettings user={user} />
       <AccountDetails user={user} onAddEmail={() => setAddEmailOpen(true)} />
       <AddEmailDialog open={addEmailOpen} onOpenChange={setAddEmailOpen} />
     </>
   );
 }
 
-function LanguageSettings() {
-  const translate = useLoginTranslation();
+function LanguageSettings({ user }: { user: ProfileUser }) {
+  const auth = useAuthClient();
+  const queryClient = useQueryClient();
+
+  const saveLocale = async (locale: LoginLocale) => {
+    const { error } = await auth.updateUser({ locale });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+    toast.success("Language updated");
+  };
 
   return (
     <section className="flex flex-col gap-6">
-      <SectionHeader
-        title={translate("auth.locale.title")}
-        description={translate("auth.locale.description")}
-      />
+      <SectionHeader title="Language" description="Choose the language used across the app." />
       <div className="max-w-md">
         <Field>
-          <FieldLabel htmlFor="settings-language">{translate("auth.locale.display")}</FieldLabel>
-          <LoginLanguageSelector
-            id="settings-language"
-            testId="settings.language-select"
-            size="default"
-            className="w-full"
-          />
-          <FieldDescription>{translate("auth.locale.saved")}</FieldDescription>
+          <FieldLabel htmlFor="settings-language">Display language</FieldLabel>
+          <LoginI18nProvider
+            initialLocale={user.locale as LoginLocale | undefined}
+            onLocaleChange={saveLocale}
+          >
+            <LoginLanguageSelector id="settings-language" testId="settings.language-select" />
+          </LoginI18nProvider>
+          <FieldDescription>
+            Your choice is saved to your account and used on every device.
+          </FieldDescription>
         </Field>
       </div>
     </section>
@@ -129,7 +141,6 @@ function LanguageSettings() {
 }
 
 function DisplayNameForm({ user }: { user: ProfileUser }) {
-  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const [name, setName] = useState(user.name || "");
@@ -141,9 +152,9 @@ function DisplayNameForm({ user }: { user: ProfileUser }) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
-      toast.success(translate("auth.profile.updated"));
+      toast.success("Profile updated");
     },
-    onError: (err: Error) => toast.error(authErrorMessage(err, translate)),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const unchanged = name.trim() === (user.name || "");
@@ -157,16 +168,14 @@ function DisplayNameForm({ user }: { user: ProfileUser }) {
   return (
     <form onSubmit={handleSubmit} className="max-w-md">
       <Field>
-        <FieldLabel htmlFor="settings-display-name">
-          {translate("auth.profile.displayName")}
-        </FieldLabel>
+        <FieldLabel htmlFor="settings-display-name">Display name</FieldLabel>
         <div className="flex gap-2">
           <Input
             id="settings-display-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={translate("auth.profile.displayNameExample")}
+            placeholder="Your display name"
             autoComplete="name"
             maxLength={64}
             className="flex-1"
@@ -177,25 +186,22 @@ function DisplayNameForm({ user }: { user: ProfileUser }) {
             disabled={updateMutation.isPending || unchanged || !name.trim()}
             data-testid="settings.display-name-save"
           >
-            {updateMutation.isPending
-              ? translate("auth.common.saving")
-              : translate("auth.common.save")}
+            {updateMutation.isPending ? "Saving…" : "Save"}
           </Button>
         </div>
-        <FieldDescription>{translate("auth.profile.displayNameHint")}</FieldDescription>
+        <FieldDescription>Shown on events you join and in your organizations.</FieldDescription>
       </Field>
     </form>
   );
 }
 
 function AccountDetails({ user, onAddEmail }: { user: ProfileUser; onAddEmail: () => void }) {
-  const translate = useLoginTranslation();
   const copyId = async () => {
     try {
       await navigator.clipboard.writeText(user.id);
-      toast.success(translate("auth.profile.idCopied"));
+      toast.success("User ID copied");
     } catch {
-      toast.error(translate("auth.common.copyFailed"));
+      toast.error("Failed to copy");
     }
   };
 
@@ -203,7 +209,7 @@ function AccountDetails({ user, onAddEmail }: { user: ProfileUser; onAddEmail: (
   const emailValue: React.ReactNode =
     emailIsSynthetic || user.isAnonymous ? (
       <span className="inline-flex items-center gap-2">
-        <span className="text-muted-foreground">{translate("auth.common.notLinked")}</span>
+        <span className="text-muted-foreground">Not linked</span>
         {!user.isAnonymous && (
           <Button
             variant="link"
@@ -211,7 +217,7 @@ function AccountDetails({ user, onAddEmail }: { user: ProfileUser; onAddEmail: (
             onClick={onAddEmail}
             data-testid="settings.account-add-email"
           >
-            {translate("auth.common.add")}
+            Add
           </Button>
         )}
       </span>
@@ -223,21 +229,21 @@ function AccountDetails({ user, onAddEmail }: { user: ProfileUser; onAddEmail: (
 
   return (
     <section className="flex flex-col gap-6">
-      <SectionHeader title={translate("auth.common.account")} />
+      <SectionHeader title="Account" />
       <div className="flex flex-col">
-        <InfoRow label={translate("auth.common.email")} value={emailValue} />
+        <InfoRow label="Email" value={emailValue} />
         <InfoRow
-          label={translate("auth.profile.accountType")}
+          label="Account type"
           value={
             user.isAnonymous ? (
-              <Badge variant="warning">{translate("auth.profile.temporary")}</Badge>
+              <Badge variant="warning">Temporary</Badge>
             ) : (
-              <Badge variant="secondary">{translate("auth.profile.standard")}</Badge>
+              <Badge variant="secondary">Standard</Badge>
             )
           }
         />
         <InfoRow
-          label={translate("auth.profile.id")}
+          label="User ID"
           mono
           value={
             <span className="inline-flex max-w-full items-center gap-2">
@@ -246,7 +252,7 @@ function AccountDetails({ user, onAddEmail }: { user: ProfileUser; onAddEmail: (
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => void copyId()}
-                aria-label={translate("auth.profile.copyId")}
+                aria-label="Copy user ID"
               >
                 <CopyIcon />
               </Button>

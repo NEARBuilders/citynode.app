@@ -7,7 +7,10 @@ export default {
   pluginId: packageJson.name,
   port: Number(process.env.PORT) || 3001,
   config: {
-    variables: {},
+    variables: {
+      domain: "citynode.app",
+      gatewayDomains: "citynode.app,testnet.citynode.app",
+    },
     secrets: {
       API_DATABASE_URL: process.env.API_DATABASE_URL || "pglite:.bos/api/:memory:",
     },

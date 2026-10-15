@@ -13,6 +13,8 @@ overrides:
   # to npm. The `-` drops the dep at resolution; remove this once the RC train
   # fixes the packaging.
   "@everything-dev/upload-app": "-"
+  "@better-fetch/fetch": 1.3.2
+  better-auth: 1.7.7
 
 catalog:
   react: 19.2.4
@@ -34,12 +36,12 @@ catalog:
   "@scure/base": ^2.2.0
   drizzle-orm: ^0.45.1
   drizzle-kit: ^0.31.8
-  better-auth: 1.6.25
-  "@better-auth/api-key": 1.6.25
-  "@better-auth/passkey": 1.6.25
-  better-near-auth: ^2.0.0-rc.0
-  every-plugin: ^3.0.0-rc.4
-  everything-dev: ^2.0.0-rc.7
+  better-auth: 1.7.7
+  "@better-auth/api-key": 1.7.7
+  "@better-auth/passkey": 1.7.7
+  better-near-auth: ^2.0.0-rc.1
+  every-plugin: ^3.0.0-rc.5
+  everything-dev: ^2.0.0-rc.8
   typescript: ^7.0.2
   vitest: ^4.1.8
   "@libsql/client": 0.17.0
@@ -74,7 +76,7 @@ catalog:
   "@rspack/cli": 2.2.6
   "@rsbuild/core": 2.2.8
   "@rsbuild/plugin-react": 2.1.0
-  "@better-auth/core": 1.6.25
+  "@better-auth/core": 1.7.7
   "@modelcontextprotocol/server": 2.0.0-beta.5
   "@base-ui/react": 1.8.0
   "@phosphor-icons/react": 2.1.10
@@ -87,5 +89,8 @@ catalog:
 
 minimumReleaseAgeExclude:
   - better-near-auth@2.0.0-rc.0
+  - better-near-auth@2.0.0-rc.1
   - every-plugin@3.0.0-rc.4
+  - every-plugin@3.0.0-rc.5
   - everything-dev@2.0.0-rc.7
+  - everything-dev@2.0.0-rc.8

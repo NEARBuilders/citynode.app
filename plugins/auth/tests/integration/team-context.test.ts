@@ -52,7 +52,20 @@ describe("team context", () => {
     });
 
     expect(context.organization.teams).toEqual([
-      { id: team.id, name: "Node Operator", areas: ["node-operations", "finance"] },
+      {
+        id: team.id,
+        name: "Node Operator",
+        areas: ["node-operations", "finance"],
+        permissions: {
+          ac: ["read"],
+          apiKey: ["read"],
+          email: [],
+          invitation: [],
+          member: [],
+          organization: [],
+          team: [],
+        },
+      },
     ]);
     expect(context.organization.activeTeamId).toBe(team.id);
   });
@@ -145,7 +158,10 @@ describe("setActiveTeam", () => {
 
     await expect(
       handlers.teams.setActiveTeam({ input: { teamId: team.id }, context: {} }),
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      data: { apiKeyProvided: false },
+    });
   });
 });
 
@@ -179,7 +195,7 @@ describe("listUserTeams", () => {
 
 describe("team area grants", () => {
   it("round-trips areas through create, update and list", async () => {
-    const { owner, org, team, handlers } = await orgWithTeamMember(["events"]);
+    const { owner, org, team, handlers } = await orgWithTeamMember(["things"]);
 
     const updated = await handlers.teams.updateTeam({
       input: { teamId: team.id, organizationId: org.id, data: { areas: ["stake", "finance"] } },

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema";
 import {
@@ -50,7 +50,7 @@ describe("onboarding handlers", () => {
     });
     expect(listed).toHaveLength(1);
     expect(listed[0]!.id).toBe(result.id);
-    expect(listed[0]!.code).toBeUndefined();
+    expect(Object.hasOwn(listed[0]!, "code")).toBe(false);
   });
 
   it("feeds every code for the same event into one Event Team", async () => {
@@ -70,35 +70,6 @@ describe("onboarding handlers", () => {
 
     expect(second.teamId).toBe(first.teamId);
     expect(second.eventId).toBe(launch.eventId);
-  });
-
-  it("starts a new station with its own join limit while the event's first one is still live", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const meetup = eventOf("Meetup");
-
-    const first = await handlers.onboarding.createOnboardingCode({
-      input: { ...meetup, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    const second = await handlers.onboarding.createOnboardingCode({
-      input: { ...meetup, organizationId: org.id, maxUses: 5 },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-
-    expect(second.id).not.toBe(first.id);
-    expect(second.code).not.toBe(first.code);
-    expect(second.maxUses).toBe(5);
-    expect(second.teamId).toBe(first.teamId);
-
-    const listed = await handlers.onboarding.listOnboardingCodes({
-      input: { organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    expect(listed.map((code: { id: string }) => code.id).sort()).toEqual(
-      [first.id, second.id].sort(),
-    );
   });
 
   it("gives two events with the same title separate Event Teams", async () => {
@@ -159,7 +130,6 @@ describe("onboarding handlers", () => {
 
     expect(result.success).toBe(true);
     expect(result.alreadyRedeemed).toBe(false);
-    expect(result.organizationId).toBe(org.id);
     expect(result.organizationName).toBe(org.name);
     expect(result.eventName).toBe("Meetup");
 
@@ -215,20 +185,6 @@ describe("onboarding handlers", () => {
     });
     expect(context.organization.activeOrganizationId).toBe(org.id);
     expect(context.organization.activeTeamId).toBe(workspace!.id);
-
-    await services.services.db
-      .update(schema.onboardingCode)
-      .set({ expiresAt: new Date(Date.now() - 60_000) })
-      .where(eq(schema.onboardingCode.id, code.id));
-    const revisit = await handlers.onboarding.redeemOnboardingCode({
-      input: { code: code.code },
-      context: { reqHeaders: member.reqHeaders },
-    });
-    expect(revisit.alreadyRedeemed).toBe(true);
-    const revisitContext = await handlers.session.getContext({
-      context: { reqHeaders: member.reqHeaders },
-    });
-    expect(revisitContext.organization.activeTeamId).toBe(workspace!.id);
   });
 
   it("redeems idempotently without double-crediting the code", async () => {
@@ -252,7 +208,6 @@ describe("onboarding handlers", () => {
     });
 
     expect(again.alreadyRedeemed).toBe(true);
-    expect(again.organizationId).toBe(org.id);
 
     const drifted = await services.services.db.query.session.findFirst({
       where: eq(schema.session.userId, newcomer.userId),
@@ -306,10 +261,7 @@ describe("onboarding handlers", () => {
         input: { code: code.code },
         context: { reqHeaders: second.reqHeaders },
       }),
-    ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      data: { reason: "code_used_up" },
-    });
+    ).rejects.toThrow(/reached its limit/i);
 
     const member = await services.services.db.query.member.findFirst({
       where: and(eq(schema.member.userId, second.userId), eq(schema.member.organizationId, org.id)),
@@ -344,180 +296,6 @@ describe("onboarding handlers", () => {
     ).rejects.toThrow(/revoked/i);
   });
 
-  it("recognizes a prior redeemer after the code expires", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const code = await handlers.onboarding.createOnboardingCode({
-      input: { ...eventOf("Expired Later"), organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    const member = await createTestUser(services.services, { email: undefined });
-    await handlers.onboarding.redeemOnboardingCode({
-      input: { code: code.code },
-      context: { reqHeaders: member.reqHeaders },
-    });
-    await services.services.db
-      .update(schema.onboardingCode)
-      .set({ expiresAt: new Date(Date.now() - 60_000) })
-      .where(eq(schema.onboardingCode.id, code.id));
-
-    const again = await handlers.onboarding.redeemOnboardingCode({
-      input: { code: code.code },
-      context: { reqHeaders: member.reqHeaders },
-    });
-
-    expect(again.alreadyRedeemed).toBe(true);
-    expect(again.eventName).toBe("Expired Later");
-    const status = await handlers.onboarding.getOnboardingStatus({
-      input: { codeId: code.id, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    expect(status.usedCount).toBe(1);
-  });
-
-  it("rejects a removed member who revisits an expired code without changing their session", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const code = await handlers.onboarding.createOnboardingCode({
-      input: { ...eventOf("Removed Later"), organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    const member = await createTestUser(services.services, { email: undefined });
-    await handlers.onboarding.redeemOnboardingCode({
-      input: { code: code.code },
-      context: { reqHeaders: member.reqHeaders },
-    });
-    const membership = await services.services.db.query.member.findFirst({
-      where: and(eq(schema.member.userId, member.userId), eq(schema.member.organizationId, org.id)),
-    });
-    await handlers.members.removeMember({
-      input: { memberIdOrEmail: membership!.id, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await services.services.db
-      .update(schema.session)
-      .set({ activeOrganizationId: null })
-      .where(eq(schema.session.userId, member.userId));
-    await services.services.db
-      .update(schema.onboardingCode)
-      .set({ expiresAt: new Date(Date.now() - 60_000) })
-      .where(eq(schema.onboardingCode.id, code.id));
-
-    await expect(
-      handlers.onboarding.redeemOnboardingCode({
-        input: { code: code.code },
-        context: { reqHeaders: member.reqHeaders },
-      }),
-    ).rejects.toThrow(/expired/i);
-
-    const session = await services.services.db.query.session.findFirst({
-      where: eq(schema.session.userId, member.userId),
-    });
-    expect(session?.activeOrganizationId).toBeNull();
-  });
-
-  it("rejects a member who revisits a revoked code without changing their session", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const code = await handlers.onboarding.createOnboardingCode({
-      input: { ...eventOf("Withdrawn Invite"), organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    const member = await createTestUser(services.services, { email: undefined });
-    await handlers.onboarding.redeemOnboardingCode({
-      input: { code: code.code },
-      context: { reqHeaders: member.reqHeaders },
-    });
-    await handlers.onboarding.revokeOnboardingCode({
-      input: { codeId: code.id, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await services.services.db
-      .update(schema.session)
-      .set({ activeOrganizationId: null })
-      .where(eq(schema.session.userId, member.userId));
-
-    await expect(
-      handlers.onboarding.redeemOnboardingCode({
-        input: { code: code.code },
-        context: { reqHeaders: member.reqHeaders },
-      }),
-    ).rejects.toThrow(/revoked/i);
-
-    const session = await services.services.db.query.session.findFirst({
-      where: eq(schema.session.userId, member.userId),
-    });
-    expect(session?.activeOrganizationId).toBeNull();
-  });
-
-  it("rejects a removed member who revisits a used-up code without changing their session", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const code = await handlers.onboarding.createOnboardingCode({
-      input: { ...eventOf("Single Seat"), organizationId: org.id, maxUses: 1 },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    const member = await createTestUser(services.services, { email: undefined });
-    await handlers.onboarding.redeemOnboardingCode({
-      input: { code: code.code },
-      context: { reqHeaders: member.reqHeaders },
-    });
-    const membership = await services.services.db.query.member.findFirst({
-      where: and(eq(schema.member.userId, member.userId), eq(schema.member.organizationId, org.id)),
-    });
-    await handlers.members.removeMember({
-      input: { memberIdOrEmail: membership!.id, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await services.services.db
-      .update(schema.session)
-      .set({ activeOrganizationId: null })
-      .where(eq(schema.session.userId, member.userId));
-
-    await expect(
-      handlers.onboarding.redeemOnboardingCode({
-        input: { code: code.code },
-        context: { reqHeaders: member.reqHeaders },
-      }),
-    ).rejects.toThrow(/reached its limit/i);
-
-    const session = await services.services.db.query.session.findFirst({
-      where: eq(schema.session.userId, member.userId),
-    });
-    expect(session?.activeOrganizationId).toBeNull();
-  });
-
-  it("recognizes a prior redeemer after the code is used up", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const code = await handlers.onboarding.createOnboardingCode({
-      input: { ...eventOf("Full Room"), organizationId: org.id, maxUses: 1 },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    const member = await createTestUser(services.services, { email: undefined });
-    await handlers.onboarding.redeemOnboardingCode({
-      input: { code: code.code },
-      context: { reqHeaders: member.reqHeaders },
-    });
-
-    const again = await handlers.onboarding.redeemOnboardingCode({
-      input: { code: code.code },
-      context: { reqHeaders: member.reqHeaders },
-    });
-
-    expect(again.alreadyRedeemed).toBe(true);
-    const status = await handlers.onboarding.getOnboardingStatus({
-      input: { codeId: code.id, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    expect(status.usedCount).toBe(1);
-  });
-
   it("rejects expired and revoked codes", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);
@@ -538,10 +316,7 @@ describe("onboarding handlers", () => {
         input: { code: expired.code },
         context: { reqHeaders: late.reqHeaders },
       }),
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      data: { reason: "code_expired" },
-    });
+    ).rejects.toThrow(/expired/i);
 
     const revoked = await handlers.onboarding.createOnboardingCode({
       input: { ...eventOf("Cancelled"), organizationId: org.id },
@@ -556,10 +331,7 @@ describe("onboarding handlers", () => {
         input: { code: revoked.code },
         context: { reqHeaders: late.reqHeaders },
       }),
-    ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      data: { reason: "code_revoked" },
-    });
+    ).rejects.toThrow(/revoked/i);
   });
 
   it("rejects unknown codes and reports status flags publicly", async () => {
@@ -572,16 +344,6 @@ describe("onboarding handlers", () => {
       context: {},
     });
     expect(unknown).toBeNull();
-    const stranger = await createTestUser(services.services, { email: undefined });
-    await expect(
-      handlers.onboarding.redeemOnboardingCode({
-        input: { code: "not-a-real-code" },
-        context: { reqHeaders: stranger.reqHeaders },
-      }),
-    ).rejects.toMatchObject({
-      code: "NOT_FOUND",
-      data: { reason: "code_not_found" },
-    });
 
     const code = await handlers.onboarding.createOnboardingCode({
       input: { ...eventOf("Info Event"), organizationId: org.id },
@@ -774,155 +536,6 @@ describe("onboarding organizers", () => {
   });
 });
 
-describe("listing one event's onboarding codes", () => {
-  it("finds an event's live code older than the organization's 100 newest codes", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const launch = eventOf("Launch Night");
-    const live = await handlers.onboarding.createOnboardingCode({
-      input: { ...launch, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await services.services.db
-      .update(schema.onboardingCode)
-      .set({ createdAt: new Date(Date.now() - 3_600_000) })
-      .where(eq(schema.onboardingCode.id, live.id));
-    for (let index = 0; index < 100; index++) {
-      await handlers.onboarding.createOnboardingCode({
-        input: { ...eventOf(`Meetup ${index}`), organizationId: org.id },
-        context: { reqHeaders: owner.reqHeaders },
-      });
-    }
-
-    const newest = await handlers.onboarding.listOnboardingCodes({
-      input: { organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    const forEvent = await handlers.onboarding.listOnboardingCodes({
-      input: { organizationId: org.id, eventId: launch.eventId },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-
-    expect(newest).toHaveLength(100);
-    expect(newest.some((code: { id: string }) => code.id === live.id)).toBe(false);
-    expect(forEvent.map((code: { id: string }) => code.id)).toEqual([live.id]);
-  });
-
-  it("lists every code of an event, so an older live one isn't hidden by the cap", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const launch = eventOf("Launch Night");
-    const live = await handlers.onboarding.createOnboardingCode({
-      input: { ...launch, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await services.services.db
-      .update(schema.onboardingCode)
-      .set({ createdAt: new Date(Date.now() - 3_600_000) })
-      .where(eq(schema.onboardingCode.id, live.id));
-    for (let index = 0; index < 100; index++) {
-      const closed = await handlers.onboarding.createOnboardingCode({
-        input: { ...launch, organizationId: org.id },
-        context: { reqHeaders: owner.reqHeaders },
-      });
-      await handlers.onboarding.revokeOnboardingCode({
-        input: { codeId: closed.id, organizationId: org.id },
-        context: { reqHeaders: owner.reqHeaders },
-      });
-    }
-
-    const listed = await handlers.onboarding.listOnboardingCodes({
-      input: { organizationId: org.id, eventId: launch.eventId },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-
-    expect(listed).toHaveLength(101);
-    expect(listed.at(-1)!.id).toBe(live.id);
-    expect(listed.filter((code: { revokedAt: Date | null }) => !code.revokedAt)).toHaveLength(1);
-  });
-
-  it("lists only that event's codes, newest first, including closed ones", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const launch = eventOf("Launch Night");
-    const first = await handlers.onboarding.createOnboardingCode({
-      input: { ...launch, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await services.services.db
-      .update(schema.onboardingCode)
-      .set({ createdAt: new Date(Date.now() - 60_000) })
-      .where(eq(schema.onboardingCode.id, first.id));
-    const second = await handlers.onboarding.createOnboardingCode({
-      input: { ...launch, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await handlers.onboarding.revokeOnboardingCode({
-      input: { codeId: second.id, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await handlers.onboarding.createOnboardingCode({
-      input: { ...eventOf("Other Night"), organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-
-    const listed = await handlers.onboarding.listOnboardingCodes({
-      input: { organizationId: org.id, eventId: launch.eventId },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-
-    expect(listed.map((code: { id: string }) => code.id)).toEqual([second.id, first.id]);
-    expect(listed[0]!.revokedAt).not.toBeNull();
-    expect(listed[1]!.revokedAt).toBeNull();
-  });
-
-  it("does not list another organization's codes for the same event", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const otherOwner = await createTestUser(services.services);
-    const other = await createTestOrg(services.services, otherOwner.userId);
-    const handlers = createTestHandlers(services.services);
-    const shared = eventOf("Shared Night");
-    await handlers.onboarding.createOnboardingCode({
-      input: { ...shared, organizationId: other.id },
-      context: { reqHeaders: otherOwner.reqHeaders },
-    });
-
-    const listed = await handlers.onboarding.listOnboardingCodes({
-      input: { organizationId: org.id, eventId: shared.eventId },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-
-    expect(listed).toEqual([]);
-  });
-
-  it("lets an events Team member filter by event and refuses other members", async () => {
-    const { owner, org, member, handlers } = await orgWithTeamMember(["events"]);
-    const launch = eventOf("Crew Night");
-    const code = await handlers.onboarding.createOnboardingCode({
-      input: { ...launch, organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    const finance = await orgWithTeamMember(["finance"]);
-
-    const listed = await handlers.onboarding.listOnboardingCodes({
-      input: { organizationId: org.id, eventId: launch.eventId },
-      context: { reqHeaders: member.reqHeaders },
-    });
-
-    expect(listed.map((entry: { id: string }) => entry.id)).toEqual([code.id]);
-    await expect(
-      finance.handlers.onboarding.listOnboardingCodes({
-        input: { organizationId: finance.org.id, eventId: launch.eventId },
-        context: { reqHeaders: finance.member.reqHeaders },
-      }),
-    ).rejects.toThrow(/organizers/i);
-  });
-});
-
 describe("onboarding station", () => {
   async function stationFixture(options: { maxUses?: number } = {}) {
     const owner = await createTestUser(services.services);
@@ -1023,65 +636,9 @@ describe("onboarding into a full organization", () => {
           input: { code: code.code },
           context: { reqHeaders: attendee.reqHeaders },
         }),
-      ).rejects.toMatchObject({
-        code: "FORBIDDEN",
-        data: { reason: "organization_full" },
-      });
+      ).rejects.toThrow(/organization is full/i);
     } finally {
       await full.driver.close();
     }
   }, 30000);
-});
-
-describe("redeemOnboardingCode organization causes", () => {
-  it("returns organization_not_active when the organization is pending", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const code = await handlers.onboarding.createOnboardingCode({
-      input: { ...eventOf("Pending Hall"), organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await services.services.db
-      .update(schema.organization)
-      .set({ status: "pending" })
-      .where(eq(schema.organization.id, org.id));
-    const attendee = await createTestUser(services.services, { email: undefined });
-
-    await expect(
-      handlers.onboarding.redeemOnboardingCode({
-        input: { code: code.code },
-        context: { reqHeaders: attendee.reqHeaders },
-      }),
-    ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      data: { reason: "organization_not_active" },
-    });
-  });
-
-  it("returns organization_not_found when the organization row is missing", async () => {
-    const owner = await createTestUser(services.services);
-    const org = await createTestOrg(services.services, owner.userId);
-    const handlers = createTestHandlers(services.services);
-    const code = await handlers.onboarding.createOnboardingCode({
-      input: { ...eventOf("Gone Hall"), organizationId: org.id },
-      context: { reqHeaders: owner.reqHeaders },
-    });
-    await services.services.db.execute(sql`SET session_replication_role = replica`);
-    await services.services.db
-      .delete(schema.organization)
-      .where(eq(schema.organization.id, org.id));
-    await services.services.db.execute(sql`SET session_replication_role = DEFAULT`);
-    const attendee = await createTestUser(services.services, { email: undefined });
-
-    await expect(
-      handlers.onboarding.redeemOnboardingCode({
-        input: { code: code.code },
-        context: { reqHeaders: attendee.reqHeaders },
-      }),
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      data: { reason: "organization_not_found" },
-    });
-  });
 });

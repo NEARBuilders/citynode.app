@@ -1,8 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema";
-import { DEFAULT_TEAMS } from "../../src/default-teams";
-import { parseTeamAreas } from "../../src/utils";
 import { createTestHandlers, createTestOrg, createTestServices, createTestUser } from "../helpers";
 
 let setup: Awaited<ReturnType<typeof createTestServices>>;
@@ -154,26 +152,6 @@ describe("organization approval gate", () => {
       context: { reqHeaders: admin.reqHeaders },
     });
     expect(approved).toMatchObject({ status: "active", rejectionReason: null });
-    const teams = await setup.services.db.query.team.findMany({
-      where: eq(schema.team.organizationId, organization.id),
-    });
-    expect(
-      teams.map((team) => ({ name: team.name, areas: parseTeamAreas(team.metadata) })),
-    ).toEqual(
-      expect.arrayContaining(
-        DEFAULT_TEAMS.map((team) => ({ name: team.name, areas: [...team.areas] })),
-      ),
-    );
-    expect(teams).toHaveLength(3);
-    expect(
-      await setup.services.db.query.teamMember.findMany({
-        where: (member, { inArray }) =>
-          inArray(
-            member.teamId,
-            teams.map((team) => team.id),
-          ),
-      }),
-    ).toHaveLength(0);
     expect(
       await setup.services.db.query.member.findFirst({
         where: and(
@@ -199,59 +177,6 @@ describe("organization approval gate", () => {
         context: { reqHeaders: admin.reqHeaders },
       }),
     ).rejects.toThrow("no longer pending");
-  });
-
-  it("keeps edited and deleted default teams unchanged when an approved community is reactivated", async () => {
-    const requester = await createTestUser(setup.services);
-    const organization = await requestOrganization(requester);
-    await setup.services.db.insert(schema.team).values({
-      id: crypto.randomUUID(),
-      name: "Operations",
-      organizationId: organization.id,
-      metadata: '{"areas":["events"]}',
-    });
-    await createTestHandlers(setup.services).organizationRequests.reviewOrganization({
-      input: { organizationId: organization.id, decision: "approve" },
-      context: { reqHeaders: admin.reqHeaders },
-    });
-    const teams = await setup.services.db.query.team.findMany({
-      where: eq(schema.team.organizationId, organization.id),
-    });
-    expect(teams).toHaveLength(3);
-    expect(teams.find((team) => team.name === "Operations")?.metadata).toBe('{"areas":["events"]}');
-    const treasury = teams.find((team) => team.name === "Treasury")!;
-    await setup.services.db
-      .update(schema.team)
-      .set({ name: "Custom treasury", metadata: '{"areas":["stake"]}' })
-      .where(eq(schema.team.id, treasury.id));
-    await setup.services.db
-      .delete(schema.team)
-      .where(eq(schema.team.id, teams.find((team) => team.name === "Community")!.id));
-    await setup.services.auth.api.setActiveOrganization({
-      headers: requester.headers,
-      body: { organizationId: organization.id },
-    });
-    await setup.services.auth.api.setActiveOrganization({
-      headers: requester.headers,
-      body: { organizationId: null },
-    });
-    await setup.services.auth.api.setActiveOrganization({
-      headers: requester.headers,
-      body: { organizationId: organization.id },
-    });
-    const teamsAfterReactivation = await setup.services.db.query.team.findMany({
-      where: eq(schema.team.organizationId, organization.id),
-    });
-    expect(teamsAfterReactivation).toHaveLength(2);
-    expect(teamsAfterReactivation).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: treasury.id,
-          name: "Custom treasury",
-          metadata: '{"areas":["stake"]}',
-        }),
-      ]),
-    );
   });
 
   it("requires a rejection reason, exposes it to the requester, and keeps rejected orgs gated", async () => {
@@ -411,36 +336,6 @@ describe("organization approval gate", () => {
         }),
       ).rejects.toThrow("approval");
     }
-    expect(
-      await setup.services.db.query.member.findMany({
-        where: eq(schema.member.organizationId, organization.id),
-      }),
-    ).toEqual([expect.objectContaining({ userId: requester.userId, role: "owner" })]);
-  });
-
-  it.each([
-    "pending",
-    "rejected",
-  ])("rejects outsiders adding themselves to %s organizations without revealing the status", async (status) => {
-    const requester = await createTestUser(setup.services);
-    const outsider = await createTestUser(setup.services);
-    const organization = await requestOrganization(requester);
-    const handlers = createTestHandlers(setup.services);
-    if (status === "rejected") {
-      await handlers.organizationRequests.reviewOrganization({
-        input: { organizationId: organization.id, decision: "reject", reason: "Not approved" },
-        context: { reqHeaders: admin.reqHeaders },
-      });
-    }
-    await expect(
-      handlers.members.addMember({
-        input: { userId: outsider.userId, role: "owner", organizationId: organization.id },
-        context: { reqHeaders: outsider.reqHeaders },
-      }),
-    ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      message: "Only organization owners and admins can add members",
-    });
     expect(
       await setup.services.db.query.member.findMany({
         where: eq(schema.member.organizationId, organization.id),

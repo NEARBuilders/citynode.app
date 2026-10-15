@@ -1,322 +1,139 @@
-import { ORPCError } from "@orpc/server";
-import { eq } from "drizzle-orm";
-import { Context } from "effect";
-import * as schema from "../db/schema";
-import { AuthServicesTag } from "../service-types";
-import {
-  canReadMemberEmails,
-  createHeaders,
-  parseTeamAreas,
-  safeAuthApi,
-  tryJsonParse,
-} from "../utils";
+import type { Implementer } from "@orpc/server";
+import { Effect } from "effect";
+import type { ContractType } from "../contract";
+import type { AuthHandlerContext, RequireAuthMiddleware } from "../middleware";
+import { mapDomainError } from "../services/domain-errors";
+import { OrganizationsService } from "../services/organizations";
+import { createHeaders } from "../utils";
 
-function toOrganizationInfo(organization: {
-  id: string;
-  name: string;
-  slug: string;
-  logo?: string | null;
-  metadata?: unknown;
-  status?: string;
-  requestedBy?: string | null;
-  rejectionReason?: string | null;
-}) {
+export function createOrganizationHandlers(
+  builder: Implementer<ContractType, AuthHandlerContext>,
+  requireAuth: RequireAuthMiddleware,
+) {
   return {
-    id: organization.id,
-    name: organization.name,
-    slug: organization.slug,
-    logo: organization.logo ?? null,
-    status: organization.status ?? "active",
-    requestedBy: organization.requestedBy ?? null,
-    rejectionReason: organization.rejectionReason ?? null,
-    metadata:
-      typeof organization.metadata === "string"
-        ? tryJsonParse<Record<string, unknown>>(organization.metadata)
-        : ((organization.metadata as Record<string, unknown> | null | undefined) ?? null),
-  };
-}
+    listOrganizations: builder.listOrganizations.use(requireAuth).effect(function* ({ context }) {
+      const organizations = yield* OrganizationsService;
+      return yield* mapDomainError(
+        organizations.listOrganizations(createHeaders(context.reqHeaders)),
+      );
+    }),
 
-export function createOrganizationHandlers(builder: any, requireAuth: any) {
-  return {
-    listOrganizations: builder.listOrganizations
-      .use(requireAuth)
-      .handler(async ({ context }: { context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const result = await safeAuthApi(() =>
-          services.auth.api.listOrganizations({
+    getFullOrganization: builder.getFullOrganization.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const organizations = yield* OrganizationsService;
+      return yield* mapDomainError(
+        organizations.getFullOrganization(
+          {
             headers: createHeaders(context.reqHeaders),
-          }),
+            reqHeaders: context.reqHeaders,
+            user: context.user,
+          },
+          input,
+        ),
+      );
+    }),
+
+    getOrganizationForAdmin: builder.getOrganizationForAdmin.use(requireAuth).effect(function* ({
+      input,
+      context,
+      errors,
+    }) {
+      const organizations = yield* OrganizationsService;
+      if (context.user.role !== "admin") {
+        return yield* Effect.fail(
+          errors.FORBIDDEN({ message: "Admin access required", data: { action: "admin-access" } }),
         );
-        return result.map((org: any) => ({
-          ...toOrganizationInfo(org),
-          createdAt: org.createdAt instanceof Date ? org.createdAt : new Date(org.createdAt),
-        }));
-      }),
+      }
+      return yield* mapDomainError(organizations.getOrganizationById(input.organizationId));
+    }),
 
-    getFullOrganization: builder.getFullOrganization
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        try {
-          const emailAllowed = await canReadMemberEmails(services, context, input?.organizationId);
-          const result = await services.auth.api.getFullOrganization({
-            headers: createHeaders(context.reqHeaders),
-            query: {
-              organizationId: input.organizationId,
-              organizationSlug: input.organizationSlug,
-              membersLimit: input.membersLimit,
-            },
-          });
-          if (!result) return null;
-          return {
-            ...toOrganizationInfo(result),
-            createdAt:
-              result.createdAt instanceof Date ? result.createdAt : new Date(result.createdAt),
-            members: (result.members ?? []).map((m: any) => ({
-              id: m.id,
-              userId: m.userId,
-              organizationId: m.organizationId,
-              role: m.role,
-              createdAt: m.createdAt instanceof Date ? m.createdAt : new Date(m.createdAt),
-            })),
-            invitations: (result.invitations ?? []).map((inv: any) => ({
-              id: inv.id,
-              organizationId: inv.organizationId,
-              email: emailAllowed ? inv.email : null,
-              role: inv.role,
-              status: inv.status,
-              expiresAt: inv.expiresAt instanceof Date ? inv.expiresAt : new Date(inv.expiresAt),
-              inviterId: inv.inviterId,
-            })),
-            teams: result.teams
-              ? result.teams.map((t: any) => ({
-                  id: t.id,
-                  name: t.name,
-                  organizationId: t.organizationId,
-                  areas: parseTeamAreas(t.metadata),
-                  createdAt: t.createdAt instanceof Date ? t.createdAt : new Date(t.createdAt),
-                  updatedAt: t.updatedAt instanceof Date ? t.updatedAt : new Date(t.updatedAt),
-                }))
-              : undefined,
-          };
-        } catch {
-          return null;
-        }
-      }),
+    createOrganization: builder.createOrganization.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const organizations = yield* OrganizationsService;
+      return yield* mapDomainError(
+        organizations.createOrganization(createHeaders(context.reqHeaders), input),
+      );
+    }),
 
-    getOrganizationForAdmin: builder.getOrganizationForAdmin
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        if (context.user.role !== "admin") {
-          throw new ORPCError("FORBIDDEN", {
-            message: "Admin access required",
-          });
-        }
-        const organization = await services.db.query.organization.findFirst({
-          where: eq(schema.organization.id, input.organizationId),
-        });
-        if (!organization) return null;
-        return toOrganizationInfo(organization);
-      }),
+    setActiveOrganization: builder.setActiveOrganization.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const organizations = yield* OrganizationsService;
+      yield* mapDomainError(
+        organizations.setActiveOrganization(
+          createHeaders(context.reqHeaders),
+          input.organizationId,
+        ),
+      );
+      return { success: true };
+    }),
 
-    createOrganization: builder.createOrganization
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const result = await safeAuthApi(() =>
-          services.auth.api.createOrganization({
-            headers: createHeaders(context.reqHeaders),
-            body: {
-              name: input.name,
-              slug: input.slug,
-              logo: input.logo,
-              metadata: input.metadata,
-            },
-          }),
-        );
-        return {
-          ...toOrganizationInfo(result),
-          createdAt:
-            result.createdAt instanceof Date ? result.createdAt : new Date(result.createdAt),
-        };
-      }),
+    updateOrganization: builder.updateOrganization.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const organizations = yield* OrganizationsService;
+      return yield* mapDomainError(
+        organizations.updateOrganization(createHeaders(context.reqHeaders), input),
+      );
+    }),
 
-    setActiveOrganization: builder.setActiveOrganization
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        await safeAuthApi(() =>
-          services.auth.api.setActiveOrganization({
-            headers: createHeaders(context.reqHeaders),
-            body: { organizationId: input.organizationId },
-          }),
-        );
-        return { success: true };
-      }),
+    leaveOrganization: builder.leaveOrganization.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const organizations = yield* OrganizationsService;
+      yield* mapDomainError(
+        organizations.leaveOrganization(createHeaders(context.reqHeaders), input.organizationId),
+      );
+      return { success: true };
+    }),
 
-    updateOrganization: builder.updateOrganization
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const result = await safeAuthApi(() =>
-          services.auth.api.updateOrganization({
-            headers: createHeaders(context.reqHeaders),
-            body: {
-              data: {
-                name: input.data.name,
-                slug: input.data.slug,
-                logo: input.data.logo,
-                metadata: input.data.metadata,
-              },
-              organizationId: input.organizationId,
-            },
-          }),
-        );
-        if (!result) {
-          throw new ORPCError("NOT_FOUND", {
-            message: "Organization not found",
-          });
-        }
-        return toOrganizationInfo(result);
-      }),
+    deleteOrganization: builder.deleteOrganization.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const organizations = yield* OrganizationsService;
+      yield* mapDomainError(
+        organizations.deleteOrganization(createHeaders(context.reqHeaders), input.organizationId),
+      );
+      return { success: true };
+    }),
 
-    leaveOrganization: builder.leaveOrganization
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        await safeAuthApi(() =>
-          services.auth.api.leaveOrganization({
-            headers: createHeaders(context.reqHeaders),
-            body: { organizationId: input.organizationId },
-          }),
-        );
-        return { success: true };
-      }),
+    checkSlug: builder.checkSlug.effect(function* ({ input }) {
+      const organizations = yield* OrganizationsService;
+      return yield* mapDomainError(organizations.checkSlug(input.slug));
+    }),
 
-    deleteOrganization: builder.deleteOrganization
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        await safeAuthApi(() =>
-          services.auth.api.deleteOrganization({
-            headers: createHeaders(context.reqHeaders),
-            body: { organizationId: input.organizationId },
-          }),
-        );
-        return { success: true };
-      }),
+    hasPermission: builder.hasPermission.use(requireAuth).effect(function* ({ input, context }) {
+      const organizations = yield* OrganizationsService;
+      return yield* mapDomainError(
+        organizations.hasPermission(createHeaders(context.reqHeaders), input),
+      );
+    }),
 
-    checkSlug: builder.checkSlug.handler(
-      async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        try {
-          const result = await services.auth.api.checkOrganizationSlug({
-            body: { slug: input.slug },
-          });
-          return { status: result.status };
-        } catch {
-          return { status: false };
-        }
-      },
-    ),
+    linkDao: builder.linkDao.use(requireAuth).effect(function* ({ input, context }) {
+      const organizations = yield* OrganizationsService;
+      yield* mapDomainError(organizations.linkDao(createHeaders(context.reqHeaders), input));
+      return { success: true };
+    }),
 
-    hasPermission: builder.hasPermission
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const result = await safeAuthApi(() =>
-          services.auth.api.hasPermission({
-            headers: createHeaders(context.reqHeaders),
-            body: {
-              organizationId: input.organizationId,
-              permissions: input.permissions,
-            },
-          }),
-        );
-        return { success: result.success };
-      }),
+    unlinkDao: builder.unlinkDao.use(requireAuth).effect(function* ({ input, context }) {
+      const organizations = yield* OrganizationsService;
+      yield* mapDomainError(organizations.unlinkDao(createHeaders(context.reqHeaders), input));
+      return { success: true };
+    }),
 
-    linkDao: builder.linkDao
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const headers = createHeaders(context.reqHeaders);
-        const org = await services.db.query.organization.findFirst({
-          where: eq(schema.organization.id, input.organizationId),
-        });
-        if (!org)
-          throw new ORPCError("NOT_FOUND", {
-            message: "Organization not found",
-          });
-
-        const existingMetadata = tryJsonParse<Record<string, unknown>>(org.metadata) ?? {};
-        existingMetadata.daoAccountId = input.daoAccountId;
-        existingMetadata.daoNetwork = input.daoNetwork ?? "mainnet";
-
-        await safeAuthApi(() =>
-          services.auth.api.updateOrganization({
-            headers,
-            body: {
-              data: { metadata: existingMetadata },
-              organizationId: input.organizationId,
-            },
-          }),
-        );
-        return { success: true };
-      }),
-
-    unlinkDao: builder.unlinkDao
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const headers = createHeaders(context.reqHeaders);
-        const org = await services.db.query.organization.findFirst({
-          where: eq(schema.organization.id, input.organizationId),
-        });
-        if (!org)
-          throw new ORPCError("NOT_FOUND", {
-            message: "Organization not found",
-          });
-
-        const existingMetadata = tryJsonParse<Record<string, unknown>>(org.metadata) ?? {};
-        delete existingMetadata.daoAccountId;
-        delete existingMetadata.daoNetwork;
-
-        await safeAuthApi(() =>
-          services.auth.api.updateOrganization({
-            headers,
-            body: {
-              data: { metadata: existingMetadata },
-              organizationId: input.organizationId,
-            },
-          }),
-        );
-        return { success: true };
-      }),
-
-    getDao: builder.getDao
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const result = await safeAuthApi(() =>
-          services.auth.api.getFullOrganization({
-            headers: createHeaders(context.reqHeaders),
-            query: { organizationId: input.organizationId },
-          }),
-        );
-        if (!result)
-          throw new ORPCError("NOT_FOUND", {
-            message: "Organization not found",
-          });
-        const metadata =
-          (typeof result.metadata === "string"
-            ? tryJsonParse<Record<string, unknown>>(result.metadata)
-            : (result.metadata as Record<string, unknown> | null | undefined)) ?? null;
-        return {
-          daoAccountId: (metadata?.daoAccountId as string) ?? null,
-          daoNetwork: (metadata?.daoNetwork as "mainnet" | "testnet") ?? null,
-        };
-      }),
+    getDao: builder.getDao.use(requireAuth).effect(function* ({ input, context }) {
+      const organizations = yield* OrganizationsService;
+      return yield* mapDomainError(
+        organizations.getDao(createHeaders(context.reqHeaders), input.organizationId),
+      );
+    }),
   };
 }

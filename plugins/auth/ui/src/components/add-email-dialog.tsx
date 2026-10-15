@@ -2,8 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { refreshSessionCache, useAuthClient } from "everything-dev/ui/auth";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { LoginMessageId } from "@/i18n/catalogs";
-import { useLoginTranslation } from "@/i18n/runtime";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -21,216 +19,101 @@ interface AddEmailDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const CODE_LENGTH = 6;
-
 export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
-  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
-  const [error, setError] = useState<LoginMessageId | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setEmail("");
-      setCode("");
-      setPendingEmail(null);
       setError(null);
     }
   }, [open]);
 
-  const saved = async () => {
-    await refreshSessionCache(auth, queryClient);
-    toast.success(translate("auth.common.emailSaved"));
-    onOpenChange(false);
-  };
-
-  const sendCode = useMutation({
+  const mutation = useMutation({
     mutationFn: async (newEmail: string) => {
-      const { data, error: apiError } = await auth.$fetch<{ verificationRequired?: boolean }>(
-        "/email-otp/request-email-change",
-        { method: "POST", body: { newEmail } },
-      );
-      if (apiError) throw apiError;
-      return { newEmail, verificationRequired: data?.verificationRequired !== false };
-    },
-    onSuccess: async ({ newEmail, verificationRequired }) => {
-      if (!verificationRequired) {
-        await saved();
-        return;
-      }
-      if (pendingEmail === newEmail) toast.success(translate("auth.email.codeResent"));
-      setPendingEmail(newEmail);
-      setCode("");
-      setError(null);
-    },
-    onError: () => {
-      setError("auth.email.sendError");
-    },
-  });
-
-  const confirm = useMutation({
-    mutationFn: async ({ newEmail, otp }: { newEmail: string; otp: string }) => {
-      const { error: apiError } = await auth.$fetch("/email-otp/change-email", {
+      const { error: apiError } = await auth.$fetch("/set-email", {
         method: "POST",
-        body: { newEmail, otp },
+        body: { email: newEmail },
       });
-      if (apiError) throw apiError;
+      const message =
+        apiError && typeof apiError === "object" && "message" in apiError
+          ? (apiError as { message?: string }).message
+          : undefined;
+      if (apiError) throw new Error(message || "Could not save email");
     },
-    onSuccess: saved,
-    onError: () => {
-      setError("auth.email.codeError");
+    onSuccess: async () => {
+      await refreshSessionCache(auth, queryClient);
+      toast.success("Email saved");
+      onOpenChange(false);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
     },
   });
 
-  const busy = sendCode.isPending || confirm.isPending;
-
-  const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
-      setError("auth.email.required");
+      setError("Enter your email");
       return;
     }
     setError(null);
-    sendCode.mutate(trimmed);
-  };
-
-  const handleCodeSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!pendingEmail) return;
-    const otp = code.replace(/\D/g, "");
-    if (otp.length !== CODE_LENGTH) {
-      setError("auth.email.codeRequired");
-      return;
-    }
-    setError(null);
-    confirm.mutate({ newEmail: pendingEmail, otp });
+    mutation.mutate(trimmed);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        {pendingEmail ? (
-          <form
-            onSubmit={handleCodeSubmit}
-            className="flex flex-col gap-6"
-            data-testid="add-email.code-step"
-          >
-            <DialogHeader>
-              <DialogTitle>{translate("auth.email.checkTitle")}</DialogTitle>
-              <DialogDescription>
-                {translate("auth.email.checkDescription", { email: pendingEmail })}
-              </DialogDescription>
-            </DialogHeader>
-            <Field>
-              <FieldLabel htmlFor="add-email-code">{translate("auth.email.code")}</FieldLabel>
-              <Input
-                id="add-email-code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-                required
-                maxLength={CODE_LENGTH}
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-                data-testid="add-email.code-input"
-              />
-              {error ? <FieldError>{translate(error)}</FieldError> : null}
-            </Field>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              <Button
-                type="button"
-                variant="link"
-                size="xs"
-                onClick={() => sendCode.mutate(pendingEmail)}
-                disabled={busy}
-                data-testid="add-email.resend"
-              >
-                {translate("auth.email.resend")}
-              </Button>
-              <Button
-                type="button"
-                variant="link"
-                size="xs"
-                onClick={() => {
-                  setPendingEmail(null);
-                  setCode("");
-                  setError(null);
-                }}
-                disabled={busy}
-                data-testid="add-email.change-address"
-              >
-                {translate("auth.email.changeAddress")}
-              </Button>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => onOpenChange(false)}
-                disabled={busy}
-                data-testid="add-email.cancel"
-              >
-                {translate("auth.common.cancel")}
-              </Button>
-              <Button
-                type="submit"
-                disabled={busy || code.length !== CODE_LENGTH}
-                data-testid="add-email.confirm"
-              >
-                {confirm.isPending
-                  ? translate("auth.email.confirming")
-                  : translate("auth.email.confirm")}
-              </Button>
-            </DialogFooter>
-          </form>
-        ) : (
-          <form onSubmit={handleEmailSubmit} className="flex flex-col gap-6">
-            <DialogHeader>
-              <DialogTitle>{translate("auth.email.add")}</DialogTitle>
-              <DialogDescription>{translate("auth.email.description")}</DialogDescription>
-            </DialogHeader>
-            <Field>
-              <FieldLabel htmlFor="add-email-input">{translate("auth.common.email")}</FieldLabel>
-              <Input
-                id="add-email-input"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                autoFocus
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder={translate("auth.common.emailExample")}
-                data-testid="add-email.input"
-              />
-              {error ? (
-                <FieldError>{translate(error)}</FieldError>
-              ) : (
-                <FieldDescription>{translate("auth.email.privacy")}</FieldDescription>
-              )}
-            </Field>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => onOpenChange(false)}
-                disabled={busy}
-                data-testid="add-email.cancel"
-              >
-                {translate("auth.common.cancel")}
-              </Button>
-              <Button type="submit" disabled={busy || !email.trim()} data-testid="add-email.save">
-                {sendCode.isPending
-                  ? translate("auth.common.saving")
-                  : translate("auth.common.continue")}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <DialogHeader>
+            <DialogTitle>Add your email</DialogTitle>
+            <DialogDescription>
+              So you can sign in from another device and recover your account.
+            </DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="add-email-input">Email</FieldLabel>
+            <Input
+              id="add-email-input"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoFocus
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              data-testid="add-email.input"
+            />
+            {error ? (
+              <FieldError>{error}</FieldError>
+            ) : (
+              <FieldDescription>We won't share it. You can change it later.</FieldDescription>
+            )}
+          </Field>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={mutation.isPending}
+              data-testid="add-email.cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={mutation.isPending || !email.trim()}
+              data-testid="add-email.save"
+            >
+              {mutation.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

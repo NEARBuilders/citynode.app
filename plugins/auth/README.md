@@ -45,6 +45,8 @@ It runs inside the **everything-plugin** framework (oRPC + Effect) and is design
 | `passkey.rpID` | `string` | Derived from `baseUrl` | WebAuthn relying party ID |
 | `passkey.rpName` | `string` | `Everything Dev` | Human-readable relying party name |
 | `passkey.origin` | `string` | Derived from `baseUrl` | Browser origin for passkeys |
+| `siwn.permissions.statements` | `Record<string, string[]>` | — | **Required.** Permission catalog (statement → allowed actions); undeclared statements cannot be granted |
+| `siwn.permissions.roles` | `Record<string, Record<string, string[]>>` | — | **Required.** Role grant maps; `owner`/`admin`/`member` mandatory, custom roles allowed; grants must reference declared statements/actions or boot fails |
 | `siwn.recipient` | `string` | — | Single-network SIWN recipient |
 | `siwn.recipients.mainnet` | `string` | — | Mainnet SIWN recipient |
 | `siwn.recipients.testnet` | `string` | — | Testnet SIWN recipient |
@@ -122,6 +124,12 @@ AUTH_DATABASE_URL=postgres://user:pass@host:5432/dbname
 - Registration with email verification
 - Password reset via email
 - Sign-in with verified email
+
+```tip
+- **verify-on-claim**: when `RESEND_API_KEY` and `email.from` are configured, a claimed email lands `emailVerified: false`; a verification email is sent through better-auth's standard token flow, and `emailVerified` flips only on click. Without a provider, instant claim is kept unchanged.
+- **haveIBeenPwned**: the plugin rejects compromised passwords on signup/password change (k-anonymity API; disabled under `NODE_ENV === "test"`).
+- **lastLoginMethod**: per-user last authentication method is tracked.
+```
 
 ### Phone Number
 - OTP via SMS (preview mode logs to console)
