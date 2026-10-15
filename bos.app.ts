@@ -23,7 +23,7 @@ export default App({
   // Pin the dashboard ref to this same sha-tag (and disable image-push
   // watching) so upstream re-pushing :rc can't drift this deployment.
   ci: {
-    image: "ghcr.io/nearbuilders/everything-dev:sha-0866f88",
+    image: "ghcr.io/nearbuilders/everything-dev:sha-2fb30b2",
     railway: {
       service: "app",
     },
