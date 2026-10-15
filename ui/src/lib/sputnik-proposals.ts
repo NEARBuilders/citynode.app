@@ -9,7 +9,7 @@ import { Amount, type FinalExecutionOutcome, Near } from "near-kit";
 
 let _near: Near | null = null;
 
-export function getNear(): Near {
+function getNear(): Near {
   if (!_near) _near = new Near({ network: "mainnet" });
   return _near;
 }

@@ -147,19 +147,10 @@ function OnboardPage() {
     return (
       <AuthPanel
         icon={<CheckCircleIcon />}
-        title="Ready to start building?"
+        title="You're in"
         titleTestId="onboard.heading"
         description={joinedLine}
       >
-        <Button
-          size="lg"
-          className="w-full"
-          nativeButton={false}
-          render={<Link to="/build" />}
-          data-testid="onboard.build-button"
-        >
-          Get build prompts
-        </Button>
         {communityPage && (
           <Button
             variant="outline"

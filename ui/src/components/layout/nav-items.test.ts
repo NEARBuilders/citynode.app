@@ -160,7 +160,7 @@ describe("route-aware filtering", () => {
   });
 
   it("reduces to the public shell for a simple-level child", () => {
-    const simpleChildPaths = new Set(["/", "/about", "/build", "/login", "/skill"]);
+    const simpleChildPaths = new Set(["/", "/about", "/login", "/skill"]);
     const filtered = filterSidebarByRoutes(
       buildNavItems({ isAdmin: true, canCurate: true }),
       simpleChildPaths,

@@ -1,60 +1,6 @@
 import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
-  "build.copyFailed": [
-    "Couldn't copy the prompt",
-    "No se pudo copiar el prompt",
-    "Impossible de copier la consigne",
-    "无法复制提示词",
-  ],
-  "build.copyHint": [
-    "Copied — paste it into your AI agent.",
-    "Copiado: pégalo en tu agente de IA.",
-    "Copié : collez dans votre agent IA.",
-    "已复制，请粘贴到你的 AI 助手。",
-  ],
-  "build.description": [
-    "Copy a prompt into your AI agent and build with NEAR AI Cloud and NEAR Intents.",
-    "Copia un prompt en tu agente de IA y desarrolla con NEAR AI Cloud y NEAR Intents.",
-    "Collez une consigne dans votre agent IA et développez avec NEAR AI Cloud et NEAR Intents.",
-    "将提示词复制到你的 AI 助手，使用 NEAR AI Cloud 和 NEAR Intents 进行开发。",
-  ],
-  "build.intentsDescription": [
-    "Copy a prompt that teaches your agent to build cross-chain swaps with NEAR Intents and confidential AI.",
-    "Copia un prompt para que tu agente desarrolle intercambios entre cadenas con NEAR Intents e IA confidencial.",
-    "Copiez une consigne pour apprendre à votre agent à créer des échanges interchaînes avec NEAR Intents et l'IA confidentielle.",
-    "复制提示词，让你的助手通过 NEAR Intents 和保密 AI 构建跨链兑换。",
-  ],
-  "build.intentsTitle": [
-    "Integrate NEAR Intents",
-    "Integra NEAR Intents",
-    "Intégrer NEAR Intents",
-    "集成 NEAR Intents",
-  ],
-  "build.privateDescription": [
-    "Copy a prompt that teaches your agent to build with verifiable private inference on NEAR AI Cloud.",
-    "Copia un prompt para que tu agente desarrolle con inferencia privada verificable en NEAR AI Cloud.",
-    "Copiez une consigne pour apprendre à votre agent à utiliser l'inférence privée vérifiable sur NEAR AI Cloud.",
-    "复制提示词，让你的助手使用 NEAR AI Cloud 上的可验证私密推理进行开发。",
-  ],
-  "build.privateTitle": [
-    "Integrate NEAR AI Private Inference",
-    "Integra la inferencia privada de NEAR AI",
-    "Intégrer l'inférence privée de NEAR AI",
-    "集成 NEAR AI 私密推理",
-  ],
-  "build.promptCopied": [
-    "Prompt copied — paste it into your AI agent",
-    "Prompt copiado: pégalo en tu agente de IA",
-    "Consigne copiée : collez-la dans votre agent IA",
-    "提示词已复制，请粘贴到你的 AI 助手",
-  ],
-  "build.ready": [
-    "Ready to start building?",
-    "¿Listo para empezar a construir?",
-    "Prêt à commencer à développer ?",
-    "准备好开始开发了吗？",
-  ],
   "community.addLink": ["Add link", "Añadir enlace", "Ajouter un lien", "添加链接"],
   "community.addLocation": [
     "Add a location",

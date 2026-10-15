@@ -296,7 +296,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.docs": ["Docs", "Documentación", "Documentation", "文档"],
   "common.done": ["Done", "Listo", "Terminé", "完成"],
   "common.edit": ["Edit", "Editar", "Modifier", "编辑"],
-  "common.hide": ["Hide", "Ocultar", "Masquer", "隐藏"],
   "common.editNamed": ["Edit {name}", "Editar {name}", "Modifier {name}", "编辑{name}"],
   "common.email": ["Email", "Correo electrónico", "Adresse e-mail", "邮箱"],
   "common.emailExample": [
@@ -348,7 +347,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "common.name": ["Name", "Nombre", "Nom", "名称"],
   "common.network": ["Network", "Red", "Réseau", "网络"],
-  "common.no": ["No", "No", "Non", "否"],
   "common.node": ["Node", "Nodo", "Nœud", "节点"],
   "common.none": ["None", "Ninguno", "Aucun", "无"],
   "common.notConfigured": ["Not configured", "Sin configurar", "Non configuré", "未配置"],
@@ -372,7 +370,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.organization": ["Organization", "Organización", "Organisation", "组织"],
   "common.organizations": ["Organizations", "Organizaciones", "Organisations", "组织"],
   "common.overview": ["Overview", "Resumen", "Vue d'ensemble", "概览"],
-  "common.owner": ["Owner", "Propietario", "Propriétaire", "所有者"],
   "common.parent": ["Parent", "Superior", "Parent", "上级"],
   "common.payload": ["payload", "datos", "données", "数据内容"],
   "common.pendingLower": ["pending", "pendiente", "en attente", "待处理"],
@@ -439,7 +436,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.tenant": ["Tenant", "Sitio", "Site", "站点"],
   "common.title": ["Title", "Título", "Titre", "标题"],
   "common.type": ["Type", "Tipo", "Type", "类型"],
-  "common.unknown": ["Unknown", "Desconocido", "Inconnu", "未知"],
   "common.unnamed": ["Unnamed", "Sin nombre", "Sans nom", "未命名"],
   "common.unverified": ["Unverified", "Sin verificar", "Non vérifié", "未验证"],
   "common.updated": ["Updated", "Actualizado", "Mis à jour", "更新时间"],
@@ -450,7 +446,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.view": ["View", "Ver", "Voir", "查看"],
   "common.wallet": ["Wallet", "Cartera", "Portefeuille", "钱包"],
   "common.working": ["Working…", "Procesando…", "Traitement…", "正在处理…"],
-  "common.yes": ["Yes", "Sí", "Oui", "是"],
   "curators.added": ["Curator added", "Curador añadido", "Modérateur ajouté", "已添加管理员"],
   "curators.description": [
     "People who can feature communities and see engagement.",
@@ -1262,7 +1257,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "nav.admin": ["Admin", "Administración", "Administration", "管理"],
   "nav.apiKeys": ["API keys", "Claves API", "Clés API", "API 密钥"],
-  "nav.build": ["Build", "Construir", "Développer", "开发"],
   "nav.community": ["Community", "Comunidad", "Communauté", "社区"],
   "nav.communitySettings": [
     "Community settings",
@@ -1519,12 +1513,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Trezu n’a aucun compte pour {account}. Déployez-le ou importez-le sur trezu.app.",
     "Trezu 中没有 {account} 的账户。请在 trezu.app 部署或导入该账户。",
   ],
-  "wallet.daoNotMember": [
-    "{account} is not a member of {dao}. Ask an owner to add it.",
-    "{account} no es miembro de {dao}. Pide a un propietario que lo añada.",
-    "{account} n’est pas membre de {dao}. Demandez à un propriétaire de l’ajouter.",
-    "{account} 不是 {dao} 的成员，请联系所有者将其添加。",
-  ],
   "wallet.daoUnavailable": [
     "Trezu is unavailable. Check your connection and try again.",
     "Trezu no está disponible. Comprueba tu conexión e inténtalo de nuevo.",
@@ -1544,7 +1532,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "无法验证 DAO 成员身份。请重试。",
   ],
   "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
-  "wallet.treasury": ["the treasury", "la tesorería", "la trésorerie", "资金库"],
   "workspace.adminOnly": [
     "{area} is only for platform admins.",
     "{area} es solo para administradores de la plataforma.",
