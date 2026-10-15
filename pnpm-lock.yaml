@@ -212,6 +212,9 @@ catalogs:
     '@orpc/contract':
       specifier: 2.0.0-beta.35
       version: 2.0.0-beta.35
+    '@orpc/experimental-effect':
+      specifier: 2.0.0-beta.35
+      version: 2.0.0-beta.35
     '@orpc/openapi':
       specifier: 2.0.0-beta.35
       version: 2.0.0-beta.35
@@ -494,6 +497,9 @@ importers:
       '@orpc/contract':
         specifier: 'catalog:'
         version: 2.0.0-beta.35
+      '@orpc/experimental-effect':
+        specifier: 'catalog:'
+        version: 2.0.0-beta.35(effect@4.0.0-rc.117)
       '@orpc/openapi':
         specifier: 'catalog:'
         version: 2.0.0-beta.35

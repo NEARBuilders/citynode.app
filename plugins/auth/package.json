@@ -26,6 +26,7 @@
     "@lingui/react": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
+    "@orpc/experimental-effect": "catalog:",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/tanstack-query": "catalog:",
