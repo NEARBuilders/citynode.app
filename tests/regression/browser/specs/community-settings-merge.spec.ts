@@ -39,9 +39,13 @@ test.describe("community settings merge", () => {
     const org = await (
       await authFetch("/organization/create", ownerCookie, { name: unique, slug: unique })
     ).json();
-    execFileSync("pnpm", ["exec", "tsx", "tests/regression/lib/approve-test-organizations.ts", org.id], {
-      timeout: FETCH_TIMEOUT_MS,
-    });
+    execFileSync(
+      "pnpm",
+      ["exec", "tsx", "tests/regression/lib/approve-test-organizations.ts", org.id],
+      {
+        timeout: FETCH_TIMEOUT_MS,
+      },
+    );
     const tenant = await seedTenant({
       subdomain: unique,
       name: `Settings ${unique}`,

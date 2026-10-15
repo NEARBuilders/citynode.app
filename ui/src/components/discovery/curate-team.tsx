@@ -79,11 +79,13 @@ export function CurateTeam({ curators }: { curators: string[] }) {
       const { data } = await auth.admin.listUsers({
         query: { searchValue: term, searchField: "name", searchOperator: "contains", limit: 5 },
       });
-      return (data?.users ?? []).map((user) => ({
-        id: user.id,
-        name: user.name,
-        image: user.image ?? null,
-      }));
+      return (data?.users ?? []).map(
+        (user: { id: string; name: string; image?: string | null }) => ({
+          id: user.id,
+          name: user.name,
+          image: user.image ?? null,
+        }),
+      );
     },
   });
 

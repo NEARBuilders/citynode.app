@@ -41,7 +41,7 @@ async function loadPlugins(config: ResolvedApp): Promise<WebPluginModule[]> {
   return Promise.all(
     config.ui.map(async (u) => {
       const mod = (await loadRemote<any>(`${u.name}/tree`)) ?? {};
-      const module = mod?.default && mod.default.tree ? mod.default : mod;
+      const module = mod?.default?.tree ? mod.default : mod;
       console.log(`[host] loaded ${u.ns} tree from ${u.name}`, {
         hasTree: module?.tree !== undefined,
       });

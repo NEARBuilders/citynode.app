@@ -1,7 +1,7 @@
+import { createRequire } from "node:module";
+import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
-import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
-import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 
@@ -43,9 +43,30 @@ export default defineConfig({
           runtimePlugins: [require.resolve("@module-federation/node/runtimePlugin")],
           library: { type: "commonjs-module" },
           shared: {
-            react: { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
-            "react-dom": { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
-            "@tanstack/react-router": { version: "1.170.32", requiredVersion: "1.170.32", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
+            react: {
+              version: "19.2.4",
+              requiredVersion: "19.2.4",
+              singleton: true,
+              strictVersion: true,
+              eager: false,
+              shareScope: "default",
+            },
+            "react-dom": {
+              version: "19.2.4",
+              requiredVersion: "19.2.4",
+              singleton: true,
+              strictVersion: true,
+              eager: false,
+              shareScope: "default",
+            },
+            "@tanstack/react-router": {
+              version: "1.170.32",
+              requiredVersion: "1.170.32",
+              singleton: true,
+              strictVersion: true,
+              eager: false,
+              shareScope: "default",
+            },
           },
         }),
       ],

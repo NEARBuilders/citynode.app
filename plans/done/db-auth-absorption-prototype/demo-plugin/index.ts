@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { Effect, Scope } from "effect";
+import { fileURLToPath } from "node:url";
+import { Effect, type Scope } from "effect";
+import { type DatabaseError, DatabaseLive, DatabaseService } from "../facade/db";
 import { buildScoped } from "../facade/effect-helpers";
-import { DatabaseLive, DatabaseService, type DatabaseError } from "../facade/db";
 import { createNotesService, type NotesService } from "./service";
 
 export interface PluginInitializeInput {

@@ -15,7 +15,7 @@ async function main() {
   for (const name of names) {
     console.log(`\n=== loading ${name}/tree over MF ===`);
     const mod = (await mf.loadRemote<any>(`${name}/tree`)) ?? {};
-    const module = mod.default && mod.default.tree ? mod.default : mod;
+    const module = mod.default?.tree ? mod.default : mod;
     console.log("module exports:", Object.keys(module));
     console.log("has tree:", module.tree !== undefined);
     const children = (module.tree?.children ?? []) as Array<{ options?: { id?: string } }>;

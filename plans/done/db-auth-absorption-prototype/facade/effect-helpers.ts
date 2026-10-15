@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Scope } from "effect";
+import { Context, Effect, Layer, type Scope } from "effect";
 
 export const buildScopedContext = <A, E, R>(
   layer: Layer.Layer<A, E, R>,

@@ -10,8 +10,12 @@
 import { MOUNT_REGISTRY_VERSION } from "./mount-registry";
 
 export type RemoteSource =
-  | { kind: "local"; /** path relative to the prototype root */ path: string }
-  | { kind: "remote"; mfName: string; /** remoteEntry.server.js URL of the deployed SSR bundle */ url: string };
+  | { kind: "local" /** path relative to the prototype root */; path: string }
+  | {
+      kind: "remote";
+      mfName: string /** remoteEntry.server.js URL of the deployed SSR bundle */;
+      url: string;
+    };
 
 export interface PluginRef {
   key: string;
@@ -50,7 +54,10 @@ export function App(input: AppInput): AppInput {
 
 export function Plugin<K extends keyof KnownPlugins & string>(
   name: K,
-): { local: (path: string) => PluginRefInput; remote: (mfName: string, url: string) => PluginRefInput } {
+): {
+  local: (path: string) => PluginRefInput;
+  remote: (mfName: string, url: string) => PluginRefInput;
+} {
   return {
     local: (path: string) => ({ name, source: { kind: "local", path } }),
     remote: (mfName: string, url: string) => ({ name, source: { kind: "remote", mfName, url } }),

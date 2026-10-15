@@ -8,9 +8,9 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { constructTree, type ConstructedTree, type HostContext } from "./construct";
-import { resolveAppOrThrow, diskResolver, renderPath } from "./harness";
 import { APPS, type AppKey } from "../../apps";
+import { type ConstructedTree, constructTree, type HostContext } from "./construct";
+import { diskResolver, renderPath, resolveAppOrThrow } from "./harness";
 
 const protoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -34,7 +34,9 @@ if (Object.values(app.plugins).some((p) => p.source.kind === "remote")) {
   process.exit(1);
 }
 
-console.log(`[start] booting from apps.ts → app "${appKey}" (plugins: ${Object.keys(app.plugins).join(", ")})`);
+console.log(
+  `[start] booting from apps.ts → app "${appKey}" (plugins: ${Object.keys(app.plugins).join(", ")})`,
+);
 const tree: ConstructedTree = await constructTree(app, diskResolver(protoRoot));
 console.log(`[start] composed ${tree.manifests.length} plugin(s), digest=${tree.digest}`);
 

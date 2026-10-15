@@ -1,22 +1,18 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
 import { Effect, Exit, Scope } from "effect";
+import { describe, expect, it } from "vitest";
+import { notesContract } from "../demo-plugin/contract";
+import { initialize } from "../demo-plugin/index";
 import { createAuthMiddleware } from "../facade/auth";
-import {
-  createDatabaseDriver,
-  runMigrations,
-  type Migration,
-} from "../facade/db";
+import { createDatabaseDriver, type Migration, runMigrations } from "../facade/db";
 import {
   getDatabaseUrlSecretName,
   getMigrationStorage,
   pluginMigrationSlug,
   pluginSchemaName,
 } from "../facade/slug";
-import { initialize } from "../demo-plugin/index";
-import { notesContract } from "../demo-plugin/contract";
 
 const PROTOTYPE_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -39,9 +35,7 @@ describe("slug semantics (D1)", () => {
   });
 
   it("derives secret names and journal storage from the same slug", () => {
-    expect(getDatabaseUrlSecretName(pluginMigrationSlug("demo-plugin"))).toBe(
-      "DEMO_DATABASE_URL",
-    );
+    expect(getDatabaseUrlSecretName(pluginMigrationSlug("demo-plugin"))).toBe("DEMO_DATABASE_URL");
     expect(getMigrationStorage(pluginMigrationSlug("demo-plugin"))).toEqual({
       schema: "drizzle",
       table: "__drizzle_migrations",
@@ -75,9 +69,7 @@ describe("demo plugin initialize (R channel + schema isolation)", () => {
       "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'plugin_demo'",
     );
     expect(schemas.rows).toHaveLength(1);
-    const journal = await driver.client.query(
-      "SELECT hash FROM plugin_demo.__drizzle_migrations",
-    );
+    const journal = await driver.client.query("SELECT hash FROM plugin_demo.__drizzle_migrations");
     expect(journal.rows.map((row) => row.hash)).toEqual(["0000_init"]);
     await driver.client.close?.();
   });
@@ -95,9 +87,7 @@ describe("demo plugin initialize (R channel + schema isolation)", () => {
     expect(driver.schemaName).toBeUndefined();
     const report = await runMigrations(driver, loadPluginMigrations());
     expect(report.applied).toEqual(["0000_init"]);
-    const journal = await driver.client.query(
-      "SELECT hash FROM public.__drizzle_migrations",
-    );
+    const journal = await driver.client.query("SELECT hash FROM public.__drizzle_migrations");
     expect(journal.rows).toHaveLength(1);
     await driver.client.close?.();
   });
@@ -130,13 +120,13 @@ describe("auth middleware facade", () => {
 
   it("requireAuth rejects without a user", async () => {
     const builder = makeBuilder();
-    const { requireAuth } = createAuthMiddleware<DemoAuthContext>(builder);
+    createAuthMiddleware<DemoAuthContext>(builder);
     await expect(builder.run(0, {})).rejects.toThrow("Authentication required");
   });
 
   it("requireAuth narrows the context to an authenticated user", async () => {
     const builder = makeBuilder();
-    const { requireAuth } = createAuthMiddleware<DemoAuthContext>(builder);
+    createAuthMiddleware<DemoAuthContext>(builder);
     const result = (await builder.run(0, {
       userId: "u1",
       user: { id: "u1", name: "Ada" },
@@ -147,7 +137,7 @@ describe("auth middleware facade", () => {
 
   it("requireAuthOrApiKey passes with only an API key", async () => {
     const builder = makeBuilder();
-    const { requireAuthOrApiKey } = createAuthMiddleware<DemoAuthContext>(builder);
+    createAuthMiddleware<DemoAuthContext>(builder);
     const result = (await builder.run(1, { apiKey: { id: "k1" } })) as {
       context: { apiKey?: { id: string } };
     };

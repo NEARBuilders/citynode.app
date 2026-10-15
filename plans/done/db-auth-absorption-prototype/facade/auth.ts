@@ -31,12 +31,14 @@ export function createAuthMiddleware<
   TAuthContext extends AuthContextShape = AuthContextShape,
   TOrgMetaSchema extends z.ZodType | undefined = undefined,
 >(builder: MiddlewareLike, options?: { orgMetaSchema?: TOrgMetaSchema }) {
-  const requireAuth = builder.middleware(async ({ context, next }: { context: TAuthContext; next: any }) => {
-    if (!context.user || !context.userId) {
-      throw new Error("UNAUTHORIZED: Authentication required");
-    }
-    return next({ context: { userId: context.userId, user: context.user } });
-  });
+  const requireAuth = builder.middleware(
+    async ({ context, next }: { context: TAuthContext; next: any }) => {
+      if (!context.user || !context.userId) {
+        throw new Error("UNAUTHORIZED: Authentication required");
+      }
+      return next({ context: { userId: context.userId, user: context.user } });
+    },
+  );
 
   const requireAuthOrApiKey = builder.middleware(
     async ({ context, next }: { context: TAuthContext; next: any }) => {

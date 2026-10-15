@@ -3,20 +3,25 @@
  * One implementation, consumed by verify.tsx (disk gates), start.tsx
  * (dev boot) and server.tsx (bundled MF boot).
  */
-import path from "node:path";
+
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { createRequestHandler, renderRouterToStream, RouterServer } from "@tanstack/react-router/ssr/server";
 import {
-  PluginManifestSchema,
-  resolveApp,
   type AppInput,
   type PluginManifest,
+  PluginManifestSchema,
   type PluginRef,
   type ResolvedApp,
+  resolveApp,
 } from "@manifest-compose/shared";
-import { constructTree, type ConstructedTree, type HostContext, type PluginResolver } from "./construct";
+import { createMemoryHistory, createRouter } from "@tanstack/react-router";
+import {
+  createRequestHandler,
+  RouterServer,
+  renderRouterToStream,
+} from "@tanstack/react-router/ssr/server";
+import type { ConstructedTree, HostContext, PluginResolver } from "./construct";
 
 export const ANON: HostContext = {};
 export const ADMIN: HostContext = { user: { id: "u1", name: "Ada", isAdmin: true } };
@@ -82,7 +87,9 @@ export function diskResolver(protoRoot: string): PluginResolver {
       );
       manifestCache.set(dir, manifest);
     }
-    const routeConfig = (await import(pathToFileURL(path.join(dir, "src/routeConfig.gen.ts")).href)) as any;
+    const routeConfig = (await import(
+      pathToFileURL(path.join(dir, "src/routeConfig.gen.ts")).href
+    )) as any;
     return { key: ref.key, mfName: ref.key, manifest, routeConfig };
   };
 }
@@ -96,17 +103,16 @@ export interface HealthCase {
   status?: number;
 }
 
-export async function bootHealth(
-  tree: ConstructedTree,
-  cases: HealthCase[],
-): Promise<number> {
+export async function bootHealth(tree: ConstructedTree, cases: HealthCase[]): Promise<number> {
   let failures = 0;
   for (const c of cases) {
     try {
       const r = await readResponse(await renderPath(c.path, tree, c.ctx));
       const ok = c.expect ? clean(r.html).includes(c.expect) : r.status === c.status;
       if (!ok) failures++;
-      console.log(`  ${ok ? "ok  " : "FAIL"}  ${c.path}  ${c.expect ? `contains "${c.expect}"` : `→ ${r.status} ${r.location ?? ""}`}`);
+      console.log(
+        `  ${ok ? "ok  " : "FAIL"}  ${c.path}  ${c.expect ? `contains "${c.expect}"` : `→ ${r.status} ${r.location ?? ""}`}`,
+      );
     } catch (err) {
       failures++;
       console.log(`  FAIL  ${c.path}  threw: ${(err as Error).message}`);

@@ -1,6 +1,5 @@
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { AnyRoute } from "@tanstack/react-router";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { composeApp, type WebPluginModule } from "./compose";
 

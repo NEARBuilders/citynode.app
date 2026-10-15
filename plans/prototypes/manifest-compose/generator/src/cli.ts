@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 /**
  * manifest-gen — the load-bearing generator step (ADR 0008 §2).
  *
@@ -17,18 +18,13 @@
  * a hard generation error (no silent skip).
  */
 import path from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import {
-  Generator,
-  getConfig,
-} from "@tanstack/router-generator";
-import {
-  PluginManifestSchema,
-  MOUNT_REGISTRY_VERSION,
-  resolveMountSegment,
   type PluginManifest,
+  PluginManifestSchema,
   type RouteRecord,
+  resolveMountSegment,
 } from "@manifest-compose/shared";
+import { Generator, getConfig } from "@tanstack/router-generator";
 
 interface GeneratorOpts {
   /** remote workspace root, e.g. ../remote-auth */
@@ -38,7 +34,7 @@ interface GeneratorOpts {
 
 const MANIFEST_VERSION = 1;
 
-async function exists(p: string): Promise<boolean> {
+async function _exists(p: string): Promise<boolean> {
   return await readFile(p)
     .then(() => true)
     .catch(() => false);
@@ -46,7 +42,7 @@ async function exists(p: string): Promise<boolean> {
 
 export async function generateForRemote({ remoteRoot, pluginName }: GeneratorOpts) {
   const srcDir = path.join(remoteRoot, "src");
-  const routesDir = path.join(srcDir, "routes");
+  const _routesDir = path.join(srcDir, "routes");
 
   const generator = new Generator({
     config: getConfig(
@@ -83,7 +79,10 @@ export async function generateForRemote({ remoteRoot, pluginName }: GeneratorOpt
 
     if (node._fsRouteType === "__root") {
       continue; // root meta rides routeConfig, not a route record
-    } else if (isRootLevel && (node._fsRouteType === "pathless_layout" || node._fsRouteType === "layout")) {
+    } else if (
+      isRootLevel &&
+      (node._fsRouteType === "pathless_layout" || node._fsRouteType === "layout")
+    ) {
       // mount declaration: last `_`-prefixed segment of the id
       const id = idOf(node);
       const seg = id.split("/").at(-1) ?? "";
@@ -101,7 +100,11 @@ export async function generateForRemote({ remoteRoot, pluginName }: GeneratorOpt
       const id = idOf(node);
       record = {
         id,
-        path: isIndex ? "/" : node.cleanedPath === "/" || node.cleanedPath === "" ? undefined : node.cleanedPath,
+        path: isIndex
+          ? "/"
+          : node.cleanedPath === "/" || node.cleanedPath === ""
+            ? undefined
+            : node.cleanedPath,
         isLayout: node._fsRouteType === "pathless_layout" || node._fsRouteType === "layout",
         isIndex,
         file: node.filePath,
@@ -122,15 +125,13 @@ export async function generateForRemote({ remoteRoot, pluginName }: GeneratorOpt
   });
 
   await mkdir(srcDir, { recursive: true });
-  await writeFile(
-    path.join(srcDir, "manifest.gen.json"),
-    JSON.stringify(manifest, null, 2) + "\n",
-  );
+  await writeFile(path.join(srcDir, "manifest.gen.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
   // route-config: dynamic import per route file (per-route chunks), options
   // destructured from the route module's named `Route` export.
   // node.filePath is routes-directory-relative (e.g. "_public/login.tsx").
-  const importPath = (file: string) => "./routes/" + file.replace(/\.tsx$/, "").replace(/\.ts$/, "");
+  const importPath = (file: string) =>
+    `./routes/${file.replace(/\.tsx$/, "").replace(/\.ts$/, "")}`;
   const loaderLines = routes
     .filter((r) => r.file)
     .map((r) => {

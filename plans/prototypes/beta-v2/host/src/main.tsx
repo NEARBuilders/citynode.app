@@ -19,7 +19,7 @@ async function loadPlugins(): Promise<WebPluginModule[]> {
   const results = await Promise.all(
     REMOTES.map(async (remote) => {
       const mod = (await loadRemote<any>(`${remote.name}/tree`)) ?? {};
-      const module = mod?.default && mod.default.tree ? mod.default : mod;
+      const module = mod?.default?.tree ? mod.default : mod;
       console.log(`[host] loaded ${remote.name}:`, {
         exports: typeof module === "object" && module ? Object.keys(module) : typeof module,
         hasTree: module?.tree !== undefined,

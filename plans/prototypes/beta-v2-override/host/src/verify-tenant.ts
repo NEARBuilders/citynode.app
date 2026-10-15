@@ -26,7 +26,7 @@ async function main() {
 
   const dash = await match(composed.routeTree, "/dashboard");
   const revenue = await match(composed.routeTree, "/dashboard/revenue");
-  const home = await match(composed.routeTree, "/");
+  const _home = await match(composed.routeTree, "/");
   const dashHtml = await renderRoute(composed.routeTree, "/dashboard", ctx);
   const revenueHtml = await renderRoute(composed.routeTree, "/dashboard/revenue", ctx);
   const homeHtml = await renderRoute(composed.routeTree, "/", ctx);

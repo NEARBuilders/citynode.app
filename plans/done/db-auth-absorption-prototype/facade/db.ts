@@ -28,8 +28,7 @@ export interface Migration {
 
 async function createPgliteDriver(url: string, schemaName: string | undefined): Promise<Driver> {
   const { PGlite } = await import("@electric-sql/pglite");
-  const client =
-    url === "pglite://:memory:" || url === ":memory:" ? new PGlite() : new PGlite(url);
+  const client = url === "pglite://:memory:" || url === ":memory:" ? new PGlite() : new PGlite(url);
   if (schemaName) {
     await client.exec(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
     await client.exec(`SET search_path TO ${schemaName}, public`);
@@ -59,10 +58,7 @@ async function createPostgresDriver(url: string, schemaName: string | undefined)
   };
 }
 
-export async function createDatabaseDriver(
-  url: string,
-  schemaName?: string,
-): Promise<Driver> {
+export async function createDatabaseDriver(url: string, schemaName?: string): Promise<Driver> {
   if (url.startsWith("pglite:") || url === ":memory:") {
     return createPgliteDriver(url, schemaName);
   }
@@ -80,8 +76,8 @@ export async function runMigrations(
     `CREATE TABLE IF NOT EXISTS ${journalSchema}.__drizzle_migrations (hash text PRIMARY KEY, created_at bigint)`,
   );
   const existing = new Set(
-    (await client.query(`SELECT hash FROM ${journalSchema}.__drizzle_migrations`)).rows.map(
-      (row) => String(row.hash),
+    (await client.query(`SELECT hash FROM ${journalSchema}.__drizzle_migrations`)).rows.map((row) =>
+      String(row.hash),
     ),
   );
   const applied: string[] = [];

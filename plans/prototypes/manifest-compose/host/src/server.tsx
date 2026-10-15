@@ -9,15 +9,24 @@
  * Build:  bunx rsbuild build            (from host/)
  * Run:    APP=base|tenant PORT=3000 node dist/static/js/index.js
  */
-import path from "node:path";
+
 import { existsSync, readFileSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
-import { createMemoryHistory, createRouter } from "@tanstack/react-router";
+import path from "node:path";
+import {
+  type PluginManifest,
+  PluginManifestSchema,
+  type PluginRef,
+} from "@manifest-compose/shared";
 import { loadRemote, registerRemotes } from "@module-federation/enhanced/runtime";
-import { PluginManifestSchema, type PluginManifest, type PluginRef } from "@manifest-compose/shared";
-import { constructTree, type ConstructedTree, type HostContext, type PluginResolver } from "./construct";
-import { resolveAppOrThrow, renderPath, ANON, ADMIN, bootHealth } from "./harness";
 import { APPS, type AppKey } from "../../apps";
+import {
+  type ConstructedTree,
+  constructTree,
+  type HostContext,
+  type PluginResolver,
+} from "./construct";
+import { ADMIN, ANON, bootHealth, renderPath, resolveAppOrThrow } from "./harness";
 
 /**
  * The deploy map — the publish write-back stand-in (plan 028: local refs
@@ -26,13 +35,24 @@ import { APPS, type AppKey } from "../../apps";
  */
 const DEPLOY_MAP: Record<string, { mfName: string; ssrUrl: string }> = {
   "./remote-auth": { mfName: "auth", ssrUrl: "http://localhost:4001/ssr/remoteEntry.server.js" },
-  "./remote-landing": { mfName: "landing", ssrUrl: "http://localhost:4002/ssr/remoteEntry.server.js" },
-  "./remote-landing-tenant": { mfName: "landingTenant", ssrUrl: "http://localhost:4003/ssr/remoteEntry.server.js" },
+  "./remote-landing": {
+    mfName: "landing",
+    ssrUrl: "http://localhost:4002/ssr/remoteEntry.server.js",
+  },
+  "./remote-landing-tenant": {
+    mfName: "landingTenant",
+    ssrUrl: "http://localhost:4003/ssr/remoteEntry.server.js",
+  },
 };
 
-function deployedSource(ref: PluginRef): { mfName: string; ssrEntryUrl: string; webEntryUrl: string } {
+function deployedSource(ref: PluginRef): {
+  mfName: string;
+  ssrEntryUrl: string;
+  webEntryUrl: string;
+} {
   const deployed = DEPLOY_MAP[ref.source.path];
-  if (!deployed) throw new Error(`no deployed URL for local ref "${ref.source.path}" — add it to DEPLOY_MAP`);
+  if (!deployed)
+    throw new Error(`no deployed URL for local ref "${ref.source.path}" — add it to DEPLOY_MAP`);
   return {
     mfName: deployed.mfName,
     ssrEntryUrl: deployed.ssrUrl,
@@ -61,7 +81,9 @@ const manifestCache = new Map<string, PluginManifest>();
 async function fetchManifest(mfName: string, ssrEntryUrl: string): Promise<PluginManifest> {
   const cached = manifestCache.get(mfName);
   if (cached) return cached;
-  const res = await fetch(ssrEntryUrl.replace(/\/remoteEntry\.server\.js$/, "") + "/manifest.gen.json");
+  const res = await fetch(
+    `${ssrEntryUrl.replace(/\/remoteEntry\.server\.js$/, "")}/manifest.gen.json`,
+  );
   if (!res.ok) throw new Error(`manifest fetch failed for ${mfName}: ${res.status}`);
   const manifest = PluginManifestSchema.parse(await res.json());
   manifestCache.set(mfName, manifest);
@@ -89,7 +111,7 @@ async function composedTree(appKey: AppKey): Promise<ConstructedTree> {
 }
 
 function shell(tree: ConstructedTree, appKey: AppKey, html: string): string {
-  const title = tree.headMetas.find((m) => m?.title)?.title ?? "app";
+  const _title = tree.headMetas.find((m) => m?.title)?.title ?? "app";
   const compose = {
     app: appKey,
     digest: tree.digest,
@@ -99,7 +121,9 @@ function shell(tree: ConstructedTree, appKey: AppKey, html: string): string {
   };
   return `<!DOCTYPE html><html><head><meta charset="utf-8">${tree.headMetas
     .map((m) => (m?.title ? `<title>${m.title}</title>` : ""))
-    .join("")}</head><body><div id="root">${html}</div><script>window.__COMPOSE__ = ${JSON.stringify(compose)};</script><script src="/__host/static/js/client.js" defer></script></body></html>`;
+    .join(
+      "",
+    )}</head><body><div id="root">${html}</div><script>window.__COMPOSE__ = ${JSON.stringify(compose)};</script><script src="/__host/static/js/client.js" defer></script></body></html>`;
 }
 
 // ---- fail-loud boot health gate (ADR 0007 §2), then serve ----
@@ -107,7 +131,11 @@ const port = Number(process.env.PORT || 3000);
 const appKey = (process.env.APP || "base") as AppKey;
 
 const CASES = [
-  { path: "/", ctx: ANON, expect: appKey === "tenant" ? "TENANT landing plugin" : "Landing index — BASE landing plugin" },
+  {
+    path: "/",
+    ctx: ANON,
+    expect: appKey === "tenant" ? "TENANT landing plugin" : "Landing index — BASE landing plugin",
+  },
   { path: "/login", ctx: ANON, expect: "Login (auth plugin)" },
   { path: "/settings", ctx: ANON, status: 307 },
   { path: "/settings/api-keys", ctx: ADMIN, expect: "edk_demo" },
@@ -127,7 +155,9 @@ const composedRemotes = [
 ];
 
 const tree = await composedTree(appKey);
-console.log(`[server] app="${appKey}" composed ${tree.manifests.length} plugin(s), digest=${tree.digest}`);
+console.log(
+  `[server] app="${appKey}" composed ${tree.manifests.length} plugin(s), digest=${tree.digest}`,
+);
 
 const failures = await bootHealth(tree, CASES);
 if (failures > 0) {
@@ -146,13 +176,17 @@ if (guardEntry) {
   try {
     const mod = await loadRemote("badreact/routeConfig", { from: "build" });
     if (mod) {
-      console.error("[server] GUARD PROBE FAILED — mismatched-version remote LOADED; strict shared guard did not fire");
+      console.error(
+        "[server] GUARD PROBE FAILED — mismatched-version remote LOADED; strict shared guard did not fire",
+      );
       process.exit(1);
     }
   } catch (err) {
     const msg = (err as Error).message ?? String(err);
     if (!/version|strict|19\.3\.0|requiredVersion/i.test(msg)) {
-      console.error(`[server] GUARD PROBE FAILED — rejected for the WRONG reason (must be a version signature): ${msg.slice(0, 160)}`);
+      console.error(
+        `[server] GUARD PROBE FAILED — rejected for the WRONG reason (must be a version signature): ${msg.slice(0, 160)}`,
+      );
       process.exit(1);
     }
     console.log(`[server] guard probe passed — mismatched remote rejected: ${msg.slice(0, 120)}`);
@@ -216,7 +250,9 @@ httpServer.listen(port, async () => {
     if (!ok) throw new Error(`self-probe failed: / ${home.status}, /settings ${gated.status}`);
     console.log(`[server] live self-probe passed — serving http://localhost:${port} — ^C to stop`);
   } catch (err) {
-    console.error(`[server] LIVE SELF-PROBE FAILED: ${(err as Error).message} — unhealthy (ADR 0007 §2)`);
+    console.error(
+      `[server] LIVE SELF-PROBE FAILED: ${(err as Error).message} — unhealthy (ADR 0007 §2)`,
+    );
     process.exit(1);
   }
 });

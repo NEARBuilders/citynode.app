@@ -11,11 +11,12 @@
  * — one React/router across host client and containers by share-scope
  * negotiation, no import map, no hand-built vendors.
  */
+
+import { type PluginManifest, PluginManifestSchema } from "@manifest-compose/shared";
+import { loadRemote, registerRemotes } from "@module-federation/enhanced/runtime";
 import { createBrowserHistory, createRouter } from "@tanstack/react-router";
 import { RouterClient } from "@tanstack/react-router/ssr/client";
 import { hydrateRoot } from "react-dom/client";
-import { loadRemote, registerRemotes } from "@module-federation/enhanced/runtime";
-import { PluginManifestSchema, type PluginManifest } from "@manifest-compose/shared";
 import { constructTree, type HostContext, type RouteOptionsModule } from "./construct";
 
 interface ComposePayload {
@@ -38,7 +39,8 @@ declare global {
   }
 }
 
-const PROGRESS = (window.__CLIENT_PROGRESS__ = window.__CLIENT_PROGRESS__ ?? []);
+window.__CLIENT_PROGRESS__ = window.__CLIENT_PROGRESS__ ?? [];
+const PROGRESS = window.__CLIENT_PROGRESS__;
 const mark = (message: string) => {
   PROGRESS.push(message);
   console.log(`[client] ${message}`);
@@ -76,7 +78,10 @@ try {
     {
       name: cfg.app,
       plugins: Object.fromEntries(
-        cfg.manifests.map((m) => [m.name, { key: m.name, source: { kind: "remote", mfName: m.name, url: "" } }]),
+        cfg.manifests.map((m) => [
+          m.name,
+          { key: m.name, source: { kind: "remote", mfName: m.name, url: "" } },
+        ]),
       ),
     },
     async (ref) => {
@@ -96,7 +101,9 @@ try {
   mark(`tree constructed, digest ${tree.digest}, nav ${tree.nav.length}`);
 
   if (tree.digest !== cfg.digest) {
-    mark(`DIGEST PARITY FAILURE server=${cfg.digest} client=${tree.digest} — falling back to full CSR re-render`);
+    mark(
+      `DIGEST PARITY FAILURE server=${cfg.digest} client=${tree.digest} — falling back to full CSR re-render`,
+    );
   }
 
   const session: HostContext = {}; // prototype: anon session; production forwards the request session

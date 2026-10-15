@@ -14,7 +14,10 @@ async function connect(wsUrl: string): Promise<CDP> {
     socket.addEventListener("error", (e) => reject(e as unknown as Error));
   });
   let id = 0;
-  const pending = new Map<number, { resolve: Function; reject: Function }>();
+  const pending = new Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+  >();
   socket.addEventListener("message", (ev) => {
     const msg = JSON.parse(String(ev.data));
     if (msg.id && pending.has(msg.id)) {
@@ -44,7 +47,7 @@ async function main() {
       `--remote-debugging-port=${port}`,
       "--no-first-run",
       "--disable-gpu",
-      "--user-data-dir=/tmp/mf-chrome-profile-" + Date.now(),
+      `--user-data-dir=/tmp/mf-chrome-profile-${Date.now()}`,
       "about:blank",
     ],
     { stdio: "ignore" },
@@ -52,7 +55,7 @@ async function main() {
 
   try {
     const versionUrl = `http://localhost:${port}/json/version`;
-    let version;
+    let version: unknown;
     for (let i = 0; i < 40; i++) {
       try {
         version = await (await fetch(versionUrl)).json();
@@ -158,7 +161,7 @@ async function main() {
     console.log("\n=== cross-remote route navigation ===");
     for (const [url, expected] of routes) {
       // plain anchor navigation; host server serves SPA fallback
-      await cdp.send("Page.navigate", { url: "http://localhost:3000" + url });
+      await cdp.send("Page.navigate", { url: `http://localhost:3000${url}` });
       await new Promise((r) => setTimeout(r, 1200));
       const body = await cdp.send("Runtime.evaluate", {
         expression: "document.body.innerText",

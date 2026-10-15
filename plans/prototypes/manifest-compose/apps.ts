@@ -1,4 +1,4 @@
-import { App, Plugin, type AppInput } from "@manifest-compose/shared";
+import { App, type AppInput, Plugin } from "@manifest-compose/shared";
 
 /**
  * The authored app (plan 028's contract, prototype slice): pure data, the

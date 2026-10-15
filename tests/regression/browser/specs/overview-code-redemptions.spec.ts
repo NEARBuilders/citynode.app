@@ -30,9 +30,13 @@ async function seedCommunity() {
       slug: `redemptions-${suffix}`,
     })
   ).json();
-  execFileSync("pnpm", ["exec", "tsx", "tests/regression/lib/approve-test-organizations.ts", organization.id], {
-    timeout: FETCH_TIMEOUT_MS,
-  });
+  execFileSync(
+    "pnpm",
+    ["exec", "tsx", "tests/regression/lib/approve-test-organizations.ts", organization.id],
+    {
+      timeout: FETCH_TIMEOUT_MS,
+    },
+  );
   const tenant = await seedTenant({
     subdomain: `redemptions-${suffix}`,
     name: `Redemptions ${suffix}`,

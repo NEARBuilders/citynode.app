@@ -26,7 +26,7 @@ export async function loadApiClient(config: ResolvedApp): Promise<ApiClient> {
   const client: Record<string, unknown> = {};
   for (const ref of config.api) {
     const mod = (await loadRemote<any>(`${ref.name}/${ref.moduleKey}`)) ?? {};
-    const module = mod?.default && mod.default[ref.ns] ? mod.default : mod;
+    const module = mod?.default?.[ref.ns] ? mod.default : mod;
     client[ref.ns] = module;
   }
   return client as unknown as ApiClient;

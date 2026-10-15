@@ -9,12 +9,7 @@
  * digest deliberately excludes URLs/paths so the same effective composition
  * digests identically on both paths (hydration parity, gate 7).
  */
-import {
-  createRootRoute,
-  createRoute,
-  Outlet,
-  redirect,
-} from "@tanstack/react-router";
+
 import {
   digestOf,
   MOUNT_REGISTRY,
@@ -23,6 +18,7 @@ import {
   type ResolvedApp,
   type RouteOptionsBundle,
 } from "@manifest-compose/shared";
+import { createRootRoute, createRoute, Outlet, redirect } from "@tanstack/react-router";
 
 export interface HostContext {
   user?: { id: string; name: string; isAdmin?: boolean };
@@ -81,7 +77,10 @@ function joinPath(a: string | undefined, b: string | undefined): string {
   return `${left}/${right}`;
 }
 
-export async function constructTree(app: ResolvedApp, resolver: PluginResolver): Promise<ConstructedTree> {
+export async function constructTree(
+  app: ResolvedApp,
+  resolver: PluginResolver,
+): Promise<ConstructedTree> {
   const keys = Object.keys(app.plugins).sort();
   const resolved: ResolvedPlugin[] = [];
   for (const key of keys) {
@@ -92,13 +91,13 @@ export async function constructTree(app: ResolvedApp, resolver: PluginResolver):
     component: () => <Outlet />,
   });
 
-  const headMetas = resolved
-    .map((p) => p.routeConfig.rootMeta?.head?.({})?.meta ?? [])
-    .flat();
+  const headMetas = resolved.flatMap((p) => p.routeConfig.rootMeta?.head?.({})?.meta ?? []);
   rootRoute.options.head = () => ({ meta: headMetas });
 
   const usedMounts = new Set<string>(
-    resolved.flatMap((p) => p.manifest.routes.map((r) => r.mount).filter((m): m is string => Boolean(m))),
+    resolved.flatMap((p) =>
+      p.manifest.routes.map((r) => r.mount).filter((m): m is string => Boolean(m)),
+    ),
   );
   const mountRoutes = new Map<string, any>();
   for (const [mountId, def] of Object.entries(MOUNT_REGISTRY)) {
@@ -145,9 +144,14 @@ export async function constructTree(app: ResolvedApp, resolver: PluginResolver):
         progressed = true;
 
         const opts = optionsById.get(record.id)!;
-        const parentRoute: any = record.parentId ? byId.get(record.parentId)!.route : mountRoutes.get(record.mount!)!;
+        const parentRoute: any = record.parentId
+          ? byId.get(record.parentId)!.route
+          : mountRoutes.get(record.mount!)!;
         const parentFullPath = record.parentId ? fullPathById.get(record.parentId)! : "";
-        const fullPath = joinPath(parentFullPath, record.path ?? (record.isIndex ? "/" : undefined));
+        const fullPath = joinPath(
+          parentFullPath,
+          record.path ?? (record.isIndex ? "/" : undefined),
+        );
 
         const route = record.isLayout
           ? createRoute({

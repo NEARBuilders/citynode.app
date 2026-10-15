@@ -17,9 +17,30 @@ export default defineConfig({
           filename: "remoteEntry.js",
           exposes: { "./routeConfig": "./src/routeConfig.gen.ts" },
           shared: {
-            react: { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
-            "react-dom": { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
-            "@tanstack/react-router": { version: "1.170.32", requiredVersion: "1.170.32", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
+            react: {
+              version: "19.2.4",
+              requiredVersion: "19.2.4",
+              singleton: true,
+              strictVersion: true,
+              eager: false,
+              shareScope: "default",
+            },
+            "react-dom": {
+              version: "19.2.4",
+              requiredVersion: "19.2.4",
+              singleton: true,
+              strictVersion: true,
+              eager: false,
+              shareScope: "default",
+            },
+            "@tanstack/react-router": {
+              version: "1.170.32",
+              requiredVersion: "1.170.32",
+              singleton: true,
+              strictVersion: true,
+              eager: false,
+              shareScope: "default",
+            },
           },
         }),
       ],
@@ -32,7 +53,9 @@ export default defineConfig({
           {
             name: "auth",
             exposes: {
-              "./routeConfig": process.env.MF_GUARD_BUILD ? "./src/guard-entry.ts" : "./src/routeConfig.gen.ts",
+              "./routeConfig": process.env.MF_GUARD_BUILD
+                ? "./src/guard-entry.ts"
+                : "./src/routeConfig.gen.ts",
             },
             shared: {
               react: {
@@ -44,8 +67,24 @@ export default defineConfig({
                 import: false,
                 shareScope: "default",
               },
-              "react-dom": { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, import: false, shareScope: "default" },
-              "@tanstack/react-router": { version: "1.170.32", requiredVersion: "1.170.32", singleton: true, strictVersion: true, eager: false, import: false, shareScope: "default" },
+              "react-dom": {
+                version: "19.2.4",
+                requiredVersion: "19.2.4",
+                singleton: true,
+                strictVersion: true,
+                eager: false,
+                import: false,
+                shareScope: "default",
+              },
+              "@tanstack/react-router": {
+                version: "1.170.32",
+                requiredVersion: "1.170.32",
+                singleton: true,
+                strictVersion: true,
+                eager: false,
+                import: false,
+                shareScope: "default",
+              },
             },
             filename: "remoteEntry.server.js",
           },
@@ -58,14 +97,6 @@ export default defineConfig({
         distPath: { root: process.env.MF_GUARD_BUILD ? "dist-bad/ssr" : "dist/ssr" },
         filename: { js: "[name].js" },
       },
-    },
-  },
-  tools: {
-    rspack: (config, { environment }) => {
-      if (environment.name === "web" && config.output) {
-        config.output.publicPath = "auto";
-      }
-      return config;
     },
   },
   // Remote chunk loading must derive its base from WHERE the remoteEntry was

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import type { PluginConfigInput } from "every-plugin";
-import bosConfig from "../../bos.config.json" with { type: "json" };
+import bosApp from "../../bos.app";
 import type Plugin from "./src/index";
 
 function splitList(value?: string) {
@@ -10,11 +10,13 @@ function splitList(value?: string) {
     .filter(Boolean);
 }
 
-const configuredSiwn = bosConfig.app?.auth?.variables?.siwn;
+const configuredSiwn = bosApp.auth?.variables?.siwn as
+  | { recipients?: { mainnet?: string; testnet?: string } }
+  | undefined;
 const mainnetRecipient =
-  process.env.ACCOUNT || configuredSiwn?.recipients?.mainnet || bosConfig.account;
+  process.env.ACCOUNT || configuredSiwn?.recipients?.mainnet || bosApp.account;
 const testnetRecipient =
-  process.env.TESTNET_ACCOUNT || configuredSiwn?.recipients?.testnet || bosConfig.staging?.account;
+  process.env.TESTNET_ACCOUNT || configuredSiwn?.recipients?.testnet || bosApp.staging?.account;
 
 export default {
   port: Number(process.env.PORT) || 3002,
@@ -39,16 +41,14 @@ export default {
         from: "no-reply@example.com",
       },
       siwn: {
-        ...(testnetRecipient
+        ...(mainnetRecipient && testnetRecipient
           ? {
               recipients: {
                 mainnet: mainnetRecipient,
                 testnet: testnetRecipient,
               },
             }
-          : {
-              recipient: mainnetRecipient,
-            }),
+          : { recipient: mainnetRecipient! }),
         rpcUrl: process.env.NEAR_RPC_URL,
         relayer: {
           mainnet: {

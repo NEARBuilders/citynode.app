@@ -48,7 +48,10 @@ try {
 // the timeline; an external $_TSR presence poll can lose to fast hydration).
 try {
   await page.waitForFunction(
-    () => [...((window as any).__CLIENT_PROGRESS__ ?? [])].some((m) => m.includes("hydration consumed")),
+    () =>
+      [...((window as any).__CLIENT_PROGRESS__ ?? [])].some((m) =>
+        m.includes("hydration consumed"),
+      ),
     undefined,
     { timeout: 15000 },
   );
@@ -67,20 +70,34 @@ const result = await page.evaluate(() => {
   };
 });
 
-const mismatch = errors.filter((e) => /hydrat|did not match|Minified React error #4(18|23)/i.test(e));
+const mismatch = errors.filter((e) =>
+  /hydrat|did not match|Minified React error #4(18|23)/i.test(e),
+);
 const hardErrors = errors.filter((e) => !mismatch.includes(e));
 
 console.log(`[hydrate] ${url}`);
-console.log(`  hydrated: ${result.consumed}  digest: ${result.digest}  remotes: ${result.remoteCount}`);
-if (result.progress.length) console.log(`  client progress:\n    ${result.progress.join("\n    ")}`);
+console.log(
+  `  hydrated: ${result.consumed}  digest: ${result.digest}  remotes: ${result.remoteCount}`,
+);
+if (result.progress.length)
+  console.log(`  client progress:\n    ${result.progress.join("\n    ")}`);
 else console.log("  client progress: NONE (client bundle did not execute)");
-if (!result.bootstrapped) console.log("  client saw NO $_TSR bootstrap — the SSR stream did not dehydrate (real dehydration failure)");
-if (result.bootstrapped && !result.consumed) console.log("  hydrate(router) never settled — bootstrap present but never consumed (real hang; trace above names the step)");
+if (!result.bootstrapped)
+  console.log(
+    "  client saw NO $_TSR bootstrap — the SSR stream did not dehydrate (real dehydration failure)",
+  );
+if (result.bootstrapped && !result.consumed)
+  console.log(
+    "  hydrate(router) never settled — bootstrap present but never consumed (real hang; trace above names the step)",
+  );
 if (mismatch.length) console.log(`  mismatch errors:\n    ${mismatch.join("\n    ")}`);
 if (hardErrors.length) console.log(`  other console errors:\n    ${hardErrors.join("\n    ")}`);
 
 await browser.close();
 
-const ok = result.bootstrapped && result.consumed && mismatch.length === 0 && hardErrors.length === 0;
-console.log(`[hydrate] ${ok ? "PASS — SSR HTML hydrated cleanly (bootstrap consumed, digest parity, no mismatch)" : "FAIL"}`);
+const ok =
+  result.bootstrapped && result.consumed && mismatch.length === 0 && hardErrors.length === 0;
+console.log(
+  `[hydrate] ${ok ? "PASS — SSR HTML hydrated cleanly (bootstrap consumed, digest parity, no mismatch)" : "FAIL"}`,
+);
 process.exit(ok ? 0 : 1);

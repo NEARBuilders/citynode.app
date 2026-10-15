@@ -1,5 +1,5 @@
 import type { AnyRoute } from "@tanstack/react-router";
-import { createRootRoute, createRoute, Link, Outlet } from "@tanstack/react-router";
+import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 import { createMountRegistry, MOUNT_ALIASES } from "./mount-registry";
 
 /**
@@ -71,7 +71,8 @@ export function composeApp(plugins: WebPluginModule[]): ComposedApp {
         id: `${plugin.name}__${canonicalId}`,
         getParentRoute: () => graftTarget,
       };
-      (subtreesByMount[canonicalId] ??= []).push(child);
+      if (!subtreesByMount[canonicalId]) subtreesByMount[canonicalId] = [];
+      subtreesByMount[canonicalId].push(child);
     }
   }
 

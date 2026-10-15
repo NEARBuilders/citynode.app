@@ -6,17 +6,17 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  resolveAppOrThrow,
-  diskResolver,
-  renderPath,
-  readResponse,
-  clean,
-  ANON,
-  ADMIN,
-} from "./harness";
-import { constructTree } from "./construct";
 import { APPS } from "../../apps";
+import { constructTree } from "./construct";
+import {
+  ADMIN,
+  ANON,
+  clean,
+  diskResolver,
+  readResponse,
+  renderPath,
+  resolveAppOrThrow,
+} from "./harness";
 
 const protoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -41,7 +41,9 @@ async function main() {
   await check("gate2: / renders base landing under _public (landing + host chrome)", async () => {
     const r = await readResponse(await renderPath("/", base, ANON));
     const t = clean(r.html);
-    return t.includes("Landing index — BASE landing plugin") && t.includes("[landing:public]") ? "ok" : false;
+    return t.includes("Landing index — BASE landing plugin") && t.includes("[landing:public]")
+      ? "ok"
+      : false;
   });
   await check("gate3: /login renders auth plugin under the SAME _public mount", async () => {
     const r = await readResponse(await renderPath("/login", base, ANON));
@@ -58,15 +60,23 @@ async function main() {
       ? `ok (${r.status} → ${r.location})`
       : false;
   });
-  await check("gate2: admin /settings/api-keys renders (session gate passes, plugin loader runs)", async () => {
-    const r = await readResponse(await renderPath("/settings/api-keys", base, ADMIN));
-    const t = clean(r.html);
-    return t.includes("API keys (auth plugin)") && t.includes("[auth:authenticated]") ? "ok" : false;
-  });
-  await check("gate2: admin /login redirects to / (plugin route-level reject-authed beforeLoad)", async () => {
-    const r = await readResponse(await renderPath("/login", base, ADMIN));
-    return r.status >= 300 && r.status < 400 ? `ok (${r.status} → ${r.location})` : false;
-  });
+  await check(
+    "gate2: admin /settings/api-keys renders (session gate passes, plugin loader runs)",
+    async () => {
+      const r = await readResponse(await renderPath("/settings/api-keys", base, ADMIN));
+      const t = clean(r.html);
+      return t.includes("API keys (auth plugin)") && t.includes("[auth:authenticated]")
+        ? "ok"
+        : false;
+    },
+  );
+  await check(
+    "gate2: admin /login redirects to / (plugin route-level reject-authed beforeLoad)",
+    async () => {
+      const r = await readResponse(await renderPath("/login", base, ADMIN));
+      return r.status >= 300 && r.status < 400 ? `ok (${r.status} → ${r.location})` : false;
+    },
+  );
   await check("gate4: SSR streams plugin content server-side (loader data hydrated)", async () => {
     const r = await readResponse(await renderPath("/settings/api-keys", base, ADMIN));
     return clean(r.html).includes("edk_demo") ? "ok (loader data in SSR HTML)" : false;
@@ -79,19 +89,25 @@ async function main() {
   });
   await check("metadata: nav manifest assembled from composed staticData", async () => {
     const docs = base.nav.find((n) => n.path === "/docs");
-    return docs?.label === "Docs" && docs?.order === 10 ? `ok (${base.nav.map((n) => n.label).join(", ")})` : false;
+    return docs?.label === "Docs" && docs?.order === 10
+      ? `ok (${base.nav.map((n) => n.label).join(", ")})`
+      : false;
   });
   await check("extends: tenant inherits auth, overrides landing (child-wins merge)", async () => {
     const keys = Object.keys(tenantInput.plugins).sort();
-    const authSource = tenantInput.plugins["auth"]?.source;
-    return keys.join(",") === "auth,landing" && authSource?.kind === "local" && authSource.path === "./remote-auth"
+    const authSource = tenantInput.plugins.auth?.source;
+    return keys.join(",") === "auth,landing" &&
+      authSource?.kind === "local" &&
+      authSource.path === "./remote-auth"
       ? `ok (plugins: ${keys.join(", ")})`
       : false;
   });
   await check("gate6: tenant swap renders TENANT landing at /", async () => {
     const r = await readResponse(await renderPath("/", tenant, ANON));
     const t = clean(r.html);
-    return t.includes("TENANT landing plugin") && t.includes("[landing-tenant:public]") ? "ok" : false;
+    return t.includes("TENANT landing plugin") && t.includes("[landing-tenant:public]")
+      ? "ok"
+      : false;
   });
   await check("gate6: digests differ across apps, stable across re-composition", async () => {
     const baseAgain = await constructTree(baseInput, diskResolver(protoRoot));
@@ -107,16 +123,20 @@ async function main() {
   });
   await check("construction: manifests composed in name-ascending order", () => {
     const order = base.manifests.map((m) => m.name);
-    return order.every((n, i) => i === 0 || order[i - 1]! <= n) ? `ok (${order.join(", ")})` : false;
+    return order.every((n, i) => i === 0 || order[i - 1]! <= n)
+      ? `ok (${order.join(", ")})`
+      : false;
   });
 
   let failures = 0;
   console.log("=== manifest-compose prototype gates (disk/dev path) ===");
   for (const [name, ok, detail] of results) {
     if (!ok) failures++;
-    console.log(`  ${ok ? "ok  " : "FAIL"}  ${name}  ${ok ? "— " + detail : ""}`);
+    console.log(`  ${ok ? "ok  " : "FAIL"}  ${name}  ${ok ? `— ${detail}` : ""}`);
   }
-  console.log(`\n=== RESULT: ${failures === 0 ? `PASS — ${results.length}/${results.length}` : `${failures} FAILURES`} ===`);
+  console.log(
+    `\n=== RESULT: ${failures === 0 ? `PASS — ${results.length}/${results.length}` : `${failures} FAILURES`} ===`,
+  );
   process.exit(failures === 0 ? 0 : 1);
 }
 

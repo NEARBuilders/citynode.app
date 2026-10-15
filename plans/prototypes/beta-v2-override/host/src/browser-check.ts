@@ -15,7 +15,10 @@ async function connect(wsUrl: string): Promise<CDP> {
     socket.addEventListener("error", (e) => reject(e as unknown as Error));
   });
   let id = 0;
-  const pending = new Map<number, { resolve: Function; reject: Function }>();
+  const pending = new Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+  >();
   socket.addEventListener("message", (ev) => {
     const msg = JSON.parse(String(ev.data));
     if (msg.id && pending.has(msg.id)) {
@@ -58,7 +61,7 @@ async function main() {
       `--remote-debugging-port=${port}`,
       "--no-first-run",
       "--disable-gpu",
-      "--user-data-dir=/tmp/mf-override-chrome-" + Date.now(),
+      `--user-data-dir=/tmp/mf-override-chrome-${Date.now()}`,
       "about:blank",
     ],
     { stdio: "ignore" },
@@ -66,7 +69,7 @@ async function main() {
 
   try {
     const versionUrl = `http://localhost:${port}/json/version`;
-    let version;
+    let version: unknown;
     for (let i = 0; i < 40; i++) {
       try {
         version = await (await fetch(versionUrl)).json();

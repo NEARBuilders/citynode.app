@@ -6,15 +6,20 @@ import { useAppTranslation } from "@/i18n/runtime";
 import type { MemberCardMember } from "./-member-card";
 import { orgMembersQueryKey } from "./-organization-query-keys";
 
-async function fetchOrgMembers(auth: AuthClient, orgId: string) {
+export type OrgMember = {
+  id: string;
+  userId: string;
+  role: string;
+  user?: MemberCardMember["user"];
+};
+
+async function fetchOrgMembers(auth: AuthClient, orgId: string): Promise<OrgMember[]> {
   const { data, error } = await auth.organization.listMembers({
     query: { organizationId: orgId },
   });
   if (error) throw new Error(error.message);
   return data?.members ?? [];
 }
-
-export type OrgMember = Awaited<ReturnType<typeof fetchOrgMembers>>[number];
 
 export function orgMembersQueryOptions(auth: AuthClient, orgId: string) {
   return queryOptions({
