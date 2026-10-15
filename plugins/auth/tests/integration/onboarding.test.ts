@@ -334,6 +334,35 @@ describe("onboarding handlers", () => {
     ).rejects.toThrow(/revoked/i);
   });
 
+  it("resumes a prior redeemer's joined state after the code expires", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { ...eventOf("Expired Later"), organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const member = await createTestUser(services.services, { email: undefined });
+    await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+
+    await services.services.db
+      .update(schema.onboardingCode)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.onboardingCode.id, code.id));
+
+    const revisit = await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+    expect(revisit.alreadyRedeemed).toBe(true);
+    expect(revisit.organizationId).toBe(org.id);
+    expect(revisit.organizationName).toBe(org.name);
+  });
+
   it("rejects unknown codes and reports status flags publicly", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);

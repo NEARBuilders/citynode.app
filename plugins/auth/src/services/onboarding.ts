@@ -378,14 +378,11 @@ export const buildOnboardingService = ({
       if (codeRow.revokedAt) {
         return yield* Effect.fail(new CodeRevoked({ message: "This onboarding code was revoked" }));
       }
-      if (toDate(codeRow.expiresAt) < new Date()) {
-        return yield* Effect.fail(new CodeExpired({ message: "This onboarding code has expired" }));
-      }
-      if (codeRow.usedCount >= codeRow.maxUses) {
-        return yield* Effect.fail(
-          new CodeLimitReached({ message: "This onboarding code has reached its limit" }),
-        );
-      }
+
+      const codeActive =
+        !codeRow.revokedAt &&
+        toDate(codeRow.expiresAt) >= new Date() &&
+        codeRow.usedCount < codeRow.maxUses;
 
       const already = yield* attemptDb(() =>
         db.query.onboardingRedemption.findFirst({
@@ -395,7 +392,11 @@ export const buildOnboardingService = ({
           ),
         }),
       );
-      if (already) {
+      // Redeeming is idempotent for someone who already joined: a repeat
+      // visit (e.g. a reload after the code expired) still resolves to the
+      // joined state instead of failing on the stale code.
+      const alreadyMember = yield* attemptDb(() => isMember(db, codeRow.organizationId, userId));
+      if (already && (codeActive || alreadyMember)) {
         yield* attemptDb(() =>
           db
             .update(schema.session)
@@ -409,6 +410,15 @@ export const buildOnboardingService = ({
           organizationName,
           eventName: codeRow.eventName,
         };
+      }
+
+      if (toDate(codeRow.expiresAt) < new Date()) {
+        return yield* Effect.fail(new CodeExpired({ message: "This onboarding code has expired" }));
+      }
+      if (codeRow.usedCount >= codeRow.maxUses) {
+        return yield* Effect.fail(
+          new CodeLimitReached({ message: "This onboarding code has reached its limit" }),
+        );
       }
 
       yield* attemptDb(() =>
@@ -515,6 +525,13 @@ export const buildOnboardingService = ({
       };
     }),
   });
+
+async function isMember(db: Db, organizationId: string, userId: string): Promise<boolean> {
+  const member = await db.query.member.findFirst({
+    where: and(eq(schema.member.userId, userId), eq(schema.member.organizationId, organizationId)),
+  });
+  return !!member;
+}
 
 async function resolveEventTeamId(
   db: Db,
