@@ -79,9 +79,8 @@ async function openEvents(page: Page, nodeId: string, search = "") {
 }
 
 test.describe("owner event visibility", () => {
-  test("an owner sees whether visitors can see each event and fixes it", async ({
+  test("an owner sees whether visitors can see each event, fixes it, and visitors see only live ones", async ({
     page,
-    browser,
   }) => {
     const pageErrors = collectErrors(page);
     const unique = `${process.pid}-${Date.now().toString(36)}`;
@@ -163,14 +162,40 @@ test.describe("owner event visibility", () => {
     await page.waitForURL(new RegExp(`/activity/${events.live.id}`), { waitUntil: "commit" });
     await expect(page.getByText("Published meetup").first()).toBeVisible({ timeout: 15000 });
 
-    const visitor = await browser.newContext({ baseURL: baseUrl });
-    const visitorPage = await visitor.newPage();
-    await visitorPage.goto(`/activity/${events.live.id}`, { waitUntil: "domcontentloaded" });
-    await waitForApp(visitorPage);
-    await expect(visitorPage.getByText("Published meetup").first()).toBeVisible({
+    const waitingImport = await seedDiscoveryActivity({
+      nodeId: node.id,
+      title: "Waiting import",
+      status: "draft",
+      luma: { available: true, hidden: true },
+      ...eventWindow(2),
+    });
+
+    await page.context().clearCookies();
+    await page.goto(`/activity/${events.live.id}`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByText("Published meetup").first()).toBeVisible({
       timeout: 15000,
     });
-    await visitor.close();
+
+    const listed = (id: string) => page.getByTestId(`discovery-activity-detail-${id}`);
+    const expectPublicList = async () => {
+      await expect(listed(events.live.id)).toBeVisible({ timeout: 15000 });
+      await expect(listed(events.hiddenImport.id)).toBeVisible();
+      await expect(listed(events.draft.id)).toHaveCount(0);
+      await expect(listed(waitingImport.id)).toHaveCount(0);
+      await expect(listed(events.scheduled.id)).toHaveCount(0);
+      await expect(listed(events.cancelled.id)).toHaveCount(0);
+      await expect(listed(events.removed.id)).toHaveCount(0);
+    };
+
+    await page.goto(`/n/visibility-${unique}`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByTestId("node-page.events")).toBeVisible({ timeout: 15000 });
+    await expectPublicList();
+
+    await page.goto(`/explore?node=${node.id}`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expectPublicList();
 
     expectNoHydrationFailure(pageErrors);
   });
