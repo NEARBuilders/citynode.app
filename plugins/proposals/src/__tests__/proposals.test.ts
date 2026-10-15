@@ -179,15 +179,15 @@ describe.sequential("Proposals plugin", () => {
     expect(anonymousAll.data.map((proposal) => proposal.pluginId)).toEqual(["builders"]);
 
     const entityId = "claim:alice.near:ref-finance";
-    await expect(
-      anonymous.getAuditLog({ pluginId: "nearcatalog", entityId }),
-    ).rejects.toThrow("Authentication required");
-    await expect(
-      bobClient().getAuditLog({ pluginId: "nearcatalog", entityId }),
-    ).rejects.toThrow("Admin access required");
-    await expect(
-      aliceClient().getAuditLog({ pluginId: "nearcatalog", entityId }),
-    ).rejects.toThrow("Admin access required");
+    await expect(anonymous.getAuditLog({ pluginId: "nearcatalog", entityId })).rejects.toThrow(
+      "Authentication required",
+    );
+    await expect(bobClient().getAuditLog({ pluginId: "nearcatalog", entityId })).rejects.toThrow(
+      "Admin access required",
+    );
+    await expect(aliceClient().getAuditLog({ pluginId: "nearcatalog", entityId })).rejects.toThrow(
+      "Admin access required",
+    );
     const adminAudit = await adminClient().getAuditLog({ pluginId: "nearcatalog", entityId });
     const bobCount = await bobClient().getProposalCount({ pluginId: "nearcatalog", entityId });
     const aliceCount = await aliceClient().getProposalCount({
