@@ -1,32 +1,43 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { openResolution } from "everything-dev/resolution";
 
 // Writes the resolved config the regression helpers read. Checkouts that
 // never ran a bos command get it on demand — the helpers need it before
 // reset-plugin-dbs / regression-env run.
 const root = resolve(import.meta.dirname, "../../..");
 
-const result = spawnSync("pnpm", ["exec", "bos", "types", "gen"], {
+const typesGen = spawnSync("pnpm", ["exec", "bos", "types", "gen"], {
   cwd: root,
   encoding: "utf-8",
   stdio: ["ignore", "pipe", "pipe"],
 });
-if (result.status !== 0) {
+if (typesGen.status !== 0) {
   throw new Error(
-    `Failed to resolve the authored config (bos types gen exited ${result.status}):\n${
-      result.stderr ?? result.stdout ?? ""
+    `Failed to resolve the authored config (bos types gen exited ${typesGen.status}):\n${
+      typesGen.stderr ?? typesGen.stdout ?? ""
     }`,
   );
 }
 
-// bos writes the generated resolved config to the repo root; mirror it to the
-// .bos/ path the regression helpers read first.
-const generated = join(root, "bos.config.json");
-if (!existsSync(generated)) {
-  throw new Error("bos types gen did not write bos.config.json");
+// `bos types gen` resolves in memory only (it emits type stubs but never
+// materializes the resolved config — that is `bos dev`/`bos build`'s job,
+// which have not run in a fresh checkout). Resolve here and write the file
+// the regression helpers read (ADR 0005), same shape `bos dev` writes.
+const session = await openResolution({ cwd: root, env: "development" });
+if (!session?.config) {
+  throw new Error("Failed to resolve the authored config (openResolution returned no config)");
 }
 const out = join(root, ".bos", "bos.resolved-config.json");
 mkdirSync(dirname(out), { recursive: true });
-writeFileSync(out, `${JSON.stringify(JSON.parse(readFileSync(generated, "utf-8")), null, 2)}\n`);
+const output = {
+  _resolved: {
+    env: "development",
+    resolvedAt: new Date().toISOString(),
+    extendsChain: session.chain ?? [],
+  },
+  ...session.config,
+};
+writeFileSync(out, `${JSON.stringify(output, null, 2)}\n`);
 console.log(`[resolve-config] wrote ${out}`);
