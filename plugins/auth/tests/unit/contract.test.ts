@@ -12,6 +12,7 @@ async function validateRedeemOutput(value: unknown) {
 const redeemed = {
   success: true,
   alreadyRedeemed: false,
+  organizationId: "org-123",
   organizationName: "Example Community",
   eventName: "Launch Night",
 };

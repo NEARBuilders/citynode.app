@@ -23,7 +23,7 @@ test.describe("CSR compose", () => {
 
     const signInHeading = page.getByTestId("login.heading");
     await expect(signInHeading).toBeVisible({ timeout: 15000 });
-    await expect(signInHeading).toHaveText("Sign in to CityNode");
+    await expect(signInHeading).toHaveText("Sign in to continue");
 
     // The payload must be present client-side with the auth remote registered.
     const compose = await page.evaluate(() => {
@@ -55,9 +55,8 @@ test.describe("CSR compose", () => {
     }, manifestUrl);
     expect(entryStatus, `auth mf-manifest at ${manifestUrl}`).toBe(200);
 
-    await page.getByTestId("login.language-select").click();
-    await page.getByRole("option", { name: "Español", exact: true }).click();
-    await expect(signInHeading).toHaveText("Inicia sesión en CityNode");
+    await page.getByTestId("login.language-select").selectOption({ label: "Español" });
+    await expect(signInHeading).toHaveText("Inicia sesión para continuar");
     await expect(page.getByTestId("application-startup-error")).toHaveCount(0);
     await expect(
       page.getByText("Some application features couldn't load", { exact: true }),
@@ -84,25 +83,24 @@ test.describe("CSR compose", () => {
 
     const selector = page.getByTestId("login.language-select");
     await expect(selector).toBeVisible({ timeout: 15000 });
-    await selector.click();
-    await page.getByRole("option", { name: "Español", exact: true }).click();
+    await selector.selectOption({ label: "Español" });
 
-    await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión en CityNode");
+    await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión para continuar");
     await expect(page.getByTestId("login.device-button")).toHaveText(
       "Iniciar sesión con tu teléfono",
     );
     await expect(page.locator("html")).toHaveAttribute("lang", "es");
 
     const savedLocale = await context.cookies();
-    expect(savedLocale.find((cookie) => cookie.name === "citynode_locale")?.value).toBe("es");
+    expect(savedLocale.find((cookie) => cookie.name === "app_locale")?.value).toBe("es");
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
     await expect(
-      page.getByTestId("login.language-select").getByText("Español", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión en CityNode");
+      page.getByTestId("login.language-select").locator("option:checked"),
+    ).toHaveText("Español");
+    await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión para continuar");
   });
 
   test("an account path renders the account page, not the sign-in page", async ({ page }) => {

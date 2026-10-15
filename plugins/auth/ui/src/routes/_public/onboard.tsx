@@ -1,4 +1,5 @@
 import {
+  ArrowRightIcon,
   CheckCircleIcon,
   CheckIcon,
   CopyIcon,
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
+import { findCommunityPage } from "@/lib/community-page";
 import { DisplayNameStep } from "./-display-name-step";
 import { OnboardSignUp } from "./-onboard-sign-up";
 import "../../styles.css";
@@ -48,7 +50,7 @@ export const Route = createFileRoute("/_public/onboard")({
   component: OnboardPage,
 });
 
-type Redeemed = { organizationName: string; eventName: string };
+type Redeemed = { organizationId: string; organizationName: string; eventName: string };
 
 const PASSKEY_DEFAULT_NAME = "Passkey user";
 
@@ -72,6 +74,12 @@ function OnboardPage() {
 
   const [accountCreated, setAccountCreated] = useState(false);
   const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
+  const { data: communityPage } = useQuery({
+    queryKey: ["onboarding-community-page", redeemed?.organizationId],
+    queryFn: () => findCommunityPage(apiClient, redeemed?.organizationId ?? ""),
+    enabled: !!redeemed?.organizationId,
+    retry: false,
+  });
   const [nameDone, setNameDone] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
@@ -94,7 +102,11 @@ function OnboardPage() {
     void apiClient.auth
       .redeemOnboardingCode({ code })
       .then((result: Redeemed) => {
-        setRedeemed({ organizationName: result.organizationName, eventName: result.eventName });
+        setRedeemed({
+          organizationId: result.organizationId,
+          organizationName: result.organizationName,
+          eventName: result.eventName,
+        });
         toast.success(`You've joined ${result.organizationName}`);
         void refreshSessionCache(auth, queryClient);
       })
@@ -148,6 +160,25 @@ function OnboardPage() {
         >
           Get build prompts
         </Button>
+        {communityPage && (
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full"
+            nativeButton={false}
+            render={
+              <Link
+                to="/n/$slug"
+                params={{ slug: communityPage.slug }}
+                search={communityPage.parentId ? { parentId: communityPage.parentId } : {}}
+              />
+            }
+            data-testid="onboard.community-link"
+          >
+            Visit {redeemed.organizationName}
+            <ArrowRightIcon />
+          </Button>
+        )}
         <Item variant="muted" data-testid="onboard.continue-on-computer">
           <ItemMedia variant="icon">
             <DesktopIcon />
