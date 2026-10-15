@@ -83,7 +83,7 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "添加通行密钥",
   ],
   "auth.common.notNow": ["Not now", "Ahora no", "Plus tard", "暂不添加"],
-  "auth.settings.profile": ["Profile", "Perfil", "Profil", "资料"],
+  "auth.settings.profile": ["Your profile", "Tu perfil", "Votre profil", "你的资料"],
   "auth.settings.methods": [
     "Sign-in methods",
     "Métodos de inicio de sesión",
