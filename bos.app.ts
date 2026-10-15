@@ -15,9 +15,13 @@ export default App({
     "Decentralized city nodes on NEAR — each city is a tenant with its own validator pool you can stake to.",
   repository: "https://github.com/NEARBuilders/citynode.app",
   staging: { domain: "testnet.citynode.app", account: "v1.citynode.testnet" },
-  // CI settings: runtime image name (pinned to the immutable sha-tag that
-  // carries every-plugin 3.0.0-rc.6 — bump deliberately, not via the moving :rc),
-  // Railway service.
+  // CI settings: runtime image name (the immutable sha-tag carrying
+  // every-plugin 3.0.0-rc.6), Railway service.
+  // NOTE: ci.image does not control what Railway runs — the service's image
+  // ref is connected once in the Railway dashboard and `bos deploy` runs
+  // `railway redeploy --from-source`, pulling whatever that ref points at.
+  // Pin the dashboard ref to this same sha-tag (and disable image-push
+  // watching) so upstream re-pushing :rc can't drift this deployment.
   ci: {
     image: "ghcr.io/nearbuilders/everything-dev:sha-0866f88",
     railway: {
