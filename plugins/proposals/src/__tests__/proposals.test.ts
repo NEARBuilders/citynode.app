@@ -173,15 +173,21 @@ describe.sequential("Proposals plugin", () => {
     const anonymousAll = await anonymous.getProposals({ limit: 100 });
 
     expect(anonymousPrivate.data).toEqual([]);
-    expect(alicePrivate.data.map((proposal) => proposal.createdBy)).toEqual(["alice.near"]);
-    expect(bobPrivate.data.map((proposal) => proposal.createdBy)).toEqual(["bob.near"]);
+    expect(alicePrivate.data.map((proposal) => proposal.createdBy)).toEqual(["[hidden]"]);
+    expect(bobPrivate.data.map((proposal) => proposal.createdBy)).toEqual(["[hidden]"]);
     expect(adminPrivate.data).toHaveLength(2);
     expect(anonymousAll.data.map((proposal) => proposal.pluginId)).toEqual(["builders"]);
 
     const entityId = "claim:alice.near:ref-finance";
-    const anonymousAudit = await anonymous.getAuditLog({ pluginId: "nearcatalog", entityId });
-    const bobAudit = await bobClient().getAuditLog({ pluginId: "nearcatalog", entityId });
-    const aliceAudit = await aliceClient().getAuditLog({ pluginId: "nearcatalog", entityId });
+    await expect(
+      anonymous.getAuditLog({ pluginId: "nearcatalog", entityId }),
+    ).rejects.toThrow("Authentication required");
+    await expect(
+      bobClient().getAuditLog({ pluginId: "nearcatalog", entityId }),
+    ).rejects.toThrow("Admin access required");
+    await expect(
+      aliceClient().getAuditLog({ pluginId: "nearcatalog", entityId }),
+    ).rejects.toThrow("Admin access required");
     const adminAudit = await adminClient().getAuditLog({ pluginId: "nearcatalog", entityId });
     const bobCount = await bobClient().getProposalCount({ pluginId: "nearcatalog", entityId });
     const aliceCount = await aliceClient().getProposalCount({
@@ -189,9 +195,6 @@ describe.sequential("Proposals plugin", () => {
       entityId,
     });
 
-    expect(anonymousAudit.data).toEqual([]);
-    expect(bobAudit.data).toEqual([]);
-    expect(aliceAudit.data).toHaveLength(1);
     expect(adminAudit.data).toHaveLength(1);
     expect(bobCount.totalCount).toBe(0);
     expect(aliceCount.totalCount).toBe(1);

@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@orpc/contract": "catalog:",
+    "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "near-kit": "catalog:",
     "effect": "catalog:",

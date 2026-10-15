@@ -657,6 +657,9 @@ importers:
       '@orpc/contract':
         specifier: 'catalog:'
         version: 2.0.0-beta.35
+      '@orpc/openapi':
+        specifier: 'catalog:'
+        version: 2.0.0-beta.35
       '@orpc/publisher':
         specifier: 'catalog:'
         version: 2.0.0-beta.35
@@ -725,6 +728,9 @@ importers:
   plugins/registry:
     dependencies:
       '@orpc/contract':
+        specifier: 'catalog:'
+        version: 2.0.0-beta.35
+      '@orpc/openapi':
         specifier: 'catalog:'
         version: 2.0.0-beta.35
       '@orpc/server':
