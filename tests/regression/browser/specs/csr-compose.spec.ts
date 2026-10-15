@@ -97,9 +97,9 @@ test.describe("CSR compose", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await expect(
-      page.getByTestId("login.language-select").locator("option:checked"),
-    ).toHaveText("Español");
+    await expect(page.getByTestId("login.language-select").locator("option:checked")).toHaveText(
+      "Español",
+    );
     await expect(page.getByTestId("login.heading")).toHaveText("Inicia sesión para continuar");
   });
 
