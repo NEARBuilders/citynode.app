@@ -11,13 +11,10 @@ on:
       - "**.md"
       - "docs/**"
       - ".changeset/**"
+  # No paths-ignore on pull_request: the merge gate is a required status
+  # check, so every PR must run CI and report it — docs-only PRs included.
+  # (paths-ignore stays on push, where it gates Deploy via workflow_run.)
   pull_request:
-    # Docs-only PRs cannot affect lint/typecheck/tests; changeset-only PRs
-    # have nothing to validate here.
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".changeset/**"
   workflow_dispatch:
 
 permissions:
@@ -119,3 +116,19 @@ jobs:
             .bos/logs/**
             tests/regression/browser/test-results/**
             tests/regression/browser/playwright-report/**
+
+  # Merge gate — child-owned job with a stable name matching the repo's
+  # branch-protection required check ("Lint and Type Check"). The reusable
+  # consumer-ci job's check name embeds the upstream callee's display name
+  # ("CI / Lint, typecheck, and test"), so pointing branch protection at it
+  # directly would break silently if upstream ever renames the job. The
+  # browser regression suite runs above but is intentionally non-blocking;
+  # add it to `needs` when E2E should gate merges.
+  lint-and-typecheck-gate:
+    name: Lint and Type Check
+    needs: [ci]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert CI passed
+        run: test "${{ needs.ci.result }}" = "success"
