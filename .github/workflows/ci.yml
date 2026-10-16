@@ -22,7 +22,6 @@ permissions:
 
 jobs:
   ci:
-    name: CI
     uses: NEARBuilders/everything-dev/.github/workflows/consumer-ci.yml@main
     with:
       working_directory: .
