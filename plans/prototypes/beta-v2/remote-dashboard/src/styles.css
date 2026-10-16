@@ -1,5 +1,0 @@
-@import "tailwindcss";
-
-@theme inline {
-  --color-dashboard: oklch(0.55 0.2 250);
-}
