@@ -13,10 +13,12 @@ import {
 export type { DriftReport, LoadedMigrations } from "everything-dev/db";
 export { detectDrift } from "everything-dev/db";
 
-export const loadMigrations: Effect.Effect<LoadedMigrations, DatabaseError> = loadSharedMigrations({
-  fromDir: import.meta.dirname,
-  virtual: () => import("virtual:drizzle-migrations.sql"),
-});
+export function loadMigrations(): Effect.Effect<LoadedMigrations, DatabaseError> {
+  return loadSharedMigrations({
+    fromDir: import.meta.dirname,
+    virtual: () => import("virtual:drizzle-migrations.sql"),
+  });
+}
 
 /**
  * Thin adapter over the shared `runMigrations` runner (`everything-dev/db`).

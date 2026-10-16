@@ -16,12 +16,12 @@ export function NetworkToggle() {
       value={[currentNetwork]}
       onValueChange={(value) => {
         const next = supportedNetworks.find(
-          (network) => value.includes(network) && network !== currentNetwork,
+          (network: "mainnet" | "testnet") => value.includes(network) && network !== currentNetwork,
         );
         if (next) auth.near.setNetwork(next);
       }}
     >
-      {supportedNetworks.map((network) => (
+      {supportedNetworks.map((network: "mainnet" | "testnet") => (
         <ToggleGroupItem
           key={network}
           value={network}

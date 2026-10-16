@@ -22,7 +22,7 @@ export async function authFetch(path: string, cookie: string, body?: unknown) {
 }
 
 export function markEmailVerified(userId: string) {
-  execFileSync("bun", ["tests/regression/lib/verify-test-emails.ts", userId], {
+  execFileSync("pnpm", ["exec", "tsx", "tests/regression/lib/verify-test-emails.ts", userId], {
     timeout: FETCH_TIMEOUT_MS,
   });
 }

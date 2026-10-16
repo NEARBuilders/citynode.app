@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useLoginTranslation } from "@/i18n/runtime";
 
 export interface ApiKeyFormValues {
   name: string;
@@ -27,12 +26,12 @@ export interface ApiKeyFormValues {
 const DAY = 24 * 60 * 60;
 
 const EXPIRATION_ITEMS = [
-  { label: "auth.keys.never", value: "0" },
-  { label: "auth.keys.sevenDays", value: String(7 * DAY) },
-  { label: "auth.keys.thirtyDays", value: String(30 * DAY) },
-  { label: "auth.keys.ninetyDays", value: String(90 * DAY) },
-  { label: "auth.keys.oneYear", value: String(365 * DAY) },
-] as const;
+  { label: "Never", value: "0" },
+  { label: "7 days", value: String(7 * DAY) },
+  { label: "30 days", value: String(30 * DAY) },
+  { label: "90 days", value: String(90 * DAY) },
+  { label: "1 year", value: String(365 * DAY) },
+];
 
 export function ApiKeyCreateDialog({
   open,
@@ -45,13 +44,8 @@ export function ApiKeyCreateDialog({
   onCreate: (values: ApiKeyFormValues) => void;
   isPending: boolean;
 }) {
-  const translate = useLoginTranslation();
   const [name, setName] = useState("");
   const [expiresIn, setExpiresIn] = useState("0");
-  const expirationItems = EXPIRATION_ITEMS.map((item) => ({
-    ...item,
-    label: translate(item.label),
-  }));
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -68,27 +62,29 @@ export function ApiKeyCreateDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <DialogHeader>
-            <DialogTitle>{translate("auth.keys.createTitle")}</DialogTitle>
-            <DialogDescription>{translate("auth.keys.once")}</DialogDescription>
+            <DialogTitle>Create API key</DialogTitle>
+            <DialogDescription>
+              You'll see the full key once, right after creating it.
+            </DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="api-key-name">{translate("auth.common.name")}</FieldLabel>
+              <FieldLabel htmlFor="api-key-name">Name</FieldLabel>
               <Input
                 id="api-key-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={64}
-                placeholder={translate("auth.keys.example")}
+                placeholder="e.g. Claude desktop"
                 data-testid="api-keys.name-input"
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="api-key-expiry">{translate("auth.keys.expires")}</FieldLabel>
+              <FieldLabel htmlFor="api-key-expiry">Expires</FieldLabel>
               <Select
                 value={expiresIn}
-                items={expirationItems}
+                items={EXPIRATION_ITEMS}
                 onValueChange={(value) => setExpiresIn(value ?? "0")}
               >
                 <SelectTrigger
@@ -99,7 +95,7 @@ export function ApiKeyCreateDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {expirationItems.map((item) => (
+                  {EXPIRATION_ITEMS.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
                       {item.label}
                     </SelectItem>
@@ -110,14 +106,14 @@ export function ApiKeyCreateDialog({
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {translate("auth.common.cancel")}
+              Cancel
             </Button>
             <Button
               type="submit"
               disabled={isPending || !name.trim()}
               data-testid="api-keys.create-submit"
             >
-              {isPending ? translate("auth.common.creating") : translate("auth.keys.create")}
+              {isPending ? "Creating…" : "Create key"}
             </Button>
           </DialogFooter>
         </form>

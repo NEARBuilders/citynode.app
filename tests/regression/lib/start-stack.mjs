@@ -1,10 +1,11 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // Boots the regression stack (dev/prod/backcompat) with the test environment
 // from .env.test so regression runs never touch dev databases or dev ports.
 import { spawn } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
 import net from "node:net";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { killStalePorts } from "./kill-stale-ports.mjs";
 import { computeRegressionEnv, findRepoRoot, regressionStackOptions } from "./regression-env.mjs";
 
@@ -54,18 +55,18 @@ async function waitForDatabases(dbUrls) {
     if (attempt === PROBE_RETRIES) {
       throw new Error(
         `test databases not reachable: ${missing.join(", ")}. ` +
-          "Start them with `bun run test:db:up` (docker compose postgres-*-test services).",
+          "Start them with `pnpm run test:db:up` (docker compose postgres-*-test services).",
       );
     }
     log(`waiting for test databases (${missing.join(", ")})...`);
-    await Bun.sleep(PROBE_DELAY_MS);
+    await sleep(PROBE_DELAY_MS);
   }
 }
 
 const mode = process.argv[2] ?? "dev";
 const root = findRepoRoot();
 if (!root) {
-  console.error("[start-stack] bos.config.json not found in any parent directory");
+  console.error("[start-stack] no authored config (bos.app.ts) found in any parent directory");
   process.exit(1);
 }
 
@@ -90,7 +91,9 @@ log(`stack output: ${stackLogPath}`);
 // Own process group: bos dev spawns service trees (rspack/rsbuild watchers
 // included) that don't always die from a plain SIGTERM to the orchestrator —
 // the group kill is what playwright's webServer teardown can rely on.
-const child = spawn(process.execPath, spec.command, {
+// spec.command carries its own executable (`pnpm exec bos …`) — the wrapper
+// layer is inside the group, so teardown still reaches the service tree.
+const child = spawn(spec.command[0], spec.command.slice(1), {
   cwd: root,
   env: spec.env,
   stdio: ["ignore", stackLog, stackLog],
@@ -100,7 +103,7 @@ const child = spawn(process.execPath, spec.command, {
 let forceExitTimer = null;
 const killGroup = (signal) => {
   try {
-    if (child.pid === undefined) throw new Error("Child process did not expose a pid");
+    if (typeof child.pid !== "number") throw new Error("child has no pid");
     process.kill(-child.pid, signal);
   } catch {
     child.kill(signal);
@@ -111,7 +114,7 @@ const forceExit = () => {
   process.exit(0);
 };
 // The signal has to survive the wrapper layers (playwright's `sh -c`, the
-// `bun run` npm runner) — forward to the whole group, then hard-kill after a
+// `pnpm run` npm runner) — forward to the whole group, then hard-kill after a
 // grace: a wedged graceful shutdown must never hold the webServer open.
 const forward = (signal) => {
   killGroup(signal);

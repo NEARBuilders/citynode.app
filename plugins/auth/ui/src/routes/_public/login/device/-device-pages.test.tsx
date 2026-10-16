@@ -88,12 +88,12 @@ describe("device code verification", () => {
 
     renderAt("/login/device?user_code=ABCD2345");
 
-    expect(await screen.findByTestId("device-verify-error")).toBeTruthy();
+    expect(await screen.findByTestId("device.verify-error")).toBeTruthy();
     await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
     expect(harness.device).toHaveBeenCalledOnce();
-    expect(screen.queryByTestId("device-claiming")).toBeNull();
-    expect(screen.queryByTestId("device-verified-code")).toBeNull();
-    expect(screen.getByTestId("device-user-code-input")).toBeTruthy();
+    expect(screen.queryByTestId("device.claiming")).toBeNull();
+    expect(screen.queryByTestId("device.verified-code")).toBeNull();
+    expect(screen.getByTestId("device.user-code-input")).toBeTruthy();
   });
 
   it("re-checks the same code only when the user submits it again", async () => {
@@ -101,12 +101,12 @@ describe("device code verification", () => {
     harness.device.mockResolvedValue({ data: null, error: { status: 400 } });
 
     renderAt("/login/device?user_code=ABCD2345");
-    await screen.findByTestId("device-verify-error");
+    await screen.findByTestId("device.verify-error");
 
-    fireEvent.click(screen.getByTestId("device-verify-button"));
+    fireEvent.click(screen.getByTestId("device.verify-button"));
 
     await waitFor(() => expect(harness.device).toHaveBeenCalledTimes(2));
-    expect(await screen.findByTestId("device-verify-error")).toBeTruthy();
+    expect(await screen.findByTestId("device.verify-error")).toBeTruthy();
   });
 
   it("shows a connection error instead of retrying when the check throws", async () => {
@@ -115,7 +115,7 @@ describe("device code verification", () => {
 
     renderAt("/login/device?user_code=ABCD2345");
 
-    expect((await screen.findByTestId("device-verify-error")).textContent).toBe(
+    expect((await screen.findByTestId("device.verify-error")).textContent).toBe(
       "Check your connection and try again.",
     );
     expect(harness.device).toHaveBeenCalledOnce();
@@ -126,11 +126,11 @@ describe("device code verification", () => {
     harness.device.mockResolvedValue({ data: null, error: { status: 400 } });
 
     renderAt("/login/device?user_code=ABCD2345");
-    await screen.findByTestId("device-verify-error");
-    fireEvent.change(screen.getByTestId("device-user-code-input"), {
+    await screen.findByTestId("device.verify-error");
+    fireEvent.change(screen.getByTestId("device.user-code-input"), {
       target: { value: "WXYZ6789" },
     });
-    fireEvent.click(screen.getByTestId("device-verify-button"));
+    fireEvent.click(screen.getByTestId("device.verify-button"));
 
     await waitFor(() => expect(harness.device).toHaveBeenCalledTimes(2));
     await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
@@ -144,12 +144,12 @@ describe("device code verification", () => {
     harness.session = { user: { id: "user-1" } };
 
     renderAt("/login/device");
-    fireEvent.change(await screen.findByTestId("device-user-code-input"), {
+    fireEvent.change(await screen.findByTestId("device.user-code-input"), {
       target: { value: "AB!" },
     });
-    fireEvent.click(screen.getByTestId("device-verify-button"));
+    fireEvent.click(screen.getByTestId("device.verify-button"));
 
-    expect(await screen.findByTestId("device-verify-error")).toBeTruthy();
+    expect(await screen.findByTestId("device.verify-error")).toBeTruthy();
     expect(harness.device).not.toHaveBeenCalled();
   });
 
@@ -158,10 +158,10 @@ describe("device code verification", () => {
     harness.device.mockResolvedValue({ data: { user_code: "ABCD2345" }, error: null });
 
     const router = renderAt("/login/device");
-    fireEvent.change(await screen.findByTestId("device-user-code-input"), {
+    fireEvent.change(await screen.findByTestId("device.user-code-input"), {
       target: { value: " abcd-2345 " },
     });
-    fireEvent.click(screen.getByTestId("device-verify-button"));
+    fireEvent.click(screen.getByTestId("device.verify-button"));
 
     await waitFor(() => expect(router.state.location.pathname).toBe("/login/device/approve"));
     expect(harness.device).toHaveBeenCalledWith({ query: { user_code: "ABCD2345" } });
@@ -174,9 +174,9 @@ describe("device approval", () => {
     harness.deny.mockResolvedValue({ data: null, error: { status: 500, message: "boom" } });
 
     const router = renderAt("/login/device/approve?user_code=ABCD2345");
-    fireEvent.click(await screen.findByTestId("device-deny-button"));
+    fireEvent.click(await screen.findByTestId("device.deny-button"));
 
-    expect((await screen.findByTestId("device-approve-error")).textContent).toBe(
+    expect((await screen.findByTestId("device.approve-error")).textContent).toBe(
       "Could not deny this request. Try again.",
     );
     expect(harness.info).not.toHaveBeenCalled();
@@ -188,7 +188,7 @@ describe("device approval", () => {
     harness.deny.mockResolvedValue({ data: { success: true }, error: null });
 
     const router = renderAt("/login/device/approve?user_code=ABCD2345");
-    fireEvent.click(await screen.findByTestId("device-deny-button"));
+    fireEvent.click(await screen.findByTestId("device.deny-button"));
 
     await waitFor(() => expect(router.state.location.pathname).toBe("/"));
     expect(harness.deny).toHaveBeenCalledWith({ userCode: "ABCD2345" });
@@ -200,19 +200,19 @@ describe("device approval", () => {
     harness.approve.mockRejectedValue(new TypeError("Failed to fetch"));
 
     const router = renderAt("/login/device/approve?user_code=ABCD2345");
-    fireEvent.click(await screen.findByTestId("device-approve-button"));
+    fireEvent.click(await screen.findByTestId("device.approve-button"));
 
-    expect(await screen.findByTestId("device-approve-error")).toBeTruthy();
+    expect(await screen.findByTestId("device.approve-error")).toBeTruthy();
     expect(harness.success).not.toHaveBeenCalled();
     expect(router.state.location.pathname).toBe("/login/device/approve");
-    expect(screen.getByTestId("device-approve-button")).toHaveProperty("disabled", false);
+    expect(screen.getByTestId("device.approve-button")).toHaveProperty("disabled", false);
   });
 
   it("sends a signed-out visitor to sign in with every pairing parameter preserved", async () => {
     const router = renderAt(
       "/login/device/approve?user_code=ABCD2345&pubKey=ed25519%3Aabc&contract=kv.near&source=cli",
     );
-    fireEvent.click(await screen.findByTestId("device-approve-signin-button"));
+    fireEvent.click(await screen.findByTestId("device.approve-signin-button"));
 
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     const redirectTarget = new URL(

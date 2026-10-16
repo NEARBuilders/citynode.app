@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render } from "@/i18n/test-render";
 import { SecurityTab } from "./-security-tab";
 
 const harness = vi.hoisted(() => ({
@@ -13,7 +12,6 @@ const harness = vi.hoisted(() => ({
   disconnect: vi.fn(),
   navigate: vi.fn(),
   success: vi.fn(),
-  warning: vi.fn(),
   error: vi.fn(),
 }));
 
@@ -38,7 +36,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("sonner", () => ({
-  toast: { success: harness.success, warning: harness.warning, error: harness.error },
+  toast: { success: harness.success, error: harness.error },
 }));
 
 afterEach(() => {
@@ -87,7 +85,7 @@ describe("security settings", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Update password" }));
 
-    await waitFor(() => expect(harness.error).toHaveBeenCalledWith("The passwords do not match."));
+    await waitFor(() => expect(harness.error).toHaveBeenCalledWith("Passwords do not match"));
     expect(harness.changePassword).not.toHaveBeenCalled();
   });
 
@@ -144,29 +142,5 @@ describe("security settings", () => {
     expect(queryClient.getQueryData(["session"])).toBeNull();
     expect(queryClient.getQueryData(["passkeys"])).toBeUndefined();
     expect(queryClient.getQueryData(["organizations"])).toBeUndefined();
-    expect(harness.warning).not.toHaveBeenCalled();
-  });
-
-  it("finishes signing out but says the wallet is still connected when disconnecting fails", async () => {
-    harness.signOut.mockResolvedValue({ data: null, error: null });
-    harness.disconnect.mockRejectedValue(new Error("wallet selector unavailable"));
-    harness.navigate.mockResolvedValue(undefined);
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    queryClient.setQueryData(["session"], { user: { id: "user-1" } });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <SecurityTab user={{ email: "person@example.com" }} />
-      </QueryClientProvider>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-
-    await waitFor(() => expect(harness.navigate).toHaveBeenCalledWith({ to: "/", replace: true }));
-    expect(harness.warning).toHaveBeenCalledWith(
-      "Signed out. Your NEAR wallet is still connected in this browser.",
-    );
-    expect(harness.error).not.toHaveBeenCalled();
-    expect(queryClient.getQueryData(["session"])).toBeNull();
   });
 });

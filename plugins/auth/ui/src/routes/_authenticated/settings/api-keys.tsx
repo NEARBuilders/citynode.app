@@ -9,8 +9,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
-import { matchLocale, Trans } from "everything-dev/ui/i18n";
-import { getAppName } from "everything-dev/ui/runtime";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -35,27 +33,14 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LOGIN_LOCALES } from "@/i18n/catalogs";
-import { authErrorMessage } from "@/i18n/error-message";
-import { translateLoginMessage, useLoginTranslation } from "@/i18n/runtime";
 import { ApiKeyCreateDialog, type ApiKeyFormValues } from "./-api-key-create-dialog";
 import { ApiKeyRevealDialog, type CreatedApiKey } from "./-api-key-reveal-dialog";
-import { SessionUnavailable } from "./-components/session-unavailable";
 
 export const Route = createFileRoute("/_authenticated/settings/api-keys")({
-  head: ({ match }) => ({
+  head: () => ({
     meta: [
-      {
-        title: `${translateLoginMessage("auth.meta.apiKeys", undefined, matchLocale(match.context.locale, LOGIN_LOCALES) ?? "en")} · ${getAppName(match.context.runtimeConfig)}`,
-      },
-      {
-        name: "description",
-        content: translateLoginMessage(
-          "auth.meta.apiKeysDescription",
-          undefined,
-          matchLocale(match.context.locale, LOGIN_LOCALES) ?? "en",
-        ),
-      },
+      { title: "API keys · Settings" },
+      { name: "description", content: "Create and manage API keys for programmatic access." },
     ],
   }),
   loader: async ({ context }) => {
@@ -78,18 +63,17 @@ async function copyText(value: string, message: string) {
     await navigator.clipboard.writeText(value);
     toast.success(message);
   } catch {
-    toast.error(translateLoginMessage("auth.common.copyFailed"));
+    toast.error("Failed to copy");
   }
 }
 
 const userApiKeysQueryKey = ["user-api-keys"] as const;
 
 function ApiKeysSettings() {
-  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const sessionQuery = useQuery(sessionQueryOptions(auth));
-  const user = sessionQuery.data?.user;
+  const { data: session } = useQuery(sessionQueryOptions(auth));
+  const user = session?.user;
   const [creating, setCreating] = useState(false);
   const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKey | null>(null);
   const [keyToDelete, setKeyToDelete] = useState<ApiKeyItem | null>(null);
@@ -118,11 +102,11 @@ function ApiKeysSettings() {
     onSuccess: async (data) => {
       setCreating(false);
       if (data) setCreatedApiKey(data as CreatedApiKey);
-      toast.success(translate("auth.keys.created"));
+      toast.success("API key created");
       await queryClient.invalidateQueries({ queryKey: userApiKeysQueryKey });
     },
     onError: (error: Error) => {
-      toast.error(authErrorMessage(error, translate));
+      toast.error(error.message || "Failed to create API key");
     },
   });
 
@@ -141,37 +125,37 @@ function ApiKeysSettings() {
     },
     onSuccess: async () => {
       setKeyToDelete(null);
-      toast.success(translate("auth.keys.deleted"));
+      toast.success("API key deleted");
       await queryClient.invalidateQueries({ queryKey: userApiKeysQueryKey });
     },
     onError: (error: Error, _keyId, context) => {
       if (context?.previousKeys) {
         queryClient.setQueryData(userApiKeysQueryKey, context.previousKeys);
       }
-      toast.error(authErrorMessage(error, translate));
+      toast.error(error.message || "Failed to delete API key");
     },
   });
 
-  if (!user) return <SessionUnavailable query={sessionQuery} />;
+  if (!user) return null;
 
   const hasKeys = apiKeys.length > 0;
 
   return (
     <section className="flex flex-col gap-6">
       <SectionHeader
-        title={translate("auth.settings.apiKeys")}
+        title="API keys"
         description={
-          <Trans
-            id="auth.keys.headerHint"
-            components={{ header: <code className="font-mono text-foreground" /> }}
-          />
+          <>
+            For MCP clients and scripts. Send it as the{" "}
+            <code className="font-mono text-foreground">x-api-key</code> header.
+          </>
         }
         sectionTestId="api-keys.heading"
         action={
           hasKeys ? (
             <Button onClick={() => setCreating(true)} data-testid="api-keys.create-button">
               <PlusIcon data-icon="inline-start" />
-              {translate("auth.keys.create")}
+              Create key
             </Button>
           ) : null
         }
@@ -186,26 +170,18 @@ function ApiKeysSettings() {
               </ItemMedia>
               <ItemContent className="basis-0">
                 <ItemTitle className="max-w-full">
-                  <span className="min-w-0 truncate">
-                    {key.name ?? translate("auth.keys.unnamed")}
-                  </span>
+                  <span className="min-w-0 truncate">{key.name ?? "Unnamed key"}</span>
                 </ItemTitle>
                 <ItemDescription>
                   <span className="font-mono">
                     {key.prefix ?? "api_"}…{key.start ?? ""}
                   </span>
                   {" · "}
-                  <Trans
-                    id="auth.keys.createdDate"
-                    values={{ date: <LocalDate value={key.createdAt} format="relative" /> }}
-                  />
+                  Created <LocalDate value={key.createdAt} format="relative" />
                   {key.expiresAt ? (
                     <>
                       {" · "}
-                      <Trans
-                        id="auth.keys.expiresDate"
-                        values={{ date: <LocalDate value={key.expiresAt} /> }}
-                      />
+                      Expires <LocalDate value={key.expiresAt} />
                     </>
                   ) : null}
                 </ItemDescription>
@@ -217,9 +193,7 @@ function ApiKeysSettings() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label={translate("auth.keys.actions", {
-                          name: key.name ?? translate("auth.keys.key"),
-                        })}
+                        aria-label={`Actions for ${key.name ?? "API key"}`}
                         data-testid={`api-keys.menu-${key.id}`}
                       />
                     }
@@ -228,17 +202,15 @@ function ApiKeysSettings() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      onClick={() =>
-                        void copyText(key.start ?? "", translate("auth.keys.prefixCopied"))
-                      }
+                      onClick={() => void copyText(key.start ?? "", "Key prefix copied")}
                     >
                       <CopyIcon />
-                      {translate("auth.keys.copyPrefix")}
+                      Copy prefix
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onClick={() => setKeyToDelete(key)}>
                       <TrashIcon />
-                      {translate("auth.keys.delete")}
+                      Delete key
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -254,27 +226,27 @@ function ApiKeysSettings() {
       ) : apiKeysQuery.isError ? (
         <EmptyState
           icon={WarningCircleIcon}
-          title={translate("auth.keys.loadFailed")}
-          description={translate("auth.common.connectionHint")}
+          title="Couldn't load your API keys"
+          description="Check your connection and try again."
           action={
             <Button
               variant="outline"
               onClick={() => void apiKeysQuery.refetch()}
               data-testid="api-keys.retry-button"
             >
-              {translate("auth.common.retry")}
+              Try again
             </Button>
           }
         />
       ) : (
         <EmptyState
           icon={KeyIcon}
-          title={translate("auth.keys.empty")}
-          description={translate("auth.keys.emptyDescription")}
+          title="No API keys yet"
+          description="Create a key to call the API from scripts and agents."
           action={
             <Button onClick={() => setCreating(true)} data-testid="api-keys.create-button">
               <PlusIcon data-icon="inline-start" />
-              {translate("auth.keys.create")}
+              Create key
             </Button>
           }
         />
@@ -292,12 +264,10 @@ function ApiKeysSettings() {
         onOpenChange={(open: boolean) => {
           if (!open) setKeyToDelete(null);
         }}
-        title={translate("auth.keys.deleteTitle")}
-        description={translate("auth.keys.deleteDescription", {
-          name: keyToDelete?.name ?? translate("auth.keys.thisKey"),
-        })}
-        confirmLabel={translate("auth.keys.delete")}
-        cancelLabel={translate("auth.common.cancel")}
+        title="Delete API key?"
+        description={`Anything using ${keyToDelete?.name ?? "this key"} will stop working immediately.`}
+        confirmLabel="Delete key"
+        cancelLabel="Cancel"
         variant="destructive"
         onConfirm={() => {
           if (keyToDelete) deleteApiKeyMutation.mutate(keyToDelete.id);

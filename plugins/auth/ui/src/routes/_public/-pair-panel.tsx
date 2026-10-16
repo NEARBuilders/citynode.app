@@ -1,4 +1,4 @@
-import { ArrowClockwiseIcon, ArrowLeftIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { getDeviceLinkClientId, refreshSessionCache, useAuthClient } from "everything-dev/ui/auth";
@@ -23,29 +23,11 @@ type DeviceLink = {
 
 type TokenError = { error?: string; code?: string } | null;
 
-function parseDeviceLink(data: unknown): DeviceLink | null {
-  if (!data || typeof data !== "object") return null;
-  const deviceCode = Reflect.get(data, "device_code");
-  const userCode = Reflect.get(data, "user_code");
-  const verificationUriComplete = Reflect.get(data, "verification_uri_complete");
-  const interval = Reflect.get(data, "interval");
-  if (
-    typeof deviceCode !== "string" ||
-    typeof userCode !== "string" ||
-    typeof verificationUriComplete !== "string" ||
-    typeof interval !== "number"
-  ) {
-    return null;
-  }
-  return { deviceCode, userCode, verificationUriComplete, intervalMs: interval * 1000 };
-}
-
 export function PairPanel({ redirect, onClose }: { redirect: string; onClose: () => void }) {
   const auth = useAuthClient();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const t = useLoginTranslation();
-  const [attempt, setAttempt] = useState(0);
   const [link, setLink] = useState<DeviceLink | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState<LoginMessageId | null>(null);
@@ -55,26 +37,41 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
   useEffect(() => {
     canceledRef.current = false;
     let active = true;
-    const start = async () => {
-      const { data, error } = await auth.device.code({ client_id: getDeviceLinkClientId() });
-      const next = error ? null : parseDeviceLink(data);
-      if (!next) throw new Error("Device pairing did not start");
-      const url = await QRCode.toDataURL(next.verificationUriComplete, { width: 220, margin: 1 });
-      if (!active) return;
-      setLink(next);
-      setQrDataUrl(url);
-    };
-    start().catch(() => {
-      if (active) setFailed("auth.login.pair.startFailed");
-    });
+    void auth.device
+      .code({ client_id: getDeviceLinkClientId() })
+      .then(({ data, error }: { data: Record<string, unknown> | null; error: unknown }) => {
+        if (!active) return;
+        if (error || !data) {
+          setFailed("auth.login.pair.startFailed");
+          return;
+        }
+        const record = data as {
+          device_code: string;
+          user_code: string;
+          verification_uri: string;
+          verification_uri_complete?: string;
+          interval?: number;
+        };
+        const complete = record.verification_uri_complete ?? record.verification_uri;
+        const uri = complete.startsWith("http") ? complete : `${window.location.origin}${complete}`;
+        setLink({
+          deviceCode: record.device_code,
+          userCode: record.user_code,
+          verificationUriComplete: uri,
+          intervalMs: (record.interval ?? 5) * 1000,
+        });
+        void QRCode.toDataURL(uri, { width: 220, margin: 1 }).then((url) => {
+          if (active) setQrDataUrl(url);
+        });
+      });
     return () => {
       active = false;
       canceledRef.current = true;
     };
-  }, [auth, attempt]);
+  }, [auth]);
 
   useEffect(() => {
-    if (!link || claimed || failed || canceledRef.current) return;
+    if (!link || claimed || canceledRef.current) return;
     let timer: number | undefined;
     let intervalMs = link.intervalMs;
     const poll = async () => {
@@ -114,79 +111,46 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
       if (err === "slow_down") {
         intervalMs += 5000;
       }
-      timer = window.setTimeout(schedulePoll, intervalMs);
+      timer = window.setTimeout(poll, intervalMs);
     };
-    const schedulePoll = () => {
-      poll().catch(() => {
-        if (!canceledRef.current) setFailed("auth.login.pair.completeFailed");
-      });
-    };
-    timer = window.setTimeout(schedulePoll, intervalMs);
+    timer = window.setTimeout(poll, intervalMs);
     return () => {
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [auth, link, claimed, failed, navigate, queryClient, redirect, t]);
-
-  const restart = () => {
-    setLink(null);
-    setQrDataUrl(null);
-    setClaimed(false);
-    setFailed(null);
-    setAttempt((value) => value + 1);
-  };
+  }, [auth, link, claimed, navigate, queryClient, redirect, t]);
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <div className="rounded-3xl border border-border bg-card p-4" data-testid="device-qr">
-        {failed ? (
-          <div
-            className="flex size-56 items-center justify-center text-muted-foreground"
-            data-testid="device-qr-failed"
-          >
-            <WarningCircleIcon size={48} />
-          </div>
-        ) : qrDataUrl ? (
+      <div className="rounded-3xl border border-border bg-card p-4" data-testid="device.qr">
+        {qrDataUrl ? (
           <img src={qrDataUrl} alt={t("auth.login.pair.imageAlt")} className="size-56" />
         ) : (
           <Skeleton className="size-56" />
         )}
       </div>
-      {!failed && (
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-sm text-muted-foreground">{t("auth.login.pair.instructions")}</span>
-          <span
-            className="font-mono text-2xl font-semibold tracking-widest text-foreground"
-            data-testid="device-user-code"
-          >
-            {link?.userCode ?? "········"}
-          </span>
-        </div>
-      )}
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-sm text-muted-foreground">{t("auth.login.pair.instructions")}</span>
+        <span
+          className="font-mono text-2xl font-semibold tracking-widest text-foreground"
+          data-testid="device.user-code"
+        >
+          {link?.userCode ?? "········"}
+        </span>
+      </div>
       {failed ? (
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-center text-sm text-destructive" data-testid="device-error">
-            {t(failed)}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={restart}
-            data-testid="device-retry-button"
-          >
-            <ArrowClockwiseIcon data-icon="inline-start" />
-            {t("auth.common.retry")}
-          </Button>
-        </div>
+        <p className="text-center text-sm text-destructive" data-testid="device.error">
+          {t(failed)}
+        </p>
       ) : (
         <p
           className="flex items-center gap-2 text-sm text-muted-foreground"
-          data-testid="device-status"
+          data-testid="device.status"
         >
           <Spinner />
           {claimed ? t("auth.login.pair.signingIn") : t("auth.login.pair.waiting")}
         </p>
       )}
-      <Button type="button" variant="ghost" onClick={onClose} data-testid="device-cancel-button">
+      <Button type="button" variant="ghost" onClick={onClose} data-testid="device.cancel-button">
         <ArrowLeftIcon data-icon="inline-start" />
         {t("auth.login.pair.cancel")}
       </Button>

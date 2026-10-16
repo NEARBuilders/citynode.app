@@ -12,8 +12,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { authErrorMessage } from "@/i18n/error-message";
-import { useLoginTranslation } from "@/i18n/runtime";
 import { markAddEmailPromptPending } from "@/lib/add-email-prompt";
 
 type Mode = "create" | "existing";
@@ -21,13 +19,10 @@ type Mode = "create" | "existing";
 export function OnboardSignUp({
   networkId,
   onAccountCreated,
-  onSignedIn,
 }: {
   networkId: PasskeyWalletNetwork;
   onAccountCreated: () => void;
-  onSignedIn: () => void;
 }) {
-  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>("create");
@@ -38,12 +33,9 @@ export function OnboardSignUp({
   const walletAvailable = isPasskeyWalletAvailable(networkId);
 
   useEffect(() => {
-    void auth.near
-      .detectNearAccount()
-      .then((result: { accountId?: string | null } | null) => {
-        if (result?.accountId) setDetectedAccount(result.accountId);
-      })
-      .catch(() => undefined);
+    void auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
+      if (result?.accountId) setDetectedAccount(result.accountId);
+    });
   }, [auth.near]);
 
   const handleCreate = async () => {
@@ -54,13 +46,12 @@ export function OnboardSignUp({
         markAddEmailPromptPending();
         onAccountCreated();
         await refreshSessionCache(auth, queryClient);
-        onSignedIn();
         setPending(null);
       },
       onError: (error) => {
         setPending(null);
         if (isUnsupportedAuthenticatorError(error)) setUnsupported(true);
-        else toast.error(authErrorMessage(error, translate));
+        else toast.error(error.message);
       },
     });
   };
@@ -71,7 +62,6 @@ export function OnboardSignUp({
     await signInWithPasskey(auth, {
       onSuccess: async () => {
         await refreshSessionCache(auth, queryClient);
-        onSignedIn();
         setPending(null);
       },
       onError: () => {
@@ -88,17 +78,16 @@ export function OnboardSignUp({
       await auth.signIn.near({
         onSuccess: async () => {
           await refreshSessionCache(auth, queryClient);
-          onSignedIn();
           setPending(null);
         },
-        onError: () => {
+        onError: (error: { message?: string }) => {
           setPending(null);
-          toast.error(translate("auth.onboard.walletFailed"));
+          toast.error(error?.message || "Failed to sign in");
         },
       });
     } catch {
       setPending(null);
-      toast.error(translate("auth.onboard.walletFailed"));
+      toast.error("Failed to connect your NEAR wallet");
     }
   };
 
@@ -119,9 +108,7 @@ export function OnboardSignUp({
           <WalletIcon data-icon="inline-start" />
         )}
         <span className="min-w-0 truncate">
-          {detectedAccount
-            ? translate("auth.login.near.continueAs", { account: detectedAccount })
-            : translate("auth.onboard.continueNear")}
+          {detectedAccount ? `Continue as ${detectedAccount}` : "Continue with NEAR"}
         </span>
       </Button>
       {detectedAccount ? (
@@ -132,7 +119,7 @@ export function OnboardSignUp({
           onClick={() => void handleNear(true)}
           disabled={pending !== null}
         >
-          {translate("auth.onboard.anotherWallet")}
+          Use another wallet
         </Button>
       ) : null}
     </div>
@@ -154,16 +141,14 @@ export function OnboardSignUp({
           ) : (
             <FingerprintIcon data-icon="inline-start" />
           )}
-          {pending === "passkey"
-            ? translate("auth.onboard.passkeyPending")
-            : translate("auth.onboard.passkeySignIn")}
+          {pending === "passkey" ? "Waiting for passkey…" : "Sign in with passkey"}
         </Button>
         {passkeyMissing ? (
           <p
             className="text-center text-sm text-muted-foreground"
             data-testid="onboard.no-passkey-hint"
           >
-            {translate("auth.onboard.noPasskey")}
+            No passkey on this device? Use a NEAR wallet instead.
           </p>
         ) : null}
         {nearButtons}
@@ -175,7 +160,7 @@ export function OnboardSignUp({
           className="self-center"
           data-testid="onboard.create-account-link"
         >
-          {translate("auth.onboard.new")}
+          I'm new here
         </Button>
       </div>
     );
@@ -196,19 +181,17 @@ export function OnboardSignUp({
         ) : (
           <FingerprintIcon data-icon="inline-start" />
         )}
-        {pending === "create"
-          ? translate("auth.onboard.passkeyPending")
-          : translate("auth.onboard.create")}
+        {pending === "create" ? "Waiting for passkey…" : "Create account"}
       </Button>
       <p className="text-center text-sm text-muted-foreground" data-testid="onboard.passkey-note">
         {walletAvailable
-          ? translate("auth.onboard.createWalletDescription")
-          : translate("auth.onboard.createDescription")}
+          ? "Uses a passkey on this device and sets up a NEAR wallet for you. No seed phrase."
+          : "Uses a passkey on this device. No password to remember."}
       </p>
       {unsupported ? (
         <div className="flex flex-col gap-3" data-testid="onboard.unsupported-authenticator">
           <p className="text-center text-sm text-muted-foreground">
-            {translate("auth.onboard.unsupported")}
+            This device can't create a supported passkey. Use a NEAR wallet instead.
           </p>
           {nearButtons}
         </div>
@@ -221,7 +204,7 @@ export function OnboardSignUp({
         className="self-center"
         data-testid="onboard.existing-account-button"
       >
-        {translate("auth.onboard.existing")}
+        I already have an account
       </Button>
     </div>
   );

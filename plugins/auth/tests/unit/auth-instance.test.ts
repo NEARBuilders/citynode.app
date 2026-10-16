@@ -6,6 +6,7 @@ import {
   isRecipientsConfig,
   resolvePasskeyRelyingPartyOptions,
 } from "../../src/auth-instance";
+import { TEST_PERMISSIONS } from "../helpers";
 
 describe("resolvePasskeyRelyingPartyOptions", () => {
   it("derives localhost relying party options from baseUrl", () => {
@@ -129,7 +130,7 @@ describe("resolvePasskeyRelyingPartyOptions", () => {
 const baseConfig: AuthConfig = {
   secret: "test-secret",
   baseUrl: "http://localhost:3000",
-  siwn: { recipient: "test.near" },
+  siwn: { recipient: "test.near", permissions: TEST_PERMISSIONS },
 };
 
 describe("isRecipientsConfig", () => {
@@ -260,6 +261,35 @@ describe("buildSiwnOptions", () => {
       accountId: "relayer.near",
       privateKey: "ed25519:key",
     });
+  });
+});
+
+describe("createAuthInstance socialProviders", () => {
+  const dbStub = {} as Parameters<typeof createAuthInstance>[1];
+  const configuredProviders = (auth: ReturnType<typeof createAuthInstance>) =>
+    (auth.options as { socialProviders?: Record<string, unknown> }).socialProviders ?? {};
+
+  it("omits social providers with no credentials", () => {
+    const auth = createAuthInstance(baseConfig, dbStub);
+    const providers = configuredProviders(auth);
+    expect(providers.github).toBeUndefined();
+    expect(providers.google).toBeUndefined();
+  });
+
+  it("keeps a provider only when both credentials are set", () => {
+    const auth = createAuthInstance(
+      {
+        ...baseConfig,
+        socialProviders: {
+          github: { clientId: "gh-id", clientSecret: "gh-secret" },
+          google: { clientSecret: "g-secret" },
+        },
+      },
+      dbStub,
+    );
+    const providers = configuredProviders(auth);
+    expect(providers.github).toEqual({ clientId: "gh-id", clientSecret: "gh-secret" });
+    expect(providers.google).toBeUndefined();
   });
 });
 

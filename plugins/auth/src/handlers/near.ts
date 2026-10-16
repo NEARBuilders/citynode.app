@@ -1,202 +1,115 @@
-import { ORPCError } from "@orpc/server";
-import { Context } from "effect";
-import { AuthServicesTag } from "../service-types";
-import { createHeaders, safeAuthApi } from "../utils";
+import type { Implementer } from "@orpc/server";
+import { createAuthMiddleware } from "everything-dev/api";
+import type { ContractType } from "../contract";
+import type {
+  AuthHandlerAuthedContext,
+  AuthHandlerContext,
+  RequireAuthMiddleware,
+} from "../middleware";
+import { mapDomainError } from "../services/domain-errors";
+import { NearService } from "../services/near";
+import { createHeaders } from "../utils";
 
-export function createNearHandlers(builder: any, requireAuth: any) {
+export function createNearHandlers(
+  builder: Implementer<ContractType, AuthHandlerContext>,
+  requireAuth: RequireAuthMiddleware,
+) {
+  const { requireAdmin } = createAuthMiddleware<AuthHandlerAuthedContext>(builder);
   return {
-    nearNonce: builder.nearNonce.handler(
-      async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.getSiwnNonce({
-            body: { accountId: input.accountId, networkId: input.networkId },
-          }),
-        );
-      },
-    ),
+    nearNonce: builder.nearNonce.effect(function* ({ input }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(near.nearNonce(input));
+    }),
 
-    nearVerify: builder.nearVerify.handler(
-      async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const req = new Request("http://localhost:3000/api/auth/near/verify", {
-          method: "POST",
-          headers: createHeaders(context.reqHeaders),
-          body: JSON.stringify(input),
-        });
-        return safeAuthApi(() =>
-          services.auth.api.verifySiwnMessage({
-            request: req,
-            body: {
-              signedMessage: input.signedMessage,
-              message: input.message,
-              recipient: input.recipient,
-              nonce: input.nonce,
-              accountId: input.accountId,
-            },
-          }),
-        );
-      },
-    ),
+    nearVerify: builder.nearVerify.effect(function* ({ input, context }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(near.nearVerify(createHeaders(context.reqHeaders), input));
+    }),
 
-    nearProfile: builder.nearProfile
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.getSiwnProfile({
-            headers: createHeaders(context.reqHeaders),
-            body: { accountId: input.accountId },
-          }),
-        );
-      }),
+    nearProfile: builder.nearProfile.use(requireAuth).effect(function* ({ input, context }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(
+        near.nearProfile(createHeaders(context.reqHeaders), input.accountId),
+      );
+    }),
 
-    nearLinkAccount: builder.nearLinkAccount
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        const reqHeaders = createHeaders(context.reqHeaders);
-        const req = new Request("http://localhost:3000/api/auth/near/link", {
-          method: "POST",
-          headers: reqHeaders,
-          body: JSON.stringify(input),
-        });
-        return safeAuthApi(() =>
-          services.auth.api.linkNearAccount({
-            request: req,
-            headers: reqHeaders,
-            body: {
-              signedMessage: input.signedMessage,
-              message: input.message,
-              recipient: input.recipient,
-              nonce: input.nonce,
-              accountId: input.accountId,
-            },
-          }),
-        );
-      }),
+    nearLinkAccount: builder.nearLinkAccount.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(near.nearLinkAccount(createHeaders(context.reqHeaders), input));
+    }),
 
-    nearUnlinkAccount: builder.nearUnlinkAccount
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.unlinkNearAccount({
-            headers: createHeaders(context.reqHeaders),
-            body: { accountId: input.accountId, network: input.network },
-          }),
-        );
-      }),
+    nearUnlinkAccount: builder.nearUnlinkAccount.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(
+        near.nearUnlinkAccount(createHeaders(context.reqHeaders), input),
+      );
+    }),
 
-    nearListAccounts: builder.nearListAccounts
-      .use(requireAuth)
-      .handler(async ({ context }: { context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.listNearAccounts({
-            headers: createHeaders(context.reqHeaders),
-          }),
-        );
-      }),
+    nearListAccounts: builder.nearListAccounts.use(requireAuth).effect(function* ({ context }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(near.nearListAccounts(createHeaders(context.reqHeaders)));
+    }),
 
-    nearRelay: builder.nearRelay
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.relayNearTransaction({
-            headers: createHeaders(context.reqHeaders),
-            body: { payload: input.payload },
-          }),
-        );
-      }),
+    nearRelay: builder.nearRelay.use(requireAuth).effect(function* ({ input, context }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(
+        near.nearRelay(createHeaders(context.reqHeaders), input.payload),
+      );
+    }),
 
-    nearRelayStatus: builder.nearRelayStatus
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.getRelayStatus({
-            headers: createHeaders(context.reqHeaders),
-            params: { txHash: input.txHash },
-          }),
-        );
-      }),
+    nearRelayStatus: builder.nearRelayStatus.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(
+        near.nearRelayStatus(createHeaders(context.reqHeaders), input.txHash),
+      );
+    }),
 
     nearRelayerInfo: builder.nearRelayerInfo
       .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        if (context.user?.role !== "admin") {
-          throw new ORPCError("FORBIDDEN", {
-            message: "Admin access required",
-            data: { apiKeyProvided: false },
-          });
-        }
-        return safeAuthApi(() =>
-          services.auth.api.getRelayerInfo({
-            headers: createHeaders(context.reqHeaders),
-            body: input ?? {},
-          }),
+      .use(requireAdmin)
+      .effect(function* ({ input, context }) {
+        const near = yield* NearService;
+        return yield* mapDomainError(
+          near.nearRelayerInfo(createHeaders(context.reqHeaders), input?.network),
         );
       }),
 
-    nearRelayHistory: builder.nearRelayHistory
-      .use(requireAuth)
-      .handler(async ({ context }: { context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.getRelayHistory({
-            headers: createHeaders(context.reqHeaders),
-          }),
-        );
-      }),
+    nearRelayHistory: builder.nearRelayHistory.use(requireAuth).effect(function* ({ context }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(near.nearRelayHistory(createHeaders(context.reqHeaders)));
+    }),
 
-    nearView: builder.nearView
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.viewContract({
-            headers: createHeaders(context.reqHeaders),
-            body: {
-              contractId: input.contractId,
-              methodName: input.methodName,
-              args: input.args,
-            },
-          }),
-        );
-      }),
+    nearView: builder.nearView.use(requireAuth).effect(function* ({ input, context }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(near.nearView(createHeaders(context.reqHeaders), input));
+    }),
 
     nearCheckSubAccountAvailability: builder.nearCheckSubAccountAvailability
       .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.checkSubAccountAvailability({
-            headers: createHeaders(context.reqHeaders),
-            body: {
-              subAccountName: input.subAccountName,
-              network: input.network,
-            },
-          }),
+      .effect(function* ({ input, context }) {
+        const near = yield* NearService;
+        return yield* mapDomainError(
+          near.nearCheckSubAccountAvailability(createHeaders(context.reqHeaders), input),
         );
       }),
 
-    nearCreateSubAccount: builder.nearCreateSubAccount
-      .use(requireAuth)
-      .handler(async ({ input, context }: { input: any; context: any }) => {
-        const services = Context.get(context["effect/context"], AuthServicesTag);
-        return safeAuthApi(() =>
-          services.auth.api.createSubAccount({
-            headers: createHeaders(context.reqHeaders),
-            body: {
-              subAccountName: input.subAccountName,
-              publicKey: input.publicKey,
-              network: input.network,
-            },
-          }),
-        );
-      }),
+    nearCreateSubAccount: builder.nearCreateSubAccount.use(requireAuth).effect(function* ({
+      input,
+      context,
+    }) {
+      const near = yield* NearService;
+      return yield* mapDomainError(
+        near.nearCreateSubAccount(createHeaders(context.reqHeaders), input),
+      );
+    }),
   };
 }

@@ -99,7 +99,7 @@ function callViewFunction(
   return authClient.near
     .getNearClient(network)
     .view(accountId, methodName, args)
-    .then((result) => result ?? null)
+    .then((result: unknown) => result ?? null)
     .catch(() => null);
 }
 

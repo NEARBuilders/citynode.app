@@ -1,4 +1,3 @@
-import { useLoginTranslation } from "@/i18n/runtime";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -32,7 +31,6 @@ export function ConfirmDialog({
   onConfirm,
   isPending,
 }: ConfirmDialogProps) {
-  const translate = useLoginTranslation();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -55,7 +53,7 @@ export function ConfirmDialog({
             disabled={isPending}
             data-testid="confirm-dialog-confirm"
           >
-            {isPending ? translate("auth.common.working") : confirmLabel}
+            {isPending ? "Working…" : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

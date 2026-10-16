@@ -71,7 +71,9 @@ function AccountProfileLayout() {
   const displayName = profile?.name || accountId;
   const initials = getNearInitials(profile?.name || accountId);
   const linktree = profile?.linktree
-    ? Object.entries(profile.linktree).filter(([, url]) => Boolean(url))
+    ? Object.entries(profile.linktree)
+        .filter(([, url]) => typeof url === "string" && url.length > 0)
+        .map(([label, url]): [string, string] => [label, String(url)])
     : [];
   const hasProfile = !!(profile?.name || profile?.description || avatarUrl || linktree.length);
 

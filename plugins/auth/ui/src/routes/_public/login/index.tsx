@@ -19,7 +19,6 @@ import { Field, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { LoginTranslator } from "@/i18n/catalogs";
-import { authErrorMessage } from "@/i18n/error-message";
 import { LoginLanguageSelector } from "@/i18n/language-selector";
 import { LoginI18nProvider, useLoginTranslation } from "@/i18n/runtime";
 import { markAddEmailPromptPending } from "@/lib/add-email-prompt";
@@ -117,18 +116,9 @@ function LoginPageContent() {
   const [unsupported, setUnsupported] = useState(false);
 
   useEffect(() => {
-    let active = true;
-    auth.near
-      .detectNearAccount()
-      .then((result: { accountId?: string | null } | null) => {
-        if (active) setDetectedAccount(result?.accountId ?? null);
-      })
-      .catch(() => {
-        if (active) setDetectedAccount(null);
-      });
-    return () => {
-      active = false;
-    };
+    void auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
+      if (result?.accountId) setDetectedAccount(result.accountId);
+    });
   }, [auth.near]);
 
   const handleSuccess = async (message: string) => {
@@ -199,7 +189,7 @@ function LoginPageContent() {
       onError: (error) => {
         setPending(null);
         if (isUnsupportedAuthenticatorError(error)) setUnsupported(true);
-        else toast.error(authErrorMessage(error, t));
+        else toast.error(error.message);
       },
     });
   };
@@ -233,7 +223,7 @@ function LoginPageContent() {
           size="sm"
           onClick={() => void handleNear(true)}
           disabled={pending !== null}
-          data-testid="login-switch-wallet-button"
+          data-testid="login.switch-wallet-button"
         >
           {t("auth.login.near.useAnother")}
         </Button>
@@ -275,7 +265,7 @@ function LoginPageContent() {
               variant="link"
               size="sm"
               onClick={() => setView("sign-in")}
-              data-testid="login-signin-link"
+              data-testid="login.signin-link"
             >
               {t("auth.login.signIn")}
             </Button>
@@ -289,7 +279,7 @@ function LoginPageContent() {
             className="w-full"
             onClick={() => void handleCreate()}
             disabled={pending !== null}
-            data-testid="login-create-account-button"
+            data-testid="login.create-account-button"
           >
             {pending === "create" ? (
               <Spinner data-icon="inline-start" />
@@ -299,7 +289,7 @@ function LoginPageContent() {
             {t("auth.login.create.action")}
           </Button>
           {unsupported && (
-            <div className="flex flex-col gap-4" data-testid="login-unsupported-authenticator">
+            <div className="flex flex-col gap-4" data-testid="login.unsupported-authenticator">
               <p className="text-center text-sm text-muted-foreground">
                 {t("auth.login.create.unsupported")}
               </p>
@@ -325,7 +315,7 @@ function LoginPageContent() {
             variant="link"
             size="sm"
             onClick={() => setView("create")}
-            data-testid="login-create-account-link"
+            data-testid="login.create-account-link"
           >
             {t("auth.login.create.link")}
           </Button>
@@ -333,7 +323,7 @@ function LoginPageContent() {
       }
     >
       {banned && (
-        <p className="text-center text-sm text-destructive" data-testid="login-banned">
+        <p className="text-center text-sm text-destructive" data-testid="login.banned">
           {t("auth.login.suspended")}
         </p>
       )}
@@ -349,7 +339,7 @@ function LoginPageContent() {
               name="username"
               autoComplete="username webauthn"
               placeholder={t("auth.login.passkey.savedPlaceholder")}
-              data-testid="login-passkey-autofill"
+              data-testid="login.passkey-autofill"
             />
           </Field>
         )}
@@ -359,7 +349,7 @@ function LoginPageContent() {
           className="w-full"
           onClick={() => void handlePasskey()}
           disabled={pending !== null}
-          data-testid="login-passkey-button"
+          data-testid="login.passkey-button"
         >
           {pending === "passkey" ? (
             <Spinner data-icon="inline-start" />
@@ -371,7 +361,7 @@ function LoginPageContent() {
         {passkeyMissing && (
           <p
             className="text-center text-sm text-muted-foreground"
-            data-testid="login-no-passkey-hint"
+            data-testid="login.no-passkey-hint"
           >
             {isDesktop
               ? t("auth.login.passkey.missingDesktop")
@@ -390,7 +380,7 @@ function LoginPageContent() {
             className="w-full"
             onClick={() => setView("phone")}
             disabled={pending !== null}
-            data-testid="login-device-button"
+            data-testid="login.device-button"
           >
             <DeviceMobileIcon data-icon="inline-start" />
             {t("auth.login.phone.action")}

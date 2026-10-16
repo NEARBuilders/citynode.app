@@ -32,13 +32,10 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { authErrorMessage } from "@/i18n/error-message";
-import { useLoginTranslation } from "@/i18n/runtime";
 import { passkeyQueryKey } from "@/lib/query-keys";
 import { MethodHeader } from "./-method-header";
 
 export function PasskeysMethod() {
-  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const { data: passkeys = [], isPending } = useQuery({
@@ -52,7 +49,7 @@ export function PasskeysMethod() {
 
   const [adding, setAdding] = useState(false);
   const [passkeyName, setPasskeyName] = useState("");
-  const [passkeyToDelete, setPasskeyToDelete] = useState<Passkey>(null);
+  const [passkeyToDelete, setPasskeyToDelete] = useState<Passkey | null>(null);
 
   const addPasskeyMutation = useMutation({
     mutationFn: async () => {
@@ -65,10 +62,10 @@ export function PasskeysMethod() {
     onSuccess: () => {
       setPasskeyName("");
       setAdding(false);
-      toast.success(translate("auth.passkey.added"));
+      toast.success("Passkey added");
       void queryClient.invalidateQueries({ queryKey: passkeyQueryKey });
     },
-    onError: (err: Error) => toast.error(authErrorMessage(err, translate)),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const removePasskeyMutation = useMutation({
@@ -78,10 +75,10 @@ export function PasskeysMethod() {
     },
     onSuccess: () => {
       setPasskeyToDelete(null);
-      toast.success(translate("auth.passkey.removed"));
+      toast.success("Passkey removed");
       void queryClient.invalidateQueries({ queryKey: passkeyQueryKey });
     },
-    onError: (err: Error) => toast.error(authErrorMessage(err, translate)),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const handleAdd = (event: FormEvent<HTMLFormElement>) => {
@@ -92,8 +89,8 @@ export function PasskeysMethod() {
   return (
     <section className="flex flex-col gap-4" data-testid="settings.passkeys">
       <MethodHeader
-        title={translate("auth.passkey.title")}
-        description={translate("auth.passkey.description")}
+        title="Passkeys"
+        description="Sign in with your fingerprint, face or device PIN."
         action={
           <Button
             variant="outline"
@@ -101,7 +98,7 @@ export function PasskeysMethod() {
             data-testid="settings.add-passkey-button"
           >
             <PlusIcon data-icon="inline-start" />
-            {translate("auth.passkey.add")}
+            Add passkey
           </Button>
         }
       />
@@ -116,14 +113,11 @@ export function PasskeysMethod() {
               </ItemMedia>
               <ItemContent className="basis-0">
                 <ItemTitle className="max-w-full">
-                  <span className="min-w-0 truncate">
-                    {passkey.name || translate("auth.passkey.key")}
-                  </span>
+                  <span className="min-w-0 truncate">{passkey.name || "Passkey"}</span>
                 </ItemTitle>
                 {passkey.createdAt && (
                   <ItemDescription>
-                    {translate("auth.common.added")}
-                    <LocalDate value={passkey.createdAt} />
+                    Added <LocalDate value={passkey.createdAt} />
                   </ItemDescription>
                 )}
               </ItemContent>
@@ -135,9 +129,7 @@ export function PasskeysMethod() {
                         variant="ghost"
                         size="icon"
                         disabled={removePasskeyMutation.isPending}
-                        aria-label={translate("auth.common.actionsNamed", {
-                          name: passkey.name || translate("auth.passkey.fallback"),
-                        })}
+                        aria-label={`Actions for ${passkey.name || "passkey"}`}
                         data-testid={`settings.passkey-menu-${passkey.id}`}
                       />
                     }
@@ -150,7 +142,7 @@ export function PasskeysMethod() {
                       onClick={() => setPasskeyToDelete(passkey)}
                     >
                       <TrashIcon />
-                      {translate("auth.passkey.remove")}
+                      Remove passkey
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -160,7 +152,7 @@ export function PasskeysMethod() {
         </ItemGroup>
       ) : (
         <p className="text-sm text-muted-foreground" data-testid="settings.passkeys-empty">
-          {translate("auth.passkey.empty")}
+          No passkeys yet. Add one to sign in with your fingerprint or face.
         </p>
       )}
 
@@ -168,30 +160,26 @@ export function PasskeysMethod() {
         <DialogContent>
           <form onSubmit={handleAdd} className="flex flex-col gap-6">
             <DialogHeader>
-              <DialogTitle>{translate("auth.passkey.addTitle")}</DialogTitle>
-              <DialogDescription>{translate("auth.passkey.confirm")}</DialogDescription>
+              <DialogTitle>Add a passkey</DialogTitle>
+              <DialogDescription>Your device will ask you to confirm.</DialogDescription>
             </DialogHeader>
             <Field>
-              <FieldLabel htmlFor="settings-passkey-name">
-                {translate("auth.common.name")}
-              </FieldLabel>
+              <FieldLabel htmlFor="settings-passkey-name">Name</FieldLabel>
               <Input
                 id="settings-passkey-name"
                 type="text"
                 value={passkeyName}
                 onChange={(e) => setPasskeyName(e.target.value)}
-                placeholder={translate("auth.passkey.example")}
+                placeholder="e.g. Work laptop"
                 maxLength={64}
               />
             </Field>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAdding(false)}>
-                {translate("auth.common.cancel")}
+                Cancel
               </Button>
               <Button type="submit" disabled={addPasskeyMutation.isPending}>
-                {addPasskeyMutation.isPending
-                  ? translate("auth.onboard.passkeyPending")
-                  : translate("auth.passkey.create")}
+                {addPasskeyMutation.isPending ? "Waiting for passkey…" : "Create passkey"}
               </Button>
             </DialogFooter>
           </form>
@@ -203,12 +191,10 @@ export function PasskeysMethod() {
         onOpenChange={(open: boolean) => {
           if (!open) setPasskeyToDelete(null);
         }}
-        title={translate("auth.passkey.removeTitle")}
-        description={translate("auth.settings.unlinkDescription", {
-          name: passkeyToDelete?.name || translate("auth.passkey.thisKey"),
-        })}
+        title="Remove passkey?"
+        description={`You won't be able to sign in with ${passkeyToDelete?.name || "this passkey"} anymore.`}
         confirmLabel="Remove"
-        cancelLabel={translate("auth.common.cancel")}
+        cancelLabel="Cancel"
         variant="destructive"
         onConfirm={() => {
           if (passkeyToDelete) removePasskeyMutation.mutate(passkeyToDelete.id);

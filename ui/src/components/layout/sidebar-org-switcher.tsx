@@ -1,9 +1,9 @@
 import { CaretUpDownIcon } from "@phosphor-icons/react";
-import type { Organization } from "@/app";
 import { LogoMark } from "@/components/logo";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { useAppTranslation } from "@/i18n/runtime";
+import type { Organization } from "@/lib/queries/organizations";
 import { OrgMark } from "./org-mark";
 import { OrgSwitcherMenuContent } from "./org-switcher-menu";
 

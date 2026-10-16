@@ -1,27 +1,21 @@
-import type { WithEffectContext } from "@orpc/experimental-effect";
 import { type Implementer, ORPCError } from "@orpc/server";
 import { and, count, eq } from "drizzle-orm";
 import { Effect } from "effect";
-import type { AuthContextShape } from "everything-dev/api";
-import type { ContractType } from "../contract";
+import type { AuthErrors, ContractType } from "../contract";
+import { DatabaseTag } from "../db/layer";
 import * as schema from "../db/schema";
 import { provisionDefaultTeams } from "../default-teams";
-import { AuthServicesTag, type PluginServices } from "../service-types";
+import type { AuthHandlerContext } from "../middleware";
+import { AuthApiTag, type PluginServices } from "../service-types";
 import { createHeaders, tryJsonParse } from "../utils";
 
-type CommunityContext = AuthContextShape &
-  WithEffectContext<AuthServicesTag> & { reqHeaders?: Record<string, string> };
+type ScopedServices = Pick<PluginServices, "auth" | "db">;
 
 function conflict(message: string) {
   return new ORPCError("CONFLICT", { message });
 }
 
-type AdminErrors = {
-  UNAUTHORIZED: (input: { message: string; data: Record<string, never> }) => ORPCError<any, any>;
-  FORBIDDEN: (input: { message: string; data: Record<string, never> }) => ORPCError<any, any>;
-};
-
-function reviewingAdmin(services: PluginServices, context: CommunityContext, errors: AdminErrors) {
+function reviewingAdmin(services: ScopedServices, context: AuthHandlerContext, errors: AuthErrors) {
   return Effect.gen(function* () {
     const sessionUser =
       context.userId && context.user
@@ -35,7 +29,9 @@ function reviewingAdmin(services: PluginServices, context: CommunityContext, err
               }),
           }))?.user;
     if (!sessionUser?.id) {
-      return yield* Effect.fail(errors.UNAUTHORIZED({ message: "Sign in first", data: {} }));
+      return yield* Effect.fail(
+        errors.UNAUTHORIZED({ message: "Sign in first", data: { apiKeyProvided: false } }),
+      );
     }
     if (sessionUser.role !== "admin") {
       return yield* Effect.fail(errors.FORBIDDEN({ message: "Platform admin required", data: {} }));
@@ -45,7 +41,7 @@ function reviewingAdmin(services: PluginServices, context: CommunityContext, err
 }
 
 export function createCommunityOrganizationHandlers(
-  builder: Implementer<ContractType, CommunityContext>,
+  builder: Implementer<ContractType, AuthHandlerContext>,
 ) {
   return {
     provisionCommunityOrganization: builder.provisionCommunityOrganization.effect(function* ({
@@ -53,7 +49,7 @@ export function createCommunityOrganizationHandlers(
       context,
       errors,
     }) {
-      const services = yield* AuthServicesTag;
+      const services: ScopedServices = { auth: (yield* AuthApiTag).auth, db: yield* DatabaseTag };
       const reviewerId = yield* reviewingAdmin(services, context, errors);
       return yield* Effect.tryPromise({
         try: () =>
@@ -217,7 +213,7 @@ export function createCommunityOrganizationHandlers(
       context,
       errors,
     }) {
-      const services = yield* AuthServicesTag;
+      const services: ScopedServices = { auth: (yield* AuthApiTag).auth, db: yield* DatabaseTag };
       yield* reviewingAdmin(services, context, errors);
       return yield* Effect.tryPromise({
         try: () =>

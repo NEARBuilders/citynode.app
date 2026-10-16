@@ -7,13 +7,14 @@ import {
   createTestOrg,
   createTestServices,
   createTestUser,
+  TEST_PERMISSIONS,
   type TestUser,
 } from "../helpers";
 
 let services: Awaited<ReturnType<typeof createTestServices>>;
 
 beforeAll(async () => {
-  services = await createTestServices();
+  services = await createTestServices(undefined, undefined, { captureEmails: true });
 }, 30000);
 
 afterAll(async () => {
@@ -198,7 +199,7 @@ describe("without an email provider", () => {
       {
         secret: process.env.BETTER_AUTH_SECRET!,
         baseUrl: "http://localhost:3000",
-        siwn: { recipient: "test.near" },
+        siwn: { recipient: "test.near", permissions: TEST_PERMISSIONS },
       },
       services.services.db,
     );

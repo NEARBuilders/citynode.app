@@ -8,57 +8,19 @@ import {
   anonymous,
   deviceAuthorization,
   emailOTP,
+  haveIBeenPwned,
+  lastLoginMethod,
   organization,
   phoneNumber,
 } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
-import {
-  adminAc,
-  defaultStatements,
-  memberAc,
-  ownerAc,
-} from "better-auth/plugins/organization/access";
 import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
 import { eq, gt } from "drizzle-orm";
-import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
-import { emailChangePolicy, UNUSED_EMAIL_OTP_PATHS } from "./email-change-policy";
-import { organizationApproval } from "./organization-approval";
-import {
-  createPasskeySignUpUser,
-  passkeyAuthenticatorSelection,
-  passkeySignUp,
-  requireUserVerifiedSignIn,
-  requireWalletCapablePasskey,
-} from "./passkey-sign-up";
-
-const orgStatements = {
-  ...defaultStatements,
-  apiKey: ["create", "read", "update", "delete"],
-  email: ["read"],
-} as const;
-
-const orgAc = createAccessControl(orgStatements);
-
-const orgRoles = {
-  owner: orgAc.newRole({
-    ...ownerAc.statements,
-    apiKey: ["create", "read", "update", "delete"],
-    email: ["read"],
-  }),
-  admin: orgAc.newRole({
-    ...adminAc.statements,
-    apiKey: ["create", "read", "update", "delete"],
-    email: ["read"],
-  }),
-  member: orgAc.newRole({
-    ...memberAc.statements,
-    apiKey: ["read"],
-  }),
-};
-
-import type { AuthConfig } from "./auth-config";
+import type { AuthConfig, AuthPermissionStatements } from "./auth-config";
 import type { Database as AuthDatabase } from "./db";
 import * as schema from "./db/schema";
+import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
+import { emailChangePolicy, UNUSED_EMAIL_OTP_PATHS } from "./email-change-policy";
 import {
   isNearInvitation,
   isNearNetwork,
@@ -66,8 +28,25 @@ import {
   nearInvitations,
   normalizeNearAccountId,
 } from "./near-invitations";
+import { organizationApproval } from "./organization-approval";
 import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
+import {
+  createPasskeySignUpUser,
+  passkeyAuthenticatorSelection,
+  passkeySignUp,
+  requireUserVerifiedSignIn,
+  requireWalletCapablePasskey,
+} from "./passkey-sign-up";
+import { setEmail } from "./set-email";
 import { isSyntheticEmail } from "./synthetic-email";
+
+function buildOrganizationAccess(permissions: AuthPermissionStatements) {
+  const ac = createAccessControl(permissions.statements);
+  const roles = Object.fromEntries(
+    Object.entries(permissions.roles).map(([name, grants]) => [name, ac.newRole(grants)]),
+  );
+  return { ac, roles };
+}
 
 export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPluginOptions & {
   recipients: { mainnet: string; testnet: string };
@@ -158,49 +137,35 @@ export function buildSiwnOptions(config: AuthConfig): Parameters<typeof siwn>[0]
   };
 }
 
-export interface EmailMessage {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-}
-
-export type EmailTransport = (message: EmailMessage) => Promise<boolean>;
-
 async function sendEmail(
-  { to, subject, text, html }: EmailMessage,
+  { to, subject, text, html }: { to: string; subject: string; text: string; html?: string },
   emailApiKey?: string,
   from?: string,
-): Promise<boolean> {
-  try {
-    if (!emailApiKey || !from) {
-      throw new Error("no email API key or from address configured");
+) {
+  if (!emailApiKey || !from) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Email delivery is not configured (RESEND_API_KEY and email.from required)");
     }
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${emailApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from, to, subject, text, ...(html ? { html } : {}) }),
-    });
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Resend error ${res.status}: ${errorText}`);
-    }
-    return true;
-  } catch (err) {
-    console.log(`\n📧 [Email Preview — ${err instanceof Error ? err.message : "send failed"}] ===`);
+    console.log(`\n📧 [Email Preview — not configured] ===`);
     console.log(`To: ${to}`);
     console.log(`From: ${from ?? "(not configured)"}`);
     console.log(`Subject: ${subject}`);
     console.log(`----------------------------------------------------------------`);
     console.log(text);
-    if (html) {
-      console.log(`\n[HTML version available but not shown in console]`);
-    }
     console.log(`================================================================\n`);
-    return false;
+    return;
+  }
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${emailApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from, to, subject, text, ...(html ? { html } : {}) }),
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Resend error ${res.status}: ${errorText}`);
   }
 }
 
@@ -282,21 +247,48 @@ async function createPersonalOrganization(
   return personalOrg;
 }
 
+export interface EmailMessage {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}
+
+export type EmailTransport = (message: EmailMessage) => Promise<boolean>;
+
 export function createAuthInstance(
   config: AuthConfig,
   db: AuthDatabase,
   secrets?: { email?: { resend?: string } },
   options?: { deliverEmail?: EmailTransport },
 ) {
+  const { ac: orgAc, roles: orgRoles } = buildOrganizationAccess(config.siwn.permissions);
   const emailApiKey = secrets?.email?.resend;
   const emailConfig = config.email;
   const deliverEmail: EmailTransport =
-    options?.deliverEmail ?? ((message) => sendEmail(message, emailApiKey, emailConfig?.from));
+    options?.deliverEmail ??
+    (async (message) => {
+      await sendEmail(message, emailApiKey, emailConfig?.from);
+      return true;
+    });
   const emailProviderConfigured = !!options?.deliverEmail || (!!emailApiKey && !!emailConfig?.from);
   const passkeyOptions = resolvePasskeyRelyingPartyOptions(config);
   const twilioConfig = config.phoneNumber?.twilio;
   const githubConfig = config.socialProviders?.github;
   const googleConfig = config.socialProviders?.google;
+  const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
+  if (githubConfig?.clientId && githubConfig.clientSecret) {
+    socialProviders.github = {
+      clientId: githubConfig.clientId,
+      clientSecret: githubConfig.clientSecret,
+    };
+  }
+  if (googleConfig?.clientId && googleConfig.clientSecret) {
+    socialProviders.google = {
+      clientId: googleConfig.clientId,
+      clientSecret: googleConfig.clientSecret,
+    };
+  }
   const network = config.network ?? "mainnet";
   const siwnOptions = buildSiwnOptions(config);
   const membershipPolicy = createOrganizationMembershipPolicy(config.organizationMembershipLimit);
@@ -329,20 +321,13 @@ export function createAuthInstance(
     ...(process.env.BETTER_AUTH_RATE_LIMIT_DISABLED === "1"
       ? { rateLimit: { enabled: false } }
       : {}),
-    socialProviders: {
-      github: {
-        clientId: githubConfig?.clientId ?? "",
-        clientSecret: githubConfig?.clientSecret ?? "",
-      },
-      google: {
-        clientId: googleConfig?.clientId ?? "",
-        clientSecret: googleConfig?.clientSecret ?? "",
-      },
-    },
+    socialProviders,
     plugins: [
       siwn(siwnOptions),
       admin({ defaultRole: "user", adminRoles: ["admin"] }),
       anonymous({ emailDomainName: mainnetRecipient }),
+      haveIBeenPwned({ enabled: process.env.NODE_ENV !== "test" }),
+      lastLoginMethod(),
       ...(twilioConfig
         ? [
             phoneNumber({
@@ -381,6 +366,7 @@ export function createAuthInstance(
           });
         },
       }),
+      setEmail({ requireVerification: Boolean(emailApiKey && emailConfig?.from) }),
       organizationApproval(db),
       organization({
         ac: orgAc,
@@ -544,6 +530,15 @@ export function createAuthInstance(
           to: user.email,
           subject: "Reset your password",
           text: `Click the link to reset your password: ${url}`,
+        });
+      },
+    },
+    emailVerification: {
+      sendVerificationEmail: async ({ user, url }) => {
+        await deliverEmail({
+          to: user.email,
+          subject: "Verify your email",
+          text: `Click the link to verify your email: ${url}`,
         });
       },
     },

@@ -112,14 +112,14 @@ function DeviceVerifyPage() {
     <AuthPanel
       icon={<DeviceMobileIcon />}
       title={translate("auth.pair.title")}
-      titleTestId="device-verify-heading"
+      titleTestId="device.verify-heading"
       description={showCode ? translate("auth.pair.matches") : translate("auth.pair.enterCode")}
     >
       {showCode ? (
         <div className="flex flex-col items-center gap-2 rounded-3xl bg-muted px-6 py-8">
           <span
             className="font-mono text-3xl font-semibold tracking-widest break-all text-foreground"
-            data-testid="device-verified-code"
+            data-testid="device.verified-code"
           >
             {user_code}
           </span>
@@ -141,9 +141,9 @@ function DeviceVerifyPage() {
                 autoCorrect="off"
                 autoComplete="one-time-code"
                 className="flex-1 font-mono"
-                data-testid="device-user-code-input"
+                data-testid="device.user-code-input"
               />
-              <Button type="submit" disabled={!code.trim()} data-testid="device-verify-button">
+              <Button type="submit" disabled={!code.trim()} data-testid="device.verify-button">
                 {translate("auth.common.continue")}
               </Button>
             </div>
@@ -152,7 +152,7 @@ function DeviceVerifyPage() {
       )}
 
       {error && (
-        <p className="text-center text-sm text-destructive" data-testid="device-verify-error">
+        <p className="text-center text-sm text-destructive" data-testid="device.verify-error">
           {translate(error)}
         </p>
       )}
@@ -160,7 +160,7 @@ function DeviceVerifyPage() {
       {claiming && (
         <p
           className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
-          data-testid="device-claiming"
+          data-testid="device.claiming"
         >
           <Spinner />
           {translate("auth.pair.checking")}
@@ -174,7 +174,7 @@ function DeviceVerifyPage() {
           variant={showCode ? "default" : "outline"}
           className="w-full"
           onClick={signInToContinue}
-          data-testid="device-signin-redirect-button"
+          data-testid="device.signin-redirect-button"
         >
           {translate("auth.pair.signInContinue")}
         </Button>
