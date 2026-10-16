@@ -75,7 +75,7 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
     setEnabling(true);
     try {
       await auth.near.addSessionGasKey({
-        onError: (error) => toast.error(appErrorMessage(error, translate)),
+        onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
       });
       const funded = await auth.near.ensureGasKeyFunded();
       if (funded) {

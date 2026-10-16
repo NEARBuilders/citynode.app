@@ -5,8 +5,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { authErrorMessage } from "@/i18n/error-message";
-import { useLoginTranslation } from "@/i18n/runtime";
 
 export function DisplayNameStep({
   initialName,
@@ -15,7 +13,6 @@ export function DisplayNameStep({
   initialName: string;
   onDone: () => void;
 }) {
-  const translate = useLoginTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const [name, setName] = useState(initialName);
@@ -28,7 +25,7 @@ export function DisplayNameStep({
     const { error } = await auth.updateUser({ name: trimmed });
     setPending(false);
     if (error) {
-      toast.error(authErrorMessage(error, translate));
+      toast.error(error.message || "Could not save your name");
       return;
     }
     await refreshSessionCache(auth, queryClient);
@@ -42,14 +39,12 @@ export function DisplayNameStep({
       data-testid="onboard.display-name"
     >
       <Field>
-        <FieldLabel htmlFor="onboard-display-name">
-          {translate("auth.onboard.nameQuestion")}
-        </FieldLabel>
+        <FieldLabel htmlFor="onboard-display-name">What should organizers call you?</FieldLabel>
         <Input
           id="onboard-display-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder={translate("auth.onboard.name")}
+          placeholder="Your name"
           autoComplete="name"
           maxLength={64}
           data-testid="onboard.display-name-input"
@@ -62,7 +57,7 @@ export function DisplayNameStep({
         disabled={pending || !name.trim()}
         data-testid="onboard.display-name-save"
       >
-        {pending ? translate("auth.common.saving") : translate("auth.common.continue")}
+        {pending ? "Saving…" : "Continue"}
       </Button>
       <Button
         type="button"
@@ -72,7 +67,7 @@ export function DisplayNameStep({
         disabled={pending}
         data-testid="onboard.display-name-skip"
       >
-        {translate("auth.common.skip")}
+        Skip for now
       </Button>
     </form>
   );

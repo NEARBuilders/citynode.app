@@ -1,6 +1,6 @@
 {
   "name": "@everything-dev/auth-plugin",
-  "version": "1.2.3",
+  "version": "2.0.0-rc.2",
   "description": "Authentication plugin using Better Auth with NEAR Protocol, passkeys, and more",
   "type": "module",
   "exports": {
@@ -20,12 +20,14 @@
     "@base-ui/react": "catalog:",
     "@better-auth/api-key": "catalog:",
     "@better-auth/passkey": "catalog:",
+    "@electric-sql/pglite": "catalog:",
     "@lingui/core": "catalog:",
     "@lingui/message-utils": "catalog:",
     "@lingui/react": "catalog:",
-    "@electric-sql/pglite": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
+    "@orpc/experimental-effect": "catalog:",
+    "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/tanstack-query": "catalog:",
     "@phosphor-icons/react": "catalog:",

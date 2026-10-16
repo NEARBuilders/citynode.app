@@ -9,6 +9,7 @@ import { normalizeAuthConfig } from "./config";
 import { authSecretsSchema, authVariablesSchema } from "./config-schemas";
 import { contract } from "./contract";
 import { DatabaseLive, DatabaseTag } from "./db/layer";
+import { createAdminUsersHandlers } from "./handlers/admin-users";
 import { createApiKeyHandlers } from "./handlers/api-keys";
 import { createCommunityOrganizationHandlers } from "./handlers/community-organizations";
 import { createInvitationHandlers } from "./handlers/invitations";
@@ -18,6 +19,7 @@ import { createOnboardingHandlers } from "./handlers/onboarding";
 import { createOnboardingJoinHandlers } from "./handlers/onboarding-joins";
 import { createOrganizationRequestHandlers } from "./handlers/organization-requests";
 import { createOrganizationHandlers } from "./handlers/organizations";
+import { createPasskeyHandlers } from "./handlers/passkeys";
 import { createSessionHandlers } from "./handlers/session";
 import { createTeamHandlers } from "./handlers/teams";
 import type { PluginsClient } from "./lib/plugins-client.gen";
@@ -26,7 +28,9 @@ import { createOnboardingCodeCipher } from "./onboarding-code-cipher";
 import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
 import { OrphanSweepLive } from "./orphan-sweep";
 import { AuthServicesTag } from "./service-types";
+import { buildAuthServicesLayer } from "./service-wiring";
 import { toError } from "./utils";
+import { socialProviderWarnings } from "./warnings";
 
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: authVariablesSchema,
@@ -41,6 +45,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   servicesTag: AuthServicesTag,
 
+  warnings: socialProviderWarnings,
+
   initialize: (config) =>
     Effect.gen(function* () {
       const db = yield* buildScoped(DatabaseTag, DatabaseLive(config.secrets.AUTH_DATABASE_URL));
@@ -50,19 +56,27 @@ export default createPlugin.withPlugins<PluginsClient>()({
       const auth = createAuthInstance(authConfig, db, {
         email: { resend: config.secrets.RESEND_API_KEY },
       });
+      const handler = (req: Request) => auth.handler(req);
+      const membershipPolicy = createOrganizationMembershipPolicy(
+        authConfig.organizationMembershipLimit,
+      );
+      const onboardingCodeCipher = createOnboardingCodeCipher(authConfig.secret);
+      const permissionRegistry = {
+        statements: authConfig.siwn.permissions.statements,
+        roleGrants: authConfig.siwn.permissions.roles,
+      };
 
       yield* Effect.log("[Auth] Better Auth instance created");
 
       return Layer.mergeAll(
-        Layer.succeed(AuthServicesTag, {
+        buildAuthServicesLayer({
           auth,
           db,
-          handler: (req: Request) => auth.handler(req),
+          handler,
           apiKeyHeaders,
-          membershipPolicy: createOrganizationMembershipPolicy(
-            authConfig.organizationMembershipLimit,
-          ),
-          onboardingCodeCipher: createOnboardingCodeCipher(authConfig.secret),
+          membershipPolicy,
+          onboardingCodeCipher,
+          permissionRegistry,
         }),
         OrphanSweepLive(db),
       );
@@ -73,6 +87,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
     return {
       ...createSessionHandlers(builder),
+      ...createPasskeyHandlers(builder, requireAuth),
       ...createOrganizationHandlers(builder, requireAuth),
       ...createOrganizationRequestHandlers(builder, requireAuth),
       ...createCommunityOrganizationHandlers(builder),
@@ -80,6 +95,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       ...createInvitationHandlers(builder, requireAuth),
       ...createApiKeyHandlers(builder, requireAuth),
       ...createTeamHandlers(builder, requireAuth),
+      ...createAdminUsersHandlers(builder, requireAuth),
       ...createNearHandlers(builder, requireAuth),
       ...createOnboardingHandlers(builder, requireAuth),
       ...createOnboardingJoinHandlers(builder, requireAuth),

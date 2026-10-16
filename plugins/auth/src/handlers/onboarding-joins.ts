@@ -2,6 +2,7 @@ import type { Implementer } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { Effect, Result } from "effect";
 import type { ContractType } from "../contract";
+import { DatabaseTag } from "../db/layer";
 import * as schema from "../db/schema";
 import type { createRequireAuth } from "../middleware";
 import {
@@ -12,7 +13,7 @@ import {
   redeemedWithin,
   redemptionCounts,
 } from "../onboarding-redemption-counts";
-import { AuthServicesTag } from "../service-types";
+import { AuthApiTag } from "../service-types";
 import { toORPCError } from "../utils";
 import { requireOrganizerContext } from "./onboarding";
 import type { OrganizationRequestContext } from "./organization-requests";
@@ -28,9 +29,9 @@ export function createOnboardingJoinHandlers(
       errors,
     }) {
       if (context.user?.role !== "admin") {
-        return yield* Effect.fail(errors.FORBIDDEN({ message: "Requires role: admin" }));
+        return yield* Effect.fail(errors.FORBIDDEN({ message: "Requires role: admin", data: {} }));
       }
-      const services = yield* AuthServicesTag;
+      const services = { auth: (yield* AuthApiTag).auth, db: yield* DatabaseTag };
       const window = monthWindow(input.month, new Date());
       const inMonth = redeemedWithin(window);
       const [organizations, [totals]] = yield* Effect.tryPromise({
@@ -61,7 +62,7 @@ export function createOnboardingJoinHandlers(
       context,
       errors,
     }) {
-      const services = yield* AuthServicesTag;
+      const services = { auth: (yield* AuthApiTag).auth, db: yield* DatabaseTag };
       const organizer = yield* Effect.result(
         Effect.tryPromise({
           try: () =>
@@ -76,10 +77,16 @@ export function createOnboardingJoinHandlers(
       );
       if (Result.isFailure(organizer)) {
         const { code, message } = organizer.failure;
-        if (code === "UNAUTHORIZED") return yield* Effect.fail(errors.UNAUTHORIZED({ message }));
-        if (code === "FORBIDDEN") return yield* Effect.fail(errors.FORBIDDEN({ message }));
-        if (code === "NOT_FOUND") return yield* Effect.fail(errors.NOT_FOUND({ message }));
-        if (code === "BAD_REQUEST") return yield* Effect.fail(errors.BAD_REQUEST({ message }));
+        if (code === "UNAUTHORIZED")
+          return yield* Effect.fail(
+            errors.UNAUTHORIZED({ message, data: { apiKeyProvided: false } }),
+          );
+        if (code === "FORBIDDEN")
+          return yield* Effect.fail(errors.FORBIDDEN({ message, data: {} }));
+        if (code === "NOT_FOUND")
+          return yield* Effect.fail(errors.NOT_FOUND({ message, data: {} }));
+        if (code === "BAD_REQUEST")
+          return yield* Effect.fail(errors.BAD_REQUEST({ message, data: {} }));
         return yield* Effect.die(organizer.failure);
       }
       const { organizationId } = organizer.success;

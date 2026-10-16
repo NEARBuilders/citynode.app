@@ -384,7 +384,11 @@ describe("readStakePoolStatus", () => {
       stakingPaused: false,
       validatorSet: "current",
     });
-    expect(getNearClient.mock.calls.every(([network]) => network === "testnet")).toBe(true);
+    expect(
+      getNearClient.mock.calls.every(
+        ([network]: ("mainnet" | "testnet" | undefined)[]) => network === "testnet",
+      ),
+    ).toBe(true);
     expect(call).toHaveBeenCalledWith("validators", [null]);
   });
 

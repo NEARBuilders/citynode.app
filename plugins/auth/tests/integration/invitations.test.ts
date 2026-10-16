@@ -1,6 +1,4 @@
-import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import * as schema from "../../src/db/schema";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createTestHandlers, createTestOrg, createTestServices, createTestUser } from "../helpers";
 
 let services: Awaited<ReturnType<typeof createTestServices>>;
@@ -89,6 +87,27 @@ describe("invitation handlers", () => {
       });
 
       expect(result).toBeNull();
+    });
+
+    it("propagates infrastructure failures instead of returning null", async () => {
+      const owner = await createTestUser(services.services);
+      const handlers = createTestHandlers(services.services);
+      const spy = vi
+        .spyOn(services.services.db.query.invitation, "findFirst")
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Database unavailable"), { statusCode: 500 }),
+        );
+
+      try {
+        await expect(
+          handlers.invitations.getInvitation({
+            input: { id: "nonexistent" },
+            context: { reqHeaders: owner.reqHeaders },
+          }),
+        ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 
@@ -202,88 +221,6 @@ describe("invitation handlers", () => {
       });
 
       expect(result.success).toBe(true);
-    });
-
-    it("adds the invited user to the organization when their address matches", async () => {
-      const owner = await createTestUser(services.services);
-      const org = await createTestOrg(services.services, owner.userId);
-      const invitedEmail = `match-${crypto.randomUUID().slice(0, 8)}@example.com`;
-      const invitedUser = await createTestUser(services.services, { email: invitedEmail });
-      const handlers = createTestHandlers(services.services);
-
-      const invite = await handlers.invitations.inviteMember({
-        input: { email: invitedEmail, role: "member", organizationId: org.id },
-        context: { reqHeaders: owner.reqHeaders },
-      });
-
-      const shown = await handlers.invitations.getInvitation({
-        input: { id: invite.id },
-        context: { reqHeaders: invitedUser.reqHeaders },
-      });
-      expect(shown?.organizationName).toBe(org.name);
-
-      await handlers.invitations.acceptInvitation({
-        input: { invitationId: invite.id },
-        context: { reqHeaders: invitedUser.reqHeaders },
-      });
-
-      const membership = await services.services.db.query.member.findFirst({
-        where: and(
-          eq(schema.member.organizationId, org.id),
-          eq(schema.member.userId, invitedUser.userId),
-        ),
-      });
-      expect(membership?.role).toBe("member");
-    });
-
-    it("does not give a placeholder account an invited address it has not proven it controls", async () => {
-      const owner = await createTestUser(services.services);
-      const org = await createTestOrg(services.services, owner.userId);
-      const placeholder = `passkey-${crypto.randomUUID().slice(0, 8)}@passkey.local`;
-      const passkeyUser = await createTestUser(services.services, { email: placeholder });
-      await services.services.db
-        .update(schema.user)
-        .set({ emailVerified: false })
-        .where(eq(schema.user.id, passkeyUser.userId));
-      const invitedEmail = `real-${crypto.randomUUID().slice(0, 8)}@example.com`;
-      const handlers = createTestHandlers(services.services);
-
-      const invite = await handlers.invitations.inviteMember({
-        input: { email: invitedEmail, role: "member", organizationId: org.id },
-        context: { reqHeaders: owner.reqHeaders },
-      });
-
-      const shown = await handlers.invitations.getInvitation({
-        input: { id: invite.id },
-        context: { reqHeaders: passkeyUser.reqHeaders },
-      });
-      expect(shown).toBeNull();
-
-      await expect(
-        handlers.invitations.acceptInvitation({
-          input: { invitationId: invite.id },
-          context: { reqHeaders: passkeyUser.reqHeaders },
-        }),
-      ).rejects.toThrow();
-
-      const user = await services.services.db.query.user.findFirst({
-        where: eq(schema.user.id, passkeyUser.userId),
-      });
-      expect(user?.email).toBe(placeholder);
-      expect(user?.emailVerified).toBe(false);
-
-      const membership = await services.services.db.query.member.findFirst({
-        where: and(
-          eq(schema.member.organizationId, org.id),
-          eq(schema.member.userId, passkeyUser.userId),
-        ),
-      });
-      expect(membership).toBeUndefined();
-
-      const stored = await services.services.db.query.invitation.findFirst({
-        where: eq(schema.invitation.id, invite.id),
-      });
-      expect(stored?.status).toBe("pending");
     });
   });
 

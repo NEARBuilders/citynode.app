@@ -127,7 +127,7 @@ describe("NEAR-account invitations", () => {
     ]) {
       await expect(
         handlers.invitations.inviteMember({
-          input: { ...input, role: "member", organizationId: org.id },
+          input: { ...input, role: "member", organizationId: org.id } as never,
           context: { reqHeaders: owner.reqHeaders },
         }),
       ).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -342,7 +342,20 @@ describe("NEAR-account invitations", () => {
     expect(context.organization.member?.role).toBe("member");
     expect(context.organization.activeTeamId).toBe(team?.id);
     expect(context.organization.teams).toEqual([
-      { id: team?.id, name: "Node Operator", areas: ["node-operations"] },
+      {
+        id: team?.id,
+        name: "Node Operator",
+        areas: ["node-operations"],
+        permissions: {
+          ac: ["read"],
+          apiKey: ["read"],
+          email: [],
+          invitation: [],
+          member: [],
+          organization: [],
+          team: [],
+        },
+      },
     ]);
   });
 
@@ -553,7 +566,7 @@ describe("NEAR-account invitations", () => {
   it("cannot be accepted through the email acceptance flow", async () => {
     const { handlers, invitation } = await walletInvitation();
     const invitee = await createTestUser(services.services, {
-      email: invitation.email,
+      email: invitation.email!,
     });
 
     await expect(
