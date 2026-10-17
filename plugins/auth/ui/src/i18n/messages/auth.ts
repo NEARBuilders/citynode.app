@@ -182,18 +182,6 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "你已加入 {name}",
   ],
   "auth.onboard.ready": ["You're in", "Ya estás dentro", "Vous êtes inscrit", "已成功加入"],
-  "auth.onboard.readyBuild": [
-    "Ready to start building?",
-    "¿Listo para empezar a construir?",
-    "Prêt à commencer à développer ?",
-    "准备好开始开发了吗？",
-  ],
-  "auth.onboard.buildPrompts": [
-    "Get build prompts",
-    "Obtener prompts de desarrollo",
-    "Obtenir des consignes de développement",
-    "获取开发提示词",
-  ],
   "auth.onboard.seeCommunity": [
     "See {community}",
     "Ver {community}",

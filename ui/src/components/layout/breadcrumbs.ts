@@ -114,8 +114,6 @@ export function crumbsFor(
       return [page(t("common.stake"))];
     case "apply":
       return [page(t("dashboard.startCommunity"))];
-    case "build":
-      return [page(t("nav.build"))];
     case "discover":
       return [page(t("nav.directory"))];
     case "orgs": {
@@ -151,8 +149,6 @@ export function crumbsFor(
       return [page(DOCS.label)];
     case "skill":
       return [DOCS, page(t("about.skill"))];
-    case "prototype-staking-poc":
-      return [page(t("tenant.lifecycle"))];
     case "login":
       return [page(t("nav.signIn"))];
     case "onboard":

@@ -140,21 +140,6 @@ describe("onboard join flow", () => {
     expect(screen.queryByTestId("onboard.display-name")).toBeNull();
   });
 
-  it("points the done state at the build page", async () => {
-    harness.session = { user: { id: "user-1", name: "Grace" } };
-    harness.getOnboardingCodeInfo.mockResolvedValue(info);
-    harness.redeemOnboardingCode.mockResolvedValue({
-      organizationName: "Chicago Builders",
-      eventName: "Launch Night",
-    });
-
-    renderOnboard();
-
-    const buildButton = await screen.findByTestId("onboard.build-button");
-    expect(buildButton.getAttribute("href")).toBe("/build");
-    expect(screen.queryByTestId("build.prompts")).toBeNull();
-  });
-
   it("copies the desktop pairing link from the continue card", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
