@@ -1,0 +1,13 @@
+{
+  "extends": "bos://v1.citynode.near/citynode.app",
+  "account": "fresh.v1.citynode.near",
+  "domain": "fresh.citynode.app",
+  "title": "Fresh",
+  "description": "Spawn passkey-first citynode tenants and code them locally.",
+  "repository": "https://github.com/NEARBuilders/citynode.app",
+  "app": {
+    "ui": {
+      "development": "local:ui"
+    }
+  }
+}
