@@ -796,6 +796,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "{account} ne peut pas ajouter de propositions à {dao}.",
     "{account} 无法向 {dao} 添加提案。",
   ],
+  "admin.sequence.chainError": [
+    "Couldn't read the treasury from chain. Try again in a moment.",
+    "No se pudo leer la tesorería en la cadena. Inténtalo de nuevo en un momento.",
+    "Impossible de lire la trésorerie sur la chaîne. Réessayez dans un instant.",
+    "无法从链上读取金库，请稍后重试。",
+  ],
   "admin.sequence.description": [
     "Create treasury proposals that stake this community's pool, join House of Stake and vote.",
     "Crea propuestas de tesorería para hacer staking en el pool de esta comunidad, unirse a House of Stake y votar.",

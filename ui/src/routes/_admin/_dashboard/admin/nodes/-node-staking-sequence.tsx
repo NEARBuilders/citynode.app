@@ -1,6 +1,6 @@
 import { ArrowSquareOutIcon, CheckCircleIcon, ClockIcon } from "@phosphor-icons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Field, FieldLabel, Input, SectionHeader } from "@/components";
@@ -126,7 +126,12 @@ export function NodeStakingSequence({
     validators.find((validator) => validator.isDefault && validator.network === "mainnet") ??
     validators.find((validator) => validator.network === "mainnet");
   const pool = poolValidator?.accountId ?? "";
-  const endowment = endowmentInput.trim().includes(".") ? endowmentInput.trim() : "";
+  const [endowment, setEndowment] = useState("");
+  useEffect(() => {
+    const next = endowmentInput.trim().includes(".") ? endowmentInput.trim() : "";
+    const timer = setTimeout(() => setEndowment(next), 400);
+    return () => clearTimeout(timer);
+  }, [endowmentInput]);
   const voteProposalId = voteProposal == null ? null : Number(voteProposal);
 
   const chainQuery = useQuery({
@@ -223,7 +228,10 @@ export function NodeStakingSequence({
     "fund-lockup": !endowmentFundYocto,
     "stake-endowment": !endowmentStakeYocto,
   };
-  const chainPending = chainQuery.isPlaceholderData || chainQuery.isLoading;
+  const chainPending =
+    chainQuery.isPlaceholderData ||
+    chainQuery.isLoading ||
+    endowment !== (endowmentInput.trim().includes(".") ? endowmentInput.trim() : "");
   const govItems = (govQuery.data ?? []).map((proposal) => ({
     value: String(proposal.id),
     label: `#${proposal.id} ${proposal.title ?? ""}`.trim(),
@@ -254,6 +262,7 @@ export function NodeStakingSequence({
     }
     if (step.id === "vote")
       return voteProposalId == null ? translate("admin.sequence.pickVote") : null;
+    if (chainQuery.isError) return translate("admin.sequence.chainError");
     if (chainPending) return translate("admin.sequence.readingChain");
     if (step.plan) return null;
     return amountMissing[step.id]

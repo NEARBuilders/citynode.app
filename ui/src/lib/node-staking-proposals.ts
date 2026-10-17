@@ -311,6 +311,16 @@ function view<T>(accountId: string, method: string, args: Record<string, unknown
     .catch(() => null);
 }
 
+async function readLockupAccountId(accountId: string): Promise<string> {
+  const lockup = await getNear().view<string>(VENEAR_ACCOUNT, "get_lockup_account_id", {
+    account_id: accountId,
+  });
+  if (typeof lockup !== "string" || !lockup) {
+    throw new Error(`Unreadable lockup account for ${accountId}`);
+  }
+  return lockup;
+}
+
 async function readLockupState(lockup: string | null): Promise<LockupState | null> {
   if (!lockup) return null;
   const [liquid, locked, stakingPool, knownDeposited] = await Promise.all([
@@ -336,10 +346,8 @@ export async function readNodeSequenceChain(input: {
   const { team, endowment, pool } = input;
   const [teamLockup, endowmentLockup, teamVenear, endowmentVenear, teamPoolStake] =
     await Promise.all([
-      team ? view<string>(VENEAR_ACCOUNT, "get_lockup_account_id", { account_id: team }) : null,
-      endowment
-        ? view<string>(VENEAR_ACCOUNT, "get_lockup_account_id", { account_id: endowment })
-        : null,
+      team ? readLockupAccountId(team) : null,
+      endowment ? readLockupAccountId(endowment) : null,
       team
         ? view<VenearAccountView>(VENEAR_ACCOUNT, "get_account_info", { account_id: team })
         : null,
