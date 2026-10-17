@@ -1,5 +1,5 @@
 import { ArrowSquareOutIcon, CheckCircleIcon, ClockIcon } from "@phosphor-icons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient, useAuthClient } from "@/app";
@@ -38,6 +38,7 @@ import {
   readActiveGovProposals,
   readGovProof,
   readNodeSequenceChain,
+  readTeamVoted,
   readVoteStorageFee,
   VOTE_OPTIONS,
   type VoteOption,
@@ -128,10 +129,16 @@ export function NodeStakingSequence({
   const voteProposalId = voteProposal == null ? null : Number(voteProposal);
 
   const chainQuery = useQuery({
-    queryKey: [...SEQUENCE_KEY, "chain", team, endowment, pool, voteProposalId],
-    queryFn: () => readNodeSequenceChain({ team, endowment, pool, voteProposalId }),
+    queryKey: [...SEQUENCE_KEY, "chain", team, endowment, pool],
+    queryFn: () => readNodeSequenceChain({ team, endowment, pool }),
     enabled: !!team,
     staleTime: 15_000,
+    placeholderData: keepPreviousData,
+  });
+  const votedQuery = useQuery({
+    queryKey: [...SEQUENCE_KEY, "voted", team, voteProposalId],
+    queryFn: () => readTeamVoted(team, voteProposalId ?? 0),
+    enabled: !!team && voteProposalId != null,
   });
   const proposalsQuery = useQuery({
     queryKey: [...SEQUENCE_KEY, "proposals", team, endowment],
@@ -203,8 +210,21 @@ export function NodeStakingSequence({
       endowmentFundYocto: parseNearAmount(endowmentFund),
       endowmentStakeYocto: parseNearAmount(endowmentStake),
     },
-    chainQuery.data ?? EMPTY_CHAIN,
+    { ...(chainQuery.data ?? EMPTY_CHAIN), teamVoted: votedQuery.data ?? false },
   );
+  const amountMissing: Partial<Record<NodeSequenceStepId, boolean>> = {
+    stake: !parseNearAmount(teamStake),
+    "fund-lockup": !parseNearAmount(endowmentFund),
+    "stake-endowment": !parseNearAmount(endowmentStake),
+  };
+  const govItems = (govQuery.data ?? []).map((proposal) => ({
+    value: String(proposal.id),
+    label: `#${proposal.id} ${proposal.title ?? ""}`.trim(),
+  }));
+  const voteItems = VOTE_OPTIONS.map((option) => ({
+    value: option,
+    label: translate(VOTE_LABELS[option]),
+  }));
   const proposals = proposalsQuery.data ?? { team: [], endowment: [] };
   const canPropose = (treasury: NodeTreasury) => {
     const policy = policiesQuery.data?.[treasury];
@@ -224,7 +244,10 @@ export function NodeStakingSequence({
     }
     if (step.id === "vote")
       return voteProposalId == null ? translate("admin.sequence.pickVote") : null;
-    return step.plan ? null : translate("admin.sequence.needsInput");
+    if (step.plan) return null;
+    return amountMissing[step.id]
+      ? translate("admin.sequence.needsInput")
+      : translate("admin.sequence.readingChain");
   };
 
   const actionInputs: Partial<Record<NodeSequenceActionId, ReactNode>> = {
@@ -258,14 +281,18 @@ export function NodeStakingSequence({
           <FieldLabel htmlFor="sequence-vote-proposal">
             {translate("admin.sequence.voteProposal")}
           </FieldLabel>
-          <Select value={voteProposal} onValueChange={(value) => setVoteProposal(value)}>
+          <Select
+            value={voteProposal}
+            items={govItems}
+            onValueChange={(value) => setVoteProposal(value)}
+          >
             <SelectTrigger id="sequence-vote-proposal" className="w-full">
               <SelectValue placeholder={translate("admin.sequence.pickVote")} />
             </SelectTrigger>
             <SelectContent>
-              {(govQuery.data ?? []).map((proposal) => (
-                <SelectItem key={proposal.id} value={String(proposal.id)}>
-                  #{proposal.id} {proposal.title ?? ""}
+              {govItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -282,6 +309,7 @@ export function NodeStakingSequence({
           </FieldLabel>
           <Select
             value={voteOption}
+            items={voteItems}
             onValueChange={(value) =>
               setVoteOption(VOTE_OPTIONS.find((option) => option === value) ?? "For")
             }
@@ -290,9 +318,9 @@ export function NodeStakingSequence({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {VOTE_OPTIONS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {translate(VOTE_LABELS[option])}
+              {voteItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>

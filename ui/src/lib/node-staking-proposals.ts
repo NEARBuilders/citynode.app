@@ -330,10 +330,9 @@ export async function readNodeSequenceChain(input: {
   team: string;
   endowment: string;
   pool: string;
-  voteProposalId: number | null;
 }): Promise<NodeSequenceChain> {
-  const { team, endowment, pool, voteProposalId } = input;
-  const [teamLockup, endowmentLockup, teamVenear, endowmentVenear, teamPoolStake, teamVote] =
+  const { team, endowment, pool } = input;
+  const [teamLockup, endowmentLockup, teamVenear, endowmentVenear, teamPoolStake] =
     await Promise.all([
       team ? view<string>(VENEAR_ACCOUNT, "get_lockup_account_id", { account_id: team }) : null,
       endowment
@@ -346,12 +345,6 @@ export async function readNodeSequenceChain(input: {
         ? view<VenearAccountView>(VENEAR_ACCOUNT, "get_account_info", { account_id: endowment })
         : null,
       team && pool ? view<string>(pool, "get_account_staked_balance", { account_id: team }) : null,
-      team && voteProposalId != null
-        ? view<number>(VOTING_ACCOUNT, "get_vote", {
-            account_id: team,
-            proposal_id: voteProposalId,
-          })
-        : null,
     ]);
   const [teamLockupState, endowmentLockupState] = await Promise.all([
     teamVenear?.internal.lockup_version != null ? readLockupState(teamLockup) : null,
@@ -365,8 +358,16 @@ export async function readNodeSequenceChain(input: {
     teamLockupState,
     endowmentLockupState,
     teamStakedYocto: teamPoolStake == null ? null : yoctoOf(teamPoolStake),
-    teamVoted: teamVote != null,
+    teamVoted: false,
   };
+}
+
+export async function readTeamVoted(team: string, proposalId: number): Promise<boolean> {
+  const vote = await view<number>(VOTING_ACCOUNT, "get_vote", {
+    account_id: team,
+    proposal_id: proposalId,
+  });
+  return vote != null;
 }
 
 export interface GovProposalView {

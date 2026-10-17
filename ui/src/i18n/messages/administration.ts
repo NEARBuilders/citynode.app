@@ -901,6 +901,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Proposition envoyée à {dao}",
     "提案已发送至 {dao}",
   ],
+  "admin.sequence.readingChain": [
+    "Reading the treasury from chain…",
+    "Leyendo la tesorería en la cadena…",
+    "Lecture de la trésorerie sur la chaîne…",
+    "正在从链上读取金库…",
+  ],
   "admin.sequence.signIn": [
     "Sign in with your NEAR wallet to create proposals.",
     "Inicia sesión con tu wallet NEAR para crear propuestas.",
