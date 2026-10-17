@@ -59,7 +59,7 @@ describe("node list search", () => {
 });
 
 describe("node detail tabs", () => {
-  it.each(["overview", "validators", "domains", "profile"])("accepts %s", (tab) => {
+  it.each(["overview", "validators", "sequence", "domains", "profile"])("accepts %s", (tab) => {
     expect(parseNodeDetailTab(tab)).toBe(tab);
   });
 
