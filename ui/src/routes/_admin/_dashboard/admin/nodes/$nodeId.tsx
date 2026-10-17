@@ -212,7 +212,7 @@ function AdminNodeDetail() {
           <NodeStakingSequence
             key={node.id}
             tenantId={node.tenantId}
-            validators={summary.stakingValidators.validators}
+            validators={summary.validators}
           />
         )}
         {activeTab === "domains" &&

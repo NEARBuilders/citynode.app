@@ -41,6 +41,7 @@ import {
   readTeamVoted,
   readVoteStorageFee,
   VOTE_OPTIONS,
+  VOTE_PROPOSAL_MATCH,
   type VoteOption,
 } from "@/lib/node-staking-proposals";
 import { resolveTeamAccountId } from "@/lib/queries/stake-pool";
@@ -142,19 +143,25 @@ export function NodeStakingSequence({
   });
   const proposalsQuery = useQuery({
     queryKey: [...SEQUENCE_KEY, "proposals", team, endowment],
-    queryFn: async () => ({
-      team: team ? await fetchDaoProposals(team) : [],
-      endowment: endowment ? await fetchDaoProposals(endowment) : [],
-    }),
+    queryFn: async () => {
+      const [teamProposals, endowmentProposals] = await Promise.all([
+        fetchDaoProposals(team),
+        endowment ? fetchDaoProposals(endowment) : [],
+      ]);
+      return { team: teamProposals, endowment: endowmentProposals };
+    },
     enabled: !!team,
     refetchInterval: 15_000,
   });
   const policiesQuery = useQuery({
     queryKey: [...SEQUENCE_KEY, "policies", team, endowment],
-    queryFn: async () => ({
-      team: team ? await fetchSputnikPolicy(team) : null,
-      endowment: endowment ? await fetchSputnikPolicy(endowment) : null,
-    }),
+    queryFn: async () => {
+      const [teamPolicy, endowmentPolicy] = await Promise.all([
+        fetchSputnikPolicy(team),
+        endowment ? fetchSputnikPolicy(endowment) : null,
+      ]);
+      return { team: teamPolicy, endowment: endowmentPolicy };
+    },
     enabled: !!team,
     staleTime: 60_000,
   });
@@ -194,29 +201,29 @@ export function NodeStakingSequence({
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
-  if (!tenantId || (tenantQuery.isSuccess && !team)) {
+  if (tenantId && tenantQuery.isLoading) {
+    return <Notice title={translate("admin.sequence.readingChain")} />;
+  }
+  if (!team) {
     return <Notice title={translate("admin.sequence.noTeam")} />;
   }
   if (!pool) {
     return <Notice title={translate("admin.sequence.noPool")} />;
   }
 
+  const teamStakeYocto = parseNearAmount(teamStake);
+  const endowmentFundYocto = parseNearAmount(endowmentFund);
+  const endowmentStakeYocto = parseNearAmount(endowmentStake);
   const actions = buildNodeSequence(
-    {
-      team,
-      endowment,
-      pool,
-      teamStakeYocto: parseNearAmount(teamStake),
-      endowmentFundYocto: parseNearAmount(endowmentFund),
-      endowmentStakeYocto: parseNearAmount(endowmentStake),
-    },
+    { team, endowment, pool, teamStakeYocto, endowmentFundYocto, endowmentStakeYocto },
     { ...(chainQuery.data ?? EMPTY_CHAIN), teamVoted: votedQuery.data ?? false },
   );
   const amountMissing: Partial<Record<NodeSequenceStepId, boolean>> = {
-    stake: !parseNearAmount(teamStake),
-    "fund-lockup": !parseNearAmount(endowmentFund),
-    "stake-endowment": !parseNearAmount(endowmentStake),
+    stake: !teamStakeYocto,
+    "fund-lockup": !endowmentFundYocto,
+    "stake-endowment": !endowmentStakeYocto,
   };
+  const chainPending = chainQuery.isPlaceholderData || chainQuery.isLoading;
   const govItems = (govQuery.data ?? []).map((proposal) => ({
     value: String(proposal.id),
     label: `#${proposal.id} ${proposal.title ?? ""}`.trim(),
@@ -236,6 +243,9 @@ export function NodeStakingSequence({
     if (step.treasury === "endowment" && !endowment) {
       return translate("admin.sequence.needEndowment");
     }
+    if (step.treasury === "endowment" && endowment === team) {
+      return translate("admin.sequence.sharedTreasury");
+    }
     if (!canPropose(step.treasury)) {
       return translate("admin.sequence.cannotProposeNamed", {
         account: sessionAccount,
@@ -244,6 +254,7 @@ export function NodeStakingSequence({
     }
     if (step.id === "vote")
       return voteProposalId == null ? translate("admin.sequence.pickVote") : null;
+    if (chainPending) return translate("admin.sequence.readingChain");
     if (step.plan) return null;
     return amountMissing[step.id]
       ? translate("admin.sequence.needsInput")
@@ -380,7 +391,10 @@ export function NodeStakingSequence({
             {actionInputs[action.id]}
             <ItemGroup>
               {action.steps.map((step) => {
-                const pending = pendingProposalFor(proposals[step.treasury], step.plan);
+                const pending = pendingProposalFor(
+                  proposals[step.treasury],
+                  step.id === "vote" ? VOTE_PROPOSAL_MATCH : step.plan,
+                );
                 const blocker = stepBlocker(step);
                 const title = translate(STEP_LABELS[step.id]);
                 const dao = treasuryAccount(step.treasury);

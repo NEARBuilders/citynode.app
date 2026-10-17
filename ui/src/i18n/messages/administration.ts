@@ -907,6 +907,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Lecture de la trésorerie sur la chaîne…",
     "正在从链上读取金库…",
   ],
+  "admin.sequence.sharedTreasury": [
+    "The endowment treasury must be a different account from the team treasury.",
+    "La tesorería de dotación debe ser una cuenta distinta de la tesorería del equipo.",
+    "La trésorerie de dotation doit être un compte différent de la trésorerie de l’équipe.",
+    "捐赠金库必须是与团队金库不同的账户。",
+  ],
   "admin.sequence.signIn": [
     "Sign in with your NEAR wallet to create proposals.",
     "Inicia sesión con tu wallet NEAR para crear propuestas.",

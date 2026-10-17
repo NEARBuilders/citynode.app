@@ -12,6 +12,7 @@ import {
   pendingProposalFor,
   REGISTER_DEPOSIT,
   VENEAR_ACCOUNT,
+  VOTE_PROPOSAL_MATCH,
   VOTING_ACCOUNT,
 } from "./node-staking-proposals";
 import type { SputnikProposal } from "./sputnik-proposals";
@@ -238,5 +239,18 @@ describe("pendingProposalFor", () => {
     expect(pendingProposalFor([proposal("InProgress")], plan)?.id).toBe(12);
     expect(pendingProposalFor([proposal("Approved")], plan)).toBeNull();
     expect(pendingProposalFor([proposal("InProgress")], null)).toBeNull();
+  });
+
+  it("matches a pending team vote proposal for the vote step", () => {
+    const vote: SputnikProposal = {
+      ...proposal("InProgress"),
+      kind: {
+        FunctionCall: {
+          receiver_id: VOTING_ACCOUNT,
+          actions: [{ method_name: "vote", args: "", deposit: "0", gas: "0" }],
+        },
+      },
+    };
+    expect(pendingProposalFor([vote], VOTE_PROPOSAL_MATCH)?.id).toBe(12);
   });
 });

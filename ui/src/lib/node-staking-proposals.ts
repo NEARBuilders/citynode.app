@@ -285,6 +285,8 @@ export function buildVotePlan(input: {
   });
 }
 
+export const VOTE_PROPOSAL_MATCH: DaoPlan = call(VOTING_ACCOUNT, "vote", "300 Tgas");
+
 export function pendingProposalFor(
   proposals: readonly SputnikProposal[],
   plan: DaoPlan | null,
