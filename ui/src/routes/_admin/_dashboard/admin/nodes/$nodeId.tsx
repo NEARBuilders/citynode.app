@@ -32,6 +32,7 @@ import {
 import type { AppMessageId } from "@/i18n/catalogs";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
+import { savedEndowmentOf } from "@/lib/node-staking-proposals";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { BackLink, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
@@ -210,8 +211,10 @@ function AdminNodeDetail() {
         )}
         {activeTab === "sequence" && (
           <NodeStakingSequence
-            key={node.id}
+            key={`${node.id}:${savedEndowmentOf(node.metadata)}`}
+            nodeId={node.id}
             tenantId={node.tenantId}
+            savedEndowment={savedEndowmentOf(node.metadata)}
             validators={summary.validators}
           />
         )}

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { AppActionError, appErrorMessage } from "@/i18n/error-message";
-import { useAppTranslation } from "@/i18n/runtime";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { parseNearAmount } from "@/lib/near-amount";
 import {
   buildNodeSequence,
@@ -30,9 +30,12 @@ import {
   describePlanCall,
   EMPTY_CHAIN,
   type NodeSequenceActionId,
+  type NodeSequenceBalances,
+  type NodeSequenceBlocker,
   type NodeSequenceStep,
   type NodeSequenceStepId,
   type NodeTreasury,
+  nodeSequenceBalances,
   pendingProposalFor,
   proposalDescription,
   readActiveGovProposals,
@@ -43,8 +46,10 @@ import {
   VOTE_OPTIONS,
   VOTE_PROPOSAL_MATCH,
   type VoteOption,
+  withEndowment,
 } from "@/lib/node-staking-proposals";
-import { resolveTeamAccountId } from "@/lib/queries/stake-pool";
+import { invalidateNodeQueries } from "@/lib/queries/nodes";
+import { formatNearBalance, resolveTeamAccountId } from "@/lib/queries/stake-pool";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import {
   canAccountPropose,
@@ -64,6 +69,8 @@ const ACTION_TITLES: Record<NodeSequenceActionId, AppMessageId> = {
   "endowment-stake": "admin.sequence.endowmentStake",
   "endowment-delegate": "admin.sequence.endowmentDelegate",
   "team-vote": "admin.sequence.teamVote",
+  "team-unwind": "admin.sequence.teamUnwind",
+  "endowment-unwind": "admin.sequence.endowmentUnwind",
 };
 
 const ACTION_HINTS: Record<NodeSequenceActionId, AppMessageId> = {
@@ -72,6 +79,8 @@ const ACTION_HINTS: Record<NodeSequenceActionId, AppMessageId> = {
   "endowment-stake": "admin.sequence.endowmentStakeHint",
   "endowment-delegate": "admin.sequence.endowmentDelegateHint",
   "team-vote": "admin.sequence.teamVoteHint",
+  "team-unwind": "admin.sequence.teamUnwindHint",
+  "endowment-unwind": "admin.sequence.endowmentUnwindHint",
 };
 
 const STEP_LABELS: Record<NodeSequenceStepId, AppMessageId> = {
@@ -88,7 +97,70 @@ const STEP_LABELS: Record<NodeSequenceStepId, AppMessageId> = {
   "stake-endowment": "admin.sequence.step.stakeLockup",
   "set-delegations": "admin.sequence.step.delegate",
   vote: "admin.sequence.step.vote",
+  "unstake-team": "admin.sequence.step.unstakeAll",
+  "withdraw-team": "admin.sequence.step.withdrawAll",
+  "unstake-endowment": "admin.sequence.step.unstakeAll",
+  "withdraw-endowment": "admin.sequence.step.withdrawAll",
+  "release-pool": "admin.sequence.step.releasePool",
+  "clear-delegations": "admin.sequence.step.clearDelegations",
 };
+
+const BLOCKER_LABELS: Record<NodeSequenceBlocker, AppMessageId> = {
+  teamNotRegistered: "admin.sequence.blocker.teamNotRegistered",
+  teamNoLockup: "admin.sequence.blocker.teamNoLockup",
+  teamNothingToLock: "admin.sequence.blocker.teamNothingToLock",
+  endowmentNotRegistered: "admin.sequence.blocker.endowmentNotRegistered",
+  endowmentNoLockup: "admin.sequence.blocker.endowmentNoLockup",
+  endowmentNotFunded: "admin.sequence.blocker.endowmentNotFunded",
+  endowmentOtherPool: "admin.sequence.blocker.endowmentOtherPool",
+  endowmentPoolNotSelected: "admin.sequence.blocker.endowmentPoolNotSelected",
+  endowmentNotLocked: "admin.sequence.blocker.endowmentNotLocked",
+  endowmentNotStaked: "admin.sequence.blocker.endowmentNotStaked",
+  teamNoVotingPower: "admin.sequence.blocker.teamNoVotingPower",
+  teamNotStaked: "admin.sequence.blocker.teamNotStaked",
+  teamNothingUnstaked: "admin.sequence.blocker.nothingUnstaked",
+  teamWithdrawWait: "admin.sequence.blocker.withdrawWait",
+  endowmentNothingUnstaked: "admin.sequence.blocker.nothingUnstaked",
+  endowmentWithdrawWait: "admin.sequence.blocker.withdrawWait",
+  endowmentPoolInUse: "admin.sequence.blocker.endowmentPoolInUse",
+  endowmentNoPool: "admin.sequence.blocker.endowmentNoPool",
+  endowmentNoDelegations: "admin.sequence.blocker.endowmentNoDelegations",
+};
+
+function actionBalance(
+  id: NodeSequenceActionId,
+  balances: NodeSequenceBalances,
+  format: (yocto: bigint) => string,
+  translate: ReturnType<typeof useAppTranslation>,
+): string | null {
+  if (id === "team-stake")
+    return translate("admin.sequence.balance.staked", { amount: format(balances.teamStaked) });
+  if (id === "team-house-of-stake")
+    return translate("admin.sequence.balance.locked", { amount: format(balances.teamLocked) });
+  if (id === "endowment-stake") {
+    return translate("admin.sequence.balance.lockupStaked", {
+      lockup: format(balances.endowmentInLockup),
+      staked: format(balances.endowmentStaked),
+    });
+  }
+  if (id === "team-vote")
+    return translate("admin.sequence.balance.votingPower", {
+      amount: format(balances.teamVotingPower),
+    });
+  if (id === "team-unwind") {
+    return translate("admin.sequence.balance.stakedUnstaked", {
+      staked: format(balances.teamStaked),
+      unstaked: format(balances.teamUnstaked),
+    });
+  }
+  if (id === "endowment-unwind") {
+    return translate("admin.sequence.balance.stakedUnstaked", {
+      staked: format(balances.endowmentStaked),
+      unstaked: format(balances.endowmentUnstaked),
+    });
+  }
+  return null;
+}
 
 const VOTE_LABELS: Record<VoteOption, AppMessageId> = {
   For: "admin.sequence.voteFor",
@@ -99,18 +171,23 @@ const VOTE_LABELS: Record<VoteOption, AppMessageId> = {
 const SEQUENCE_KEY = ["node-staking-sequence"] as const;
 
 export function NodeStakingSequence({
+  nodeId,
   tenantId,
+  savedEndowment,
   validators,
 }: {
+  nodeId: string;
   tenantId: string | null;
+  savedEndowment: string;
   validators: readonly Validator[];
 }) {
   const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const sessionAccount = useNearAccount();
-  const [endowmentInput, setEndowmentInput] = useState("");
+  const [endowmentInput, setEndowmentInput] = useState(savedEndowment);
   const [teamStake, setTeamStake] = useState("1");
   const [endowmentFund, setEndowmentFund] = useState("");
   const [endowmentStake, setEndowmentStake] = useState("");
@@ -126,7 +203,7 @@ export function NodeStakingSequence({
     validators.find((validator) => validator.isDefault && validator.network === "mainnet") ??
     validators.find((validator) => validator.network === "mainnet");
   const pool = poolValidator?.accountId ?? "";
-  const [endowment, setEndowment] = useState("");
+  const [endowment, setEndowment] = useState(savedEndowment);
   useEffect(() => {
     const next = endowmentInput.trim().includes(".") ? endowmentInput.trim() : "";
     const timer = setTimeout(() => setEndowment(next), 400);
@@ -206,6 +283,21 @@ export function NodeStakingSequence({
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
+  const saveEndowment = useMutation({
+    mutationFn: async (value: string) => {
+      const latest = await apiClient.getNode({ nodeId });
+      await apiClient.updateNode({
+        nodeId,
+        metadata: withEndowment(latest?.metadata ?? {}, value),
+      });
+    },
+    onSuccess: async () => {
+      await invalidateNodeQueries(queryClient);
+      toast.success(translate("admin.sequence.endowmentSaved"));
+    },
+    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
+  });
+
   if (tenantId && tenantQuery.isLoading) {
     return <Notice title={translate("admin.sequence.readingChain")} />;
   }
@@ -228,6 +320,8 @@ export function NodeStakingSequence({
     "fund-lockup": !endowmentFundYocto,
     "stake-endowment": !endowmentStakeYocto,
   };
+  const balances = nodeSequenceBalances(chainQuery.data ?? EMPTY_CHAIN);
+  const formatYocto = (yocto: bigint) => formatNearBalance(yocto, locale);
   const chainPending =
     chainQuery.isPlaceholderData ||
     chainQuery.isLoading ||
@@ -264,6 +358,7 @@ export function NodeStakingSequence({
       return voteProposalId == null ? translate("admin.sequence.pickVote") : null;
     if (chainQuery.isError) return translate("admin.sequence.chainError");
     if (chainPending) return translate("admin.sequence.readingChain");
+    if (step.blocker) return translate(BLOCKER_LABELS[step.blocker]);
     if (step.plan) return null;
     return amountMissing[step.id]
       ? translate("admin.sequence.needsInput")
@@ -364,14 +459,26 @@ export function NodeStakingSequence({
             <FieldLabel htmlFor="sequence-endowment">
               {translate("admin.sequence.endowmentTreasury")}
             </FieldLabel>
-            <Input
-              id="sequence-endowment"
-              value={endowmentInput}
-              onChange={(event) => setEndowmentInput(event.target.value)}
-              placeholder="endowment.sputnik-dao.near"
-              className="font-mono"
-              data-testid="admin-node-sequence-endowment"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="sequence-endowment"
+                value={endowmentInput}
+                onChange={(event) => setEndowmentInput(event.target.value)}
+                placeholder="endowment.sputnik-dao.near"
+                className="font-mono"
+                data-testid="admin-node-sequence-endowment"
+              />
+              {endowmentInput.trim() !== savedEndowment && (
+                <Button
+                  variant="outline"
+                  disabled={saveEndowment.isPending}
+                  onClick={() => saveEndowment.mutate(endowmentInput.trim())}
+                  data-testid="admin-node-sequence-save-endowment"
+                >
+                  {translate("common.save")}
+                </Button>
+              )}
+            </div>
           </Field>
         </div>
       </FieldGroup>
@@ -396,6 +503,14 @@ export function NodeStakingSequence({
                     translate("admin.sequence.endowmentTreasury"),
                 })}
               </p>
+              {chainQuery.data && (
+                <p
+                  className="text-sm text-foreground"
+                  data-testid={`admin-node-sequence-balance-${action.id}`}
+                >
+                  {actionBalance(action.id, balances, formatYocto, translate)}
+                </p>
+              )}
             </div>
             {actionInputs[action.id]}
             <ItemGroup>

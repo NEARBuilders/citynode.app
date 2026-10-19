@@ -9,11 +9,14 @@ import {
   type NodeSequenceAction,
   type NodeSequenceChain,
   type NodeSequenceInputs,
+  nodeSequenceBalances,
   pendingProposalFor,
   REGISTER_DEPOSIT,
+  savedEndowmentOf,
   VENEAR_ACCOUNT,
   VOTE_PROPOSAL_MATCH,
   VOTING_ACCOUNT,
+  withEndowment,
 } from "./node-staking-proposals";
 import type { SputnikProposal } from "./sputnik-proposals";
 
@@ -47,7 +50,7 @@ function step(actions: NodeSequenceAction[], id: string) {
 }
 
 describe("buildNodeSequence", () => {
-  it("lists the five admin actions in order with their treasury", () => {
+  it("lists the admin actions in order with their treasury", () => {
     const actions = buildNodeSequence(inputs, chain);
     expect(actions.map((entry) => [entry.id, entry.treasury])).toEqual([
       ["team-stake", "team"],
@@ -55,6 +58,8 @@ describe("buildNodeSequence", () => {
       ["endowment-stake", "endowment"],
       ["endowment-delegate", "endowment"],
       ["team-vote", "team"],
+      ["team-unwind", "team"],
+      ["endowment-unwind", "endowment"],
     ]);
   });
 
@@ -156,10 +161,10 @@ describe("buildNodeSequence", () => {
     expect(step(actions, "lock").plan).toBeNull();
   });
 
-  it("marks steps done from chain state", () => {
+  it("marks one-time steps done from chain state and keeps stake steps repeatable", () => {
     const actions = buildNodeSequence(inputs, {
       ...chain,
-      teamStakedYocto: NEAR,
+      teamPool: { staked: NEAR, unstaked: 0n, canWithdraw: false },
       teamVenear: {
         account: { account_id: inputs.team, delegations: [] },
         internal: { lockup_version: 1 },
@@ -179,7 +184,8 @@ describe("buildNodeSequence", () => {
       },
       teamVoted: true,
     });
-    expect(action(actions, "team-stake").steps.every((entry) => entry.done)).toBe(true);
+    expect(step(actions, "stake").done).toBe(false);
+    expect(step(actions, "stake").blocker).toBeNull();
     expect(action(actions, "team-house-of-stake").steps.every((entry) => entry.done)).toBe(true);
     expect(step(actions, "register-endowment").done).toBe(true);
     expect(step(actions, "deploy-lockup-endowment").done).toBe(false);
@@ -252,5 +258,208 @@ describe("pendingProposalFor", () => {
       },
     };
     expect(pendingProposalFor([vote], VOTE_PROPOSAL_MATCH)?.id).toBe(12);
+  });
+});
+
+describe("step prerequisites", () => {
+  it("blocks House of Stake steps until the previous one has landed", () => {
+    const actions = buildNodeSequence(inputs, chain);
+    expect(step(actions, "register").blocker).toBeNull();
+    expect(step(actions, "deploy-lockup").blocker).toBe("teamNotRegistered");
+    expect(step(actions, "lock").blocker).toBe("teamNoLockup");
+    expect(step(actions, "deploy-lockup-endowment").blocker).toBe("endowmentNotRegistered");
+    expect(step(actions, "fund-lockup").blocker).toBe("endowmentNoLockup");
+    expect(step(actions, "lock-endowment").blocker).toBe("endowmentNoLockup");
+    expect(step(actions, "stake-endowment").blocker).toBe("endowmentPoolNotSelected");
+  });
+
+  it("requires a locked and staked endowment before delegating", () => {
+    const registered = {
+      account: { account_id: inputs.team, delegations: [] },
+      internal: { lockup_version: 1 },
+    };
+    const locked = {
+      liquid: "0",
+      locked: NEAR.toString(),
+      stakingPool: inputs.pool,
+      knownDeposited: "0",
+    };
+    expect(
+      step(buildNodeSequence(inputs, { ...chain, teamVenear: registered }), "set-delegations")
+        .blocker,
+    ).toBe("endowmentNotLocked");
+    expect(
+      step(
+        buildNodeSequence(inputs, {
+          ...chain,
+          teamVenear: registered,
+          endowmentLockupState: locked,
+        }),
+        "set-delegations",
+      ).blocker,
+    ).toBe("endowmentNotStaked");
+    expect(
+      step(
+        buildNodeSequence(inputs, {
+          ...chain,
+          teamVenear: registered,
+          endowmentLockupState: { ...locked, knownDeposited: NEAR.toString() },
+        }),
+        "set-delegations",
+      ).blocker,
+    ).toBeNull();
+  });
+
+  it("lets the team vote only with veNEAR", () => {
+    expect(step(buildNodeSequence(inputs, chain), "vote").blocker).toBe("teamNoVotingPower");
+    const withPower = buildNodeSequence(inputs, {
+      ...chain,
+      teamVenear: {
+        account: {
+          account_id: inputs.team,
+          delegations: [],
+          delegated_balance: { near_balance: NEAR.toString(), extra_venear_balance: "0" },
+        },
+        internal: { lockup_version: null },
+      },
+    });
+    expect(step(withPower, "vote").blocker).toBeNull();
+  });
+});
+
+describe("unwind steps", () => {
+  it("only unstakes what is staked and withdraws once unlocked", () => {
+    const idle = buildNodeSequence(inputs, chain);
+    expect(step(idle, "unstake-team").blocker).toBe("teamNotStaked");
+    expect(step(idle, "withdraw-team").blocker).toBe("teamNothingUnstaked");
+    const waiting = buildNodeSequence(inputs, {
+      ...chain,
+      teamPool: { staked: NEAR, unstaked: NEAR, canWithdraw: false },
+    });
+    expect(step(waiting, "unstake-team").blocker).toBeNull();
+    expect(step(waiting, "unstake-team").plan).toMatchObject({
+      receiverId: inputs.pool,
+      methodName: "unstake_all",
+    });
+    expect(step(waiting, "withdraw-team").blocker).toBe("teamWithdrawWait");
+    const ready = buildNodeSequence(inputs, {
+      ...chain,
+      teamPool: { staked: 0n, unstaked: NEAR, canWithdraw: true },
+    });
+    expect(step(ready, "withdraw-team").blocker).toBeNull();
+  });
+
+  it("releases the endowment pool only once it is empty and clears delegations", () => {
+    const state = {
+      liquid: "0",
+      locked: NEAR.toString(),
+      stakingPool: inputs.pool,
+      knownDeposited: NEAR.toString(),
+    };
+    const staked = buildNodeSequence(inputs, {
+      ...chain,
+      endowmentLockupState: state,
+      endowmentPool: { staked: NEAR, unstaked: 0n, canWithdraw: false },
+      endowmentVenear: {
+        account: {
+          account_id: inputs.endowment,
+          delegations: [{ account_id: inputs.team, bps: FULL_DELEGATION_BPS }],
+        },
+        internal: { lockup_version: 1 },
+      },
+    });
+    expect(step(staked, "unstake-endowment").blocker).toBeNull();
+    expect(step(staked, "release-pool").blocker).toBe("endowmentPoolInUse");
+    expect(step(staked, "clear-delegations").blocker).toBeNull();
+    expect(step(staked, "clear-delegations").plan).toMatchObject({
+      methodName: "set_delegations",
+      args: { entries: [] },
+    });
+    const empty = buildNodeSequence(inputs, {
+      ...chain,
+      endowmentLockupState: { ...state, knownDeposited: "0" },
+      endowmentPool: { staked: 0n, unstaked: 0n, canWithdraw: true },
+    });
+    expect(step(empty, "release-pool").blocker).toBeNull();
+    expect(step(empty, "clear-delegations").blocker).toBe("endowmentNoDelegations");
+  });
+});
+
+describe("nodeSequenceBalances", () => {
+  it("sums lockup, stake and voting power", () => {
+    expect(
+      nodeSequenceBalances({
+        ...chain,
+        teamPool: { staked: 3n, unstaked: 1n, canWithdraw: false },
+        endowmentLockupState: { liquid: "2", locked: "5", stakingPool: null, knownDeposited: "0" },
+        endowmentPool: { staked: 4n, unstaked: 0n, canWithdraw: false },
+        teamVenear: {
+          account: {
+            account_id: inputs.team,
+            delegations: [],
+            balance: { near_balance: "6", extra_venear_balance: "0" },
+            delegated_balance: { near_balance: "7", extra_venear_balance: "0" },
+          },
+          internal: { lockup_version: 1 },
+        },
+      }),
+    ).toMatchObject({
+      teamStaked: 3n,
+      teamUnstaked: 1n,
+      teamVotingPower: 13n,
+      endowmentInLockup: 7n,
+      endowmentStaked: 4n,
+    });
+  });
+});
+
+describe("endowment metadata", () => {
+  it("reads and writes the endowment without touching other keys", () => {
+    expect(savedEndowmentOf({ endowmentAccountId: "nf-fixture.sputnik-dao.near" })).toBe(
+      "nf-fixture.sputnik-dao.near",
+    );
+    expect(savedEndowmentOf({ endowmentAccountId: 3 })).toBe("");
+    expect(withEndowment({ poolAccountId: "p.near" }, "nf-fixture.sputnik-dao.near")).toEqual({
+      poolAccountId: "p.near",
+      endowmentAccountId: "nf-fixture.sputnik-dao.near",
+    });
+    expect(withEndowment({ poolAccountId: "p.near", endowmentAccountId: "x" }, "")).toEqual({
+      poolAccountId: "p.near",
+    });
+  });
+});
+
+describe("delegation proposal matching", () => {
+  const delegationProposal = (entries: unknown[]): SputnikProposal => ({
+    id: 30,
+    proposer: "admin-fixture.near",
+    description: "",
+    kind: {
+      FunctionCall: {
+        receiver_id: VENEAR_ACCOUNT,
+        actions: [
+          {
+            method_name: "set_delegations",
+            args: btoa(JSON.stringify({ entries })),
+            deposit: "0",
+            gas: "0",
+          },
+        ],
+      },
+    },
+    status: "InProgress",
+    vote_counts: {},
+    votes: {},
+    submission_time: "0",
+  });
+
+  it("keeps delegate and clear proposals apart", () => {
+    const actions = buildNodeSequence(inputs, chain);
+    const delegate = delegationProposal([{ account_id: inputs.team, bps: FULL_DELEGATION_BPS }]);
+    const clear = delegationProposal([]);
+    expect(pendingProposalFor([delegate], step(actions, "set-delegations").plan)?.id).toBe(30);
+    expect(pendingProposalFor([delegate], step(actions, "clear-delegations").plan)).toBeNull();
+    expect(pendingProposalFor([clear], step(actions, "clear-delegations").plan)?.id).toBe(30);
+    expect(pendingProposalFor([clear], step(actions, "set-delegations").plan)).toBeNull();
   });
 });
