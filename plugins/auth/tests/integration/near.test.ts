@@ -1,3 +1,6 @@
+import { mkdirSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { hex } from "@scure/base";
 import { generateKey, Near } from "near-kit";
 import { EMPTY_CODE_HASH, Sandbox } from "near-kit/sandbox";
@@ -7,14 +10,20 @@ import { createTestServices, TEST_PERMISSIONS } from "../helpers";
 describe("NEAR SIWN Sandbox Integration", () => {
   let sandbox: Awaited<ReturnType<typeof Sandbox.start>>;
   let keyPair: ReturnType<typeof generateKey>;
+  const previousTmpDir = process.env.TMPDIR;
 
   beforeAll(async () => {
+    const sandboxTmpDir = path.join(os.homedir(), ".near-kit", "tmp");
+    mkdirSync(sandboxTmpDir, { recursive: true });
+    process.env.TMPDIR = sandboxTmpDir;
     sandbox = await Sandbox.start({ detached: false });
     keyPair = generateKey();
   }, 30000);
 
   afterAll(async () => {
     await sandbox?.stop();
+    if (previousTmpDir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpDir;
   });
 
   it("sandbox responds to RPC", async () => {

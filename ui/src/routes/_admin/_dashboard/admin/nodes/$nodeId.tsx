@@ -32,11 +32,13 @@ import {
 import type { AppMessageId } from "@/i18n/catalogs";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
+import { savedEndowmentOf } from "@/lib/node-staking-proposals";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { BackLink, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
 import { NodeBindings } from "./-node-bindings";
 import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailTab } from "./-node-management";
+import { NodeStakingSequence } from "./-node-staking-sequence";
 import { NodeValidators } from "./-node-validators";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -45,6 +47,7 @@ type NodeSummary = Awaited<ReturnType<ApiClient["getNodeSummary"]>>;
 const TAB_LABELS: Record<NodeDetailTab, AppMessageId> = {
   overview: "common.overview",
   validators: "common.validators",
+  sequence: "admin.sequence.tab",
   domains: "admin.domain.title",
   profile: "community.profile",
 };
@@ -205,6 +208,15 @@ function AdminNodeDetail() {
         )}
         {activeTab === "validators" && (
           <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
+        )}
+        {activeTab === "sequence" && (
+          <NodeStakingSequence
+            key={`${node.id}:${savedEndowmentOf(node.metadata)}`}
+            nodeId={node.id}
+            tenantId={node.tenantId}
+            savedEndowment={savedEndowmentOf(node.metadata)}
+            validators={summary.validators}
+          />
         )}
         {activeTab === "domains" &&
           (node.tenantId ? (
