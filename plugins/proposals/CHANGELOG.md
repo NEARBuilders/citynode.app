@@ -1,5 +1,13 @@
 # @everything-dev/proposals-plugin
 
+## 1.2.0
+
+### Minor Changes
+
+- a577cd4: Accept community applications without a pre-existing organization, then provision or reconcile the community organization and its tenant/node when a platform admin approves. Preserve legacy organization requests and applicant identity checks. Admins can retry a failed application and see the recorded error.
+- 70c7d8c: Consumer break-off: the app now extends the published base runtime (`bos://dev.everything.near/everything.dev`) on the latest RC train — everything-dev 2.0.0-rc.7, every-plugin 3.0.0-rc.4, better-near-auth 2.0.0-rc.0 — instead of vendoring the fork. Deploys are image-backed on the base's floating `everything-dev:rc` image (no local Docker build), and the citynode browser regression suite runs the retained app specs against a local `bos dev` stack on the adopted upstream harness (dev:ssr project; image-level validation is the deploy train's smoke gate).
+- ef6e255: Record community application setup steps (organization, community and node, DAO settings publication) on the proposal and show them to admins and applicants. Failed or stalled setups appear on the admin Pending tab and resume from the first unfinished step, reusing renamed organizations and communities and waiting on an open DAO vote instead of proposing the settings again. Rejecting a failed setup removes the organization and community it created when nothing else uses them, so the applicant can apply again with the same name.
+
 ## 1.1.0
 
 ### Minor Changes
