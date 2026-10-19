@@ -354,11 +354,12 @@ export function NodeStakingSequence({
         dao: treasuryAccount(step.treasury),
       });
     }
-    if (step.id === "vote")
-      return voteProposalId == null ? translate("admin.sequence.pickVote") : null;
     if (chainQuery.isError) return translate("admin.sequence.chainError");
     if (chainPending) return translate("admin.sequence.readingChain");
     if (step.blocker) return translate(BLOCKER_LABELS[step.blocker]);
+    if (step.id === "vote") {
+      return voteProposalId == null ? translate("admin.sequence.pickVote") : null;
+    }
     if (step.plan) return null;
     return amountMissing[step.id]
       ? translate("admin.sequence.needsInput")
