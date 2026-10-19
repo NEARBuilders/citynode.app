@@ -64,7 +64,7 @@ test("an attendee scans a code, creates a passkey once and lands on the joined p
     expect(ceremonies).toEqual({ created: 1, asserted: 0 });
 
     await page.getByTestId("onboard.display-name-skip").click();
-    await expect(page.getByTestId("onboard.build-button")).toBeVisible();
+    await expect(page.getByTestId("onboard.continue-on-computer")).toBeVisible();
     await expect(page.getByTestId("onboard.success")).toContainText(seeded.organizationName);
     const communityLink = page.getByTestId("onboard.community-link");
     await expect(communityLink).toBeVisible({ timeout: 15000 });

@@ -1,22 +1,10 @@
 import { createTenantConfigDraftSchema, emptyTenantConfigDraft } from "everything-dev/ui/tenant";
 import { describe, expect, it, vi } from "vitest";
 import { formatLocalDate } from "@/components/local-date";
-import { formatNear } from "@/routes/_authenticated/_dashboard/-poc-chain";
 import { APP_LOCALES } from "./catalogs";
 import { translateAppMessage } from "./runtime";
 
 describe("localized values and validation", () => {
-  it("formats large balances without losing integer precision", () => {
-    const amount = (12345678901234567890n * 10n ** 24n + 1234n * 10n ** 20n).toString();
-    for (const locale of APP_LOCALES) {
-      const formatter = new Intl.NumberFormat(locale);
-      const decimal = formatter.formatToParts(1.1).find((part) => part.type === "decimal")?.value;
-      expect(formatNear(amount, locale)).toBe(
-        `${formatter.format(12345678901234567890n)}${decimal}1234 NEAR`,
-      );
-    }
-  });
-
   it("uses the selected language and the existing local time zone for dates", () => {
     const date = new Date("2026-09-24T20:30:00Z");
     for (const locale of APP_LOCALES) {

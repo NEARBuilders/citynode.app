@@ -197,10 +197,6 @@ export function describeDaoError(
   return appErrorMessage(error, t);
 }
 
-export function getDaoConnector(): NearConnector {
-  return getConnector();
-}
-
 export async function fetchDaoPolicy(daoAccountId: string): Promise<NearPolicy | null> {
   const connector = getConnector();
   const wallet = await connector.wallet();
@@ -302,7 +298,7 @@ export interface SignAsDaoOptions {
   waitUntil?: "NONE" | "INCLUDED" | "EXECUTED" | "FINAL";
 }
 
-export function toNearKitWallet(connector: NearConnector) {
+function toNearKitWallet(connector: NearConnector) {
   return fromNearConnect(connector as unknown as Parameters<typeof fromNearConnect>[0]);
 }
 

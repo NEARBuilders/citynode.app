@@ -62,18 +62,6 @@ export const metadataMessages = createMessageCatalogs(["en", "es", "fr", "zh"], 
     "Les CityNodes sont des communautés locales qui exploitent chacune un validateur NEAR. Trouvez la vôtre, participez à ses événements et misez pour la maintenir en ligne.",
     "CityNode 是各自运行 NEAR 验证节点的本地社区。寻找你的社区、参加活动，并通过质押支持其持续运行。",
   ],
-  "meta.lifecycle": [
-    "Node lifecycle POC",
-    "Prueba del ciclo de vida de un nodo",
-    "Démonstration du cycle de vie d’un nœud",
-    "节点生命周期演示",
-  ],
-  "meta.lifecycleDescription": [
-    "One node, end to end: apply, approve and assign the pool, fund the team treasury, stake, lock veNEAR, sponsor, and vote in House of Stake.",
-    "Un nodo de principio a fin: solicitarlo, aprobarlo y asignarle un pool, financiar la tesorería, hacer stake, bloquear veNEAR, patrocinar y votar en House of Stake.",
-    "Un nœud de bout en bout : demande, approbation et attribution du pool, financement de la trésorerie, mise, verrouillage de veNEAR, parrainage et vote dans House of Stake.",
-    "完整的节点流程：申请、批准并分配质押池、为团队资金库注资、质押、锁定 veNEAR、赞助，并参与 House of Stake 投票。",
-  ],
   "meta.myCommunityDescription": [
     "Run your community.",
     "Gestiona tu comunidad.",
