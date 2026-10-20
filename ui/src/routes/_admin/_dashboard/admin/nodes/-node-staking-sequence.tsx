@@ -37,15 +37,14 @@ import {
   type NodeTreasury,
   nodeSequenceBalances,
   pendingProposalFor,
+  pendingVoteProposalFor,
   proposalDescription,
   readActiveGovProposals,
   readGovProof,
   readNodeSequenceChain,
-  readTeamVoted,
+  readTeamVote,
   readVoteStorageFee,
-  VOTE_OPTIONS,
-  VOTE_PROPOSAL_MATCH,
-  type VoteOption,
+  voteStepOption,
   withEndowment,
 } from "@/lib/node-staking-proposals";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
@@ -96,7 +95,9 @@ const STEP_LABELS: Record<NodeSequenceStepId, AppMessageId> = {
   "select-pool": "admin.sequence.step.selectPool",
   "stake-endowment": "admin.sequence.step.stakeLockup",
   "set-delegations": "admin.sequence.step.delegate",
-  vote: "admin.sequence.step.vote",
+  "vote-for": "admin.sequence.step.voteFor",
+  "vote-against": "admin.sequence.step.voteAgainst",
+  "vote-abstain": "admin.sequence.step.voteAbstain",
   "unstake-team": "admin.sequence.step.unstakeAll",
   "withdraw-team": "admin.sequence.step.withdrawAll",
   "unstake-endowment": "admin.sequence.step.unstakeAll",
@@ -162,12 +163,6 @@ function actionBalance(
   return null;
 }
 
-const VOTE_LABELS: Record<VoteOption, AppMessageId> = {
-  For: "admin.sequence.voteFor",
-  Against: "admin.sequence.voteAgainst",
-  Abstain: "admin.sequence.voteAbstain",
-};
-
 const SEQUENCE_KEY = ["node-staking-sequence"] as const;
 
 export function NodeStakingSequence({
@@ -192,7 +187,6 @@ export function NodeStakingSequence({
   const [endowmentFund, setEndowmentFund] = useState("");
   const [endowmentStake, setEndowmentStake] = useState("");
   const [voteProposal, setVoteProposal] = useState<string | null>(null);
-  const [voteOption, setVoteOption] = useState<VoteOption>("For");
 
   const tenantQuery = useQuery(tenantByIdQueryOptions(apiClient, tenantId ?? ""));
   const team = resolveTeamAccountId({
@@ -220,7 +214,7 @@ export function NodeStakingSequence({
   });
   const votedQuery = useQuery({
     queryKey: [...SEQUENCE_KEY, "voted", team, voteProposalId],
-    queryFn: () => readTeamVoted(team, voteProposalId ?? 0),
+    queryFn: () => readTeamVote(team, voteProposalId ?? 0),
     enabled: !!team && voteProposalId != null,
   });
   const proposalsQuery = useQuery({
@@ -261,7 +255,8 @@ export function NodeStakingSequence({
       const dao = treasuryAccount(step.treasury);
       if (!dao) throw new AppActionError("admin.sequence.needEndowment");
       let plan: DaoPlan | null = step.plan;
-      if (step.id === "vote") {
+      const voteOption = voteStepOption(step.id);
+      if (voteOption) {
         if (voteProposalId == null) throw new AppActionError("admin.sequence.pickVote");
         const [proof, storageFee] = await Promise.all([readGovProof(team), readVoteStorageFee()]);
         if (!proof) throw new AppActionError("admin.sequence.noProofNamed", { account: team });
@@ -313,7 +308,7 @@ export function NodeStakingSequence({
   const endowmentStakeYocto = parseNearAmount(endowmentStake);
   const actions = buildNodeSequence(
     { team, endowment, pool, teamStakeYocto, endowmentFundYocto, endowmentStakeYocto },
-    { ...(chainQuery.data ?? EMPTY_CHAIN), teamVoted: votedQuery.data ?? false },
+    { ...(chainQuery.data ?? EMPTY_CHAIN), teamVote: votedQuery.data ?? null },
   );
   const amountMissing: Partial<Record<NodeSequenceStepId, boolean>> = {
     stake: !teamStakeYocto,
@@ -329,10 +324,6 @@ export function NodeStakingSequence({
   const govItems = (govQuery.data ?? []).map((proposal) => ({
     value: String(proposal.id),
     label: `#${proposal.id} ${proposal.title ?? ""}`.trim(),
-  }));
-  const voteItems = VOTE_OPTIONS.map((option) => ({
-    value: option,
-    label: translate(VOTE_LABELS[option]),
   }));
   const proposals = proposalsQuery.data ?? { team: [], endowment: [] };
   const canPropose = (treasury: NodeTreasury) => {
@@ -357,7 +348,7 @@ export function NodeStakingSequence({
     if (chainQuery.isError) return translate("admin.sequence.chainError");
     if (chainPending) return translate("admin.sequence.readingChain");
     if (step.blocker) return translate(BLOCKER_LABELS[step.blocker]);
-    if (step.id === "vote") {
+    if (voteStepOption(step.id)) {
       return voteProposalId == null ? translate("admin.sequence.pickVote") : null;
     }
     if (step.plan) return null;
@@ -392,57 +383,32 @@ export function NodeStakingSequence({
       </div>
     ),
     "team-vote": (
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="sequence-vote-proposal">
-            {translate("admin.sequence.voteProposal")}
-          </FieldLabel>
-          <Select
-            value={voteProposal}
-            items={govItems}
-            onValueChange={(value) => setVoteProposal(value)}
-          >
-            <SelectTrigger id="sequence-vote-proposal" className="w-full">
-              <SelectValue placeholder={translate("admin.sequence.pickVote")} />
-            </SelectTrigger>
-            <SelectContent>
-              {govItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {govQuery.isSuccess && govQuery.data.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              {translate("admin.sequence.noActiveVotes")}
-            </p>
-          )}
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="sequence-vote-option">
-            {translate("admin.sequence.voteOption")}
-          </FieldLabel>
-          <Select
-            value={voteOption}
-            items={voteItems}
-            onValueChange={(value) =>
-              setVoteOption(VOTE_OPTIONS.find((option) => option === value) ?? "For")
-            }
-          >
-            <SelectTrigger id="sequence-vote-option" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {voteItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      </div>
+      <Field>
+        <FieldLabel htmlFor="sequence-vote-proposal">
+          {translate("admin.sequence.voteProposal")}
+        </FieldLabel>
+        <Select
+          value={voteProposal}
+          items={govItems}
+          onValueChange={(value) => setVoteProposal(value)}
+        >
+          <SelectTrigger id="sequence-vote-proposal" className="w-full">
+            <SelectValue placeholder={translate("admin.sequence.pickVote")} />
+          </SelectTrigger>
+          <SelectContent>
+            {govItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {govQuery.isSuccess && govQuery.data.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            {translate("admin.sequence.noActiveVotes")}
+          </p>
+        )}
+      </Field>
     ),
   };
 
@@ -516,10 +482,10 @@ export function NodeStakingSequence({
             {actionInputs[action.id]}
             <ItemGroup>
               {action.steps.map((step) => {
-                const pending = pendingProposalFor(
-                  proposals[step.treasury],
-                  step.id === "vote" ? VOTE_PROPOSAL_MATCH : step.plan,
-                );
+                const voteOption = voteStepOption(step.id);
+                const pending = voteOption
+                  ? pendingVoteProposalFor(proposals[step.treasury], voteProposalId, voteOption)
+                  : pendingProposalFor(proposals[step.treasury], step.plan);
                 const blocker = stepBlocker(step);
                 const title = translate(STEP_LABELS[step.id]);
                 const dao = treasuryAccount(step.treasury);

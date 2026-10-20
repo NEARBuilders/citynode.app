@@ -2,6 +2,8 @@ import {
   type DaoPlan,
   findPendingProposalForPlan,
   getNear,
+  isPendingProposal,
+  proposalCallsMethod,
   type SputnikProposal,
 } from "@/lib/sputnik-proposals";
 
@@ -19,6 +21,7 @@ export const ENDOWMENT_METADATA_KEY = "endowmentAccountId";
 
 export type VoteOption = (typeof VOTE_OPTIONS)[number];
 export type NodeTreasury = "team" | "endowment";
+
 export type NodeSequenceActionId =
   | "team-stake"
   | "team-house-of-stake"
@@ -27,6 +30,8 @@ export type NodeSequenceActionId =
   | "team-vote"
   | "team-unwind"
   | "endowment-unwind";
+
+export type NodeVoteStepId = "vote-for" | "vote-against" | "vote-abstain";
 
 export type NodeSequenceStepId =
   | "stake"
@@ -41,13 +46,23 @@ export type NodeSequenceStepId =
   | "select-pool"
   | "stake-endowment"
   | "set-delegations"
-  | "vote"
+  | NodeVoteStepId
   | "unstake-team"
   | "withdraw-team"
   | "unstake-endowment"
   | "withdraw-endowment"
   | "release-pool"
   | "clear-delegations";
+
+export const VOTE_STEP_OPTIONS: Record<NodeVoteStepId, VoteOption> = {
+  "vote-for": "For",
+  "vote-against": "Against",
+  "vote-abstain": "Abstain",
+};
+
+export function voteStepOption(id: NodeSequenceStepId): VoteOption | null {
+  return id in VOTE_STEP_OPTIONS ? VOTE_STEP_OPTIONS[id as NodeVoteStepId] : null;
+}
 
 export type NodeSequenceBlocker =
   | "teamNotRegistered"
@@ -107,7 +122,7 @@ export interface NodeSequenceChain {
   endowmentLockupState: LockupState | null;
   teamPool: PoolAccount | null;
   endowmentPool: PoolAccount | null;
-  teamVoted: boolean;
+  teamVote: VoteOption | null;
 }
 
 export interface NodeSequenceInputs {
@@ -152,7 +167,7 @@ export const EMPTY_CHAIN: NodeSequenceChain = {
   endowmentLockupState: null,
   teamPool: null,
   endowmentPool: null,
-  teamVoted: false,
+  teamVote: null,
 };
 
 export function yoctoOf(value: string | null | undefined): bigint {
@@ -372,10 +387,24 @@ export function buildNodeSequence(
       treasury: "team",
       steps: [
         {
-          id: "vote",
+          id: "vote-for",
           treasury: "team",
           plan: null,
-          done: chain.teamVoted,
+          done: chain.teamVote === "For",
+          blocker: firstBlocker([balances.teamVotingPower === 0n, "teamNoVotingPower"]),
+        },
+        {
+          id: "vote-against",
+          treasury: "team",
+          plan: null,
+          done: chain.teamVote === "Against",
+          blocker: firstBlocker([balances.teamVotingPower === 0n, "teamNoVotingPower"]),
+        },
+        {
+          id: "vote-abstain",
+          treasury: "team",
+          plan: null,
+          done: chain.teamVote === "Abstain",
           blocker: firstBlocker([balances.teamVotingPower === 0n, "teamNoVotingPower"]),
         },
       ],
@@ -462,7 +491,38 @@ export function buildVotePlan(input: {
   });
 }
 
-export const VOTE_PROPOSAL_MATCH: DaoPlan = call(VOTING_ACCOUNT, "vote", "300 Tgas");
+function proposalVote(
+  proposal: SputnikProposal,
+): { proposalId: number; option: VoteOption } | null {
+  const action = (
+    proposal.kind as { FunctionCall?: { actions: { method_name: string; args: string }[] } }
+  ).FunctionCall?.actions.find((entry) => entry.method_name === "vote");
+  if (!action) return null;
+  try {
+    const args = JSON.parse(atob(action.args)) as { proposal_id?: unknown; vote?: unknown };
+    const option = VOTE_OPTIONS.find((entry) => entry === args.vote);
+    if (typeof args.proposal_id !== "number" || !option) return null;
+    return { proposalId: args.proposal_id, option };
+  } catch {
+    return null;
+  }
+}
+
+export function pendingVoteProposalFor(
+  proposals: readonly SputnikProposal[],
+  proposalId: number | null,
+  option: VoteOption,
+): SputnikProposal | null {
+  if (proposalId == null) return null;
+  return (
+    proposals.find((proposal) => {
+      if (!isPendingProposal(proposal)) return false;
+      if (!proposalCallsMethod(proposal, VOTING_ACCOUNT, ["vote"])) return false;
+      const parsed = proposalVote(proposal);
+      return parsed?.proposalId === proposalId && parsed.option === option;
+    }) ?? null
+  );
+}
 
 function proposalClearsDelegations(proposal: SputnikProposal): boolean | null {
   const action = (
@@ -598,16 +658,16 @@ export async function readNodeSequenceChain(input: {
     endowmentLockupState,
     teamPool,
     endowmentPool,
-    teamVoted: false,
+    teamVote: null,
   };
 }
 
-export async function readTeamVoted(team: string, proposalId: number): Promise<boolean> {
+export async function readTeamVote(team: string, proposalId: number): Promise<VoteOption | null> {
   const vote = await view<number>(VOTING_ACCOUNT, "get_vote", {
     account_id: team,
     proposal_id: proposalId,
   });
-  return vote != null;
+  return typeof vote === "number" ? (VOTE_OPTIONS[vote] ?? null) : null;
 }
 
 export interface GovProposalView {
