@@ -234,6 +234,8 @@ This document provides operational guidance for AI agents working in this everyt
 
 ## Quick Reference
 
+**Never use bun.** CI fails on any `bun.lock` artifact — bun re-migrates the workspace (framework ADR 0026, see https://github.com/NEARBuilders/everything-dev). Run package managers and executables as `pnpm …` / `pnpm exec …`.
+
 **Start Development:**
 ```bash
 pnpm install
@@ -421,10 +423,12 @@ The host exposes several surfaces for programmatic agent access:
 
 ### Authentication for agents
 
-1. Sign in with your NEAR wallet (SIWN) at the website.
+Every surface requires a session or API key — anonymous requests get `401` (including MCP `tools/list`).
+
+1. Sign in with your NEAR wallet (SIWN) at the website — or run `bos login` from a machine with a browser.
 2. Navigate to **Settings → API Keys** at `/settings/api-keys`.
-3. Create a new key — the full secret (`edk_...`) is shown once. Copy it immediately.
-4. Pass it on every request: `x-api-key: edk_your_key_here`
+3. Create a new key — the full secret (`api_...`) is shown once. Copy it immediately.
+4. Pass it on every request: `x-api-key: api_your_key_here`
 
 ### Architecture note: remotes are code bundles
 
@@ -438,6 +442,8 @@ bos kill        # Kill all tracked processes
 pnpm install    # Ensure dependencies
 pnpm run dev    # Restart
 ```
+
+**Docker commands hang instead of failing:** the daemon is down (it hangs, not fails — a slow API call masks it). Start Docker Desktop and retry; probe with a short timeout, don't extend the timeout hoping it completes.
 
 **Module Federation errors:**
 - Check `bos.app.ts` URLs are accessible

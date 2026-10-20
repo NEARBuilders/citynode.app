@@ -7,13 +7,13 @@ name: CI
 on:
   push:
     branches: [main]
+    # paths-ignore stays on push only: it gates Deploy (workflow_run). On
+    # pull_request a paths-ignored run never reports the required check,
+    # which permanently blocks docs-only PRs once branch protection is on.
     paths-ignore:
       - "**.md"
       - "docs/**"
       - ".changeset/**"
-  # No paths-ignore on pull_request: the merge gate is a required status
-  # check, so every PR must run CI and report it — docs-only PRs included.
-  # (paths-ignore stays on push, where it gates Deploy via workflow_run.)
   pull_request:
   workflow_dispatch:
 
@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   ci:
+    name: CI
     uses: NEARBuilders/everything-dev/.github/workflows/consumer-ci.yml@main
     with:
       working_directory: .
@@ -32,6 +33,8 @@ jobs:
   # never boots databases or browsers. This job mirrors the base runtime's
   # browser leg: test-database service containers, then the full retained
   # suite against a local `bos dev` stack (base host remote, local workspaces).
+  # Once upstream's consumer-regression.yml (everything-dev#368) ships, this
+  # job can move onto it.
   regression-browser:
     name: Regression browser (dev:ssr)
     runs-on: ubuntu-latest
@@ -116,18 +119,18 @@ jobs:
             tests/regression/browser/test-results/**
             tests/regression/browser/playwright-report/**
 
-  # Merge gate — child-owned job with a stable name matching the repo's
-  # branch-protection required check ("Lint and Type Check"). The reusable
-  # consumer-ci job's check name embeds the upstream callee's display name
-  # ("CI / Lint, typecheck, and test"), so pointing branch protection at it
-  # directly would break silently if upstream ever renames the job. The
-  # browser regression suite runs above but is intentionally non-blocking;
-  # add it to `needs` when E2E should gate merges.
+  # Merge gate for branch protection. Require this check name ("Lint and Type
+  # Check") in Settings → Branches — it is child-owned and slash-free, unlike
+  # the reusable call, which GitHub renders as "CI / Lint, typecheck, and test"
+  # (the callee half cannot be overridden and breaks silently on upstream
+  # renames). A reusable job cannot take caller jobs in `needs`, so this gate
+  # lives here, not in the shared workflow. Once consumer-regression.yml
+  # (everything-dev#368) ships, add that job to `needs` if E2E should gate
+  # merges.
   lint-and-typecheck-gate:
     name: Lint and Type Check
     needs: [ci]
-    if: always()
+    if: always() # a plain needs-skip reports "skipped", not failure
     runs-on: ubuntu-latest
     steps:
-      - name: Assert CI passed
-        run: test "${{ needs.ci.result }}" = "success"
+      - run: test "${{ needs.ci.result }}" = "success"

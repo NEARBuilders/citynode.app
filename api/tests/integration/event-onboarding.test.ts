@@ -100,11 +100,10 @@ const orphanEventId = crypto.randomUUID();
 
 async function seedEventOnNodeWithoutOrganization() {
   const slug = pluginMigrationSlug(pluginDevConfig.pluginId);
-  const schemaName = `plugin_${slug}`;
-  const driver = await createDatabaseDriver(`pglite:${databaseDir}`, schemaName);
+  const driver = await createDatabaseDriver(`pglite:${databaseDir}`);
   try {
-    const { migrations } = await Effect.runPromise(loadMigrations());
-    await Effect.runPromise(migrate(driver.db, migrations, getMigrationStorage(slug), schemaName));
+    const { migrations } = await Effect.runPromise(loadMigrations);
+    await Effect.runPromise(migrate(driver.db, migrations, getMigrationStorage(slug)));
     const [tenant] = await driver.db
       .insert(tenants)
       .values({ name: "Solo app", accountId: "solo-app.near", orgId: null, ownerKind: "user" })

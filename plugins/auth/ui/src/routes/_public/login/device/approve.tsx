@@ -101,7 +101,7 @@ function DeviceApprovePage() {
       }
     }
     const approveError = await auth.device.approve({ userCode: user_code }).then(
-      ({ error }) => error,
+      ({ error }: { error?: unknown }) => error,
       (thrown: unknown) => thrown,
     );
     setPending(false);
@@ -123,7 +123,7 @@ function DeviceApprovePage() {
     setPending(true);
     setError(null);
     const denyError = await auth.device.deny({ userCode: user_code }).then(
-      ({ error }) => error,
+      ({ error }: { error?: unknown }) => error,
       (thrown: unknown) => thrown,
     );
     setPending(false);
