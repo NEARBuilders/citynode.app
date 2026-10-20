@@ -11,10 +11,10 @@ import {
   type NodeSequenceInputs,
   nodeSequenceBalances,
   pendingProposalFor,
+  pendingVoteProposalFor,
   REGISTER_DEPOSIT,
   savedEndowmentOf,
   VENEAR_ACCOUNT,
-  VOTE_PROPOSAL_MATCH,
   VOTING_ACCOUNT,
   withEndowment,
 } from "./node-staking-proposals";
@@ -182,7 +182,7 @@ describe("buildNodeSequence", () => {
         },
         internal: { lockup_version: null },
       },
-      teamVoted: true,
+      teamVote: "For",
     });
     expect(step(actions, "stake").done).toBe(false);
     expect(step(actions, "stake").blocker).toBeNull();
@@ -190,7 +190,9 @@ describe("buildNodeSequence", () => {
     expect(step(actions, "register-endowment").done).toBe(true);
     expect(step(actions, "deploy-lockup-endowment").done).toBe(false);
     expect(step(actions, "set-delegations").done).toBe(true);
-    expect(step(actions, "vote").done).toBe(true);
+    expect(step(actions, "vote-for").done).toBe(true);
+    expect(step(actions, "vote-against").done).toBe(false);
+    expect(step(actions, "vote-abstain").done).toBe(false);
   });
 
   it("does not count a partial delegation as done", () => {
@@ -247,17 +249,30 @@ describe("pendingProposalFor", () => {
     expect(pendingProposalFor([proposal("InProgress")], null)).toBeNull();
   });
 
-  it("matches a pending team vote proposal for the vote step", () => {
-    const vote: SputnikProposal = {
+  it("matches a pending team vote proposal by proposal id and option", () => {
+    const vote = (proposalId: number, option: string): SputnikProposal => ({
       ...proposal("InProgress"),
       kind: {
         FunctionCall: {
           receiver_id: VOTING_ACCOUNT,
-          actions: [{ method_name: "vote", args: "", deposit: "0", gas: "0" }],
+          actions: [
+            {
+              method_name: "vote",
+              args: btoa(JSON.stringify({ proposal_id: proposalId, vote: option })),
+              deposit: "0",
+              gas: "0",
+            },
+          ],
         },
       },
-    };
-    expect(pendingProposalFor([vote], VOTE_PROPOSAL_MATCH)?.id).toBe(12);
+    });
+    const forVote = vote(7, "For");
+    expect(pendingVoteProposalFor([forVote], 7, "For")?.id).toBe(12);
+    expect(pendingVoteProposalFor([forVote], 7, "Against")).toBeNull();
+    expect(pendingVoteProposalFor([forVote], 7, "Abstain")).toBeNull();
+    expect(pendingVoteProposalFor([forVote], 8, "For")).toBeNull();
+    expect(pendingVoteProposalFor([forVote], null, "For")).toBeNull();
+    expect(pendingVoteProposalFor([{ ...forVote, status: "Approved" }], 7, "For")).toBeNull();
   });
 });
 
@@ -311,7 +326,10 @@ describe("step prerequisites", () => {
   });
 
   it("lets the team vote only with veNEAR", () => {
-    expect(step(buildNodeSequence(inputs, chain), "vote").blocker).toBe("teamNoVotingPower");
+    const idle = buildNodeSequence(inputs, chain);
+    for (const id of ["vote-for", "vote-against", "vote-abstain"] as const) {
+      expect(step(idle, id).blocker).toBe("teamNoVotingPower");
+    }
     const withPower = buildNodeSequence(inputs, {
       ...chain,
       teamVenear: {
@@ -323,7 +341,9 @@ describe("step prerequisites", () => {
         internal: { lockup_version: null },
       },
     });
-    expect(step(withPower, "vote").blocker).toBeNull();
+    for (const id of ["vote-for", "vote-against", "vote-abstain"] as const) {
+      expect(step(withPower, id).blocker).toBeNull();
+    }
   });
 });
 
