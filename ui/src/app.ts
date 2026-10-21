@@ -73,6 +73,7 @@ export function getAppName(config?: RuntimeConfigInput): string {
 
 import type { ApiClient } from "./lib/api";
 import type { AuthClient as AuthClientType } from "./lib/auth";
+import { requireSession as frameworkRequireSession, sessionQueryKey } from "./lib/auth";
 
 export {
   type BuildTenantUrlOptions,
@@ -109,11 +110,17 @@ export {
   pluginPath,
   pluginSearch,
   requireAdmin,
-  requireSession,
   sessionQueryKey,
   sessionQueryOptions,
   useAuthClient,
 } from "./lib/auth";
+
+export async function requireSession(args: Parameters<typeof frameworkRequireSession>[0]) {
+  if (args.context.queryClient.getQueryData(sessionQueryKey) === null) {
+    args.context.queryClient.removeQueries({ queryKey: sessionQueryKey });
+  }
+  return frameworkRequireSession(args);
+}
 
 import type {
   CreateRouterOptions as BaseCreateRouterOptions,

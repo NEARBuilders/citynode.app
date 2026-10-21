@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import type { BrowserContext } from "@playwright/test";
+import { addSessionCookies, cookiesFromHeader } from "../../lib/playwright-cookies.mjs";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 
 const { baseUrl } = computeRegressionEnv();
@@ -76,19 +77,5 @@ export async function refreshSessionCookies(cookie: string) {
 }
 
 export async function useCookieHeader(context: BrowserContext, cookieHeader: string) {
-  const url = new URL(baseUrl);
-  await context.addCookies(
-    cookieHeader.split("; ").map((pair) => {
-      const index = pair.indexOf("=");
-      return {
-        name: pair.slice(0, index),
-        value: pair.slice(index + 1),
-        domain: url.hostname,
-        path: "/",
-        httpOnly: true,
-        secure: url.protocol === "https:",
-        sameSite: "Lax" as const,
-      };
-    }),
-  );
+  await addSessionCookies(context, cookiesFromHeader(cookieHeader), baseUrl);
 }
