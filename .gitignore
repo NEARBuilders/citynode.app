@@ -335,6 +335,7 @@ node_modules/.federation
 *.md
 !**/skills/**/*.md
 !AGENTS.md
+!CODING_STANDARDS.md
 !CONTRIBUTING.md
 !ui/DESIGN.md
 !ui/public/skill.md

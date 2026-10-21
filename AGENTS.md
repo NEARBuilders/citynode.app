@@ -451,6 +451,8 @@ pnpm run dev    # Restart
 
 **Docker commands hang instead of failing:** the daemon is down (it hangs, not fails — a slow API call masks it). Start Docker Desktop and retry; probe with a short timeout, don't extend the timeout hoping it completes.
 
+**Browser regression suite (`test:regression:browser:dev:ssr`):** its preflight (`tests/regression/lib/preflight.mjs`) kills stale stack processes and brings up every compose postgres automatically — Docker Desktop must be running. If a run fails at boot, check `.bos/logs/regression-dev-ssr.log` and `.bos/bos.resolved-config.json` staleness (regenerate with `bos dev` or the helpers' `resolve-config`).
+
 **Module Federation errors:**
 - Check `bos.app.ts` URLs are accessible
 - Verify shared dependency versions match in package.json
