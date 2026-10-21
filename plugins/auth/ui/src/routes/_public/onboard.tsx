@@ -56,7 +56,7 @@ export const Route = createFileRoute("/_public/onboard")({
 
 type Redeemed = { organizationId: string; organizationName: string; eventName: string };
 type RedeemFailure = OnboardingRedeemReason | "network";
-type StatusAction = "retry" | "explore" | "ask-organizer";
+type StatusAction = "retry" | "explore" | "contact-community";
 
 const PASSKEY_DEFAULT_NAME = "Passkey user";
 
@@ -66,11 +66,11 @@ const redeemCopy: Record<
 > = {
   organization_not_active: { title: "auth.onboard.communityNotOpen", action: "explore" },
   organization_full: { title: "auth.onboard.communityFull", action: "explore" },
-  code_revoked: { title: "auth.onboard.invitationRevoked", action: "ask-organizer" },
-  code_expired: { title: "auth.onboard.invitationExpired", action: "ask-organizer" },
-  code_used_up: { title: "auth.onboard.invitationUsedUp", action: "ask-organizer" },
-  code_not_found: { title: "auth.onboard.invitationInvalid", action: "ask-organizer" },
-  organization_not_found: { title: "auth.onboard.invitationInvalid", action: "ask-organizer" },
+  code_revoked: { title: "auth.onboard.invitationRevoked", action: "contact-community" },
+  code_expired: { title: "auth.onboard.invitationExpired", action: "contact-community" },
+  code_used_up: { title: "auth.onboard.invitationUsedUp", action: "contact-community" },
+  code_not_found: { title: "auth.onboard.invitationInvalid", action: "contact-community" },
+  organization_not_found: { title: "auth.onboard.invitationInvalid", action: "contact-community" },
 };
 
 function isRedeemReason(value: unknown): value is OnboardingRedeemReason {
@@ -104,6 +104,18 @@ function OnboardContent() {
     translate("auth.onboard.stepJoin"),
     translate("auth.onboard.stepName"),
   ];
+  const joinProgress = (current: number) => (
+    <StepProgress
+      steps={JOIN_STEPS}
+      current={current}
+      testId="onboard.progress"
+      label={translate("auth.progress.label")}
+      stepLabel={translate("auth.progress.step", {
+        step: current + 1,
+        total: JOIN_STEPS.length,
+      })}
+    />
+  );
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const code = sanitizeCode(Route.useSearch().code);
@@ -191,7 +203,7 @@ function OnboardContent() {
           titleTestId="onboard.heading"
           description={joinedLine}
         >
-          <StepProgress steps={JOIN_STEPS} current={2} testId="onboard.progress" />
+          {joinProgress(2)}
           <DisplayNameStep
             initialName={accountCreated ? "" : (session?.user.name ?? "")}
             onDone={() => setNameDone(true)}
@@ -328,7 +340,7 @@ function OnboardContent() {
         title={translate("auth.onboard.notFound")}
         description={translate("auth.onboard.invalidCode")}
         testId="onboard.not-found"
-        action="ask-organizer"
+        action="contact-community"
         toolbar={languageSelect}
       />
     );
@@ -361,7 +373,7 @@ function OnboardContent() {
               : translate("auth.onboard.limit")
         }
         testId="onboard.unavailable"
-        action="ask-organizer"
+        action="contact-community"
         toolbar={languageSelect}
       />
     );
@@ -373,7 +385,7 @@ function OnboardContent() {
       <StatusPanel
         title={translate(copy.title)}
         description={
-          copy.action === "ask-organizer" ? translate("auth.onboard.askOrganizer") : undefined
+          copy.action === "contact-community" ? translate("auth.onboard.askOrganizer") : undefined
         }
         testId="onboard.error"
         action={copy.action}
@@ -390,7 +402,7 @@ function OnboardContent() {
         title={translate("auth.onboard.joining", { community: info.organizationName })}
         titleTestId="onboard.heading"
       >
-        <StepProgress steps={JOIN_STEPS} current={1} testId="onboard.progress" />
+        {joinProgress(1)}
         <p
           className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
           data-testid="onboard.status"
@@ -415,14 +427,22 @@ function OnboardContent() {
       titleTestId="onboard.heading"
       description={
         <Trans
-          id="auth.onboard.eventWithOrg"
+          id="auth.onboard.eventWithCommunity"
           values={{ community: info.organizationName, event: info.eventName }}
           components={{ community: <span className="font-medium text-foreground" /> }}
         />
       }
       descriptionTestId="onboard.invite"
     >
-      <StepProgress steps={JOIN_STEPS} current={0} testId="onboard.progress" />
+      {joinProgress(0)}
+      {signInAgain ? (
+        <p
+          className="text-center text-sm text-muted-foreground"
+          data-testid="onboard.sign-in-again"
+        >
+          {translate("auth.onboard.signInDifferent")}
+        </p>
+      ) : null}
       <OnboardSignUp
         networkId={runtimeConfig?.networkId ?? "mainnet"}
         onAccountCreated={() => setAccountCreated(true)}

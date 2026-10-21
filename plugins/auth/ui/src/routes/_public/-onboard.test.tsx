@@ -394,7 +394,7 @@ describe("onboard join flow", () => {
 
     expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
     expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
-    expect(screen.queryByText("Ask the organizer for a new link")).toBeNull();
+    expect(screen.queryByText("Contact the community for a new link")).toBeNull();
 
     fireEvent.click(screen.getByTestId("onboard.retry-button"));
     expect(await screen.findByTestId("onboard.success")).toBeTruthy();
@@ -422,7 +422,7 @@ describe("onboard join flow", () => {
     expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
     expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
     expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
-    expect(screen.queryByText("Ask the organizer for a new link")).toBeNull();
+    expect(screen.queryByText("Contact the community for a new link")).toBeNull();
 
     fireEvent.click(screen.getByTestId("onboard.retry-button"));
     expect(await screen.findByTestId("onboard.success")).toBeTruthy();
@@ -454,6 +454,9 @@ describe("onboard join flow", () => {
     renderOnboard();
 
     expect(await screen.findByTestId("onboard.create-account-button")).toBeTruthy();
+    expect(screen.getByTestId("onboard.sign-in-again").textContent).toContain(
+      "Sign in with a different account",
+    );
     expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
     expect(screen.queryByTestId("onboard.error")).toBeNull();
     expect(refreshSessionCache).toHaveBeenCalled();
@@ -486,7 +489,7 @@ describe("onboard join flow", () => {
       expect(screen.getByTestId(actionTestId)).toBeTruthy();
       expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
     } else {
-      expect(screen.getByText("Ask the organizer for a new link")).toBeTruthy();
+      expect(screen.getByText("Contact the community for a new link")).toBeTruthy();
       expect(screen.queryByTestId("onboard.explore-button")).toBeNull();
       expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
     }
