@@ -12,10 +12,10 @@ export const DatabaseLive = (url: string) =>
     Effect.gen(function* () {
       const pluginId = yield* PluginIdTag;
       const slug = pluginMigrationSlug(pluginId);
-      // The api keeps the public-schema topology (what `bos db doctor` checks,
-      // the drizzle-kit config targets, and every v1-upgraded database already
-      // has); plugins scope into plugin_<slug> on the shared database.
-      const schemaName = slug === "api" ? undefined : `plugin_${slug}`;
+      // citynode diverges from the rc.14 template here on purpose: the api's
+      // tables (and journal history) live in plugin_api on every deployed
+      // database, so the api keeps the plugin_<slug> topology.
+      const schemaName = `plugin_${slug}`;
 
       const driver = yield* Effect.acquireRelease(
         Effect.tryPromise({

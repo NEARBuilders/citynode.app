@@ -27,7 +27,8 @@ function rebase(iso: string, shift: number) {
 
 async function seedCases() {
   const slug = pluginMigrationSlug(pluginDevConfig.pluginId);
-  const driver = await createDatabaseDriver(`pglite:${databaseDir}`);
+  const schemaName = `plugin_${slug}`;
+  const driver = await createDatabaseDriver(`pglite:${databaseDir}`, schemaName);
   try {
     const insertActivity = async (
       activity: CaseActivity,
@@ -67,7 +68,7 @@ async function seedCases() {
       return id;
     };
     const { migrations } = await Effect.runPromise(loadMigrations);
-    await Effect.runPromise(migrate(driver.db, migrations, getMigrationStorage(slug)));
+    await Effect.runPromise(migrate(driver.db, migrations, getMigrationStorage(slug), schemaName));
     for (const [
       index,
       { name, activity, earlierEvents, community, now },
