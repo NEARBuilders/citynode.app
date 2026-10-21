@@ -2,9 +2,8 @@ name: CI
 
 # Thin wrapper — the shared implementation lives in the base runtime repo
 # (NEARBuilders/everything-dev). This repo owns triggers, secret policy, and
-# working directory. Reusable-workflow refs are release-pinned (@v<version>)
-# by bos sync (ADR 0034 T5); the platform-drift alarm compares our recorded
-# pin against the latest published platform manifest.
+# working directory. The @main ref matches the sync trust model: bos sync
+# already tracks the parent's main for all framework-owned files.
 on:
   push:
     branches: [main]
@@ -57,7 +56,7 @@ jobs:
     needs: [filter]
     # Always run on push to main; on PRs only run when relevant files changed.
     if: ${{ github.event_name != 'pull_request' || needs.filter.outputs.ci == 'true' }}
-    uses: NEARBuilders/everything-dev/.github/workflows/consumer-ci.yml@v2.0.0-rc.16
+    uses: NEARBuilders/everything-dev/.github/workflows/consumer-ci.yml@v2.0.0-rc.17
     with:
       working_directory: .
     secrets: inherit
@@ -83,8 +82,8 @@ jobs:
   # browser leg: test-database service containers, then the full retained
   # suite against a local `bos dev` stack (base host remote, local workspaces).
   # Once upstream's consumer-regression.yml (everything-dev#368) ships, this
-  # job can move onto it. Red until everything-dev#527 (SSR session
-  # resolution) lands upstream — kept non-gating on purpose.
+  # job can move onto it. Gating as of 2.0.0-rc.17: the SSR session wall
+  # (everything-dev#527) is fixed upstream.
   regression-browser:
     name: Regression browser (dev:ssr)
     needs: [filter, ci]
@@ -188,18 +187,18 @@ jobs:
   # the reusable call, which GitHub renders as "CI / Lint, typecheck, and test"
   # (the callee half cannot be overridden and breaks silently on upstream
   # renames). A reusable job cannot take caller jobs in `needs`, so this gate
-  # lives here, not in the shared workflow. Once consumer-regression.yml
-  # (everything-dev#368) ships, add that job to `needs` if E2E should gate
-  # merges.
+  # lives here, not in the shared workflow. The browser regression suite is
+  # gated through this same check (needs: regression-browser).
   lint-and-typecheck-gate:
     name: Lint and Type Check
-    needs: [filter, ci]
-    if: ${{ always() }}
+    needs: [filter, ci, regression-browser]
+    if: always() # a plain needs-skip reports "skipped", not failure
     runs-on: ubuntu-latest
     steps:
       - run: |
           if [ "${{ needs.filter.outputs.ci }}" = "true" ]; then
             test "${{ needs.ci.result }}" = "success"
+            test "${{ needs.regression-browser.result }}" = "success"
           else
             echo "Skipping CI gate — no relevant changes detected"
             exit 0

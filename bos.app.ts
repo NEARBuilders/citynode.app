@@ -10,10 +10,8 @@ export default App({
   account: "v1.citynode.near",
   // The gateway: FastKV lookup key and public ingress for this runtime.
   domain: "citynode.app",
-  // The platform release pin (ADR 0034): one exact version — catalog, sync
-  // source, runtime image (ref + digest), and compat checks all derive from
-  // the resolved platform release manifest.
-  platform: "2.0.0-rc.16",
+  // The platform release pin (ADR 0034): the exact framework version this app targets ("exact-or-loud").
+  platform: "2.0.0-rc.17",
   // CI settings: runtime image name, Railway service.
   ci: {
     railway: {
