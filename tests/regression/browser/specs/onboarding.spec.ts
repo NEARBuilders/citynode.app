@@ -31,8 +31,8 @@ test.describe("Onboarding page", () => {
 
   const unavailable: Array<[OnboardingCodeFixture, string, RegExp]> = [
     ["expired", "an expired", /expired/i],
-    ["revoked", "a revoked", /revoked/i],
-    ["usedUp", "a used-up", /reached its limit/i],
+    ["revoked", "a revoked", /turned off/i],
+    ["usedUp", "a used-up", /used up/i],
   ];
 
   for (const [fixture, label, message] of unavailable) {

@@ -117,7 +117,7 @@ function renderOnboard(path = `/onboard?code=${CODE}`) {
       runtimeConfig: { networkId: "mainnet", runtime: { gatewayId: "citynode.app" } },
     },
   });
-  render(
+  return render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router as never} />
     </QueryClientProvider>,
@@ -139,6 +139,7 @@ afterEach(() => {
   harness.session = null;
   harness.sessionGate = null;
   harness.detectNearAccount.mockResolvedValue(null);
+  sessionStorage.clear();
   Reflect.set(
     document,
     "cookie",
@@ -216,6 +217,24 @@ describe("onboard join flow", () => {
     expect(screen.queryByTestId("onboard.display-name")).toBeNull();
   });
 
+  it("keeps the joined panel after a reload when the code has since expired", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode.mockResolvedValue(joined);
+
+    const view = renderOnboard();
+    expect(await screen.findByTestId("onboard.continue-on-computer")).toBeTruthy();
+    view.unmount();
+
+    harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, expired: true });
+    harness.redeemOnboardingCode.mockRejectedValue(joinFailure("code_expired"));
+
+    renderOnboard();
+
+    expect(await screen.findByTestId("onboard.success")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
+  });
+
   it("shows a returning member the joined state for a code that has since expired", async () => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, expired: true });
@@ -245,7 +264,7 @@ describe("onboard join flow", () => {
 
     renderOnboard();
 
-    expect((await screen.findByTestId("onboard.unavailable")).textContent).toBeTruthy();
+    expect((await screen.findByTestId("onboard.unavailable")).textContent).toMatch(/used up/i);
     expect(screen.queryByTestId("onboard.error")).toBeNull();
   });
 
@@ -256,7 +275,7 @@ describe("onboard join flow", () => {
 
     renderOnboard();
 
-    expect(await screen.findByTestId("onboard.unavailable")).toBeTruthy();
+    expect((await screen.findByTestId("onboard.unavailable")).textContent).toMatch(/turned off/i);
   });
 
   it("keeps an expired code on loading until the session is known", async () => {
