@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import * as authSchema from "../../../../plugins/auth/src/db/schema.ts";
+import * as authSchema from "../../fixtures/auth/schema.ts";
 import { openAuthDatabase } from "./onboarding-seed.ts";
 
 export async function seedOrganizationRedemptions(organizationId: string): Promise<void> {
