@@ -68,7 +68,7 @@ describe("proposals migrations", () => {
             VALUES (${initialHash}, 1780344361156)`,
       );
 
-      const { migrations } = await Effect.runPromise(loadMigrations());
+      const { migrations } = await Effect.runPromise(loadMigrations);
       await Effect.runPromise(migrate(driver.db, migrations, storage, "plugin_proposals"));
 
       const result = await driver.db.execute(

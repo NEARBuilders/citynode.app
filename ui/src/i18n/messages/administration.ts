@@ -1148,7 +1148,14 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Tout déstaker",
     "全部解除质押",
   ],
-  "admin.sequence.step.vote": ["Cast the vote", "Emitir el voto", "Voter", "投票"],
+  "admin.sequence.step.voteAgainst": [
+    "Vote against",
+    "Votar en contra",
+    "Voter contre",
+    "投反对票",
+  ],
+  "admin.sequence.step.voteAbstain": ["Vote abstain", "Abstenerse", "S’abstenir", "投弃权票"],
+  "admin.sequence.step.voteFor": ["Vote for", "Votar a favor", "Voter pour", "投赞成票"],
   "admin.sequence.step.withdrawAll": ["Withdraw all", "Sacar todo", "Tout retirer", "全部提取"],
   "admin.sequence.tab": ["Node sequence", "Secuencia del nodo", "Séquence du nœud", "节点流程"],
   "admin.sequence.teamHos": [
@@ -1206,10 +1213,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "向 {dao} 提议用其 veNEAR 对 House of Stake 提案投票。",
   ],
   "admin.sequence.title": ["Node sequence", "Secuencia del nodo", "Séquence du nœud", "节点流程"],
-  "admin.sequence.voteAbstain": ["Abstain", "Abstención", "Abstention", "弃权"],
-  "admin.sequence.voteAgainst": ["Against", "En contra", "Contre", "反对"],
-  "admin.sequence.voteFor": ["For", "A favor", "Pour", "赞成"],
-  "admin.sequence.voteOption": ["Vote", "Voto", "Vote", "投票选项"],
   "admin.sequence.voteProposal": [
     "House of Stake proposal",
     "Propuesta de House of Stake",

@@ -67,7 +67,7 @@ async function seedCases() {
       });
       return id;
     };
-    const { migrations } = await Effect.runPromise(loadMigrations());
+    const { migrations } = await Effect.runPromise(loadMigrations);
     await Effect.runPromise(migrate(driver.db, migrations, getMigrationStorage(slug), schemaName));
     for (const [
       index,

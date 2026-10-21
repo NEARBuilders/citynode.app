@@ -48,7 +48,8 @@
     "react-dom": "catalog:",
     "sonner": "catalog:",
     "tw-animate-css": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@better-auth/core": "catalog:"
   },
   "devDependencies": {
     "@module-federation/node": "catalog:",
