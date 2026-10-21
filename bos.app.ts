@@ -10,10 +10,11 @@ export default App({
   account: "v1.citynode.near",
   // The gateway: FastKV lookup key and public ingress for this runtime.
   domain: "citynode.app",
-  // CI settings: Railway service name. The runtime image is NOT pinned here —
-  // ci.image was retired (ADR 0034): the platform pin (or latest-via-extends)
-  // resolves the release manifest, which derives the image ref and digest at
-  // deploy time.
+  // The platform release pin (ADR 0034): one exact version — catalog, sync
+  // source, runtime image (ref + digest), and compat checks all derive from
+  // the resolved platform release manifest.
+  platform: "2.0.0-rc.16",
+  // CI settings: runtime image name, Railway service.
   ci: {
     railway: {
       service: "app",

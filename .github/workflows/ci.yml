@@ -57,7 +57,7 @@ jobs:
     needs: [filter]
     # Always run on push to main; on PRs only run when relevant files changed.
     if: ${{ github.event_name != 'pull_request' || needs.filter.outputs.ci == 'true' }}
-    uses: NEARBuilders/everything-dev/.github/workflows/consumer-ci.yml@v2.0.0-rc.15
+    uses: NEARBuilders/everything-dev/.github/workflows/consumer-ci.yml@v2.0.0-rc.16
     with:
       working_directory: .
     secrets: inherit
@@ -65,11 +65,8 @@ jobs:
   # Drift alarm (ADR 0034): the child's recorded `platform` pin (or the
   # inherited default) compared against the latest published release
   # manifest. Exits 1 — i.e. fails this job — when updates are available.
-  # continue-on-error until everything-dev#524 lands (the check misreads the
-  # v2 catalog location and exits 1 even when up to date); drop the flag then.
   platform-drift:
     name: Platform Drift
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (Node 24)
@@ -86,7 +83,8 @@ jobs:
   # browser leg: test-database service containers, then the full retained
   # suite against a local `bos dev` stack (base host remote, local workspaces).
   # Once upstream's consumer-regression.yml (everything-dev#368) ships, this
-  # job can move onto it.
+  # job can move onto it. Red until everything-dev#527 (SSR session
+  # resolution) lands upstream — kept non-gating on purpose.
   regression-browser:
     name: Regression browser (dev:ssr)
     needs: [filter, ci]

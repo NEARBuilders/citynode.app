@@ -49,18 +49,12 @@
     "@biomejs/biome": "2.4.15",
     "@changesets/cli": "^2.29.8",
     "@effect/tsgo": "^0.45.0",
-    "@electric-sql/pglite": "catalog:",
-    "@libsql/client": "catalog:",
-    "@opentelemetry/api": "catalog:",
     "@playwright/test": "^1.58.1",
     "@shadcn/lint": "^0.2.0",
     "@types/pg": "catalog:",
-    "better-auth": "catalog:",
     "dotenv": "^17.3.1",
-    "drizzle-orm": "catalog:",
     "oxlint": "1.82.0",
     "oxlint-tsgolint": "7.0.2001",
-    "pg": "catalog:",
     "tsx": "^4.21.0",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "catalog:"
@@ -79,7 +73,10 @@
     "every-plugin": "catalog:",
     "everything-dev": "catalog:",
     "pg": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@electric-sql/pglite": "catalog:",
+    "@libsql/client": "catalog:",
+    "@opentelemetry/api": "catalog:"
   },
   "peerDependencies": {
     "typescript": "catalog:"

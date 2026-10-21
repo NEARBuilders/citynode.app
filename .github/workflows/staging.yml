@@ -26,7 +26,7 @@ permissions:
 jobs:
   deploy-staging:
     name: Deploy Staging
-    uses: NEARBuilders/everything-dev/.github/workflows/consumer-staging.yml@v2.0.0-rc.15
+    uses: NEARBuilders/everything-dev/.github/workflows/consumer-staging.yml@v2.0.0-rc.16
     with:
       working_directory: .
       verbose: ${{ inputs.verbose == true }}
