@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema";
@@ -21,6 +22,14 @@ afterAll(async () => {
 
 function eventOf(title: string, eventId: string = crypto.randomUUID()) {
   return { eventId, eventName: title };
+}
+
+async function expectRedeemReason(promise: Promise<unknown>, code: string, reason: string) {
+  await expect(promise).rejects.toMatchObject({
+    constructor: ORPCError,
+    code,
+    data: { reason },
+  });
 }
 
 describe("onboarding handlers", () => {
@@ -256,12 +265,14 @@ describe("onboarding handlers", () => {
     });
 
     const second = await createTestUser(services.services, { email: undefined });
-    await expect(
+    await expectRedeemReason(
       handlers.onboarding.redeemOnboardingCode({
         input: { code: code.code },
         context: { reqHeaders: second.reqHeaders },
       }),
-    ).rejects.toThrow(/reached its limit/i);
+      "FORBIDDEN",
+      "code_used_up",
+    );
 
     const member = await services.services.db.query.member.findFirst({
       where: and(eq(schema.member.userId, second.userId), eq(schema.member.organizationId, org.id)),
@@ -311,12 +322,14 @@ describe("onboarding handlers", () => {
       .where(eq(schema.onboardingCode.id, expired.id));
 
     const late = await createTestUser(services.services, { email: undefined });
-    await expect(
+    await expectRedeemReason(
       handlers.onboarding.redeemOnboardingCode({
         input: { code: expired.code },
         context: { reqHeaders: late.reqHeaders },
       }),
-    ).rejects.toThrow(/expired/i);
+      "BAD_REQUEST",
+      "code_expired",
+    );
 
     const revoked = await handlers.onboarding.createOnboardingCode({
       input: { ...eventOf("Cancelled"), organizationId: org.id },
@@ -326,12 +339,14 @@ describe("onboarding handlers", () => {
       input: { codeId: revoked.id, organizationId: org.id },
       context: { reqHeaders: owner.reqHeaders },
     });
-    await expect(
+    await expectRedeemReason(
       handlers.onboarding.redeemOnboardingCode({
         input: { code: revoked.code },
         context: { reqHeaders: late.reqHeaders },
       }),
-    ).rejects.toThrow(/revoked/i);
+      "FORBIDDEN",
+      "code_revoked",
+    );
   });
 
   it("resumes a prior redeemer's joined state after the code expires", async () => {
@@ -660,12 +675,14 @@ describe("onboarding into a full organization", () => {
       });
       const attendee = await createTestUser(full.services, { email: undefined });
 
-      await expect(
+      await expectRedeemReason(
         handlers.onboarding.redeemOnboardingCode({
           input: { code: code.code },
           context: { reqHeaders: attendee.reqHeaders },
         }),
-      ).rejects.toThrow(/organization is full/i);
+        "FORBIDDEN",
+        "organization_full",
+      );
     } finally {
       await full.driver.close();
     }

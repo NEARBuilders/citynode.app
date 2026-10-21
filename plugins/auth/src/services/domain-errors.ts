@@ -260,7 +260,10 @@ export function toTransportError(error: AuthFailure): ORPCError<string, unknown>
         data: { action: error.action },
       });
     case "OrgRequiresApproval":
-      return new ORPCError("FORBIDDEN", { message: error.message, data: {} });
+      return new ORPCError("FORBIDDEN", {
+        message: error.message,
+        data: { reason: "organization_not_active" },
+      });
     case "NoActiveOrganization":
       return new ORPCError("BAD_REQUEST", { message: error.message, data: {} });
     case "NoOrganizationSelected":
@@ -304,7 +307,11 @@ export function toTransportError(error: AuthFailure): ORPCError<string, unknown>
     case "CodeNotFound":
       return new ORPCError("NOT_FOUND", {
         message: error.message,
-        data: { resource: "onboardingCode", ...(error.codeId ? { resourceId: error.codeId } : {}) },
+        data: {
+          resource: "onboardingCode",
+          ...(error.codeId ? { resourceId: error.codeId } : {}),
+          reason: "code_not_found",
+        },
       });
     case "CodeInactive":
       return new ORPCError("BAD_REQUEST", { message: error.message, data: {} });
@@ -314,15 +321,30 @@ export function toTransportError(error: AuthFailure): ORPCError<string, unknown>
         data: { apiKeyProvided: false },
       });
     case "CodeRevoked":
-      return new ORPCError("FORBIDDEN", { message: error.message, data: {} });
+      return new ORPCError("FORBIDDEN", {
+        message: error.message,
+        data: { reason: "code_revoked" },
+      });
     case "CodeExpired":
-      return new ORPCError("BAD_REQUEST", { message: error.message, data: {} });
+      return new ORPCError("BAD_REQUEST", {
+        message: error.message,
+        data: { reason: "code_expired" },
+      });
     case "CodeLimitReached":
-      return new ORPCError("FORBIDDEN", { message: error.message, data: {} });
+      return new ORPCError("FORBIDDEN", {
+        message: error.message,
+        data: { reason: "code_used_up" },
+      });
     case "RedeemOrgMissing":
-      return new ORPCError("BAD_REQUEST", { message: error.message, data: {} });
+      return new ORPCError("BAD_REQUEST", {
+        message: error.message,
+        data: { reason: "organization_not_found" },
+      });
     case "OrgFull":
-      return new ORPCError("FORBIDDEN", { message: error.message, data: {} });
+      return new ORPCError("FORBIDDEN", {
+        message: error.message,
+        data: { reason: "organization_full" },
+      });
     case "EventTeamCreateFailed":
       return new ORPCError("INTERNAL_SERVER_ERROR", { message: error.message });
     case "InviteeAmbiguous":

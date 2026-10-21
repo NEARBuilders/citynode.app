@@ -1,5 +1,10 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { contract, type InferOutput } from "../../src/contract";
+import {
+  contract,
+  type InferOutput,
+  type OnboardingRedeemReason,
+  onboardingRedeemFailures,
+} from "../../src/contract";
 
 async function validateRedeemOutput(value: unknown) {
   const schemas = contract.redeemOnboardingCode["~orpc"].outputSchemas ?? [];
@@ -33,5 +38,27 @@ describe("redeemOnboardingCode contract", () => {
 
   it("carries the joined flags", () => {
     expectTypeOf(redeemed).toMatchTypeOf<RedeemOutput>();
+  });
+
+  it("names each join failure reason on its error code", async () => {
+    const reasons: OnboardingRedeemReason[] = [];
+    for (const failure of Object.values(onboardingRedeemFailures)) {
+      for (const reason of failure.data.shape.reason.options) {
+        reasons.push(reason);
+        const result = await failure.data["~standard"].validate({ reason });
+        expect(result.issues, reason).toBeUndefined();
+      }
+    }
+    expect(reasons.sort()).toEqual(
+      [
+        "code_expired",
+        "code_not_found",
+        "code_revoked",
+        "code_used_up",
+        "organization_full",
+        "organization_not_active",
+        "organization_not_found",
+      ].sort(),
+    );
   });
 });

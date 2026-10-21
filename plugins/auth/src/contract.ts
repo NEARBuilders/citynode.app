@@ -15,6 +15,12 @@ import { sessionRoutes } from "./contract/session.contract";
 import { teamRoutes } from "./contract/teams.contract";
 
 export { type AuthErrors, Errors } from "./contract/errors";
+export {
+  type OnboardingRedeemFailureCode,
+  type OnboardingRedeemReason,
+  onboardingRedeemFailures,
+  onboardingRedeemReasonSchema,
+} from "./contract/onboarding.contract";
 export { apiKeySchema } from "./contract/schemas";
 
 export const contract = oc.router({

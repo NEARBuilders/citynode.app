@@ -1,3 +1,5 @@
+import type { OnboardingRedeemReason } from "@everything-dev/auth-plugin/contract";
+import { safe } from "@orpc/client";
 import {
   ArrowRightIcon,
   CheckCircleIcon,
@@ -10,7 +12,8 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { refreshSessionCache, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
-import { useEffect, useRef, useState } from "react";
+import { Trans } from "everything-dev/ui/i18n";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AuthPanel } from "@/components/auth-panel";
 import { StepProgress } from "@/components/step-progress";
@@ -24,6 +27,9 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import type { LoginMessageId } from "@/i18n/catalogs";
+import { LoginLanguageSelector } from "@/i18n/language-selector";
+import { LoginI18nProvider, useLoginTranslation } from "@/i18n/runtime";
 import { findCommunityPage } from "@/lib/community-page";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { DisplayNameStep } from "./-display-name-step";
@@ -33,8 +39,6 @@ import "../../styles.css";
 type SearchParams = {
   code?: string;
 };
-
-const JOIN_STEPS = ["Create your account", "Join the organization", "Add your name"] as const;
 
 function sanitizeCode(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -51,26 +55,69 @@ export const Route = createFileRoute("/_public/onboard")({
 });
 
 type Redeemed = { organizationId: string; organizationName: string; eventName: string };
+type RedeemFailure = OnboardingRedeemReason | "network";
+type StatusAction = "retry" | "explore" | "ask-organizer";
 
 const PASSKEY_DEFAULT_NAME = "Passkey user";
+
+const redeemCopy: Record<
+  OnboardingRedeemReason,
+  { title: LoginMessageId; action: Exclude<StatusAction, "retry"> }
+> = {
+  organization_not_active: { title: "auth.onboard.communityNotOpen", action: "explore" },
+  organization_full: { title: "auth.onboard.communityFull", action: "explore" },
+  code_revoked: { title: "auth.onboard.invitationRevoked", action: "ask-organizer" },
+  code_expired: { title: "auth.onboard.invitationExpired", action: "ask-organizer" },
+  code_used_up: { title: "auth.onboard.invitationUsedUp", action: "ask-organizer" },
+  code_not_found: { title: "auth.onboard.invitationInvalid", action: "ask-organizer" },
+  organization_not_found: { title: "auth.onboard.invitationInvalid", action: "ask-organizer" },
+};
+
+function isRedeemReason(value: unknown): value is OnboardingRedeemReason {
+  return typeof value === "string" && Object.hasOwn(redeemCopy, value);
+}
+
+function definedRedeemError(error: unknown): { code?: string; reason?: unknown } {
+  if (!error || typeof error !== "object") return {};
+  const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
+  const data = "data" in error && error.data && typeof error.data === "object" ? error.data : null;
+  const reason = data && "reason" in data ? data.reason : undefined;
+  return { code, reason };
+}
 
 function hasChosenName(accountCreated: boolean, name: string | undefined | null): boolean {
   return !accountCreated && !!name && name !== PASSKEY_DEFAULT_NAME;
 }
 
 function OnboardPage() {
+  return (
+    <LoginI18nProvider>
+      <OnboardContent />
+    </LoginI18nProvider>
+  );
+}
+
+function OnboardContent() {
+  const translate = useLoginTranslation();
+  const JOIN_STEPS = [
+    translate("auth.onboard.stepAccount"),
+    translate("auth.onboard.stepJoin"),
+    translate("auth.onboard.stepName"),
+  ];
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const code = sanitizeCode(Route.useSearch().code);
   const { apiClient, runtimeConfig } = Route.useRouteContext();
-  const { data: session } = useQuery(sessionQueryOptions(auth));
-  const { data: info } = useQuery({
+  const { data: session, isPending: sessionPending } = useQuery(sessionQueryOptions(auth));
+  const infoQuery = useQuery({
     queryKey: ["onboarding-info", code],
     queryFn: async () => {
       return apiClient.auth.getOnboardingCodeInfo({ code: code! });
     },
     enabled: !!code,
+    retry: false,
   });
+  const info = infoQuery.data;
 
   const [accountCreated, setAccountCreated] = useState(false);
   const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
@@ -82,45 +129,56 @@ function OnboardPage() {
   });
   const [nameDone, setNameDone] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [redeemError, setRedeemError] = useState<RedeemFailure | null>(null);
+  const [signInAgain, setSignInAgain] = useState(false);
   const redeemingRef = useRef(false);
+  const signedIn = !!session?.user && !signInAgain;
+  const languageSelect = <LoginLanguageSelector testId="onboard.language-select" />;
 
   const copyPairLink = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
-      toast.success("Link copied — open it on your computer");
+      toast.success(translate("auth.onboard.linkCopied"));
       setTimeout(() => setLinkCopied(false), 2000);
     } catch {
-      toast.error("Couldn't copy the link");
+      toast.error(translate("auth.onboard.copyFailed"));
     }
   };
 
   useEffect(() => {
-    if (!session?.user || !code || redeemingRef.current || redeemed || redeemError) return;
+    if (!signedIn || !code || redeemingRef.current || redeemed || redeemError) return;
     redeemingRef.current = true;
-    void apiClient.auth
-      .redeemOnboardingCode({ code })
-      .then((result: Redeemed) => {
-        setRedeemed({
-          organizationId: result.organizationId,
-          organizationName: result.organizationName,
-          eventName: result.eventName,
-        });
-        toast.success(`You've joined ${result.organizationName}`);
-        void refreshSessionCache(auth, queryClient);
-      })
-      .catch((error: { message?: string }) => {
-        setRedeemError(error?.message || "Could not join this organization");
-      });
-  }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient]);
+    void safe(apiClient.auth.redeemOnboardingCode({ code }) as Promise<Redeemed>).then(
+      ({ data, definedError, error, isSuccess }) => {
+        if (isSuccess) {
+          setRedeemed(data);
+          toast.success(
+            translate("auth.onboard.joinedToast", { community: data.organizationName }),
+          );
+          void refreshSessionCache(auth, queryClient);
+          return;
+        }
+        const failure = definedRedeemError(definedError ?? error);
+        if (failure.code === "UNAUTHORIZED") {
+          redeemingRef.current = false;
+          setSignInAgain(true);
+          void refreshSessionCache(auth, queryClient);
+          return;
+        }
+        setRedeemError(isRedeemReason(failure.reason) ? failure.reason : "network");
+      },
+    );
+  }, [signedIn, code, redeemed, redeemError, auth, apiClient, queryClient, translate]);
 
   if (redeemed) {
     const joinedLine = (
       <span data-testid="onboard.success">
-        You've joined{" "}
-        <span className="font-medium text-foreground">{redeemed.organizationName}</span> for{" "}
-        {redeemed.eventName}.
+        <Trans
+          id="auth.onboard.joinedLine"
+          values={{ community: redeemed.organizationName, event: redeemed.eventName }}
+          components={{ community: <span className="font-medium text-foreground" /> }}
+        />
       </span>
     );
 
@@ -128,7 +186,8 @@ function OnboardPage() {
       return (
         <AuthPanel
           icon={<CheckCircleIcon />}
-          title="You're in"
+          toolbar={languageSelect}
+          title={translate("auth.onboard.ready")}
           titleTestId="onboard.heading"
           description={joinedLine}
         >
@@ -147,7 +206,8 @@ function OnboardPage() {
     return (
       <AuthPanel
         icon={<CheckCircleIcon />}
-        title="You're in"
+        toolbar={languageSelect}
+        title={translate("auth.onboard.ready")}
         titleTestId="onboard.heading"
         description={joinedLine}
       >
@@ -166,7 +226,7 @@ function OnboardPage() {
             }
             data-testid="onboard.community-link"
           >
-            Visit {redeemed.organizationName}
+            {translate("auth.onboard.seeCommunity", { community: redeemed.organizationName })}
             <ArrowRightIcon />
           </Button>
         )}
@@ -175,13 +235,20 @@ function OnboardPage() {
             <DesktopIcon />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Continue on your computer</ItemTitle>
+            <ItemTitle>{translate("auth.onboard.desktop")}</ItemTitle>
             <ItemDescription>
-              On your computer, open{" "}
-              <span className="font-mono text-foreground" data-testid="onboard.gateway-origin">
-                {gatewayHost}/login?method=phone
-              </span>{" "}
-              — a QR code appears. Scan it with this phone's camera and tap Approve.
+              <Trans
+                id="auth.onboard.desktopHelp"
+                values={{ url: `${gatewayHost}/login?method=phone` }}
+                components={{
+                  url: (
+                    <span
+                      className="font-mono text-foreground"
+                      data-testid="onboard.gateway-origin"
+                    />
+                  ),
+                }}
+              />
             </ItemDescription>
           </ItemContent>
           <ItemActions className="w-full sm:w-auto">
@@ -194,7 +261,7 @@ function OnboardPage() {
               data-testid="onboard.continue-copy-link"
             >
               {linkCopied ? <CheckIcon /> : <CopyIcon />}
-              {linkCopied ? "Copied" : "Copy link"}
+              {linkCopied ? translate("auth.common.copied") : translate("auth.common.copyLink")}
             </Button>
           </ItemActions>
         </Item>
@@ -205,7 +272,7 @@ function OnboardPage() {
           render={<Link to="/dashboard" />}
           data-testid="onboard.home-button"
         >
-          Go to Home
+          {translate("auth.onboard.home")}
         </Button>
       </AuthPanel>
     );
@@ -214,14 +281,34 @@ function OnboardPage() {
   if (!code) {
     return (
       <StatusPanel
-        title="Invalid invitation"
-        description="This link is missing its code. Ask the organizer for a new QR code."
+        title={translate("auth.onboard.invalid")}
+        description={translate("auth.onboard.missingCode")}
         testId="onboard.invalid"
+        action="explore"
+        toolbar={languageSelect}
       />
     );
   }
 
-  if (info === undefined) {
+  if (infoQuery.isError && !(infoQuery.isFetching && info === undefined)) {
+    return (
+      <StatusPanel
+        title={translate("auth.onboard.loadFailed")}
+        testId="onboard.load-error"
+        action="retry"
+        retrying={infoQuery.isFetching}
+        toolbar={languageSelect}
+        onRetry={() => {
+          void infoQuery.refetch();
+        }}
+      />
+    );
+  }
+
+  const awaitingJoin = sessionPending || (signedIn && !redeemError);
+  const closedForNewcomers = !!info && !info.revoked && (info.expired || info.usedUp);
+
+  if (info === undefined || (closedForNewcomers && awaitingJoin)) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-20">
         <p
@@ -229,7 +316,7 @@ function OnboardPage() {
           data-testid="onboard.loading"
         >
           <Spinner />
-          Loading invitation…
+          {translate("auth.onboard.loading")}
         </p>
       </div>
     );
@@ -238,9 +325,26 @@ function OnboardPage() {
   if (info === null) {
     return (
       <StatusPanel
-        title="Invitation not found"
-        description="This onboarding code is invalid. Ask the organizer for a new QR code."
+        title={translate("auth.onboard.notFound")}
+        description={translate("auth.onboard.invalidCode")}
         testId="onboard.not-found"
+        action="ask-organizer"
+        toolbar={languageSelect}
+      />
+    );
+  }
+
+  if (redeemError === "network" && !info.revoked) {
+    return (
+      <StatusPanel
+        title={translate("auth.onboard.joinUnavailable")}
+        testId="onboard.error"
+        action="retry"
+        toolbar={languageSelect}
+        onRetry={() => {
+          redeemingRef.current = false;
+          setRedeemError(null);
+        }}
       />
     );
   }
@@ -248,28 +352,42 @@ function OnboardPage() {
   if (info.revoked || info.expired || info.usedUp) {
     return (
       <StatusPanel
-        title="Invitation unavailable"
+        title={translate("auth.onboard.unavailable")}
         description={
           info.revoked
-            ? "This onboarding code was revoked by the organizer."
+            ? translate("auth.onboard.revoked")
             : info.expired
-              ? "This onboarding code has expired. Ask the organizer for a new one."
-              : "This onboarding code has reached its limit. Ask the organizer for a new one."
+              ? translate("auth.onboard.expired")
+              : translate("auth.onboard.limit")
         }
         testId="onboard.unavailable"
+        action="ask-organizer"
+        toolbar={languageSelect}
       />
     );
   }
 
-  if (redeemError) {
-    return <StatusPanel title="Could not join" description={redeemError} testId="onboard.error" />;
+  if (redeemError && redeemError !== "network") {
+    const copy = redeemCopy[redeemError];
+    return (
+      <StatusPanel
+        title={translate(copy.title)}
+        description={
+          copy.action === "ask-organizer" ? translate("auth.onboard.askOrganizer") : undefined
+        }
+        testId="onboard.error"
+        action={copy.action}
+        toolbar={languageSelect}
+      />
+    );
   }
 
-  if (session?.user) {
+  if (signedIn) {
     return (
       <AuthPanel
         icon={<TicketIcon />}
-        title={`Joining ${info.organizationName}`}
+        toolbar={languageSelect}
+        title={translate("auth.onboard.joining", { community: info.organizationName })}
         titleTestId="onboard.heading"
       >
         <StepProgress steps={JOIN_STEPS} current={1} testId="onboard.progress" />
@@ -278,7 +396,7 @@ function OnboardPage() {
           data-testid="onboard.status"
         >
           <Spinner />
-          Adding you to {info.eventName}…
+          {translate("auth.onboard.adding", { event: info.eventName })}
         </p>
       </AuthPanel>
     );
@@ -287,14 +405,20 @@ function OnboardPage() {
   return (
     <AuthPanel
       icon={<TicketIcon />}
-      eyebrow={info.inviterName ? `${info.inviterName} invited you` : "You're invited"}
-      title={`Join ${info.organizationName}`}
+      toolbar={languageSelect}
+      eyebrow={
+        info.inviterName
+          ? translate("auth.onboard.invitedBy", { name: info.inviterName })
+          : translate("auth.onboard.invited")
+      }
+      title={translate("auth.onboard.joinTitle", { community: info.organizationName })}
       titleTestId="onboard.heading"
       description={
-        <>
-          {info.eventName} with{" "}
-          <span className="font-medium text-foreground">{info.organizationName}</span>
-        </>
+        <Trans
+          id="auth.onboard.eventWithOrg"
+          values={{ community: info.organizationName, event: info.eventName }}
+          components={{ community: <span className="font-medium text-foreground" /> }}
+        />
       }
       descriptionTestId="onboard.invite"
     >
@@ -302,6 +426,7 @@ function OnboardPage() {
       <OnboardSignUp
         networkId={runtimeConfig?.networkId ?? "mainnet"}
         onAccountCreated={() => setAccountCreated(true)}
+        onSignedIn={() => setSignInAgain(false)}
       />
     </AuthPanel>
   );
@@ -311,29 +436,54 @@ function StatusPanel({
   title,
   description,
   testId,
+  action,
+  retrying = false,
+  toolbar,
+  onRetry,
 }: {
   title: string;
-  description: string;
+  description?: string;
   testId: string;
+  action: StatusAction;
+  retrying?: boolean;
+  toolbar?: ReactNode;
+  onRetry?: () => void;
 }) {
-  return (
+  const translate = useLoginTranslation();
+  const panel = (
     <AuthPanel
       icon={<WarningCircleIcon />}
+      toolbar={toolbar}
       title={title}
       titleTestId="onboard.heading"
       description={description}
-      descriptionTestId={testId}
+      descriptionTestId={description ? testId : undefined}
     >
-      <Button
-        variant="outline"
-        size="lg"
-        className="w-full"
-        nativeButton={false}
-        render={<Link to="/explore" />}
-        data-testid="onboard.explore-button"
-      >
-        Explore communities
-      </Button>
+      {action === "retry" ? (
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full"
+          onClick={onRetry}
+          disabled={retrying}
+          data-testid="onboard.retry-button"
+        >
+          {retrying ? <Spinner data-icon="inline-start" /> : null}
+          {translate("auth.common.retry")}
+        </Button>
+      ) : action === "explore" ? (
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full"
+          nativeButton={false}
+          render={<Link to="/explore" />}
+          data-testid="onboard.explore-button"
+        >
+          {translate("auth.common.exploreCommunities")}
+        </Button>
+      ) : null}
     </AuthPanel>
   );
+  return description ? panel : <div data-testid={testId}>{panel}</div>;
 }

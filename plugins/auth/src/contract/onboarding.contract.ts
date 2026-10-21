@@ -4,6 +4,31 @@ import { z } from "zod";
 import { Errors } from "./errors";
 import { onboardingCodeSummarySchema } from "./schemas";
 
+function onboardingRedeemFailure<const T extends readonly [string, ...string[]]>(
+  status: number,
+  reasons: T,
+) {
+  return { status, data: z.object({ reason: z.enum(reasons) }) };
+}
+
+export const onboardingRedeemFailures = {
+  FORBIDDEN: onboardingRedeemFailure(403, [
+    "organization_not_active",
+    "organization_full",
+    "code_revoked",
+    "code_used_up",
+  ]),
+  BAD_REQUEST: onboardingRedeemFailure(400, ["code_expired", "organization_not_found"]),
+  NOT_FOUND: onboardingRedeemFailure(404, ["code_not_found"]),
+};
+
+export type OnboardingRedeemFailureCode = keyof typeof onboardingRedeemFailures;
+
+export const onboardingRedeemReasonSchema = z.enum(
+  Object.values(onboardingRedeemFailures).flatMap((failure) => failure.data.shape.reason.options),
+);
+export type OnboardingRedeemReason = z.infer<typeof onboardingRedeemReasonSchema>;
+
 export const onboardingRoutes = {
   createOnboardingCode: oc
     .route({ method: "POST", path: "/v1/auth/onboarding/codes" })
@@ -104,5 +129,5 @@ export const onboardingRoutes = {
         eventName: z.string(),
       }),
     )
-    .errors(Errors),
+    .errors({ UNAUTHORIZED: Errors.UNAUTHORIZED, ...onboardingRedeemFailures }),
 };
