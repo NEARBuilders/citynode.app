@@ -10,14 +10,9 @@ export default App({
   account: "v1.citynode.near",
   // The gateway: FastKV lookup key and public ingress for this runtime.
   domain: "citynode.app",
-  title: "City Nodes",
-  description:
-    "Decentralized city nodes on NEAR — each city is a tenant with its own validator pool you can stake to.",
-  repository: "https://github.com/NEARBuilders/citynode.app",
-  staging: { domain: "testnet.citynode.app", account: "v1.citynode.testnet" },
   // CI settings: runtime image name, Railway service.
   ci: {
-    image: "ghcr.io/nearbuilders/everything-dev:sha-3272362",
+    image: "ghcr.io/nearbuilders/everything-dev:sha-0da6b0c",
     railway: {
       service: "app",
     },

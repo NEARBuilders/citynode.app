@@ -44,6 +44,7 @@ catalog:
   "@rspack/cli": 2.2.6
   "@rspack/core": 2.2.8
   "@scure/base": ^2.2.0
+  "@simplewebauthn/browser": ^13.3.0
   "@tanstack/ai": 0.61.0
   "@tanstack/ai-openai": 0.24.1
   "@tanstack/ai-react": 0.29.1
@@ -63,14 +64,14 @@ catalog:
   "@types/react-dom": ^19.2.3
   aws4fetch: ^1.0.20
   better-auth: 1.7.7
-  better-near-auth: ^2.0.0-rc.2
+  better-near-auth: ^2.0.0-rc.3
   class-variance-authority: 0.7.1
   cn: 0.4.0
   drizzle-kit: ^0.31.8
   drizzle-orm: ^0.45.1
   effect: 4.0.0-rc.117
-  every-plugin: ^3.0.0-rc.9
-  everything-dev: ^2.0.0-rc.14
+  every-plugin: ^3.0.0-rc.10
+  everything-dev: ^2.0.0-rc.15
   framer-motion: 12.43.0
   near-kit: ^0.20.2
   pg: ^8.12.0
@@ -85,6 +86,6 @@ catalog:
   yaml: 2.9.0
   zod: 4.6.5
 minimumReleaseAgeExclude:
-  - better-near-auth@2.0.0-rc.0 || 2.0.0-rc.1 || 2.0.0-rc.2
-  - every-plugin@3.0.0-rc.4 || 3.0.0-rc.5 || 3.0.0-rc.6 || 3.0.0-rc.7 || 3.0.0-rc.8 || 3.0.0-rc.9
-  - everything-dev@2.0.0-rc.7 || 2.0.0-rc.8 || 2.0.0-rc.9 || 2.0.0-rc.10 || 2.0.0-rc.11 || 2.0.0-rc.12 || 2.0.0-rc.13 || 2.0.0-rc.14
+  - better-near-auth@2.0.0-rc.0 || 2.0.0-rc.1 || 2.0.0-rc.2 || 2.0.0-rc.3
+  - every-plugin@3.0.0-rc.4 || 3.0.0-rc.5 || 3.0.0-rc.6 || 3.0.0-rc.7 || 3.0.0-rc.8 || 3.0.0-rc.9 || 3.0.0-rc.10
+  - everything-dev@2.0.0-rc.7 || 2.0.0-rc.8 || 2.0.0-rc.9 || 2.0.0-rc.10 || 2.0.0-rc.11 || 2.0.0-rc.12 || 2.0.0-rc.13 || 2.0.0-rc.14 || 2.0.0-rc.15
