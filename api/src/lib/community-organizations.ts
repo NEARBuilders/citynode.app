@@ -15,6 +15,9 @@ export const DEFAULT_TEAMS = [
 const isNotFound = (error: unknown): boolean =>
   error instanceof ORPCError && error.code === "NOT_FOUND";
 
+const isConflict = (error: unknown): boolean =>
+  error instanceof ORPCError && error.code === "CONFLICT";
+
 async function fetchOrganization(
   auth: AuthClient,
   organizationId?: string,
@@ -95,9 +98,20 @@ export async function provisionCommunityOrganization(
         decision: "approve",
       });
     }
-    if (metadata.communityProposalId !== input.proposalId) {
+    if (
+      metadata.communityProposalId !== input.proposalId ||
+      metadata.communityApplicantId !== input.proposerUserId ||
+      metadata.communityReviewerId !== input.reviewerUserId
+    ) {
       await auth.updateOrganization({
-        data: { metadata: { ...metadata, communityProposalId: input.proposalId } },
+        data: {
+          metadata: {
+            ...metadata,
+            communityProposalId: input.proposalId,
+            communityApplicantId: input.proposerUserId,
+            communityReviewerId: input.reviewerUserId,
+          },
+        },
         organizationId: organization.id,
       });
     }
@@ -123,13 +137,27 @@ export async function provisionCommunityOrganization(
   if (existing && existing.metadata?.communityProposalId !== input.proposalId) {
     throw conflict("The community slug is already used by another organization");
   }
-  const organization =
-    existing ??
-    (await auth.createOrganization({
-      name: input.name,
-      slug: input.slug,
-      metadata: { communityProposalId: input.proposalId },
-    }));
+  let organization = existing;
+  if (!organization) {
+    const metadata = {
+      communityProposalId: input.proposalId,
+      communityApplicantId: input.proposerUserId,
+      communityReviewerId: input.reviewerUserId,
+    };
+    try {
+      organization = await auth.createOrganization({
+        name: input.name,
+        slug: input.slug,
+        metadata,
+      });
+    } catch (error) {
+      // Another admin applying the same proposal concurrently won the unique-slug insert.
+      if (!isConflict(error)) throw error;
+      const raced = await fetchOrganization(auth, undefined, input.slug);
+      if (!raced || raced.metadata?.communityProposalId !== input.proposalId) throw error;
+      organization = raced;
+    }
+  }
   await grantProposerOwnership(auth, organization.id, input.proposerUserId);
   if (input.reviewerUserId !== input.proposerUserId) {
     const { members } = await auth.listMembers({ organizationId: organization.id });
@@ -161,9 +189,11 @@ export async function releaseCommunityOrganization(
     return { released: false, keptReason: "not_found" };
   }
   const provisioned = new Set(
-    [organization.requestedBy, organization.metadata?.communityReviewerId].filter(
-      (id): id is string => typeof id === "string",
-    ),
+    [
+      organization.requestedBy,
+      organization.metadata?.communityApplicantId,
+      organization.metadata?.communityReviewerId,
+    ].filter((id): id is string => typeof id === "string"),
   );
   if (organization.members.some((member) => !provisioned.has(member.userId))) {
     return { released: false, keptReason: "in_use" };

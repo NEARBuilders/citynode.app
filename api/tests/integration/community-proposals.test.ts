@@ -1,19 +1,6 @@
+import { ORPCError } from "@orpc/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { authedContext, getPluginClient, teardown } from "../setup";
-
-const provision = vi.fn(
-  async ({ proposalId, legacyOrgId }: { proposalId: string; legacyOrgId?: string }) => ({
-    id: legacyOrgId ?? `community-${proposalId}`,
-  }),
-);
-
-const releaseOrganization = vi.fn(async (_input: { proposalId: string }) => ({
-  released: true,
-  keptReason: null,
-}));
-
-type RecordedStep = { entityId: string; step: string; status: string; resourceId?: string };
-const recordApplyStep = vi.fn(async (_input: RecordedStep) => ({}));
 
 const proposals = new Map<string, Record<string, unknown>>();
 const applicant = "community-applicant.near";
@@ -39,6 +26,7 @@ function savedProposal(
     createdBy: options?.createdBy ?? applicant,
     reviewStatus: options?.status ?? "approved",
     applyStatus: options?.applyStatus ?? "applying",
+    applySteps: {},
     payload: {
       kind: "country",
       parentId: null,
@@ -53,8 +41,130 @@ function savedProposal(
   };
 }
 
+type RecordedStep = { pluginId?: string; entityId: string; step: string; status: string; resourceId?: string };
+
+type FakeMember = {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: string;
+};
+
+type FakeTeam = {
+  id: string;
+  name: string;
+  organizationId: string;
+  areas: string[];
+};
+
+type FakeOrganization = {
+  id: string;
+  name: string;
+  slug: string;
+  status: "active" | "pending" | "rejected";
+  requestedBy: string | null;
+  metadata: Record<string, unknown>;
+  members: FakeMember[];
+  invitations: unknown[];
+  teams: FakeTeam[];
+};
+
+const organizations = new Map<string, FakeOrganization>();
+let memberCounter = 0;
+let teamCounter = 0;
+
+const fakeNow = () => new Date("2026-09-10T00:00:00.000Z");
+
+function findOrganization(organizationId?: string, organizationSlug?: string) {
+  for (const organization of organizations.values()) {
+    if (
+      organizationId
+        ? organization.id === organizationId
+        : organization.slug === organizationSlug
+    ) {
+      return organization;
+    }
+  }
+  return undefined;
+}
+
+function fakeOrgOutput(organization: FakeOrganization) {
+  return {
+    ...organization,
+    createdAt: fakeNow(),
+    members: organization.members.map((member) => ({
+      ...member,
+      createdAt: fakeNow(),
+      user: null,
+    })),
+    invitations: [...organization.invitations],
+  };
+}
+
+const notFound = (message: string) => new ORPCError("NOT_FOUND", { message });
+
+const createOrganization = vi.fn(
+  async ({
+    name,
+    slug,
+    metadata,
+    requestedBy,
+  }: {
+    name: string;
+    slug: string;
+    metadata?: Record<string, unknown>;
+    requestedBy: string | null;
+  }) => {
+    if (findOrganization(undefined, slug)) {
+      throw new ORPCError("CONFLICT", { message: "The organization slug is already taken" });
+    }
+    const organization: FakeOrganization = {
+      id: `org-${slug}`,
+      name,
+      slug,
+      status: "active",
+      requestedBy,
+      metadata: metadata ? { ...metadata } : {},
+      members: [],
+      invitations: [],
+      teams: [],
+    };
+    organizations.set(organization.id, organization);
+    return fakeOrgOutput(organization);
+  },
+);
+
+const deleteOrganization = vi.fn(async ({ organizationId }: { organizationId: string }) => {
+  organizations.delete(organizationId);
+  return { success: true };
+});
+
+const recordApplyStepDefault = async (input: RecordedStep) => {
+  const proposal = proposals.get(input.entityId);
+  if (proposal) {
+    proposal.applySteps = {
+      ...(proposal.applySteps as Record<string, unknown>),
+      [input.step]: {
+        step: input.step,
+        status: input.status,
+        resourceId: input.resourceId ?? null,
+      },
+    };
+  }
+  return {};
+};
+
+const recordApplyStep = vi.fn(recordApplyStepDefault);
+
 describe("approved community proposal provisioning", () => {
   beforeAll(async () => {
+    organizations.clear();
+    memberCounter = 0;
+    teamCounter = 0;
+    createOrganization.mockClear();
+    deleteOrganization.mockClear();
+    recordApplyStep.mockImplementation(recordApplyStepDefault);
+    proposals.clear();
     proposals.set("chicago", savedProposal("prop-chicago", "chicago"));
     await getPluginClient(undefined, {
       proposals: {
@@ -73,16 +183,127 @@ describe("approved community proposal provisioning", () => {
         router: {},
       },
       auth: {
-        client: (context?: { user?: { role?: string | null } }) => ({
-          provisionCommunityOrganization: async (input: Parameters<typeof provision>[0]) => {
-            if (context?.user?.role !== "admin") throw new Error("Reviewer context missing");
-            return provision(input);
-          },
-          releaseCommunityOrganization: async (input: { proposalId: string }) => {
-            if (context?.user?.role !== "admin") throw new Error("Reviewer context missing");
-            return releaseOrganization(input);
-          },
-        }),
+        client: (context?: { user?: { id?: string; role?: string | null } }) => {
+          const sessionId = context?.user?.id ?? null;
+          return {
+            getFullOrganization: async (input: {
+              organizationId?: string;
+              organizationSlug?: string;
+            }) => {
+              const organization = findOrganization(input.organizationId, input.organizationSlug);
+              if (!organization) throw notFound("Organization not found");
+              return fakeOrgOutput(organization);
+            },
+            checkSlug: async ({ slug }: { slug: string }) => ({
+              status: !findOrganization(undefined, slug),
+            }),
+            createOrganization: (input: {
+              name: string;
+              slug: string;
+              metadata?: Record<string, unknown>;
+            }) => createOrganization({ ...input, requestedBy: sessionId }),
+            reviewOrganization: async ({
+              organizationId,
+              decision,
+            }: {
+              organizationId: string;
+              decision: "approve" | "reject";
+            }) => {
+              const organization = organizations.get(organizationId);
+              if (!organization) throw notFound("Organization not found");
+              organization.status = decision === "approve" ? "active" : "rejected";
+              return fakeOrgOutput(organization);
+            },
+            updateOrganization: async ({
+              data,
+              organizationId,
+            }: {
+              data: { metadata?: Record<string, unknown> };
+              organizationId?: string;
+            }) => {
+              const organization = organizations.get(organizationId ?? "");
+              if (!organization) throw notFound("Organization not found");
+              if (data.metadata !== undefined) {
+                organization.metadata = { ...data.metadata };
+              }
+              return fakeOrgOutput(organization);
+            },
+            addMember: async ({
+              userId,
+              role,
+              organizationId,
+            }: {
+              userId: string;
+              role: string;
+              organizationId: string;
+            }) => {
+              const organization = organizations.get(organizationId);
+              if (!organization) throw notFound("Organization not found");
+              const member: FakeMember = {
+                id: `member-${++memberCounter}`,
+                userId,
+                organizationId,
+                role,
+              };
+              organization.members.push(member);
+              return { ...member, createdAt: fakeNow() };
+            },
+            updateMemberRole: async ({
+              memberId,
+              role,
+              organizationId,
+            }: {
+              memberId: string;
+              role: string;
+              organizationId?: string;
+            }) => {
+              const organization = organizations.get(organizationId ?? "");
+              const member = organization?.members.find((item) => item.id === memberId);
+              if (!organization || !member) throw notFound("Member not found");
+              member.role = role;
+              return { ...member, createdAt: fakeNow(), user: null };
+            },
+            listMembers: async ({ organizationId }: { organizationId?: string }) => {
+              const organization = organizations.get(organizationId ?? "");
+              if (!organization) throw notFound("Organization not found");
+              const members = organization.members.map((member) => ({
+                ...member,
+                createdAt: fakeNow(),
+                user: null,
+              }));
+              return { members, total: members.length };
+            },
+            listTeams: async ({ organizationId }: { organizationId?: string }) => {
+              const organization = organizations.get(organizationId ?? "");
+              if (!organization) throw notFound("Organization not found");
+              return organization.teams.map((team) => ({
+                ...team,
+                createdAt: fakeNow(),
+                updatedAt: fakeNow(),
+              }));
+            },
+            createTeam: async ({
+              name,
+              areas,
+              organizationId,
+            }: {
+              name: string;
+              areas?: string[];
+              organizationId?: string;
+            }) => {
+              const team: FakeTeam = {
+                id: `team-${++teamCounter}`,
+                name,
+                organizationId: organizationId ?? "",
+                areas: areas ?? [],
+              };
+              organizations.get(organizationId ?? "")?.teams.push(team);
+              return { ...team, createdAt: fakeNow(), updatedAt: fakeNow() };
+            },
+            listOnboardingCodes: async () => [],
+            deleteOrganization: (input: { organizationId: string }) => deleteOrganization(input),
+          };
+        },
         router: {},
       },
     } as never);
@@ -100,31 +321,38 @@ describe("approved community proposal provisioning", () => {
       hostname: "chicago.citynode.app",
     };
     const first = await admin.applyCommunityProposal(input);
-    expect(recordApplyStep.mock.calls.map(([call]) => call)).toEqual([
-      expect.objectContaining({
-        entityId: "chicago",
-        step: "organization",
-        status: "completed",
-        resourceId: "community-prop-chicago",
-      }),
-      expect.objectContaining({
-        entityId: "chicago",
-        step: "community",
-        status: "completed",
-        resourceId: first.nodeId,
-      }),
-    ]);
-    expect(provision).toHaveBeenCalledWith({
-      proposalId: "prop-chicago",
+    const stored = proposals.get("chicago")!;
+    expect(stored.applySteps).toMatchObject({
+      organization: { status: "completed", resourceId: "org-chicago" },
+      community: { status: "completed", resourceId: first.nodeId },
+    });
+    expect(createOrganization).toHaveBeenCalledWith({
       name: "Chicago",
       slug: "chicago",
-      proposerAccountId: applicant,
-      proposerUserId: "user-applicant",
+      metadata: {
+        communityProposalId: "prop-chicago",
+        communityApplicantId: "user-applicant",
+        communityReviewerId: "platform-reviewer",
+      },
+      requestedBy: "platform-reviewer",
     });
+    const organization = organizations.get("org-chicago")!;
+    expect(organization.metadata).toMatchObject({
+      communityProposalId: "prop-chicago",
+      communityApplicantId: "user-applicant",
+      communityReviewerId: "platform-reviewer",
+    });
+    expect(Object.fromEntries(organization.members.map((member) => [member.userId, member.role])))
+      .toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
+    expect(organization.teams.map((team) => team.name).sort()).toEqual([
+      "Community",
+      "Operations",
+      "Treasury",
+    ]);
     const node = await admin.getNode({ nodeId: first.nodeId });
     const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
     expect(tenant).toMatchObject({
-      orgId: "community-prop-chicago",
+      orgId: "org-chicago",
       accountId: "chicago.sputnik-dao.near",
     });
     const second = await admin.applyCommunityProposal(input);
@@ -167,6 +395,17 @@ describe("approved community proposal provisioning", () => {
   });
 
   it("preserves the legacy organization link", async () => {
+    organizations.set("legacy-org", {
+      id: "legacy-org",
+      name: "Boston Collective",
+      slug: "boston-collective",
+      status: "pending",
+      requestedBy: "user-applicant",
+      metadata: { seeded: true },
+      members: [],
+      invitations: [],
+      teams: [],
+    });
     proposals.set("boston", savedProposal("prop-boston", "boston", { orgId: "legacy-org" }));
     const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
     const applied = await admin.applyCommunityProposal({
@@ -174,9 +413,16 @@ describe("approved community proposal provisioning", () => {
       entityId: "boston",
       hostname: "boston.citynode.app",
     });
-    expect(provision).toHaveBeenCalledWith(
-      expect.objectContaining({ legacyOrgId: "legacy-org", proposerAccountId: applicant }),
-    );
+    const legacy = organizations.get("legacy-org")!;
+    expect(legacy.status).toBe("active");
+    expect(legacy.metadata).toMatchObject({
+      seeded: true,
+      communityProposalId: "prop-boston",
+      communityApplicantId: "user-applicant",
+      communityReviewerId: "platform-reviewer",
+    });
+    expect(Object.fromEntries(legacy.members.map((member) => [member.userId, member.role])))
+      .toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
     const node = await admin.getNode({ nodeId: applied.nodeId });
     const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
     expect(tenant?.orgId).toBe("legacy-org");
@@ -224,7 +470,7 @@ describe("approved community proposal provisioning", () => {
       hostname: "denver.citynode.app",
     };
     recordApplyStep.mockClear();
-    provision.mockRejectedValueOnce(new Error("auth unavailable"));
+    createOrganization.mockRejectedValueOnce(new Error("auth unavailable"));
     await expect(admin.applyCommunityProposal(input)).rejects.toBeTruthy();
     expect(recordApplyStep).not.toHaveBeenCalled();
     expect(
@@ -248,14 +494,17 @@ describe("approved community proposal provisioning", () => {
       hostname: "austin.citynode.app",
     };
     recordApplyStep.mockClear();
-    recordApplyStep.mockImplementation(async (call) => {
-      if (call.step === "community") throw new Error("proposals unavailable");
+    recordApplyStep.mockImplementation(async (input: RecordedStep) => {
+      if (input.step === "organization" || input.step === "community") {
+        await recordApplyStepDefault(input);
+      }
+      if (input.step === "community") throw new Error("proposals unavailable");
       return {};
     });
     try {
       await expect(admin.applyCommunityProposal(input)).rejects.toBeTruthy();
     } finally {
-      recordApplyStep.mockImplementation(async () => ({}));
+      recordApplyStep.mockImplementation(recordApplyStepDefault);
     }
     const created = (await admin.listTenants()).filter(
       (item) => item.accountId === "austin.sputnik-dao.near",
@@ -304,23 +553,28 @@ describe("approved community proposal provisioning", () => {
     await expect(admin.releaseCommunityProposal(release)).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
-    proposals.set("lagos", savedProposal("prop-lagos", "lagos", { applyStatus: "failed" }));
+    {
+      const failed: Record<string, unknown> | undefined = proposals.get("lagos");
+      if (failed) failed.applyStatus = "failed";
+    }
     const member = await getPluginClient(authedContext("ordinary-reviewer"));
     await expect(member.releaseCommunityProposal(release)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
 
-    releaseOrganization.mockClear();
+    deleteOrganization.mockClear();
     expect(await admin.releaseCommunityProposal(release)).toEqual({
       community: { released: true, keptReason: null },
       organization: { released: true, keptReason: null },
     });
-    expect(releaseOrganization).toHaveBeenCalledWith({ proposalId: "prop-lagos" });
+    expect(deleteOrganization).toHaveBeenCalledWith({ organizationId: "org-lagos" });
+    expect(organizations.has("org-lagos")).toBe(false);
     expect(
       (await admin.listTenants()).some((item) => item.accountId === "lagos.sputnik-dao.near"),
     ).toBe(false);
 
-    proposals.set("lagos", savedProposal("prop-lagos", "lagos"));
+    const resumable: Record<string, unknown> | undefined = proposals.get("lagos");
+    if (resumable) resumable.applyStatus = "applying";
     const reapplied = await admin.applyCommunityProposal(input);
     expect(await admin.getNode({ nodeId: reapplied.nodeId })).toMatchObject({ slug: "lagos" });
   });
@@ -340,7 +594,7 @@ describe("approved community proposal provisioning", () => {
         updatedAt: "2026-09-10T00:05:00.000Z",
       }),
     );
-    releaseOrganization.mockClear();
+    deleteOrganization.mockClear();
 
     await expect(
       admin.releaseCommunityProposal({
@@ -349,13 +603,24 @@ describe("approved community proposal provisioning", () => {
         expectedUpdatedAt: savedAt,
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/changed/) });
-    expect(releaseOrganization).not.toHaveBeenCalled();
+    expect(deleteOrganization).not.toHaveBeenCalled();
     expect(
       (await admin.listTenants()).some((item) => item.accountId === "nairobi.sputnik-dao.near"),
     ).toBe(true);
   });
 
   it("keeps an organization that existed before the application", async () => {
+    organizations.set("legacy-accra", {
+      id: "legacy-accra",
+      name: "Accra Hub",
+      slug: "accra-hub",
+      status: "active",
+      requestedBy: "user-applicant",
+      metadata: {},
+      members: [],
+      invitations: [],
+      teams: [],
+    });
     proposals.set(
       "accra",
       savedProposal("prop-accra", "accra", { orgId: "legacy-accra", applyStatus: "applying" }),
@@ -370,7 +635,7 @@ describe("approved community proposal provisioning", () => {
       "accra",
       savedProposal("prop-accra", "accra", { orgId: "legacy-accra", applyStatus: "failed" }),
     );
-    releaseOrganization.mockClear();
+    deleteOrganization.mockClear();
 
     expect(
       await admin.releaseCommunityProposal({
@@ -382,6 +647,6 @@ describe("approved community proposal provisioning", () => {
       community: { released: true, keptReason: null },
       organization: { released: false, keptReason: "existing" },
     });
-    expect(releaseOrganization).not.toHaveBeenCalled();
+    expect(deleteOrganization).not.toHaveBeenCalled();
   });
 });
