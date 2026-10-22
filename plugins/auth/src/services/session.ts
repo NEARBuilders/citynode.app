@@ -417,25 +417,43 @@ export const buildSessionService = ({
             : null
         : null;
 
-      return {
-        user: user
+      const serializedUser = user
+        ? {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            emailVerified: user.emailVerified,
+            image: user.image ?? null,
+            role: user.role ?? null,
+            isAnonymous: user.isAnonymous ?? null,
+            locale: user.locale ?? null,
+          }
+        : null;
+
+      // The host seeds SSR router context from this row; without it every
+      // signed-in HTML request renders (and redirects) as signed out.
+      const serializedSession =
+        session?.session && serializedUser
           ? {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              emailVerified: user.emailVerified,
-              image: user.image ?? null,
-              role: user.role ?? null,
-              isAnonymous: user.isAnonymous ?? null,
-              locale: user.locale ?? null,
+              id: session.session.id,
+              token: session.session.token,
+              userId: session.session.userId,
+              expiresAt: session.session.expiresAt,
+              activeOrganizationId: session.session.activeOrganizationId,
+              activeTeamId: getActiveTeamId(session.session),
+              user: serializedUser,
             }
-          : null,
+          : null;
+
+      return {
+        user: serializedUser,
         userId: user?.id ?? null,
         isAuthenticated,
         authMethod,
         principal: serializedPrincipal,
         apiKey: apiKeyInfo,
         permissions,
+        session: serializedSession,
         near: nearCapabilities,
         organization: organizationContext,
         organizations: organizations.length > 0 ? organizations : undefined,

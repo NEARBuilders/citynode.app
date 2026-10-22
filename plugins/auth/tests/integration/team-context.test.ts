@@ -111,6 +111,40 @@ describe("team context", () => {
   });
 });
 
+describe("request context session", () => {
+  // The base runtime's host seeds SSR router context from getContext().session;
+  // when it is missing every signed-in HTML request redirects to /login.
+  it("carries the resolved session row with the active organization and team", async () => {
+    const { member, org, team, handlers } = await orgWithTeamMember();
+    await handlers.teams.setActiveTeam({
+      input: { teamId: team.id },
+      context: { reqHeaders: member.reqHeaders },
+    });
+
+    const context = await handlers.session.getContext({
+      context: { reqHeaders: member.reqHeaders },
+    });
+
+    expect(context.session).toMatchObject({
+      userId: member.userId,
+      activeOrganizationId: org.id,
+      activeTeamId: team.id,
+      user: { id: member.userId },
+    });
+    expect(context.session?.token).toEqual(expect.any(String));
+    expect(context.session?.expiresAt).toBeInstanceOf(Date);
+  });
+
+  it("returns no session for a signed-out request", async () => {
+    const handlers = createTestHandlers(services.services);
+
+    const context = await handlers.session.getContext({ context: { reqHeaders: {} } });
+
+    expect(context.session).toBeNull();
+    expect(context.isAuthenticated).toBe(false);
+  });
+});
+
 describe("setActiveTeam", () => {
   it("rejects a team the user is not a member of", async () => {
     const { owner, org, handlers } = await orgWithTeamMember();

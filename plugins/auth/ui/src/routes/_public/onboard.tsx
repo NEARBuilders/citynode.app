@@ -60,41 +60,6 @@ type StatusAction = "retry" | "explore" | "contact-community";
 
 const PASSKEY_DEFAULT_NAME = "Passkey user";
 
-function redeemedStorageKey(code: string) {
-  return `citynode.onboard.redeemed:${code}`;
-}
-
-function readStoredRedeemed(code: string | undefined): Redeemed | null {
-  if (!code) return null;
-  try {
-    const raw = sessionStorage.getItem(redeemedStorageKey(code));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<Redeemed>;
-    if (
-      typeof parsed.organizationId === "string" &&
-      typeof parsed.organizationName === "string" &&
-      typeof parsed.eventName === "string"
-    ) {
-      return {
-        organizationId: parsed.organizationId,
-        organizationName: parsed.organizationName,
-        eventName: parsed.eventName,
-      };
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function storeRedeemed(code: string, data: Redeemed) {
-  try {
-    sessionStorage.setItem(redeemedStorageKey(code), JSON.stringify(data));
-  } catch {
-    return;
-  }
-}
-
 const redeemCopy: Record<
   OnboardingRedeemReason,
   { title: LoginMessageId; action: Exclude<StatusAction, "retry"> }
@@ -167,7 +132,7 @@ function OnboardContent() {
   const info = infoQuery.data;
 
   const [accountCreated, setAccountCreated] = useState(false);
-  const [redeemed, setRedeemed] = useState<Redeemed | null>(() => readStoredRedeemed(code));
+  const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
   const { data: communityPage } = useQuery({
     queryKey: ["onboarding-community-page", redeemed?.organizationId],
     queryFn: () => findCommunityPage(apiClient, redeemed?.organizationId ?? ""),
@@ -194,17 +159,12 @@ function OnboardContent() {
   };
 
   useEffect(() => {
-    setRedeemed(readStoredRedeemed(code));
-  }, [code]);
-
-  useEffect(() => {
     if (!signedIn || !code || redeemingRef.current || redeemed || redeemError) return;
     redeemingRef.current = true;
     void safe(apiClient.auth.redeemOnboardingCode({ code }) as Promise<Redeemed>).then(
       ({ data, definedError, error, isSuccess }) => {
         if (isSuccess) {
           setRedeemed(data);
-          storeRedeemed(code, data);
           toast.success(
             translate("auth.onboard.joinedToast", { community: data.organizationName }),
           );

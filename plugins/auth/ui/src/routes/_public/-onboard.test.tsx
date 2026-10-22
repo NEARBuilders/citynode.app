@@ -226,13 +226,33 @@ describe("onboard join flow", () => {
     expect(await screen.findByTestId("onboard.continue-on-computer")).toBeTruthy();
     view.unmount();
 
+    // The server treats a repeat redeem by an existing member as idempotent,
+    // so the reload re-redeems and still resolves to the joined state.
     harness.getOnboardingCodeInfo.mockResolvedValue({ ...info, expired: true });
-    harness.redeemOnboardingCode.mockRejectedValue(joinFailure("code_expired"));
+    harness.redeemOnboardingCode.mockResolvedValue({ ...joined, alreadyRedeemed: true });
 
     renderOnboard();
 
     expect(await screen.findByTestId("onboard.success")).toBeTruthy();
     expect(screen.queryByTestId("onboard.unavailable")).toBeNull();
+    expect(harness.redeemOnboardingCode).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not carry a previous visitor's join over to the next one in the same tab", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode.mockResolvedValue(joined);
+
+    const view = renderOnboard();
+    expect(await screen.findByTestId("onboard.continue-on-computer")).toBeTruthy();
+    view.unmount();
+
+    harness.session = null;
+    renderOnboard();
+
+    expect(await screen.findByTestId("onboard.invite")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.success")).toBeNull();
+    expect(harness.redeemOnboardingCode).toHaveBeenCalledTimes(1);
   });
 
   it("shows a returning member the joined state for a code that has since expired", async () => {
