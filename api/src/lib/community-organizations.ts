@@ -33,6 +33,35 @@ async function fetchOrganization(
   }
 }
 
+async function createCommunityOrganization(
+  auth: AuthClient,
+  input: {
+    proposalId: string;
+    name: string;
+    slug: string;
+    proposerUserId: string;
+    reviewerUserId: string;
+  },
+) {
+  try {
+    return await auth.createOrganization({
+      name: input.name,
+      slug: input.slug,
+      metadata: {
+        communityProposalId: input.proposalId,
+        communityApplicantId: input.proposerUserId,
+        communityReviewerId: input.reviewerUserId,
+      },
+    });
+  } catch (error) {
+    // Another admin applying the same proposal concurrently won the unique-slug insert.
+    if (!isConflict(error)) throw error;
+    const raced = await fetchOrganization(auth, undefined, input.slug);
+    if (!raced || raced.metadata?.communityProposalId !== input.proposalId) throw error;
+    return raced;
+  }
+}
+
 async function provisionDefaultTeams(auth: AuthClient, organizationId: string) {
   const teams = await auth.listTeams({ organizationId });
   for (const team of DEFAULT_TEAMS) {
@@ -137,27 +166,8 @@ export async function provisionCommunityOrganization(
   if (existing && existing.metadata?.communityProposalId !== input.proposalId) {
     throw conflict("The community slug is already used by another organization");
   }
-  let organization = existing;
-  if (!organization) {
-    const metadata = {
-      communityProposalId: input.proposalId,
-      communityApplicantId: input.proposerUserId,
-      communityReviewerId: input.reviewerUserId,
-    };
-    try {
-      organization = await auth.createOrganization({
-        name: input.name,
-        slug: input.slug,
-        metadata,
-      });
-    } catch (error) {
-      // Another admin applying the same proposal concurrently won the unique-slug insert.
-      if (!isConflict(error)) throw error;
-      const raced = await fetchOrganization(auth, undefined, input.slug);
-      if (!raced || raced.metadata?.communityProposalId !== input.proposalId) throw error;
-      organization = raced;
-    }
-  }
+  const organization =
+    existing ?? (await createCommunityOrganization(auth, input));
   await grantProposerOwnership(auth, organization.id, input.proposerUserId);
   if (input.reviewerUserId !== input.proposerUserId) {
     const { members } = await auth.listMembers({ organizationId: organization.id });
