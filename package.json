@@ -79,6 +79,6 @@
     "@opentelemetry/api": "catalog:"
   },
   "peerDependencies": {
-    "typescript": "catalog:"
+    "typescript": "^7.0.2"
   }
 }

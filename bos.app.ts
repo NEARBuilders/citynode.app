@@ -11,7 +11,7 @@ export default App({
   // The gateway: FastKV lookup key and public ingress for this runtime.
   domain: "citynode.app",
   // The platform release pin (ADR 0034): the exact framework version this app targets ("exact-or-loud").
-  platform: "2.0.0-rc.17",
+  platform: "2.0.0-rc.18",
   // CI settings: runtime image name, Railway service.
   ci: {
     railway: {

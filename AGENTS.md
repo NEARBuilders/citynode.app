@@ -265,7 +265,7 @@ The Railway template deploys the everything.dev Docker image. Set these variable
 
 You don't need to wait for a PR to merge and run through CI/CD. Publish your own config on-chain under your own NEAR account and run your own host instance, inheriting the base platform via `extends`.
 
-1. **Install near-cli-rs** (the `bos` CLI shells out to it for `bos publish` and `bos key generate`):
+1. **Install near-cli-rs** (the `bos` CLI shells out to it for `bos publish` and `bos login --key`):
    ```bash
    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.23.5/near-cli-rs-installer.sh | sh
    ```
@@ -273,10 +273,9 @@ You don't need to wait for a PR to merge and run through CI/CD. Publish your own
    ```bash
    near account create-account fund-my-account <your-account>.testnet use-faucet network-config testnet
    ```
-3. **Generate a publish key** — a function-call key scoped to the FastKV registry contract:
+3. **Generate a publish key** — a function-call key scoped to the FastKV registry contract, minted straight into the near-cli-rs keystore:
    ```bash
-   bos key generate
-   # Output: NEAR_PRIVATE_KEY=ed25519:...
+   bos login --key
    ```
    Add the key to your account via near-cli-rs, then set `NEAR_PRIVATE_KEY` in `.env` or CI secrets.
 4. **Update `bos.app.ts`** — set `account` to your NEAR account, add `extends` to inherit the base platform, keep `domain` as the gateway:
@@ -340,7 +339,7 @@ The parent runtime provides the shared framework; your project provides custom o
 
 ### Framework-owned files and the upstream-change protocol (ADR 0032)
 
-The files carrying the `FRAMEWORK-OWNED` header (build configs, db/lib plumbing, workflows) are reconciled from the parent template by `bos sync` / `bos upgrade`: template wins on the next sync, local copies are backed up under `.bos/sync-backup/`, and **same-version upgrades never touch them** (only a framework version change reconciles; `bos sync` pulls drift explicitly).
+The files carrying the `FRAMEWORK-OWNED` header (build configs, db/lib plumbing, workflows) are reconciled from the parent template by `bos upgrade`: template wins on the next framework version change, local copies are backed up under `.bos/sync-backup/`. Hand-authored child-owned content survives via the `// child-owned-start` / `// child-owned-end` block protocol (e.g. `api/plugin.dev.ts` variables), and repo-specific CI jobs belong in `.github/workflows/ci-child.yml`, which `bos upgrade` never rewrites.
 
 **Editing them is allowed.** When the work needs it, edit a framework-owned file, keep the build/typecheck/tests green — then **file an accompanying issue at https://github.com/NEARBuilders/everything-dev/issues** describing the change so it gets implemented in the framework and shipped in package versions. A local edit without an upstream issue is an undocumented fork that the next sync will quietly clobber.
 

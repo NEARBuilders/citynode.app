@@ -4,8 +4,8 @@
 //   2. bring up every compose postgres (test DBs + the main postgres the
 //      plugin DBs resolve to) — waitForDatabases then only has to confirm
 import { spawnSync } from "node:child_process";
-import { computeRegressionEnv, findRepoRoot } from "./regression-env.mjs";
 import { killStalePorts } from "./kill-stale-ports.mjs";
+import { computeRegressionEnv, findRepoRoot } from "./regression-env.mjs";
 
 const root = findRepoRoot();
 if (!root) {
