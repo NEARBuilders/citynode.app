@@ -166,8 +166,7 @@ export async function provisionCommunityOrganization(
   if (existing && existing.metadata?.communityProposalId !== input.proposalId) {
     throw conflict("The community slug is already used by another organization");
   }
-  const organization =
-    existing ?? (await createCommunityOrganization(auth, input));
+  const organization = existing ?? (await createCommunityOrganization(auth, input));
   await grantProposerOwnership(auth, organization.id, input.proposerUserId);
   if (input.reviewerUserId !== input.proposerUserId) {
     const { members } = await auth.listMembers({ organizationId: organization.id });

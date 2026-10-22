@@ -41,7 +41,13 @@ function savedProposal(
   };
 }
 
-type RecordedStep = { pluginId?: string; entityId: string; step: string; status: string; resourceId?: string };
+type RecordedStep = {
+  pluginId?: string;
+  entityId: string;
+  step: string;
+  status: string;
+  resourceId?: string;
+};
 
 type FakeMember = {
   id: string;
@@ -78,9 +84,7 @@ const fakeNow = () => new Date("2026-09-10T00:00:00.000Z");
 function findOrganization(organizationId?: string, organizationSlug?: string) {
   for (const organization of organizations.values()) {
     if (
-      organizationId
-        ? organization.id === organizationId
-        : organization.slug === organizationSlug
+      organizationId ? organization.id === organizationId : organization.slug === organizationSlug
     ) {
       return organization;
     }
@@ -342,8 +346,9 @@ describe("approved community proposal provisioning", () => {
       communityApplicantId: "user-applicant",
       communityReviewerId: "platform-reviewer",
     });
-    expect(Object.fromEntries(organization.members.map((member) => [member.userId, member.role])))
-      .toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
+    expect(
+      Object.fromEntries(organization.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
     expect(organization.teams.map((team) => team.name).sort()).toEqual([
       "Community",
       "Operations",
@@ -421,8 +426,9 @@ describe("approved community proposal provisioning", () => {
       communityApplicantId: "user-applicant",
       communityReviewerId: "platform-reviewer",
     });
-    expect(Object.fromEntries(legacy.members.map((member) => [member.userId, member.role])))
-      .toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
+    expect(
+      Object.fromEntries(legacy.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
     const node = await admin.getNode({ nodeId: applied.nodeId });
     const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
     expect(tenant?.orgId).toBe("legacy-org");
