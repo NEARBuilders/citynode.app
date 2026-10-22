@@ -13,6 +13,10 @@ import {
 } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
+import {
+  provisionCommunityOrganization,
+  releaseCommunityOrganization,
+} from "./lib/community-organizations";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { verifyDaoMembership } from "./services/dao";
@@ -959,14 +963,23 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("BAD_REQUEST", { message: "Hostname does not match the community slug" }),
           );
         }
+        const proposerUserId = payload.applicantUserId;
+        if (!proposerUserId) {
+          return yield* Effect.fail(
+            new ORPCError("CONFLICT", {
+              message:
+                "The saved application has no applicant identity to attribute the organization to",
+            }),
+          );
+        }
         const organization = yield* Effect.tryPromise({
           try: () =>
-            auth.provisionCommunityOrganization({
+            provisionCommunityOrganization(auth, {
               proposalId: proposal.id,
               name: payload.name,
               slug: payload.slug,
-              proposerAccountId: proposal.createdBy,
-              ...(payload.applicantUserId ? { proposerUserId: payload.applicantUserId } : {}),
+              proposerUserId,
+              reviewerUserId: context.userId ?? context.user?.id ?? "",
               ...(payload.orgId ? { legacyOrgId: payload.orgId } : {}),
             }),
           catch: (error) =>
@@ -1021,8 +1034,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
               organization: { released: false, keptReason: "existing" as const },
             };
           }
+          const recordedOrgId = proposal.applySteps.organization?.resourceId;
+          if (!recordedOrgId) {
+            return {
+              community,
+              organization: { released: false, keptReason: "not_found" as const },
+            };
+          }
           const organization = yield* Effect.tryPromise({
-            try: () => auth.releaseCommunityOrganization({ proposalId: proposal.id }),
+            try: () =>
+              releaseCommunityOrganization(auth, {
+                organizationId: recordedOrgId,
+                proposalId: proposal.id,
+              }),
             catch: (error) =>
               error instanceof ORPCError
                 ? error

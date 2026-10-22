@@ -16,7 +16,9 @@ function fixture() {
     join(root, "bos.config.json"),
     JSON.stringify({
       app: { api: { secrets: ["API_DATABASE_URL"] } },
-      plugins: { auth: { development: "local:plugins/auth", secrets: ["AUTH_DATABASE_URL"] } },
+      plugins: {
+        auth: { development: "local:plugins/auth-fixture", secrets: ["AUTH_DATABASE_URL"] },
+      },
     }),
   );
   writeFileSync(

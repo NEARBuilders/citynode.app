@@ -32,9 +32,10 @@ export default App({
   ui: {
     path: "ui",
   },
-  // Auth attachment — lands in the app.auth slot (e.g. the Better-Auth + NEAR SIWN plugin).
+  // Auth attachment — the published @everything-dev/auth-plugin from the extends
+  // chain (server + auth-UI bundles with SRI pins); no local auth workspace. Only
+  // the citynode-specific variables/secrets are authored (child-wins merge).
   auth: {
-    path: "plugins/auth",
     name: "@everything-dev/auth-plugin",
     variables: {
       organizationMembershipLimit: 1000,
@@ -95,9 +96,12 @@ export default App({
       "NEAR_RELAYER_PRIVATE_KEY_MAINNET",
       "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
     ],
+    // The local auth-UI override (citynode i18n/messages, community-page,
+    // onboarding extras) — a standalone workspace; the auth SERVER side is the
+    // published upstream bundle (no local auth workspace).
     ui: {
       name: "auth-ui",
-      path: "plugins/auth/ui",
+      path: "plugins/auth-ui",
     },
   },
   // Attached plugins, keyed by registry key. `path` = local workspace, `extends` = published module.
