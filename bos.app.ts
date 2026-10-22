@@ -96,6 +96,13 @@ export default App({
       "NEAR_RELAYER_PRIVATE_KEY_MAINNET",
       "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
     ],
+    // The local auth-UI override (citynode i18n/messages, community-page,
+    // onboarding extras) — a standalone workspace; the auth SERVER side is the
+    // published upstream bundle (no local auth workspace).
+    ui: {
+      name: "auth-ui",
+      path: "plugins/auth-ui",
+    },
   },
   // Attached plugins, keyed by registry key. `path` = local workspace, `extends` = published module.
   plugins: {
