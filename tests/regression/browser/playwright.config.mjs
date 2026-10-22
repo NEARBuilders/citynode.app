@@ -11,6 +11,8 @@ const regressionEnv = computeRegressionEnv();
 const derivedEnv = {
   ...regressionEnv.dbUrls,
   CORS_ORIGIN: regressionEnv.baseUrl,
+  BASE_URL: regressionEnv.baseUrl,
+  BETTER_AUTH_URL: regressionEnv.baseUrl,
   BETTER_AUTH_SECRET: regressionEnv.authSecret,
   RATE_LIMIT_WINDOW_MS: "1000",
   RATE_LIMIT_MAX: "100",

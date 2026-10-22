@@ -10,14 +10,10 @@ export default App({
   account: "v1.citynode.near",
   // The gateway: FastKV lookup key and public ingress for this runtime.
   domain: "citynode.app",
-  title: "City Nodes",
-  description:
-    "Decentralized city nodes on NEAR — each city is a tenant with its own validator pool you can stake to.",
-  repository: "https://github.com/NEARBuilders/citynode.app",
-  staging: { domain: "testnet.citynode.app", account: "v1.citynode.testnet" },
+  // The platform release pin (ADR 0034): the exact framework version this app targets ("exact-or-loud").
+  platform: "2.0.0-rc.18",
   // CI settings: runtime image name, Railway service.
   ci: {
-    image: "ghcr.io/nearbuilders/everything-dev:sha-3272362",
     railway: {
       service: "app",
     },
@@ -36,9 +32,10 @@ export default App({
   ui: {
     path: "ui",
   },
-  // Auth attachment — lands in the app.auth slot (e.g. the Better-Auth + NEAR SIWN plugin).
+  // Auth attachment — the published @everything-dev/auth-plugin from the extends
+  // chain (server + auth-UI bundles with SRI pins); no local auth workspace. Only
+  // the citynode-specific variables/secrets are authored (child-wins merge).
   auth: {
-    path: "plugins/auth",
     name: "@everything-dev/auth-plugin",
     variables: {
       organizationMembershipLimit: 1000,
@@ -99,9 +96,12 @@ export default App({
       "NEAR_RELAYER_PRIVATE_KEY_MAINNET",
       "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
     ],
+    // The local auth-UI override (citynode i18n/messages, community-page,
+    // onboarding extras) — a standalone workspace; the auth SERVER side is the
+    // published upstream bundle (no local auth workspace).
     ui: {
       name: "auth-ui",
-      path: "plugins/auth/ui",
+      path: "plugins/auth-ui",
     },
   },
   // Attached plugins, keyed by registry key. `path` = local workspace, `extends` = published module.

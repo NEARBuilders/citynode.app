@@ -13,7 +13,7 @@
     "deploy": "bos deploy",
     "publish": "bos publish",
     "start": "bos start",
-    "typecheck": "pnpm run types:gen && if [ -d ui ]; then pnpm --dir ui run typecheck; fi && if [ -d api ]; then pnpm --dir api run typecheck; fi && if [ -d plugins ]; then for dir in plugins/*; do if [ -f \"$dir/package.json\" ]; then pnpm --dir \"$dir\" --if-present run typecheck; fi; done; fi",
+    "typecheck": "pnpm run types:gen && pnpm run gen:auth-ui && if [ -d ui ]; then pnpm --dir ui run typecheck; fi && if [ -d api ]; then pnpm --dir api run typecheck; fi && if [ -d plugins ]; then for dir in plugins/*; do if [ -f \"$dir/package.json\" ]; then pnpm --dir \"$dir\" --if-present run typecheck || exit 1; pnpm --dir \"$dir\" --if-present run typecheck:ui || exit 1; fi; done; fi",
     "test": "pnpm --dir api --if-present run test && pnpm --dir ui --if-present run test && for d in plugins/*; do [ -f \"$d/package.json\" ] && pnpm --dir \"$d\" --if-present run test; done",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -39,28 +39,23 @@
     "test:db:reset": "docker compose rm -fsv postgres-api-test postgres-auth-test && docker compose up -d --wait postgres-api-test postgres-auth-test",
     "test:regression:unit": "node --test tests/regression/lib/*.test.mjs",
     "test:regression:browser:install": "pnpm exec playwright install --with-deps chromium",
-    "test:regression:browser:dev:ssr": "REGRESSION_MODE=dev:ssr pnpm exec playwright test -c tests/regression/browser/playwright.config.mjs --project=dev:ssr",
+    "test:regression:browser:dev:ssr": "node tests/regression/lib/preflight.mjs && REGRESSION_MODE=dev:ssr pnpm exec playwright test -c tests/regression/browser/playwright.config.mjs --project=dev:ssr",
     "test:regression:browser": "pnpm run test:regression:browser:dev:ssr",
     "regression:dev:ssr": "node tests/regression/lib/start-stack.mjs dev:ssr",
     "dev:ui": "bos dev --ui local --api remote",
-    "dev:api": "bos dev --ui remote --api local"
+    "dev:api": "bos dev --ui remote --api local",
+    "gen:auth-ui": "node scripts/gen-auth-ui-artifacts.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
     "@changesets/cli": "^2.29.8",
     "@effect/tsgo": "^0.45.0",
-    "@electric-sql/pglite": "catalog:",
-    "@libsql/client": "catalog:",
-    "@opentelemetry/api": "catalog:",
     "@playwright/test": "^1.58.1",
     "@shadcn/lint": "^0.2.0",
     "@types/pg": "catalog:",
-    "better-auth": "catalog:",
     "dotenv": "^17.3.1",
-    "drizzle-orm": "catalog:",
     "oxlint": "1.82.0",
     "oxlint-tsgolint": "7.0.2001",
-    "pg": "catalog:",
     "tsx": "^4.21.0",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "catalog:"
@@ -79,7 +74,10 @@
     "every-plugin": "catalog:",
     "everything-dev": "catalog:",
     "pg": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@electric-sql/pglite": "catalog:",
+    "@libsql/client": "catalog:",
+    "@opentelemetry/api": "catalog:"
   },
   "peerDependencies": {
     "typescript": "catalog:"

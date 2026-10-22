@@ -12,5 +12,14 @@ import type { AppDescriptor } from "everything-dev/descriptor";
  * export default {
  *   auth: { development: "http://localhost:3006" },
  * } satisfies Partial<AppDescriptor>;
+ *
+ * The auth SERVER composes the published upstream bundle in development too —
+ * the parent's inherited `development: "local:plugins/auth"` target is the
+ * parent's own workspace path and cannot spawn here. The auth-UI stays local
+ * (authored in bos.app.ts); no dev override is needed for it.
  */
-export default {} satisfies Partial<AppDescriptor>;
+export default {
+  auth: {
+    development: "https://cdn.everything.dev/bundles/dev.everything.near/everything.dev/auth/",
+  },
+} satisfies Partial<AppDescriptor>;
