@@ -56,6 +56,10 @@ jobs:
     name: Regression browser (dev:ssr)
     needs: [filter]
     if: ${{ github.event_name != 'pull_request' || needs.filter.outputs.ci == 'true' }}
+    # Deliberately non-gating until the upstream session wall (everything-dev#531)
+    # lands: without this flag a red suite reds the whole child-ci call (reusable
+    # workflow results aggregate their jobs) and trips the merge gate.
+    continue-on-error: true
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
