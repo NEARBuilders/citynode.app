@@ -15,8 +15,8 @@ export default App({
   // CI settings: runtime image name, Railway service.
   ci: {
     railway: {
-      service: "app",
-    },
+      service: "app"
+    }
   },
   // Local API workspace override.
   api: {
@@ -24,9 +24,12 @@ export default App({
     variables: {
       platformAccount: "v1.citynode.near",
       domain: "citynode.app",
-      gatewayDomains: "citynode.app,testnet.citynode.app",
+      gatewayDomains: "citynode.app,testnet.citynode.app"
     },
-    secrets: ["API_DATABASE_URL", "LUMA_CALENDAR_API_KEYS"],
+    secrets: [
+      "API_DATABASE_URL",
+      "LUMA_CALENDAR_API_KEYS"
+    ]
   },
   // Local UI workspace override.
   ui: {
@@ -108,15 +111,17 @@ export default App({
   plugins: {
     registry: {
       path: "plugins/registry",
-      name: "registry",
+      name: "registry"
     },
     proposals: {
       path: "plugins/proposals",
       name: "proposals",
       variables: {
-        privatePluginIds: [],
+        privatePluginIds: []
       },
-      secrets: ["PROPOSALS_DATABASE_URL"],
-    },
+      secrets: [
+        "PROPOSALS_DATABASE_URL"
+      ]
+    }
   },
 });
