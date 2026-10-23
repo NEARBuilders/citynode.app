@@ -992,6 +992,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "L'application n'a pas pu se charger. Réessayez dans un instant.",
     "应用无法加载，请稍后重试。",
   ],
+  "error.nearUnavailable": [
+    "Couldn't reach NEAR, try again.",
+    "No se pudo conectar con NEAR. Inténtalo de nuevo.",
+    "Impossible de joindre NEAR. Réessayez.",
+    "无法连接 NEAR，请重试。",
+  ],
   "error.notFound": ["Page not found", "Página no encontrada", "Page introuvable", "页面不存在"],
   "error.notFoundDescription": [
     "This link may be old, or the page has moved.",
