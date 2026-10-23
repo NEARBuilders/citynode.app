@@ -1,8 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { Data, Effect, Result } from "effect";
 import { Near } from "near-kit";
-
-export type NearNetworkId = "mainnet" | "testnet";
+import { type NearNetworkId, nearRpcUrl } from "./near-rpc";
 
 export interface PolicyRoleGroup {
   kind: { Group: string[] };
@@ -20,8 +19,6 @@ export interface DaoPolicy {
   roles: PolicyRole[];
 }
 
-const MAINNET_RPC_URL = "https://rpc.mainnet.near.org";
-const TESTNET_RPC_URL = "https://rpc.testnet.near.org";
 const GET_POLICY_MAX_RETRIES = 2;
 
 class DaoPolicyQueryError extends Data.TaggedError("DaoPolicyQueryError")<{
@@ -83,8 +80,7 @@ export const verifyDaoMembership = ({
       return { isSputnikContract: false, isMember: false, policy: null };
     }
 
-    const rpcUrl = network === "testnet" ? TESTNET_RPC_URL : MAINNET_RPC_URL;
-    const near = new Near({ network: { rpcUrl, networkId: network } });
+    const near = new Near({ network: { rpcUrl: nearRpcUrl(network), networkId: network } });
 
     let policy: DaoPolicy | null = null;
     let lastError: unknown = null;
