@@ -42,7 +42,11 @@ import type { TenantRecord, TenantsService } from "./services/tenants";
 import { TenantsConfigLive, TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
-import { createRequireTeamArea } from "./team-access-policy";
+import {
+  canUseTeamArea,
+  createRequireTeamArea,
+  type TeamAccessContext,
+} from "./team-access-policy";
 
 class ApiServices extends Context.Service<
   ApiServices,
@@ -91,10 +95,21 @@ function publishStatusFor(ownerAccountId: string): "pending_funding" | "ready" {
   return ownerAccountId.startsWith("0s") ? "pending_funding" : "ready";
 }
 
-interface NodeAccessContext {
-  user?: { role?: string | null };
-  organization?: { activeOrganizationId: string | null };
-}
+type NodeAccessContext = NonNullable<TeamAccessContext> & {
+  user?: { role?: string | null } | null;
+  organization?:
+    | (NonNullable<TeamAccessContext>["organization"] & {
+        activeOrganizationId: string | null;
+      })
+    | null;
+};
+
+const nodeOperationsForbidden = () =>
+  new ORPCError("FORBIDDEN", {
+    message:
+      "Node operations require an organization owner or admin, or a team granted node operations",
+    data: { requiredPermissions: ["node-operations"] },
+  });
 
 const resolveNodeForAccess = (
   services: { nodes: NodesService },
@@ -152,6 +167,9 @@ const authorizeNodeAccess = (
         }),
       );
     }
+    if (!canUseTeamArea(context, "node-operations")) {
+      return yield* Effect.fail(nodeOperationsForbidden());
+    }
   });
 
 const requireTenantOwnedByOrg = (
@@ -176,6 +194,9 @@ const requireTenantOwnedByOrg = (
           data: {},
         }),
       );
+    }
+    if (!canUseTeamArea(context, "node-operations")) {
+      return yield* Effect.fail(nodeOperationsForbidden());
     }
     return tenant;
   });
@@ -255,6 +276,27 @@ const authorizedNodeForValidators = (
       resource: "validators",
     });
     return node;
+  });
+
+const authorizeParentNode = (
+  services: { nodes: NodesService; tenants: TenantsService },
+  parentId: string,
+  context: NodeAccessContext,
+): NodeEffect<void> =>
+  Effect.gen(function* () {
+    const parent = yield* services.nodes.getById(parentId);
+    if (!parent) {
+      return yield* Effect.fail(
+        new ORPCError("NOT_FOUND", {
+          message: "Parent node not found",
+          data: { resource: "node", resourceId: parentId },
+        }),
+      );
+    }
+    yield* authorizeNodeAccess(services, parent, context, {
+      adminBypassOrg: true,
+      resource: "node",
+    });
   });
 
 export default createPlugin.withPlugins<PluginsClient>()({
@@ -1087,6 +1129,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
           yield* requireTenantOwnedByOrg(services, input.tenantId, context);
+          if (input.parentId) {
+            yield* authorizeParentNode(services, input.parentId, context);
+          }
           return yield* services.nodes.spawn({
             kind: input.kind,
             slug: input.slug,
@@ -1115,20 +1160,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             yield* requireTenantOwnedByOrg(services, input.tenantId, context);
           }
           if (input.parentId) {
-            const parentId = input.parentId;
-            const parent = yield* services.nodes.getById(parentId);
-            if (!parent) {
-              return yield* Effect.fail(
-                errors.NOT_FOUND({
-                  message: "Parent node not found",
-                  data: { resource: "node", resourceId: parentId },
-                }),
-              );
-            }
-            yield* authorizeNodeAccess(services, parent, context, {
-              adminBypassOrg: true,
-              resource: "node",
-            });
+            yield* authorizeParentNode(services, input.parentId, context);
           }
           return yield* services.nodes.spawn({
             ...(input.kind !== undefined && { kind: input.kind }),
@@ -1150,6 +1182,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
             adminBypassOrg: true,
             resource: "node",
           });
+          if (input.parentId && input.parentId !== node.parentId) {
+            yield* authorizeParentNode(services, input.parentId, context);
+          }
           return yield* services.nodes.update(input.nodeId, {
             ...(input.kind !== undefined && { kind: input.kind }),
             ...(input.slug !== undefined && { slug: input.slug }),
