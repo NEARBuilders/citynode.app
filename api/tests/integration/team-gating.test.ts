@@ -57,6 +57,16 @@ async function seedNode(org = ORG) {
   });
 }
 
+function childNodeInput(name: string, slugPrefix: string, tenantId: string, parentId: string) {
+  return {
+    name,
+    kind: "city",
+    slug: `${slugPrefix}-${crypto.randomUUID().slice(0, 8)}`,
+    tenantId,
+    parentId,
+  };
+}
+
 async function seedValidator(nodeId: string) {
   const owner = await getPluginClient(teamContext("validator-seeder", { orgRole: "owner" }));
   const suffix = crypto.randomUUID().slice(0, 8);
@@ -154,13 +164,7 @@ describe("team area gating on node operations", () => {
       forbidden,
     );
     await expect(
-      client.createNode({
-        name: "Child",
-        kind: "city",
-        slug: `plain-child-${crypto.randomUUID().slice(0, 8)}`,
-        tenantId: node.tenantId!,
-        parentId: node.id,
-      }),
+      client.createNode(childNodeInput("Child", "plain-child", node.tenantId!, node.id)),
     ).rejects.toMatchObject(forbidden);
 
     const owner = await getPluginClient(teamContext("plain-check-owner", { orgRole: "owner" }));
@@ -246,13 +250,7 @@ describe("node parent authorization", () => {
     const owner = await getPluginClient(teamContext("create-parent-owner", { orgRole: "owner" }));
 
     await expect(
-      owner.createNode({
-        name: "Squatter",
-        kind: "city",
-        slug: `squatter-${crypto.randomUUID().slice(0, 8)}`,
-        tenantId: node.tenantId!,
-        parentId: foreign.id,
-      }),
+      owner.createNode(childNodeInput("Squatter", "squatter", node.tenantId!, foreign.id)),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
@@ -265,13 +263,7 @@ describe("node parent authorization", () => {
       { parentId: parent.id },
     );
     await expect(
-      owner.createNode({
-        name: "Child",
-        kind: "city",
-        slug: `own-child-${crypto.randomUUID().slice(0, 8)}`,
-        tenantId: parent.tenantId!,
-        parentId: parent.id,
-      }),
+      owner.createNode(childNodeInput("Child", "own-child", parent.tenantId!, parent.id)),
     ).resolves.toMatchObject({ parentId: parent.id });
   });
   it("lets the node's owner detach it to the root", async () => {
@@ -291,13 +283,9 @@ describe("node parent authorization", () => {
     const platformAdmin = await getPluginClient(
       teamContext("reparent-platform-admin", { orgRole: "owner", userRole: "admin" }),
     );
-    const child = await platformAdmin.createNode({
-      name: "Linked City",
-      kind: "city",
-      slug: `linked-${crypto.randomUUID().slice(0, 8)}`,
-      tenantId: tenantNode.tenantId!,
-      parentId: foreign.id,
-    });
+    const child = await platformAdmin.createNode(
+      childNodeInput("Linked City", "linked", tenantNode.tenantId!, foreign.id),
+    );
     const owner = await getPluginClient(
       teamContext("unchanged-parent-owner", { orgRole: "owner" }),
     );

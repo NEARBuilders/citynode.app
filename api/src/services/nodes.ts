@@ -123,6 +123,18 @@ function mergeKindMetadata(
   } as NodeMetadata;
 }
 
+function withMetadataKey(key: string, value: string): SQL {
+  return sql`${nodesTable.metadata} || jsonb_build_object(${key}::text, ${value}::text)`;
+}
+
+function withoutMetadataKey(key: string): SQL {
+  return sql`${nodesTable.metadata} - ${key}::text`;
+}
+
+function replaceMetadataKeepingKind(replacement: string): SQL {
+  return sql`${replacement}::jsonb || CASE WHEN ${nodesTable.metadata} ? 'kind' THEN jsonb_build_object('kind', ${nodesTable.metadata} -> 'kind') ELSE '{}'::jsonb END`;
+}
+
 const SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 
 const query = <T>(run: () => Promise<T>): NodeEffect<T> =>
@@ -298,9 +310,9 @@ export const NodesLive = Layer.effect(
             patch.metadata =
               kind !== undefined
                 ? sql`${replacement}::jsonb`
-                : sql`${replacement}::jsonb || CASE WHEN ${nodesTable.metadata} ? 'kind' THEN jsonb_build_object('kind', ${nodesTable.metadata} -> 'kind') ELSE '{}'::jsonb END`;
+                : replaceMetadataKeepingKind(replacement);
           } else if (input.kind !== undefined) {
-            patch.metadata = sql`${nodesTable.metadata} || jsonb_build_object('kind', ${input.kind}::text)`;
+            patch.metadata = withMetadataKey("kind", input.kind);
           }
 
           return yield* query(() =>
@@ -373,8 +385,8 @@ export const NodesLive = Layer.effect(
         Effect.gen(function* () {
           const metadata =
             bulletin === null || bulletin.trim() === ""
-              ? sql`${nodesTable.metadata} - 'bulletin'`
-              : sql`${nodesTable.metadata} || jsonb_build_object('bulletin', ${bulletin}::text)`;
+              ? withoutMetadataKey("bulletin")
+              : withMetadataKey("bulletin", bulletin);
           const [row] = yield* query(() =>
             db
               .update(nodesTable)
