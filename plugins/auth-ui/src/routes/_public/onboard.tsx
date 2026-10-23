@@ -87,10 +87,6 @@ function isRedeemReason(value: unknown): value is OnboardingRedeemReason {
   return typeof value === "string" && (REDEEM_REASONS as readonly string[]).includes(value);
 }
 
-// The published auth plugin answers a failed join with a status code and its
-// English message but no structured reason, so the reason comes from
-// `data.reason` when the server sends one and otherwise from the code and
-// message of the redeem failure that produced it.
 const redeemReasonsByMessage: ReadonlyArray<
   readonly [code: string, message: RegExp, reason: OnboardingRedeemReason]
 > = [
@@ -119,10 +115,6 @@ function redeemFailure(error: unknown): { code?: string; reason?: OnboardingRede
   return { code, reason: match?.[2] };
 }
 
-// A join is remembered for this tab under the signed-in user and the code, so
-// a reload still shows that person their join after the code expires or runs
-// out (the server then refuses a repeat redeem), while another visitor on the
-// same device never inherits it.
 function joinedStorageKey(userId: string, code: string) {
   return `citynode.onboard.joined:${userId}:${code}`;
 }
@@ -203,8 +195,6 @@ function OnboardContent() {
 
   const [accountCreated, setAccountCreated] = useState(false);
   const userId = session?.user.id;
-  // The join and its failure belong to the member they were attempted for, so
-  // signing out or switching accounts on this page never shows them to anyone else.
   const [joined, setJoined] = useState<{ userId: string; data: Redeemed } | null>(null);
   const redeemed = joined && joined.userId === userId ? joined.data : null;
   const { data: communityPage } = useQuery({
