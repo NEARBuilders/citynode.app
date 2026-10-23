@@ -292,9 +292,6 @@ export const NodesLive = Layer.effect(
           if (input.slug !== undefined) patch.slug = input.slug;
           if (input.name !== undefined) patch.name = input.name;
           if (input.parentId !== undefined) patch.parentId = input.parentId;
-          // Merged in the UPDATE itself, so concurrent edits keep each other's keys
-          // without a separate locked read. A kind-only change keeps the rest of the
-          // metadata; a metadata payload replaces it.
           if (input.metadata !== undefined) {
             const kind = input.kind ?? nodeKindOf(input.metadata) ?? undefined;
             const replacement = JSON.stringify(mergeKindMetadata(kind, input.metadata));

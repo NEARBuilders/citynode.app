@@ -274,6 +274,41 @@ describe("node parent authorization", () => {
       }),
     ).resolves.toMatchObject({ parentId: parent.id });
   });
+  it("lets the node's owner detach it to the root", async () => {
+    const parent = await seedNode();
+    const node = await seedNode();
+    const owner = await getPluginClient(teamContext("detach-owner", { orgRole: "owner" }));
+
+    await owner.updateNode({ nodeId: node.id, parentId: parent.id });
+    await expect(owner.updateNode({ nodeId: node.id, parentId: null })).resolves.toMatchObject({
+      parentId: null,
+    });
+  });
+
+  it("does not re-check an unchanged parent the caller cannot manage", async () => {
+    const foreign = await seedNode("team-gating-foreign-org");
+    const tenantNode = await seedNode();
+    const platformAdmin = await getPluginClient(
+      teamContext("reparent-platform-admin", { orgRole: "owner", userRole: "admin" }),
+    );
+    const child = await platformAdmin.createNode({
+      name: "Linked City",
+      kind: "city",
+      slug: `linked-${crypto.randomUUID().slice(0, 8)}`,
+      tenantId: tenantNode.tenantId!,
+      parentId: foreign.id,
+    });
+    const owner = await getPluginClient(
+      teamContext("unchanged-parent-owner", { orgRole: "owner" }),
+    );
+
+    await expect(
+      owner.updateNode({ nodeId: child.id, parentId: foreign.id, name: "Linked City (renamed)" }),
+    ).resolves.toMatchObject({ parentId: foreign.id, name: "Linked City (renamed)" });
+    await expect(
+      owner.updateNode({ nodeId: tenantNode.id, parentId: foreign.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });
 
 describe("updateNode metadata", () => {
