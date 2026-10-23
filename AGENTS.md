@@ -273,11 +273,11 @@ You don't need to wait for a PR to merge and run through CI/CD. Publish your own
    ```bash
    near account create-account fund-my-account <your-account>.testnet use-faucet network-config testnet
    ```
-3. **Generate a publish key** — a function-call key scoped to the FastKV registry contract, minted straight into the near-cli-rs keystore:
+3. **Generate a publish key** — a function-call key scoped to the FastKV registry contract:
    ```bash
    bos login --key
    ```
-   Add the key to your account via near-cli-rs, then set `NEAR_PRIVATE_KEY` in `.env` or CI secrets.
+   The key is exported to the near-cli-rs keystore; set `NEAR_PRIVATE_KEY` in `.env` or CI secrets when running non-interactively.
 4. **Update `bos.app.ts`** — set `account` to your NEAR account, add `extends` to inherit the base platform, keep `domain` as the gateway:
    ```ts
    { "extends": "bos://<parent-account>/<parent-gateway>", "account": "<your-account>.near", "domain": "<parent-gateway>" }
@@ -339,9 +339,9 @@ The parent runtime provides the shared framework; your project provides custom o
 
 ### Framework-owned files and the upstream-change protocol (ADR 0032)
 
-The files carrying the `FRAMEWORK-OWNED` header (build configs, db/lib plumbing, workflows) are reconciled from the parent template by `bos upgrade`: template wins on the next framework version change, local copies are backed up under `.bos/sync-backup/`. Hand-authored child-owned content survives via the `// child-owned-start` / `// child-owned-end` block protocol (e.g. `api/plugin.dev.ts` variables), and repo-specific CI jobs belong in `.github/workflows/ci-child.yml`, which `bos upgrade` never rewrites.
+The files carrying the `FRAMEWORK-OWNED` header (build configs, db/lib plumbing, workflows) are reconciled from the parent template by `bos upgrade`: template wins on the next upgrade, local copies are backed up under `.bos/sync-backup/`, and **same-version upgrades never touch them** (only the framework version change reconciles them).
 
-**Editing them is allowed.** When the work needs it, edit a framework-owned file, keep the build/typecheck/tests green — then **file an accompanying issue at https://github.com/NEARBuilders/everything-dev/issues** describing the change so it gets implemented in the framework and shipped in package versions. A local edit without an upstream issue is an undocumented fork that the next sync will quietly clobber.
+**Editing them is allowed.** When the work needs it, edit a framework-owned file, keep the build/typecheck/tests green — then **file an accompanying issue at https://github.com/NEARBuilders/everything-dev/issues** describing the change so it gets implemented in the framework and shipped in package versions. A local edit without an upstream issue is an undocumented fork that the next upgrade will quietly clobber.
 
 ### Adding API Endpoints
 1. Define in `api/src/contract.ts` — the oRPC route definitions and Zod schemas
@@ -449,8 +449,6 @@ pnpm run dev    # Restart
 ```
 
 **Docker commands hang instead of failing:** the daemon is down (it hangs, not fails — a slow API call masks it). Start Docker Desktop and retry; probe with a short timeout, don't extend the timeout hoping it completes.
-
-**Browser regression suite (`test:regression:browser:dev:ssr`):** its preflight (`tests/regression/lib/preflight.mjs`) kills stale stack processes and brings up every compose postgres automatically — Docker Desktop must be running. If a run fails at boot, check `.bos/logs/regression-dev-ssr.log` and `.bos/bos.resolved-config.json` staleness (regenerate with `bos dev` or the helpers' `resolve-config`).
 
 **Module Federation errors:**
 - Check `bos.app.ts` URLs are accessible
