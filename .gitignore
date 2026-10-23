@@ -1,3 +1,7 @@
+# FRAMEWORK-OWNED — reconciled from the parent template by `bos sync` / `bos upgrade`.
+# Local edits are allowed: on the next sync the template version wins and your copy
+# is backed up under `.bos/sync-backup/`. To make a change permanent, file an issue:
+# https://github.com/NEARBuilders/everything-dev/issues
  ### macOS template
 # General
 .DS_Store
@@ -306,6 +310,9 @@ fabric.properties
 !.bos/infra-state.json
 .bos/session.json
 
+# alchemy state ledger (runtime artifact of hosting-adapter stacks)
+.alchemy/
+
 # AI tool config (local only, not committed)
 .opencode/
 .agent/
@@ -314,8 +321,6 @@ fabric.properties
 **/*.gen.ts
 **/*.gen.tsx
 **/*.gen.json
-# Generated resolved config (authored surface is bos.app.ts)
-/bos.config.json
 .bos/generated/
 
 # Module Federation DTS artifacts
@@ -325,6 +330,7 @@ node_modules/.federation
 *.css
 !ui/src/styles.css
 !plugins/*/ui/src/styles.css
+!plugins/auth-ui/src/styles.css
 .tanstack
 
 # Markdown files (local notes, AI agent instructions, etc.)
@@ -333,6 +339,7 @@ node_modules/.federation
 *.md
 !**/skills/**/*.md
 !AGENTS.md
+!CODING_STANDARDS.md
 !CONTRIBUTING.md
 !ui/DESIGN.md
 !ui/public/skill.md

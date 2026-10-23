@@ -1,5 +1,5 @@
 import { inArray } from "drizzle-orm";
-import { user } from "../../../plugins/auth/src/db/schema";
+import { user } from "../fixtures/auth/schema";
 import { createAuthTestInstance } from "./auth-test-instance";
 import { computeRegressionEnv } from "./regression-env.mjs";
 

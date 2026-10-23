@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import pg from "pg";
-import * as authSchema from "../../../../plugins/auth/src/db/schema.ts";
+import * as authSchema from "../../fixtures/auth/schema.ts";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 import { seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
