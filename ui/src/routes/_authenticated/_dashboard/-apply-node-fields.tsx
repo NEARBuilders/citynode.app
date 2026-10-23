@@ -106,7 +106,10 @@ export function ApplyNodeFields({
                   <FieldLabel htmlFor="application-country">{t("apply.country.label")}</FieldLabel>
                   <Select
                     items={countryItems}
-                    value={rootParentId || (standaloneCity ? NO_COUNTRY_PARENT : null)}
+                    value={
+                      rootParentId ||
+                      (standaloneCity && !field.state.value ? NO_COUNTRY_PARENT : null)
+                    }
                     onValueChange={(countryId) => {
                       if (countryId === null) return;
                       if (countryId === NO_COUNTRY_PARENT) {

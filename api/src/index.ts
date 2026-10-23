@@ -798,18 +798,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
                   ? [activeOrganizationId]
                   : (context.organizations ?? []).map((organization) => organization.id),
               );
-        return yield* Effect.forEach(
-          apps,
-          (app) =>
-            app.node
-              ? services.validators
-                  .resolveForStaking(app.node.id)
-                  .pipe(
-                    Effect.map(({ validators }) => ({ ...app, stakeable: validators.length > 0 })),
-                  )
-              : Effect.succeed({ ...app, stakeable: false }),
-          { concurrency: 8 },
+        const stakeable = yield* services.validators.stakeableNodeIds(
+          apps.flatMap((app) => (app.node ? [app.node.id] : [])),
         );
+        return apps.map((app) => ({
+          ...app,
+          stakeable: app.node ? stakeable.has(app.node.id) : false,
+        }));
       }),
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant

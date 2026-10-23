@@ -10,11 +10,13 @@ import { render } from "@/i18n/test-render";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
+import type { NodeApplicationValues } from "./-node-application";
 import { Route } from "./apply";
 
 type ApplyApiClient = {
   listRootNodes: ReturnType<typeof vi.fn>;
   listChildren: ReturnType<typeof vi.fn>;
+  getNode: ReturnType<typeof vi.fn>;
   bindingPreflight: ReturnType<typeof vi.fn>;
   auth: { checkSlug: ReturnType<typeof vi.fn> };
   proposals: { propose: ReturnType<typeof vi.fn>; getMyNodeApplications: ReturnType<typeof vi.fn> };
@@ -124,6 +126,7 @@ function createApiClient(): ApplyApiClient {
   return {
     listRootNodes: vi.fn().mockResolvedValue(harness.initialRootNodes),
     listChildren: vi.fn().mockResolvedValue([]),
+    getNode: vi.fn().mockResolvedValue(null),
     bindingPreflight: vi.fn().mockResolvedValue({
       hostname: { available: true, format: "valid" },
     }),
@@ -411,6 +414,52 @@ describe("apply route submission", () => {
       "orgId",
     );
     expect(harness.apiClient?.auth.checkSlug).toHaveBeenCalledWith({ slug: "chicago" });
+  });
+
+  function rejectedApplication(payload: Partial<NodeApplicationValues>) {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus: "rejected",
+          applyStatus: "not_started",
+          rejectionReason: "More detail needed",
+          applySteps: {},
+          applyTimedOut: false,
+          appliedAt: null,
+          payload: { name: "Chicago", slug: "chicago", motivation: "Serve.", ...payload },
+        },
+      ],
+    });
+  }
+
+  it("only offers countries as the country of a new community", async () => {
+    harness.initialRootNodes = [
+      { id: "country-1", name: "United States", kind: "country" },
+      { id: "city-root", name: "Lonely City", kind: "city" },
+    ];
+    rejectedApplication({ kind: "state", parentId: "city-root" });
+    harness.apiClient?.getNode.mockResolvedValue({ id: "city-root", parentId: null });
+    renderApply();
+    fireEvent.click(await screen.findByTestId("apply.revise"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await waitFor(() => expect(harness.apiClient?.getNode).toHaveBeenCalled());
+    expect(screen.queryByText("Lonely City")).toBeNull();
+  });
+
+  it("restores the country and state when revising a city under a state", async () => {
+    rejectedApplication({ kind: "city", parentId: "state-1" });
+    harness.apiClient?.getNode.mockResolvedValue({ id: "state-1", parentId: "country-1" });
+    harness.apiClient?.listChildren.mockResolvedValue([
+      { id: "state-1", name: "Illinois", kind: "state" },
+    ]);
+    renderApply();
+    fireEvent.click(await screen.findByTestId("apply.revise"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    expect(await screen.findByText("Illinois")).toBeTruthy();
+    expect(screen.getByText("United States")).toBeTruthy();
+    expect(screen.queryByText("No country (standalone city)")).toBeNull();
+    expect(harness.apiClient?.getNode).toHaveBeenCalledWith({ nodeId: "state-1" });
   });
 
   it("keeps the organization when revising a rejected legacy application", async () => {
