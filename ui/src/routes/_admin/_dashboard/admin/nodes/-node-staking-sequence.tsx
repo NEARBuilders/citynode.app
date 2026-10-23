@@ -40,10 +40,11 @@ import {
   pendingVoteProposalFor,
   proposalDescription,
   readActiveGovProposals,
-  readGovProof,
   readNodeSequenceChain,
+  readTeamSnapshotVote,
   readTeamVote,
   readVoteStorageFee,
+  type SnapshotVote,
   voteStepOption,
   withEndowment,
 } from "@/lib/node-staking-proposals";
@@ -53,9 +54,9 @@ import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import {
   canAccountPropose,
   type DaoPlan,
-  fetchDaoProposals,
   fetchSputnikPolicy,
   proposeAsSession,
+  readOpenDaoProposals,
   trezuDaoUrl,
 } from "@/lib/sputnik-proposals";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -118,6 +119,7 @@ const BLOCKER_LABELS: Record<NodeSequenceBlocker, AppMessageId> = {
   endowmentNotLocked: "admin.sequence.blocker.endowmentNotLocked",
   endowmentNotStaked: "admin.sequence.blocker.endowmentNotStaked",
   teamNoVotingPower: "admin.sequence.blocker.teamNoVotingPower",
+  teamNoSnapshotPower: "admin.sequence.blocker.teamNoSnapshotPower",
   teamNotStaked: "admin.sequence.blocker.teamNotStaked",
   teamNothingUnstaked: "admin.sequence.blocker.nothingUnstaked",
   teamWithdrawWait: "admin.sequence.blocker.withdrawWait",
@@ -131,6 +133,7 @@ const BLOCKER_LABELS: Record<NodeSequenceBlocker, AppMessageId> = {
 function actionBalance(
   id: NodeSequenceActionId,
   balances: NodeSequenceBalances,
+  snapshotVote: SnapshotVote | null | undefined,
   format: (yocto: bigint) => string,
   translate: ReturnType<typeof useAppTranslation>,
 ): string | null {
@@ -144,10 +147,21 @@ function actionBalance(
       staked: format(balances.endowmentStaked),
     });
   }
-  if (id === "team-vote")
-    return translate("admin.sequence.balance.votingPower", {
-      amount: format(balances.teamVotingPower),
-    });
+  if (id === "team-vote") {
+    if (snapshotVote === undefined) {
+      return translate("admin.sequence.balance.votingPower", {
+        amount: format(balances.teamVotingPower),
+      });
+    }
+    if (!snapshotVote) return null;
+    const block = String(snapshotVote.snapshot.blockHeight);
+    return snapshotVote.votingPower === 0n
+      ? translate("admin.sequence.balance.noSnapshotPower", { block })
+      : translate("admin.sequence.balance.snapshotVotingPower", {
+          amount: format(snapshotVote.votingPower),
+          block,
+        });
+  }
   if (id === "team-unwind") {
     return translate("admin.sequence.balance.stakedUnstaked", {
       staked: format(balances.teamStaked),
@@ -164,6 +178,15 @@ function actionBalance(
 }
 
 const SEQUENCE_KEY = ["node-staking-sequence"] as const;
+
+function snapshotVoteQueryOptions(team: string, proposalId: number | null) {
+  return {
+    queryKey: [...SEQUENCE_KEY, "snapshot-vote", team, proposalId] as const,
+    queryFn: () => readTeamSnapshotVote(team, proposalId ?? 0),
+    staleTime: 5 * 60_000,
+    retry: 1,
+  };
+}
 
 export function NodeStakingSequence({
   nodeId,
@@ -217,12 +240,16 @@ export function NodeStakingSequence({
     queryFn: () => readTeamVote(team, voteProposalId ?? 0),
     enabled: !!team && voteProposalId != null,
   });
+  const snapshotQuery = useQuery({
+    ...snapshotVoteQueryOptions(team, voteProposalId),
+    enabled: !!team && voteProposalId != null,
+  });
   const proposalsQuery = useQuery({
     queryKey: [...SEQUENCE_KEY, "proposals", team, endowment],
     queryFn: async () => {
       const [teamProposals, endowmentProposals] = await Promise.all([
-        fetchDaoProposals(team),
-        endowment ? fetchDaoProposals(endowment) : [],
+        readOpenDaoProposals(team),
+        endowment ? readOpenDaoProposals(endowment) : [],
       ]);
       return { team: teamProposals, endowment: endowmentProposals };
     },
@@ -258,9 +285,22 @@ export function NodeStakingSequence({
       const voteOption = voteStepOption(step.id);
       if (voteOption) {
         if (voteProposalId == null) throw new AppActionError("admin.sequence.pickVote");
-        const [proof, storageFee] = await Promise.all([readGovProof(team), readVoteStorageFee()]);
-        if (!proof) throw new AppActionError("admin.sequence.noProofNamed", { account: team });
-        plan = buildVotePlan({ proposalId: voteProposalId, option: voteOption, proof, storageFee });
+        const [snapshotVote, storageFee] = await Promise.all([
+          queryClient.fetchQuery(snapshotVoteQueryOptions(team, voteProposalId)).catch(() => {
+            throw new AppActionError("admin.sequence.snapshotError");
+          }),
+          readVoteStorageFee(),
+        ]);
+        if (!snapshotVote) throw new AppActionError("admin.sequence.noSnapshot");
+        if (!snapshotVote.proof) {
+          throw new AppActionError("admin.sequence.noProofNamed", { account: team });
+        }
+        plan = buildVotePlan({
+          proposalId: voteProposalId,
+          option: voteOption,
+          proof: snapshotVote.proof,
+          storageFee,
+        });
       }
       if (!plan) throw new AppActionError("admin.sequence.needsInput");
       await proposeAsSession(
@@ -308,7 +348,11 @@ export function NodeStakingSequence({
   const endowmentStakeYocto = parseNearAmount(endowmentStake);
   const actions = buildNodeSequence(
     { team, endowment, pool, teamStakeYocto, endowmentFundYocto, endowmentStakeYocto },
-    { ...(chainQuery.data ?? EMPTY_CHAIN), teamVote: votedQuery.data ?? null },
+    {
+      ...(chainQuery.data ?? EMPTY_CHAIN),
+      teamVote: votedQuery.data ?? null,
+      teamSnapshotPower: snapshotQuery.data?.votingPower ?? null,
+    },
   );
   const amountMissing: Partial<Record<NodeSequenceStepId, boolean>> = {
     stake: !teamStakeYocto,
@@ -331,6 +375,15 @@ export function NodeStakingSequence({
     return policy ? canAccountPropose(policy, sessionAccount) : true;
   };
 
+  const voteBlocker = (step: NodeSequenceStep): string | null => {
+    const blocker = step.blocker ? translate(BLOCKER_LABELS[step.blocker]) : null;
+    if (voteProposalId == null) return blocker ?? translate("admin.sequence.pickVote");
+    if (snapshotQuery.isError) return translate("admin.sequence.snapshotError");
+    if (snapshotQuery.isPending) return translate("admin.sequence.readingSnapshot");
+    if (!snapshotQuery.data) return translate("admin.sequence.noSnapshot");
+    return blocker;
+  };
+
   const stepBlocker = (step: NodeSequenceStep): string | null => {
     if (!sessionAccount) return translate("admin.sequence.signIn");
     if (step.treasury === "endowment" && !endowment) {
@@ -346,11 +399,10 @@ export function NodeStakingSequence({
       });
     }
     if (chainQuery.isError) return translate("admin.sequence.chainError");
-    if (chainPending) return translate("admin.sequence.readingChain");
+    if (proposalsQuery.isError) return translate("admin.sequence.proposalsError");
+    if (chainPending || proposalsQuery.isPending) return translate("admin.sequence.readingChain");
+    if (voteStepOption(step.id)) return voteBlocker(step);
     if (step.blocker) return translate(BLOCKER_LABELS[step.blocker]);
-    if (voteStepOption(step.id)) {
-      return voteProposalId == null ? translate("admin.sequence.pickVote") : null;
-    }
     if (step.plan) return null;
     return amountMissing[step.id]
       ? translate("admin.sequence.needsInput")
@@ -475,7 +527,13 @@ export function NodeStakingSequence({
                   className="text-sm text-foreground"
                   data-testid={`admin-node-sequence-balance-${action.id}`}
                 >
-                  {actionBalance(action.id, balances, formatYocto, translate)}
+                  {actionBalance(
+                    action.id,
+                    balances,
+                    voteProposalId == null ? undefined : (snapshotQuery.data ?? null),
+                    formatYocto,
+                    translate,
+                  )}
                 </p>
               )}
             </div>
