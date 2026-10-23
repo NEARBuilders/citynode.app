@@ -58,11 +58,11 @@ type Binding = {
 
 type Harness = {
   apiClient: Record<string, (...args: never[]) => unknown>;
+  listMembers: ReturnType<typeof vi.fn>;
   auth: {
     getSession: ReturnType<typeof vi.fn>;
     organization: {
       list: ReturnType<typeof vi.fn>;
-      listMembers: ReturnType<typeof vi.fn>;
       setActive: ReturnType<typeof vi.fn>;
       setActiveTeam: ReturnType<typeof vi.fn>;
     };
@@ -226,10 +226,6 @@ function createHarness({
     getSession: vi.fn(async () => ({ data: { user: { id: USER_ID } }, error: null })),
     organization: {
       list: vi.fn(async () => ({ data: [{ id: ORG_ID, slug: "tenant-org" }], error: null })),
-      listMembers: vi.fn(async () => ({
-        data: { members: [{ userId: USER_ID, role }] },
-        error: null,
-      })),
       setActive: vi.fn(async () => ({ data: null, error: null })),
       setActiveTeam: vi.fn(async () => ({ data: null, error: null })),
     },
@@ -250,7 +246,13 @@ function createHarness({
     },
   };
 
+  const listMembers = vi.fn(async () => ({
+    members: [{ id: "member-1", userId: USER_ID, role, user: null }],
+    total: 1,
+  }));
+
   const apiClient = {
+    auth: { listMembers },
     listTenants: vi.fn(async () => {
       events.push("listTenants");
       return [server.tenant];
@@ -303,6 +305,7 @@ function createHarness({
 
   return {
     apiClient,
+    listMembers,
     auth,
     daoConnection: { status: "idle", daoAccountId: null },
     nearAccount: "wallet.near",
@@ -516,7 +519,7 @@ describe("tenant detail mutations", () => {
 
     await screen.findByText("Community not found");
     expect(screen.queryByText("Original tenant")).toBeNull();
-    await waitFor(() => expect(current.auth.organization.listMembers).toHaveBeenCalledOnce());
+    await waitFor(() => expect(current.listMembers).toHaveBeenCalledOnce());
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();

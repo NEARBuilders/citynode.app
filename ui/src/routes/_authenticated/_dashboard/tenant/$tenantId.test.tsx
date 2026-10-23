@@ -182,6 +182,10 @@ const apiClient = {
   auth: {
     listOrganizations: vi.fn(async () => []),
     getContext: vi.fn(async () => null),
+    listMembers: vi.fn(async () => ({
+      members: [{ id: "member-1", userId: USER_ID, role: "owner", user: null }],
+      total: 1,
+    })),
   },
 };
 
@@ -190,12 +194,6 @@ const authClient = {
     data: { user: { id: USER_ID, role: "user" } },
     error: null,
   })),
-  organization: {
-    listMembers: vi.fn(async () => ({
-      data: { members: [{ userId: USER_ID, role: "owner" }] },
-      error: null,
-    })),
-  },
 };
 
 async function openSettings(key: string) {

@@ -30,14 +30,11 @@ import { pageTitle } from "@/lib/page-title";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
-import { orgMembersQueryKey } from "./-organization-query-keys";
+import { orgMembersQueryOptions } from "./-organization-members";
 import { useInvitationActions } from "./-use-invitation-actions";
 
 type ApiClientType = import("@/app").ApiClient;
-type AuthClientType = import("@/app").AuthClient;
 type UserInvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listUserInvitations"]>>[number];
-type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMembers"]>>;
-type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
   head: ({ match }) => ({
@@ -113,14 +110,7 @@ function OrganizationsList() {
 
   const memberQueries = useQueries({
     queries: orgs.map((organization) => ({
-      queryKey: orgMembersQueryKey(organization.id),
-      queryFn: async (): Promise<MemberItem[]> => {
-        const { data, error } = await auth.organization.listMembers({
-          query: { organizationId: organization.id },
-        });
-        if (error) throw new Error(error.message);
-        return (data?.members ?? []) as MemberItem[];
-      },
+      ...orgMembersQueryOptions(apiClient, organization.id),
       staleTime: 30 * 1000,
     })),
   });

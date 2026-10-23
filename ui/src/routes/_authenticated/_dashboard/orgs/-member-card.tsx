@@ -67,8 +67,8 @@ export function MemberRow({
   const translate = useAppTranslation();
   const name = memberDisplayName(member, member.userId);
   const secondary = member.user?.name
-    ? (realEmail(member.user?.email) ?? member.userId)
-    : member.userId;
+    ? (realEmail(member.user?.email) ?? (canManage ? member.userId : null))
+    : null;
 
   return (
     <Item size="sm" data-testid={`org-member-${member.userId}`}>
@@ -80,9 +80,11 @@ export function MemberRow({
           <span className="min-w-0 truncate">{name}</span>
           {isSelf && <span className="shrink-0 text-muted-foreground">{translate("org.you")}</span>}
         </ItemTitle>
-        <ItemDescription>
-          <span className="font-mono break-all">{secondary}</span>
-        </ItemDescription>
+        {secondary ? (
+          <ItemDescription>
+            <span className="font-mono break-all">{secondary}</span>
+          </ItemDescription>
+        ) : null}
       </ItemContent>
       <ItemActions>
         <Badge variant={member.role === "member" ? "outline" : "secondary"}>
