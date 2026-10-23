@@ -72,6 +72,42 @@ describe("discovery publishing", () => {
   });
 });
 
+it("lists active communities without a profile as basic entries only", async () => {
+  const { node, editor, publicClient } = await fixture();
+  const has = (records: { nodeId: string }[]) => records.some((r) => r.nodeId === node.id);
+  expect((await publicClient.listDiscovery({})).find((r) => r.nodeId === node.id)).toEqual(
+    expect.objectContaining({
+      nodeId: node.id,
+      name: "Karachi",
+      slug: node.slug,
+      kind: "city",
+      published: false,
+      summary: "",
+      location: "",
+      latitude: null,
+      longitude: null,
+      channels: [],
+      events: [],
+    }),
+  );
+  expect(has(await publicClient.listDiscovery({ query: "karachi" }))).toBe(true);
+  expect(has(await publicClient.listDiscovery({ query: "lahore" }))).toBe(false);
+  expect(has(await publicClient.listDiscovery({ region: "Pakistan" }))).toBe(false);
+  expect(has(await publicClient.listDiscovery({ active: true }))).toBe(false);
+  expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toBeNull();
+  await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile, published: false });
+  expect(has(await publicClient.listDiscovery({}))).toBe(false);
+  await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile });
+  expect((await publicClient.listDiscovery({})).filter((r) => r.nodeId === node.id)).toEqual([
+    expect.objectContaining({ published: true, location: "Karachi" }),
+  ]);
+  const other = await fixture();
+  await other.provisioner.updateTenant({ tenantId: other.tenant.id, status: "suspended" });
+  expect((await publicClient.listDiscovery({})).some((r) => r.nodeId === other.node.id)).toBe(
+    false,
+  );
+});
+
 it("preserves multiple nodes per tenant and validates confirmed coordinates", async () => {
   const { node, tenant, editor, provisioner, publicClient } = await fixture();
   const sibling = await provisioner.createNode({

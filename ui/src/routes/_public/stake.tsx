@@ -71,19 +71,22 @@ type TenantApp = Awaited<ReturnType<ApiClient["listStakeCommunities"]>>[number];
 type Node = Awaited<ReturnType<ApiClient["getNode"]>>;
 
 function getDirectoryNodes(tenantApps: TenantApp[]) {
-  return tenantApps.flatMap((app) =>
-    app.node
-      ? [
-          {
-            id: app.node.id,
-            name: app.name,
-            slug: app.node.slug,
-            kind: app.node.kind,
-            hostname: app.hostname,
-          },
-        ]
-      : [],
-  );
+  return tenantApps
+    .flatMap((app) =>
+      app.node
+        ? [
+            {
+              id: app.node.id,
+              name: app.name,
+              slug: app.node.slug,
+              kind: app.node.kind,
+              hostname: app.hostname,
+              stakeable: app.stakeable,
+            },
+          ]
+        : [],
+    )
+    .sort((a, b) => Number(b.stakeable) - Number(a.stakeable));
 }
 
 function getStakeTitle(

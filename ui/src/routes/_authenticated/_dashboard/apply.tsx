@@ -72,7 +72,7 @@ function ApplyPage() {
   const nearAccountId = useNearAccount();
   const daoConnection = useDaoConnection();
   const slugManuallyEdited = useRef(false);
-  const [rootParentId, setRootParentId] = useState(initialRootNodes[0]?.id ?? "");
+  const [rootParentId, setRootParentId] = useState("");
   const [submittedProposalId, setSubmittedProposalId] = useState<string | null>(null);
   const [revising, setRevising] = useState(false);
   const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
@@ -197,8 +197,9 @@ function ApplyPage() {
           existingApplication?.reviewStatus === "rejected" && !submittedProposalId
             ? () => {
                 const prior = existingApplication.payload as Partial<NodeApplicationValues>;
+                setRootParentId(rootNodes.find((node) => node.id === prior.parentId)?.id ?? "");
                 form.reset({
-                  kind: prior.kind ?? "country",
+                  kind: prior.kind ?? "city",
                   parentId: prior.parentId ?? null,
                   name: prior.name ?? "",
                   slug: prior.slug ?? "",

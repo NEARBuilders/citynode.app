@@ -233,7 +233,7 @@ describe("apply route submission", () => {
         pluginId: "node",
         entityId: "chicago",
         payload: {
-          kind: "country",
+          kind: "city",
           parentId: null,
           name: "Chicago",
           slug: "chicago",
@@ -262,6 +262,20 @@ describe("apply route submission", () => {
     expect(
       queryClient.getQueryState(tenantQueryKeys.preflight("chicago.citynode.app"))?.isInvalidated,
     ).toBe(false);
+  });
+
+  it("starts as a standalone city and requires a country for a state", async () => {
+    renderApply();
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await waitFor(() => expect(stepStatus("details")).toBe("current"));
+    expect(screen.getByTestId("apply.kind-city").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("No country (standalone city)")).toBeTruthy();
+    await fillValidApplication();
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(screen.getByTestId("apply.kind-state"));
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", true));
+    expect(screen.queryByText("No country (standalone city)")).toBeNull();
   });
 
   it.each([

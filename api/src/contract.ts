@@ -48,7 +48,7 @@ export const NodeProposalPayloadSchema = z
         message: "Country cannot have a parent",
       });
     }
-    if (value.kind !== "country" && !value.parentId) {
+    if (value.kind === "state" && !value.parentId) {
       context.addIssue({
         code: "custom",
         path: ["parentId"],
@@ -435,7 +435,15 @@ export const contract = oc.router({
       description:
         "Session-aware — active organization first, organization memberships as fallback, and the full public directory for anonymous visitors.",
     })
-    .output(z.array(TenantAppSchema)),
+    .output(
+      z.array(
+        TenantAppSchema.extend({
+          stakeable: z
+            .boolean()
+            .describe("Whether the community or an ancestor or descendant has a validator"),
+        }),
+      ),
+    ),
 
   listTenantBindingsForTenant: oc
     .route({

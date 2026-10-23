@@ -213,6 +213,28 @@ describe("node proposal application", () => {
     ).rejects.toBeTruthy();
   });
 
+  it("provisions a standalone city without a parent", async () => {
+    const admin = await getPluginClient(adminContext);
+
+    const result = await admin.applyNodeProposal({
+      kind: "city",
+      name: "Standalone Proposal City",
+      slug: "standalone-proposal-city",
+      parentId: null,
+      orgId: "standalone-proposal-org",
+      motivation: "Run a city community that is not listed under a country.",
+      accountId: "standalone-proposal.near",
+      submitterAccountId: "standalone-proposal.near",
+      hostname: "standalone-proposal-city.citynode.app",
+    });
+
+    expect(await admin.getNode({ nodeId: result.nodeId })).toMatchObject({
+      kind: "city",
+      slug: "standalone-proposal-city",
+      parentId: null,
+    });
+  });
+
   it("does not leave a tenant behind when proposal resources conflict", async () => {
     const admin = await getPluginClient(adminContext);
     await admin.applyNodeProposal({
