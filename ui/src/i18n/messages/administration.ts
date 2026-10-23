@@ -802,6 +802,18 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Dans le lockup {lockup} · staké {staked}",
     "锁仓中 {lockup} · 已质押 {staked}",
   ],
+  "admin.sequence.balance.noSnapshotPower": [
+    "No voting power at snapshot (block {block})",
+    "Sin poder de voto en la instantánea (bloque {block})",
+    "Aucun pouvoir de vote à l’instantané (bloc {block})",
+    "快照时没有投票权（区块 {block}）",
+  ],
+  "admin.sequence.balance.snapshotVotingPower": [
+    "Voting power at snapshot {amount} (block {block})",
+    "Poder de voto en la instantánea {amount} (bloque {block})",
+    "Pouvoir de vote à l’instantané {amount} (bloc {block})",
+    "快照时的投票权 {amount}（区块 {block}）",
+  ],
   "admin.sequence.balance.staked": [
     "Staked {amount}",
     "En staking {amount}",
@@ -891,6 +903,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Despliega primero el lockup del equipo.",
     "Déployez d’abord le lockup de l’équipe.",
     "请先部署团队锁仓。",
+  ],
+  "admin.sequence.blocker.teamNoSnapshotPower": [
+    "No voting power at snapshot. The team had no veNEAR when this proposal's snapshot was taken.",
+    "Sin poder de voto en la instantánea. El equipo no tenía veNEAR cuando se tomó la instantánea de esta propuesta.",
+    "Aucun pouvoir de vote à l’instantané. L’équipe n’avait pas de veNEAR lors de l’instantané de cette proposition.",
+    "快照时没有投票权。该提案快照时团队没有 veNEAR。",
   ],
   "admin.sequence.blocker.teamNoVotingPower": [
     "The team has no veNEAR yet. Lock NEAR or receive a delegation first.",
@@ -1026,10 +1044,16 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "请先在验证者标签页添加质押池。",
   ],
   "admin.sequence.noProofNamed": [
-    "{account} has no veNEAR to vote with yet.",
-    "{account} aún no tiene veNEAR para votar.",
-    "{account} n’a pas encore de veNEAR pour voter.",
-    "{account} 还没有可用于投票的 veNEAR。",
+    "{account} had no voting power at this proposal's snapshot.",
+    "{account} no tenía poder de voto en la instantánea de esta propuesta.",
+    "{account} n’avait pas de pouvoir de vote à l’instantané de cette proposition.",
+    "{account} 在该提案快照时没有投票权。",
+  ],
+  "admin.sequence.noSnapshot": [
+    "House of Stake hasn't taken this proposal's snapshot yet, so there is nothing to vote with.",
+    "House of Stake aún no ha tomado la instantánea de esta propuesta, así que no se puede votar.",
+    "House of Stake n’a pas encore pris l’instantané de cette proposition, le vote n’est donc pas possible.",
+    "House of Stake 尚未为该提案生成快照，暂时无法投票。",
   ],
   "admin.sequence.noTeam": [
     "This community has no DAO team treasury yet.",
@@ -1051,6 +1075,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
   ],
   "admin.sequence.pool": ["Staking pool", "Pool de staking", "Pool de staking", "质押池"],
   "admin.sequence.propose": ["Propose", "Proponer", "Proposer", "提议"],
+  "admin.sequence.proposalsError": [
+    "Couldn't read pending DAO proposals, so a duplicate can't be ruled out. Retrying…",
+    "No se pudieron leer las propuestas pendientes de la DAO, así que no se puede descartar un duplicado. Reintentando…",
+    "Impossible de lire les propositions en attente de la DAO : un doublon ne peut pas être exclu. Nouvel essai…",
+    "无法读取 DAO 待处理提案，无法排除重复提案。正在重试…",
+  ],
   "admin.sequence.proposedNamed": [
     "Proposal sent to {dao}",
     "Propuesta enviada a {dao}",
@@ -1063,6 +1093,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Lecture de la trésorerie sur la chaîne…",
     "正在从链上读取金库…",
   ],
+  "admin.sequence.readingSnapshot": [
+    "Reading the proposal snapshot from an archival node…",
+    "Leyendo la instantánea de la propuesta desde un nodo de archivo…",
+    "Lecture de l’instantané de la proposition depuis un nœud d’archive…",
+    "正在从归档节点读取提案快照…",
+  ],
   "admin.sequence.sharedTreasury": [
     "The endowment treasury must be a different account from the team treasury.",
     "La tesorería de dotación debe ser una cuenta distinta de la tesorería del equipo.",
@@ -1074,6 +1110,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Inicia sesión con tu wallet NEAR para crear propuestas.",
     "Connectez-vous avec votre wallet NEAR pour créer des propositions.",
     "使用 NEAR 钱包登录以创建提案。",
+  ],
+  "admin.sequence.snapshotError": [
+    "Couldn't read the vote proof at this proposal's snapshot from the archival node. Try again in a moment.",
+    "No se pudo leer la prueba de voto en la instantánea de esta propuesta desde el nodo de archivo. Inténtalo de nuevo en un momento.",
+    "Impossible de lire la preuve de vote à l’instantané de cette proposition depuis le nœud d’archive. Réessayez dans un instant.",
+    "无法从归档节点读取该提案快照时的投票证明，请稍后重试。",
   ],
   "admin.sequence.stakeAmount": [
     "Stake amount (NEAR)",
