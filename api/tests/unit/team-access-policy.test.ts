@@ -152,10 +152,10 @@ describe("createRequireTeamArea", () => {
   });
 
   it("rejects a caller with no organization membership", async () => {
-    const context = member("member", {});
-    await expect(
-      call(whoAmI, undefined, { context: { ...context, organization: null } }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const context = { ...member("member", {}), organization: null } as unknown as AuthContext;
+    await expect(call(whoAmI, undefined, { context })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 
   it("lets organization owners, admins and platform admins through regardless of area", async () => {
