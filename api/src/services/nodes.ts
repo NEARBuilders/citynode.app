@@ -289,19 +289,6 @@ export const NodesLive = Layer.effect(
         Effect.gen(function* () {
           yield* input.slug !== undefined ? validateSlug(input.slug) : Effect.void;
           const patch: Record<string, unknown> = { updatedAt: yield* DateTime.nowAsDate };
-          if (input.kind !== undefined || input.metadata !== undefined) {
-            const [current] = yield* query(() =>
-              db
-                .select({ metadata: nodesTable.metadata })
-                .from(nodesTable)
-                .where(eq(nodesTable.id, id))
-                .limit(1),
-            );
-            const existing = (current?.metadata ?? {}) as NodeMetadata;
-            const metadataKind = nodeKindOf(input.metadata);
-            const kind = input.kind ?? metadataKind ?? nodeKindOf(existing) ?? undefined;
-            patch.metadata = mergeKindMetadata(kind, input.metadata);
-          }
           if (input.slug !== undefined) patch.slug = input.slug;
           if (input.name !== undefined) patch.name = input.name;
           if (input.parentId !== undefined) patch.parentId = input.parentId;
@@ -354,6 +341,21 @@ export const NodesLive = Layer.effect(
                 }
               }
 
+              if (input.kind !== undefined || input.metadata !== undefined) {
+                // Read under a row lock so concurrent edits cannot drop each other's keys.
+                const [current] = await tx
+                  .select({ metadata: nodesTable.metadata })
+                  .from(nodesTable)
+                  .where(eq(nodesTable.id, id))
+                  .for("update")
+                  .limit(1);
+                const existing = (current?.metadata ?? {}) as NodeMetadata;
+                const kind =
+                  input.kind ?? nodeKindOf(input.metadata) ?? nodeKindOf(existing) ?? undefined;
+                // A kind-only change keeps the rest of the metadata; a metadata payload replaces it.
+                patch.metadata = mergeKindMetadata(kind, input.metadata ?? existing);
+              }
+
               const [row] = await tx
                 .update(nodesTable)
                 .set(patch)
@@ -373,47 +375,41 @@ export const NodesLive = Layer.effect(
         }),
 
       setBulletin: (id, bulletin) =>
-        Effect.gen(function* () {
-          const [current] = yield* query(() =>
-            db
+        query(() =>
+          db.transaction(async (tx) => {
+            const [current] = await tx
               .select({ metadata: nodesTable.metadata })
               .from(nodesTable)
               .where(eq(nodesTable.id, id))
-              .limit(1),
-          );
-          if (!current) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", {
+              .for("update")
+              .limit(1);
+            if (!current) {
+              throw new ORPCError("NOT_FOUND", {
                 message: "Node not found",
                 data: { resource: "node", resourceId: id },
-              }),
-            );
-          }
-          const existing = (current.metadata ?? {}) as NodeMetadata;
-          const metadata: NodeMetadata = { ...existing };
-          if (bulletin === null || bulletin.trim() === "") {
-            delete metadata.bulletin;
-          } else {
-            metadata.bulletin = bulletin;
-          }
+              });
+            }
+            const metadata: NodeMetadata = { ...((current.metadata ?? {}) as NodeMetadata) };
+            if (bulletin === null || bulletin.trim() === "") {
+              delete metadata.bulletin;
+            } else {
+              metadata.bulletin = bulletin;
+            }
 
-          const [row] = yield* query(() =>
-            db
+            const [row] = await tx
               .update(nodesTable)
               .set({ metadata, updatedAt: new Date() })
               .where(eq(nodesTable.id, id))
-              .returning(),
-          );
-          if (!row) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", {
+              .returning();
+            if (!row) {
+              throw new ORPCError("NOT_FOUND", {
                 message: "Node not found",
                 data: { resource: "node", resourceId: id },
-              }),
-            );
-          }
-          return toNodeRecord(row);
-        }),
+              });
+            }
+            return toNodeRecord(row);
+          }),
+        ),
 
       delete: (id) =>
         Effect.gen(function* () {

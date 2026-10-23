@@ -30,7 +30,7 @@ export interface TeamAccess {
   allowedAreas: FeatureArea[] | null;
 }
 
-type TeamAccessContext = {
+export type TeamAccessContext = {
   user?: { role?: string | null } | null;
   organization?: {
     member?: { role?: string | null } | null;
@@ -53,9 +53,24 @@ export function resolveTeamAccess(context: TeamAccessContext | undefined): TeamA
 }
 
 /**
- * Gates a route on the caller's active team having one of the given areas.
- * Assumes `requireAuth` already ran on the route — it only adds the
- * team-specific check on top, rather than re-deriving auth from scratch.
+ * Whether the caller may use a feature area in their active organization:
+ * platform admins and organization owners/admins always may; other members
+ * need a Team granted the area — their Active Team when one is selected,
+ * otherwise any Team they belong to. A member with no granted Team, such as
+ * one who joined through an Onboarding Code, may not.
+ */
+export function canUseTeamArea(context: TeamAccessContext | undefined, area: FeatureArea): boolean {
+  const { teams, activeTeam, bypass } = resolveTeamAccess(context);
+  if (bypass) return true;
+  if (!context?.organization?.member?.role) return false;
+  if (activeTeam) return activeTeam.areas.includes(area);
+  return teams.some((team) => team.areas.includes(area));
+}
+
+/**
+ * Gates a route on the caller being granted one of the given areas (see
+ * `canUseTeamArea`). Assumes `requireAuth` already ran on the route — it only
+ * adds the team-specific check on top, rather than re-deriving auth from scratch.
  */
 export function createRequireTeamArea(builder: any) {
   type TeamAreaMiddleware = DecoratedMiddleware<
@@ -68,15 +83,16 @@ export function createRequireTeamArea(builder: any) {
 
   return <TAreas extends readonly FeatureArea[]>(...areas: TAreas) =>
     builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
-      const { activeTeam, allowedAreas } = resolveTeamAccess(context);
-      if (
-        activeTeam &&
-        allowedAreas !== null &&
-        !areas.some((area) => allowedAreas.includes(area))
-      ) {
+      const { activeTeam } = resolveTeamAccess(context);
+      if (!areas.some((area) => canUseTeamArea(context, area))) {
         throw new ORPCError("FORBIDDEN", {
-          message: `Your active team "${activeTeam.name}" is not granted ${areas.join(" or ")}. Switch teams or ask an organization owner to grant it.`,
-          data: { requiredPermissions: [...areas], action: "switch-team" },
+          message: activeTeam
+            ? `Your active team "${activeTeam.name}" is not granted ${areas.join(" or ")}. Switch teams or ask an organization owner to grant it.`
+            : `This requires an organization owner or admin, or a team granted ${areas.join(" or ")}.`,
+          data: {
+            requiredPermissions: [...areas],
+            ...(activeTeam && { action: "switch-team" }),
+          },
         });
       }
       return next({ context: { activeTeam } });

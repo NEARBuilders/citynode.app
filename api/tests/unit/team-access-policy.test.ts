@@ -133,10 +133,29 @@ describe("createRequireTeamArea", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("Finance") });
   });
 
-  it("lets a member with no active team through unrestricted", async () => {
+  it("rejects a member with no active team and no team granted the area", async () => {
     await expect(
       call(whoAmI, undefined, { context: member("member", { teams: [finance] }) }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      data: { requiredPermissions: ["node-operations"] },
+    });
+    await expect(call(whoAmI, undefined, { context: member("member", {}) })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("lets a member with no active team through when one of their teams has the area", async () => {
+    await expect(
+      call(whoAmI, undefined, { context: member("member", { teams: [finance, ops] }) }),
     ).resolves.toBeNull();
+  });
+
+  it("rejects a caller with no organization membership", async () => {
+    const context = member("member", {});
+    await expect(
+      call(whoAmI, undefined, { context: { ...context, organization: null } }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("lets organization owners, admins and platform admins through regardless of area", async () => {
