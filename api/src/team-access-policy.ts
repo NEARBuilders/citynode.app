@@ -59,8 +59,12 @@ export function resolveTeamAccess(context: TeamAccessContext | undefined): TeamA
  * otherwise any Team they belong to. A member with no granted Team, such as
  * one who joined through an Onboarding Code, may not.
  */
-export function canUseTeamArea(context: TeamAccessContext | undefined, area: FeatureArea): boolean {
-  const { teams, activeTeam, bypass } = resolveTeamAccess(context);
+export function canUseTeamArea(
+  context: TeamAccessContext | undefined,
+  area: FeatureArea,
+  access: TeamAccess = resolveTeamAccess(context),
+): boolean {
+  const { teams, activeTeam, bypass } = access;
   if (bypass) return true;
   if (!context?.organization?.member?.role) return false;
   if (activeTeam) return activeTeam.areas.includes(area);
@@ -98,10 +102,10 @@ export function createRequireTeamArea(builder: any) {
 
   return <TAreas extends readonly FeatureArea[]>(...areas: TAreas) =>
     builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
-      const { activeTeam } = resolveTeamAccess(context);
-      if (!areas.some((area) => canUseTeamArea(context, area))) {
-        throw teamAreaForbidden(activeTeam, areas);
+      const access = resolveTeamAccess(context);
+      if (!areas.some((area) => canUseTeamArea(context, area, access))) {
+        throw teamAreaForbidden(access.activeTeam, areas);
       }
-      return next({ context: { activeTeam } });
+      return next({ context: { activeTeam: access.activeTeam } });
     }) as TeamAreaMiddleware;
 }
