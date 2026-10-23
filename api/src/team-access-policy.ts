@@ -67,6 +67,21 @@ export function canUseTeamArea(context: TeamAccessContext | undefined, area: Fea
   return teams.some((team) => team.areas.includes(area));
 }
 
+export function teamAreaForbidden(
+  activeTeam: WorkspaceTeam | null,
+  areas: readonly FeatureArea[],
+): ORPCError<"FORBIDDEN", unknown> {
+  return new ORPCError("FORBIDDEN", {
+    message: activeTeam
+      ? `Your active team "${activeTeam.name}" is not granted ${areas.join(" or ")}. Switch teams or ask an organization owner to grant it.`
+      : `This requires an organization owner or admin, or a team granted ${areas.join(" or ")}.`,
+    data: {
+      requiredPermissions: [...areas],
+      ...(activeTeam && { action: "switch-team" }),
+    },
+  });
+}
+
 /**
  * Gates a route on the caller being granted one of the given areas (see
  * `canUseTeamArea`). Assumes `requireAuth` already ran on the route — it only
@@ -85,15 +100,7 @@ export function createRequireTeamArea(builder: any) {
     builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
       const { activeTeam } = resolveTeamAccess(context);
       if (!areas.some((area) => canUseTeamArea(context, area))) {
-        throw new ORPCError("FORBIDDEN", {
-          message: activeTeam
-            ? `Your active team "${activeTeam.name}" is not granted ${areas.join(" or ")}. Switch teams or ask an organization owner to grant it.`
-            : `This requires an organization owner or admin, or a team granted ${areas.join(" or ")}.`,
-          data: {
-            requiredPermissions: [...areas],
-            ...(activeTeam && { action: "switch-team" }),
-          },
-        });
+        throw teamAreaForbidden(activeTeam, areas);
       }
       return next({ context: { activeTeam } });
     }) as TeamAreaMiddleware;

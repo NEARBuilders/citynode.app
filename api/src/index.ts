@@ -45,7 +45,9 @@ import { ValidatorsLive, ValidatorsTag } from "./services/validators";
 import {
   canUseTeamArea,
   createRequireTeamArea,
+  resolveTeamAccess,
   type TeamAccessContext,
+  teamAreaForbidden,
 } from "./team-access-policy";
 
 class ApiServices extends Context.Service<
@@ -104,12 +106,10 @@ type NodeAccessContext = NonNullable<TeamAccessContext> & {
     | null;
 };
 
-const nodeOperationsForbidden = () =>
-  new ORPCError("FORBIDDEN", {
-    message:
-      "Node operations require an organization owner or admin, or a team granted node operations",
-    data: { requiredPermissions: ["node-operations"] },
-  });
+const requireNodeOperationsAccess = (context: NodeAccessContext): NodeEffect<void> =>
+  canUseTeamArea(context, "node-operations")
+    ? Effect.void
+    : Effect.fail(teamAreaForbidden(resolveTeamAccess(context).activeTeam, ["node-operations"]));
 
 const resolveNodeForAccess = (
   services: { nodes: NodesService },
@@ -167,9 +167,7 @@ const authorizeNodeAccess = (
         }),
       );
     }
-    if (!canUseTeamArea(context, "node-operations")) {
-      return yield* Effect.fail(nodeOperationsForbidden());
-    }
+    yield* requireNodeOperationsAccess(context);
   });
 
 const requireTenantOwnedByOrg = (
@@ -195,9 +193,7 @@ const requireTenantOwnedByOrg = (
         }),
       );
     }
-    if (!canUseTeamArea(context, "node-operations")) {
-      return yield* Effect.fail(nodeOperationsForbidden());
-    }
+    yield* requireNodeOperationsAccess(context);
     return tenant;
   });
 
