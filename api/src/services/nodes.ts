@@ -292,6 +292,19 @@ export const NodesLive = Layer.effect(
           if (input.slug !== undefined) patch.slug = input.slug;
           if (input.name !== undefined) patch.name = input.name;
           if (input.parentId !== undefined) patch.parentId = input.parentId;
+          // Merged in the UPDATE itself, so concurrent edits keep each other's keys
+          // without a separate locked read. A kind-only change keeps the rest of the
+          // metadata; a metadata payload replaces it.
+          if (input.metadata !== undefined) {
+            const kind = input.kind ?? nodeKindOf(input.metadata) ?? undefined;
+            const replacement = JSON.stringify(mergeKindMetadata(kind, input.metadata));
+            patch.metadata =
+              kind !== undefined
+                ? sql`${replacement}::jsonb`
+                : sql`${replacement}::jsonb || CASE WHEN ${nodesTable.metadata} ? 'kind' THEN jsonb_build_object('kind', ${nodesTable.metadata} -> 'kind') ELSE '{}'::jsonb END`;
+          } else if (input.kind !== undefined) {
+            patch.metadata = sql`${nodesTable.metadata} || jsonb_build_object('kind', ${input.kind}::text)`;
+          }
 
           return yield* query(() =>
             db.transaction(async (tx) => {
@@ -341,21 +354,6 @@ export const NodesLive = Layer.effect(
                 }
               }
 
-              if (input.kind !== undefined || input.metadata !== undefined) {
-                // Read under a row lock so concurrent edits cannot drop each other's keys.
-                const [current] = await tx
-                  .select({ metadata: nodesTable.metadata })
-                  .from(nodesTable)
-                  .where(eq(nodesTable.id, id))
-                  .for("update")
-                  .limit(1);
-                const existing = (current?.metadata ?? {}) as NodeMetadata;
-                const kind =
-                  input.kind ?? nodeKindOf(input.metadata) ?? nodeKindOf(existing) ?? undefined;
-                // A kind-only change keeps the rest of the metadata; a metadata payload replaces it.
-                patch.metadata = mergeKindMetadata(kind, input.metadata ?? existing);
-              }
-
               const [row] = await tx
                 .update(nodesTable)
                 .set(patch)
@@ -375,41 +373,28 @@ export const NodesLive = Layer.effect(
         }),
 
       setBulletin: (id, bulletin) =>
-        query(() =>
-          db.transaction(async (tx) => {
-            const [current] = await tx
-              .select({ metadata: nodesTable.metadata })
-              .from(nodesTable)
-              .where(eq(nodesTable.id, id))
-              .for("update")
-              .limit(1);
-            if (!current) {
-              throw new ORPCError("NOT_FOUND", {
-                message: "Node not found",
-                data: { resource: "node", resourceId: id },
-              });
-            }
-            const metadata: NodeMetadata = { ...((current.metadata ?? {}) as NodeMetadata) };
-            if (bulletin === null || bulletin.trim() === "") {
-              delete metadata.bulletin;
-            } else {
-              metadata.bulletin = bulletin;
-            }
-
-            const [row] = await tx
+        Effect.gen(function* () {
+          const metadata =
+            bulletin === null || bulletin.trim() === ""
+              ? sql`${nodesTable.metadata} - 'bulletin'`
+              : sql`${nodesTable.metadata} || jsonb_build_object('bulletin', ${bulletin}::text)`;
+          const [row] = yield* query(() =>
+            db
               .update(nodesTable)
               .set({ metadata, updatedAt: new Date() })
               .where(eq(nodesTable.id, id))
-              .returning();
-            if (!row) {
-              throw new ORPCError("NOT_FOUND", {
+              .returning(),
+          );
+          if (!row) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", {
                 message: "Node not found",
                 data: { resource: "node", resourceId: id },
-              });
-            }
-            return toNodeRecord(row);
-          }),
-        ),
+              }),
+            );
+          }
+          return toNodeRecord(row);
+        }),
 
       delete: (id) =>
         Effect.gen(function* () {
