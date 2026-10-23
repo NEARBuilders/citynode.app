@@ -109,7 +109,10 @@ function redeemFailure(error: unknown): { code?: string; reason?: OnboardingRede
   const data = "data" in error && error.data && typeof error.data === "object" ? error.data : null;
   const sent = data && "reason" in data ? data.reason : undefined;
   if (isRedeemReason(sent)) return { code, reason: sent };
-  if (code === "NOT_FOUND") return { code, reason: "code_not_found" };
+  const resource = data && "resource" in data ? data.resource : undefined;
+  if (code === "NOT_FOUND" && (resource === "onboardingCode" || /code not found/i.test(message))) {
+    return { code, reason: "code_not_found" };
+  }
   const match = redeemReasonsByMessage.find(
     ([failureCode, pattern]) => failureCode === code && pattern.test(message),
   );
@@ -199,7 +202,11 @@ function OnboardContent() {
   const info = infoQuery.data;
 
   const [accountCreated, setAccountCreated] = useState(false);
-  const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
+  const userId = session?.user.id;
+  // The join and its failure belong to the member they were attempted for, so
+  // signing out or switching accounts on this page never shows them to anyone else.
+  const [joined, setJoined] = useState<{ userId: string; data: Redeemed } | null>(null);
+  const redeemed = joined && joined.userId === userId ? joined.data : null;
   const { data: communityPage } = useQuery({
     queryKey: ["onboarding-community-page", redeemed?.organizationId],
     queryFn: () => findCommunityPage(apiClient, redeemed?.organizationId ?? ""),
@@ -208,9 +215,10 @@ function OnboardContent() {
   });
   const [nameDone, setNameDone] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [redeemError, setRedeemError] = useState<RedeemFailure | null>(null);
+  const [failed, setFailed] = useState<{ userId: string; reason: RedeemFailure } | null>(null);
+  const redeemError = failed && failed.userId === userId ? failed.reason : null;
   const [signInAgain, setSignInAgain] = useState(false);
-  const redeemingRef = useRef(false);
+  const redeemingFor = useRef<string | null>(null);
   const signedIn = !!session?.user && !signInAgain;
   const languageSelect = <LoginLanguageSelector testId="onboard.language-select" />;
 
@@ -226,19 +234,19 @@ function OnboardContent() {
   };
 
   useEffect(() => {
-    if (!signedIn || !code || redeemingRef.current || redeemed || redeemError) return;
-    const userId = session?.user.id;
-    const stored = userId ? readStoredJoin(userId, code) : null;
+    if (!signedIn || !userId || !code || redeemed || redeemError) return;
+    if (redeemingFor.current === userId) return;
+    const stored = readStoredJoin(userId, code);
     if (stored) {
-      setRedeemed(stored);
+      setJoined({ userId, data: stored });
       return;
     }
-    redeemingRef.current = true;
+    redeemingFor.current = userId;
     void safe(apiClient.auth.redeemOnboardingCode({ code }) as Promise<Redeemed>).then(
       ({ data, definedError, error, isSuccess }) => {
         if (isSuccess) {
-          setRedeemed(data);
-          if (userId) storeJoin(userId, code, data);
+          setJoined({ userId, data });
+          storeJoin(userId, code, data);
           toast.success(
             translate("auth.onboard.joinedToast", { community: data.organizationName }),
           );
@@ -247,25 +255,15 @@ function OnboardContent() {
         }
         const failure = redeemFailure(definedError ?? error);
         if (failure.code === "UNAUTHORIZED") {
-          redeemingRef.current = false;
+          redeemingFor.current = null;
           setSignInAgain(true);
           void refreshSessionCache(auth, queryClient);
           return;
         }
-        setRedeemError(failure.reason ?? "network");
+        setFailed({ userId, reason: failure.reason ?? "network" });
       },
     );
-  }, [
-    signedIn,
-    session?.user.id,
-    code,
-    redeemed,
-    redeemError,
-    auth,
-    apiClient,
-    queryClient,
-    translate,
-  ]);
+  }, [signedIn, userId, code, redeemed, redeemError, auth, apiClient, queryClient, translate]);
 
   if (redeemed) {
     const joinedLine = (
@@ -438,8 +436,8 @@ function OnboardContent() {
         action="retry"
         toolbar={languageSelect}
         onRetry={() => {
-          redeemingRef.current = false;
-          setRedeemError(null);
+          redeemingFor.current = null;
+          setFailed(null);
         }}
       />
     );

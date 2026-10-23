@@ -123,11 +123,12 @@ function renderOnboard(path = `/onboard?code=${CODE}`) {
       runtimeConfig: { networkId: "mainnet", runtime: { gatewayId: "citynode.app" } },
     },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router as never} />
     </QueryClientProvider>,
   );
+  return { ...view, queryClient };
 }
 
 beforeEach(() => {
@@ -572,6 +573,38 @@ describe("onboard join flow", () => {
 
     expect(await screen.findByText("This community is full")).toBeTruthy();
     expect(screen.getByTestId("onboard.explore-button")).toBeTruthy();
+  });
+
+  it("treats a not-found that is not about the code as a join it can retry", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode.mockRejectedValue(definedError("NOT_FOUND", "Not found"));
+
+    renderOnboard();
+
+    expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
+    expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
+  });
+
+  it("drops the join when the member signs out and joins the next member on their own", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode.mockResolvedValue(joined);
+
+    const { queryClient } = renderOnboard();
+    expect(await screen.findByTestId("onboard.continue-on-computer")).toBeTruthy();
+
+    harness.session = null;
+    await act(() => queryClient.refetchQueries({ queryKey: ["session"] }));
+    await waitFor(() => expect(screen.queryByTestId("onboard.success")).toBeNull());
+
+    harness.session = { user: { id: "user-2", name: "Alan" } };
+    harness.redeemOnboardingCode.mockRejectedValue(joinFailure("code_used_up"));
+    await act(() => queryClient.refetchQueries({ queryKey: ["session"] }));
+
+    expect(await screen.findByText("This invitation has been used up")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.success")).toBeNull();
+    expect(harness.redeemOnboardingCode).toHaveBeenCalledTimes(2);
   });
 
   it("treats an unrecognised refusal as a join it can retry", async () => {
