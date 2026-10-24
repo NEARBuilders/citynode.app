@@ -42,8 +42,11 @@
     "test:regression:unit": "node --test tests/regression/lib/*.test.mjs",
     "test:regression:browser:install": "pnpm exec playwright install --with-deps chromium",
     "test:regression:browser:dev:ssr": "node tests/regression/lib/preflight.mjs && REGRESSION_MODE=dev:ssr pnpm exec playwright test -c tests/regression/browser/playwright.config.mjs --project=dev:ssr",
+    "test:regression:browser:dev:csr": "node tests/regression/lib/preflight.mjs && REGRESSION_MODE=dev:csr pnpm exec playwright test -c tests/regression/browser/playwright.config.mjs --project=dev:csr",
     "test:regression:browser": "pnpm run test:regression:browser:dev:ssr",
+    "test:regression:browser:all": "pnpm run test:regression:browser:dev:ssr && pnpm run test:regression:browser:dev:csr",
     "regression:dev:ssr": "node tests/regression/lib/start-stack.mjs dev:ssr",
+    "regression:dev:csr": "node tests/regression/lib/start-stack.mjs dev:csr",
     "dev:ui": "bos dev --ui local --api remote",
     "dev:api": "bos dev --ui remote --api local"
   },
