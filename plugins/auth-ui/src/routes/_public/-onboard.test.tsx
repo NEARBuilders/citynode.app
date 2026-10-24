@@ -415,11 +415,10 @@ describe("onboard join flow", () => {
     expect(screen.queryByTestId("onboard.load-error")).toBeNull();
   });
 
-  it("disables Retry while a failed invitation refresh retries", async () => {
+  it("keeps the invitation when a background refresh fails", async () => {
     harness.getOnboardingCodeInfo
       .mockResolvedValueOnce(info)
-      .mockRejectedValueOnce(new Error("offline"))
-      .mockReturnValue(new Promise(() => undefined));
+      .mockRejectedValueOnce(new Error("offline"));
 
     renderOnboard();
     expect(await screen.findByTestId("onboard.invite")).toBeTruthy();
@@ -427,15 +426,14 @@ describe("onboard join flow", () => {
       focusManager.setFocused(false);
       focusManager.setFocused(true);
     });
-    const retry = await screen.findByTestId("onboard.retry-button");
-    expect(retry.hasAttribute("disabled")).toBe(false);
 
-    fireEvent.click(retry);
-
-    await waitFor(() =>
-      expect(screen.getByTestId("onboard.retry-button").hasAttribute("disabled")).toBe(true),
-    );
-    expect(harness.getOnboardingCodeInfo).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(harness.getOnboardingCodeInfo).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByTestId("onboard.invite")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.load-error")).toBeNull();
+    expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
   });
 
   it("does not throw when the NEAR account check fails", async () => {
@@ -522,7 +520,7 @@ describe("onboard join flow", () => {
 
     expect(await screen.findByTestId("onboard.create-account-button")).toBeTruthy();
     expect(screen.getByTestId("onboard.sign-in-again").textContent).toContain(
-      "Sign in with a different account",
+      "Your sign-in expired. Sign in again to join.",
     );
     expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
     expect(screen.queryByTestId("onboard.error")).toBeNull();
@@ -607,15 +605,20 @@ describe("onboard join flow", () => {
     expect(harness.redeemOnboardingCode).toHaveBeenCalledTimes(2);
   });
 
-  it("treats an unrecognised refusal as a join it can retry", async () => {
+  it.each([
+    "FORBIDDEN",
+    "BAD_REQUEST",
+  ])("does not offer Retry for an unrecognised %s refusal", async (code) => {
     harness.session = { user: { id: "user-1", name: "Grace" } };
     harness.getOnboardingCodeInfo.mockResolvedValue(info);
-    harness.redeemOnboardingCode.mockRejectedValue(definedError("FORBIDDEN", "Something else"));
+    harness.redeemOnboardingCode.mockRejectedValue(definedError(code, "Something else"));
 
     renderOnboard();
 
-    expect(await screen.findByText("Couldn't join right now")).toBeTruthy();
-    expect(screen.getByTestId("onboard.retry-button")).toBeTruthy();
+    expect(await screen.findByText("Couldn't add you to this community")).toBeTruthy();
+    expect(screen.getByText("Contact the community for a new link")).toBeTruthy();
+    expect(screen.queryByTestId("onboard.retry-button")).toBeNull();
+    expect(screen.queryByText("Couldn't join right now")).toBeNull();
   });
 });
 

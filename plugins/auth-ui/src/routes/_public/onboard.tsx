@@ -65,7 +65,7 @@ const REDEEM_REASONS = [
   "organization_not_found",
 ] as const;
 type OnboardingRedeemReason = (typeof REDEEM_REASONS)[number];
-type RedeemFailure = OnboardingRedeemReason | "network";
+type RedeemFailure = OnboardingRedeemReason | "refused" | "network";
 type StatusAction = "retry" | "explore" | "contact-community";
 
 const PASSKEY_DEFAULT_NAME = "Passkey user";
@@ -97,6 +97,8 @@ const redeemReasonsByMessage: ReadonlyArray<
   ["BAD_REQUEST", /code has expired/i, "code_expired"],
   ["BAD_REQUEST", /organization not found/i, "organization_not_found"],
 ];
+
+const REFUSAL_CODES = ["FORBIDDEN", "BAD_REQUEST"];
 
 function redeemFailure(error: unknown): { code?: string; reason?: OnboardingRedeemReason } {
   if (!error || typeof error !== "object") return {};
@@ -250,7 +252,10 @@ function OnboardContent() {
           void refreshSessionCache(auth, queryClient);
           return;
         }
-        setFailed({ userId, reason: failure.reason ?? "network" });
+        const reason: RedeemFailure =
+          failure.reason ??
+          (failure.code && REFUSAL_CODES.includes(failure.code) ? "refused" : "network");
+        setFailed({ userId, reason });
       },
     );
   }, [signedIn, userId, code, redeemed, redeemError, auth, apiClient, queryClient, translate]);
@@ -374,13 +379,12 @@ function OnboardContent() {
     );
   }
 
-  if (infoQuery.isError && !(infoQuery.isFetching && info === undefined)) {
+  if (infoQuery.isError && info === undefined && !infoQuery.isFetching) {
     return (
       <StatusPanel
         title={translate("auth.onboard.loadFailed")}
         testId="onboard.load-error"
         action="retry"
-        retrying={infoQuery.isFetching}
         toolbar={languageSelect}
         onRetry={() => {
           void infoQuery.refetch();
@@ -451,6 +455,18 @@ function OnboardContent() {
     );
   }
 
+  if (redeemError === "refused") {
+    return (
+      <StatusPanel
+        title={translate("auth.onboard.joinRefused")}
+        description={translate("auth.onboard.askOrganizer")}
+        testId="onboard.error"
+        action="contact-community"
+        toolbar={languageSelect}
+      />
+    );
+  }
+
   if (redeemError && redeemError !== "network") {
     const copy = redeemCopy[redeemError];
     return (
@@ -512,7 +528,7 @@ function OnboardContent() {
           className="text-center text-sm text-muted-foreground"
           data-testid="onboard.sign-in-again"
         >
-          {translate("auth.onboard.signInDifferent")}
+          {translate("auth.onboard.sessionExpired")}
         </p>
       ) : null}
       <OnboardSignUp
@@ -529,7 +545,6 @@ function StatusPanel({
   description,
   testId,
   action,
-  retrying = false,
   toolbar,
   onRetry,
 }: {
@@ -537,19 +552,18 @@ function StatusPanel({
   description?: string;
   testId: string;
   action: StatusAction;
-  retrying?: boolean;
   toolbar?: ReactNode;
   onRetry?: () => void;
 }) {
   const translate = useLoginTranslation();
-  const panel = (
+  return (
     <AuthPanel
+      testId={testId}
       icon={<WarningCircleIcon />}
       toolbar={toolbar}
       title={title}
       titleTestId="onboard.heading"
       description={description}
-      descriptionTestId={description ? testId : undefined}
     >
       {action === "retry" ? (
         <Button
@@ -557,10 +571,8 @@ function StatusPanel({
           size="lg"
           className="w-full"
           onClick={onRetry}
-          disabled={retrying}
           data-testid="onboard.retry-button"
         >
-          {retrying ? <Spinner data-icon="inline-start" /> : null}
           {translate("auth.common.retry")}
         </Button>
       ) : action === "explore" ? (
@@ -577,5 +589,4 @@ function StatusPanel({
       ) : null}
     </AuthPanel>
   );
-  return description ? panel : <div data-testid={testId}>{panel}</div>;
 }

@@ -935,6 +935,12 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Impossible de rejoindre pour le moment",
     "现在无法加入",
   ],
+  "auth.onboard.joinRefused": [
+    "Couldn't add you to this community",
+    "No pudimos añadirte a esta comunidad",
+    "Impossible de vous ajouter à cette communauté",
+    "无法将你加入此社区",
+  ],
   "auth.onboard.communityNotOpen": [
     "This community isn't open yet",
     "Esta comunidad aún no está abierta",
@@ -977,11 +983,11 @@ export const authMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Contactez la communauté pour obtenir un nouveau lien",
     "请联系社区索取新链接",
   ],
-  "auth.onboard.signInDifferent": [
-    "That sign-in is no longer valid. Sign in with a different account to join.",
-    "Esa sesión ya no es válida. Inicia sesión con otra cuenta para unirte.",
-    "Cette connexion n’est plus valable. Connectez-vous avec un autre compte pour rejoindre.",
-    "该登录已失效，请使用其他账户登录后再加入。",
+  "auth.onboard.sessionExpired": [
+    "Your sign-in expired. Sign in again to join.",
+    "Tu sesión caducó. Inicia sesión de nuevo para unirte.",
+    "Votre session a expiré. Reconnectez-vous pour rejoindre.",
+    "你的登录已过期，请重新登录后加入。",
   ],
   "auth.onboard.stepAccount": [
     "Create your account",

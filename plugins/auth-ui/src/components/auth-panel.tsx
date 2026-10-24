@@ -10,6 +10,7 @@ interface AuthPanelProps {
   toolbar?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
+  testId?: string;
 }
 
 export function AuthPanel({
@@ -22,11 +23,12 @@ export function AuthPanel({
   toolbar,
   children,
   footer,
+  testId = "auth-panel",
 }: AuthPanelProps) {
   return (
     <div
       className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-4 py-12 sm:py-20"
-      data-testid="auth-panel"
+      data-testid={testId}
     >
       <div className="mx-auto my-auto flex w-full max-w-sm flex-col gap-8">
         {toolbar && <div className="flex justify-end">{toolbar}</div>}
