@@ -15,7 +15,7 @@ Work in this order. Each step names the skill that owns it. `/ask-matt` is the r
 
 1. **Sharpen the idea** — `/grill-with-docs` interviews until the design is sound, leaving a paper trail in `GLOSSARY.md` and `docs/adr/`. For pure decisions without docs, `/grilling`. For handing a plan to a future session, `/to-spec`.
 2. **Chart the work** — `/to-tickets` breaks the spec into tracer-bullet tickets (vertical slices, each demoable, each declaring blocking edges) under `.scratch/<feature>/issues/`. For huge, foggy efforts, `/wayfinder` instead.
-3. **Work the frontier** — pick any ticket whose blockers are done. `/implement` builds it, driving `/tdd` at pre-agreed seams. `/diagnosing-bugs` is the loop for hard bugs and performance regressions.
+3. **Work the frontier** — pick any ticket whose blockers are done. `/implement` builds it, driving `/tdd` at pre-agreed seams. `/diagnosing-bugs` is the loop for hard bugs and performance regressions. If your ticket builds on unmerged work, stack on that branch — base your branch on the *named* base PR's branch, never on whatever the working tree happens to have checked out (`docs/agents/change-placement.md` → Branching and stacking).
 4. **Review** — `/code-review` audits the diff since a fixed point on two axes: Standards (this repo's documented conventions) and Spec (what the ticket asked for).
 5. **Ship** — `bos deploy` runs the full train (preflight → build → upload bundles → publish config to FastKV → image/Railway). Deploy surface details live in `AGENTS.md`.
 

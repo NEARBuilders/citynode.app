@@ -338,6 +338,8 @@ The parent runtime provides the shared framework; your project provides custom o
 - Component file naming: lowercase kebab-case (`data-table.tsx`, `user-profile.tsx`)
 - Follow existing patterns in neighboring files
 
+Review-time rules — the write-once goal, type-safety patterns, the workaround protocol, and the comment `KEEP`/`TODO` conventions — are in [`CODING_STANDARDS.md`](CODING_STANDARDS.md).
+
 ### Framework-owned files and the upstream-change protocol (ADR 0032)
 
 The files carrying the `FRAMEWORK-OWNED` header (build configs, db/lib plumbing, workflows) are reconciled from the parent template by `bos upgrade`: template wins on the next upgrade, local copies are backed up under `.bos/sync-backup/`, and **same-version upgrades never touch them** (only the framework version change reconciles them).
@@ -371,6 +373,8 @@ Which screen belongs to which source, and how to override it, is **generated**, 
 
 The composition/route-shadowing rules are documented in the framework's `everything-dev#v1-to-v2-upgrade` skill — load it rather than reverse-engineering `node_modules`.
 
+When the need is a **bug**, a **missing capability**, or a **pattern improvement**, follow [`docs/agents/change-placement.md`](docs/agents/change-placement.md) — including its first rule: sync-owned files are a contribution channel, not a fence. A human-facing diagram tour of the whole runtime lives in [`docs/agents/how-it-fits.md`](docs/agents/how-it-fits.md); `/teach` builds lessons from it.
+
 ### Plugin Client (pluginsClient)
 
 The API plugin receives typed client factories for all other plugins via `createPlugin.withPlugins<PluginsClient>()`, enabling in-process composition without HTTP roundtrips.
@@ -389,6 +393,9 @@ pnpm run test    # Run all tests
 pnpm run typecheck   # Type check all packages
 pnpm run lint        # Run linting
 ```
+
+When to write a test, which layer, what the parent framework covers vs what
+this repo must cover: [`docs/agents/testing.md`](docs/agents/testing.md).
 
 ## Common Patterns
 
