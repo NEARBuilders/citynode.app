@@ -18,22 +18,57 @@ Do not work around the sync by stashing things in app-owned docs that belong in
 the template — every child then re-solves the same problem. Make the improvement
 here, describe it upstream, let every child inherit it.
 
+## Branching and stacking
+
+- **Default: one branch per ticket, off `main`.** Small PRs, one tracer bullet
+  each.
+- **Stack when — and only when — your work builds on unmerged work** (docs
+  referencing artifacts that only exist on the base PR, specs for a seam the
+  base PR creates). Branch from the **named** base branch
+  (`git switch -c mine feat/runtime-map`) and open the PR against that branch.
+  Merge order: base first; stacked PRs auto-retarget when the base branch is
+  deleted.
+- **Never branch from the working tree's current HEAD.** Other sessions share
+  this checkout and move it — pre-flighting is cheap and mandatory:
+  `git status -sb`, `git log --oneline -3` (whose commits exactly?), then
+  `gh pr list` for overlapping work. *Seen in:* a fresh branch here absorbed
+  two commits from another session's PR because the tree happened to stand on
+  their branch; caught by `git log` before pushing, fixed by recreating from
+  the named base.
+- **Parallel independent work does not stack — it coordinates.** Before
+  starting, scan the open PRs you might overlap with
+  (`gh pr view <n> --json files`); real overlap gets a conflict comment on the
+  older PR so merge order is agreed, not discovered.
+
 ## Bug
 
 1. **Reproduce** it locally.
 2. **Classify**: run `bos dev --ui remote --api remote` (or wipe the local
-   override) and see if it still reproduces against the **pinned platform**. Also
-   check the owner in the runtime map — code living in the `auth` source is not
-   debugged here.
+   override) and see if it still reproduces against the **pinned platform**. Two
+   cheap classifiers first: the runtime map (whose source owns the failing
+   path/behaviour) and the resolved-config comparison in
+   [`how-it-fits.md`](how-it-fits.md) (which slots are local overrides vs
+   inherited). Code living in the `auth` source is not debugged here.
 3. **Local** → fix it, add the test at the seam that caught it.
 4. **Upstream** → **search existing issues first** (`gh issue list -R
    NEARBuilders/everything-dev --search "…"`); comment on the matching one with
-   the repro, the `platform:` pin, and `.bos/logs/` output; file new only when
-   the search is empty. If you need to keep working now, ship an interim local
-   fix and open the follow-up cleanup ticket that links the upstream issue.
+   the repro, the `platform:` pin, the relevant `.bos/logs/` line, and the
+   resolved-config slice if relevant; file new only when the search is empty.
+   If you need to keep working now, ship an interim local fix and open the
+   follow-up cleanup ticket that links the upstream issue.
 
 Done when: the fix is in the right package and the bug's upstream counterpart
 (linked issue) is either applied or parked with a cleanup ticket.
+
+## Clean up at source
+
+Resource cleanup — accumulating logs, stale caches, dead state — gets fixed
+**where it is produced**, not hacked around locally: a `TODO(<ticket>)` at the
+spot that documents the gap and an upstream issue for the mechanism (log
+retention is the standing example: `TODO(#596)`). Locally, deleting a stale
+`.bos/logs/*.log` or wiping a stale `regression/` cache is always safe; adding
+a local cron, hook, or script to manage the runtime's file lives is not — that
+is a child-only fork of a platform responsibility.
 
 ## Missing capability
 

@@ -61,6 +61,31 @@ composition inventory. `pnpm run verify:runtime-map` proves the static model
 still matches the engine. If a remote manifest fetch fails the build is
 **loud**: an explicit `UNRESOLVED` beats a silently-shrinking map.
 
+## Read the runtime's own state
+
+Everything above can be **checked, not trusted** — `.bos/` is the runtime's
+ledger. Teachings and investigations cite these surfaces; when a doc and the
+state disagree, believe the state and fix the doc.
+
+| Surface | What it teaches |
+|---|---|
+| `generated/runtime-map.json` + `ui/src/lib/runtime-map.gen.ts` | what composed, from where, who owns each path (regenerate: `pnpm run types:gen`) |
+| `bos.resolved-config.json` | the resolution snapshot — each slot with `development`/`production`/`pin`. **Compare it to the published parent** (each slot's `pin.manifest` names a CDN `versions/<hash>.json`; the parent's live config is at `https://<parent-domain>/.well-known/version`) to see which slots are local overrides and which are inherited as-is |
+| `logs/dev-latest.log` + dated `logs/dev-*.log` | what **actually ran**: which MF bundles loaded (`auth=https://cdn…`), compose warnings, per-service boot logs. `bos logs` reads it. This is the truth of last resort when a boot behaves differently than its config suggests |
+| `platform-manifest.json` | the resolved platform release — what the `platform:` pin actually pulled (source, resolvedAt, manifest) |
+| `deploy-state.json` | what was last published (version, apps) — confuses nobody when "is production serving my code?" |
+| `sync-snapshot.json` + `sync-backup/<date>/` | what the last `bos upgrade` reconciled, and pre-upgrade copies of template-owned files you'd edited — the diff surface for merge-review on upgrades |
+| `regression/*.json` | cached seeded sessions (`cookies.json`, `seed.json`, …) — why regression specs start signed-in without minting their own |
+
+**Clean up at source.** These are the runtime's artifacts, not yours to hack
+around. Logs currently accumulate with no rotation — 79 files / 4.6 MB in nine
+working days here — and the durable fix is upstream
+(right now: `TODO(#596)`); deleting dated `.bos/logs/*.log` is safe in the
+meantime. The regression caches are safe to wipe whenever fixtures drift: the
+next run re-seeds them. Anything else under `.bos/` (`session.json`,
+`sync-backup/`) is state you regenerate by re-running the responsible command —
+when a surface feels stale, regenerate it in place rather than editing it.
+
 ## Where source actually lives
 
 | Want to change… | Where |
@@ -85,3 +110,5 @@ still matches the engine. If a remote manifest fetch fails the build is
   inspector), #531 (non-gating regression), #577 (docs parity).
 - **Learn it interactively**: run `/teach` with a question about any section
   above — lessons are built from this reference and pin their claims to it.
+  Teach from **state**: every claim cites the `.bos` surface or code path that
+  shows it, and never rests on parametric memory.

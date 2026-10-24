@@ -394,6 +394,9 @@ pnpm run typecheck   # Type check all packages
 pnpm run lint        # Run linting
 ```
 
+When to write a test, which layer, what the parent framework covers vs what
+this repo must cover: [`docs/agents/testing.md`](docs/agents/testing.md).
+
 ## Common Patterns
 
 ### Authentication Check
