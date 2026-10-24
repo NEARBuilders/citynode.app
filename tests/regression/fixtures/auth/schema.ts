@@ -1,3 +1,12 @@
+/**
+ * FROZEN SNAPSHOT of the upstream auth plugin's Better Auth schema
+ * (`@everything-dev/auth-plugin` → `github.com/nearbuilders/everything-dev`,
+ * `plugins/auth/src/db/schema.ts`). This repo does not own the auth schema.
+ *
+ * Refresh this file (and `migrations/`) whenever the platform pin in
+ * `bos.app.ts` bumps — otherwise regression fixtures drift from the running
+ * remote plugin and break in ways that look like local test bugs.
+ */
 import { relations } from "drizzle-orm";
 import {
   boolean,

@@ -9,7 +9,8 @@ import { migrateTestDatabase } from "./migrate-test-db.mjs";
 /**
  * Test-only Better Auth instance for regression fixtures.
  *
- * Reuses the vendored auth plugin's real schema through the same
+ * Uses a frozen snapshot of the upstream auth plugin's schema (see
+ * `tests/regression/fixtures/auth/schema.ts`) through the same
  * `drizzleAdapter` wiring as the production instance, plus `testUtils()` —
  * the documented Better Auth pattern for integration/E2E fixtures. Sessions
  * and users minted here validate against the running server because the

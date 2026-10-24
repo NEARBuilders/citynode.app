@@ -2,9 +2,11 @@
 
 Should citynode.app use [`@marinedotsh/better-auth-referral`](https://github.com/marinedotsh/better-auth-referral) for event QR onboarding with referral attribution?
 
-**Short answer: no.** The plugin only attributes email and OAuth sign-ups. citynode users sign up with a passkey or SIWN. The QR-to-team flow the plugin would support already exists here as **Onboarding Codes** (`onboarding_code`), and a Onboarding Code already records the organizer who created it. If user-to-user referral becomes a priority later, add one nullable column to the Onboarding Code redemption.
+**Short answer: no.** The plugin only attributes email and OAuth sign-ups. citynode users sign up with a passkey or SIWN. The QR-to-team flow the plugin would support already exists here as **Onboarding Codes** (`onboarding_code`), and an Onboarding Code already records the organizer who created it. If user-to-user referral becomes a priority later, add one nullable column to the Onboarding Code redemption.
 
-Sources checked 2026-09-25. Plugin permalinks use commit `9f228d7` (`R` = `https://github.com/marinedotsh/better-auth-referral/blob/9f228d753c0177e9ab37edbb3c0ef484496a7ef8`). Better Auth facts come from the installed 1.6.25 sources in `node_modules/`.
+Sources checked 2026-09-25. Plugin permalinks use commit `9f228d7` (`R` = `https://github.com/marinedotsh/better-auth-referral/blob/9f228d753c0177e9ab37edbb3c0ef484496a7ef8`).
+
+> **Where the auth server lives now.** Auth is a **remote published plugin** (`@everything-dev/auth-plugin`, inherited via `extends`). This repo has **no** `plugins/auth` workspace. Internal auth paths cited below (auth instance, schema, handlers, UI) refer to the upstream source at `github.com/nearbuilders/everything-dev` under `plugins/auth/`, not to this repo. See `docs/runtime-map.md` and `.scratch/runtime-map/`.
 
 ## 1. What the plugin does
 
@@ -51,19 +53,19 @@ Sources checked 2026-09-25. Plugin permalinks use commit `9f228d7` (`R` = `https
 | Adoption | 79 stars, 5 forks, 0 open issues. The repo was created 2026-07-12 (`gh api repos/marinedotsh/better-auth-referral`). |
 | Tests | 43 vitest cases across `tests/helpers.test.ts` (14), `tests/server.test.ts` (18) and `tests/routes.test.ts` (11). None cover passkey, SIWN or `databaseHooks`; grepping for those terms finds nothing. |
 | License | MIT (`R/LICENSE`). |
-| Better Auth compat | Peer dependencies are `better-auth ^1.6.23` and `zod ^4` (`R/package.json` `peerDependencies`). This repo pins `better-auth` and `@better-auth/passkey` to `1.6.25` in the catalog (`package.json:29`, `package.json:31`; `node_modules/better-auth/package.json` shows 1.6.25). The versions are compatible. |
+| Better Auth compat | Peer dependencies are `better-auth ^1.6.23` and `zod ^4` (`R/package.json` `peerDependencies`). The upstream auth plugin pins its own `better-auth`; keep the two in range when adopting any Better Auth server plugin. |
 
 ## 3. Passkey and SIWN sign-up are not covered
 
 The plugin attaches to specific endpoint paths. It does not use `databaseHooks.user.create`. The only paths it matches are `/sign-up/email`, `/sign-in/social`, `/sign-in/oauth2` and the OAuth callbacks (`R/src/server.ts#L275`, `#L286`, `#L304`, `#L315`, `#L341-L342`).
 
-**Passkey-first sign-up.** The user is created inside `/passkey/generate-register-options`, by our `resolveUser` callback (`plugins/auth/src/auth-instance.ts:314-331`, `node_modules/@better-auth/passkey/dist/index.mjs:22-48`, `:56`, `:150`). `/passkey/verify-registration` creates the passkey row but no session (`…/passkey/dist/index.mjs:380-383`). The client then calls `signIn.passkey()`, which creates the session (`packages/everything-dev/src/ui/auth.ts:176-219`, `…/passkey/dist/index.mjs:461-465`). None of these paths match the plugin's hooks, so no referral is recorded.
+**Passkey-first sign-up.** The user is created inside `/passkey/generate-register-options`, by the auth plugin's `resolveUser` callback (upstream `plugins/auth/src/auth-instance.ts`; `node_modules/@better-auth/passkey/dist/index.mjs:22-48`, `:56`, `:150`). `/passkey/verify-registration` creates the passkey row but no session (`…/passkey/dist/index.mjs:380-383`). The client then calls `signIn.passkey()`, which creates the session (the framework's `everything-dev/ui/auth` package; `…/passkey/dist/index.mjs:461-465`). None of these paths match the plugin's hooks, so no referral is recorded.
 
-**SIWN.** New users are created in `/near/verify` via `internalAdapter.createUser` (`packages/better-near-auth/src/index.ts:1375-1376`, `:1514`). The plugin doesn't match that path either.
+**SIWN.** New users are created in `/near/verify` via `internalAdapter.createUser` (`better-near-auth` package, `index.ts`). The plugin doesn't match that path either.
 
-**Anonymous and phone OTP sign-ups** are also created off-path (`plugins/auth/src/auth-instance.ts:300-313`).
+**Anonymous and phone OTP sign-ups** are also created off-path (upstream `plugins/auth/src/auth-instance.ts`).
 
-**Where a generic hook would go.** `internalAdapter.createUser` goes through `createWithHooks`, so `databaseHooks.user.create.after` fires for every sign-up path (`node_modules/better-auth/dist/db/internal-adapter.mjs:78-79`, `node_modules/better-auth/dist/db/with-hooks.mjs:6`). This repo already uses that hook to create a personal org (`plugins/auth/src/auth-instance.ts:494-505`). A database hook has no request context for reading a referral header, though. Passkey does offer a request channel: `generate-register-options` accepts a `context` query string, which is passed to `resolveUser` and to `registration.afterVerification` (`…/passkey/dist/index.mjs:50-54`, `:43-46`, `:197`, `:351-358`).
+**Where a generic hook would go.** `internalAdapter.createUser` goes through `createWithHooks`, so `databaseHooks.user.create.after` fires for every sign-up path (`node_modules/better-auth/dist/db/internal-adapter.mjs:78-79`, `node_modules/better-auth/dist/db/with-hooks.mjs:6`). The upstream auth plugin already uses that hook to create a personal org (upstream `plugins/auth/src/auth-instance.ts`). A database hook has no request context for reading a referral header, though. Passkey does offer a request channel: `generate-register-options` accepts a `context` query string, which is passed to `resolveUser` and to `registration.afterVerification` (`…/passkey/dist/index.mjs:50-54`, `:43-46`, `:197`, `:351-358`).
 
 **Making the plugin work here would require forking it** to add matchers for `/passkey/*` and `/near/verify`, plus a new way to deliver the code, because neither path has a header or `additionalData` convention. That is most of the plugin.
 
@@ -78,27 +80,27 @@ The plugin can't carry the team invite. Its code belongs to a user, and it has n
 - `accept-invitation` throws `YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION` unless `invitation.email === session.user.email`, and it can require `emailVerified` (`…/crud-invites.mjs:246`, `:269`, `:274`). Get and reject apply the same check (`:380`, `:503`).
 - It has no multi-use "anyone with this link" mode, so each invite is for one recipient.
 
-Passkey users here get a synthetic `passkey-xxxx@<recipient>` email and SIWN users get a derived one (`plugins/auth/src/auth-instance.ts:320`, `packages/better-near-auth/src/index.ts:1508`). No organizer could know either address in advance, so native invites don't fit QR onboarding. This repo already works around the email binding for wallets with `nearInvitations`, which uses a synthetic email plus custom accept endpoints (`plugins/auth/src/near-invitations.ts:31-33`, `:122-216`; `plugins/auth/src/auth-instance.ts:355-409`).
+Passkey users here get a synthetic `passkey-xxxx@<recipient>` email and SIWN users get a derived one (upstream `plugins/auth/src/auth-instance.ts`, `better-near-auth` `index.ts`). No organizer could know either address in advance, so native invites don't fit QR onboarding. The upstream auth plugin already works around the email binding for wallets with `nearInvitations`, which uses a synthetic email plus custom accept endpoints (upstream `plugins/auth/src/near-invitations.ts`, `plugins/auth/src/auth-instance.ts`).
 
-**The flow already exists: the Onboarding Code** (commit `ad8c2ef9`, 2026-09-22, on `main`; `CONTEXT.md` "Event onboarding"):
+**The flow already exists: the Onboarding Code** (`CONTEXT.md` "Event onboarding"):
 
-- **Schema.** `onboarding_code` holds `codeHash` (SHA-256 of a 32-byte base64url token), `organizationId`, `eventName`, `teamId`, `role`, `maxUses`, `usedCount`, `expiresAt`, `revokedAt` and **`createdBy`**. `onboarding_redemption` holds `codeId`, `userId` and `createdAt`, unique on `(codeId, userId)` (`plugins/auth/src/db/schema.ts:278-321`, `plugins/auth/src/handlers/onboarding.ts:16-22`).
-- **Routes.** create, list, revoke, status, info and redeem, under `/v1/auth/onboarding/*` (`plugins/auth/src/contract.ts:715-800`).
-- **Redeem.** In one transaction it adds the org member, adds the team member, does a capped increment of `usedCount`, and inserts the redemption row. It then sets the session's active org and team (`plugins/auth/src/handlers/onboarding.ts:271-420`).
-- **UI.** The organizer's QR encodes `/onboard?code=…` (`ui/src/routes/_authenticated/_dashboard/orgs/-onboarding-tab.tsx:65-66`). `/onboard` redeems automatically once any session exists, whether it came from passkey or NEAR (`plugins/auth/ui/src/routes/_public/onboard.tsx:23-29`, `:65-78`).
+- **Schema.** `onboarding_code` holds `codeHash` (SHA-256 of a 32-byte base64url token), `organizationId`, `eventName`, `teamId`, `role`, `maxUses`, `usedCount`, `expiresAt`, `revokedAt` and **`createdBy`**. `onboarding_redemption` holds `codeId`, `userId` and `createdAt`, unique on `(codeId, userId)` (upstream `plugins/auth/src/db/schema.ts`, `plugins/auth/src/handlers/onboarding.ts`).
+- **Routes.** create, list, revoke, status, info and redeem, under `/v1/auth/onboarding/*` (upstream `plugins/auth/src/contract.ts`).
+- **Redeem.** In one transaction it adds the org member, adds the team member, does a capped increment of `usedCount`, and inserts the redemption row. It then sets the session's active org and team (upstream `plugins/auth/src/handlers/onboarding.ts`).
+- **UI.** The organizer's QR encodes `/onboard?code=…` (`ui/src/routes/_authenticated/_dashboard/orgs/-onboarding-tab.tsx:65-66`). `/onboard` redeems automatically once any session exists, whether it came from passkey or NEAR (upstream auth plugin UI).
 - **Auth-method independence.** Redemption runs after sign-in, not during it, so it works for passkey, SIWN, email and OAuth.
-- **Organizer attribution.** Joining `onboarding_redemption` to `onboarding_code.createdBy` already records which organizer brought each member. `getOnboardingStatus` lists who joined through each code (`plugins/auth/src/handlers/onboarding.ts:195-243`).
+- **Organizer attribution.** Joining `onboarding_redemption` to `onboarding_code.createdBy` already records which organizer brought each member. `getOnboardingStatus` lists who joined through each code (upstream `plugins/auth/src/handlers/onboarding.ts`).
 
 **Remaining gaps:**
 
 - There is no user-to-user referral, such as "Alice shared the organizer's QR".
 - There is no flag for whether a redemption was a new sign-up. It can be derived by comparing `user.createdAt` with `onboarding_redemption.createdAt`.
 
-## 5. Where a Better Auth server plugin would go
+## 5. Where a Better Auth server plugin would go now
 
-The auth server is **in this repo**, so we can add plugins here. In development, `bos.config.json` points auth at `local:plugins/auth` (`bos.config.json:45-52`). The Better Auth instance, including its plugin list and `databaseHooks`, is built in `plugins/auth/src/auth-instance.ts:255-527`. The schema and Drizzle migrations are in `plugins/auth/src/db/`. Production runs the deployed build of this same package, `@everything-dev/auth-plugin` 1.2.3 (`plugins/auth/package.json:1-3`, `bos.config.json:52`).
+The auth server is **not in this repo** — it is the published `@everything-dev/auth-plugin`, inherited through the `extends` chain (`bos.app.ts` `auth` block carries only this app's variables/secrets). The Better Auth instance, its plugin list, `databaseHooks`, schema and Drizzle migrations all live upstream at `github.com/nearbuilders/everything-dev` under `plugins/auth/`.
 
-`AGENTS.md:477` still describes auth as "Extended remote plugin from `bos://auth.everything.near`". `bos.config.json` has no `extends` for it, and the source here is actively edited: commits `e682bc04`, `5ec019ad` and `a1e1cba8` touch `plugins/auth`. Any Better Auth plugin therefore lands in `auth-instance.ts`, plus a migration under `plugins/auth/src/db/migrations/`, followed by a redeploy of the auth remote.
+Any Better Auth plugin therefore lands upstream: edit `plugins/auth/src/auth-instance.ts`, add a migration under `plugins/auth/src/db/migrations/`, release through the platform train, then bump the auth pin in `bos.app.ts`. This app's escape hatch, if a change is needed before an upstream release, is to screenshot/override behaviour in the local `ui/` (see `docs/runtime-map.md`), not to fork the server.
 
 ## 6. Recommendation
 
@@ -114,4 +116,4 @@ The auth server is **in this repo**, so we can add plugins here. In development,
 
   If multi-step "qualified referral" rewards are needed later, copy the plugin's `referralStepCompletion` idempotency-key design (`R/src/schema.ts#L93-L127`) instead of taking the dependency.
 - **Naming:** keep "Onboarding Code" in code and UI, and avoid "referral link" (`CONTEXT.md` "Onboarding Code" `_Avoid_`).
-- **Unrelated gap found:** `CONTEXT.md` says members of a Team granted the events Feature Area are **Organizers**. The handler currently allows only org owners and admins to manage codes (`plugins/auth/src/handlers/onboarding.ts:57-62`).
+- **Unrelated gap found:** `CONTEXT.md` says members of a Team granted the events Feature Area are **Organizers**, but the handler currently allows only org owners and admins to manage codes (upstream `plugins/auth/src/handlers/onboarding.ts`).
