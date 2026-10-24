@@ -1,5 +1,11 @@
 # UI hygiene on current main
 
+> **Historical record (pre-break-off).** `packages/everything-dev/src/*` and the
+> `Bun`/`bun` commands below refer to the then-vendored fork and are no longer
+> valid here — those modules now live in the published `everything-dev` package,
+> and this repo runs `pnpm` (bun is CI-fatal). Auth is the published
+> `@everything-dev/auth-plugin`. See `docs/runtime-map.md`.
+
 Issue #215's hydration, session, navigation and router code moved to
 `packages/everything-dev/src/ui`. Auth uses that shared session implementation;
 the old plugin-local bootstrap WeakSet no longer exists.

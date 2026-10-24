@@ -24,6 +24,10 @@ services:
     volumes:
       - postgres_api_data:/var/lib/postgresql/data
 
+  # auth_db is used by the REMOTE @everything-dev/auth-plugin (its dev server
+  # runs against a local DB via AUTH_DATABASE_URL). This repo does not own the
+  # auth schema or migrations — they live upstream in the plugin. Do not delete
+  # these services as "unused": the auth plugin needs them in dev.
   postgres-auth:
     image: postgres:17-alpine
     environment:

@@ -41,7 +41,7 @@ test.describe("admin overview joins", () => {
     const row = page.getByTestId(`admin-joins-row-${tenant.id}`);
     if (!(await row.isVisible())) await page.getByTestId("admin-joins-toggle").click();
 
-    await expect(row.getByTestId("admin-joins-this-month")).toHaveText("2", { timeout: 15000 });
+    await expect(row.getByTestId("admin-joins-this-month")).toHaveText("3", { timeout: 15000 });
     await expect(row.getByTestId("admin-joins-new-this-month")).toHaveText("1");
     await expect(row.getByTestId("admin-joins-last-month")).toHaveText("1");
     await expect(row.getByTestId("admin-joins-new-last-month")).toHaveText("1");

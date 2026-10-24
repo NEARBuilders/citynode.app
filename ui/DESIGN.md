@@ -4,7 +4,7 @@ The CityNode UI is built on shadcn's `base-maia` style (preset `b3ZN5L2h44`) run
 Base UI, with our own tokens, sizes and page patterns layered on top. The preset is
 the starting point; this file is the source of truth.
 
-`bun lint` enforces the mechanical parts through `@shadcn/lint`. The rest is judgment —
+`pnpm run lint` enforces the mechanical parts. The rest is judgment —
 read this before building or changing a page.
 
 ## Principles

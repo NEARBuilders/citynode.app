@@ -1,5 +1,11 @@
 # Teams and workspaces walkthrough
 
+> **Historical record (2026-09-21).** This walkthrough predates the consumer
+> break-off: the `bun …` commands, `plugins/auth/*` paths, and route shapes
+> below refer to the then-vendored fork and no longer exist here. Commands run
+> as `pnpm …`; auth is a remote published plugin. See `docs/runtime-map.md`
+> for current structure.
+
 Date: 2026-09-21
 
 The local databases were started with `docker compose up -d --wait`. The development stack was then started with:
@@ -42,4 +48,4 @@ The walkthrough used disposable local users. The wallet identity was linked in t
 - The full root test command is not green: after Chromium installation, the host remote-runtime browser suite passed two tests but failed its navigation check because the deployed remote UI had no link named `Skill`; seven cases were skipped and one did not run. That suite targets the deployed remote UI, not the local team workspace.
 - A broad auth-suite run also timed out in the session-revocation test and the NEAR sandbox setup hook. Rerunning those two files with `--maxWorkers=1` passed session revocation, but `Sandbox.start` still exceeded the 30-second setup timeout and its four SIWN tests did not run. External-wallet signature verification therefore remains unverified in this environment.
 
-Automated acceptance coverage lives in `plugins/auth/tests/integration/near-invitations.test.ts`, `ui/src/routes/_layout/_authenticated/_dashboard/orgs/-invite-member-form.test.tsx`, and `tests/regression/browser/specs/team-workspace.spec.ts`.
+Automated acceptance coverage at the time lived in `plugins/auth/tests/integration/near-invitations.test.ts` (now upstream, in the auth plugin), `ui/src/routes/_authenticated/_dashboard/orgs/-invite-member-form.test.tsx`, and `tests/regression/browser/specs/team-workspace.spec.ts` (both the latter two still in this repo).
