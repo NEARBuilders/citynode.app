@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
 import * as authSchema from "../../fixtures/auth/schema.ts";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
@@ -22,18 +21,6 @@ export async function openAuthDatabase() {
     authDatabaseUrl: regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "",
     secret: regressionEnv.authSecret,
   });
-}
-
-export async function expireOnboardingCode(code: string): Promise<void> {
-  const { db, close } = await openAuthDatabase();
-  try {
-    await db
-      .update(authSchema.onboardingCode)
-      .set({ expiresAt: new Date(Date.now() - HOUR) })
-      .where(eq(authSchema.onboardingCode.codeHash, hashCode(code)));
-  } finally {
-    await close();
-  }
 }
 
 export async function seedOnboardingCodes(): Promise<{
@@ -170,20 +157,33 @@ export async function seedCommunityJoins(): Promise<{
     const once = await saveUser("once");
     const earlier = await saveUser("earlier");
     const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15));
-    const redeemed = (codeId: string, userId: string, createdAt: Date, newMember: boolean) => ({
+    // `newMembers` is derived from the member row's createdAt (not a stored
+    // flag): `twice` joined this month, `once` is a pre-existing member, and
+    // `earlier` joined last month.
+    const addMemberAt = (userId: string, createdAt: Date) =>
+      db.insert(authSchema.member).values({
+        id: randomUUID(),
+        organizationId: organization.id,
+        userId,
+        role: "member",
+        createdAt,
+      });
+    await addMemberAt(twice.id, now);
+    await addMemberAt(once.id, lastMonth);
+    await addMemberAt(earlier.id, lastMonth);
+    const redeemed = (codeId: string, userId: string, createdAt: Date) => ({
       id: randomUUID(),
       codeId,
       userId,
-      newMember,
       createdAt,
     });
     await db
       .insert(authSchema.onboardingRedemption)
       .values([
-        redeemed(launch, twice.id, now, true),
-        redeemed(mixer, twice.id, now, false),
-        redeemed(mixer, once.id, now, false),
-        redeemed(launch, earlier.id, lastMonth, true),
+        redeemed(launch, twice.id, now),
+        redeemed(mixer, twice.id, now),
+        redeemed(mixer, once.id, now),
+        redeemed(launch, earlier.id, lastMonth),
       ]);
     return { organizationId: organization.id };
   } finally {

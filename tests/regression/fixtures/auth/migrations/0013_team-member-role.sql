@@ -1,1 +1,0 @@
-ALTER TABLE "team_member" ADD COLUMN "role" text DEFAULT 'member' NOT NULL;
