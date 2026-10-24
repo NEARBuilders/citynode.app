@@ -1,6 +1,5 @@
 ---
-"@everything-dev/auth-plugin": minor
 "ui": minor
 ---
 
-Record whether each onboarding code redemption brought in a new member (`onboarding_redemption.new_member`, backfilled from membership timing for existing rows), add a platform-admin `listOnboardingJoins` procedure that counts, per organization and in total for a UTC calendar month, the distinct people who redeemed one of its codes and the distinct new members among them, and show both figures on the admin overview with a per-community this-month and last-month table (one row per organization, excluding sites pending deletion).
+Show platform admins, on the admin overview, how many distinct people redeemed one of each community's onboarding codes and how many of them were new members, in total and in a per-community table for this and last UTC calendar month.
