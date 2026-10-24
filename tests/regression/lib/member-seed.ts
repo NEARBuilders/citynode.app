@@ -18,9 +18,9 @@ const MEMBER_SEED_PATH = ".bos/regression/seed.json";
  * - the matched seed.json metadata (org ids/names, tenant id/subdomain)
  *
  * Runs on every browser regression invocation (global-setup), so stale or
- * wiped fixtures never reach the specs. Mirrors the Go HTTP seeder
- * (tests/regression/http/seed_test.go) but goes straight to the databases
- * instead of the API, so it works with whichever stack is running.
+ * wiped fixtures never reach the specs. It writes straight to the databases
+ * instead of going through the API, so it works with whichever stack is
+ * running.
  */
 export async function seedMemberFixtures({
   authDatabaseUrl,

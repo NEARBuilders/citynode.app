@@ -4,31 +4,32 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`GLOSSARY.md`** at the repo root, or
-- **`GLOSSARY-MAP.md`** at the repo root if it exists: it points at one `GLOSSARY.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+- **`CONTEXT.md`** at the repo root — this repo's domain glossary (sections: Language, Organization access, Community discovery, Event onboarding, Regression stacks, Gasless transactions). `GLOSSARY.md` is a pointer to it.
+- **`docs/adr/`**: this child repo has only an index (`docs/adr/README.md`) that resolves cited ADR numbers to the upstream framework repo. Read the relevant upstream ADR there.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
 ## File structure
 
-This repo is a single-context monorepo with multiple workspaces (host, ui, api, plugins, packages). The layout is:
+This repo is a single-context **child runtime** (it extends the published platform; the host and framework packages are not vendored). The layout is:
 
 ```
 /
-├── GLOSSARY.md
+├── CONTEXT.md                         ← domain glossary
+├── GLOSSARY.md                        ← pointer to CONTEXT.md
+├── bos.app.ts                         ← authored runtime descriptor
 ├── docs/
-│   ├── adr/                           ← system-wide decisions
-│   ├── agents/                        ← this file and siblings
-│   └── plans/                         ← implementation plans, prototypes
-├── host/
-├── ui/
-├── api/
-├── plugins/
-└── packages/
+│   ├── runtime-map.md                 ← what is local vs remote; how to override
+│   ├── adr/README.md                  ← ADR number → upstream URL index
+│   └── agents/                        ← this file and siblings
+├── ui/                                ← local core ui (routes, components)
+├── api/                               ← local API plugin
+├── plugins/                           ← local plugins (registry, proposals)
+├── scripts/                           ← repo tooling (gen-runtime-map, verify)
+└── tests/                             ← regression suites + fixtures
 ```
 
-If no `GLOSSARY-MAP.md` exists, treat this as a single-context repo: read `GLOSSARY.md` at the root, and `docs/adr/` for decisions.
+Auth is a remote published plugin; there is no local `plugins/auth` workspace.
 
 ## Use the glossary's vocabulary
 
