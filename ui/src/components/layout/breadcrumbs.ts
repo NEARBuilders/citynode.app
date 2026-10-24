@@ -1,5 +1,10 @@
 import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
+import type { RemotePath } from "@/lib/runtime-map.gen";
+
+/** Sub-sections the auth plugin publishes under /settings (generated inventory). */
+type RemoteSettingsSection = RemotePath extends `/settings/${infer Section}` ? Section : never;
+
 export interface Crumb {
   label: string;
   to?: string;
@@ -25,12 +30,12 @@ export function crumbsFor(
   context: CrumbContext = {},
   t: AppTranslator = translateEnglishAppMessage,
 ): Crumb[] {
-  const SETTINGS_SECTIONS: Record<string, string> = {
+  const SETTINGS_SECTIONS = {
     profile: t("nav.profile"),
     "auth-methods": t("nav.signinMethods"),
     "api-keys": t("nav.apiKeys"),
     security: t("nav.security"),
-  };
+  } satisfies Partial<Record<RemoteSettingsSection, string>>;
 
   const ADMIN_SECTIONS: Record<
     string,
@@ -142,7 +147,7 @@ export function crumbsFor(
       ];
     }
     case "settings": {
-      const section = second ? SETTINGS_SECTIONS[second] : undefined;
+      const section = second ? SETTINGS_SECTIONS[second as RemoteSettingsSection] : undefined;
       return section ? [SETTINGS, page(section)] : [page(SETTINGS.label)];
     }
     case "about":

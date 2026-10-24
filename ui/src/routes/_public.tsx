@@ -3,12 +3,13 @@ import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import { sessionQueryOptions, useAuthClient } from "@/app";
 import { AppShell } from "@/components/layout/app-shell";
 import { PublicShell, PublicShellFooter } from "@/components/layout/public-shell";
+import type { RemotePath } from "@/lib/runtime-map.gen";
 
 export const Route = createFileRoute("/_public")({
   component: PublicLayout,
 });
 
-const FOCUSED_PREFIXES = ["/login", "/onboard"];
+const FOCUSED_PREFIXES = ["/login", "/onboard"] satisfies readonly RemotePath[];
 
 export function isFocusedPublicPath(pathname: string) {
   return FOCUSED_PREFIXES.some(
