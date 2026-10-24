@@ -1,17 +1,21 @@
 /**
  * FROZEN SNAPSHOT of the upstream auth plugin's Better Auth schema
- * (`@everything-dev/auth-plugin` → `github.com/nearbuilders/everything-dev`,
- * `plugins/auth/src/db/schema.ts`). This repo does not own the auth schema.
+ * (`@everything-dev/auth-plugin` → github.com/NEARBuilders/everything-dev,
+ * `plugins/auth/src/db/schema.ts`, published 2.0.0-rc.8 / platform 2.0.0-rc.21).
  *
- * Refresh this file (and `migrations/`) whenever the platform pin in
- * `bos.app.ts` bumps — otherwise regression fixtures drift from the running
- * remote plugin and break in ways that look like local test bugs.
+ * This repo does not own the auth schema. Refresh this file whenever the
+ * platform pin in `bos.app.ts` bumps — otherwise the regression seeders drift
+ * from the running remote plugin and break in ways that look like local test bugs.
+ *
+ * The running stack applies the plugin's own migrations at boot (before
+ * Playwright's /health gate), so no migration copy is vendored here.
  */
 import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -348,7 +352,6 @@ export const onboardingRedemption = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    newMember: boolean("new_member"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -410,6 +413,68 @@ export const relayerKey = pgTable("relayer_key", {
   network: text("network").notNull(),
   createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   lastUsedAt: timestamp("last_used_at", { mode: "date", withTimezone: true }),
+});
+
+export const custodyWallet = pgTable(
+  "custody_wallet",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    network: text("network").notNull(),
+    walletId: text("wallet_id").notNull(),
+    nearAccountId: text("near_account_id").notNull(),
+    encryptedApiKey: text("encrypted_api_key").notNull(),
+    handoffUrl: text("handoff_url"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    lastUsedAt: timestamp("last_used_at", { mode: "date", withTimezone: true }),
+  },
+  (table) => [uniqueIndex("custodyWallet_userId_network_uidx").on(table.userId, table.network)],
+);
+
+export const referralCode = pgTable("referral_code", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  code: text("code").notNull().unique(),
+  createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+});
+
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: text("id").primaryKey(),
+    referrerUserId: text("referrer_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    referredUserId: text("referred_user_id")
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: "cascade" }),
+    referralCodeId: text("referral_code_id")
+      .notNull()
+      .references(() => referralCode.id, { onDelete: "cascade" }),
+    status: text("status").$type<"pending" | "completed">().default("pending").notNull(),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("referrals_referrerUserId_idx").on(table.referrerUserId)],
+);
+
+export const referralStepCompletion = pgTable("referral_step_completion", {
+  id: text("id").primaryKey(),
+  referralId: text("referral_id")
+    .notNull()
+    .references(() => referrals.id, { onDelete: "cascade" }),
+  step: text("step").notNull(),
+  completionKey: text("completion_key").notNull().unique(),
+  metadata: jsonb("metadata"),
+  completedAt: timestamp("completed_at", { mode: "date", withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 export const userRelations = relations(user, ({ many }) => ({

@@ -3,7 +3,6 @@ import path from "node:path";
 import type { PluginLoadFailureInfo } from "every-plugin/errors";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
 import { seedMemberFixtures } from "../../lib/member-seed.ts";
-import { migrateTestDatabase } from "../../lib/migrate-test-db.mjs";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 
 const ADMIN_COOKIES_PATH = ".bos/regression/admin-cookies.json";
@@ -93,11 +92,9 @@ export default async function globalSetup() {
   );
   console.log(`[global-setup] wrote ${seedResolved}`);
 
-  await migrateTestDatabase({
-    migrationsDir: "api/src/db/migrations",
-    databaseUrl: regressionEnv.dbUrls.API_DATABASE_URL,
-    schemaName: "plugin_api",
-  });
+  // globalSetup runs after Playwright's `/health` gate, i.e. after the stack
+  // has booted and every plugin has applied its own migrations — no mirroring
+  // pre-migration pass is needed here.
   await seedMemberFixtures({ authDatabaseUrl, secret });
   console.log(`[global-setup] refreshed member fixtures`);
 }
