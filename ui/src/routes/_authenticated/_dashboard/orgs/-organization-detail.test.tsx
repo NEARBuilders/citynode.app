@@ -17,12 +17,21 @@ import { render } from "@/i18n/test-render";
 const mocks = vi.hoisted(() => ({
   apiClient: null as unknown,
   auth: null as unknown,
+  openSettings: vi.fn(async () => true),
 }));
 
 vi.mock("@/app", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/app")>()),
   useApiClient: () => mocks.apiClient,
   useAuthClient: () => mocks.auth,
+}));
+
+vi.mock("../tenant/-use-open-community-settings", () => ({
+  useOpenCommunitySettings: () => ({
+    needsSwitch: () => false,
+    open: mocks.openSettings,
+    isPending: false,
+  }),
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -64,11 +73,13 @@ function setup({
   organizer = false,
   roleResult,
   platformRole,
+  tenantId,
 }: {
   role: Role | null;
   organizer?: boolean;
   roleResult?: () => Promise<{ role: string | null }>;
   platformRole?: string;
+  tenantId?: string;
 }) {
   const session = {
     user: { id: USER_ID, name: "Viewer", email: "viewer@example.com", role: platformRole },
@@ -109,7 +120,7 @@ function setup({
   });
   const apiClient = {
     auth: api,
-    resolveTenantByOrgId: vi.fn().mockResolvedValue(null),
+    resolveTenantByOrgId: vi.fn().mockResolvedValue(tenantId ? { id: tenantId } : null),
   } as unknown as ApiClient;
   const auth = {
     getSession: vi.fn().mockResolvedValue({ data: session, error: null }),
@@ -263,5 +274,30 @@ describe("organization page tabs", () => {
     await waitFor(() => expect(screen.queryByTestId("orgs-tab-teams")).toBeNull());
     expectNoRestrictedTabs();
     expect(router.state.location.pathname).toBe(`/orgs/${SLUG}`);
+  });
+
+  it("returns an owner to the Members tab when a legacy settings link can't open", async () => {
+    mocks.openSettings.mockResolvedValueOnce(false);
+    const mocked = setup({ role: "owner", tenantId: "tenant-1" });
+    const router = await showOrganization(`/orgs/${SLUG}?tab=homepage`, mocked);
+    const members = await screen.findByTestId("orgs-tab-members");
+    expect(members.getAttribute("aria-selected")).toBe("true");
+    expect(mocks.openSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: ORG_ID, tenantId: "tenant-1" }),
+    );
+    expect(router.state.location.search).not.toHaveProperty("tab", "homepage");
+  });
+
+  it("returns a platform admin to the overview when a legacy settings link can't open", async () => {
+    mocks.openSettings.mockResolvedValueOnce(false);
+    const mocked = setup({ role: "member", platformRole: "admin", tenantId: "tenant-1" });
+    const router = await showOrganization(`/orgs/${SLUG}?tab=node-config`, mocked);
+    await waitFor(() => expect(mocks.openSettings).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(router.state.location.search).not.toHaveProperty("tab", "node-config"),
+    );
+    await waitFor(() => expect(screen.queryByTestId("orgs-tabs-loading")).toBeNull());
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expectNoRestrictedTabs();
   });
 });

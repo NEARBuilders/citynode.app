@@ -302,7 +302,9 @@ function OrganizationDetail() {
       <LegacySettingsRedirect
         orgId={orgId}
         tenantId={target.tenantId}
-        onFailed={() => setActiveTab("members")}
+        onFailed={() =>
+          void navigate({ search: (prev) => ({ ...prev, tab: "members" }), replace: true })
+        }
       />
     ) : (
       <Navigate to="/orgs/$slug" params={{ slug: orgSlug }} search={{ tab: "members" }} replace />
