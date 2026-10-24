@@ -123,6 +123,18 @@ function mergeKindMetadata(
   } as NodeMetadata;
 }
 
+function withMetadataKey(key: string, value: string): SQL {
+  return sql`${nodesTable.metadata} || jsonb_build_object(${key}::text, ${value}::text)`;
+}
+
+function withoutMetadataKey(key: string): SQL {
+  return sql`${nodesTable.metadata} - ${key}::text`;
+}
+
+function replaceMetadataKeepingKind(replacement: string): SQL {
+  return sql`${replacement}::jsonb || CASE WHEN ${nodesTable.metadata} ? 'kind' THEN jsonb_build_object('kind', ${nodesTable.metadata} -> 'kind') ELSE '{}'::jsonb END`;
+}
+
 const SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 
 const query = <T>(run: () => Promise<T>): NodeEffect<T> =>
@@ -289,22 +301,19 @@ export const NodesLive = Layer.effect(
         Effect.gen(function* () {
           yield* input.slug !== undefined ? validateSlug(input.slug) : Effect.void;
           const patch: Record<string, unknown> = { updatedAt: yield* DateTime.nowAsDate };
-          if (input.kind !== undefined || input.metadata !== undefined) {
-            const [current] = yield* query(() =>
-              db
-                .select({ metadata: nodesTable.metadata })
-                .from(nodesTable)
-                .where(eq(nodesTable.id, id))
-                .limit(1),
-            );
-            const existing = (current?.metadata ?? {}) as NodeMetadata;
-            const metadataKind = nodeKindOf(input.metadata);
-            const kind = input.kind ?? metadataKind ?? nodeKindOf(existing) ?? undefined;
-            patch.metadata = mergeKindMetadata(kind, input.metadata);
-          }
           if (input.slug !== undefined) patch.slug = input.slug;
           if (input.name !== undefined) patch.name = input.name;
           if (input.parentId !== undefined) patch.parentId = input.parentId;
+          if (input.metadata !== undefined) {
+            const kind = input.kind ?? nodeKindOf(input.metadata) ?? undefined;
+            const replacement = JSON.stringify(mergeKindMetadata(kind, input.metadata));
+            patch.metadata =
+              kind !== undefined
+                ? sql`${replacement}::jsonb`
+                : replaceMetadataKeepingKind(replacement);
+          } else if (input.kind !== undefined) {
+            patch.metadata = withMetadataKey("kind", input.kind);
+          }
 
           return yield* query(() =>
             db.transaction(async (tx) => {
@@ -374,29 +383,10 @@ export const NodesLive = Layer.effect(
 
       setBulletin: (id, bulletin) =>
         Effect.gen(function* () {
-          const [current] = yield* query(() =>
-            db
-              .select({ metadata: nodesTable.metadata })
-              .from(nodesTable)
-              .where(eq(nodesTable.id, id))
-              .limit(1),
-          );
-          if (!current) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", {
-                message: "Node not found",
-                data: { resource: "node", resourceId: id },
-              }),
-            );
-          }
-          const existing = (current.metadata ?? {}) as NodeMetadata;
-          const metadata: NodeMetadata = { ...existing };
-          if (bulletin === null || bulletin.trim() === "") {
-            delete metadata.bulletin;
-          } else {
-            metadata.bulletin = bulletin;
-          }
-
+          const metadata =
+            bulletin === null || bulletin.trim() === ""
+              ? withoutMetadataKey("bulletin")
+              : withMetadataKey("bulletin", bulletin);
           const [row] = yield* query(() =>
             db
               .update(nodesTable)
