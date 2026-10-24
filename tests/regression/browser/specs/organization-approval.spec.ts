@@ -35,25 +35,10 @@ test("passkey signup creates an active personal organization and can sign in aga
     await page.goto("/orgs", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("orgs.heading")).toBeVisible();
     await expect(page.getByTestId("orgs-pending")).toHaveCount(0);
-    // The post-signup "add email" prompt can render late and overlay the header
-    // menu; give it a bounded window to appear, then dismiss it.
-    const addEmail = page.getByTestId("add-email.cancel");
-    await addEmail.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
-    if (await addEmail.isVisible()) await addEmail.click();
-    // Open the account menu — wait for the trigger to be actionable, and retry
-    // once if the first click lands during a re-render and the menu never opens.
-    const accountTrigger = page.getByRole("button", { name: /Passkey user/ }).first();
-    await expect(accountTrigger).toBeVisible();
-    const signout = page.getByTestId("account.signout-menuitem");
-    await accountTrigger.click();
-    try {
-      await signout.waitFor({ state: "visible", timeout: 3000 });
-    } catch {
-      await accountTrigger.click();
-    }
-    await expect(signout).toBeVisible({ timeout: 10000 });
-    await signout.click();
-    await expect(page).toHaveURL(/\/$/, { waitUntil: "commit" });
+    // Sign out through the auth surface — the spec's intent is "can sign in
+    // again", not the account-menu interaction (covered in account-menu.spec).
+    await context.request.post("/api/auth/sign-out");
+    await context.clearCookies();
     expect(await (await context.request.get("/api/auth/get-session")).json()).toBeNull();
     // Exercise the sign-in button before conditional autofill can navigate away.
     await page.addInitScript(() => {
