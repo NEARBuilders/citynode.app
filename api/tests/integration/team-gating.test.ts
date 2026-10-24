@@ -12,6 +12,12 @@ vi.mock("@/services/dao", () => ({
 
 const ORG = "team-gating-org";
 
+const TEAM_DENIED = {
+  code: "FORBIDDEN",
+  message: "Ask an organization owner to add you to a team with node-operations.",
+  data: { requiredPermissions: ["node-operations"] },
+};
+
 function teamContext(
   userId: string,
   options: {
@@ -93,10 +99,9 @@ describe("team area gating on node operations", () => {
     const node = await seedNode();
     const client = await getPluginClient(teamContext("finance-member", { areas: ["finance"] }));
 
-    await expect(client.updateNode({ nodeId: node.id, name: "Renamed" })).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      data: { requiredPermissions: ["node-operations"], action: "switch-team" },
-    });
+    await expect(client.updateNode({ nodeId: node.id, name: "Renamed" })).rejects.toMatchObject(
+      TEAM_DENIED,
+    );
     await expect(
       client.createValidator({
         nodeId: node.id,
@@ -187,10 +192,9 @@ describe("team area gating on node operations", () => {
     await expect(inactive.updateNode({ nodeId: node.id, name: "Nope" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
-    await expect(active.updateNode({ nodeId: node.id, name: "Nope" })).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      data: { action: "switch-team" },
-    });
+    await expect(active.updateNode({ nodeId: node.id, name: "Nope" })).rejects.toMatchObject(
+      TEAM_DENIED,
+    );
   });
 
   it("allows a member with no active team who belongs to a team granted node-operations", async () => {
@@ -337,10 +341,7 @@ describe("team area gating on setNodeBulletin", () => {
 
     await expect(
       client.setNodeBulletin({ nodeId: node.id, bulletin: "Nope" }),
-    ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      data: { requiredPermissions: ["node-operations"], action: "switch-team" },
-    });
+    ).rejects.toMatchObject(TEAM_DENIED);
   });
 
   it("rejects users without an active organization", async () => {
@@ -369,5 +370,225 @@ describe("team area gating on setNodeBulletin", () => {
     const cleared = await owner.setNodeBulletin({ nodeId: node.id, bulletin: null });
     expect(cleared.metadata).toMatchObject({ poolAccountId: "pool.poolv1.near" });
     expect(cleared.metadata.bulletin).toBeUndefined();
+  });
+});
+
+describe("node-operations through any team the member belongs to", () => {
+  type Client = Awaited<ReturnType<typeof getPluginClient>>;
+  type Fixture = { node: Awaited<ReturnType<typeof seedNode>>; validatorId: string };
+  type Outcome = "allowed" | "team-denied" | "forbidden";
+
+  const UNRELATED_ORG = "team-gating-unrelated-org";
+  const opsTeam = { id: "team-node-ops", name: "Node Operator", areas: ["node-operations"] };
+  const financeTeam = { id: "team-finance", name: "Finance", areas: ["finance"] };
+
+  function withActiveTeam(context: ReturnType<typeof teamContext>, activeTeamId: string | null) {
+    return { ...context, organization: { ...context.organization, activeTeamId } };
+  }
+
+  function apiKeyContext(userId: string) {
+    const base = orgContext(userId, ORG, "member");
+    return {
+      ...base,
+      apiKey: { id: `key-${userId}`, permissions: {} },
+      organization: { ...(base.organization as Record<string, unknown>), member: null, teams: [] },
+    };
+  }
+
+  function unrelatedOrgOpsMember(userId: string) {
+    const base = orgContext(userId, UNRELATED_ORG, "member");
+    return {
+      ...base,
+      organization: {
+        ...(base.organization as Record<string, unknown>),
+        teams: [opsTeam],
+        activeTeamId: opsTeam.id,
+      },
+    };
+  }
+
+  const routes: Array<{
+    name: string;
+    run: (client: Client, fixture: Fixture) => Promise<unknown>;
+    rolesOnly?: boolean;
+  }> = [
+    {
+      name: "createNode",
+      run: (client, { node }) =>
+        client.createNode(childNodeInput("Child", "matrix-create", node.tenantId!, node.id)),
+    },
+    {
+      name: "spawnNode",
+      run: (client, { node }) =>
+        client.spawnNode({
+          name: "Spawned",
+          slug: `matrix-spawn-${crypto.randomUUID().slice(0, 8)}`,
+          tenantId: node.tenantId!,
+          parentId: node.id,
+        }),
+    },
+    {
+      name: "updateNode",
+      run: (client, { node }) => client.updateNode({ nodeId: node.id, name: "Renamed" }),
+    },
+    {
+      name: "setNodeBulletin",
+      run: (client, { node }) => client.setNodeBulletin({ nodeId: node.id, bulletin: "Hi" }),
+    },
+    {
+      name: "deleteNode",
+      run: (client, { node }) => client.deleteNode({ nodeId: node.id }),
+      rolesOnly: true,
+    },
+    {
+      name: "createValidator",
+      run: (client, { node }) =>
+        client.createValidator({
+          nodeId: node.id,
+          accountId: `matrix-${crypto.randomUUID().slice(0, 8)}.pool.near`,
+          network: "mainnet",
+          protocol: "near",
+          role: "community",
+        }),
+    },
+    {
+      name: "updateValidator",
+      run: (client, { validatorId }) =>
+        client.updateValidator({
+          validatorId,
+          accountId: `matrix-${crypto.randomUUID().slice(0, 8)}.pool.near`,
+        }),
+    },
+    {
+      name: "setDefaultValidator",
+      run: (client, { validatorId }) => client.setDefaultValidator({ validatorId }),
+    },
+    {
+      name: "deleteValidator",
+      run: (client, { validatorId }) => client.deleteValidator({ validatorId }),
+    },
+  ];
+
+  const callers: Array<{
+    name: string;
+    context: (userId: string) => Record<string, unknown>;
+    outcome: Outcome;
+    rolesOnlyOutcome?: Outcome;
+  }> = [
+    {
+      name: "an organization owner",
+      context: (userId) => teamContext(userId, { orgRole: "owner", teams: [] }),
+      outcome: "allowed",
+      rolesOnlyOutcome: "forbidden",
+    },
+    {
+      name: "an organization admin",
+      context: (userId) => teamContext(userId, { orgRole: "admin", teams: [] }),
+      outcome: "allowed",
+    },
+    {
+      name: "a platform admin who is a plain member",
+      context: (userId) => teamContext(userId, { userRole: "admin", teams: [] }),
+      outcome: "allowed",
+      rolesOnlyOutcome: "forbidden",
+    },
+    {
+      name: "a node-operations team member with another team active",
+      context: (userId) =>
+        withActiveTeam(teamContext(userId, { teams: [financeTeam, opsTeam] }), financeTeam.id),
+      outcome: "allowed",
+      rolesOnlyOutcome: "forbidden",
+    },
+    {
+      name: "a node-operations team member with no active team",
+      context: (userId) => teamContext(userId, { teams: [opsTeam], active: false }),
+      outcome: "allowed",
+      rolesOnlyOutcome: "forbidden",
+    },
+    {
+      name: "a node-operations team member with that team active",
+      context: (userId) => withActiveTeam(teamContext(userId, { teams: [opsTeam] }), opsTeam.id),
+      outcome: "allowed",
+      rolesOnlyOutcome: "forbidden",
+    },
+    {
+      name: "a member with no team",
+      context: (userId) => teamContext(userId, { teams: [] }),
+      outcome: "team-denied",
+      rolesOnlyOutcome: "forbidden",
+    },
+    {
+      name: "a member whose teams lack node-operations",
+      context: (userId) => teamContext(userId, { teams: [financeTeam] }),
+      outcome: "team-denied",
+      rolesOnlyOutcome: "forbidden",
+    },
+    {
+      name: "a member who joined by Onboarding Code",
+      context: plainMemberContext,
+      outcome: "team-denied",
+      rolesOnlyOutcome: "forbidden",
+    },
+    {
+      name: "a node-operations team member of an unrelated organization",
+      context: unrelatedOrgOpsMember,
+      outcome: "forbidden",
+    },
+    {
+      name: "an organization API key",
+      context: apiKeyContext,
+      outcome: "team-denied",
+      rolesOnlyOutcome: "forbidden",
+    },
+  ];
+
+  async function seedFixture(): Promise<Fixture> {
+    const node = await seedNode();
+    const validator = await seedValidator(node.id);
+    return { node, validatorId: validator.id };
+  }
+
+  describe.each(callers)("$name", (caller) => {
+    it.each(routes)("$name", async (route) => {
+      const fixture = await seedFixture();
+      const userId = `matrix-${route.name}-${crypto.randomUUID().slice(0, 8)}`;
+      const client = await getPluginClient(caller.context(userId));
+      const outcome = (route.rolesOnly && caller.rolesOnlyOutcome) || caller.outcome;
+      const result = route.run(client, fixture);
+
+      if (outcome === "allowed") {
+        await expect(result).resolves.toBeTruthy();
+      } else if (outcome === "team-denied") {
+        await expect(result).rejects.toMatchObject(TEAM_DENIED);
+      } else {
+        await expect(result).rejects.toMatchObject({ code: "FORBIDDEN" });
+      }
+    });
+  });
+
+  it("does not let a node-operations grant in another organization reach this one", async () => {
+    const fixture = await seedFixture();
+    const client = await getPluginClient(unrelatedOrgOpsMember("unrelated-ops"));
+
+    await expect(
+      client.updateNode({ nodeId: fixture.node.id, name: "Hijacked" }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "This node does not belong to your organization",
+    });
+    await expect(
+      client.setDefaultValidator({ validatorId: fixture.validatorId }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "This node's validators do not belong to your organization",
+    });
+    await expect(
+      client.createNode(
+        childNodeInput("Child", "unrelated", fixture.node.tenantId!, fixture.node.id),
+      ),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "This tenant does not belong to your organization",
+    });
   });
 });

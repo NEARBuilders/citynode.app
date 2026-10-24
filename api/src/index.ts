@@ -45,7 +45,6 @@ import { ValidatorsLive, ValidatorsTag } from "./services/validators";
 import {
   canUseTeamArea,
   createRequireTeamArea,
-  resolveTeamAccess,
   type TeamAccessContext,
   teamAreaForbidden,
 } from "./team-access-policy";
@@ -109,7 +108,7 @@ type NodeAccessContext = NonNullable<TeamAccessContext> & {
 const requireNodeOperationsAccess = (context: NodeAccessContext): NodeEffect<void> =>
   canUseTeamArea(context, "node-operations")
     ? Effect.void
-    : Effect.fail(teamAreaForbidden(resolveTeamAccess(context).activeTeam, ["node-operations"]));
+    : Effect.fail(teamAreaForbidden(["node-operations"]));
 
 const resolveNodeForAccess = (
   services: { nodes: NodesService },

@@ -55,34 +55,24 @@ export function resolveTeamAccess(context: TeamAccessContext | undefined): TeamA
 /**
  * Whether the caller may use a feature area in their active organization:
  * platform admins and organization owners/admins always may; other members
- * need a Team granted the area — their Active Team when one is selected,
- * otherwise any Team they belong to. A member with no granted Team, such as
- * one who joined through an Onboarding Code, may not.
+ * need any Team they belong to that is granted the area. The Active Team only
+ * filters the view and never narrows access. A member with no granted Team,
+ * such as one who joined through an Onboarding Code, may not.
  */
 export function canUseTeamArea(
   context: TeamAccessContext | undefined,
   area: FeatureArea,
   access: TeamAccess = resolveTeamAccess(context),
 ): boolean {
-  const { teams, activeTeam, bypass } = access;
-  if (bypass) return true;
+  if (access.bypass) return true;
   if (!context?.organization?.member?.role) return false;
-  if (activeTeam) return activeTeam.areas.includes(area);
-  return teams.some((team) => team.areas.includes(area));
+  return access.teams.some((team) => team.areas.includes(area));
 }
 
-export function teamAreaForbidden(
-  activeTeam: WorkspaceTeam | null,
-  areas: readonly FeatureArea[],
-): ORPCError<"FORBIDDEN", unknown> {
+export function teamAreaForbidden(areas: readonly FeatureArea[]): ORPCError<"FORBIDDEN", unknown> {
   return new ORPCError("FORBIDDEN", {
-    message: activeTeam
-      ? `Your active team "${activeTeam.name}" is not granted ${areas.join(" or ")}. Switch teams or ask an organization owner to grant it.`
-      : `This requires an organization owner or admin, or a team granted ${areas.join(" or ")}.`,
-    data: {
-      requiredPermissions: [...areas],
-      ...(activeTeam && { action: "switch-team" }),
-    },
+    message: `Ask an organization owner to add you to a team with ${areas.join(" or ")}.`,
+    data: { requiredPermissions: [...areas] },
   });
 }
 
@@ -104,7 +94,7 @@ export function createRequireTeamArea(builder: any) {
     builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
       const access = resolveTeamAccess(context);
       if (!areas.some((area) => canUseTeamArea(context, area, access))) {
-        throw teamAreaForbidden(access.activeTeam, areas);
+        throw teamAreaForbidden(areas);
       }
       return next({ context: { activeTeam: access.activeTeam } });
     }) as TeamAreaMiddleware;
