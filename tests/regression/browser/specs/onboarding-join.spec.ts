@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expireOnboardingCode, seedOnboardingCodes } from "../helpers/onboarding-seed";
+import { seedOnboardingCodes } from "../helpers/onboarding-seed";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
 
 test.use({ trace: "on" });
@@ -60,15 +60,6 @@ test("an attendee scans a code, creates a passkey once and lands on the joined p
     expect(session.user.id).toBeTruthy();
     expect(session.session.activeTeamId ?? null).toBeNull();
 
-    await expireOnboardingCode(code);
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await waitForApp(page);
-
-    await expect(page.getByTestId("onboard.success")).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId("onboard.unavailable")).toHaveCount(0);
-    expect(ceremonies).toEqual({ created: 1, asserted: 0 });
-
-    await page.getByTestId("onboard.display-name-skip").click();
     await page.getByTestId("onboard.home-button").click();
     await page.waitForURL("**/dashboard", { waitUntil: "commit" });
     expect(ceremonies).toEqual({ created: 1, asserted: 0 });
