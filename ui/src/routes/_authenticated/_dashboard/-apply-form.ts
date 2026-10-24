@@ -5,7 +5,7 @@ import type { NodeApplicationValues } from "./-node-application";
 import { createNodeApplicationSchema } from "./-node-application";
 
 const defaultValues: NodeApplicationValues = {
-  kind: "country",
+  kind: "city",
   parentId: null,
   name: "",
   slug: "",

@@ -108,7 +108,7 @@ export const NodeApplicationPayloadSchema = z
         message: "Country cannot have a parent",
       });
     }
-    if (value.kind !== "country" && !value.parentId) {
+    if (value.kind === "state" && !value.parentId) {
       context.addIssue({ code: "custom", path: ["parentId"], message: "Parent is required" });
     }
   });

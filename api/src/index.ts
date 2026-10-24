@@ -573,7 +573,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }),
       listDiscovery: builder.listDiscovery.effect(function* ({ input }) {
         const services = yield* ApiServices;
-        return yield* services.discovery.list(input);
+        return yield* services.discovery.directory(input);
       }),
       getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input }) {
         const services = yield* ApiServices;
@@ -790,14 +790,22 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listStakeCommunities: builder.listStakeCommunities.effect(function* ({ context }) {
         const services = yield* ApiServices;
-        if (!context.user || context.user.isAnonymous === true) {
-          return yield* services.tenants.listTenantApps();
-        }
         const activeOrganizationId = context.organization?.activeOrganizationId;
-        const organizationIds = activeOrganizationId
-          ? [activeOrganizationId]
-          : (context.organizations ?? []).map((organization) => organization.id);
-        return yield* services.tenants.listTenantApps(organizationIds);
+        const apps =
+          !context.user || context.user.isAnonymous === true
+            ? yield* services.tenants.listTenantApps()
+            : yield* services.tenants.listTenantApps(
+                activeOrganizationId
+                  ? [activeOrganizationId]
+                  : (context.organizations ?? []).map((organization) => organization.id),
+              );
+        const stakeable = yield* services.validators.stakeableNodeIds(
+          apps.flatMap((app) => (app.node ? [app.node.id] : [])),
+        );
+        return apps.map((app) => ({
+          ...app,
+          stakeable: app.node ? stakeable.has(app.node.id) : false,
+        }));
       }),
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant

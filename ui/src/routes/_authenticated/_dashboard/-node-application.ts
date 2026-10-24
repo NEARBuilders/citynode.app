@@ -35,7 +35,7 @@ function validateParent(
       message: t("application.countryParentError"),
     });
   }
-  if (value.kind !== "country" && !value.parentId) {
+  if (value.kind === "state" && !value.parentId) {
     context.addIssue({ code: "custom", path: ["parentId"], message: t("application.parentError") });
   }
 }
