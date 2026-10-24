@@ -2,10 +2,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { AuthClient } from "@/app";
+import type { ApiClient, AuthClient } from "@/app";
 import { AppActionError, appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
-import { invalidateStakePoolQueries } from "@/lib/queries/stake-pool";
+import { invalidateStakePoolQueries, requireApprovedStakingPool } from "@/lib/queries/stake-pool";
 
 const STAKE_GAS = "300000000000000";
 
@@ -34,7 +34,7 @@ export function useStakeWalletConnection(auth: AuthClient) {
   return { connect, isConnecting };
 }
 
-export function useStakeMutation(auth: AuthClient, queryClient: QueryClient) {
+export function useStakeMutation(auth: AuthClient, apiClient: ApiClient, queryClient: QueryClient) {
   const translate = useAppTranslation();
   return useMutation({
     mutationFn: async ({
@@ -49,6 +49,7 @@ export function useStakeMutation(auth: AuthClient, queryClient: QueryClient) {
       if (stakeAmount <= 0n) {
         throw new AppActionError("stake.positiveAmount");
       }
+      await requireApprovedStakingPool(queryClient, apiClient, poolAccountId, network);
       const connected = await auth.near.ensureConnected();
       if (!connected) throw new AppActionError("stake.connectRequired");
       if (auth.near.getNetwork() !== network) {

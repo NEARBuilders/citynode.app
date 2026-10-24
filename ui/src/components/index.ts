@@ -41,6 +41,7 @@ export { RootError } from "./root-error";
 export { RootNotFound } from "./root-not-found";
 export { RouterError } from "./router-error";
 export { StakePoolCard } from "./stake-pool-card";
+export { StakingPoolApprovalBadge } from "./staking-pool-approval-badge";
 export { type Step, StepList, type StepState } from "./stepper";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";

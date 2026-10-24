@@ -180,7 +180,7 @@ function StakePage() {
     validators.find((validator) => validator.id === selectedValidatorId) ?? defaultValidator;
   const parsedYocto = useMemo(() => parseNearAmount(amount), [amount]);
 
-  const stakeMutation = useStakeMutation(auth, queryClient);
+  const stakeMutation = useStakeMutation(auth, apiClient, queryClient);
 
   const form = (
     <StakeForm
