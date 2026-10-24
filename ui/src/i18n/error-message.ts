@@ -1,4 +1,5 @@
 import { Data } from "effect";
+import { FEATURE_AREA_MESSAGES, isFeatureArea } from "@/lib/feature-areas";
 import type { AppMessageId, AppTranslator } from "./catalogs";
 
 export class AppActionError extends Data.TaggedError("AppActionError")<{
@@ -30,6 +31,15 @@ export function isNotFoundError(error: unknown) {
   return status === 404 || code === "NOT_FOUND";
 }
 
+function deniedFeatureArea(error: unknown) {
+  if (!error || typeof error !== "object") return undefined;
+  const data = Reflect.get(error, "data");
+  if (!data || typeof data !== "object") return undefined;
+  const required = Reflect.get(data, "requiredPermissions");
+  if (!Array.isArray(required)) return undefined;
+  return required.filter((permission) => typeof permission === "string").find(isFeatureArea);
+}
+
 export function appErrorMessage(
   error: unknown,
   t: AppTranslator,
@@ -38,7 +48,12 @@ export function appErrorMessage(
   if (error instanceof AppActionError) return t(error.messageId, error.values);
   const { status, code } = errorStatusAndCode(error);
   if (isSessionError(error)) return t("error.session");
-  if (isPermissionError(error)) return t("error.permission");
+  if (isPermissionError(error)) {
+    const area = deniedFeatureArea(error);
+    return area
+      ? t("permissions.teamDenied", { area: t(FEATURE_AREA_MESSAGES[area]) })
+      : t("error.permission");
+  }
   if (status === 409 || code === "CONFLICT") return t("error.conflict");
   if (
     code === "ACTION_REJECTED" ||

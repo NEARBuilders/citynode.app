@@ -125,12 +125,24 @@ describe("createRequireTeamArea", () => {
     ).resolves.toBe("team-ops");
   });
 
-  it("rejects a member whose active team lacks the area", async () => {
+  it("rejects a member none of whose teams has the area and tells them to ask an owner", async () => {
     await expect(
       call(whoAmI, undefined, {
         context: member("member", { teams: [finance], activeTeamId: finance.id }),
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("Finance") });
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Ask an organization owner to add you to a team with node-operations.",
+      data: { requiredPermissions: ["node-operations"] },
+    });
+  });
+
+  it("allows a member through another team granted the area, whatever team is active", async () => {
+    await expect(
+      call(whoAmI, undefined, {
+        context: member("member", { teams: [finance, ops], activeTeamId: finance.id }),
+      }),
+    ).resolves.toBe("team-finance");
   });
 
   it("rejects a member with no active team and no team granted the area", async () => {
