@@ -1,7 +1,6 @@
 ---
 "ui": minor
 "api": minor
-"@everything-dev/auth-plugin": minor
 "@everything-dev/proposals-plugin": minor
 "@everything-dev/registry-plugin": minor
 ---

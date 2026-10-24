@@ -62,7 +62,11 @@ export default defineConfig({
       // suite. Image-level validation is the deploy train's smoke gate —
       // the parent Dockerfile's regression fixture target is not buildable
       // here, so there are no start:* projects.
-      name: "dev:ssr",
+      //
+      // The project name IS the mode: the webServer command is derived from
+      // REGRESSION_MODE, so only the active mode's project may exist. This
+      // makes `--project=dev:ssr` and `--project=dev:csr` both valid.
+      name: mode,
     },
   ],
 });
