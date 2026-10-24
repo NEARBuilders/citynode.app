@@ -330,6 +330,7 @@ node_modules/.federation
 *.css
 !ui/src/styles.css
 !plugins/*/ui/src/styles.css
+!plugins/auth-ui/src/styles.css
 .tanstack
 
 # Markdown files (local notes, AI agent instructions, etc.)

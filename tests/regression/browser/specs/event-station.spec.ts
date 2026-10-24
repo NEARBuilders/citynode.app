@@ -4,6 +4,7 @@ import {
   seedEventStationCommunity,
 } from "../helpers/event-station-seed";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
+import { injectSessionCookies } from "../helpers/seeded";
 
 test.use({ trace: "on" });
 
@@ -45,7 +46,7 @@ test.describe("an event's onboarding button opens its station", () => {
   test("an owner reaches the same live station from Overview and the Events tab", async ({
     page,
   }) => {
-    await page.context().addCookies(community.cookies.owner);
+    await injectSessionCookies(page, community.cookies.owner);
     const button = page.getByTestId(`dashboard-node.open-station-${community.eventId}`);
 
     await openOverview(page, community);
@@ -78,7 +79,7 @@ test.describe("an event's onboarding button opens its station", () => {
   test("a platform admin who isn't a member sees the event without its onboarding button", async ({
     page,
   }) => {
-    await page.context().addCookies(community.cookies.platformAdmin);
+    await injectSessionCookies(page, community.cookies.platformAdmin);
 
     await openOverview(page, community);
     await expect(page.getByText(community.eventTitle)).toBeVisible({ timeout: 15000 });
@@ -100,7 +101,7 @@ test.describe("an event's onboarding button opens its station", () => {
   test("an organizer of another organization gets no Events-tab menu for this community", async ({
     page,
   }) => {
-    await page.context().addCookies(community.cookies.otherOrganizer);
+    await injectSessionCookies(page, community.cookies.otherOrganizer);
 
     await openContentTab(page, community, "events");
     await expect(page.getByTestId(`discovery-edit-activity-${community.eventId}`)).toBeVisible({

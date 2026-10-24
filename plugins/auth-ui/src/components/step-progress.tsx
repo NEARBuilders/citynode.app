@@ -4,12 +4,14 @@ interface StepProgressProps {
   steps: readonly string[];
   current: number;
   testId?: string;
+  label: string;
+  stepLabel: string;
 }
 
-export function StepProgress({ steps, current, testId }: StepProgressProps) {
+export function StepProgress({ steps, current, testId, label, stepLabel }: StepProgressProps) {
   return (
     <div className="flex flex-col gap-2" data-testid={testId} data-step={current + 1}>
-      <ol className="flex gap-2" aria-label="Progress">
+      <ol className="flex gap-2" aria-label={label}>
         {steps.map((step, index) => (
           <li
             key={step}
@@ -25,9 +27,7 @@ export function StepProgress({ steps, current, testId }: StepProgressProps) {
       </ol>
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="font-medium text-foreground">{steps[current]}</span>
-        <span className="text-muted-foreground">
-          Step {current + 1} of {steps.length}
-        </span>
+        <span className="text-muted-foreground">{stepLabel}</span>
       </div>
     </div>
   );

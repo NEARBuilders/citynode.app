@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createAuthTestInstance } from "../../lib/auth-test-instance";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 import { waitForApp } from "../helpers/page-ready";
-import { injectAdminCookies } from "../helpers/seeded";
+import { injectAdminCookies, injectSessionCookies } from "../helpers/seeded";
 
 test.use({ trace: "on" });
 
@@ -85,9 +85,10 @@ for (const decision of ["approve", "reject"] as const) {
           emailVerified: true,
         }),
       );
-      await page
-        .context()
-        .addCookies(await fixture.test.getCookies({ userId: requester.id, domain: "localhost" }));
+      await injectSessionCookies(
+        page,
+        await fixture.test.getCookies({ userId: requester.id, domain: "localhost" }),
+      );
       await page.goto("/orgs/new", { waitUntil: "domcontentloaded" });
       await waitForApp(page);
       await page.getByPlaceholder("My Team").fill(`Requested ${unique}`);
