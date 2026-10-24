@@ -1,5 +1,5 @@
 ---
-"@everything-dev/auth-plugin": patch
+"auth-ui": patch
 "ui": patch
 ---
 
