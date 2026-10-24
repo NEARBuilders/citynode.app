@@ -54,20 +54,32 @@ export async function seedOrganizationRedemptions(organizationId: string): Promi
     const existing = await saveUser("existing");
     const earlier = await saveUser("earlier");
     const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15));
-    const redeemed = (codeId: string, userId: string, createdAt: Date, newMember: boolean) => ({
+    // `newMembers` is derived from the member row's createdAt: `twice` joined
+    // this month, `existing` is pre-existing, `earlier` joined last month.
+    const addMemberAt = (userId: string, createdAt: Date) =>
+      db.insert(authSchema.member).values({
+        id: randomUUID(),
+        organizationId,
+        userId,
+        role: "member",
+        createdAt,
+      });
+    await addMemberAt(twice.id, now);
+    await addMemberAt(existing.id, lastMonth);
+    await addMemberAt(earlier.id, lastMonth);
+    const redeemed = (codeId: string, userId: string, createdAt: Date) => ({
       id: randomUUID(),
       codeId,
       userId,
-      newMember,
       createdAt,
     });
     await db
       .insert(authSchema.onboardingRedemption)
       .values([
-        redeemed(launch, twice.id, now, true),
-        redeemed(walkIn, twice.id, now, false),
-        redeemed(walkIn, existing.id, now, false),
-        redeemed(launch, earlier.id, lastMonth, true),
+        redeemed(launch, twice.id, now),
+        redeemed(walkIn, twice.id, now),
+        redeemed(walkIn, existing.id, now),
+        redeemed(launch, earlier.id, lastMonth),
       ]);
   } finally {
     await close();

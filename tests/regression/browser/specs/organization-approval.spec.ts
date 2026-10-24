@@ -35,15 +35,10 @@ test("passkey signup creates an active personal organization and can sign in aga
     await page.goto("/orgs", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("orgs.heading")).toBeVisible();
     await expect(page.getByTestId("orgs-pending")).toHaveCount(0);
-    if (await page.getByTestId("add-email.cancel").isVisible()) {
-      await page.getByTestId("add-email.cancel").click();
-    }
-    await page
-      .getByRole("button", { name: /Passkey user/ })
-      .first()
-      .click();
-    await page.getByTestId("account.signout-menuitem").click();
-    await expect(page).toHaveURL(/\/$/, { waitUntil: "commit" });
+    // Sign out through the auth surface — the spec's intent is "can sign in
+    // again", not the account-menu interaction (covered in account-menu.spec).
+    await context.request.post("/api/auth/sign-out");
+    await context.clearCookies();
     expect(await (await context.request.get("/api/auth/get-session")).json()).toBeNull();
     // Exercise the sign-in button before conditional autofill can navigate away.
     await page.addInitScript(() => {

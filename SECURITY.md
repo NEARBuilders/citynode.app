@@ -13,10 +13,11 @@
 This repository has implemented protections against the Axios npm supply chain compromise (CVE related to malicious versions 1.14.1 and 0.30.4).
 
 **Current Protections:**
-- Lifecycle scripts disabled via `bunfig.toml` (`ignore-scripts = true`)
-- Security audit integrated into CI/CD pipeline (`bun audit`, gated by `AUDIT_STRICT` secret)
+- Lifecycle/build scripts are restricted under pnpm — only explicitly allow-listed build scripts run, and `pnpm install --ignore-scripts` skips them entirely
+- `pnpm audit` is the dependency audit tool (run before merging dependency changes)
 - Renovate manages dependency updates with `vulnerabilityAlerts` enabled
-- Catalog pinning in root `package.json` locks shared dependency versions across all workspaces
+- Catalog pinning in `pnpm-workspace.yaml` / root `package.json` locks shared dependency versions across all workspaces
+- **This repo uses pnpm, not bun** — CI fails on any `bun.lock` artifact; the lockfile is `pnpm-lock.yaml`
 
 **Review Date:** May 2, 2026 (30 days from implementation)
 
@@ -24,7 +25,7 @@ This repository has implemented protections against the Axios npm supply chain c
 
 1. **Manual Review Required:** All dependency updates must be manually reviewed
 2. **Renovate Managed:** Renovate opens PRs for updates; minor bumps are never auto-merged
-3. **Security Audits:** Run `bun audit` before merging dependency changes
+3. **Security Audits:** Run `pnpm audit` before merging dependency changes
 4. **Lock File:** Always commit lock file changes with dependency updates
 
 ## Reporting a Vulnerability
@@ -53,7 +54,7 @@ This repository has implemented protections against the Axios npm supply chain c
 1. **Immediate Actions:**
    - Stop all CI/CD pipelines
    - Isolate affected systems
-   - Do NOT run `npm install` or `bun install` until verified
+   - Do NOT run `npm install`, `pnpm install` or `bun install` until verified
 
 2. **Assessment:**
    - Check for malicious package versions in `node_modules`
@@ -98,15 +99,15 @@ This repository has implemented protections against the Axios npm supply chain c
 
 1. **Never use `^` or `~` for critical dependencies** - Use exact versions
 2. **Review package changes** - Check what changed before updating
-3. **Use `bun install --ignore-scripts`** - When possible, skip lifecycle scripts
+3. **Use `pnpm install --ignore-scripts`** - When possible, skip lifecycle scripts
 4. **Monitor dependencies** - Subscribe to security advisories
 5. **Rotate credentials regularly** - Especially after dependency updates
 
 ### For CI/CD
 
 1. **Pin all dependencies** - Use exact versions in `package.json`
-2. **Use lock files** - Always commit `bun.lock`
-3. **Run security audits** - Integrate `bun audit` in pipelines
+2. **Use lock files** - Always commit `pnpm-lock.yaml` (never a `bun.lock`; CI rejects it)
+3. **Run security audits** - Run `pnpm audit` before merging dependency changes
 4. **Limit permissions** - Use minimal required permissions for workflows
 5. **Monitor logs** - Review CI/CD logs for anomalies
 

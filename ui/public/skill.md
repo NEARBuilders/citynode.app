@@ -134,7 +134,7 @@ bos init your-app.everything.dev \
 If your installed `bos` version rejects `--no-interactive` or other expected init flags, use one of these fallbacks:
 
 ```bash
-bunx everything-dev@latest init your-app.everything.dev
+pnpm dlx everything-dev@latest init your-app.everything.dev
 ```
 
 or run `bos init` interactively and answer the prompts.
@@ -143,7 +143,7 @@ or run `bos init` interactively and answer the prompts.
 
 ```bash
 cp .env.example .env
-bun install
+pnpm install
 docker compose up -d --wait   # Start local Postgres
 bos dev
 ```

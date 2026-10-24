@@ -8,7 +8,7 @@ import { waitForApp } from "../helpers/page-ready";
  * against the failure class where plugin routes are absent client-side and
  * dynamic core routes (/_public/$accountId) swallow static paths like
  * /login. Complements the SSR (dev) project which covers the server-composed
- * path; see auth-redirect.spec.ts for the redirect flows shared by both.
+ * path.
  */
 test.describe("CSR compose", () => {
   test("/login renders the auth plugin's sign-in page client-side", async ({ page }) => {
