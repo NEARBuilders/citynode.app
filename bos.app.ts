@@ -6,12 +6,11 @@ export default App({
   name: "citynode.app",
   // The base runtime this app extends — inherit the platform, override only what you change.
   extends: "bos://dev.everything.near/everything.dev",
+  platform: "2.0.0-rc.21",
   // The NEAR account this app publishes under.
   account: "v1.citynode.near",
   // The gateway: FastKV lookup key and public ingress for this runtime.
   domain: "citynode.app",
-  // The platform release pin (ADR 0034): the exact framework version this app targets ("exact-or-loud").
-  platform: "2.0.0-rc.18",
   // CI settings: runtime image name, Railway service.
   ci: {
     railway: {

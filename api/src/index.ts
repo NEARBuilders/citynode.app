@@ -317,6 +317,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
   secrets: z.object({
     LUMA_CALENDAR_API_KEYS: z.string().default(""),
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
+    BETTER_AUTH_SECRET: z.string().default(""),
   }),
 
   context: ContextSchema,
