@@ -48,19 +48,25 @@ import { OnboardingTab } from "./-onboarding-tab";
 import { useOrganizationApiKeyActions } from "./-organization-api-keys";
 import { OrganizationEditForm } from "./-organization-edit-form";
 import { useOrganizationInvitationActions } from "./-organization-invitations";
-import { orgMembersQueryOptions, useOrganizationMemberActions } from "./-organization-members";
+import {
+  orgActiveRoleQueryOptions,
+  orgMembersQueryOptions,
+  useOrganizationMemberActions,
+} from "./-organization-members";
 import { OrganizationOverview } from "./-organization-overview";
 import { orgApiKeysQueryKey, orgInvitationsQueryKey } from "./-organization-query-keys";
 import { useOrganizationSettings } from "./-organization-settings";
+import {
+  isOrganizationTab,
+  ORGANIZATION_TABS,
+  resolveOrganizationTab,
+  visibleOrganizationTabs,
+} from "./-organization-tabs";
 import { useOrganizationTeams } from "./-organization-teams";
 import { TeamsTab } from "./-teams-tab";
 
 type ApiClientType = import("@/app").ApiClient;
 type InvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listInvitations"]>>[number];
-
-const ORGANIZATION_TABS = ["members", "teams", "invitations", "onboard", "apikeys"] as const;
-
-type OrganizationTab = (typeof ORGANIZATION_TABS)[number];
 
 const organizationSearchSchema = z.object({
   tab: z
@@ -68,10 +74,6 @@ const organizationSearchSchema = z.object({
     .default("members")
     .catch("members"),
 });
-
-function isOrganizationTab(value: unknown): value is OrganizationTab {
-  return ORGANIZATION_TABS.some((tab) => tab === value);
-}
 
 async function handleCopyApiKey(value: string, message: string) {
   try {
@@ -135,13 +137,19 @@ function OrganizationDetail() {
     enabled: !!orgId && org?.status === "active",
   });
   const members = membersQuery.data ?? [];
+  const roleQuery = useQuery({
+    ...orgActiveRoleQueryOptions(apiClient, orgId),
+    enabled: !!orgId && org?.status === "active",
+  });
+  const myRole = roleQuery.data;
+  const canManageMembers = isCommunitySettingsRole(myRole);
   const invitations =
     useQuery({
       queryKey: orgInvitationsQueryKey(orgId),
       queryFn: async (): Promise<InvitationItem[]> => {
         return apiClient.auth.listInvitations({ organizationId: orgId });
       },
-      enabled: !!orgId && org?.status === "active",
+      enabled: !!orgId && org?.status === "active" && canManageMembers,
     }).data ?? [];
   const apiKeys =
     useQuery({
@@ -153,12 +161,10 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.apiKeys ?? []) as OrganizationApiKey[];
       },
-      enabled: !!orgId && org?.status === "active",
+      enabled: !!orgId && org?.status === "active" && canManageMembers,
     }).data ?? [];
-  const myMembership = members.find((member) => member.userId === session?.user?.id);
-  const canManageMembers = isCommunitySettingsRole(myMembership?.role);
   const canViewSettings = canManageMembers || session?.user?.role === "admin";
-  const isOwner = myMembership?.role === "owner";
+  const isOwner = myRole === "owner";
   const tenantQuery = useQuery({
     ...tenantByOrgQueryOptions(apiClient, orgId),
     enabled: !!orgId && org?.status === "active" && canViewSettings,
@@ -195,7 +201,6 @@ function OrganizationDetail() {
     (apiKey) => setCreatedApiKey(apiKey),
   );
   const { removeMemberMutation } = useOrganizationMemberActions(auth, orgId);
-  const canExportEmails = canManageMembers || session?.user?.role === "admin";
   const exportEmailsMutation = useMutation({
     mutationFn: async () => {
       const result = await apiClient.auth.exportMembers({ organizationId: orgId });
@@ -213,12 +218,17 @@ function OrganizationDetail() {
     },
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
-  const activeTab = requestedTab === "onboard" && !canOrganize ? "members" : requestedTab;
+  const visibleTabs = visibleOrganizationTabs({ canManageMembers, canOrganize });
+  const activeTab = resolveOrganizationTab(requestedTab, visibleTabs);
   const setActiveTab = (value: unknown) => {
-    if (!isOrganizationTab(value) || value === activeTab) return;
+    if (!isOrganizationTab(value) || !visibleTabs.includes(value) || value === activeTab) return;
     void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
   };
-  const teamsState = useOrganizationTeams(orgId, activeTab === "teams" && org?.status === "active");
+  const teamsState = useOrganizationTeams(
+    orgId,
+    activeTab === "teams" && org?.status === "active",
+    canManageMembers && org?.status === "active",
+  );
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
     orgId,
@@ -280,7 +290,7 @@ function OrganizationDetail() {
   }
 
   if (isLegacySettingsTab(requestedTab)) {
-    if (!membersQuery.isFetched || (canViewSettings && !tenantQuery.isFetched)) {
+    if (!roleQuery.isFetched || (canViewSettings && !tenantQuery.isFetched)) {
       return (
         <PageContainer variant="wide">
           <Skeleton className="h-64 w-full" />
@@ -309,7 +319,7 @@ function OrganizationDetail() {
         isLeaving={leaveOrgMutation.isPending}
         isSwitching={switchOrg.isPending || communitySettings.isPending}
         memberCount={members.length}
-        myRole={myMembership?.role}
+        myRole={myRole}
         onDelete={() => deleteOrgMutation.mutate()}
         onEdit={() => {
           setEditName(org.name);
@@ -334,104 +344,138 @@ function OrganizationDetail() {
           onSlugChange={setEditSlug}
         />
       )}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <TabsList variant="line">
-            <TabsTrigger value="members" data-testid="orgs-tab-members">
-              {translate("org.members")}
-              <TabCount value={members.length} />
-            </TabsTrigger>
-            <TabsTrigger value="teams" data-testid="orgs-tab-teams">
-              {translate("org.teams")}
-              <TabCount value={teamsState.teams.length} />
-            </TabsTrigger>
-            <TabsTrigger value="invitations" data-testid="orgs-tab-invitations">
-              {translate("org.invitations")}
-              <TabCount value={pendingInvitationsCount} />
-            </TabsTrigger>
-            {canOrganize && (
-              <TabsTrigger value="onboard" data-testid="orgs-tab-onboard">
-                {translate("org.onboarding")}
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="apikeys" data-testid="orgs-tab-apikeys">
-              {translate("org.apiKeys")}
-              <TabCount value={apiKeys.length} />
-            </TabsTrigger>
-          </TabsList>
+      {roleQuery.data === undefined && roleQuery.isError ? (
+        <div
+          role="alert"
+          data-testid="orgs-role-error"
+          className="flex flex-wrap items-center gap-3 text-sm text-destructive"
+        >
+          {translate("org.roleLoadFailed")}
+          <Button
+            variant="outline"
+            onClick={() => void roleQuery.refetch()}
+            disabled={roleQuery.isFetching}
+            data-testid="orgs-role-retry"
+          >
+            {translate("org.retry")}
+          </Button>
         </div>
-        <MembersTab
-          canManageMembers={canManageMembers}
-          canExportEmails={canExportEmails}
-          isExportingEmails={exportEmailsMutation.isPending}
-          isRemoving={removeMemberMutation.isPending}
-          members={members}
-          onExportEmails={() => exportEmailsMutation.mutate()}
-          onInvite={isPersonal ? undefined : () => setActiveTab("invitations")}
-          onRemove={(member) => removeMemberMutation.mutate(member)}
-          sessionUserId={session?.user?.id}
-        />
-        <TeamsTab
-          canManage={canManageMembers}
-          isMutating={teamsState.isMutating}
-          onAddMember={(teamId, userId) => teamsState.addTeamMember.mutate({ teamId, userId })}
-          onAreasChange={(teamId, areas) => teamsState.updateTeam.mutate({ teamId, areas })}
-          onCreate={(name) => teamsState.createTeam.mutate(name)}
-          onDelete={(teamId) => setPendingTeamDeleteId(teamId)}
-          onRemoveMember={(teamId, userId) =>
-            teamsState.removeTeamMember.mutate({ teamId, userId })
-          }
-          onRetryMembers={teamsState.retryTeamMembers}
-          onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
-          orgMembers={members}
-          teams={teamsState.teams}
-        />
-        <ConfirmDialog
-          open={pendingTeamDeleteId !== null}
-          onOpenChange={(open) => {
-            if (!open) setPendingTeamDeleteId(null);
-          }}
-          title={translate("common.deleteQuestion", {
-            name:
-              teamsState.teams.find((team) => team.id === pendingTeamDeleteId)?.name ??
-              translate("org.teamFallback"),
-          })}
-          description={translate("org.deleteTeamDescription")}
-          confirmLabel={translate("org.deleteTeamAction")}
-          variant="destructive"
-          isPending={teamsState.deleteTeam.isPending}
-          onConfirm={() => {
-            if (!pendingTeamDeleteId) return;
-            teamsState.deleteTeam.mutate(pendingTeamDeleteId, {
-              onSettled: () => setPendingTeamDeleteId(null),
-            });
-          }}
-        />
-        <InvitationsTab
-          canManageMembers={canManageMembers}
-          invitePending={inviteMutation.isPending}
-          invitations={invitations}
-          isPersonal={isPersonal}
-          isCancelling={cancelInvitationMutation.isPending}
-          isResending={resendInvitationMutation.isPending}
-          onCancel={(invitationId) => cancelInvitationMutation.mutate(invitationId)}
-          onInvite={(values) => inviteMutation.mutateAsync(values)}
-          onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
-          teams={teamsState.teams}
-        />
-        {canOrganize && <OnboardingTab apiClient={apiClient} orgId={orgId} isActive={isActive} />}
-        <ApiKeysTab
-          apiKeys={apiKeys}
-          canManageMembers={canManageMembers}
-          createdApiKey={createdApiKey}
-          isCreating={createApiKeyMutation.isPending}
-          isDeleting={deleteApiKeyMutation.isPending}
-          onCopy={handleCopyApiKey}
-          onCreate={(values) => createApiKeyMutation.mutate(values)}
-          onDelete={(keyId) => deleteApiKeyMutation.mutate(keyId)}
-          onDismiss={() => setCreatedApiKey(null)}
-        />
-      </Tabs>
+      ) : roleQuery.data === undefined ? (
+        <Skeleton className="h-64 w-full" data-testid="orgs-tabs-loading" />
+      ) : activeTab ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            <TabsList variant="line">
+              {canManageMembers && (
+                <>
+                  <TabsTrigger value="members" data-testid="orgs-tab-members">
+                    {translate("org.members")}
+                    <TabCount value={members.length} />
+                  </TabsTrigger>
+                  <TabsTrigger value="teams" data-testid="orgs-tab-teams">
+                    {translate("org.teams")}
+                    <TabCount value={teamsState.teams.length} />
+                  </TabsTrigger>
+                  <TabsTrigger value="invitations" data-testid="orgs-tab-invitations">
+                    {translate("org.invitations")}
+                    <TabCount value={pendingInvitationsCount} />
+                  </TabsTrigger>
+                </>
+              )}
+              {canOrganize && (
+                <TabsTrigger value="onboard" data-testid="orgs-tab-onboard">
+                  {translate("org.onboarding")}
+                </TabsTrigger>
+              )}
+              {canManageMembers && (
+                <TabsTrigger value="apikeys" data-testid="orgs-tab-apikeys">
+                  {translate("org.apiKeys")}
+                  <TabCount value={apiKeys.length} />
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </div>
+          {canManageMembers && (
+            <>
+              <MembersTab
+                canManageMembers={canManageMembers}
+                canExportEmails={canManageMembers}
+                isExportingEmails={exportEmailsMutation.isPending}
+                isRemoving={removeMemberMutation.isPending}
+                members={members}
+                onExportEmails={() => exportEmailsMutation.mutate()}
+                onInvite={isPersonal ? undefined : () => setActiveTab("invitations")}
+                onRemove={(member) => removeMemberMutation.mutate(member)}
+                sessionUserId={session?.user?.id}
+              />
+              <TeamsTab
+                canManage={canManageMembers}
+                isMutating={teamsState.isMutating}
+                onAddMember={(teamId, userId) =>
+                  teamsState.addTeamMember.mutate({ teamId, userId })
+                }
+                onAreasChange={(teamId, areas) => teamsState.updateTeam.mutate({ teamId, areas })}
+                onCreate={(name) => teamsState.createTeam.mutate(name)}
+                onDelete={(teamId) => setPendingTeamDeleteId(teamId)}
+                onRemoveMember={(teamId, userId) =>
+                  teamsState.removeTeamMember.mutate({ teamId, userId })
+                }
+                onRetryMembers={teamsState.retryTeamMembers}
+                onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
+                orgMembers={members}
+                teams={teamsState.teams}
+              />
+              <ConfirmDialog
+                open={pendingTeamDeleteId !== null}
+                onOpenChange={(open) => {
+                  if (!open) setPendingTeamDeleteId(null);
+                }}
+                title={translate("common.deleteQuestion", {
+                  name:
+                    teamsState.teams.find((team) => team.id === pendingTeamDeleteId)?.name ??
+                    translate("org.teamFallback"),
+                })}
+                description={translate("org.deleteTeamDescription")}
+                confirmLabel={translate("org.deleteTeamAction")}
+                variant="destructive"
+                isPending={teamsState.deleteTeam.isPending}
+                onConfirm={() => {
+                  if (!pendingTeamDeleteId) return;
+                  teamsState.deleteTeam.mutate(pendingTeamDeleteId, {
+                    onSettled: () => setPendingTeamDeleteId(null),
+                  });
+                }}
+              />
+              <InvitationsTab
+                canManageMembers={canManageMembers}
+                invitePending={inviteMutation.isPending}
+                invitations={invitations}
+                isPersonal={isPersonal}
+                isCancelling={cancelInvitationMutation.isPending}
+                isResending={resendInvitationMutation.isPending}
+                onCancel={(invitationId) => cancelInvitationMutation.mutate(invitationId)}
+                onInvite={(values) => inviteMutation.mutateAsync(values)}
+                onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
+                teams={teamsState.teams}
+              />
+            </>
+          )}
+          {canOrganize && <OnboardingTab apiClient={apiClient} orgId={orgId} isActive={isActive} />}
+          {canManageMembers && (
+            <ApiKeysTab
+              apiKeys={apiKeys}
+              canManageMembers={canManageMembers}
+              createdApiKey={createdApiKey}
+              isCreating={createApiKeyMutation.isPending}
+              isDeleting={deleteApiKeyMutation.isPending}
+              onCopy={handleCopyApiKey}
+              onCreate={(values) => createApiKeyMutation.mutate(values)}
+              onDelete={(keyId) => deleteApiKeyMutation.mutate(keyId)}
+              onDismiss={() => setCreatedApiKey(null)}
+            />
+          )}
+        </Tabs>
+      ) : null}
     </PageContainer>
   );
 }
