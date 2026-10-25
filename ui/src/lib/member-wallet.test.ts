@@ -152,6 +152,7 @@ describe("classifyMemberSigningError", () => {
     ["a WebAuthn NotAllowedError", named("NotAllowedError", "The operation either timed out")],
     ["an AbortError", named("AbortError")],
     ["a user rejection", new Error("User rejected the request")],
+    ["the passkey executor closing", new Error("Wallet closed")],
     ["an ACTION_REJECTED code", Object.assign(new Error("x"), { code: "ACTION_REJECTED" })],
   ])("maps %s to cancelled", (_label, error) => {
     expect(classifyMemberSigningError(error)).toBe("cancelled");
@@ -161,6 +162,18 @@ describe("classifyMemberSigningError", () => {
     ["an InvalidStateError", named("InvalidStateError")],
     ["a missing WebAuthn API", named("NotSupportedError")],
     ["a missing credential", new Error("No credential found for this account")],
+    [
+      "the passkey executor's sign-up failure",
+      new Error(
+        "Something went wrong creating your passkey. Please try again, and make sure your device's screen lock (Face ID, fingerprint, or PIN) is set up.",
+      ),
+    ],
+    [
+      "the passkey executor's sign-in failure",
+      new Error(
+        "Something went wrong signing in with your passkey. Please try again on the device where you created it.",
+      ),
+    ],
   ])("maps %s to an unavailable credential", (_label, error) => {
     expect(classifyMemberSigningError(error)).toBe("credential");
   });
