@@ -1,6 +1,7 @@
 # Change placement — bugs, missing capabilities, and pattern improvements
 
-`docs/runtime-map.md` says **who owns what**. This says **what to do about it**.
+A runtime map (where your repo generates one — everything-dev#591 proposes the
+shared kit) says **who owns what**. This says **what to do about it**.
 One branch of this document answers one kind of need.
 
 ## First rule: sync-owned is a contribution channel, not a fence
@@ -75,9 +76,10 @@ is a child-only fork of a platform responsibility.
 1. **Search before building** — check upstream issues, the framework docs, and
    the TanStack Intent skills (`pnpm dlx @tanstack/intent@latest load
    everything-dev#…`). Someone may have built it.
-2. **Build the smallest reference implementation** with a cross-check and tests
-   (`scripts/gen-runtime-map.mjs` is the model: generator + `verify-runtime-map`
-   diff against the real engine + unit tests).
+2. **Build the smallest reference implementation** with a cross-check and tests —
+   a generator plus a verify step diffing its output against the real engine
+   (the runtime-map generator — shipped in everything-dev#612, see
+   `docs/agents/runtime-map.md` — is the model).
 3. **File or comment upstream with the reference attached** — ask for the API
    shape you need, show what works.
 4. **Keep the interim local, wired sync-safely**, and track the tech debt: hook
@@ -90,7 +92,7 @@ and every child inherits it instead of each one re-building it.
 
 ## Pattern improvement
 
-- **Child-specific** (citynode-only concepts): an ADR under
+- **Child-specific** (this app-only concepts): an ADR under
   [`docs/adr/`](../adr/) — the index links upstream ADRs by number.
 - **Framework-wide**: an upstream ADR + PR, then a `platform:` pin bump here.
   Decision numbers cited across the repo resolve via

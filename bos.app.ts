@@ -6,7 +6,7 @@ export default App({
   name: "citynode.app",
   // The base runtime this app extends — inherit the platform, override only what you change.
   extends: "bos://dev.everything.near/everything.dev",
-  platform: "2.0.0-rc.22",
+  platform: "2.0.0-rc.23",
   // The NEAR account this app publishes under.
   account: "v1.citynode.near",
   // The gateway: FastKV lookup key and public ingress for this runtime.
