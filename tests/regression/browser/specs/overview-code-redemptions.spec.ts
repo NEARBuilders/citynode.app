@@ -102,7 +102,9 @@ test.describe("overview code redemptions", () => {
       timeout: 15000,
     });
 
-    const expected = ["2", "1", "1", "1"];
+    // redeemed counts redemption rows; newMembers counts members whose
+    // membership was created inside the month window (see the seed helpers).
+    const expected = ["3", "1", "1", "1"];
     for (const [index, testId] of REDEMPTION_STATS.entries()) {
       await expect(page.getByTestId(testId).locator("dd")).toHaveText(expected[index]!, {
         timeout: 15000,

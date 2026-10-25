@@ -51,7 +51,7 @@ Want to set up a node for your city, state, or country? [Apply to run a City Nod
 
 ## For builders
 
-City Nodes runs on [everything.dev](https://github.com/NEARBuilders/everything-dev) — a Module Federation runtime platform with oRPC contracts, Better-Auth + NEAR SIWN, and an every-plugin API. A fork of this framework exists within this repository, so feel free to make changes to it.
+City Nodes runs on [everything.dev](https://github.com/NEARBuilders/everything-dev) — a Module Federation runtime platform with oRPC contracts, Better-Auth + NEAR SIWN, and an every-plugin API. This app is a child runtime that extends the published platform (`bos://dev.everything.near/everything.dev`) and overrides only what it changes; the platform and its plugins (including auth) are consumed as remote bundles. See [`docs/runtime-map.md`](docs/runtime-map.md) for what lives here versus upstream, and [`docs/agents/how-it-fits.md`](docs/agents/how-it-fits.md) for a drawn tour of how the runtime fits together.
 
 ## Deploy
 
