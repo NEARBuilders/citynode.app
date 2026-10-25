@@ -12,7 +12,10 @@ const harness = vi.hoisted(() => ({
   toastError: vi.fn(),
 }));
 
-vi.mock("@/i18n/runtime", () => ({ useAppTranslation: () => (id: string) => id }));
+vi.mock("@/i18n/runtime", () => ({
+  useAppTranslation: () => (id: string) => id,
+  translateAppMessage: (id: string) => id,
+}));
 
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => ({ invalidate: harness.invalidateRouter }),
@@ -96,5 +99,31 @@ describe("useClearStaleTeam", () => {
 
     await waitFor(() => expect(harness.invalidateRouter).toHaveBeenCalledTimes(2));
     expect(harness.setActiveTeam).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears the same team again after it recovers and goes stale once more", async () => {
+    const { rerender } = setup("team-x");
+    await waitFor(() => expect(harness.invalidateRouter).toHaveBeenCalledOnce());
+
+    rerender({ staleTeamId: null });
+    rerender({ staleTeamId: "team-x" });
+
+    await waitFor(() => expect(harness.invalidateRouter).toHaveBeenCalledTimes(2));
+    expect(harness.setActiveTeam).toHaveBeenCalledTimes(2);
+  });
+
+  it("only retries the refresh when the team was cleared but the workspace refresh failed", async () => {
+    harness.getSession.mockRejectedValueOnce(new Error("offline"));
+    setup("team-empty");
+
+    await waitFor(() => expect(harness.toastError).toHaveBeenCalledOnce());
+    const [message, options] = harness.toastError.mock.calls[0];
+    expect(message).toBe("workspace.refreshError");
+
+    options.action.onClick();
+
+    await waitFor(() => expect(harness.invalidateRouter).toHaveBeenCalledOnce());
+    expect(harness.setActiveTeam).toHaveBeenCalledOnce();
+    expect(harness.toastError).toHaveBeenCalledOnce();
   });
 });
