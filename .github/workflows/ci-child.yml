@@ -126,20 +126,13 @@ jobs:
       - name: Generate resolved config and ui bootstrap stubs
         run: pnpm run types:gen
 
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 (Node 24)
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Playwright browser
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Install Playwright system deps
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      # Shared browser install from the base runtime (cache + probe-gated
+      # system deps). Replaces the inline steps that ran `--with-deps` on the
+      # cache miss and an unconditional `install-deps` (apt-get update) on
+      # every cached run — the apt surface that hung parent CI on
+      # 2026-10-23. The child-owned ref tracks the base runtime's main,
+      # same trust model as the framework-owned wrappers.
+      - uses: NEARBuilders/everything-dev/.github/actions/install-playwright@main
 
       - name: Run browser regression suite (dev:ssr)
         run: pnpm run test:regression:browser:dev:ssr
