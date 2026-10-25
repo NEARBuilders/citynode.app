@@ -1556,6 +1556,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Votre modification a été enregistrée, mais l'espace de travail n'a pas pu être actualisé. Réessayez.",
     "更改已保存，但工作空间无法刷新，请重试。",
   ],
+  "workspace.staleTeamError": [
+    "Your selected team no longer covers any areas, so all areas are shown. We couldn't clear it from your session.",
+    "Tu equipo seleccionado ya no cubre ningún área, así que se muestran todas. No pudimos quitarlo de tu sesión.",
+    "Votre équipe sélectionnée ne couvre plus aucun espace, tous les espaces sont donc affichés. Impossible de la retirer de votre session.",
+    "所选团队已不再涵盖任何功能区，因此显示所有功能区。无法从你的会话中清除该团队。",
+  ],
   "workspace.switched": [
     "Switched team workspace",
     "Espacio de equipo cambiado",

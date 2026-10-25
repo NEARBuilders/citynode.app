@@ -24,6 +24,7 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { groupSidebarItems, isNavItemActive, navSlug, type SidebarItem } from "./nav-items";
 import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
 import { SidebarTeamSwitcher } from "./sidebar-team-switcher";
+import { useClearStaleTeam } from "./use-clear-stale-team";
 import { useIdentity } from "./use-identity";
 import { useSwitchTeam } from "./use-switch-team";
 import { useTeamWorkspace } from "./use-team-workspace";
@@ -46,6 +47,7 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
   } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
   const switchTeam = useSwitchTeam();
+  useClearStaleTeam(workspace?.staleActiveTeamId ?? null);
   const tab = useRouterState({
     select: (s) => {
       const value = (s.location.search as { tab?: unknown }).tab;

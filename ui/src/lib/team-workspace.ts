@@ -24,16 +24,14 @@ export type WorkspaceTeam =
 export interface TeamWorkspace {
   teams: WorkspaceTeam[];
   activeTeam: WorkspaceTeam | null;
+  staleActiveTeamId: string | null;
   allowedAreas: FeatureArea[] | null;
   canManageOrganization?: boolean;
 }
 
-const ROUTE_AREAS: Array<{ path: string; exact?: boolean; areas: FeatureArea[] }> = [
-  { path: "/dashboard/node", exact: true, areas: ["node-operations", "finance", "events"] },
-  { path: "/dashboard/node", areas: ["node-operations"] },
+const ROUTE_AREAS: Array<{ path: string; areas: FeatureArea[] }> = [
   { path: "/tenant", areas: ["node-operations"] },
   { path: "/nodes", areas: ["node-operations", "events"] },
-  { path: "/stake", areas: ["stake"] },
 ];
 
 export const teamWorkspaceQueryKey = ["team-workspace"] as const;
@@ -41,15 +39,21 @@ export const teamWorkspaceQueryKey = ["team-workspace"] as const;
 export function resolveTeamWorkspace(
   context: AuthRequestContext | null | undefined,
 ): TeamWorkspace {
-  const teams: WorkspaceTeam[] = [...(context?.organization?.teams ?? [])];
-  const activeTeam = teams.find((team) => team.id === context?.organization?.activeTeamId) ?? null;
+  const teams: WorkspaceTeam[] = (context?.organization?.teams ?? []).filter(hasFeatureArea);
+  const activeTeamId = context?.organization?.activeTeamId ?? null;
+  const activeTeam = teams.find((team) => team.id === activeTeamId) ?? null;
   const bypass = canManageCommunity(context);
   return {
     teams,
     activeTeam,
+    staleActiveTeamId: activeTeamId && !activeTeam ? activeTeamId : null,
     allowedAreas: activeTeam && !bypass ? activeTeam.areas.filter(isFeatureArea) : null,
     canManageOrganization: bypass,
   };
+}
+
+export function hasFeatureArea(team: { areas: readonly string[] }): boolean {
+  return team.areas.some(isFeatureArea);
 }
 
 /** Organization roles that manage the community's settings (mirrors the API's rule). */
@@ -66,10 +70,8 @@ export function canManageCommunity(context: AuthRequestContext | null | undefine
 }
 
 export function areasForPath(pathname: string): FeatureArea[] | null {
-  const match = ROUTE_AREAS.find(({ path, exact }) =>
-    exact
-      ? pathname === path || pathname === `${path}/`
-      : pathname === path || pathname.startsWith(`${path}/`),
+  const match = ROUTE_AREAS.find(
+    ({ path }) => pathname === path || pathname.startsWith(`${path}/`),
   );
   return match?.areas ?? null;
 }
@@ -79,8 +81,12 @@ export function areasAllowPath(
   pathname: string,
 ): boolean {
   const areas = areasForPath(pathname);
-  if (!areas || !allowedAreas) return true;
-  return areas.some((area) => allowedAreas.includes(area));
+  if (!areas) return true;
+  return areas.some((area) => isAreaInView(allowedAreas, area));
+}
+
+export function isAreaInView(allowedAreas: readonly FeatureArea[] | null, area: FeatureArea) {
+  return !allowedAreas || allowedAreas.includes(area);
 }
 
 export function isPathAllowed(workspace: TeamWorkspace, pathname: string): boolean {

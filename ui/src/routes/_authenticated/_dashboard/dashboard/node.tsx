@@ -5,9 +5,9 @@ import { discoveryNodeQueryOptions } from "@/components/discovery/event-visibili
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
-import { canManageCommunity } from "@/lib/team-workspace";
+import { canManageCommunity, teamWorkspaceQueryOptions } from "@/lib/team-workspace";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
-import { hasNodeProposalReviewPermission } from "./node/-node-access";
+import { hasNodeProposalReviewPermission, resolveCommunityTools } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
 
 type NodeDashboardSearch = { nodeId?: string };
@@ -89,14 +89,15 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       .catch(() => null);
     context.queryClient.setQueryData(nodeQueryKeys.tenant(tenant.id), nodes);
     context.queryClient.setQueryData(nodeQueryKeys.byId(selectedNode.id), selectedNode);
-    const orgRole = authContext?.organization?.member?.role;
     const canManage = canReview || canManageCommunity(authContext);
-    const inFinanceTeam =
-      authContext?.organization?.teams?.some((team) => team.areas.includes("finance")) ?? false;
-    const canOrganize =
-      orgRole === "owner" ||
-      orgRole === "admin" ||
-      (authContext?.organization?.teams?.some((team) => team.areas.includes("events")) ?? false);
+    const workspace = await context.queryClient
+      .ensureQueryData(teamWorkspaceQueryOptions(context.apiClient))
+      .catch(() => null);
+    const { inFinanceTeam, canOrganize } = resolveCommunityTools(
+      authContext,
+      workspace?.allowedAreas ?? null,
+      selectedNode.id,
+    );
 
     return {
       tenant,

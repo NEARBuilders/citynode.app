@@ -64,7 +64,7 @@ describe("CommunityNav", () => {
     expect(shownTabs()).toEqual(["overview", "proposals"]);
   });
 
-  it("shows an active events team only the community sections its area opens", () => {
+  it("shows an active events team its event sections next to Overview and Proposals", () => {
     render(
       <CommunityNav
         active="overview"
@@ -76,6 +76,25 @@ describe("CommunityNav", () => {
       />,
     );
 
-    expect(shownTabs()).toEqual(["overview", "content", "onboarding"]);
+    expect(shownTabs()).toEqual(["overview", "content", "onboarding", "proposals"]);
+  });
+
+  it.each([
+    ["stake"],
+    ["finance"],
+    ["node-operations"],
+  ] as const)("keeps Overview and Proposals for an active %s team", (area) => {
+    render(
+      <CommunityNav
+        active="overview"
+        nodeId="node-1"
+        tenantId="tenant-1"
+        canManage={false}
+        canOrganize={false}
+        allowedAreas={[area]}
+      />,
+    );
+
+    expect(shownTabs()).toEqual(["overview", "proposals"]);
   });
 });

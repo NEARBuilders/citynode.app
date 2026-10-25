@@ -10,7 +10,7 @@ import {
 } from "../helpers/auth-session";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
 
-async function seedTeamMember() {
+async function seedTeamMember(teamName = "Stake Desk", areas: string[] = ["stake"]) {
   const suffix = `${process.pid}-${Date.now()}`;
   const ownerCookie = await signInAnonymously();
   const org = await (
@@ -28,9 +28,9 @@ async function seedTeamMember() {
   );
   const team = await (
     await authFetch("/organization/create-team", ownerCookie, {
-      name: "Stake Desk",
+      name: teamName,
       organizationId: org.id,
-      metadata: JSON.stringify({ areas: ["stake"] }),
+      metadata: JSON.stringify({ areas }),
     })
   ).json();
 
@@ -115,7 +115,9 @@ test.describe("team workspace", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
-  test("switching teams filters navigation and guards restricted routes", async ({ page }) => {
+  test("switching teams keeps member destinations and guards work-area routes", async ({
+    page,
+  }) => {
     const pageErrors = collectErrors(page);
     const { memberCookie, teamName } = await seedTeamMember();
     await useCookieHeader(page.context(), memberCookie);
@@ -127,9 +129,18 @@ test.describe("team workspace", () => {
     await expect(switcher).toContainText(teamName, { timeout: 10000 });
     await expect(page.getByTestId("workspace-active-team")).toContainText(teamName);
     await expect(page.getByTestId("sidebar-nav-stake")).toBeVisible();
-    await expect(page.getByTestId("sidebar-nav-my-node")).toHaveCount(0);
+    await expect(page.getByTestId("sidebar-nav-my-node")).toBeVisible();
 
-    await page.goto("/dashboard/node", { waitUntil: "domcontentloaded" });
+    for (const path of ["/dashboard/node", "/dashboard/node/proposals", "/stake"]) {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await waitForApp(page);
+      await expect.poll(() => new URL(page.url()).pathname).toBe(path);
+      await expect(page.getByTestId("workspace-restricted-notice")).toHaveCount(0);
+    }
+
+    await page.goto("/tenant/00000000-0000-4000-8000-000000000398", {
+      waitUntil: "domcontentloaded",
+    });
     await page.waitForURL(/\/dashboard\?restricted=node-operations/, {
       timeout: 10000,
       waitUntil: "commit",
@@ -139,11 +150,41 @@ test.describe("team workspace", () => {
     await switcher.click();
     await page.getByTestId("team-switcher-item-all").click();
     await expect(switcher).toContainText("All areas", { timeout: 10000 });
-    await expect(page.getByTestId("sidebar-nav-my-node")).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);
 
     await page.getByTestId("sidebar-nav-my-node").click();
     await page.waitForURL(/\/dashboard\/node/, { timeout: 10000, waitUntil: "commit" });
+
+    expectNoHydrationFailure(pageErrors);
+  });
+
+  test("a selected team without areas falls back to All areas and is cleared", async ({ page }) => {
+    const pageErrors = collectErrors(page);
+    const { memberCookie } = await seedTeamMember("Event Team", []);
+    await useCookieHeader(page.context(), memberCookie);
+
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    await expect(page.getByTestId("sidebar-nav-my-node")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("sidebar-nav-stake")).toBeVisible();
+    await expect(page.getByTestId("team-switcher")).toHaveCount(0);
+    await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);
+    await expect
+      .poll(
+        async () => {
+          const session = await (
+            await authFetch("/get-session?disableCookieCache=true", memberCookie)
+          ).json();
+          return session.session.activeTeamId ?? null;
+        },
+        { timeout: 10000 },
+      )
+      .toBeNull();
+
+    await page.getByTestId("sidebar-nav-my-node").click();
+    await page.waitForURL(/\/dashboard\/node/, { timeout: 10000, waitUntil: "commit" });
+    await expect(page.getByTestId("workspace-restricted-notice")).toHaveCount(0);
 
     expectNoHydrationFailure(pageErrors);
   });

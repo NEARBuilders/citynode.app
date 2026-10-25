@@ -238,16 +238,14 @@ it("lets anonymous visitors browse a pool and asks them to sign in to stake", as
   expect(screen.queryByTestId("stake.connect-wallet")).toBeNull();
 });
 
-it("sends signed-in members of a team without the stake area to Home", async () => {
+it.each([
+  ["stake"],
+  ["events"],
+  ["finance"],
+  ["node-operations"],
+])("keeps signed-in members of an active %s team on the staking page", async (area) => {
   mockApi([parent, child], child.id);
-  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["events"]);
-  await vi.waitFor(() => expect(router.state.location.pathname).toBe("/dashboard"));
-  expect(router.state.location.search).toEqual({ restricted: "stake" });
-});
-
-it("keeps signed-in members of a stake team on the staking page", async () => {
-  mockApi([parent, child], child.id);
-  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["stake"]);
+  const router = await showNode(`/stake?nodeId=${child.id}`, true, [area]);
   expect(router.state.location.pathname).toBe("/stake");
   expect(await screen.findByTestId("stake.connect-wallet")).toBeTruthy();
   expect(screen.queryByTestId("stake.sign-in")).toBeNull();

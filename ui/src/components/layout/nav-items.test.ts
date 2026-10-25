@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { translateAppMessage } from "@/i18n/runtime";
+import { areasForPath } from "@/lib/team-workspace";
 import { crumbsFor } from "./breadcrumbs";
 import {
   buildNavItems,
-  filterSidebarByArea,
   filterSidebarByRole,
   filterSidebarByRoutes,
   groupSidebarItems,
@@ -238,28 +238,21 @@ describe("active state", () => {
 });
 
 describe("team area navigation", () => {
-  it("shows only the active team's areas plus area-free sections", () => {
-    const paths = flattenPaths(
-      filterSidebarByArea(filterSidebarByRole(NAV_ITEMS, "member"), ["stake"]),
+  it("keeps every member sidebar destination outside the team area filter", () => {
+    const items = filterSidebarByRole(
+      buildNavItems({
+        activeOrgSlug: "acme",
+        hasOrganization: true,
+        canManageOrganization: true,
+        canCurate: true,
+        isAdmin: true,
+      }),
+      "admin",
     );
+    const paths = flattenPaths(items);
 
-    expect(paths).toEqual(expect.arrayContaining(["/explore", "/dashboard", "/stake"]));
-    expect(paths).not.toContain("/dashboard/node");
-  });
-
-  it("shows My community to a Finance-active member, matching the overview route", () => {
-    const paths = flattenPaths(
-      filterSidebarByArea(filterSidebarByRole(NAV_ITEMS, "member"), ["finance", "stake"]),
-    );
-
-    expect(paths).toContain("/dashboard/node");
-    expect(paths).toContain("/stake");
-  });
-
-  it("leaves navigation untouched when unrestricted", () => {
-    const member = filterSidebarByRole(NAV_ITEMS, "member");
-
-    expect(filterSidebarByArea(member, null)).toEqual(member);
+    expect(paths).toEqual(expect.arrayContaining(["/dashboard/node", "/stake"]));
+    for (const path of paths) expect(areasForPath(path)).toBeNull();
   });
 });
 
