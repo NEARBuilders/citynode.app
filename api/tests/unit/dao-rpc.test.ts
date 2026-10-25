@@ -39,6 +39,24 @@ describe("verifyDaoMembership RPC handling", () => {
     expect(error?.message).not.toMatch(/sputnik/);
   });
 
+  it("keeps RPC endpoint details out of the client-facing 503", async () => {
+    view.mockRejectedValueOnce(
+      new NearRpcUnavailableError({
+        network: "mainnet",
+        attempts: 3,
+        lastError: new Error("https://rpc.example/near?apiKey=secret-key responded 429"),
+      }),
+    );
+    const { error } = await run();
+    expect(error?.data).toEqual({
+      reason: "NEAR_RPC_UNAVAILABLE",
+      daoAccountId: "city.sputnik-dao.near",
+      network: "mainnet",
+      attempts: 3,
+    });
+    expect(JSON.stringify(error?.data)).not.toContain("secret-key");
+  });
+
   it("reports a missing account or get_policy method as not a sputnik-dao contract", async () => {
     for (const kind of ["UNKNOWN_ACCOUNT", "METHOD_NOT_FOUND"] as const) {
       view.mockRejectedValueOnce(

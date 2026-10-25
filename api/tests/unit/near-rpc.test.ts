@@ -138,6 +138,19 @@ describe("viewFunction", () => {
     for (const call of hang.mock.calls) expect(call[1]?.signal?.aborted).toBe(true);
   });
 
+  it("names only the endpoint host in failure messages, never its query string", async () => {
+    const { fetch } = fetchSequence(() => jsonResponse({}, 503));
+    const failure = await viewFunction({
+      ...base,
+      urls: ["https://rpc.example/near?apiKey=secret-key"],
+      fetch,
+      sleep: async () => {},
+      maxAttempts: 1,
+    }).catch((err: unknown) => err);
+    expect((failure as Error).message).toContain("rpc.example responded 503");
+    expect((failure as Error).message).not.toContain("secret-key");
+  });
+
   it("treats network errors and node-side rpc errors as unavailable", async () => {
     const { fetch } = fetchSequence(
       () => {

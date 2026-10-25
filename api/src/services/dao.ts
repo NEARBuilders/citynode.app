@@ -118,7 +118,7 @@ export function daoPolicyError(
       reason: "NEAR_RPC_UNAVAILABLE",
       daoAccountId,
       network,
-      cause: error instanceof NearRpcUnavailableError ? error.message : String(error),
+      attempts: error instanceof NearRpcUnavailableError ? error.attempts : undefined,
     },
   });
 }

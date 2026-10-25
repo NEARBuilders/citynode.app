@@ -98,6 +98,14 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function endpointHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "rpc endpoint";
+  }
+}
+
 function wasmFailureKind(error: string): NearViewFailureKind {
   if (error.includes("MethodNotFound")) return "METHOD_NOT_FOUND";
   if (error.includes("CodeDoesNotExist")) return "NO_CONTRACT_CODE";
@@ -115,6 +123,7 @@ async function postView(
   fetchImpl: typeof globalThis.fetch,
 ): Promise<unknown> {
   const { accountId, methodName } = options;
+  const endpoint = endpointHost(url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let body: unknown;
@@ -136,14 +145,14 @@ async function postView(
         },
       }),
     });
-    if (!res.ok) throw new RetryableRpcError(`${url} responded ${res.status}`);
+    if (!res.ok) throw new RetryableRpcError(`${endpoint} responded ${res.status}`);
     body = await res.json();
   } catch (err) {
     if (err instanceof RetryableRpcError) throw err;
     if (controller.signal.aborted) {
-      throw new RetryableRpcError(`${url} timed out after ${timeoutMs}ms`);
+      throw new RetryableRpcError(`${endpoint} timed out after ${timeoutMs}ms`);
     }
-    throw new RetryableRpcError(`${url} request failed: ${errorText(err)}`);
+    throw new RetryableRpcError(`${endpoint} request failed: ${errorText(err)}`);
   } finally {
     clearTimeout(timer);
   }
@@ -166,7 +175,7 @@ async function postView(
       });
     }
     throw new RetryableRpcError(
-      `${url} rpc error: ${String(causeName ?? envelope.error.message ?? "unknown")}`,
+      `${endpoint} rpc error: ${String(causeName ?? envelope.error.message ?? "unknown")}`,
     );
   }
 
@@ -180,7 +189,7 @@ async function postView(
     });
   }
   if (!Array.isArray(result?.result)) {
-    throw new RetryableRpcError(`${url} returned no result`);
+    throw new RetryableRpcError(`${endpoint} returned no result`);
   }
 
   try {
