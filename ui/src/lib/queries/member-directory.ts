@@ -9,6 +9,8 @@ export const memberDirectoryQueryKeys = {
   nodeCount: (nodeId: string) => [...memberDirectoryQueryKeys.all, "node-count", nodeId] as const,
 };
 
+export const memberDirectoryChannelName = "member-directory";
+
 export function memberDirectoryOptInQueryOptions(apiClient: ApiClient) {
   return queryOptions({
     queryKey: memberDirectoryQueryKeys.optIn(),
@@ -20,7 +22,8 @@ export function memberDirectoryQueryOptions(apiClient: ApiClient, organizationId
   return queryOptions({
     queryKey: memberDirectoryQueryKeys.organization(organizationId),
     queryFn: () => apiClient.getMemberDirectory({ organizationId }),
-    refetchOnWindowFocus: "always",
+    staleTime: 60_000,
+    refetchOnMount: "always",
     retry: false,
   });
 }

@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useId } from "react";
+import { useEffect, useId } from "react";
 import { useApiClient } from "@/app";
-import { SectionHeader } from "@/components";
+import { Button, SectionHeader } from "@/components";
 import { MemberCountValue } from "@/components/member-count";
 import { Switch } from "@/components/ui/switch";
 import { useAppTranslation } from "@/i18n/runtime";
 import {
+  memberDirectoryChannelName,
   memberDirectoryOptInQueryOptions,
   memberDirectoryQueryKeys,
   memberDirectoryQueryOptions,
@@ -35,9 +36,18 @@ export function MemberDirectory({
     mutationFn: (optedIn: boolean) => apiClient.setMemberDirectoryOptIn({ optedIn }),
     onSuccess: async (result) => {
       queryClient.setQueryData(memberDirectoryQueryKeys.optIn(), result);
+      notifyOtherViews();
       await queryClient.invalidateQueries({ queryKey: memberDirectoryQueryKeys.all });
     },
   });
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(memberDirectoryChannelName);
+    channel.onmessage = () => {
+      void queryClient.invalidateQueries({ queryKey: memberDirectoryQueryKeys.all });
+    };
+    return () => channel.close();
+  }, [queryClient]);
   const checked = setOptIn.isPending
     ? (setOptIn.variables ?? false)
     : (optIn.data?.optedIn ?? false);
@@ -79,6 +89,23 @@ export function MemberDirectory({
           data-testid="dashboard-node.member-opt-in"
         />
       </div>
+      {optIn.isError && (
+        <div
+          className="flex flex-wrap items-center gap-2 text-sm text-destructive"
+          role="alert"
+          data-testid="dashboard-node.member-opt-in-load-error"
+        >
+          <span>{translate("members.optInLoadFailed")}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void optIn.refetch()}
+            data-testid="dashboard-node.member-opt-in-retry"
+          >
+            {translate("common.retry")}
+          </Button>
+        </div>
+      )}
       {setOptIn.isError && (
         <p
           className="text-sm text-destructive"
@@ -126,4 +153,11 @@ export function MemberDirectory({
       ) : null}
     </section>
   );
+}
+
+function notifyOtherViews() {
+  if (typeof BroadcastChannel === "undefined") return;
+  const channel = new BroadcastChannel(memberDirectoryChannelName);
+  channel.postMessage("changed");
+  channel.close();
 }

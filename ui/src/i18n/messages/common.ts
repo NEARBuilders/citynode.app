@@ -1758,6 +1758,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "还没有成员公开名字。",
   ],
   "members.notAvailable": ["Not available", "No disponible", "Non disponible", "暂无数据"],
+  "members.optInLoadFailed": [
+    "Couldn't load your name setting.",
+    "No se pudo cargar la configuración de tu nombre.",
+    "Impossible de charger le réglage de votre nom.",
+    "无法加载名字设置。",
+  ],
   "members.optInFailed": [
     "Couldn't update your name setting. Try again.",
     "No se pudo actualizar la configuración de tu nombre. Inténtalo de nuevo.",

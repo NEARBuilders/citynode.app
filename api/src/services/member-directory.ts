@@ -1,5 +1,5 @@
 import type { ORPCError } from "@orpc/server";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import { memberCountObservations, memberDirectoryOptIns } from "../db/schema";
@@ -69,7 +69,12 @@ export const MemberDirectoryLive = Layer.effect(
           await db
             .update(memberDirectoryOptIns)
             .set({ primaryAccountId, updatedAt: new Date() })
-            .where(eq(memberDirectoryOptIns.userId, userId));
+            .where(
+              and(
+                eq(memberDirectoryOptIns.userId, userId),
+                sql`${memberDirectoryOptIns.primaryAccountId} is distinct from ${primaryAccountId}`,
+              ),
+            );
         }),
       optedInAccounts: (userIds) =>
         query(async () => {
