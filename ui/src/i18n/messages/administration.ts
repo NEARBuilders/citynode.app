@@ -21,6 +21,18 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Arborescence des communautés, validateurs et domaines",
     "社区树、验证节点和域名",
   ],
+  "admin.community.adminNote": [
+    "Admin note",
+    "Nota de administración",
+    "Note d’administration",
+    "管理员备注",
+  ],
+  "admin.community.adminNoteHint": [
+    "Only platform admins see this. The public description is in the profile below.",
+    "Solo la ven los administradores de la plataforma. La descripción pública está en el perfil de abajo.",
+    "Visible uniquement par les admins de la plateforme. La description publique se trouve dans le profil ci-dessous.",
+    "仅平台管理员可见。公开描述在下方的资料中。",
+  ],
   "admin.community.allNodes": ["All nodes", "Todos los nodos", "Tous les nœuds", "所有节点"],
   "admin.community.attention": ["Needs attention", "Requiere atención", "À traiter", "需要处理"],
   "admin.community.attentionNoOrganization": [
@@ -53,12 +65,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Le site est suspendu.",
     "站点已暂停。",
   ],
-  "admin.community.back": [
-    "Back to communities",
-    "Volver a comunidades",
-    "Retour aux communautés",
-    "返回社区列表",
-  ],
   "admin.community.backNodes": [
     "Back to nodes",
     "Volver a nodos",
@@ -66,6 +72,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "返回节点列表",
   ],
   "admin.community.children": ["Sub-communities", "Subcomunidades", "Sous-communautés", "子社区"],
+  "admin.community.detailsNotSaved": [
+    "Details weren't saved: {reason}",
+    "No se guardaron los detalles: {reason}",
+    "Les informations n’ont pas été enregistrées : {reason}",
+    "详情未保存：{reason}",
+  ],
   "admin.community.edit": [
     "Edit community",
     "Editar comunidad",
@@ -73,10 +85,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "编辑社区",
   ],
   "admin.community.editHint": [
-    "Name, description and extra metadata.",
-    "Nombre, descripción y metadatos adicionales.",
-    "Nom, description et métadonnées supplémentaires.",
-    "名称、描述和额外元数据。",
+    "Details for admins and the public profile, saved together.",
+    "Detalles para administradores y el perfil público, guardados juntos.",
+    "Informations pour les admins et profil public, enregistrés ensemble.",
+    "管理员信息和公开资料将一起保存。",
   ],
   "admin.community.eventsFailed": [
     "Couldn't load events.",
@@ -108,12 +120,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "{count} le mois dernier",
     "上月 {count}",
   ],
-  "admin.community.loadEditHint": [
-    "The requested community could not be loaded.",
-    "No se pudo cargar la comunidad solicitada.",
-    "La communauté demandée n'a pas pu être chargée.",
-    "无法加载请求的社区。",
-  ],
   "admin.community.loadError": [
     "Couldn't load this community",
     "No se pudo cargar esta comunidad",
@@ -139,6 +145,18 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "无法加载节点。",
   ],
   "admin.community.metadata": ["metadata", "metadatos", "métadonnées", "元数据"],
+  "admin.community.metadataInvalid": [
+    "Extra metadata must be a valid JSON object.",
+    "Los metadatos adicionales deben ser un objeto JSON válido.",
+    "Les métadonnées supplémentaires doivent être un objet JSON valide.",
+    "额外元数据必须是有效的 JSON 对象。",
+  ],
+  "admin.community.nameRequired": [
+    "Add a name for the community.",
+    "Añade un nombre para la comunidad.",
+    "Ajoutez un nom pour la communauté.",
+    "请填写社区名称。",
+  ],
   "admin.community.noChildren": [
     "No communities below this one.",
     "No hay comunidades subordinadas a esta.",
@@ -163,11 +181,23 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Pas encore d'organisation",
     "尚无组织",
   ],
+  "admin.community.noPublicDescription": [
+    "No public description yet.",
+    "Todavía no hay descripción pública.",
+    "Pas encore de description publique.",
+    "尚无公开描述。",
+  ],
   "admin.community.noSite": [
     "No community site yet",
     "Aún no hay sitio de la comunidad",
     "Pas encore de site communautaire",
     "尚无社区站点",
+  ],
+  "admin.community.noSiteProfile": [
+    "This community has no site yet, so it has no public profile.",
+    "Esta comunidad aún no tiene sitio, así que no tiene perfil público.",
+    "Cette communauté n’a pas encore de site, donc pas de profil public.",
+    "此社区尚无站点，因此没有公开资料。",
   ],
   "admin.community.noStakeValidators": [
     "No validators to stake with yet.",
@@ -187,12 +217,37 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Aucun événement à venir.",
     "暂无即将举行的活动。",
   ],
+  "admin.community.onExplore": ["On Explore", "En Explorar", "Dans Explorer", "已在探索页面显示"],
   "admin.community.parentId": ["Parent ID", "ID superior", "Identifiant parent", "上级 ID"],
   "admin.community.pastEvents": [
     "{count, plural, one {# past event} other {# past events}}",
     "{count, plural, one {# evento pasado} other {# eventos pasados}}",
     "{count, plural, one {# événement passé} other {# événements passés}}",
     "{count, plural, other {已结束 # 场活动}}",
+  ],
+  "admin.community.profileNotSaved": [
+    "Profile wasn't saved: {reason}",
+    "No se guardó el perfil: {reason}",
+    "Le profil n’a pas été enregistré : {reason}",
+    "资料未保存：{reason}",
+  ],
+  "admin.community.publicProfile": [
+    "Public profile",
+    "Perfil público",
+    "Profil public",
+    "公开资料",
+  ],
+  "admin.community.publicProfileHint": [
+    "What people see on Explore and the community page.",
+    "Lo que la gente ve en Explorar y en la página de la comunidad.",
+    "Ce que les gens voient dans Explorer et sur la page de la communauté.",
+    "大家在探索页面和社区页面上看到的内容。",
+  ],
+  "admin.community.saveFailed": [
+    "Some changes weren't saved",
+    "Algunos cambios no se guardaron",
+    "Certaines modifications n’ont pas été enregistrées",
+    "部分更改未保存",
   ],
   "admin.community.search": [
     "Search by name or slug",

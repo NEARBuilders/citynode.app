@@ -371,7 +371,7 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
                 <Link
                   to="/admin/nodes/$nodeId"
                   params={{ nodeId: node.nodeId }}
-                  search={{ tab: "profile" }}
+                  search={{ edit: true }}
                 />
               }
             >

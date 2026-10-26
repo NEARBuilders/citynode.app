@@ -12,7 +12,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components";
-import { ProfileEditor } from "@/components/discovery/profile-editor";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
@@ -20,13 +19,20 @@ import { savedEndowmentOf } from "@/lib/node-staking-proposals";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { BackLink } from "../-admin-ui";
+import { CommunityEditorSheet } from "./-community-editor";
 import {
   CommunityOverview,
   CommunityProgressProvider,
   CommunityStats,
 } from "./-community-overview";
+import { CommunityProfileSummary } from "./-community-profile-summary";
 import { NodeBindings } from "./-node-bindings";
-import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailTab } from "./-node-management";
+import {
+  NODE_DETAIL_TABS,
+  type NodeDetailTab,
+  parseNodeDetailTab,
+  parseNodeEditSearch,
+} from "./-node-management";
 import { NodeStakingSequence } from "./-node-staking-sequence";
 import { NodeValidators } from "./-node-validators";
 
@@ -35,12 +41,12 @@ const TAB_LABELS: Record<NodeDetailTab, AppMessageId> = {
   validators: "common.validators",
   management: "admin.sequence.tab",
   domains: "admin.domain.title",
-  profile: "community.profile",
 };
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
-  validateSearch: (search: Record<string, unknown>): { tab?: NodeDetailTab } => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: NodeDetailTab; edit?: true } => ({
     tab: parseNodeDetailTab(search.tab),
+    edit: parseNodeEditSearch(search),
   }),
   head: ({ match }) => ({
     meta: [
@@ -62,7 +68,7 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
 function AdminNodeDetail() {
   const translate = useAppTranslation();
   const { nodeId } = Route.useParams();
-  const { tab } = Route.useSearch();
+  const { tab, edit } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
@@ -144,14 +150,29 @@ function AdminNodeDetail() {
               variant="outline"
               nativeButton={false}
               data-testid="admin-node-edit"
-              render={<Link to="/admin/nodes/$nodeId/edit" params={{ nodeId: node.id }} />}
+              render={
+                <Link
+                  to="/admin/nodes/$nodeId"
+                  params={{ nodeId: node.id }}
+                  search={{ tab, edit: true }}
+                />
+              }
             >
               <PencilIcon />
-              {translate("org.editDetails")}
+              {translate("admin.community.edit")}
             </Button>
           </>
         }
         headerTestId="admin-node.heading"
+      />
+
+      <CommunityProfileSummary nodeId={node.id} name={node.name} hasSite={!!node.tenantId} />
+      <CommunityEditorSheet
+        node={node}
+        open={edit === true}
+        onOpenChange={(open) => {
+          if (!open) void navigate({ search: (prev) => ({ ...prev, edit: undefined }) });
+        }}
       />
 
       <CommunityProgressProvider node={node}>
@@ -203,7 +224,6 @@ function AdminNodeDetail() {
                 {translate("admin.community.noTenant")}
               </p>
             ))}
-          {activeTab === "profile" && <ProfileEditor nodeId={node.id} />}
         </div>
       </CommunityProgressProvider>
     </>
