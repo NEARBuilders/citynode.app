@@ -74,6 +74,7 @@ export type MemberSigningFailure =
   | "cancelled"
   | "credential"
   | "network"
+  | "unconfirmed"
   | "rejected"
   | "mismatch"
   | "signedOut"
@@ -140,7 +141,8 @@ const CREDENTIAL_PATTERN =
   /credential|passkey (?:not found|unavailable)|no passkey|(?:signing in with|creating) your passkey|screen lock|passkey is not registered/i;
 const REJECTED_PATTERN = /smart contract panicked|executionerror|functioncallerror|actionerror/i;
 const NETWORK_PATTERN =
-  /failed to fetch|load failed|network|timeout|timed out|relay|sender|sponsor|status (?:429|5\d\d)/i;
+  /failed to fetch|load failed|network|relay|sender|sponsor|status (?:429|5\d\d)/i;
+const UNCONFIRMED_PATTERN = /timeout|timed out/i;
 
 function errorName(error: unknown): string | undefined {
   return error && typeof error === "object" ? (Reflect.get(error, "name") as string) : undefined;
@@ -160,12 +162,9 @@ export function classifyMemberSigningError(error: unknown): MemberSigningFailure
   )
     return "credential";
   if (error instanceof FunctionCallError || REJECTED_PATTERN.test(message)) return "rejected";
-  if (
-    error instanceof NetworkError ||
-    error instanceof TransactionTimeoutError ||
-    NETWORK_PATTERN.test(message)
-  )
-    return "network";
+  if (error instanceof TransactionTimeoutError || UNCONFIRMED_PATTERN.test(message))
+    return "unconfirmed";
+  if (error instanceof NetworkError || NETWORK_PATTERN.test(message)) return "network";
   return "unknown";
 }
 
@@ -173,6 +172,7 @@ export const MEMBER_SIGNING_MESSAGES: Record<MemberSigningFailure, AppMessageId>
   cancelled: "memberWallet.error.cancelled",
   credential: "memberWallet.error.credential",
   network: "memberWallet.error.network",
+  unconfirmed: "memberWallet.error.unconfirmed",
   rejected: "memberWallet.error.rejected",
   mismatch: "memberWallet.error.mismatch",
   signedOut: "memberWallet.error.signedOut",
@@ -218,6 +218,8 @@ export function createMemberSigningController<T>(
     submit(task) {
       if (inFlight) return inFlight;
       if (state.status === "submitted") return Promise.resolve(state.result as T);
+      if (state.failure === "unconfirmed")
+        return Promise.reject(new MemberSigningError("unconfirmed"));
       const run = generation;
       const request = ++requests;
       const isCurrent = () => run === generation;

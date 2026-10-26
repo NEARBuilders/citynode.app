@@ -35,7 +35,7 @@ export function MemberSigningStatus({ state, onRetry }: MemberSigningStatusProps
   }
 
   const failure = state.failure ?? "unknown";
-  const canRetry = failure !== "signedOut" && failure !== "rejected";
+  const canRetry = failure !== "signedOut" && failure !== "rejected" && failure !== "unconfirmed";
   return (
     <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
       <span className="min-w-0 break-words">

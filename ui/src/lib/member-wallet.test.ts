@@ -1,4 +1,10 @@
-import { FunctionCallError, Near, NetworkError, type WalletConnection } from "near-kit";
+import {
+  FunctionCallError,
+  Near,
+  NetworkError,
+  TransactionTimeoutError,
+  type WalletConnection,
+} from "near-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   classifyMemberSigningError,
@@ -209,6 +215,13 @@ describe("classifyMemberSigningError", () => {
     expect(classifyMemberSigningError(error)).toBe("rejected");
   });
 
+  it.each([
+    ["a near-kit TransactionTimeoutError", new TransactionTimeoutError("tx-hash")],
+    ["an RPC timeout", new Error("Transaction timed out waiting for EXECUTED")],
+  ])("maps %s to unconfirmed, not a retryable network failure", (_label, error) => {
+    expect(classifyMemberSigningError(error)).toBe("unconfirmed");
+  });
+
   it("keeps unrecognised errors generic", () => {
     expect(classifyMemberSigningError(new Error("something odd"))).toBe("unknown");
     expect(classifyMemberSigningError(undefined)).toBe("unknown");
@@ -227,6 +240,7 @@ describe("classifyMemberSigningError", () => {
       "cancelled",
       "credential",
       "network",
+      "unconfirmed",
       "rejected",
       "mismatch",
       "signedOut",
@@ -356,5 +370,26 @@ describe("member signing controller", () => {
     expect(await first).toBe("hash");
     expect(await second).toBe("hash");
     expect(task).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to resubmit after an unconfirmed send until reset", async () => {
+    const { executor } = stubExecutor({ connected: MEMBER });
+    const controller = createMemberSigningController<string>(
+      createMemberSessionWallet({ sessionAccountId: MEMBER, executor }),
+    );
+    const task = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(new TransactionTimeoutError("tx-hash"))
+      .mockResolvedValueOnce("hash");
+
+    await expect(controller.submit(task)).rejects.toBeInstanceOf(TransactionTimeoutError);
+    expect(controller.getState()).toMatchObject({ status: "error", failure: "unconfirmed" });
+
+    await expect(controller.submit(task)).rejects.toMatchObject({ failure: "unconfirmed" });
+    expect(task).toHaveBeenCalledTimes(1);
+
+    controller.reset();
+    await expect(controller.submit(task)).resolves.toBe("hash");
+    expect(task).toHaveBeenCalledTimes(2);
   });
 });

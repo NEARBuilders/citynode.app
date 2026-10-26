@@ -56,6 +56,7 @@ describe("MemberSigningStatus", () => {
     ["network", "Couldn't reach the network to submit.", true],
     ["rejected", "The DAO contract rejected this request.", false],
     ["signedOut", "Sign in again to sign with your passkey wallet.", false],
+    ["unconfirmed", "Your request was sent but isn't confirmed yet.", false],
   ] as const)("explains a %s failure", (failure, text, retry) => {
     const onRetry = vi.fn();
     render(<MemberSigningStatus state={stateOf({ status: "error", failure })} onRetry={onRetry} />);

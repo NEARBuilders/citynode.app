@@ -1507,6 +1507,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Reconnectez-vous pour signer avec votre portefeuille à clé d’accès.",
     "请重新登录后再用通行密钥钱包签名。",
   ],
+  "memberWallet.error.unconfirmed": [
+    "Your request was sent but isn't confirmed yet. Check the proposals list before trying again.",
+    "Tu solicitud se envió, pero aún no está confirmada. Revisa la lista de propuestas antes de volver a intentarlo.",
+    "Votre demande a été envoyée mais n’est pas encore confirmée. Vérifiez la liste des propositions avant de réessayer.",
+    "你的请求已发送，但尚未确认。请先查看提案列表，再决定是否重试。",
+  ],
   "memberWallet.error.unknown": [
     "Signing failed. Try again.",
     "La firma falló. Inténtalo de nuevo.",
