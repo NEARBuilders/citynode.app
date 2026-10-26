@@ -250,7 +250,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.address": ["Address", "Dirección", "Adresse", "地址"],
   "common.admin": ["Admin", "Administración", "Administration", "管理"],
   "common.amount": ["Amount", "Cantidad", "Montant", "金额"],
-  "common.application": ["Application", "Solicitud", "Demande", "申请"],
   "common.approve": ["Approve", "Aprobar", "Approuver", "批准"],
   "common.available": ["Available", "Disponible", "Disponible", "可用"],
   "common.backHome": ["Back home", "Volver al inicio", "Retour à l'accueil", "返回首页"],
@@ -372,7 +371,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.overview": ["Overview", "Resumen", "Vue d'ensemble", "概览"],
   "common.parent": ["Parent", "Superior", "Parent", "上级"],
   "common.payload": ["payload", "datos", "données", "数据内容"],
-  "common.pendingLower": ["pending", "pendiente", "en attente", "待处理"],
   "common.platform": ["Platform", "Plataforma", "Plateforme", "平台"],
   "common.plugin": ["Plugin", "Plugin", "Plugin", "插件"],
   "common.preview": ["Preview", "Vista previa", "Aperçu", "预览"],
@@ -403,12 +401,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "common.saving": ["Saving…", "Guardando…", "Enregistrement…", "正在保存…"],
   "common.seeAll": ["See all", "Ver todo", "Tout voir", "查看全部"],
-  "common.seeAllCount": [
-    "See all ({count})",
-    "Ver todo ({count})",
-    "Tout voir ({count})",
-    "查看全部（{count}）",
-  ],
   "common.sending": ["Sending…", "Enviando…", "Envoi…", "正在发送…"],
   "common.settings": ["Settings", "Configuración", "Paramètres", "设置"],
   "common.showAll": ["Show all", "Mostrar todo", "Tout afficher", "显示全部"],
@@ -433,7 +425,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.status": ["Status", "Estado", "État", "状态"],
   "common.submission": ["Submission", "Envío", "Soumission", "提交内容"],
   "common.submitted": ["Submitted", "Enviado", "Soumis", "提交时间"],
-  "common.tenant": ["Tenant", "Sitio", "Site", "站点"],
   "common.title": ["Title", "Título", "Titre", "标题"],
   "common.type": ["Type", "Tipo", "Type", "类型"],
   "common.unnamed": ["Unnamed", "Sin nombre", "Sans nom", "未命名"],
@@ -444,7 +435,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.value": ["Value", "Valor", "Valeur", "值"],
   "common.verified": ["Verified", "Verificado", "Vérifié", "已验证"],
   "common.view": ["View", "Ver", "Voir", "查看"],
-  "common.wallet": ["Wallet", "Cartera", "Portefeuille", "钱包"],
   "common.working": ["Working…", "Procesando…", "Traitement…", "正在处理…"],
   "curators.added": ["Curator added", "Curador añadido", "Modérateur ajouté", "已添加管理员"],
   "curators.description": [
@@ -992,6 +982,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "L'application n'a pas pu se charger. Réessayez dans un instant.",
     "应用无法加载，请稍后重试。",
   ],
+  "error.nearUnavailable": [
+    "Couldn't reach NEAR, try again.",
+    "No se pudo conectar con NEAR. Inténtalo de nuevo.",
+    "Impossible de joindre NEAR. Réessayez.",
+    "无法连接 NEAR，请重试。",
+  ],
   "error.notFound": ["Page not found", "Página no encontrada", "Page introuvable", "页面不存在"],
   "error.notFoundDescription": [
     "This link may be old, or the page has moved.",
@@ -1531,7 +1527,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Impossible de vérifier l’appartenance à la DAO. Réessayez.",
     "无法验证 DAO 成员身份。请重试。",
   ],
-  "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
   "workspace.adminOnly": [
     "{area} is only for platform admins.",
     "{area} es solo para administradores de la plataforma.",
@@ -1748,4 +1743,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Créer une DAO sur Trezu",
     "在 Trezu 上创建 DAO",
   ],
+  "common.wallet": ["Wallet", "Cartera", "Portefeuille", "钱包"],
+  "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
 });

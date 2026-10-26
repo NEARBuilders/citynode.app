@@ -65,6 +65,7 @@ export interface SputnikPolicy {
   roles: SputnikRole[];
   default_vote_policy?: { threshold?: string | [number, number] };
   proposal_period?: string;
+  proposal_bond?: string;
 }
 
 /** Reads the most recent proposals, newest first, failing when the DAO cannot be read. */
@@ -125,6 +126,18 @@ export async function readDaoProposalsSince(
   return proposals.sort((a, b) => b.id - a.id);
 }
 
+/** Reads every proposal still inside the DAO's proposal period, failing when any read fails. */
+export async function readOpenDaoProposals(daoAccountId: string): Promise<SputnikProposal[]> {
+  if (!daoAccountId) return [];
+  const [policy, chainNowNs] = await Promise.all([
+    readSputnikPolicy(daoAccountId),
+    readChainTimeNs(),
+  ]);
+  const sinceNs = policy?.proposal_period ? chainNowNs - BigInt(policy.proposal_period) : 0n;
+  const proposals = await readDaoProposalsSince(daoAccountId, sinceNs);
+  return proposals.filter((proposal) => isOpenProposal(proposal, policy, chainNowNs));
+}
+
 export async function readChainTimeNs(): Promise<bigint> {
   const block = await getNear().rpc.getBlock({ finality: "final" });
   return BigInt(block.header.timestamp_nanosec);
@@ -159,14 +172,38 @@ export function roleMembers(role: SputnikRole): string[] {
   return [];
 }
 
-function permits(permissions: string[] | undefined, action: string): boolean {
-  if (!permissions) return false;
+/** Sputnik's policy label for each proposal kind (`ProposalKind::to_policy_label`). */
+export type SputnikProposalKindLabel =
+  | "config"
+  | "policy"
+  | "add_member_to_role"
+  | "remove_member_from_role"
+  | "call"
+  | "upgrade_self"
+  | "upgrade_remote"
+  | "transfer"
+  | "set_vote_token"
+  | "add_bounty"
+  | "bounty_done"
+  | "vote"
+  | "factory_info_update"
+  | "policy_add_or_update_role"
+  | "policy_remove_role"
+  | "policy_update_default_vote_policy"
+  | "policy_update_parameters";
+
+function permits(
+  permissions: string[] | undefined,
+  kind: SputnikProposalKindLabel,
+  action: string,
+): boolean {
+  if (!Array.isArray(permissions)) return false;
   return permissions.some(
     (permission) =>
-      permission === "*:*" ||
+      permission === `${kind}:${action}` ||
+      permission === `${kind}:*` ||
       permission === `*:${action}` ||
-      permission === "call:*" ||
-      permission === `call:${action}`,
+      permission === "*:*",
   );
 }
 
@@ -195,13 +232,16 @@ function accountInRoles(
 /** Roles that can approve a FunctionCall/Transfer proposal. */
 export function approverRoles(policy: SputnikPolicy | null | undefined): SputnikRole[] {
   if (!policy?.roles) return [];
-  return policy.roles.filter((role) => permits(role.permissions, "VoteApprove"));
+  return policy.roles.filter((role) => permits(role.permissions, "call", "VoteApprove"));
 }
 
-/** Roles that can add a FunctionCall ("call") proposal. */
-export function proposerRoles(policy: SputnikPolicy | null | undefined): SputnikRole[] {
+/** Roles that can add a proposal of `kind`, a FunctionCall ("call") proposal by default. */
+export function proposerRoles(
+  policy: SputnikPolicy | null | undefined,
+  kind: SputnikProposalKindLabel = "call",
+): SputnikRole[] {
   if (!policy?.roles) return [];
-  return policy.roles.filter((role) => permits(role.permissions, "AddProposal"));
+  return policy.roles.filter((role) => permits(role.permissions, kind, "AddProposal"));
 }
 
 export function canAccountPropose(
@@ -230,6 +270,48 @@ export function needsDelegationBalance(
   return [...proposerRoles(policy), ...approverRoles(policy)].some(
     (role) => (memberThreshold(role) ?? 0n) > 0n,
   );
+}
+
+export interface ProposalPermission {
+  canPropose: boolean;
+  reason: "allowed" | "no-account" | "no-policy" | "no-permission" | "bond-unavailable";
+  /** The exact deposit `add_proposal` requires, in yoctoNEAR; null when the bond is missing or unreadable. */
+  bondYocto: bigint | null;
+}
+
+function readableRoles(policy: unknown): policy is SputnikPolicy {
+  if (!policy || typeof policy !== "object") return false;
+  const roles = (policy as { roles?: unknown }).roles;
+  return Array.isArray(roles) && roles.every((role) => role && typeof role === "object");
+}
+
+function proposalBondYocto(policy: SputnikPolicy): bigint | null {
+  const bond = policy.proposal_bond;
+  return typeof bond === "string" && /^\d+$/.test(bond) ? BigInt(bond) : null;
+}
+
+/**
+ * Whether `accountId` may add a proposal of `kind` under `policy`, and the bond
+ * it must attach. Mirrors Sputnik's `can_execute_action`: any role the account
+ * matches (Everyone, its Group, or a Member weight at or below
+ * `delegationBalance`) grants `<kind>:AddProposal`, `<kind>:*`,
+ * `*:AddProposal` or `*:*`. A missing or unreadable policy or bond never allows
+ * submission.
+ */
+export function proposalPermission(
+  policy: unknown,
+  accountId: string | null,
+  kind: SputnikProposalKindLabel,
+  delegationBalance?: bigint,
+): ProposalPermission {
+  if (!readableRoles(policy)) return { canPropose: false, reason: "no-policy", bondYocto: null };
+  const bondYocto = proposalBondYocto(policy);
+  if (!accountId) return { canPropose: false, reason: "no-account", bondYocto };
+  if (!accountInRoles(proposerRoles(policy, kind), accountId, delegationBalance)) {
+    return { canPropose: false, reason: "no-permission", bondYocto };
+  }
+  if (bondYocto === null) return { canPropose: false, reason: "bond-unavailable", bondYocto };
+  return { canPropose: true, reason: "allowed", bondYocto };
 }
 
 export interface ApprovalThreshold {

@@ -1,6 +1,6 @@
 # Testing doctrine — when to test, where, and what the parent covers
 
-Companion to `tests/README.md` (commands and prerequisites live there) and
+Companion to your repo's tests README (commands and prerequisites live there) and
 [`change-placement.md`](change-placement.md). This document is the *judgement
 layer*: it tells you when to write a test at all, which layer owns it, what to
 assume the parent framework already covers, and how to write a regression test
@@ -21,7 +21,7 @@ Do **not** write a test when something already pins it:
 - a lower seam: an integration test on the router beats five component tests firing the same fetch through jsdom mocks
 
 Deletions-first applies to tests as to comments
-([`CODING_STANDARDS.md`](../../CODING_STANDARDS.md)): suites that re-test
+([`coding-standards.md`](coding-standards.md)): suites that re-test
 mocking scaffolding, or that duplicate coverage available one seam lower, get
 deleted when touched, not maintained. *Seen in:* five regression seed helpers
 each re-running auth migrations and re-implementing cookie minting — one shared
