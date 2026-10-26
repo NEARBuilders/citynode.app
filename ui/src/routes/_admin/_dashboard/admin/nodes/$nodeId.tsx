@@ -48,7 +48,11 @@ import {
 import { nodeKindLabel } from "@/lib/node-kind";
 import { savedEndowmentOf } from "@/lib/node-staking-proposals";
 import { pageTitle } from "@/lib/page-title";
-import { adminNodeDetailQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
+import {
+  adminNodeDetailQueryOptions,
+  adminNodeListQueryOptions,
+  communityEventStatsQueryOptions,
+} from "@/lib/queries/nodes";
 import {
   onboardingJoinsQueryOptions,
   recentUtcMonths,
@@ -62,6 +66,7 @@ import {
 } from "@/lib/queries/stake-pool";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import { isPendingProposal, readRecentDaoProposals } from "@/lib/sputnik-proposals";
+import { communityEventTotals } from "../-admin-progress";
 import {
   BackLink,
   Disclosure,
@@ -378,7 +383,8 @@ function CommunityStats({
   const authClient = useAuthClient();
   const { node } = summary;
   const orgId = tenant?.orgId ?? "";
-  const eventsQuery = useQuery(communityEventStatsQueryOptions(apiClient, node.id));
+  const eventsQuery = useQuery(communityEventStatsQueryOptions(apiClient));
+  const nodesQuery = useQuery(adminNodeListQueryOptions(apiClient, "all", "all"));
   const joinsQuery = useOrganizationJoins(orgId);
   const team = resolveTeamAccountId({
     tenantAccountId: tenant?.accountId,
@@ -396,7 +402,10 @@ function CommunityStats({
     }),
     enabled: !!pool && !!team,
   });
-  const events = eventsQuery.data?.find((row) => row.nodeId === node.id);
+  const events =
+    eventsQuery.data && nodesQuery.data
+      ? communityEventTotals(node.id, nodesQuery.data, eventsQuery.data)
+      : undefined;
   const noSite = !node.tenantId;
   const retryTenant = tenantQuery.isError ? () => void tenantQuery.refetch() : undefined;
 
@@ -404,13 +413,16 @@ function CommunityStats({
     <StatGrid>
       <StatFigure
         label={translate("admin.community.upcomingEvents")}
-        value={eventsQuery.data ? (events?.upcoming ?? 0) : "—"}
-        hint={
-          eventsQuery.data
-            ? translate("admin.community.pastEvents", { count: events?.past ?? 0 })
+        value={events?.upcoming ?? "—"}
+        hint={events ? translate("admin.community.pastEvents", { count: events.past }) : undefined}
+        onRetry={
+          eventsQuery.isError || nodesQuery.isError
+            ? () => {
+                if (eventsQuery.isError) void eventsQuery.refetch();
+                if (nodesQuery.isError) void nodesQuery.refetch();
+              }
             : undefined
         }
-        onRetry={eventsQuery.isError ? () => void eventsQuery.refetch() : undefined}
         testId="admin-node-stat-events"
       />
       <StatFigure

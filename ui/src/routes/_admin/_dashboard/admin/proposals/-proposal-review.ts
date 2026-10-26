@@ -113,6 +113,19 @@ export function awaitingReviewQueryOptions(apiClient: ApiClient, limit: number) 
   });
 }
 
+export function stalledSetupsQueryOptions(apiClient: ApiClient) {
+  return queryOptions({
+    queryKey: [...proposalReviewQueryKeys.all, "stalled-setups"] as const,
+    queryFn: () =>
+      apiClient.proposals.getProposals({
+        reviewStatus: "approved",
+        lifecycleStatus: "needs_review",
+        limit: 20,
+      }),
+    staleTime: 15 * 1000,
+  });
+}
+
 export function adminProposalListQueryOptions(apiClient: ApiClient, filter: ProposalReviewFilter) {
   return infiniteQueryOptions({
     queryKey: proposalReviewQueryKeys.list(filter),

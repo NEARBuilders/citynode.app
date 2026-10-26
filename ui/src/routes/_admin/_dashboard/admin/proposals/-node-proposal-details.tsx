@@ -59,7 +59,7 @@ function ParentName({ nodeId }: { nodeId: string }) {
   const apiClient = useApiClient();
   const parentQuery = useQuery(nodeByIdQueryOptions(apiClient, nodeId));
   if (parentQuery.isLoading) return <span className="text-muted-foreground">…</span>;
-  if (parentQuery.isError) {
+  if (parentQuery.isError && !parentQuery.data) {
     return (
       <span role="alert" className="flex flex-wrap items-center gap-1 text-destructive">
         {translate("admin.proposal.parentFailed")}

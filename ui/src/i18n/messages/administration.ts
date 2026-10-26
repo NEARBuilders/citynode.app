@@ -1767,10 +1767,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "本月已兑换码",
   ],
   "admin.manage.communitiesCount": [
-    "{count, plural, one {# community} other {# communities}}",
-    "{count, plural, one {# comunidad} other {# comunidades}}",
-    "{count, plural, one {# communauté} other {# communautés}}",
-    "{count, plural, other {# 个社区}}",
+    "{count, plural, one {# community with a site} other {# communities with a site}}",
+    "{count, plural, one {# comunidad con sitio} other {# comunidades con sitio}}",
+    "{count, plural, one {# communauté avec un site} other {# communautés avec un site}}",
+    "{count, plural, other {# 个有站点的社区}}",
   ],
   "admin.manage.proposalsPending": [
     "{count, plural, one {# needs action} other {# need action}}",

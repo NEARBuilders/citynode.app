@@ -22,7 +22,7 @@ export type CommunityJoinRow<T extends JoinsTenant> = {
 
 const NO_JOINS: JoinCounts = { redeemed: 0, newMembers: 0 };
 
-export function olderTenant<T extends JoinsTenant>(a: T, b: T) {
+function olderTenant<T extends JoinsTenant>(a: T, b: T) {
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? a : b;
   return a.id <= b.id ? a : b;
 }

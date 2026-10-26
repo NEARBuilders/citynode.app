@@ -161,10 +161,10 @@ export function adminNodeDetailQueryOptions(apiClient: ApiClient, nodeId: string
   });
 }
 
-export function communityEventStatsQueryOptions(apiClient: ApiClient, nodeId?: string) {
+export function communityEventStatsQueryOptions(apiClient: ApiClient) {
   return queryOptions({
-    queryKey: [...nodeQueryKeys.all, "event-stats", nodeId ?? "all"] as const,
-    queryFn: () => apiClient.getDiscoveryEventStats(nodeId ? { nodeId } : {}),
+    queryKey: [...nodeQueryKeys.all, "event-stats"] as const,
+    queryFn: () => apiClient.getDiscoveryEventStats({}),
     staleTime: NODE_STALE_TIME,
   });
 }

@@ -1,8 +1,8 @@
 import {
+  buildCommunityJoinRows,
   type JoinCounts,
   type JoinsTenant,
   type OrganizationJoins,
-  olderTenant,
 } from "./-community-joins";
 
 export type StakingState = "own" | "below" | "inherited" | "none";
@@ -29,7 +29,7 @@ export interface EventStat {
 export interface CommunityProgressRow<T extends JoinsTenant, N extends ProgressNode> {
   node: N;
   tenant: T;
-  joins: JoinCounts;
+  joins: JoinCounts | null;
   events: { upcoming: number; past: number };
   lastActivityAt: string | null;
   staking: StakingState;
@@ -75,7 +75,39 @@ export function stakingStates(summaries: readonly ProgressNodeSummary[]) {
   return states;
 }
 
-const NO_JOINS: JoinCounts = { redeemed: 0, newMembers: 0 };
+export function communityEventTotals(
+  nodeId: string,
+  summaries: readonly ProgressNodeSummary[],
+  eventStats: readonly EventStat[],
+) {
+  const byId = new Map(summaries.map(({ node }) => [node.id, node]));
+  const tenantId = byId.get(nodeId)?.tenantId ?? null;
+  const included = (id: string) => {
+    const seen = new Set<string>();
+    let current: string | null = id;
+    while (current && !seen.has(current)) {
+      if (current === nodeId) return true;
+      seen.add(current);
+      const node = byId.get(current);
+      if (!node || node.tenantId !== tenantId) return false;
+      current = node.parentId;
+    }
+    return false;
+  };
+  const totals = { upcoming: 0, past: 0, lastActivityAt: null as string | null };
+  for (const stat of eventStats) {
+    if (!included(stat.nodeId)) continue;
+    totals.upcoming += stat.upcoming;
+    totals.past += stat.past;
+    if (
+      stat.lastActivityAt &&
+      (!totals.lastActivityAt || stat.lastActivityAt > totals.lastActivityAt)
+    ) {
+      totals.lastActivityAt = stat.lastActivityAt;
+    }
+  }
+  return totals;
+}
 
 export function buildCommunityProgressRows<T extends JoinsTenant, N extends ProgressNode>(
   tenants: readonly T[],
@@ -83,79 +115,47 @@ export function buildCommunityProgressRows<T extends JoinsTenant, N extends Prog
   joins: OrganizationJoins | undefined,
   eventStats: readonly EventStat[],
 ): CommunityProgressRow<T, N>[] {
-  const groupOf = (tenant: T) => tenant.orgId ?? `tenant:${tenant.id}`;
   const liveTenants = new Map(
     tenants
       .filter((tenant) => tenant.status !== "pending_deletion")
       .map((tenant) => [tenant.id, tenant]),
   );
-  const representative = new Map<string, T>();
-  for (const tenant of liveTenants.values()) {
-    const existing = representative.get(groupOf(tenant));
-    representative.set(groupOf(tenant), existing ? olderTenant(existing, tenant) : tenant);
-  }
-  const joinsByOrg = new Map(
-    joins?.organizations.map(({ organizationId, redeemed, newMembers }) => [
-      organizationId,
-      { redeemed, newMembers },
-    ]),
+  const joinsByTenant = new Map(
+    buildCommunityJoinRows(tenants, joins, undefined).map((row) => [row.tenant.id, row.thisMonth]),
   );
-  const eventsByNode = new Map(eventStats.map((stat) => [stat.nodeId, stat]));
   const tenantOfNode = new Map(summaries.map(({ node }) => [node.id, node.tenantId]));
   const isTop = (node: N) => !node.parentId || tenantOfNode.get(node.parentId) !== node.tenantId;
-  const groups = new Map<string, { nodes: N[]; primary?: N }>();
+  const primary = new Map<string, N>();
   for (const { node } of summaries) {
-    const tenant = node.tenantId ? liveTenants.get(node.tenantId) : undefined;
-    if (!tenant) continue;
-    const key = groupOf(tenant);
-    const group = groups.get(key) ?? { nodes: [] };
-    group.nodes.push(node);
-    const owned = node.tenantId === representative.get(key)?.id;
-    const current = group.primary;
-    const currentOwned = current?.tenantId === representative.get(key)?.id;
-    const rank = (candidate: N, ownedByRep: boolean) =>
-      (ownedByRep ? 2 : 0) + (isTop(candidate) ? 1 : 0);
+    if (!node.tenantId || !liveTenants.has(node.tenantId)) continue;
+    const current = primary.get(node.tenantId);
     if (
       !current ||
-      rank(node, owned) > rank(current, currentOwned) ||
-      (rank(node, owned) === rank(current, currentOwned) &&
-        node.name.localeCompare(current.name) < 0)
+      (isTop(node) && !isTop(current)) ||
+      (isTop(node) === isTop(current) && node.name.localeCompare(current.name) < 0)
     ) {
-      group.primary = node;
+      primary.set(node.tenantId, node);
     }
-    groups.set(key, group);
   }
   const states = stakingStates(summaries);
-  const rows: CommunityProgressRow<T, N>[] = [];
-  for (const [key, { nodes, primary }] of groups) {
-    const tenant = representative.get(key);
-    if (!tenant || !primary) continue;
-    const events = { upcoming: 0, past: 0 };
-    let lastActivityAt: string | null = null;
-    for (const node of nodes) {
-      const stat = eventsByNode.get(node.id);
-      if (!stat) continue;
-      events.upcoming += stat.upcoming;
-      events.past += stat.past;
-      if (stat.lastActivityAt && (!lastActivityAt || stat.lastActivityAt > lastActivityAt)) {
-        lastActivityAt = stat.lastActivityAt;
-      }
-    }
-    rows.push({
-      node: primary,
-      tenant,
-      joins: (tenant.orgId && joinsByOrg.get(tenant.orgId)) || NO_JOINS,
-      events,
-      lastActivityAt,
-      staking: states.get(primary.id) ?? "none",
-    });
-  }
-  return rows.sort(
-    (a, b) =>
-      b.joins.redeemed - a.joins.redeemed ||
-      b.events.upcoming - a.events.upcoming ||
-      a.node.name.localeCompare(b.node.name),
-  );
+  return [...primary.entries()]
+    .map(([tenantId, node]) => {
+      const { lastActivityAt, ...events } = communityEventTotals(node.id, summaries, eventStats);
+      return {
+        node,
+        tenant: liveTenants.get(tenantId) as T,
+        joins: joinsByTenant.get(tenantId) ?? null,
+        events,
+        lastActivityAt,
+        staking: states.get(node.id) ?? ("none" as const),
+      };
+    })
+    .sort(
+      (a, b) =>
+        (b.joins?.redeemed ?? 0) - (a.joins?.redeemed ?? 0) ||
+        b.events.upcoming - a.events.upcoming ||
+        a.node.name.localeCompare(b.node.name),
+    );
 }
 
 export interface NeedsActionProposal {

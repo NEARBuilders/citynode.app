@@ -72,11 +72,13 @@ import {
   COMMUNITY_JOINS_LIMIT,
   visibleCommunityJoinRows,
 } from "./-community-joins";
+import { relayerStatus } from "./-relayer-status";
 import {
   adminProposalListQueryOptions,
   awaitingReviewQueryOptions,
   proposalTitle,
   proposalTypeLabel,
+  stalledSetupsQueryOptions,
 } from "./proposals/-proposal-review";
 
 const TREND_MONTHS = 6;
@@ -115,13 +117,13 @@ function AdminOverview() {
   const requestsQuery = useQuery(organizationRequestsQueryOptions(apiClient));
   const progress = useCommunityProgress();
 
-  const setups = (pendingQuery.data?.pages[0]?.data ?? []).filter(communitySetupNeedsAttention);
+  const setupsQuery = useQuery(stalledSetupsQueryOptions(apiClient));
+  const setups = (setupsQuery.data?.data ?? []).filter(communitySetupNeedsAttention);
   const awaiting = awaitingQuery.data?.data ?? [];
   const pendingTotal = pendingQuery.data?.pages[0]?.meta.total;
   const reviewTotal = awaitingQuery.data?.meta.total ?? 0;
   const relayer = relayerQuery.data;
-  const relayerReady = !!relayer?.accountId;
-  const relayerNeedsFunding = relayerReady && relayer?.enabled === false;
+  const relayerNeedsFunding = !!relayer?.accountId && relayer.enabled === false;
   const requestCount = requestsQuery.data?.length;
 
   return (
@@ -141,9 +143,9 @@ function AdminOverview() {
             title={translate("common.communities")}
             testId="admin.heading.nodes"
             status={
-              progress.nodeCount === undefined
+              progress.isLoading || progress.isError
                 ? translate("admin.communitiesDescription")
-                : translate("admin.manage.communitiesCount", { count: progress.nodeCount })
+                : translate("admin.manage.communitiesCount", { count: progress.rows.length })
             }
           />
           <ManageTile
@@ -192,15 +194,13 @@ function AdminOverview() {
                 ? translate("admin.loadFailed")
                 : relayerQuery.isLoading
                   ? translate("common.loading")
-                  : !relayerReady
-                    ? translate("admin.relayer.notConfigured")
-                    : relayerNeedsFunding
-                      ? translate("admin.relayer.needsFunding")
-                      : translate("admin.manage.relayerBalance", {
-                          balance: formatNearFigure(relayer?.balance, locale),
-                        })
+                  : relayer?.enabled
+                    ? translate("admin.manage.relayerBalance", {
+                        balance: formatNearFigure(relayer.balance, locale),
+                      })
+                    : relayerStatus(relayer, translate).label
             }
-            attention={relayerNeedsFunding || relayerQuery.isError || (!!relayer && !relayerReady)}
+            attention={relayerQuery.isError || (!!relayer && !relayer.enabled)}
             statusTestId="admin.stat.relayer"
           />
           <ManageTile
@@ -227,7 +227,7 @@ function AdminOverview() {
         relayerNeedsFunding={relayerNeedsFunding}
         organizationRequestCount={requestCount ?? 0}
         progress={progress}
-        sources={[pendingQuery, awaitingQuery, relayerQuery, requestsQuery]}
+        sources={[setupsQuery, awaitingQuery, relayerQuery, requestsQuery]}
       />
 
       <CommunityProgress progress={progress} />
@@ -256,7 +256,6 @@ function useCommunityProgress() {
   );
   return {
     rows,
-    nodeCount: nodesQuery.data?.length,
     isLoading: queries.some((query) => query.isLoading),
     isError: queries.some((query) => query.isError),
     retry: () => {
@@ -525,9 +524,11 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
                         {row.node.name}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{row.joins.redeemed}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {row.joins?.redeemed ?? "—"}
+                    </TableCell>
                     <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                      {row.joins.newMembers}
+                      {row.joins?.newMembers ?? "—"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       <span data-testid="admin-progress-events">

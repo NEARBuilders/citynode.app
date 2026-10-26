@@ -10,7 +10,9 @@ import { proposalSetupStatus } from "./-proposal-review";
 export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
   const translate = useAppTranslation();
   const showApply =
-    !proposalSetupStatus(proposal, translate) && proposal.applyStatus !== "not_started";
+    proposal.reviewStatus === "approved" &&
+    !proposalSetupStatus(proposal, translate) &&
+    proposal.applyStatus !== "not_started";
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <ProposalStatusCell proposal={proposal} t={translate} />
