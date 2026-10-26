@@ -98,7 +98,7 @@ const checkStakingPool = (
         Effect.mapError((error) =>
           error instanceof StakingPoolCheckFailed
             ? new ORPCError("CONNECTION_ERROR", {
-                message: error.message,
+                message: `Could not check the staking pool whitelist on ${error.network}`,
                 data: {
                   errorCode: "STAKING_POOL_CHECK_FAILED",
                   suggestion: "Try again in a moment",

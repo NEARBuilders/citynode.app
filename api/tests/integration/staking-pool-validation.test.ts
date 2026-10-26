@@ -74,7 +74,12 @@ describe("validator staking pool approval", () => {
   it("refuses to save when the whitelist can't be checked", async () => {
     const { owner, node } = await seedNode();
     pools.isApproved.mockReturnValue(
-      Effect.fail(new StakingPoolCheckFailed({ network: "mainnet", cause: new Error("rpc down") })),
+      Effect.fail(
+        new StakingPoolCheckFailed({
+          network: "mainnet",
+          cause: new Error("rpc.example.com responded 429"),
+        }),
+      ),
     );
 
     await expect(
@@ -85,6 +90,7 @@ describe("validator staking pool approval", () => {
       }),
     ).rejects.toMatchObject({
       code: "CONNECTION_ERROR",
+      message: "Could not check the staking pool whitelist on mainnet",
       data: { errorCode: "STAKING_POOL_CHECK_FAILED", suggestion: "Try again in a moment" },
     });
     expect(await owner.listValidators({ nodeId: node.id })).toEqual([]);
