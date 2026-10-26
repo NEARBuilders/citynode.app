@@ -75,7 +75,7 @@ export function StatFigure({
       </span>
       {onRetry ? (
         <span role="alert" className="flex items-center gap-1 text-sm text-destructive">
-          {translate("admin.loadFailed")}
+          <span data-testid={testId && `${testId}-error`}>{translate("admin.loadFailed")}</span>
           <Button variant="link" size="xs" className="h-auto p-0" onClick={onRetry}>
             {translate("common.retry")}
           </Button>

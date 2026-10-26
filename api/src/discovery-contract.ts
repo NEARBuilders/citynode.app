@@ -191,7 +191,6 @@ export const discoveryContract = {
     )
     .errors({ UNAUTHORIZED, FORBIDDEN }),
   getDiscoveryEventStats: oc
-    .input(z.object({ nodeId: z.uuid().optional() }))
     .output(
       z.array(
         z.object({

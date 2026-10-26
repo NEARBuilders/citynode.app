@@ -1596,18 +1596,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Communauté parente introuvable",
     "未找到上级社区",
   ],
-  "admin.proposal.showTechnical": [
-    "Show technical details",
-    "Mostrar detalles técnicos",
-    "Afficher les détails techniques",
-    "显示技术详情",
-  ],
-  "admin.proposal.hideTechnical": [
-    "Hide technical details",
-    "Ocultar detalles técnicos",
-    "Masquer les détails techniques",
-    "隐藏技术详情",
-  ],
   "admin.proposal.showDecisions": [
     "Show recent decisions",
     "Mostrar decisiones recientes",
@@ -1865,13 +1853,7 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Validateurs de staking",
     "质押验证节点",
   ],
-  "admin.community.statFailed": [
-    "Couldn't load",
-    "No se pudo cargar",
-    "Chargement impossible",
-    "无法加载",
-  ],
-  "admin.community.technicalDetails": [
+  "admin.technicalDetails": [
     "technical details",
     "detalles técnicos",
     "détails techniques",

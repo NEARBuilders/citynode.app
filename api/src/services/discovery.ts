@@ -728,7 +728,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         );
         return { visits: totals?.visits ?? 0, activatedVisits: totals?.activatedVisits ?? 0, rows };
       }),
-    eventStats: (nodeId: string | undefined, context: AuthContext) =>
+    eventStats: (context: AuthContext) =>
       Effect.gen(function* () {
         yield* requireAdmin(context);
         const now = new Date(yield* Clock.currentTimeMillis).toISOString();
@@ -753,7 +753,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
                 sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
                 sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
                 sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
-                nodeId ? eq(discoveryActivities.ownerNodeId, nodeId) : undefined,
               ),
             )
             .groupBy(discoveryActivities.ownerNodeId),

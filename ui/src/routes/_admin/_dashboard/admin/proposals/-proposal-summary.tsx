@@ -42,8 +42,8 @@ export function ProposalTechnicalDetails({ proposal }: { proposal: Proposal }) {
   const orgId = (proposal.payload as { orgId?: unknown } | null)?.orgId;
   return (
     <Disclosure
-      label={translate("admin.proposal.showTechnical")}
-      openLabel={translate("admin.proposal.hideTechnical")}
+      label={translate("admin.showNamed", { label: translate("admin.technicalDetails") })}
+      openLabel={translate("admin.hideNamed", { label: translate("admin.technicalDetails") })}
       testId="admin-proposal-technical"
     >
       <div className="flex flex-col gap-6">

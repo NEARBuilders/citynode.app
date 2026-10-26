@@ -9,7 +9,7 @@ import {
   UsersIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
 import { type ComponentType, type ReactElement, type ReactNode, useMemo, useState } from "react";
@@ -24,7 +24,6 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -42,11 +41,7 @@ import {
 } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeListQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
-import {
-  onboardingJoinsQueryOptions,
-  recentUtcMonths,
-  utcMonth,
-} from "@/lib/queries/onboarding-joins";
+import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { organizationRequestsQueryOptions } from "@/lib/queries/organizations";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
@@ -66,27 +61,23 @@ import {
   StatFigure,
   StatGrid,
 } from "./-admin-ui";
-import { CommunityJoinChart } from "./-community-join-chart";
+import { CommunityJoinTrend } from "./-community-join-chart";
 import {
   buildCommunityJoinRows,
   COMMUNITY_JOINS_LIMIT,
   visibleCommunityJoinRows,
 } from "./-community-joins";
 import {
-  adminProposalListQueryOptions,
   awaitingReviewQueryOptions,
+  pendingProposalCountQueryOptions,
   proposalTitle,
   proposalTypeLabel,
   stalledSetupsQueryOptions,
 } from "./proposals/-proposal-review";
 
-const TREND_MONTHS = 6;
-
 export const Route = createFileRoute("/_admin/_dashboard/admin/")({
   loader: ({ context }) =>
-    context.queryClient.ensureInfiniteQueryData(
-      adminProposalListQueryOptions(context.apiClient, "pending"),
-    ),
+    context.queryClient.ensureQueryData(pendingProposalCountQueryOptions(context.apiClient)),
   head: ({ match }) => ({
     meta: [
       {
@@ -110,7 +101,7 @@ function AdminOverview() {
   const { runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
 
-  const pendingQuery = useInfiniteQuery(adminProposalListQueryOptions(apiClient, "pending"));
+  const pendingQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
   const awaitingQuery = useQuery(awaitingReviewQueryOptions(apiClient, APPLICATION_ITEMS_LIMIT));
   const relayerQuery = useRelayerInfoQuery();
   const requestsQuery = useQuery(organizationRequestsQueryOptions(apiClient));
@@ -119,7 +110,7 @@ function AdminOverview() {
   const setupsQuery = useQuery(stalledSetupsQueryOptions(apiClient));
   const setups = (setupsQuery.data?.data ?? []).filter(communitySetupNeedsAttention);
   const awaiting = awaitingQuery.data?.data ?? [];
-  const pendingTotal = pendingQuery.data?.pages[0]?.meta.total;
+  const pendingTotal = pendingQuery.data?.meta.total;
   const reviewTotal = awaitingQuery.data?.meta.total ?? 0;
   const relayer = relayerQuery.data;
   const relayerNeedsFunding = !!relayer?.accountId && relayer.enabled === false;
@@ -584,13 +575,9 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
 function CommunityJoins() {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
-  const months = recentUtcMonths(TREND_MONTHS);
   const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
-  const monthQueries = useQueries({
-    queries: months.map((month) => onboardingJoinsQueryOptions(apiClient, month)),
-  });
-  const currentQuery = monthQueries[TREND_MONTHS - 1]!;
-  const previousQuery = monthQueries[TREND_MONTHS - 2]!;
+  const currentQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(0)));
+  const previousQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(-1)));
   const tableQueries = [tenantsQuery, currentQuery, previousQuery];
   const [showAll, setShowAll] = useState(false);
 
@@ -599,12 +586,6 @@ function CommunityJoins() {
     [tenantsQuery.data, currentQuery.data, previousQuery.data],
   );
   const visibleRows = visibleCommunityJoinRows(rows, showAll);
-  const chartReady = !tenantsQuery.isLoading && monthQueries.every((query) => query.isSuccess);
-  const chartFailed = tenantsQuery.isError || monthQueries.some((query) => query.isError);
-  const monthData = months.map((month, index) => ({ month, joins: monthQueries[index]?.data }));
-  const retry = () => {
-    for (const query of [tenantsQuery, ...monthQueries]) if (query.isError) void query.refetch();
-  };
 
   return (
     <section className="flex flex-col gap-6">
@@ -640,16 +621,14 @@ function CommunityJoins() {
           testId="admin.stat.new-members"
         />
       </StatGrid>
-      {chartFailed ? (
+      {tenantsQuery.isError ? (
         <LoadError
           message={translate("admin.redemptions.failed")}
-          onRetry={retry}
+          onRetry={() => void tenantsQuery.refetch()}
           testId="admin-joins-error"
         />
-      ) : chartReady ? (
-        <CommunityJoinChart tenants={tenantsQuery.data ?? []} months={monthData} />
       ) : (
-        <Skeleton className="h-64 w-full" />
+        <CommunityJoinTrend tenants={tenantsQuery.data} />
       )}
       <Disclosure
         label={translate("admin.redemptions.showTable")}

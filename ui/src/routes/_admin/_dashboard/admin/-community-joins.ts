@@ -65,13 +65,13 @@ export function visibleCommunityJoinRows<T>(rows: readonly T[], showAll: boolean
   return showAll ? rows : rows.slice(0, COMMUNITY_JOINS_LIMIT);
 }
 
-export const JOIN_TREND_SERIES = 4;
+const JOIN_TREND_SERIES = 4;
 
 export type JoinMetric = keyof JoinCounts;
 
 export type JoinTrendSeries = { key: string; label: string; other?: true };
 
-export type JoinTrendMonth = {
+type JoinTrendMonth = {
   month: string;
   total: number;
   values: Record<string, number>;

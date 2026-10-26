@@ -491,15 +491,12 @@ it("counts upcoming and past published events per community for platform admins 
     publishedAt: new Date(now + 7 * 86400000).toISOString(),
   });
 
-  const [stats] = await admin.getDiscoveryEventStats({ nodeId: node.id });
+  const stats = (await admin.getDiscoveryEventStats()).find((row) => row.nodeId === node.id);
   expect(stats).toMatchObject({ nodeId: node.id, upcoming: 3, past: 1 });
   const lastActivity = Date.parse(stats?.lastActivityAt ?? "");
   expect(Math.abs(lastActivity - (now - 3600000))).toBeLessThan(1000);
-  expect(await admin.getDiscoveryEventStats({})).toEqual(
-    expect.arrayContaining([expect.objectContaining({ nodeId: node.id, upcoming: 3 })]),
-  );
-  await expect(editor.getDiscoveryEventStats({ nodeId: node.id })).rejects.toMatchObject({
+  await expect(editor.getDiscoveryEventStats()).rejects.toMatchObject({
     code: "FORBIDDEN",
   });
-  await expect(member.getDiscoveryEventStats({})).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(member.getDiscoveryEventStats()).rejects.toMatchObject({ code: "FORBIDDEN" });
 });

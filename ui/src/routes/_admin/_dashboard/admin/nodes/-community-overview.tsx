@@ -1,7 +1,7 @@
-import { CaretDownIcon, CaretRightIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { useApiClient } from "@/app";
 import { Button, InfoRow, NodeValidatorTable, SectionHeader, Skeleton } from "@/components";
 import { EventDate } from "@/components/discovery/event-onboarding";
@@ -18,14 +18,11 @@ import { useNow } from "@/hooks/use-client";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
-import {
-  onboardingJoinsQueryOptions,
-  recentUtcMonths,
-  utcMonth,
-} from "@/lib/queries/onboarding-joins";
+import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
-import { ListSkeleton, LoadError, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
-import { CommunityJoinChart } from "../-community-join-chart";
+import { Disclosure, ListSkeleton, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
+import { CommunityJoinTrend } from "../-community-join-chart";
+import type { JoinsTenant } from "../-community-joins";
 import {
   type AttentionItem,
   communityAttention,
@@ -51,8 +48,6 @@ const ATTENTION_LABELS: Record<AttentionItem, AppMessageId> = {
   noStaking: "admin.community.attentionNoStaking",
   noUpcomingEvents: "admin.community.noUpcomingEvents",
 };
-
-const TREND_MONTHS = 6;
 
 function useOrganizationJoins(orgId: string) {
   const apiClient = useApiClient();
@@ -80,38 +75,15 @@ function useOrganizationJoins(orgId: string) {
   };
 }
 
-function CommunityTrend({
-  tenant,
-}: {
-  tenant: { id: string; name: string; orgId: string | null; status: string; createdAt: string };
-}) {
+function CommunityTrend({ tenant }: { tenant: JoinsTenant }) {
   const translate = useAppTranslation();
-  const apiClient = useApiClient();
-  const months = recentUtcMonths(TREND_MONTHS);
-  const monthQueries = useQueries({
-    queries: months.map((month) => onboardingJoinsQueryOptions(apiClient, month)),
-  });
   return (
     <section className="flex flex-col gap-6">
       <SectionHeader
         title={translate("admin.community.joinsTitle")}
         sectionTestId="admin-node.section.joins"
       />
-      {monthQueries.some((query) => query.isError) ? (
-        <LoadError
-          message={translate("admin.redemptions.failed")}
-          onRetry={() => {
-            for (const query of monthQueries) if (query.isError) void query.refetch();
-          }}
-        />
-      ) : monthQueries.every((query) => query.isSuccess) ? (
-        <CommunityJoinChart
-          tenants={[tenant]}
-          months={months.map((month, index) => ({ month, joins: monthQueries[index]?.data }))}
-        />
-      ) : (
-        <Skeleton className="h-56 w-full" />
-      )}
+      <CommunityJoinTrend tenants={[tenant]} />
     </section>
   );
 }
@@ -164,19 +136,8 @@ function ProgressStat<V>({
   onRetry: () => void;
   testId: string;
 }) {
-  const translate = useAppTranslation();
   if (state.status === "error") {
-    return (
-      <div className="flex min-w-0 flex-col gap-1" data-testid={testId}>
-        <span className="text-sm text-muted-foreground">{label}</span>
-        <span role="alert" className="text-sm text-destructive" data-testid={`${testId}-error`}>
-          {translate("admin.community.statFailed")}
-        </span>
-        <Button variant="outline" size="sm" className="self-start" onClick={onRetry}>
-          {translate("common.retry")}
-        </Button>
-      </div>
-    );
+    return <StatFigure label={label} value="—" onRetry={onRetry} testId={testId} />;
   }
   if (state.status === "loading") {
     return <StatFigure label={label} value={<Skeleton className="h-10 w-16" />} testId={testId} />;
@@ -462,39 +423,29 @@ function UpcomingEvents({
 
 function TechnicalDetails({ node }: { node: CommunityNode }) {
   const translate = useAppTranslation();
-  const [open, setOpen] = useState(false);
-  const label = translate("admin.community.technicalDetails");
+  const label = translate("admin.technicalDetails");
   return (
-    <div className="flex flex-col gap-3">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="self-start"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-        data-testid="admin-node-technical-details"
-      >
-        {open ? <CaretDownIcon /> : <CaretRightIcon />}
-        {translate(open ? "admin.hideNamed" : "admin.showNamed", { label })}
-      </Button>
-      {open && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col">
-            <InfoRow label={translate("admin.community.id")} value={node.id} mono />
-            <InfoRow
-              label={translate("admin.community.siteId")}
-              value={node.tenantId ?? translate("common.none")}
-              mono={!!node.tenantId}
-            />
-            <InfoRow
-              label={translate("admin.community.parentId")}
-              value={node.parentId ?? translate("common.none")}
-              mono={!!node.parentId}
-            />
-          </div>
-          <RawJsonDisclosure value={node.metadata} label={translate("admin.community.metadata")} />
+    <Disclosure
+      label={translate("admin.showNamed", { label })}
+      openLabel={translate("admin.hideNamed", { label })}
+      testId="admin-node-technical-details"
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col">
+          <InfoRow label={translate("admin.community.id")} value={node.id} mono />
+          <InfoRow
+            label={translate("admin.community.siteId")}
+            value={node.tenantId ?? translate("common.none")}
+            mono={!!node.tenantId}
+          />
+          <InfoRow
+            label={translate("admin.community.parentId")}
+            value={node.parentId ?? translate("common.none")}
+            mono={!!node.parentId}
+          />
         </div>
-      )}
-    </div>
+        <RawJsonDisclosure value={node.metadata} label={translate("admin.community.metadata")} />
+      </div>
+    </Disclosure>
   );
 }

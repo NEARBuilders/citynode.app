@@ -164,7 +164,7 @@ export function adminNodeDetailQueryOptions(apiClient: ApiClient, nodeId: string
 export function communityEventStatsQueryOptions(apiClient: ApiClient) {
   return queryOptions({
     queryKey: [...nodeQueryKeys.all, "event-stats"] as const,
-    queryFn: () => apiClient.getDiscoveryEventStats({}),
+    queryFn: () => apiClient.getDiscoveryEventStats(),
     staleTime: NODE_STALE_TIME,
   });
 }

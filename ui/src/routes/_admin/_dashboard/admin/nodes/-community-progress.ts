@@ -1,9 +1,19 @@
-export type CommunityEvent = {
-  kind: string;
-  status: string;
-  startsAt: string | null;
-  endsAt: string | null;
-};
+import type { ApiClient } from "@/app";
+
+export type CommunityEvent = Pick<
+  Awaited<ReturnType<ApiClient["listDiscoveryActivities"]>>[number],
+  "kind" | "status" | "publishedAt" | "startsAt" | "endsAt" | "luma"
+>;
+
+function isListedEvent(activity: CommunityEvent, now: number) {
+  return (
+    activity.kind === "event" &&
+    activity.status === "published" &&
+    !activity.luma?.hidden &&
+    activity.luma?.available !== false &&
+    Date.parse(activity.publishedAt) <= now
+  );
+}
 
 export type SplitEvents<T> = { upcoming: T[]; past: T[] };
 
@@ -14,7 +24,7 @@ export function splitCommunityEvents<T extends CommunityEvent>(
   const upcoming: T[] = [];
   const past: T[] = [];
   for (const activity of activities) {
-    if (activity.kind !== "event" || activity.status !== "published") continue;
+    if (!isListedEvent(activity, now)) continue;
     const boundary = activity.endsAt ?? activity.startsAt;
     if (!boundary || Date.parse(boundary) >= now) upcoming.push(activity);
     else past.push(activity);

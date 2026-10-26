@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   APPLICATION_ITEMS_LIMIT,
   buildCommunityProgressRows,
-  communityEventTotals,
   deriveNeedsAction,
   type NeedsActionProposal,
   STAKING_ITEMS_LIMIT,
@@ -110,34 +109,12 @@ describe("buildCommunityProgressRows", () => {
   });
 });
 
-describe("communityEventTotals", () => {
-  it("adds events from sub-communities on the same site only", () => {
-    const summaries = [
-      summary("city", null, 0, "t1"),
-      summary("district", "city", 0, "t1"),
-      summary("block", "district", 0, "t1"),
-      summary("neighbour", "city", 0, "t2"),
-    ];
-    const stats = [
-      { nodeId: "city", upcoming: 1, past: 0, lastActivityAt: "2026-10-01T00:00:00.000Z" },
-      { nodeId: "block", upcoming: 2, past: 1, lastActivityAt: "2026-10-09T00:00:00.000Z" },
-      { nodeId: "neighbour", upcoming: 5, past: 5, lastActivityAt: "2026-10-20T00:00:00.000Z" },
-    ];
-    expect(communityEventTotals("city", summaries, stats)).toEqual({
-      upcoming: 3,
-      past: 1,
-      lastActivityAt: "2026-10-09T00:00:00.000Z",
-    });
-    expect(communityEventTotals("district", summaries, stats)).toMatchObject({ upcoming: 2 });
-  });
-});
-
 describe("deriveNeedsAction", () => {
   const setup: NeedsActionProposal = {
     id: "p1",
     pluginId: "node",
     entityId: "karachi",
-    reviewStatus: "approved",
+    reviewStatus: "approved" as const,
     title: "Karachi",
     createdAt: "2026-10-20T00:00:00.000Z",
     setupNeedsAttention: true,
@@ -156,7 +133,12 @@ describe("deriveNeedsAction", () => {
   });
 
   it("lists failed setups, applications, relayer funding, organization requests and unstaked communities", () => {
-    const pending = { ...setup, id: "p2", reviewStatus: "pending", setupNeedsAttention: false };
+    const pending = {
+      ...setup,
+      id: "p2",
+      reviewStatus: "pending" as const,
+      setupNeedsAttention: false,
+    };
     expect(
       deriveNeedsAction({
         pendingReviewCount: 1,
@@ -181,7 +163,7 @@ describe("deriveNeedsAction", () => {
     const pending = Array.from({ length: APPLICATION_ITEMS_LIMIT + 2 }, (_, index) => ({
       ...setup,
       id: `p${index}`,
-      reviewStatus: "pending",
+      reviewStatus: "pending" as const,
       setupNeedsAttention: false,
     }));
     const items = deriveNeedsAction({

@@ -1,3 +1,6 @@
+import type { ApiClient } from "@/app";
+import type { AdminNodeListRow } from "@/lib/queries/nodes";
+import type { Proposal } from "@/lib/queries/proposals";
 import {
   buildCommunityJoinRows,
   type JoinCounts,
@@ -7,26 +10,15 @@ import {
 
 export type StakingState = "own" | "below" | "inherited" | "none";
 
-export interface ProgressNode {
-  id: string;
-  name: string;
-  parentId: string | null;
-  tenantId: string | null;
-}
+type NodeRecord = Awaited<ReturnType<ApiClient["listNodes"]>>[number];
 
-export interface ProgressNodeSummary {
-  node: ProgressNode;
-  validatorCount: number;
-}
+type ProgressNode = Pick<NodeRecord, "id" | "name" | "parentId" | "tenantId">;
 
-export interface EventStat {
-  nodeId: string;
-  upcoming: number;
-  past: number;
-  lastActivityAt: string | null;
-}
+type ProgressNodeSummary = { node: ProgressNode } & Pick<AdminNodeListRow, "validatorCount">;
 
-export interface CommunityProgressRow<T extends JoinsTenant, N extends ProgressNode> {
+type EventStat = Awaited<ReturnType<ApiClient["getDiscoveryEventStats"]>>[number];
+
+interface CommunityProgressRow<T extends JoinsTenant, N extends ProgressNode> {
   node: N;
   tenant: T;
   joins: JoinCounts | null;
@@ -75,40 +67,6 @@ export function stakingStates(summaries: readonly ProgressNodeSummary[]) {
   return states;
 }
 
-export function communityEventTotals(
-  nodeId: string,
-  summaries: readonly ProgressNodeSummary[],
-  eventStats: readonly EventStat[],
-) {
-  const byId = new Map(summaries.map(({ node }) => [node.id, node]));
-  const tenantId = byId.get(nodeId)?.tenantId ?? null;
-  const included = (id: string) => {
-    const seen = new Set<string>();
-    let current: string | null = id;
-    while (current && !seen.has(current)) {
-      if (current === nodeId) return true;
-      seen.add(current);
-      const node = byId.get(current);
-      if (!node || node.tenantId !== tenantId) return false;
-      current = node.parentId;
-    }
-    return false;
-  };
-  const totals = { upcoming: 0, past: 0, lastActivityAt: null as string | null };
-  for (const stat of eventStats) {
-    if (!included(stat.nodeId)) continue;
-    totals.upcoming += stat.upcoming;
-    totals.past += stat.past;
-    if (
-      stat.lastActivityAt &&
-      (!totals.lastActivityAt || stat.lastActivityAt > totals.lastActivityAt)
-    ) {
-      totals.lastActivityAt = stat.lastActivityAt;
-    }
-  }
-  return totals;
-}
-
 export function buildCommunityProgressRows<T extends JoinsTenant, N extends ProgressNode>(
   tenants: readonly T[],
   summaries: readonly (ProgressNodeSummary & { node: N })[],
@@ -138,17 +96,22 @@ export function buildCommunityProgressRows<T extends JoinsTenant, N extends Prog
     }
   }
   const states = stakingStates(summaries);
+  const eventsByNode = new Map(eventStats.map((stat) => [stat.nodeId, stat]));
   return [...primary.entries()]
-    .map(([tenantId, node]) => {
-      const { lastActivityAt, ...events } = communityEventTotals(node.id, summaries, eventStats);
-      return {
-        node,
-        tenant: liveTenants.get(tenantId) as T,
-        joins: joinsByTenant.get(tenantId) ?? null,
-        events,
-        lastActivityAt,
-        staking: states.get(node.id) ?? ("none" as const),
-      };
+    .flatMap(([tenantId, node]) => {
+      const tenant = liveTenants.get(tenantId);
+      if (!tenant) return [];
+      const stat = eventsByNode.get(node.id);
+      return [
+        {
+          node,
+          tenant,
+          joins: joinsByTenant.get(tenantId) ?? null,
+          events: { upcoming: stat?.upcoming ?? 0, past: stat?.past ?? 0 },
+          lastActivityAt: stat?.lastActivityAt ?? null,
+          staking: states.get(node.id) ?? ("none" as const),
+        },
+      ];
     })
     .sort(
       (a, b) =>
@@ -158,15 +121,10 @@ export function buildCommunityProgressRows<T extends JoinsTenant, N extends Prog
     );
 }
 
-export interface NeedsActionProposal {
-  id: string;
-  pluginId: string;
-  entityId: string;
-  reviewStatus: string;
-  title: string;
-  createdAt: string;
-  setupNeedsAttention: boolean;
-}
+export type NeedsActionProposal = Pick<
+  Proposal,
+  "id" | "pluginId" | "entityId" | "reviewStatus" | "createdAt"
+> & { title: string; setupNeedsAttention: boolean };
 
 export type NeedsActionItem =
   | { kind: "application"; proposal: NeedsActionProposal }

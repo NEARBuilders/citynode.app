@@ -1,7 +1,12 @@
+import { useQueries } from "@tanstack/react-query";
 import { cn } from "cn";
 import { useMemo, useState } from "react";
+import { useApiClient } from "@/app";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { onboardingJoinsQueryOptions, recentUtcMonths } from "@/lib/queries/onboarding-joins";
+import { LoadError } from "./-admin-ui";
 import {
   buildJoinTrend,
   type JoinMetric,
@@ -13,6 +18,36 @@ import {
 const SERIES_COLORS = ["bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"];
 const OTHER_COLOR = "bg-muted-foreground/40";
 const PLOT_HEIGHT = 176;
+const TREND_MONTHS = 6;
+
+export function CommunityJoinTrend({ tenants }: { tenants: readonly JoinsTenant[] | undefined }) {
+  const translate = useAppTranslation();
+  const apiClient = useApiClient();
+  const months = recentUtcMonths(TREND_MONTHS);
+  const monthQueries = useQueries({
+    queries: months.map((month) => onboardingJoinsQueryOptions(apiClient, month)),
+  });
+  if (monthQueries.some((query) => query.isError)) {
+    return (
+      <LoadError
+        message={translate("admin.redemptions.failed")}
+        onRetry={() => {
+          for (const query of monthQueries) if (query.isError) void query.refetch();
+        }}
+        testId="admin-joins-error"
+      />
+    );
+  }
+  if (!tenants || !monthQueries.every((query) => query.isSuccess)) {
+    return <Skeleton className="h-64 w-full" />;
+  }
+  return (
+    <CommunityJoinChart
+      tenants={tenants}
+      months={months.map((month, index) => ({ month, joins: monthQueries[index]?.data }))}
+    />
+  );
+}
 
 function seriesColor(series: JoinTrendSeries, index: number) {
   return series.other ? OTHER_COLOR : (SERIES_COLORS[index] ?? OTHER_COLOR);
@@ -25,7 +60,7 @@ function niceMax(value: number) {
   return step * magnitude * 2;
 }
 
-export function CommunityJoinChart({
+function CommunityJoinChart({
   tenants,
   months,
 }: {
