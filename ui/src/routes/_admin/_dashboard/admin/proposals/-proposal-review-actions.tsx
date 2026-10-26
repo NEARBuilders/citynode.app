@@ -66,19 +66,12 @@ export function ProposalReviewActions({
       )}
 
       {isNodeProposal && (
-        <div className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            {translate("admin.proposedDaoNamed", {
-              account: proposalDaoAccountId ?? translate("admin.proposal.daoFallback"),
-            })}
-          </p>
-          <ConnectDao
-            purpose="proposal-review"
-            variant="plain"
-            expectedDaoAccountId={proposalDaoAccountId}
-            onVerified={onDaoVerified}
-          />
-        </div>
+        <ConnectDao
+          purpose="proposal-review"
+          variant="plain"
+          expectedDaoAccountId={proposalDaoAccountId}
+          onVerified={onDaoVerified}
+        />
       )}
 
       <div className="flex flex-col gap-2">

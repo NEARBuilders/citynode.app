@@ -1,9 +1,12 @@
 # How it all fits — the everything.dev runtime, drawn
 
 For the human wondering how this app, the framework, and the deployed runtime
-connect. Two companions: [`docs/runtime-map.md`](../runtime-map.md) is the
-**operational** view (what is local vs remote, how to override) and
-[`CONTEXT.md`](../../CONTEXT.md) is the domain vocabulary. An agent can teach any
+connect. Two companions: the runtime map (`docs/agents/runtime-map.md`, with the
+generated inventory in `.bos/generated/runtime-map.json` and the typed
+`ui/src/lib/runtime-map.gen.ts` — regenerate with `pnpm run types:gen`) is the
+**operational** view (what is local vs remote, who owns each path, how to
+override) and [`GLOSSARY.md`](../../GLOSSARY.md) is the
+domain vocabulary. An agent can teach any
 section below interactively (`/teach`) — this file is the reference those
 lessons cite.
 
@@ -11,7 +14,7 @@ lessons cite.
 
 ```mermaid
 flowchart LR
-  A["bos.app.ts<br/>(authored descriptor)"] -->|"bos deploy"| B["FastKV registry<br/>bos://v1.citynode.near/citynode.app"]
+  A["bos.app.ts<br/>(authored descriptor)"] -->|"bos deploy"| B["FastKV registry<br/>bos://&lt;account&gt;/&lt;gateway&gt;"]
   B -->|"resolve at boot"| C["Host process<br/>(universal image)"]
   C -->|"extends"| D["Parent config<br/>dev.everything.near/everything.dev"]
   C -->|"Module Federation"| E["Remote bundles on the CDN<br/>(host · auth · parent ui)"]
@@ -69,7 +72,7 @@ state disagree, believe the state and fix the doc.
 
 | Surface | What it teaches |
 |---|---|
-| `generated/runtime-map.json` + `ui/src/lib/runtime-map.gen.ts` | what composed, from where, who owns each path (regenerate: `pnpm run types:gen`) |
+| the generated runtime map (`runtime-map.json` + the typed `REMOTE_ROUTES` module, where a repo produces one) | what composed, from where, who owns each path (regenerate: `pnpm run types:gen`) |
 | `bos.resolved-config.json` | the resolution snapshot — each slot with `development`/`production`/`pin`. **Compare it to the published parent** (each slot's `pin.manifest` names a CDN `versions/<hash>.json`; the parent's live config is at `https://<parent-domain>/.well-known/version`) to see which slots are local overrides and which are inherited as-is |
 | `logs/dev-latest.log` + dated `logs/dev-*.log` | what **actually ran**: which MF bundles loaded (`auth=https://cdn…`), compose warnings, per-service boot logs. `bos logs` reads it. This is the truth of last resort when a boot behaves differently than its config suggests |
 | `platform-manifest.json` | the resolved platform release — what the `platform:` pin actually pulled (source, resolvedAt, manifest) |

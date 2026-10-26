@@ -1,9 +1,4 @@
-import {
-  CalendarDotsIcon,
-  CaretRightIcon,
-  PencilIcon,
-  TreeStructureIcon,
-} from "@phosphor-icons/react";
+import { CalendarDotsIcon, PencilIcon, TreeStructureIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
@@ -11,50 +6,43 @@ import { getActiveRuntime, useApiClient } from "@/app";
 import {
   Button,
   EmptyState,
-  InfoRow,
-  NodeValidatorTable,
   PageHeader,
-  SectionHeader,
   Skeleton,
   Tabs,
   TabsList,
   TabsTrigger,
 } from "@/components";
-import { ProfileEditor } from "@/components/discovery/profile-editor";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "@/components/ui/item";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 import { savedEndowmentOf } from "@/lib/node-staking-proposals";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
-import { BackLink, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
+import { BackLink } from "../-admin-ui";
+import { CommunityEditorSheet } from "./-community-editor";
+import { CommunityOverview, CommunityStats } from "./-community-overview";
+import { CommunityProfileSummary } from "./-community-profile-summary";
 import { NodeBindings } from "./-node-bindings";
-import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailTab } from "./-node-management";
+import {
+  NODE_DETAIL_TABS,
+  type NodeDetailTab,
+  parseNodeDetailTab,
+  parseNodeEditSearch,
+} from "./-node-management";
 import { NodeStakingSequence } from "./-node-staking-sequence";
 import { NodeValidators } from "./-node-validators";
-
-type ApiClient = ReturnType<typeof useApiClient>;
-type NodeSummary = Awaited<ReturnType<ApiClient["getNodeSummary"]>>;
 
 const TAB_LABELS: Record<NodeDetailTab, AppMessageId> = {
   overview: "common.overview",
   validators: "common.validators",
-  sequence: "admin.sequence.tab",
+  management: "admin.sequence.tab",
   domains: "admin.domain.title",
-  profile: "community.profile",
 };
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
-  validateSearch: (search: Record<string, unknown>): { tab?: NodeDetailTab } => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: NodeDetailTab; edit?: true } => ({
     tab: parseNodeDetailTab(search.tab),
+    edit: parseNodeEditSearch(search),
   }),
   head: ({ match }) => ({
     meta: [
@@ -76,7 +64,7 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
 function AdminNodeDetail() {
   const translate = useAppTranslation();
   const { nodeId } = Route.useParams();
-  const { tab } = Route.useSearch();
+  const { tab, edit } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
@@ -158,31 +146,32 @@ function AdminNodeDetail() {
               variant="outline"
               nativeButton={false}
               data-testid="admin-node-edit"
-              render={<Link to="/admin/nodes/$nodeId/edit" params={{ nodeId: node.id }} />}
+              render={
+                <Link
+                  to="/admin/nodes/$nodeId"
+                  params={{ nodeId: node.id }}
+                  search={{ tab, edit: true }}
+                />
+              }
             >
               <PencilIcon />
-              {translate("org.editDetails")}
+              {translate("admin.community.edit")}
             </Button>
           </>
         }
         headerTestId="admin-node.heading"
       />
 
-      <StatGrid>
-        <StatFigure
-          label={translate("admin.community.directChildren")}
-          value={summary.childrenCount}
-        />
-        <StatFigure
-          label={translate("admin.community.descendants")}
-          value={summary.subtreeNodeCount}
-        />
-        <StatFigure label={translate("common.validators")} value={summary.validators.length} />
-        <StatFigure
-          label={translate("admin.community.descendantValidators")}
-          value={summary.subtreeValidatorCount}
-        />
-      </StatGrid>
+      <CommunityProfileSummary nodeId={node.id} name={node.name} hasSite={!!node.tenantId} />
+      <CommunityEditorSheet
+        node={node}
+        open={edit === true}
+        onOpenChange={(open) => {
+          if (!open) void navigate({ search: (prev) => ({ ...prev, edit: undefined }) });
+        }}
+      />
+
+      <CommunityStats summary={summary} sourceName={sourceNode?.name} />
 
       <div className="flex flex-col gap-6">
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -204,12 +193,12 @@ function AdminNodeDetail() {
         </div>
 
         {activeTab === "overview" && (
-          <NodeOverview summary={summary} sourceName={sourceNode?.name} />
+          <CommunityOverview summary={summary} sourceName={sourceNode?.name} />
         )}
         {activeTab === "validators" && (
           <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
         )}
-        {activeTab === "sequence" && (
+        {activeTab === "management" && (
           <NodeStakingSequence
             key={`${node.id}:${savedEndowmentOf(node.metadata)}`}
             nodeId={node.id}
@@ -228,94 +217,7 @@ function AdminNodeDetail() {
           ) : (
             <p className="text-sm text-muted-foreground">{translate("admin.community.noTenant")}</p>
           ))}
-        {activeTab === "profile" && <ProfileEditor nodeId={node.id} />}
       </div>
     </>
-  );
-}
-
-function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceName?: string }) {
-  const translate = useAppTranslation();
-  const { node } = summary;
-  const resolvedElsewhere = summary.stakingValidators.sourceNodeId !== node.id;
-  const description =
-    typeof node.metadata.description === "string" ? node.metadata.description : null;
-
-  return (
-    <div className="flex flex-col gap-12">
-      <section className="flex flex-col gap-6">
-        <SectionHeader
-          title={translate("common.staking")}
-          description={
-            resolvedElsewhere
-              ? translate("admin.validatorSourceNamed", {
-                  name: sourceName ?? summary.stakingValidators.sourceNodeId,
-                })
-              : translate("admin.community.stakingHint")
-          }
-        />
-        {summary.stakingValidators.validators.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {translate("admin.community.noStakeValidators")}
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-border">
-            <NodeValidatorTable validators={summary.stakingValidators.validators} />
-          </div>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-6">
-        <SectionHeader title={translate("admin.community.children")} />
-        {summary.children.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{translate("admin.community.noChildren")}</p>
-        ) : (
-          <ItemGroup>
-            {summary.children.map((child) => (
-              <Item
-                key={child.id}
-                variant="outline"
-                size="sm"
-                render={
-                  <Link to="/admin/nodes/$nodeId" params={{ nodeId: child.id }} search={{}} />
-                }
-              >
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="max-w-full">
-                    <span className="min-w-0 truncate">{child.name}</span>
-                  </ItemTitle>
-                  <ItemDescription>
-                    {nodeKindLabel(child.kind, translate("label.node"), translate)} ·{" "}
-                    <span className="font-mono break-all">{child.slug}</span>
-                  </ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <CaretRightIcon className="size-4 text-muted-foreground" />
-                </ItemActions>
-              </Item>
-            ))}
-          </ItemGroup>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-6">
-        <SectionHeader title={translate("common.details")} />
-        {description && <p className="max-w-2xl text-base text-foreground">{description}</p>}
-        <div className="flex flex-col">
-          <InfoRow label={translate("admin.community.id")} value={node.id} mono />
-          <InfoRow
-            label={translate("admin.community.siteId")}
-            value={node.tenantId ?? translate("common.none")}
-            mono={!!node.tenantId}
-          />
-          <InfoRow
-            label={translate("admin.community.parentId")}
-            value={node.parentId ?? translate("common.none")}
-            mono={!!node.parentId}
-          />
-        </div>
-        <RawJsonDisclosure value={node.metadata} label={translate("admin.community.metadata")} />
-      </section>
-    </div>
   );
 }

@@ -17,8 +17,8 @@ import {
 import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { organizationRequestsQueryOptions } from "@/lib/queries/organizations";
 
-const requestsKey = ["organization-requests"];
 type Request = Awaited<ReturnType<ApiClient["auth"]["listOrganizationRequests"]>>[number];
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/organizations")({
@@ -42,10 +42,7 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/organizations")({
 function OrganizationRequests() {
   const translate = useAppTranslation();
   const api = useApiClient();
-  const requests = useQuery({
-    queryKey: requestsKey,
-    queryFn: () => api.auth.listOrganizationRequests(),
-  });
+  const requests = useQuery(organizationRequestsQueryOptions(api));
   return (
     <>
       <PageHeader
@@ -92,7 +89,7 @@ function OrganizationRequest({ request }: { request: Request }) {
           : translate("orgApproval.rejectedToast"),
       );
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: requestsKey }),
+        queryClient.invalidateQueries({ queryKey: organizationRequestsQueryOptions(api).queryKey }),
         queryClient.invalidateQueries({ queryKey: ["organizations"] }),
       ]);
       await router.invalidate();

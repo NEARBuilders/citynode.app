@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { Near } from "near-kit";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildNodeSequence,
   buildVotePlan,
   DELEGATE_DEPOSIT,
   EMPTY_CHAIN,
   FULL_DELEGATION_BPS,
+  type GovSnapshot,
+  getArchivalNear,
+  govSnapshotOf,
   LOCKUP_DEPLOY_DEPOSIT,
   type NodeSequenceAction,
   type NodeSequenceChain,
@@ -13,6 +17,8 @@ import {
   pendingProposalFor,
   pendingVoteProposalFor,
   REGISTER_DEPOSIT,
+  readSnapshotVote,
+  readTeamSnapshotVote,
   savedEndowmentOf,
   VENEAR_ACCOUNT,
   VOTING_ACCOUNT,
@@ -345,6 +351,29 @@ describe("step prerequisites", () => {
       expect(step(withPower, id).blocker).toBeNull();
     }
   });
+
+  it("checks the vote against the snapshot voting power once it is known", () => {
+    const currentPower: NodeSequenceChain = {
+      ...chain,
+      teamVenear: {
+        account: {
+          account_id: inputs.team,
+          delegations: [],
+          balance: { near_balance: NEAR.toString(), extra_venear_balance: "0" },
+        },
+        internal: { lockup_version: 1 },
+      },
+    };
+    const lockedAfterSnapshot = buildNodeSequence(inputs, {
+      ...currentPower,
+      teamSnapshotPower: 0n,
+    });
+    const unlockedAfterSnapshot = buildNodeSequence(inputs, { ...chain, teamSnapshotPower: NEAR });
+    for (const id of ["vote-for", "vote-against", "vote-abstain"] as const) {
+      expect(step(lockedAfterSnapshot, id).blocker).toBe("teamNoSnapshotPower");
+      expect(step(unlockedAfterSnapshot, id).blocker).toBeNull();
+    }
+  });
 });
 
 describe("unwind steps", () => {
@@ -481,5 +510,123 @@ describe("delegation proposal matching", () => {
     expect(pendingProposalFor([delegate], step(actions, "clear-delegations").plan)).toBeNull();
     expect(pendingProposalFor([clear], step(actions, "clear-delegations").plan)?.id).toBe(30);
     expect(pendingProposalFor([clear], step(actions, "set-delegations").plan)).toBeNull();
+  });
+});
+
+describe("snapshot vote proof", () => {
+  const team = "india.sputnik-dao.near";
+  const snapshot: GovSnapshot = {
+    root: "2QcSsBUW8i6QayUtFLsbHS1chMsJQswhzGi3EWUryUNr",
+    length: 496,
+    blockHeight: 220563095,
+  };
+  const merkleProof = { index: 492, path: ["GPLWFUYXzpfAaEWEtHNeEQREGQMG6oDPQxALvqbqNNWY"] };
+  const vAccount = { V1: { account_id: team, delegations: [] } };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function stubViews(views: Record<string, unknown>) {
+    return vi
+      .spyOn(Near.prototype, "view")
+      .mockImplementation((_contractId, method) =>
+        views[method] instanceof Error
+          ? Promise.reject(views[method])
+          : Promise.resolve(views[method]),
+      );
+  }
+
+  it("takes the snapshot block from the proposal's snapshot_and_state", () => {
+    expect(
+      govSnapshotOf({
+        snapshot_and_state: {
+          snapshot: { root: snapshot.root, length: 496, block_height: 220563095 },
+        },
+      }),
+    ).toEqual(snapshot);
+    expect(govSnapshotOf({ snapshot_and_state: null })).toBeNull();
+    expect(() =>
+      govSnapshotOf({ snapshot_and_state: { snapshot: { root: snapshot.root } } }),
+    ).toThrow("Unreadable House of Stake proposal snapshot");
+  });
+
+  it("reads the proof and veNEAR from the archival node at the snapshot block", async () => {
+    const view = stubViews({
+      ft_balance_of: "2100001088726367280000000",
+      get_proof: [merkleProof, vAccount],
+    });
+    const vote = await readSnapshotVote(team, snapshot);
+    expect(vote).toEqual({
+      snapshot,
+      votingPower: 2100001088726367280000000n,
+      proof: [merkleProof, vAccount],
+    });
+    expect(view.mock.calls).toEqual([
+      [VENEAR_ACCOUNT, "ft_balance_of", { account_id: team }, { blockId: 220563095 }],
+      [VENEAR_ACCOUNT, "get_proof", { account_id: team }, { blockId: 220563095 }],
+    ]);
+    expect(view.mock.contexts.every((context) => context === getArchivalNear())).toBe(true);
+    if (!vote.proof) throw new Error("missing proof");
+    for (const option of ["For", "Against", "Abstain"] as const) {
+      expect(
+        buildVotePlan({ proposalId: 29, option, proof: vote.proof, storageFee: "1" }),
+      ).toMatchObject({
+        receiverId: VOTING_ACCOUNT,
+        methodName: "vote",
+        args: { proposal_id: 29, vote: option, merkle_proof: merkleProof, v_account: vAccount },
+      });
+    }
+  });
+
+  it("looks up the snapshot on vote.dao before reading the archival node", async () => {
+    const view = stubViews({
+      get_proposal: {
+        id: 29,
+        snapshot_and_state: {
+          snapshot: { root: snapshot.root, length: 496, block_height: 220563095 },
+        },
+      },
+      ft_balance_of: "5",
+      get_proof: [merkleProof, vAccount],
+    });
+    expect((await readTeamSnapshotVote(team, 29))?.snapshot.blockHeight).toBe(220563095);
+    expect(view.mock.calls[0]).toEqual([VOTING_ACCOUNT, "get_proposal", { proposal_id: 29 }]);
+    expect(view.mock.contexts[0]).not.toBe(getArchivalNear());
+  });
+
+  it("reports no snapshot yet without reading the archival node", async () => {
+    const view = stubViews({ get_proposal: { id: 29, snapshot_and_state: null } });
+    expect(await readTeamSnapshotVote(team, 29)).toBeNull();
+    expect(view).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports zero voting power at the snapshot without asking for a proof", async () => {
+    const view = stubViews({ ft_balance_of: "0" });
+    expect(await readSnapshotVote(team, snapshot)).toEqual({
+      snapshot,
+      votingPower: 0n,
+      proof: null,
+    });
+    expect(view).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails when the archival node can't serve the snapshot block", async () => {
+    stubViews({ ft_balance_of: new Error("Block either has never been observed or was GC'd") });
+    await expect(readSnapshotVote(team, snapshot)).rejects.toThrow("GC'd");
+    vi.restoreAllMocks();
+    stubViews({ ft_balance_of: "5", get_proof: new Error("archival timeout") });
+    await expect(readSnapshotVote(team, snapshot)).rejects.toThrow("archival timeout");
+  });
+
+  it("rejects an unreadable balance or a proof for another account", async () => {
+    stubViews({ ft_balance_of: undefined });
+    await expect(readSnapshotVote(team, snapshot)).rejects.toThrow("Unreadable veNEAR balance");
+    vi.restoreAllMocks();
+    stubViews({
+      ft_balance_of: "5",
+      get_proof: [merkleProof, { V1: { account_id: "other.sputnik-dao.near" } }],
+    });
+    await expect(readSnapshotVote(team, snapshot)).rejects.toThrow("Unreadable veNEAR proof");
   });
 });
