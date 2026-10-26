@@ -21,12 +21,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Arborescence des communautés, validateurs et domaines",
     "社区树、验证节点和域名",
   ],
-  "admin.community.allEvents": [
-    "All events",
-    "Todos los eventos",
-    "Tous les événements",
-    "全部活动",
-  ],
   "admin.community.allNodes": ["All nodes", "Todos los nodos", "Tous les nœuds", "所有节点"],
   "admin.community.attention": ["Needs attention", "Requiere atención", "À traiter", "需要处理"],
   "admin.community.attentionNoOrganization": [

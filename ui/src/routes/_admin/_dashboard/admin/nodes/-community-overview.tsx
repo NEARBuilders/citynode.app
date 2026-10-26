@@ -1,10 +1,10 @@
-import { CaretDownIcon, CaretRightIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 import { useApiClient } from "@/app";
 import { Button, InfoRow, NodeValidatorTable, SectionHeader, Skeleton } from "@/components";
-import { EventDate } from "@/components/discovery/event-onboarding";
+import { type DiscoveryActivity, EventDate } from "@/components/discovery/event-onboarding";
 import {
   Item,
   ItemActions,
@@ -20,7 +20,7 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
-import { ListSkeleton, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
+import { Disclosure, ListSkeleton, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
 import {
   type AttentionItem,
   communityAttention,
@@ -35,7 +35,6 @@ import {
 type ApiClient = ReturnType<typeof useApiClient>;
 type NodeSummary = Awaited<ReturnType<ApiClient["getNodeSummary"]>>;
 type CommunityNode = NodeSummary["node"];
-type EventRow = Awaited<ReturnType<ApiClient["listDiscoveryActivities"]>>[number];
 
 const UPCOMING_EVENTS_SHOWN = 3;
 
@@ -59,6 +58,7 @@ function useCommunityProgress(node: CommunityNode) {
     retry: false,
   });
   const tenantQuery = useQuery(tenantByIdQueryOptions(apiClient, tenantId));
+  const hasSite = !!tenantId && tenantQuery.data !== null;
   const orgId = tenantQuery.data?.orgId ?? "";
   const currentJoins = useQuery({
     ...onboardingJoinsQueryOptions(apiClient, utcMonth(0)),
@@ -80,11 +80,11 @@ function useCommunityProgress(node: CommunityNode) {
         : undefined,
   };
 
-  const events = progressState(tenantId ? eventsQuery : null, (activities) =>
+  const events = progressState(hasSite ? eventsQuery : null, (activities) =>
     splitCommunityEvents(activities, now),
   );
   const joins = communityJoinsState({
-    hasSite: !!tenantId,
+    hasSite,
     tenant: tenantQuery,
     joins: joinsQuery,
   });
@@ -93,7 +93,7 @@ function useCommunityProgress(node: CommunityNode) {
     events,
     joins,
     tenant: tenantQuery.data,
-    hasSite: !!tenantId,
+    hasSite,
     retryEvents: () => void eventsQuery.refetch(),
     retryJoins: () => {
       if (tenantQuery.isError) void tenantQuery.refetch();
@@ -101,6 +101,31 @@ function useCommunityProgress(node: CommunityNode) {
       if (previousJoins.isError) void previousJoins.refetch();
     },
   };
+}
+
+type CommunityProgress = ReturnType<typeof useCommunityProgress>;
+
+const CommunityProgressContext = createContext<CommunityProgress | null>(null);
+
+export function CommunityProgressProvider({
+  node,
+  children,
+}: {
+  node: CommunityNode;
+  children: ReactNode;
+}) {
+  const progress = useCommunityProgress(node);
+  return (
+    <CommunityProgressContext.Provider value={progress}>
+      {children}
+    </CommunityProgressContext.Provider>
+  );
+}
+
+function useProgress() {
+  const progress = useContext(CommunityProgressContext);
+  if (!progress) throw new Error("CommunityProgressProvider is missing");
+  return progress;
 }
 
 function ProgressStat<V>({
@@ -151,7 +176,7 @@ export function CommunityStats({
 }) {
   const translate = useAppTranslation();
   const { node } = summary;
-  const progress = useCommunityProgress(node);
+  const progress = useProgress();
   const noJoinsHint = progress.hasSite
     ? translate("admin.community.noOrganization")
     : translate("admin.community.noSite");
@@ -221,7 +246,7 @@ export function CommunityOverview({
 }) {
   const translate = useAppTranslation();
   const { node } = summary;
-  const progress = useCommunityProgress(node);
+  const progress = useProgress();
   const attention = communityAttention({
     hasSite: progress.hasSite,
     tenant: progress.tenant,
@@ -265,25 +290,6 @@ export function CommunityOverview({
         <SectionHeader
           title={translate("admin.community.upcomingEvents")}
           sectionTestId="admin-node.section.events"
-          action={
-            progress.hasSite ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                nativeButton={false}
-                render={
-                  <Link
-                    to="/nodes/$nodeId/content"
-                    params={{ nodeId: node.id }}
-                    search={{ tab: "events" }}
-                  />
-                }
-              >
-                {translate("admin.community.allEvents")}
-                <CaretRightIcon />
-              </Button>
-            ) : undefined
-          }
         />
         <UpcomingEvents
           state={progress.events}
@@ -364,7 +370,7 @@ function UpcomingEvents({
   onRetry,
   hasSite,
 }: {
-  state: ProgressState<SplitEvents<EventRow>>;
+  state: ProgressState<SplitEvents<DiscoveryActivity>>;
   onRetry: () => void;
   hasSite: boolean;
 }) {
@@ -414,39 +420,27 @@ function UpcomingEvents({
 
 function TechnicalDetails({ node }: { node: CommunityNode }) {
   const translate = useAppTranslation();
-  const [open, setOpen] = useState(false);
-  const label = translate("admin.community.technicalDetails");
   return (
-    <div className="flex flex-col gap-3">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="self-start"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-        data-testid="admin-node-technical-details"
-      >
-        {open ? <CaretDownIcon /> : <CaretRightIcon />}
-        {translate(open ? "admin.hideNamed" : "admin.showNamed", { label })}
-      </Button>
-      {open && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col">
-            <InfoRow label={translate("admin.community.id")} value={node.id} mono />
-            <InfoRow
-              label={translate("admin.community.siteId")}
-              value={node.tenantId ?? translate("common.none")}
-              mono={!!node.tenantId}
-            />
-            <InfoRow
-              label={translate("admin.community.parentId")}
-              value={node.parentId ?? translate("common.none")}
-              mono={!!node.parentId}
-            />
-          </div>
-          <RawJsonDisclosure value={node.metadata} label={translate("admin.community.metadata")} />
+    <Disclosure
+      label={translate("admin.community.technicalDetails")}
+      testId="admin-node-technical-details"
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col">
+          <InfoRow label={translate("admin.community.id")} value={node.id} mono />
+          <InfoRow
+            label={translate("admin.community.siteId")}
+            value={node.tenantId ?? translate("common.none")}
+            mono={!!node.tenantId}
+          />
+          <InfoRow
+            label={translate("admin.community.parentId")}
+            value={node.parentId ?? translate("common.none")}
+            mono={!!node.parentId}
+          />
         </div>
-      )}
-    </div>
+        <RawJsonDisclosure value={node.metadata} label={translate("admin.community.metadata")} />
+      </div>
+    </Disclosure>
   );
 }

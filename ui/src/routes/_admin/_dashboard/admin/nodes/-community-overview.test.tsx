@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
-import { CommunityStats } from "./-community-overview";
+import { CommunityProgressProvider, CommunityStats } from "./-community-overview";
 
 const mocks = vi.hoisted(() => ({
   apiClient: null as unknown,
@@ -41,6 +41,7 @@ function summary(overrides: { tenantId?: string | null; validators?: number } = 
 function api({
   activities = async () => [] as unknown[],
   orgId = "org-1" as string | null,
+  tenant = "found" as "found" | "missing",
   stats = async (_input: { month: string; organizationId?: string }) => ({
     month: "2026-10",
     totals: { redeemed: 0, newMembers: 0 },
@@ -49,7 +50,9 @@ function api({
 } = {}) {
   const client = {
     listDiscoveryActivities: vi.fn(activities),
-    resolveTenantById: vi.fn(async () => ({ id: "tenant-1", orgId, status: "active" })),
+    resolveTenantById: vi.fn(async () =>
+      tenant === "found" ? { id: "tenant-1", orgId, status: "active" } : null,
+    ),
     auth: { getOnboardingStats: vi.fn(stats) },
   };
   mocks.apiClient = client;
@@ -60,7 +63,9 @@ function renderStats(value: Summary) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CommunityStats summary={value} />
+      <CommunityProgressProvider node={value.node}>
+        <CommunityStats summary={value} />
+      </CommunityProgressProvider>
     </QueryClientProvider>,
   );
 }
@@ -162,5 +167,18 @@ describe("community stats", () => {
 
     const redeemed = screen.getByTestId("admin-node.stat-redeemed");
     await waitFor(() => expect(within(redeemed).getByText("No organization yet")).toBeTruthy());
+  });
+
+  it("treats a missing site record as no site instead of an error", async () => {
+    const client = api({ tenant: "missing" });
+    renderStats(summary());
+
+    const events = screen.getByTestId("admin-node.stat-events");
+    await waitFor(() => expect(within(events).getByText("No community site yet")).toBeTruthy());
+    expect(
+      within(screen.getByTestId("admin-node.stat-redeemed")).getByText("No community site yet"),
+    ).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(client.auth.getOnboardingStats).not.toHaveBeenCalled();
   });
 });

@@ -125,14 +125,14 @@ export function RawJson({ value }: { value: unknown }) {
   );
 }
 
-export function RawJsonDisclosure({
-  value,
+export function Disclosure({
   label,
   testId,
+  children,
 }: {
-  value: unknown;
-  label?: string;
+  label: string;
   testId?: string;
+  children: ReactNode;
 }) {
   const translate = useAppTranslation();
   const [open, setOpen] = useState(false);
@@ -147,12 +147,27 @@ export function RawJsonDisclosure({
         data-testid={testId}
       >
         {open ? <CaretDownIcon /> : <CaretRightIcon />}
-        {translate(open ? "admin.hideNamed" : "admin.showNamed", {
-          label: label ?? translate("admin.rawJson"),
-        })}
+        {translate(open ? "admin.hideNamed" : "admin.showNamed", { label })}
       </Button>
-      {open && <RawJson value={value} />}
+      {open && children}
     </div>
+  );
+}
+
+export function RawJsonDisclosure({
+  value,
+  label,
+  testId,
+}: {
+  value: unknown;
+  label?: string;
+  testId?: string;
+}) {
+  const translate = useAppTranslation();
+  return (
+    <Disclosure label={label ?? translate("admin.rawJson")} testId={testId}>
+      <RawJson value={value} />
+    </Disclosure>
   );
 }
 

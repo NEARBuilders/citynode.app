@@ -20,7 +20,11 @@ import { savedEndowmentOf } from "@/lib/node-staking-proposals";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { BackLink } from "../-admin-ui";
-import { CommunityOverview, CommunityStats } from "./-community-overview";
+import {
+  CommunityOverview,
+  CommunityProgressProvider,
+  CommunityStats,
+} from "./-community-overview";
 import { NodeBindings } from "./-node-bindings";
 import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailTab } from "./-node-management";
 import { NodeStakingSequence } from "./-node-staking-sequence";
@@ -150,54 +154,58 @@ function AdminNodeDetail() {
         headerTestId="admin-node.heading"
       />
 
-      <CommunityStats summary={summary} sourceName={sourceNode?.name} />
+      <CommunityProgressProvider node={node}>
+        <CommunityStats summary={summary} sourceName={sourceNode?.name} />
 
-      <div className="flex flex-col gap-6">
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => {
-              const next = parseNodeDetailTab(value);
-              void navigate({ search: { tab: next === "overview" ? undefined : next } });
-            }}
-          >
-            <TabsList variant="line">
-              {NODE_DETAIL_TABS.map((value) => (
-                <TabsTrigger key={value} value={value} data-testid={`admin-node-tab-${value}`}>
-                  {translate(TAB_LABELS[value])}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        </div>
+        <div className="flex flex-col gap-6">
+          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => {
+                const next = parseNodeDetailTab(value);
+                void navigate({ search: { tab: next === "overview" ? undefined : next } });
+              }}
+            >
+              <TabsList variant="line">
+                {NODE_DETAIL_TABS.map((value) => (
+                  <TabsTrigger key={value} value={value} data-testid={`admin-node-tab-${value}`}>
+                    {translate(TAB_LABELS[value])}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
 
-        {activeTab === "overview" && (
-          <CommunityOverview summary={summary} sourceName={sourceNode?.name} />
-        )}
-        {activeTab === "validators" && (
-          <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
-        )}
-        {activeTab === "management" && (
-          <NodeStakingSequence
-            key={`${node.id}:${savedEndowmentOf(node.metadata)}`}
-            nodeId={node.id}
-            tenantId={node.tenantId}
-            savedEndowment={savedEndowmentOf(node.metadata)}
-            validators={summary.validators}
-          />
-        )}
-        {activeTab === "domains" &&
-          (node.tenantId ? (
-            <NodeBindings
-              key={node.tenantId}
+          {activeTab === "overview" && (
+            <CommunityOverview summary={summary} sourceName={sourceNode?.name} />
+          )}
+          {activeTab === "validators" && (
+            <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
+          )}
+          {activeTab === "management" && (
+            <NodeStakingSequence
+              key={`${node.id}:${savedEndowmentOf(node.metadata)}`}
+              nodeId={node.id}
               tenantId={node.tenantId}
-              gateway={getActiveRuntime(runtimeConfig)?.gatewayId ?? ""}
+              savedEndowment={savedEndowmentOf(node.metadata)}
+              validators={summary.validators}
             />
-          ) : (
-            <p className="text-sm text-muted-foreground">{translate("admin.community.noTenant")}</p>
-          ))}
-        {activeTab === "profile" && <ProfileEditor nodeId={node.id} />}
-      </div>
+          )}
+          {activeTab === "domains" &&
+            (node.tenantId ? (
+              <NodeBindings
+                key={node.tenantId}
+                tenantId={node.tenantId}
+                gateway={getActiveRuntime(runtimeConfig)?.gatewayId ?? ""}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {translate("admin.community.noTenant")}
+              </p>
+            ))}
+          {activeTab === "profile" && <ProfileEditor nodeId={node.id} />}
+        </div>
+      </CommunityProgressProvider>
     </>
   );
 }

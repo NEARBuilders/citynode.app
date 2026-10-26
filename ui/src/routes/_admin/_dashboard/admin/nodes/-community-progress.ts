@@ -1,28 +1,17 @@
-export type CommunityEvent = {
-  kind: string;
-  status: string;
-  startsAt: string | null;
-  endsAt: string | null;
-};
+import { type DiscoveryActivity, upcomingEvents } from "@/components/discovery/event-onboarding";
 
 export type SplitEvents<T> = { upcoming: T[]; past: T[] };
 
-export function splitCommunityEvents<T extends CommunityEvent>(
-  activities: readonly T[],
+export function splitCommunityEvents(
+  activities: readonly DiscoveryActivity[],
   now: number,
-): SplitEvents<T> {
-  const upcoming: T[] = [];
-  const past: T[] = [];
-  for (const activity of activities) {
-    if (activity.kind !== "event" || activity.status !== "published") continue;
-    const boundary = activity.endsAt ?? activity.startsAt;
-    if (!boundary || Date.parse(boundary) >= now) upcoming.push(activity);
-    else past.push(activity);
-  }
-  const startOf = (event: T) =>
-    event.startsAt ? Date.parse(event.startsAt) : Number.POSITIVE_INFINITY;
-  upcoming.sort((a, b) => startOf(a) - startOf(b));
-  past.sort((a, b) => startOf(b) - startOf(a));
+): SplitEvents<DiscoveryActivity> {
+  const published = activities.filter((activity) => activity.status === "published");
+  const upcoming = upcomingEvents(published, now);
+  const upcomingIds = new Set(upcoming.map((event) => event.id));
+  const past = published
+    .filter((activity) => activity.kind === "event" && !upcomingIds.has(activity.id))
+    .sort((a, b) => Date.parse(b.startsAt ?? "") - Date.parse(a.startsAt ?? ""));
   return { upcoming, past };
 }
 

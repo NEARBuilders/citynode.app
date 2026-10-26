@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { DiscoveryActivity } from "@/components/discovery/event-onboarding";
 import {
   communityAttention,
   communityJoinsState,
@@ -9,13 +10,28 @@ import {
 
 const now = Date.parse("2026-10-26T12:00:00Z");
 
-function event(id: string, startsAt: string | null, overrides: Record<string, unknown> = {}) {
+const NODE_ID = "11111111-1111-4111-8111-111111111111";
+
+function event(
+  id: string,
+  startsAt: string | null,
+  overrides: Partial<DiscoveryActivity> = {},
+): DiscoveryActivity {
   return {
     id,
+    ownerNodeId: NODE_ID,
+    nodeIds: [NODE_ID],
     kind: "event",
-    status: "published",
+    title: id,
+    summary: "",
+    url: `https://example.com/${id}`,
+    source: "manual",
+    publishedAt: "2026-10-01T00:00:00.000Z",
     startsAt,
     endsAt: startsAt,
+    timezone: "UTC",
+    venue: "",
+    status: "published",
     ...overrides,
   };
 }
@@ -39,6 +55,14 @@ describe("community events", () => {
   it("keeps an event upcoming until it ends", () => {
     const running = event("running", "2026-10-26T10:00:00Z", { endsAt: "2026-10-26T14:00:00Z" });
     expect(splitCommunityEvents([running], now).upcoming).toHaveLength(1);
+  });
+
+  it("lists past events newest first", () => {
+    const { past } = splitCommunityEvents(
+      [event("august", "2026-08-01T18:00:00Z"), event("september", "2026-09-01T18:00:00Z")],
+      now,
+    );
+    expect(past.map((e) => e.id)).toEqual(["september", "august"]);
   });
 
   it("ignores drafts, cancelled events and social posts", () => {
