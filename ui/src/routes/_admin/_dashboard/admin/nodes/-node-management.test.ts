@@ -59,11 +59,15 @@ describe("node list search", () => {
 });
 
 describe("node detail tabs", () => {
-  it.each(["overview", "validators", "sequence", "domains", "profile"])("accepts %s", (tab) => {
+  it.each(["overview", "validators", "management", "domains", "profile"])("accepts %s", (tab) => {
     expect(parseNodeDetailTab(tab)).toBe(tab);
   });
 
-  it.each([undefined, "", "bindings", 3])("ignores %s", (tab) => {
+  it("opens Node management for old ?tab=sequence links", () => {
+    expect(parseNodeDetailTab("sequence")).toBe("management");
+  });
+
+  it.each([undefined, "", "bindings", "constructor", 3])("ignores %s", (tab) => {
     expect(parseNodeDetailTab(tab)).toBeUndefined();
   });
 });

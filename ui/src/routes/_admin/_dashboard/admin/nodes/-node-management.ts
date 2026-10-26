@@ -36,13 +36,18 @@ export function filterNodeRows<T extends SearchableNodeRow>(
 export const NODE_DETAIL_TABS = [
   "overview",
   "validators",
-  "sequence",
+  "management",
   "domains",
   "profile",
 ] as const;
 
 export type NodeDetailTab = (typeof NODE_DETAIL_TABS)[number];
 
+const NODE_DETAIL_TAB_ALIASES: Record<string, NodeDetailTab> = {
+  sequence: "management",
+};
+
 export function parseNodeDetailTab(value: unknown): NodeDetailTab | undefined {
-  return NODE_DETAIL_TABS.find((tab) => tab === value);
+  const tab = typeof value === "string" ? (NODE_DETAIL_TAB_ALIASES[value] ?? value) : value;
+  return NODE_DETAIL_TABS.find((candidate) => candidate === tab);
 }
