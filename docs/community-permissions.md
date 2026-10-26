@@ -53,7 +53,10 @@ renames, area changes, and deletions across repeated activation.
 
 Owners, org admins, and platform admins bypass feature-area restrictions. For a
 regular member with an active team, routes guarded by `requireTeamArea` require
-one of that team's assigned areas. Existing behavior for members without an
-active team is unrestricted by this area guard; individual routes still enforce
-their own authentication and organization checks. Feature areas never grant
-community settings access, regardless of team membership.
+one of that team's assigned areas. A regular member without an active team needs
+at least one of their teams to have the area; a member with no such team, for
+example one who joined through an onboarding code, is rejected. Individual routes
+still enforce their own authentication and organization checks, and node and
+validator routes repeat the node-operations check when they resolve the node's
+organization. Feature areas never grant community settings access, regardless of
+team membership.
