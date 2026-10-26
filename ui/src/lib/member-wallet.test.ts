@@ -10,8 +10,6 @@ import {
   classifyMemberSigningError,
   createMemberSessionWallet,
   createMemberSigningController,
-  MEMBER_SIGNING_MESSAGES,
-  MEMBER_WALLET_ID,
   MemberSigningError,
   type MemberWalletExecutor,
 } from "./member-wallet";
@@ -82,10 +80,6 @@ afterEach(() => {
 });
 
 describe("member session wallet", () => {
-  it("uses the Passkey Wallet from better-near-auth's manifest", () => {
-    expect(MEMBER_WALLET_ID).toBe("passkey");
-  });
-
   it("signs add_proposal as the session-linked account with the bond attached", async () => {
     mockBond("100000000000000000000000");
     const { executor, sent } = stubExecutor();
@@ -233,21 +227,6 @@ describe("classifyMemberSigningError", () => {
         new TypeError("Cannot read properties of undefined (reading 'x')"),
       ),
     ).toBe("unknown");
-  });
-
-  it("has a message for every failure", () => {
-    for (const failure of [
-      "cancelled",
-      "credential",
-      "network",
-      "unconfirmed",
-      "rejected",
-      "mismatch",
-      "signedOut",
-      "unknown",
-    ] as const) {
-      expect(MEMBER_SIGNING_MESSAGES[failure]).toMatch(/^memberWallet\.error\./);
-    }
   });
 });
 

@@ -168,6 +168,16 @@ export function classifyMemberSigningError(error: unknown): MemberSigningFailure
   return "unknown";
 }
 
+const NOT_RETRYABLE: ReadonlySet<MemberSigningFailure> = new Set([
+  "rejected",
+  "signedOut",
+  "unconfirmed",
+]);
+
+export function canRetryMemberSigning(failure: MemberSigningFailure): boolean {
+  return !NOT_RETRYABLE.has(failure);
+}
+
 export const MEMBER_SIGNING_MESSAGES: Record<MemberSigningFailure, AppMessageId> = {
   cancelled: "memberWallet.error.cancelled",
   credential: "memberWallet.error.credential",
@@ -202,8 +212,8 @@ export function createMemberSigningController<T>(
 ): MemberSigningController<T> {
   let state: MemberSigningState<T> = idleState;
   let inFlight: Promise<T> | null = null;
-  let requests = 0;
-  let generation = 0;
+  let requestSeq = 0;
+  let resetEpoch = 0;
   const listeners = new Set<() => void>();
   const update = (next: MemberSigningState<T>) => {
     state = next;
@@ -220,9 +230,9 @@ export function createMemberSigningController<T>(
       if (state.status === "submitted") return Promise.resolve(state.result as T);
       if (state.failure === "unconfirmed")
         return Promise.reject(new MemberSigningError("unconfirmed"));
-      const run = generation;
-      const request = ++requests;
-      const isCurrent = () => run === generation;
+      const epoch = resetEpoch;
+      const request = ++requestSeq;
+      const isCurrent = () => epoch === resetEpoch;
       const pending = (async () => {
         try {
           update({ status: "connecting", failure: null, result: null });
@@ -243,14 +253,14 @@ export function createMemberSigningController<T>(
           }
           throw error;
         } finally {
-          if (request === requests) inFlight = null;
+          if (request === requestSeq) inFlight = null;
         }
       })();
       inFlight = pending;
       return pending;
     },
     reset() {
-      generation += 1;
+      resetEpoch += 1;
       update(idleState);
     },
   };

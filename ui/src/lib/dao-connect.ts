@@ -1,26 +1,11 @@
-import type { AppTranslator } from "@/i18n/catalogs";
-import { appErrorMessage } from "@/i18n/error-message";
-import { translateEnglishAppMessage } from "@/i18n/runtime";
-/**
- * DAO wallet connection — a second NEAR Connect instance locked to the Trezu
- * wallet via an explicit wallet id on every connect, fully separated from the
- * SIWN session wallet. Wallet metadata (executor URL, icon, features) comes
- * from the official near-connect registry manifest, fetched at runtime.
- * Trezu sessions are bound to the SIWN identity that opened them and are torn
- * down when that identity changes or signs out.
- * Exposes a singleton connector + a `useDaoConnection` hook + a `signAsDao`
- * helper that wraps a near-kit transaction builder as the connected DAO account.
- *
- * Designed as a reusable primitive; only the tenant wizard and tenant detail
- * consume it today.
- */
-
 import { LocalStorage, NearConnector } from "@hot-labs/near-connect";
 import { Amount, type FinalExecutionOutcome, fromNearConnect, Gas, Near } from "near-kit";
 import { useEffect } from "react";
 import { create } from "zustand";
-
 import { getCspNonce } from "@/app";
+import type { AppTranslator } from "@/i18n/catalogs";
+import { appErrorMessage } from "@/i18n/error-message";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 
 import {
   buildTenantPublishConfig,
@@ -139,11 +124,6 @@ export async function disconnectDaoAccount(): Promise<void> {
   useDaoConnectionStore.getState().reset();
 }
 
-/**
- * Re-syncs the store from the connector itself. The zustand store can go
- * stale — Trezu sessions expire while the store still says "connected" — so
- * anything about to sign should verify against the connector first.
- */
 export async function verifyDaoAccount(want: string): Promise<boolean> {
   try {
     const connector = getConnector();
@@ -164,7 +144,6 @@ export async function verifyDaoAccount(want: string): Promise<boolean> {
   return false;
 }
 
-/** Maps raw connector errors to actionable messages. */
 export function describeDaoError(
   error: unknown,
   want: string,
@@ -239,14 +218,6 @@ export async function fetchDaoMembership(
   };
 }
 
-/**
- * Restores a Trezu session on mount, but only while it belongs to the current
- * SIWN identity. The session is bound to the auth account it was opened under
- * (stored at `dao-connect:auth-account`); a mismatch, a signed-out state, or a
- * legacy session with no binding tears the Trezu session down instead of
- * restoring it. DAO membership is verified separately — binding only scopes
- * the session to the signed-in identity.
- */
 export function useDaoAutoRestore(authAccountId: string | null): void {
   const set = (partial: Partial<DaoConnectionState>) =>
     useDaoConnectionStore.getState().set(partial);

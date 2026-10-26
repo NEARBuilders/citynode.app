@@ -87,7 +87,7 @@ The deterministic NEAR account derived from a member's passkey public key, linke
 _Avoid_: passkey account, embedded wallet, smart wallet
 
 **Activation**:
-The first request a Passkey Wallet sends, which carries the wallet contract's state-init and so creates the wallet on-chain, at no cost to the member. A Passkey Wallet has no access keys: every request is a `w_execute_signed` call checked against the passkey signature, so any sender can relay it, including the first one.
+The first request a Passkey Wallet sends, which carries the wallet contract's state-init and so makes the wallet live on-chain, at no cost to the member. A Passkey Wallet has no access keys: every request is a `w_execute_signed` call checked against the passkey signature, so any sender can relay it, including the first one.
 _Avoid_: funding (that's the Sponsor topping up a key), creation
 
 **Gateway Origin**:

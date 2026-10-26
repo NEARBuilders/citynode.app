@@ -1,7 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAppTranslation } from "@/i18n/runtime";
-import { MEMBER_SIGNING_MESSAGES, type MemberSigningState } from "@/lib/member-wallet";
+import {
+  canRetryMemberSigning,
+  MEMBER_SIGNING_MESSAGES,
+  type MemberSigningState,
+} from "@/lib/member-wallet";
 
 export interface MemberSigningStatusProps {
   state: MemberSigningState;
@@ -35,7 +39,7 @@ export function MemberSigningStatus({ state, onRetry }: MemberSigningStatusProps
   }
 
   const failure = state.failure ?? "unknown";
-  const canRetry = failure !== "signedOut" && failure !== "rejected" && failure !== "unconfirmed";
+  const canRetry = canRetryMemberSigning(failure);
   return (
     <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
       <span className="min-w-0 break-words">
