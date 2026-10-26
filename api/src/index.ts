@@ -315,7 +315,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .default("")
       .describe("Repository URL included in the Nominatim User-Agent"),
     nearbuildersUrl: z
-      .string()
+      .url({ protocol: /^https?$/ })
       .default("https://nearbuilders.org")
       .describe("NEAR Builders base URL for community builders and projects"),
   }),

@@ -7,8 +7,7 @@ import {
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { type ApiClient, useApiClient, useAuthClient } from "@/app";
-import { Avatar, AvatarFallback, AvatarImage, Button, SectionHeader } from "@/components";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage, Button, SectionHeader, Skeleton } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
 
@@ -19,11 +18,10 @@ type Project = CommunityBuilders["projects"]["items"][number];
 const cardClassName =
   "group flex h-full min-h-16 items-center gap-4 rounded-2xl border border-border bg-card p-4 outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
 
-export function communityBuildersQueryOptions(apiClient: ApiClient, nodeId: string) {
+function communityBuildersQueryOptions(apiClient: ApiClient, nodeId: string) {
   return queryOptions({
     queryKey: ["community-builders", nodeId],
     queryFn: () => apiClient.getCommunityBuilders({ nodeId }),
-    enabled: !!nodeId,
     retry: false,
     staleTime: 60_000,
   });
@@ -83,7 +81,7 @@ export function NearbuildersSection({ nodeId, nodeName }: { nodeId: string; node
         </Notice>
       ) : (
         <div className="flex flex-col gap-8">
-          <Group
+          <NearbuildersList
             title={translate("nearbuilders.builders")}
             empty={translate("nearbuilders.noBuilders")}
             seeAllUrl={data.builders.total > builders.length ? data.builders.url : null}
@@ -94,8 +92,8 @@ export function NearbuildersSection({ nodeId, nodeName }: { nodeId: string; node
                 <BuilderCard builder={builder} />
               </li>
             ))}
-          </Group>
-          <Group
+          </NearbuildersList>
+          <NearbuildersList
             title={translate("nearbuilders.projects")}
             empty={translate("nearbuilders.noProjects")}
             seeAllUrl={data.projects.total > projects.length ? data.projects.url : null}
@@ -106,7 +104,7 @@ export function NearbuildersSection({ nodeId, nodeName }: { nodeId: string; node
                 <ProjectCard project={project} />
               </li>
             ))}
-          </Group>
+          </NearbuildersList>
         </div>
       )}
     </section>
@@ -122,7 +120,7 @@ function Notice({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   );
 }
 
-function Group({
+function NearbuildersList({
   title,
   empty,
   seeAllUrl,
@@ -170,7 +168,6 @@ function BuilderCard({ builder }: { builder: Builder }) {
       return data ?? null;
     },
     staleTime: 5 * 60 * 1000,
-    retry: false,
   });
   const name = builder.name || profile?.name || builder.nearAccount;
   const avatarUrl = resolveNearImageUrl(profile?.image);

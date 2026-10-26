@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { z } from "zod";
+import type { communityBuildersSchema } from "../discovery-contract";
 
 export const NEARBUILDERS_PREVIEW_LIMIT = 6;
 const REQUEST_TIMEOUT_MS = 5000;
@@ -29,56 +30,30 @@ const pageSchema = z.object({
   meta: z.object({ total: z.number().int().nonnegative() }).optional(),
 });
 
-export interface CommunityBuilder {
-  nearAccount: string;
-  name: string | null;
-  url: string;
+export type CommunityBuilders = z.infer<typeof communityBuildersSchema>;
+
+interface NodeLink {
+  slug: string;
+  parentId: string | null;
 }
 
-export interface CommunityProject {
-  title: string;
-  description: string | null;
-  logoUrl: string | null;
-  url: string;
-}
-
-export interface CommunityBuilders {
-  path: string;
-  baseUrl: string;
-  status: "ok" | "unavailable";
-  builders: { items: CommunityBuilder[]; total: number; url: string };
-  projects: { items: CommunityProject[]; total: number; url: string };
-}
-
-export function normalizeBaseUrl(value: string) {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("protocol");
-    return url.origin;
-  } catch {
-    return "https://nearbuilders.org";
-  }
-}
-
-export function communityPath<E>(
+export const communityPath = Effect.fn("communityPath")(function* <E>(
   nodeId: string,
-  getNode: (id: string) => Effect.Effect<{ slug: string; parentId: string | null } | null, E>,
+  getNode: (id: string) => Effect.Effect<NodeLink | null, E>,
 ) {
-  return Effect.gen(function* () {
-    const slugs: string[] = [];
-    const seen = new Set<string>();
-    let current: string | null = nodeId;
-    while (current) {
-      if (seen.has(current) || slugs.length >= MAX_DEPTH) return null;
-      seen.add(current);
-      const node: { slug: string; parentId: string | null } | null = yield* getNode(current);
-      if (!node) return null;
-      slugs.push(node.slug.toLowerCase());
-      current = node.parentId;
-    }
-    return slugs.reverse().join("/");
-  });
-}
+  const slugs: string[] = [];
+  const seen = new Set<string>();
+  let current: string | null = nodeId;
+  while (current) {
+    if (seen.has(current) || slugs.length >= MAX_DEPTH) return null;
+    seen.add(current);
+    const node: NodeLink | null = yield* getNode(current);
+    if (!node) return null;
+    slugs.push(node.slug.toLowerCase());
+    current = node.parentId;
+  }
+  return slugs.reverse().join("/");
+});
 
 function httpsUrl(value: string | null | undefined) {
   if (!value) return null;
@@ -111,7 +86,7 @@ function matchedPage<T extends { cityNode?: string | null }>(
 }
 
 export function createNearbuilders(baseUrlInput: string) {
-  const baseUrl = normalizeBaseUrl(baseUrlInput);
+  const baseUrl = new URL(baseUrlInput).origin;
   const cache = new Map<string, { loadedAt: number; value: CommunityBuilders }>();
   const pending = new Map<string, Promise<CommunityBuilders>>();
   const failures = new Map<string, number>();
@@ -127,7 +102,7 @@ export function createNearbuilders(baseUrlInput: string) {
     return response.json();
   }
 
-  function empty(path: string, status: CommunityBuilders["status"]): CommunityBuilders {
+  function baseResult(path: string, status: CommunityBuilders["status"]): CommunityBuilders {
     return {
       path,
       baseUrl,
@@ -154,7 +129,7 @@ export function createNearbuilders(baseUrlInput: string) {
       path,
       (project) => !project.visibility || project.visibility === "public",
     );
-    const result = empty(path, "ok");
+    const result = baseResult(path, "ok");
     return {
       ...result,
       builders: {
@@ -186,7 +161,9 @@ export function createNearbuilders(baseUrlInput: string) {
       const cached = cache.get(path);
       if (cached && now - cached.loadedAt < CACHE_TTL_MS) return Promise.resolve(cached.value);
       const fallback = () =>
-        cached && now - cached.loadedAt < STALE_TTL_MS ? cached.value : empty(path, "unavailable");
+        cached && now - cached.loadedAt < STALE_TTL_MS
+          ? cached.value
+          : baseResult(path, "unavailable");
       const failedAt = failures.get(path);
       if (failedAt !== undefined && now - failedAt < FAILURE_BACKOFF_MS) {
         return Promise.resolve(fallback());
