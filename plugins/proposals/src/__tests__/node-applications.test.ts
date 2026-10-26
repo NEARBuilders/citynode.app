@@ -7,12 +7,9 @@ import Plugin from "../index";
 
 const daoPolicy = vi.hoisted(() => ({ members: ["alice.near"] }));
 
-vi.mock("near-kit", () => ({
-  Near: class {
-    view() {
-      return Promise.resolve({ roles: [{ kind: { Group: daoPolicy.members } }] });
-    }
-  },
+vi.mock("../services/near-rpc", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/near-rpc")>()),
+  viewFunction: () => Promise.resolve({ roles: [{ kind: { Group: daoPolicy.members } }] }),
 }));
 
 vi.mock("virtual:drizzle-migrations.sql", async () => {

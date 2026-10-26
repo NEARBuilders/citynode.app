@@ -3,6 +3,11 @@
 Two loops. Use the fast one unless the change is about rendered pages,
 SSR/hydration, or a real auth session.
 
+Judgement — when to write a test at all, which layer, what the parent framework
+already covers, and how to write a regression test that fits this setup — lives
+in [`docs/agents/testing.md`](../docs/agents/testing.md). This file is the
+operational view (commands, prerequisites, costs).
+
 ## Which harness?
 
 | Changed | Run | Cost |

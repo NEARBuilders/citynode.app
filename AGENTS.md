@@ -327,9 +327,8 @@ The parent runtime provides the shared framework; your project provides custom o
 ### Making Changes
 - **UI Changes**: Edit `ui/src/` files → hot reload automatically
 - **API Changes**: Edit `api/src/` files → hot reload automatically
-- **Design-system primitives**: `ui/src/components/ui/*` (shadcn `base-maia`). Use as-is; change appearance via variants/sizes, `className` for layout only (see `ui/DESIGN.md`).
-- **Feature components**: colocate with their route (e.g. `ui/src/routes/_authenticated/_dashboard/orgs/-invite-member-form.tsx`). Export shared ones from `ui/src/components/index.ts`.
-- **New Routes**: Create file in `ui/src/routes/`, TanStack Router auto-generates tree. Route shape is mount-based — see *Common Patterns* below.
+- **New Components**: Create in `ui/src/components/ui/`, export from `ui/src/components/index.ts`
+- **New Routes**: Create file in `ui/src/routes/`, TanStack Router auto-generates tree
 
 ### Style Requirements
 - Use semantic Tailwind classes: `bg-background`, `text-foreground`, `text-muted-foreground`
@@ -338,13 +337,15 @@ The parent runtime provides the shared framework; your project provides custom o
 - Component file naming: lowercase kebab-case (`data-table.tsx`, `user-profile.tsx`)
 - Follow existing patterns in neighboring files
 
+Review-time rules — the write-once goal, type-safety patterns, the workaround protocol, and the comment `KEEP`/`TODO` conventions — are in [`docs/agents/coding-standards.md`](docs/agents/coding-standards.md).
+
 ### Framework-owned files and the upstream-change protocol (ADR 0032)
 
 The files carrying the `FRAMEWORK-OWNED` header (build configs, db/lib plumbing, workflows) are reconciled from the parent template by `bos upgrade`: template wins on the next upgrade, local copies are backed up under `.bos/sync-backup/`, and **same-version upgrades never touch them** (only the framework version change reconciles them).
 
 **Editing them is allowed.** When the work needs it, edit a framework-owned file, keep the build/typecheck/tests green — then **file an accompanying issue at https://github.com/NEARBuilders/everything-dev/issues** describing the change so it gets implemented in the framework and shipped in package versions. A local edit without an upstream issue is an undocumented fork that the next upgrade will quietly clobber.
 
-Architecture decisions live upstream. ADR numbers cited throughout this repo resolve via [`docs/adr/README.md`](docs/adr/README.md).
+When the need is a **bug**, a **missing capability**, or a **pattern improvement**, follow [`docs/agents/change-placement.md`](docs/agents/change-placement.md) — including its first rule: sync-owned files are a contribution channel, not a fence. A human-facing diagram tour of the whole runtime lives in [`docs/agents/how-it-fits.md`](docs/agents/how-it-fits.md); `/teach` builds lessons from it.
 
 ### Adding API Endpoints
 1. Define in `api/src/contract.ts` — the oRPC route definitions and Zod schemas
@@ -353,23 +354,12 @@ Architecture decisions live upstream. ADR numbers cited throughout this repo res
 
 ### Plugin Architecture
 
-Business logic is organized into independent plugins loaded via Module Federation. A plugin is either **local** (a workspace in this repo) or **remote** (a published bundle inherited via `extends`):
-
-- **Local** (`plugins/registry`, `plugins/proposals`): each has `contract.ts` (oRPC route definitions + Zod schemas) and `index.ts` (`createPlugin` with variables, secrets, context, router).
-- **Remote** (`auth`): the published `@everything-dev/auth-plugin`, server **and** UI. There is **no local auth workspace**; `bos.app.ts`'s `auth` block carries only this app's variables/secrets. Its source lives upstream at `github.com/NEARBuilders/everything-dev` under `plugins/auth/`.
+Business logic is organized into independent plugins loaded via Module Federation:
+- Each plugin has its own `contract.ts` — oRPC route definitions and Zod schemas
+- Each plugin has its own `index.ts` — `createPlugin` with variables, secrets, context, router
+- Each plugin has its own rspack config for independent deployment
 
 The UI accesses plugin routes via namespaced clients: `apiClient.<plugin>.<method>()`.
-
-### Runtime map — where a change belongs
-
-Which screen belongs to which source, and how to override it, is **generated**, not guessed: see [`docs/runtime-map.md`](docs/runtime-map.md). Short version:
-
-- The composed inventory is `.bos/generated/runtime-map.json` + `ui/src/lib/runtime-map.gen.ts` (regenerate with `pnpm run types:gen`; verify with `pnpm run verify:runtime-map`).
-- **Core ui wins** a route claim: create a local route with the same path and the plugin's route is shadowed.
-- Three ways to change a screen: claim the path locally (`ui/src/routes/…`), `bos import plugins/auth` to own the subtree, or change upstream (PR → platform release → `platform:` pin bump).
-- Auth screens (`/login`, `/onboard`, `/settings/*`) come from the remote auth bundle. Navigate to plugin-owned paths through `pluginPath()` from `@/app`; a literal `to="/login"` will not typecheck until upstream #346 lands.
-
-The composition/route-shadowing rules are documented in the framework's `everything-dev#v1-to-v2-upgrade` skill — load it rather than reverse-engineering `node_modules`.
 
 ### Plugin Client (pluginsClient)
 
@@ -377,7 +367,7 @@ The API plugin receives typed client factories for all other plugins via `create
 
 ### Generated Types
 
-`api/src/lib/plugins-types.gen.ts`, `api/src/lib/auth-types.gen.ts`, `ui/src/lib/api-types.gen.ts`, and `ui/src/lib/auth-types.gen.ts` are generated by `bos types gen` from `bos.app.ts`. `ui/src/lib/runtime-map.gen.ts` is generated right after it by `scripts/gen-runtime-map.mjs` (part of `pnpm run types:gen`). These files are gitignored and auto-regenerated on `pnpm install`, `typecheck`, `bos dev`, `bos build`, and bos plugin management commands.
+`api/src/lib/plugins-types.gen.ts`, `api/src/lib/auth-types.gen.ts`, `ui/src/lib/api-types.gen.ts`, and `ui/src/lib/auth-types.gen.ts` are generated by `bos types gen` from `bos.app.ts`. These files are gitignored and auto-regenerated on `pnpm install`, `typecheck`, `bos dev`, `bos build`, and bos plugin management commands.
 
 If you hand-edit `bos.app.ts`, run `bos types gen` or restart `bos dev` to regenerate.
 
@@ -390,21 +380,24 @@ pnpm run typecheck   # Type check all packages
 pnpm run lint        # Run linting
 ```
 
+When to write a test, which layer, what the parent framework covers vs what
+this repo must cover: [`docs/agents/testing.md`](docs/agents/testing.md).
+
 ## Common Patterns
 
 ### Authentication Check
 
-Auth is enforced by **mounts**, not by per-route checks. `ui/src/routes/_authenticated.tsx` declares the `authenticated` mount and calls `requireSession`; `ui/src/routes/_admin.tsx` adds `requireAdmin`; `ui/src/routes/_public.tsx` is ungated. The host attaches the mount gate before any route `beforeLoad`, so a route cannot escape its mount.
-
+Routes requiring auth use `_authenticated.tsx` layout:
 ```typescript
-// ui/src/routes/_authenticated.tsx
-export const Route = createFileRoute("/_authenticated")({
-  beforeLoad: requireSession,
-  component: AuthenticatedLayout,
+export const Route = createFileRoute('/_layout/_authenticated')({
+  beforeLoad: async ({ location }) => {
+    const { data: session } = await authClient.getSession();
+    if (!session?.user) {
+      throw redirect({ to: '/login', search: { redirect: location.pathname } });
+    }
+  },
 });
 ```
-
-Put new screens under the right mount directory (`_public/…`, `_authenticated/…`, `_admin/…`) — do not re-implement session checks in child routes.
 
 ### API Client Usage
 ```typescript

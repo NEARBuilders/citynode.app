@@ -38,12 +38,6 @@ export const metadataMessages = createMessageCatalogs(["en", "es", "fr", "zh"], 
     "{name} sur CityNode : événements, communautés locales et pools de staking.",
     "CityNode 上的 {name}：活动、本地社区和质押池。",
   ],
-  "meta.editCommunityAdmin": [
-    "Edit community · Admin",
-    "Editar comunidad · Administración",
-    "Modifier la communauté · Administration",
-    "编辑社区 · 管理",
-  ],
   "meta.exploreDescription": [
     "Find a CityNode community near you and see what's coming up.",
     "Encuentra una comunidad CityNode cerca de ti y descubre sus próximos eventos.",
