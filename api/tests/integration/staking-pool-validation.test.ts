@@ -61,7 +61,13 @@ describe("validator staking pool approval", () => {
 
     await expect(
       owner.createValidator({ nodeId: node.id, accountId: "not-a-pool.near", network: "mainnet" }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST", data: { invalidFields: ["accountId"] } });
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      data: {
+        invalidFields: ["accountId"],
+        validationErrors: [expect.objectContaining({ code: "STAKING_POOL_NOT_APPROVED" })],
+      },
+    });
     expect(await owner.listValidators({ nodeId: node.id })).toEqual([]);
   });
 
@@ -79,7 +85,7 @@ describe("validator staking pool approval", () => {
       }),
     ).rejects.toMatchObject({
       code: "CONNECTION_ERROR",
-      data: { suggestion: "Try again in a moment" },
+      data: { errorCode: "STAKING_POOL_CHECK_FAILED", suggestion: "Try again in a moment" },
     });
     expect(await owner.listValidators({ nodeId: node.id })).toEqual([]);
   });

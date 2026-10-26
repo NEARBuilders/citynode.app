@@ -75,4 +75,26 @@ describe("makeStakingPools", () => {
     }
     expect(near.view).not.toHaveBeenCalled();
   });
+
+  it("answers repeat checks from a short cache instead of calling NEAR each time", async () => {
+    near.view.mockResolvedValue(true);
+    let clock = 0;
+    const pools = makeStakingPools(whitelists, () => clock);
+
+    await Effect.runPromise(pools.isApproved("pool.poolv1.near", "mainnet"));
+    await Effect.runPromise(pools.isApproved("pool.poolv1.near", "mainnet"));
+    expect(near.view).toHaveBeenCalledTimes(1);
+
+    clock = 5 * 60_000 + 1;
+    await Effect.runPromise(pools.isApproved("pool.poolv1.near", "mainnet"));
+    expect(near.view).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache a failed check", async () => {
+    near.view.mockRejectedValueOnce(new Error("rpc down")).mockResolvedValueOnce(true);
+    const pools = makeStakingPools(whitelists);
+
+    await Effect.runPromiseExit(pools.isApproved("pool.poolv1.near", "mainnet"));
+    expect(await Effect.runPromise(pools.isApproved("pool.poolv1.near", "mainnet"))).toBe(true);
+  });
 });

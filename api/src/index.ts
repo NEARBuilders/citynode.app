@@ -93,7 +93,10 @@ const checkStakingPool = (
           error instanceof StakingPoolCheckFailed
             ? new ORPCError("CONNECTION_ERROR", {
                 message: error.message,
-                data: { suggestion: "Try again in a moment" },
+                data: {
+                  errorCode: "STAKING_POOL_CHECK_FAILED",
+                  suggestion: "Try again in a moment",
+                },
               })
             : new ORPCError("BAD_REQUEST", { message: error.message }),
         ),
@@ -112,7 +115,16 @@ const requireApprovedStakingPool = (
       return yield* Effect.fail(
         new ORPCError("BAD_REQUEST", {
           message: `${validator.accountId} is not an approved staking pool on ${validator.network}`,
-          data: { invalidFields: ["accountId"] },
+          data: {
+            invalidFields: ["accountId"],
+            validationErrors: [
+              {
+                field: "accountId",
+                message: "Not an approved staking pool",
+                code: "STAKING_POOL_NOT_APPROVED",
+              },
+            ],
+          },
         }),
       );
     }

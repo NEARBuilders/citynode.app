@@ -33,13 +33,22 @@ function isNearNetwork(network: string): network is NearNetworkId {
   return network === "mainnet" || network === "testnet";
 }
 
-export function makeStakingPools(whitelists: StakingPoolWhitelists): StakingPoolsService {
+const APPROVAL_TTL_MS = 5 * 60_000;
+
+export function makeStakingPools(
+  whitelists: StakingPoolWhitelists,
+  now: () => number = Date.now,
+): StakingPoolsService {
+  const approvals = new Map<string, { approved: boolean; expiresAt: number }>();
   return {
     isApproved: (accountId, network) =>
       Effect.gen(function* () {
         if (!isNearNetwork(network)) {
           return yield* Effect.fail(new UnsupportedStakingNetwork({ network }));
         }
+        const key = `${network}:${accountId}`;
+        const cached = approvals.get(key);
+        if (cached && cached.expiresAt > now()) return cached.approved;
         const approved = yield* Effect.tryPromise({
           try: () =>
             viewFunction<boolean>({
@@ -50,6 +59,7 @@ export function makeStakingPools(whitelists: StakingPoolWhitelists): StakingPool
             }),
           catch: (cause) => new StakingPoolCheckFailed({ network, cause }),
         });
+        approvals.set(key, { approved: approved === true, expiresAt: now() + APPROVAL_TTL_MS });
         return approved === true;
       }),
   };

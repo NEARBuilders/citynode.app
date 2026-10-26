@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getActiveOrganizationNodeId, getStakeScopeKey } from "./-stake-selection";
+import {
+  chooseDefaultValidator,
+  getActiveOrganizationNodeId,
+  getStakeScopeKey,
+} from "./-stake-selection";
 
 describe("stake community selection", () => {
   it("uses the public scope for signed-out and anonymous visitors", () => {
@@ -35,5 +39,28 @@ describe("stake community selection", () => {
         hasRequestedNode: false,
       }),
     ).toBeNull();
+  });
+});
+
+describe("chooseDefaultValidator", () => {
+  const pools = [
+    { id: "default", isDefault: true },
+    { id: "second", isDefault: false },
+    { id: "third", isDefault: false },
+  ];
+
+  it("keeps the community's default when it is approved", () => {
+    expect(chooseDefaultValidator(pools, new Set())?.id).toBe("default");
+  });
+
+  it("skips an unapproved default for the first approved pool", () => {
+    expect(chooseDefaultValidator(pools, new Set(["default"]))?.id).toBe("second");
+  });
+
+  it("falls back to the default when no pool is approved", () => {
+    expect(chooseDefaultValidator(pools, new Set(["default", "second", "third"]))?.id).toBe(
+      "default",
+    );
+    expect(chooseDefaultValidator([], new Set())).toBeUndefined();
   });
 });

@@ -112,7 +112,15 @@ interface ValidatorRow {
   isDefault: boolean;
 }
 
-function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; network: string }) {
+function PoolOwnerBadge({
+  poolAccountId,
+  network,
+  protocol,
+}: {
+  poolAccountId: string;
+  network: string;
+  protocol: string;
+}) {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
   const { data: owner, isLoading } = useQuery({
@@ -120,9 +128,10 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
     queryFn: () => fetchPoolOwner(poolAccountId, network),
     staleTime: 5 * 60 * 1000,
   });
-  const { data: approval } = useQuery(
-    stakingPoolApprovalQueryOptions(apiClient, poolAccountId, network),
-  );
+  const { data: approval } = useQuery({
+    ...stakingPoolApprovalQueryOptions(apiClient, poolAccountId, network),
+    enabled: protocol === "near",
+  });
 
   if (isLoading) {
     return (
@@ -245,6 +254,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                     <PoolOwnerBadge
                       poolAccountId={validator.accountId}
                       network={validator.network}
+                      protocol={validator.protocol}
                     />
                   </ItemDescription>
                 </ItemContent>
