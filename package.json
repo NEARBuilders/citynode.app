@@ -58,7 +58,8 @@
     "oxlint-tsgolint": "7.0.2001",
     "tsx": "^4.21.0",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@changesets/cli": "^2.29.8"
   },
   "dependencies": {
     "@better-auth/api-key": "catalog:",
