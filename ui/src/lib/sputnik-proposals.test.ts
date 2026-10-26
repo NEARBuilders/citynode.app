@@ -10,6 +10,7 @@ import {
   proposalMatchesPlan,
   readDaoProposalsSince,
   readDelegationBalance,
+  readOpenDaoProposals,
   type SputnikPolicy,
   type SputnikProposal,
 } from "./sputnik-proposals";
@@ -292,5 +293,60 @@ describe("readDaoProposalsSince", () => {
     stubSparseDao(150, [record(20, cutoff, "InProgress"), record(120, cutoff)]);
     const proposals = await readDaoProposalsSince(dao, cutoff);
     expect(proposals.map((proposal) => proposal.id)).toEqual([120, 20]);
+  });
+});
+
+describe("readOpenDaoProposals", () => {
+  const nowNs = 1_760_000_000_000n * 1_000_000n;
+  const hourNs = 3_600_000_000_000n;
+  const dao = "example.sputnik-dao.near";
+  const policy = { roles: [], proposal_period: (168n * hourNs).toString() };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function stubDao(proposals: SputnikProposal[], failOn?: string) {
+    vi.spyOn(Near.prototype, "rpc", "get").mockReturnValue({
+      getBlock: () => Promise.resolve({ header: { timestamp_nanosec: nowNs.toString() } }),
+    } as never);
+    return vi.spyOn(Near.prototype, "view").mockImplementation((_contractId, method, args) => {
+      if (method === failOn) return Promise.reject(new Error(`${method} failed`));
+      if (method === "get_policy") return Promise.resolve(policy);
+      if (method === "get_last_proposal_id") return Promise.resolve(proposals.length);
+      const { from_index, limit } = args as { from_index: number; limit: number };
+      return Promise.resolve(proposals.slice(from_index, from_index + limit));
+    });
+  }
+
+  it("finds a pending proposal older than the newest 25", async () => {
+    stubDao(
+      Array.from({ length: 60 }, (_, id) =>
+        proposalRecord({
+          id,
+          status: id === 5 ? "InProgress" : "Approved",
+          submission_time: (nowNs - hourNs * BigInt(60 - id)).toString(),
+        }),
+      ),
+    );
+    const open = await readOpenDaoProposals(dao);
+    expect(open.map((proposal) => proposal.id)).toEqual([5]);
+  });
+
+  it("drops proposals past the proposal period", async () => {
+    stubDao([
+      proposalRecord({ id: 0, submission_time: (nowNs - 200n * hourNs).toString() }),
+      proposalRecord({ id: 1, submission_time: (nowNs - hourNs).toString() }),
+    ]);
+    expect((await readOpenDaoProposals(dao)).map((proposal) => proposal.id)).toEqual([1]);
+  });
+
+  it.each([
+    "get_policy",
+    "get_last_proposal_id",
+    "get_proposals",
+  ])("fails instead of reporting no pending proposals when %s fails", async (method) => {
+    stubDao([proposalRecord({ id: 0, submission_time: nowNs.toString() })], method);
+    await expect(readOpenDaoProposals(dao)).rejects.toThrow(`${method} failed`);
   });
 });

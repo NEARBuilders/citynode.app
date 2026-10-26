@@ -126,6 +126,18 @@ export async function readDaoProposalsSince(
   return proposals.sort((a, b) => b.id - a.id);
 }
 
+/** Reads every proposal still inside the DAO's proposal period, failing when any read fails. */
+export async function readOpenDaoProposals(daoAccountId: string): Promise<SputnikProposal[]> {
+  if (!daoAccountId) return [];
+  const [policy, chainNowNs] = await Promise.all([
+    readSputnikPolicy(daoAccountId),
+    readChainTimeNs(),
+  ]);
+  const sinceNs = policy?.proposal_period ? chainNowNs - BigInt(policy.proposal_period) : 0n;
+  const proposals = await readDaoProposalsSince(daoAccountId, sinceNs);
+  return proposals.filter((proposal) => isOpenProposal(proposal, policy, chainNowNs));
+}
+
 export async function readChainTimeNs(): Promise<bigint> {
   const block = await getNear().rpc.getBlock({ finality: "final" });
   return BigInt(block.header.timestamp_nanosec);
