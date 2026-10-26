@@ -72,7 +72,6 @@ import {
   COMMUNITY_JOINS_LIMIT,
   visibleCommunityJoinRows,
 } from "./-community-joins";
-import { relayerStatus } from "./-relayer-status";
 import {
   adminProposalListQueryOptions,
   awaitingReviewQueryOptions,
@@ -124,6 +123,7 @@ function AdminOverview() {
   const reviewTotal = awaitingQuery.data?.meta.total ?? 0;
   const relayer = relayerQuery.data;
   const relayerNeedsFunding = !!relayer?.accountId && relayer.enabled === false;
+  const relayerFailed = relayerQuery.isError && !relayer;
   const requestCount = requestsQuery.data?.length;
 
   return (
@@ -190,7 +190,7 @@ function AdminOverview() {
             title={translate("nav.relayer")}
             testId="admin.heading.relayer"
             status={
-              relayerQuery.isError
+              relayerFailed
                 ? translate("admin.loadFailed")
                 : relayerQuery.isLoading
                   ? translate("common.loading")
@@ -198,9 +198,11 @@ function AdminOverview() {
                     ? translate("admin.manage.relayerBalance", {
                         balance: formatNearFigure(relayer.balance, locale),
                       })
-                    : relayerStatus(relayer, translate).label
+                    : relayerNeedsFunding
+                      ? translate("admin.relayer.needsFunding")
+                      : translate("admin.relayer.notConfigured")
             }
-            attention={relayerQuery.isError || (!!relayer && !relayer.enabled)}
+            attention={relayerFailed || relayerNeedsFunding}
             statusTestId="admin.stat.relayer"
           />
           <ManageTile
@@ -227,7 +229,12 @@ function AdminOverview() {
         relayerNeedsFunding={relayerNeedsFunding}
         organizationRequestCount={requestCount ?? 0}
         progress={progress}
-        sources={[setupsQuery, awaitingQuery, relayerQuery, requestsQuery]}
+        sources={[
+          setupsQuery,
+          awaitingQuery,
+          { ...relayerQuery, isError: relayerFailed },
+          requestsQuery,
+        ]}
       />
 
       <CommunityProgress progress={progress} />

@@ -95,7 +95,7 @@ describe("buildCommunityProgressRows", () => {
     ]);
   });
 
-  it("shows zero joins and events for a community with no activity instead of dropping it", () => {
+  it("keeps a community with no activity, showing no joins for a site without an organization", () => {
     const [row] = buildCommunityProgressRows(
       [tenant("t-berlin", null)],
       [summary("berlin", null, 0, "t-berlin")],
