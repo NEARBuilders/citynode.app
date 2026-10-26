@@ -1,16 +1,9 @@
 import { Effect, Exit } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const near = vi.hoisted(() => ({ view: vi.fn(), configs: [] as unknown[] }));
+const near = vi.hoisted(() => ({ view: vi.fn() }));
 
-vi.mock("near-kit", () => ({
-  Near: class {
-    constructor(config: unknown) {
-      near.configs.push(config);
-    }
-    view = near.view;
-  },
-}));
+vi.mock("../../src/services/near-rpc", () => ({ viewFunction: near.view }));
 
 const { makeStakingPools, StakingPoolCheckFailed, UnsupportedStakingNetwork } = await import(
   "../../src/services/staking-pools"
@@ -20,14 +13,13 @@ const whitelists = { mainnet: "whitelist.mainnet", testnet: "whitelist.testnet" 
 
 afterEach(() => {
   near.view.mockReset();
-  near.configs.length = 0;
 });
 
 describe("makeStakingPools", () => {
   it.each([
-    ["mainnet", "whitelist.mainnet", "https://rpc.mainnet.near.org"],
-    ["testnet", "whitelist.testnet", "https://rpc.testnet.near.org"],
-  ])("asks the %s whitelist whether the account is approved", async (network, whitelist, rpcUrl) => {
+    ["mainnet", "whitelist.mainnet"],
+    ["testnet", "whitelist.testnet"],
+  ])("asks the %s whitelist whether the account is approved", async (network, whitelist) => {
     near.view.mockResolvedValue(true);
 
     const approved = await Effect.runPromise(
@@ -35,10 +27,12 @@ describe("makeStakingPools", () => {
     );
 
     expect(approved).toBe(true);
-    expect(near.view).toHaveBeenCalledWith(whitelist, "is_whitelisted", {
-      staking_pool_account_id: "pool.poolv1.near",
+    expect(near.view).toHaveBeenCalledWith({
+      accountId: whitelist,
+      methodName: "is_whitelisted",
+      args: { staking_pool_account_id: "pool.poolv1.near" },
+      network,
     });
-    expect(near.configs).toEqual([{ network: { rpcUrl, networkId: network } }]);
   });
 
   it.each([

@@ -1,6 +1,5 @@
 import { Data, Effect } from "effect";
-import { Near } from "near-kit";
-import { type NearNetworkId, nearRpcUrl } from "./near-rpc";
+import { type NearNetworkId, viewFunction } from "./near-rpc";
 
 export type StakingPoolWhitelists = Record<NearNetworkId, string>;
 
@@ -41,11 +40,13 @@ export function makeStakingPools(whitelists: StakingPoolWhitelists): StakingPool
         if (!isNearNetwork(network)) {
           return yield* Effect.fail(new UnsupportedStakingNetwork({ network }));
         }
-        const near = new Near({ network: { rpcUrl: nearRpcUrl(network), networkId: network } });
         const approved = yield* Effect.tryPromise({
           try: () =>
-            near.view<boolean>(whitelists[network], "is_whitelisted", {
-              staking_pool_account_id: accountId,
+            viewFunction<boolean>({
+              accountId: whitelists[network],
+              methodName: "is_whitelisted",
+              args: { staking_pool_account_id: accountId },
+              network,
             }),
           catch: (cause) => new StakingPoolCheckFailed({ network, cause }),
         });

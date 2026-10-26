@@ -37,6 +37,15 @@ describe("localized action failures", () => {
       expect(appErrorMessage({ status: 403 }, t)).toBe(t("error.permission"));
       expect(appErrorMessage({ status: 409 }, t)).toBe(t("error.conflict"));
       expect(appErrorMessage({ code: "ACTION_REJECTED" }, t)).toBe(t("wallet.cancelled"));
+      expect(
+        appErrorMessage(
+          { code: "SERVICE_UNAVAILABLE", status: 503, data: { reason: "NEAR_RPC_UNAVAILABLE" } },
+          t,
+        ),
+      ).toBe(t("error.nearUnavailable"));
+      expect(appErrorMessage({ code: "SERVICE_UNAVAILABLE", status: 503 }, t)).toBe(
+        t("error.action"),
+      );
     }
   });
 

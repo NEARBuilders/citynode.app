@@ -1,22 +1,22 @@
 import { ORPCError } from "@orpc/server";
 import { Effect } from "effect";
-import { Near } from "near-kit";
+import { type NearNetworkId, NearViewCallError, resolveNetwork, viewFunction } from "./near-rpc";
+
+type ApplicantPolicy = { roles?: Array<{ kind?: { Group?: string[] } | string }> };
 
 export function verifyNodeApplicant(
   daoAccountId: string,
   applicantAccountId: string,
-  networkId: "mainnet" | "testnet",
+  networkId: NearNetworkId,
 ) {
+  const network = resolveNetwork(daoAccountId, networkId);
   return Effect.tryPromise({
     try: async () => {
-      const near = new Near({
-        network: { rpcUrl: `https://rpc.${networkId}.near.org`, networkId },
+      const policy = await viewFunction<ApplicantPolicy | null>({
+        accountId: daoAccountId,
+        methodName: "get_policy",
+        network,
       });
-      const policy = await near.view<{ roles?: Array<{ kind?: { Group?: string[] } | string }> }>(
-        daoAccountId,
-        "get_policy",
-        {},
-      );
       return (
         policy?.roles?.some(
           (role) =>
@@ -26,9 +26,15 @@ export function verifyNodeApplicant(
         ) === true
       );
     },
-    catch: () =>
-      new ORPCError("BAD_REQUEST", {
-        message: "Unable to verify the proposed Sputnik DAO policy",
-      }),
+    catch: (error) =>
+      error instanceof NearViewCallError
+        ? new ORPCError("BAD_REQUEST", {
+            message: "Unable to verify the proposed Sputnik DAO policy",
+            data: { daoAccountId, network, cause: error.kind },
+          })
+        : new ORPCError("SERVICE_UNAVAILABLE", {
+            message: "Couldn't reach NEAR, try again",
+            data: { reason: "NEAR_RPC_UNAVAILABLE", daoAccountId, network },
+          }),
   });
 }
