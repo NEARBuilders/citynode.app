@@ -71,6 +71,7 @@ test.describe("admin", () => {
     await waitForApp(page);
 
     await expect(page.getByTestId("orgs.heading")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("orgs-new-button")).toHaveCount(0);
 
     expectNoHydrationFailure(pageErrors);
   });

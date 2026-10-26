@@ -122,18 +122,11 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "加入代码已撤销",
   ],
   "org.copyPrefix": ["Copy prefix", "Copiar prefijo", "Copier le préfixe", "复制前缀"],
-  "org.create": ["Create organization", "Crear organización", "Créer une organisation", "创建组织"],
   "org.createdNamed": [
     'Organization "{name}" created',
     "Organización «{name}» creada",
     "Organisation « {name} » créée",
     "已创建组织“{name}”",
-  ],
-  "org.createHint": [
-    "Create one to invite people, form teams and start a community.",
-    "Crea una para invitar personas, formar equipos y crear una comunidad.",
-    "Créez-en une pour inviter des personnes, former des équipes et lancer une communauté.",
-    "创建组织以邀请成员、组建团队和创建社区。",
   ],
   "org.createTeam": ["Create team", "Crear equipo", "Créer une équipe", "创建团队"],
   "org.decline": ["Decline", "Rechazar", "Refuser", "拒绝"],
