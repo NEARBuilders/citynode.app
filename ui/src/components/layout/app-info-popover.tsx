@@ -32,6 +32,10 @@ const OUTCOME_LABELS: Record<
   "pointer-unreachable": { label: "version.pointerUnreachable", variant: "destructive" },
 };
 
+export function showsAppInfo(isAdmin: boolean, pathname: string) {
+  return isAdmin && (pathname === "/admin" || pathname.startsWith("/admin/"));
+}
+
 export function AppInfoPopover({
   runtimeConfig,
 }: {

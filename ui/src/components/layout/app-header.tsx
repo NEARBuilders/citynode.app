@@ -15,7 +15,7 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAppTranslation } from "@/i18n/runtime";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
-import { AppInfoPopover } from "./app-info-popover";
+import { AppInfoPopover, showsAppInfo } from "./app-info-popover";
 import { crumbsFor } from "./breadcrumbs";
 import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
@@ -96,7 +96,7 @@ export function AppHeader({ runtimeConfig, isAdmin = false }: AppHeaderProps) {
           </div>
         )}
         <div className="flex shrink-0 items-center gap-1">
-          {isAdmin && <AppInfoPopover runtimeConfig={runtimeConfig} />}
+          {showsAppInfo(isAdmin, pathname) && <AppInfoPopover runtimeConfig={runtimeConfig} />}
           <ThemeToggle />
           <UserNav />
         </div>
