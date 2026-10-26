@@ -724,15 +724,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
-        yield* services.memberDirectory.refreshPrimaryAccount(
-          context.userId,
-          yield* readOwnPrimaryAccount(auth),
-        );
         const { members, total } = yield* listAllMembers(auth, input.organizationId);
         const current = members.filter((member) => member.organizationId === input.organizationId);
         if (!current.some((member) => member.userId === context.userId)) {
           return yield* Effect.fail(notACommunityMember());
         }
+        yield* services.memberDirectory.refreshPrimaryAccount(
+          context.userId,
+          yield* readOwnPrimaryAccount(auth),
+        );
         const observation = yield* services.memberDirectory.recordCount(
           input.organizationId,
           total,
