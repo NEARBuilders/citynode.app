@@ -163,6 +163,10 @@ describe("classifyMemberSigningError", () => {
     ["a missing WebAuthn API", named("NotSupportedError")],
     ["a missing credential", new Error("No credential found for this account")],
     [
+      "a passkey missing from the registry",
+      new Error("This passkey is not registered in the passkeys registry"),
+    ],
+    [
       "the passkey executor's sign-up failure",
       new Error(
         "Something went wrong creating your passkey. Please try again, and make sure your device's screen lock (Face ID, fingerprint, or PIN) is set up.",

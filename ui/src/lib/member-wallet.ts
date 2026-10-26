@@ -149,7 +149,7 @@ export function createMemberSessionWallet({
 const CANCELLED_PATTERN =
   /user (?:rejected|cancelled|canceled|closed)|request (?:rejected|cancelled|canceled)|cancelled by user|popup closed|wallet closed/i;
 const CREDENTIAL_PATTERN =
-  /credential|passkey (?:not found|unavailable)|no passkey|(?:signing in with|creating) your passkey|screen lock/i;
+  /credential|passkey (?:not found|unavailable)|no passkey|(?:signing in with|creating) your passkey|screen lock|passkey is not registered/i;
 const REJECTED_PATTERN = /smart contract panicked|executionerror|functioncallerror|actionerror/i;
 const NETWORK_PATTERN =
   /failed to fetch|network|timeout|timed out|relay|sender|sponsor|status (?:429|5\d\d)/i;
