@@ -25,7 +25,6 @@ export type WorkspaceTeam =
 
 export interface TeamAccess {
   teams: WorkspaceTeam[];
-  activeTeam: WorkspaceTeam | null;
   bypass: boolean;
 }
 
@@ -40,10 +39,9 @@ export type TeamAccessContext = {
 
 export function resolveTeamAccess(context: TeamAccessContext | undefined): TeamAccess {
   const teams = [...(context?.organization?.teams ?? [])];
-  const activeTeam = teams.find((team) => team.id === context?.organization?.activeTeamId) ?? null;
   const orgRole = context?.organization?.member?.role;
   const bypass = context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
-  return { teams, activeTeam, bypass };
+  return { teams, bypass };
 }
 
 export function canUseTeamArea(
@@ -63,19 +61,8 @@ export function teamAreaForbidden(areas: readonly FeatureArea[]): ORPCError<"FOR
   });
 }
 
-/**
- * Gates a route on the caller being granted one of the given areas (see
- * `canUseTeamArea`). Assumes `requireAuth` already ran on the route — it only
- * adds the team-specific check on top, rather than re-deriving auth from scratch.
- */
 export function createRequireTeamArea(builder: any) {
-  type TeamAreaMiddleware = DecoratedMiddleware<
-    AuthContext,
-    { activeTeam: WorkspaceTeam | null },
-    any,
-    any,
-    any
-  >;
+  type TeamAreaMiddleware = DecoratedMiddleware<AuthContext, Record<never, never>, any, any, any>;
 
   return <TAreas extends readonly FeatureArea[]>(...areas: TAreas) =>
     builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
@@ -83,6 +70,6 @@ export function createRequireTeamArea(builder: any) {
       if (!areas.some((area) => canUseTeamArea(context, area, access))) {
         throw teamAreaForbidden(areas);
       }
-      return next({ context: { activeTeam: access.activeTeam } });
+      return next();
     }) as TeamAreaMiddleware;
 }
