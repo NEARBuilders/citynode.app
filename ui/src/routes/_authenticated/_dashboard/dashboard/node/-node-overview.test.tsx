@@ -455,6 +455,19 @@ describe("node overview member directory", () => {
     expect(screen.getByTestId("dashboard-node.member-list").className).toContain("min-w-0");
   });
 
+  it("reloads my own view once when I change the toggle", async () => {
+    stubChain();
+    const requested = directoryWith([]);
+    renderOverview({ nearAccount: null });
+    expect(await screen.findByTestId("dashboard-node.members-empty")).toBeTruthy();
+    const toggle = screen.getByTestId("dashboard-node.member-opt-in");
+    await waitFor(() => expect(toggle.getAttribute("aria-disabled")).not.toBe("true"));
+    await act(async () => fireEvent.click(toggle));
+    expect(await screen.findByRole("link", { name: "Me Myself" })).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(requested).toEqual(["org-1", "org-1"]);
+  });
+
   it("adds my name when I turn the toggle on and removes it when I turn it off", async () => {
     stubChain();
     directoryWith([]);

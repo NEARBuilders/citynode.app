@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useApiClient } from "@/app";
 import { Button, SectionHeader } from "@/components";
 import { MemberCountValue } from "@/components/member-count";
@@ -32,21 +32,26 @@ export function MemberDirectory({
     ...nodeMemberCountQueryOptions(apiClient, nodeId),
     enabled: directory.isError,
   });
+  const channel = useRef<BroadcastChannel | null>(null);
   const setOptIn = useMutation({
     mutationFn: (optedIn: boolean) => apiClient.setMemberDirectoryOptIn({ optedIn }),
     onSuccess: async (result) => {
       queryClient.setQueryData(memberDirectoryQueryKeys.optIn(), result);
-      notifyOtherViews();
+      channel.current?.postMessage("changed");
       await queryClient.invalidateQueries({ queryKey: memberDirectoryQueryKeys.all });
     },
   });
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(memberDirectoryChannelName);
-    channel.onmessage = () => {
+    const views = new BroadcastChannel(memberDirectoryChannelName);
+    views.onmessage = () => {
       void queryClient.invalidateQueries({ queryKey: memberDirectoryQueryKeys.all });
     };
-    return () => channel.close();
+    channel.current = views;
+    return () => {
+      channel.current = null;
+      views.close();
+    };
   }, [queryClient]);
   const checked = setOptIn.isPending
     ? (setOptIn.variables ?? false)
@@ -153,11 +158,4 @@ export function MemberDirectory({
       ) : null}
     </section>
   );
-}
-
-function notifyOtherViews() {
-  if (typeof BroadcastChannel === "undefined") return;
-  const channel = new BroadcastChannel(memberDirectoryChannelName);
-  channel.postMessage("changed");
-  channel.close();
 }
