@@ -131,7 +131,7 @@ function OrganizationDetail() {
   const activeOrgId = session?.session?.activeOrganizationId;
   const isActive = orgId === activeOrgId;
   const membersQuery = useQuery({
-    ...orgMembersQueryOptions(auth, orgId),
+    ...orgMembersQueryOptions(apiClient, orgId),
     enabled: !!orgId && org?.status === "active",
   });
   const members = membersQuery.data ?? [];
