@@ -1,5 +1,12 @@
 import { ArrowSquareOutIcon, CheckCircleIcon, ClockIcon } from "@phosphor-icons/react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  queryOptions,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient, useAuthClient } from "@/app";
@@ -180,12 +187,13 @@ function actionBalance(
 const SEQUENCE_KEY = ["node-staking-sequence"] as const;
 
 function snapshotVoteQueryOptions(team: string, proposalId: number | null) {
-  return {
+  return queryOptions({
     queryKey: [...SEQUENCE_KEY, "snapshot-vote", team, proposalId] as const,
     queryFn: () => readTeamSnapshotVote(team, proposalId ?? 0),
-    staleTime: 5 * 60_000,
+    staleTime: (query) => (query.state.data ? 5 * 60_000 : 0),
+    refetchInterval: (query) => (query.state.data ? false : 30_000),
     retry: 1,
-  };
+  });
 }
 
 export function NodeStakingSequence({
@@ -244,18 +252,15 @@ export function NodeStakingSequence({
     ...snapshotVoteQueryOptions(team, voteProposalId),
     enabled: !!team && voteProposalId != null,
   });
-  const proposalsQuery = useQuery({
-    queryKey: [...SEQUENCE_KEY, "proposals", team, endowment],
-    queryFn: async () => {
-      const [teamProposals, endowmentProposals] = await Promise.all([
-        readOpenDaoProposals(team),
-        endowment ? readOpenDaoProposals(endowment) : [],
-      ]);
-      return { team: teamProposals, endowment: endowmentProposals };
-    },
-    enabled: !!team,
-    refetchInterval: 15_000,
+  const [teamProposalsQuery, endowmentProposalsQuery] = useQueries({
+    queries: [team, endowment].map((dao) => ({
+      queryKey: [...SEQUENCE_KEY, "proposals", dao],
+      queryFn: () => readOpenDaoProposals(dao),
+      enabled: !!team && !!dao,
+      refetchInterval: 15_000,
+    })),
   });
+  const proposalsQueries = { team: teamProposalsQuery, endowment: endowmentProposalsQuery };
   const policiesQuery = useQuery({
     queryKey: [...SEQUENCE_KEY, "policies", team, endowment],
     queryFn: async () => {
@@ -369,7 +374,10 @@ export function NodeStakingSequence({
     value: String(proposal.id),
     label: `#${proposal.id} ${proposal.title ?? ""}`.trim(),
   }));
-  const proposals = proposalsQuery.data ?? { team: [], endowment: [] };
+  const proposals = {
+    team: teamProposalsQuery?.data ?? [],
+    endowment: endowmentProposalsQuery?.data ?? [],
+  };
   const canPropose = (treasury: NodeTreasury) => {
     const policy = policiesQuery.data?.[treasury];
     return policy ? canAccountPropose(policy, sessionAccount) : true;
@@ -399,8 +407,9 @@ export function NodeStakingSequence({
       });
     }
     if (chainQuery.isError) return translate("admin.sequence.chainError");
-    if (proposalsQuery.isError) return translate("admin.sequence.proposalsError");
-    if (chainPending || proposalsQuery.isPending) return translate("admin.sequence.readingChain");
+    const proposalsQuery = proposalsQueries[step.treasury];
+    if (proposalsQuery?.isError) return translate("admin.sequence.proposalsError");
+    if (chainPending || proposalsQuery?.isPending) return translate("admin.sequence.readingChain");
     if (voteStepOption(step.id)) return voteBlocker(step);
     if (step.blocker) return translate(BLOCKER_LABELS[step.blocker]);
     if (step.plan) return null;
