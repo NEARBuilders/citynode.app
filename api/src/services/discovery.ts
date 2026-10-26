@@ -741,7 +741,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               past: sql<number>`count(*) filter (where ${data}->>'kind' = 'event' and (${data}->>'startsAt')::timestamptz < ${now})::int`,
               lastActivityAt: sql<
                 string | null
-              >`to_char(least(max(greatest((${data}->>'publishedAt')::timestamptz, least((${data}->>'startsAt')::timestamptz, ${now}::timestamptz))), ${now}::timestamptz) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+              >`to_char(least(max(greatest((${data}->>'publishedAt')::timestamptz, case when (${data}->>'startsAt')::timestamptz <= ${now}::timestamptz then (${data}->>'startsAt')::timestamptz end)), ${now}::timestamptz) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
             })
             .from(discoveryActivities)
             .where(

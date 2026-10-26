@@ -12,7 +12,7 @@ import {
 import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
-import { type ComponentType, type ReactNode, useMemo, useState } from "react";
+import { type ComponentType, type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { getAccount, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, PageHeader, SectionHeader } from "@/components";
 import {
@@ -57,7 +57,14 @@ import {
   type NeedsActionItem,
   type StakingState,
 } from "./-admin-progress";
-import { formatNearFigure, ListSkeleton, LoadError, StatFigure, StatGrid } from "./-admin-ui";
+import {
+  Disclosure,
+  formatNearFigure,
+  ListSkeleton,
+  LoadError,
+  StatFigure,
+  StatGrid,
+} from "./-admin-ui";
 import { CommunityJoinChart } from "./-community-join-chart";
 import {
   buildCommunityJoinRows,
@@ -70,7 +77,6 @@ import {
   proposalTypeLabel,
 } from "./proposals/-proposal-review";
 
-const QUEUE_SIZE = 5;
 const TREND_MONTHS = 6;
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/")({
@@ -103,15 +109,16 @@ function AdminOverview() {
 
   const pendingQuery = useInfiniteQuery(adminProposalListQueryOptions(apiClient, "pending"));
   const relayerQuery = useRelayerInfoQuery();
-  const joinsQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(0)));
+  const requestsQuery = useQuery(organizationRequestsQueryOptions(apiClient));
+  const progress = useCommunityProgress();
 
   const queue = pendingQuery.data?.pages[0]?.data ?? [];
-  const setups = queue.filter(communitySetupNeedsAttention);
-  const awaitingReview = queue.filter((proposal) => proposal.reviewStatus === "pending");
+  const setupCount = queue.filter(communitySetupNeedsAttention).length;
   const pendingTotal = pendingQuery.data?.pages[0]?.meta.total;
-  const reviewTotal = pendingTotal === undefined ? undefined : pendingTotal - setups.length;
+  const reviewTotal = pendingTotal === undefined ? undefined : pendingTotal - setupCount;
   const relayer = relayerQuery.data;
   const relayerNeedsFunding = !!relayer && relayer.enabled === false && !!relayer.accountId;
+  const requestCount = requestsQuery.data?.length;
 
   return (
     <>
@@ -121,193 +128,103 @@ function AdminOverview() {
         headerTestId="admin.heading"
       />
 
-      <StatGrid>
-        <StatFigure
-          label={translate("admin.waitingReview")}
-          value={reviewTotal ?? "—"}
-          onRetry={pendingQuery.isError ? () => void pendingQuery.refetch() : undefined}
-          tone={reviewTotal ? "attention" : "default"}
-          testId="admin.stat.pending-proposals"
-        />
-        <StatFigure
-          label={translate("admin.relayer.balance")}
-          value={relayer?.enabled ? formatNearFigure(relayer.balance, locale) : relayer ? "0" : "—"}
-          onRetry={relayerQuery.isError ? () => void relayerQuery.refetch() : undefined}
-          hint={
-            relayer
-              ? relayer.enabled
-                ? "NEAR"
-                : translate("admin.relayer.needsFunding")
-              : translate("admin.relayer.notConfigured")
-          }
-          tone={relayer && !relayer.enabled ? "attention" : "default"}
-          testId="admin.stat.relayer"
-        />
-        <StatFigure
-          label={translate("admin.redeemedThisMonth")}
-          value={joinsQuery.data?.totals.redeemed ?? "—"}
-          onRetry={joinsQuery.isError ? () => void joinsQuery.refetch() : undefined}
-          testId="admin.stat.redeemed"
-        />
-        <StatFigure
-          label={translate("admin.newMembersThisMonth")}
-          value={joinsQuery.data?.totals.newMembers ?? "—"}
-          onRetry={joinsQuery.isError ? () => void joinsQuery.refetch() : undefined}
-          testId="admin.stat.new-members"
-        />
-      </StatGrid>
-
-      <div className="grid gap-12 lg:grid-cols-3 lg:gap-10">
-        <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
-          <NeedsAction
-            reviewTotal={reviewTotal ?? 0}
-            setups={setups.map((proposal) => ({
-              id: proposal.id,
-              pluginId: proposal.pluginId,
-              entityId: proposal.entityId,
-              reviewStatus: proposal.reviewStatus,
-              title: proposalTitle(proposal, translate),
-              setupNeedsAttention: true,
-            }))}
-            relayerNeedsFunding={relayerNeedsFunding}
-            proposalsState={pendingQuery}
+      <section className="flex flex-col gap-6">
+        <SectionHeader title={translate("nav.manage")} sectionTestId="admin.section.manage" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ManageTile
+            to="/admin/nodes"
+            icon={TreeStructureIcon}
+            title={translate("common.communities")}
+            testId="admin.heading.nodes"
+            status={
+              progress.isLoading || progress.isError
+                ? translate("admin.communitiesDescription")
+                : translate("admin.manage.communitiesCount", { count: progress.rows.length })
+            }
           />
-
-          <section className="flex flex-col gap-6">
-            <SectionHeader
-              title={translate("admin.waitingReview")}
-              sectionTestId="admin.section.queue"
-              action={
-                reviewTotal ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    nativeButton={false}
-                    render={<Link to="/admin/proposals" search={{ status: "pending" }} />}
-                  >
-                    {translate("common.seeAllCount", { count: reviewTotal })}
-                  </Button>
-                ) : undefined
-              }
-            />
-            {pendingQuery.isLoading ? (
-              <ListSkeleton rows={3} />
-            ) : pendingQuery.isError ? (
-              <LoadError
-                message={translate("admin.proposalsFailed")}
-                onRetry={() => void pendingQuery.refetch()}
-              />
-            ) : awaitingReview.length === 0 ? (
-              <EmptyState
-                icon={CheckCircleIcon}
-                title={translate("admin.caughtUp")}
-                description={translate("admin.queueEmpty")}
-                className="py-10"
-              />
-            ) : (
-              <ItemGroup data-testid="admin-queue">
-                {awaitingReview.slice(0, QUEUE_SIZE).map((proposal) => (
-                  <Item
-                    key={proposal.id}
-                    variant="outline"
-                    render={
-                      <Link
-                        to="/admin/proposals/$proposalId"
-                        params={{ proposalId: proposal.id }}
-                        search={{ pluginId: proposal.pluginId, entityId: proposal.entityId }}
-                      />
-                    }
-                    data-testid={`admin-queue-item-${proposal.id}`}
-                  >
-                    <ItemMedia variant="icon">
-                      <GavelIcon />
-                    </ItemMedia>
-                    <ItemContent className="min-w-0">
-                      <ItemTitle className="max-w-full">
-                        <span className="min-w-0 truncate">
-                          {proposalTitle(proposal, translate)}
-                        </span>
-                      </ItemTitle>
-                      <ItemDescription>
-                        <Trans
-                          id="admin.submittedTypeDate"
-                          values={{ type: proposalTypeLabel(proposal.pluginId, translate) }}
-                          components={{
-                            date: <LocalDate value={proposal.createdAt} format="relative" />,
-                          }}
-                        />
-                      </ItemDescription>
-                    </ItemContent>
-                    <ItemActions>
-                      <span className="hidden text-sm font-medium sm:inline">
-                        {translate("common.review")}
-                      </span>
-                      <CaretRightIcon className="size-4 text-muted-foreground" />
-                    </ItemActions>
-                  </Item>
-                ))}
-              </ItemGroup>
-            )}
-          </section>
+          <ManageTile
+            to="/admin/proposals"
+            icon={GavelIcon}
+            title={translate("common.proposals")}
+            testId="admin.heading.proposals"
+            status={
+              pendingQuery.isError
+                ? translate("admin.loadFailed")
+                : pendingTotal
+                  ? translate("admin.manage.proposalsPending", { count: pendingTotal })
+                  : translate("admin.manage.nothingPending")
+            }
+            attention={!!pendingTotal || pendingQuery.isError}
+            statusTestId="admin.stat.pending-proposals"
+          />
+          <ManageTile
+            to="/admin/tenants"
+            icon={BuildingsIcon}
+            title={translate("nav.sites")}
+            testId="admin.heading.tenants"
+            status={translate("admin.sitesDescription")}
+          />
+          <ManageTile
+            to="/admin/organizations"
+            icon={UsersIcon}
+            title={translate("common.organizations")}
+            testId="admin.heading.organizations"
+            status={
+              requestsQuery.isError
+                ? translate("admin.loadFailed")
+                : requestCount
+                  ? translate("admin.manage.requestsPending", { count: requestCount })
+                  : translate("orgApproval.reviewDescription")
+            }
+            attention={!!requestCount || requestsQuery.isError}
+          />
+          <ManageTile
+            to="/admin/relayer"
+            icon={GasPumpIcon}
+            title={translate("nav.relayer")}
+            testId="admin.heading.relayer"
+            status={
+              relayerQuery.isError
+                ? translate("admin.loadFailed")
+                : !relayer
+                  ? translate("admin.relayer.notConfigured")
+                  : relayerNeedsFunding || !relayer.enabled
+                    ? translate("admin.relayer.needsFunding")
+                    : translate("admin.manage.relayerBalance", {
+                        balance: formatNearFigure(relayer.balance, locale),
+                      })
+            }
+            attention={relayerNeedsFunding || relayerQuery.isError}
+            statusTestId="admin.stat.relayer"
+          />
+          <ManageTile
+            to="/admin/system"
+            icon={GearIcon}
+            title={translate("nav.system")}
+            testId="admin.heading.system"
+            status={translate("admin.systemDescription")}
+          />
         </div>
+      </section>
 
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
-          <SectionHeader title={translate("nav.manage")} sectionTestId="admin.section.manage" />
-          <ItemGroup>
-            <ManageRow
-              to="/admin/nodes"
-              icon={TreeStructureIcon}
-              title={translate("common.communities")}
-              testId="admin.heading.nodes"
-              description={translate("admin.communitiesDescription")}
-            />
-            <ManageRow
-              to="/admin/proposals"
-              icon={GavelIcon}
-              title={translate("common.proposals")}
-              testId="admin.heading.proposals"
-              description={translate("admin.proposalsDescription")}
-              badge={
-                pendingTotal ? (
-                  <Badge variant="warning">
-                    {pendingTotal} {translate("common.pendingLower")}
-                  </Badge>
-                ) : null
-              }
-            />
-            <ManageRow
-              to="/admin/tenants"
-              icon={BuildingsIcon}
-              title={translate("nav.sites")}
-              testId="admin.heading.tenants"
-              description={translate("admin.sitesDescription")}
-            />
-            <ManageRow
-              to="/admin/organizations"
-              icon={UsersIcon}
-              title={translate("common.organizations")}
-              testId="admin.heading.organizations"
-              description={translate("orgApproval.reviewDescription")}
-            />
-            <ManageRow
-              to="/admin/relayer"
-              icon={GasPumpIcon}
-              title={translate("nav.relayer")}
-              testId="admin.heading.relayer"
-              description={translate("admin.relayerDescription")}
-            />
-            <ManageRow
-              to="/admin/system"
-              icon={GearIcon}
-              title={translate("nav.system")}
-              testId="admin.heading.system"
-              description={translate("admin.systemDescription")}
-            />
-          </ItemGroup>
-        </aside>
-      </div>
+      <NeedsAction
+        reviewTotal={reviewTotal ?? 0}
+        proposals={queue.map((proposal) => ({
+          id: proposal.id,
+          pluginId: proposal.pluginId,
+          entityId: proposal.entityId,
+          reviewStatus: proposal.reviewStatus,
+          title: proposalTitle(proposal, translate),
+          createdAt: proposal.createdAt,
+          setupNeedsAttention: communitySetupNeedsAttention(proposal),
+        }))}
+        relayerNeedsFunding={relayerNeedsFunding}
+        organizationRequestCount={requestCount ?? 0}
+        progress={progress}
+        sources={[pendingQuery, requestsQuery]}
+      />
 
-      <CommunityProgress />
+      <CommunityProgress progress={progress} />
 
       <CommunityJoins />
     </>
@@ -343,28 +260,29 @@ function useCommunityProgress() {
 
 function NeedsAction({
   reviewTotal,
-  setups,
+  proposals,
   relayerNeedsFunding,
-  proposalsState,
+  organizationRequestCount,
+  progress,
+  sources,
 }: {
   reviewTotal: number;
-  setups: Parameters<typeof deriveNeedsAction>[0]["proposals"];
+  proposals: Parameters<typeof deriveNeedsAction>[0]["proposals"];
   relayerNeedsFunding: boolean;
-  proposalsState: { isLoading: boolean; isError: boolean; refetch: () => unknown };
+  organizationRequestCount: number;
+  progress: ReturnType<typeof useCommunityProgress>;
+  sources: { isLoading: boolean; isError: boolean; refetch: () => unknown }[];
 }) {
   const translate = useAppTranslation();
-  const apiClient = useApiClient();
-  const requestsQuery = useQuery(organizationRequestsQueryOptions(apiClient));
-  const progress = useCommunityProgress();
   const items = deriveNeedsAction({
     pendingReviewCount: reviewTotal,
-    proposals: setups,
+    proposals,
     relayerNeedsFunding,
-    organizationRequestCount: requestsQuery.data?.length ?? 0,
+    organizationRequestCount,
     communities: progress.rows,
   });
-  const loading = proposalsState.isLoading || requestsQuery.isLoading || progress.isLoading;
-  const failed = proposalsState.isError || requestsQuery.isError || progress.isError;
+  const loading = progress.isLoading || sources.some((source) => source.isLoading);
+  const failed = progress.isError || sources.some((source) => source.isError);
 
   return (
     <section className="flex flex-col gap-6">
@@ -372,20 +290,31 @@ function NeedsAction({
         title={translate("admin.action.title")}
         description={translate("admin.action.description")}
         sectionTestId="admin.section.needs-action"
+        action={
+          reviewTotal ? (
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to="/admin/proposals" search={{ status: "pending" }} />}
+            >
+              {translate("admin.action.allApplications", { count: reviewTotal })}
+            </Button>
+          ) : undefined
+        }
       />
       {failed && (
         <LoadError
           message={translate("admin.action.failed")}
           onRetry={() => {
-            if (proposalsState.isError) void proposalsState.refetch();
-            if (requestsQuery.isError) void requestsQuery.refetch();
+            for (const source of sources) if (source.isError) void source.refetch();
             if (progress.isError) progress.retry();
           }}
           testId="admin-needs-action-error"
         />
       )}
       {loading ? (
-        <ListSkeleton rows={2} />
+        <ListSkeleton rows={3} />
       ) : items.length === 0 ? (
         failed ? null : (
           <EmptyState
@@ -407,14 +336,21 @@ function NeedsAction({
 }
 
 function needsActionKey(item: NeedsActionItem) {
-  if (item.kind === "setup") return `setup-${item.proposal.id}`;
+  if (item.kind === "setup" || item.kind === "application") {
+    return `${item.kind}-${item.proposal.id}`;
+  }
   if (item.kind === "staking") return `staking-${item.nodeId}`;
   return item.kind;
 }
 
 function NeedsActionRow({ item }: { item: NeedsActionItem }) {
   const translate = useAppTranslation();
-  const content = (() => {
+  const content: {
+    icon?: ComponentType<{ className?: string }>;
+    title: string;
+    description: ReactNode;
+    link: ReactElement;
+  } = (() => {
     switch (item.kind) {
       case "setup":
         return {
@@ -434,9 +370,29 @@ function NeedsActionRow({ item }: { item: NeedsActionItem }) {
           description: translate("admin.relayer.paused"),
           link: <Link to="/admin/relayer" />,
         };
-      case "review":
+      case "application":
         return {
-          title: translate("admin.action.reviewCount", { count: item.count }),
+          icon: GavelIcon,
+          title: translate("admin.action.reviewNamed", { name: item.proposal.title }),
+          description: (
+            <Trans
+              id="admin.submittedTypeDate"
+              values={{ type: proposalTypeLabel(item.proposal.pluginId, translate) }}
+              components={{ date: <LocalDate value={item.proposal.createdAt} format="relative" /> }}
+            />
+          ),
+          link: (
+            <Link
+              to="/admin/proposals/$proposalId"
+              params={{ proposalId: item.proposal.id }}
+              search={{ pluginId: item.proposal.pluginId, entityId: item.proposal.entityId }}
+            />
+          ),
+        };
+      case "moreApplications":
+        return {
+          icon: GavelIcon,
+          title: translate("admin.action.moreApplications", { count: item.count }),
           description: translate("admin.action.reviewHint"),
           link: <Link to="/admin/proposals" search={{ status: "pending" }} />,
         };
@@ -474,7 +430,7 @@ function NeedsActionRow({ item }: { item: NeedsActionItem }) {
       data-testid={`admin-needs-action-${needsActionKey(item)}`}
     >
       <ItemMedia variant="icon">
-        <WarningCircleIcon className="text-brand-strong" />
+        {content.icon ? <content.icon /> : <WarningCircleIcon className="text-brand-strong" />}
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="max-w-full">
@@ -499,9 +455,9 @@ const STAKING_LABELS: Record<
   none: { label: "admin.progress.stakingNone", variant: "warning" },
 };
 
-function CommunityProgress() {
+function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommunityProgress> }) {
   const translate = useAppTranslation();
-  const { rows, isLoading, isError, retry } = useCommunityProgress();
+  const { rows, isLoading, isError, retry } = progress;
   const [showAll, setShowAll] = useState(false);
   const visibleRows = visibleCommunityJoinRows(rows, showAll);
 
@@ -641,6 +597,34 @@ function CommunityJoins() {
         title={translate("admin.redemptions.title")}
         sectionTestId="admin.section.joins"
       />
+      <StatGrid>
+        <StatFigure
+          label={translate("admin.redeemedThisMonth")}
+          value={currentQuery.data?.totals.redeemed ?? "—"}
+          hint={
+            previousQuery.data
+              ? translate("admin.community.lastMonthCount", {
+                  count: previousQuery.data.totals.redeemed,
+                })
+              : undefined
+          }
+          onRetry={currentQuery.isError ? () => void currentQuery.refetch() : undefined}
+          testId="admin.stat.redeemed"
+        />
+        <StatFigure
+          label={translate("admin.newMembersThisMonth")}
+          value={currentQuery.data?.totals.newMembers ?? "—"}
+          hint={
+            previousQuery.data
+              ? translate("admin.community.lastMonthCount", {
+                  count: previousQuery.data.totals.newMembers,
+                })
+              : undefined
+          }
+          onRetry={currentQuery.isError ? () => void currentQuery.refetch() : undefined}
+          testId="admin.stat.new-members"
+        />
+      </StatGrid>
       {chartFailed ? (
         <LoadError
           message={translate("admin.redemptions.failed")}
@@ -652,111 +636,119 @@ function CommunityJoins() {
       ) : (
         <Skeleton className="h-64 w-full" />
       )}
-      {tableQueries.some((query) => query.isLoading) ? (
-        <ListSkeleton rows={3} />
-      ) : tableQueries.some((query) => query.isError) ? null : rows.length === 0 ? (
-        <EmptyState
-          icon={UsersIcon}
-          title={translate("admin.redemptions.empty")}
-          description={translate("admin.redemptions.emptyDescription")}
-          className="py-10"
-        />
-      ) : (
-        <div className="flex flex-col gap-3">
-          <Table data-testid="admin-joins">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{translate("common.community")}</TableHead>
-                <TableHead className="text-right">
-                  {translate("admin.redemptions.thisMonth")}
-                </TableHead>
-                <TableHead className="text-right">
-                  {translate("admin.redemptions.newThisMonth")}
-                </TableHead>
-                <TableHead className="text-right">
-                  {translate("admin.redemptions.lastMonth")}
-                </TableHead>
-                <TableHead className="hidden text-right md:table-cell">
-                  {translate("admin.redemptions.newLastMonth")}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleRows.map((row) => (
-                <TableRow key={row.tenant.id} data-testid={`admin-joins-row-${row.tenant.id}`}>
-                  <TableCell>
-                    <Link
-                      to="/tenant/$tenantId"
-                      params={{ tenantId: row.tenant.id }}
-                      className="font-medium text-foreground hover:underline"
-                      data-testid="admin-joins-link"
-                    >
-                      {row.tenant.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="tabular-nums" data-testid="admin-joins-this-month">
-                      {row.thisMonth.redeemed}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="tabular-nums" data-testid="admin-joins-new-this-month">
-                      {row.thisMonth.newMembers}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span
-                      className="tabular-nums text-muted-foreground"
-                      data-testid="admin-joins-last-month"
-                    >
-                      {row.lastMonth.redeemed}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden text-right md:table-cell">
-                    <span
-                      className="tabular-nums text-muted-foreground"
-                      data-testid="admin-joins-new-last-month"
-                    >
-                      {row.lastMonth.newMembers}
-                    </span>
-                  </TableCell>
+      <Disclosure
+        label={translate("admin.redemptions.showTable")}
+        openLabel={translate("admin.redemptions.hideTable")}
+        testId="admin-joins-table-toggle"
+      >
+        {tableQueries.some((query) => query.isLoading) ? (
+          <ListSkeleton rows={3} />
+        ) : tableQueries.some((query) => query.isError) ? null : rows.length === 0 ? (
+          <EmptyState
+            icon={UsersIcon}
+            title={translate("admin.redemptions.empty")}
+            description={translate("admin.redemptions.emptyDescription")}
+            className="py-10"
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            <Table data-testid="admin-joins">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{translate("common.community")}</TableHead>
+                  <TableHead className="text-right">
+                    {translate("admin.redemptions.thisMonth")}
+                  </TableHead>
+                  <TableHead className="text-right">
+                    {translate("admin.redemptions.newThisMonth")}
+                  </TableHead>
+                  <TableHead className="text-right">
+                    {translate("admin.redemptions.lastMonth")}
+                  </TableHead>
+                  <TableHead className="hidden text-right md:table-cell">
+                    {translate("admin.redemptions.newLastMonth")}
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {rows.length > COMMUNITY_JOINS_LIMIT && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="self-start"
-              onClick={() => setShowAll((value) => !value)}
-              data-testid="admin-joins-toggle"
-            >
-              {showAll
-                ? translate("admin.redemptions.showTop", { count: COMMUNITY_JOINS_LIMIT })
-                : translate("admin.redemptions.showAll", { count: rows.length })}
-            </Button>
-          )}
-        </div>
-      )}
+              </TableHeader>
+              <TableBody>
+                {visibleRows.map((row) => (
+                  <TableRow key={row.tenant.id} data-testid={`admin-joins-row-${row.tenant.id}`}>
+                    <TableCell>
+                      <Link
+                        to="/tenant/$tenantId"
+                        params={{ tenantId: row.tenant.id }}
+                        className="font-medium text-foreground hover:underline"
+                        data-testid="admin-joins-link"
+                      >
+                        {row.tenant.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="tabular-nums" data-testid="admin-joins-this-month">
+                        {row.thisMonth.redeemed}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="tabular-nums" data-testid="admin-joins-new-this-month">
+                        {row.thisMonth.newMembers}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span
+                        className="tabular-nums text-muted-foreground"
+                        data-testid="admin-joins-last-month"
+                      >
+                        {row.lastMonth.redeemed}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden text-right md:table-cell">
+                      <span
+                        className="tabular-nums text-muted-foreground"
+                        data-testid="admin-joins-new-last-month"
+                      >
+                        {row.lastMonth.newMembers}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {rows.length > COMMUNITY_JOINS_LIMIT && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="self-start"
+                onClick={() => setShowAll((value) => !value)}
+                data-testid="admin-joins-toggle"
+              >
+                {showAll
+                  ? translate("admin.redemptions.showTop", { count: COMMUNITY_JOINS_LIMIT })
+                  : translate("admin.redemptions.showAll", { count: rows.length })}
+              </Button>
+            )}
+          </div>
+        )}
+      </Disclosure>
     </section>
   );
 }
 
-function ManageRow({
+function ManageTile({
   to,
   icon: Icon,
   title,
-  description,
+  status,
   testId,
-  badge,
+  statusTestId,
+  attention,
 }: {
   to: LinkProps["to"];
   icon: ComponentType<{ className?: string }>;
   title: string;
-  description: string;
+  status: ReactNode;
   testId: string;
-  badge?: ReactNode;
+  statusTestId?: string;
+  attention?: boolean;
 }) {
   return (
     <Item variant="outline" size="sm" render={<Link to={to} />}>
@@ -764,13 +756,17 @@ function ManageRow({
         <Icon />
       </ItemMedia>
       <ItemContent className="min-w-0">
-        <ItemTitle className="flex-wrap">
+        <ItemTitle>
           <h3 className="min-w-0 truncate" data-testid={testId}>
             {title}
           </h3>
-          {badge}
         </ItemTitle>
-        <ItemDescription>{description}</ItemDescription>
+        <ItemDescription
+          className={attention ? "font-medium text-brand-strong" : undefined}
+          data-testid={statusTestId}
+        >
+          {status}
+        </ItemDescription>
       </ItemContent>
       <ItemActions>
         <CaretRightIcon className="size-4 text-muted-foreground" />

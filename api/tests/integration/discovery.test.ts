@@ -484,7 +484,8 @@ it("counts upcoming and past published events per community for platform admins 
 
   const [stats] = await admin.getDiscoveryEventStats({ nodeId: node.id });
   expect(stats).toMatchObject({ nodeId: node.id, upcoming: 2, past: 1 });
-  expect(Date.parse(stats?.lastActivityAt ?? "")).toBeLessThanOrEqual(Date.now());
+  const lastActivity = Date.parse(stats?.lastActivityAt ?? "");
+  expect(Math.abs(lastActivity - (now - 10 * 86400000))).toBeLessThan(1000);
   expect(await admin.getDiscoveryEventStats({})).toEqual(
     expect.arrayContaining([expect.objectContaining({ nodeId: node.id, upcoming: 2 })]),
   );

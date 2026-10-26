@@ -91,12 +91,26 @@ export function buildCommunityProgressRows<T extends JoinsTenant, N extends Prog
   );
   const eventsByNode = new Map(eventStats.map((stat) => [stat.nodeId, stat]));
   const states = stakingStates(summaries);
-  const rows: CommunityProgressRow<T, N>[] = [];
-  const seenTenants = new Set<string>();
+  const tenantOf = new Map(summaries.map(({ node }) => [node.id, node.tenantId]));
+  const primary = new Map<string, N>();
   for (const { node } of summaries) {
-    const tenant = node.tenantId ? tenantById.get(node.tenantId) : undefined;
-    if (!tenant || seenTenants.has(tenant.id)) continue;
-    seenTenants.add(tenant.id);
+    if (!node.tenantId || !tenantById.has(node.tenantId)) continue;
+    const top = !node.parentId || tenantOf.get(node.parentId) !== node.tenantId;
+    const current = primary.get(node.tenantId);
+    const currentTop =
+      !!current && (!current.parentId || tenantOf.get(current.parentId) !== current.tenantId);
+    if (
+      !current ||
+      (top && !currentTop) ||
+      (top === currentTop && node.name.localeCompare(current.name) < 0)
+    ) {
+      primary.set(node.tenantId, node);
+    }
+  }
+  const rows: CommunityProgressRow<T, N>[] = [];
+  for (const node of primary.values()) {
+    const tenant = tenantById.get(node.tenantId ?? "");
+    if (!tenant) continue;
     const events = eventsByNode.get(node.id);
     rows.push({
       node,
@@ -121,11 +135,13 @@ export interface NeedsActionProposal {
   entityId: string;
   reviewStatus: string;
   title: string;
+  createdAt: string;
   setupNeedsAttention: boolean;
 }
 
 export type NeedsActionItem =
-  | { kind: "review"; count: number }
+  | { kind: "application"; proposal: NeedsActionProposal }
+  | { kind: "moreApplications"; count: number }
   | { kind: "setup"; proposal: NeedsActionProposal }
   | { kind: "relayer" }
   | { kind: "organizations"; count: number }
@@ -133,6 +149,7 @@ export type NeedsActionItem =
   | { kind: "stakingMany"; count: number };
 
 export const STAKING_ITEMS_LIMIT = 3;
+export const APPLICATION_ITEMS_LIMIT = 5;
 
 export function deriveNeedsAction({
   pendingReviewCount,
@@ -153,8 +170,14 @@ export function deriveNeedsAction({
       items.push({ kind: "setup", proposal });
     }
   }
+  const applications = proposals
+    .filter((proposal) => proposal.reviewStatus === "pending")
+    .slice(0, APPLICATION_ITEMS_LIMIT);
+  for (const proposal of applications) items.push({ kind: "application", proposal });
+  if (pendingReviewCount > applications.length) {
+    items.push({ kind: "moreApplications", count: pendingReviewCount - applications.length });
+  }
   if (relayerNeedsFunding) items.push({ kind: "relayer" });
-  if (pendingReviewCount > 0) items.push({ kind: "review", count: pendingReviewCount });
   if (organizationRequestCount > 0) {
     items.push({ kind: "organizations", count: organizationRequestCount });
   }

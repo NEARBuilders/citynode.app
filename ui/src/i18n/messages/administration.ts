@@ -21,14 +21,19 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Arborescence des communautés, validateurs et domaines",
     "社区树、验证节点和域名",
   ],
-  "admin.community.allNodes": ["All nodes", "Todos los nodos", "Tous les nœuds", "所有节点"],
+  "admin.community.allNodes": [
+    "All communities",
+    "Todas las comunidades",
+    "Toutes les communautés",
+    "所有社区",
+  ],
   "admin.community.back": [
     "Back to communities",
     "Volver a comunidades",
     "Retour aux communautés",
     "返回社区列表",
   ],
-  "admin.community.children": ["Children", "Dependientes", "Communautés rattachées", "子社区"],
+  "admin.community.children": ["Sub-communities", "Subcomunidades", "Sous-communautés", "下级社区"],
   "admin.community.edit": [
     "Edit community",
     "Editar comunidad",
@@ -66,10 +71,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "无法加载此社区",
   ],
   "admin.community.loadErrorHint": [
-    "The requested node could not be loaded.",
-    "No se pudo cargar el nodo solicitado.",
-    "Le nœud demandé n'a pas pu être chargé.",
-    "无法加载请求的节点。",
+    "The community couldn't be loaded.",
+    "No se pudo cargar la comunidad.",
+    "Impossible de charger la communauté.",
+    "无法加载该社区。",
   ],
   "admin.community.loadListError": [
     "Couldn't load communities",
@@ -78,10 +83,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "无法加载社区",
   ],
   "admin.community.loadListHint": [
-    "Something went wrong while loading nodes.",
-    "No se pudieron cargar los nodos.",
-    "Impossible de charger les nœuds.",
-    "无法加载节点。",
+    "Something went wrong while loading communities.",
+    "Algo salió mal al cargar las comunidades.",
+    "Un problème est survenu lors du chargement des communautés.",
+    "加载社区时出错。",
   ],
   "admin.community.metadata": ["metadata", "metadatos", "métadonnées", "元数据"],
   "admin.community.noChildren": [
@@ -109,10 +114,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "暂无可质押的验证节点。",
   ],
   "admin.community.noTenant": [
-    "This node is not attached to a tenant, so it has no domains.",
-    "Este nodo no está vinculado a un sitio y no tiene dominios.",
-    "Ce nœud n'est pas associé à un site et n'a donc aucun domaine.",
-    "此节点未关联站点，因此没有域名。",
+    "This community has no site yet, so it has no domains.",
+    "Esta comunidad aún no tiene sitio, así que no tiene dominios.",
+    "Cette communauté n’a pas encore de site, elle n’a donc pas de domaine.",
+    "该社区还没有站点，因此没有域名。",
   ],
   "admin.community.parentId": ["Parent ID", "ID superior", "Identifiant parent", "上级 ID"],
   "admin.community.search": [
@@ -123,10 +128,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
   ],
   "admin.community.siteId": ["Site ID", "ID del sitio", "Identifiant du site", "站点 ID"],
   "admin.community.stakingHint": [
-    "Stakes go to validators on this node or below it.",
-    "Las delegaciones van a validadores de este nodo o sus dependientes.",
-    "Le staking va aux validateurs de ce nœud ou de ses communautés rattachées.",
-    "质押会分配给此节点或其下属节点的验证节点。",
+    "Stakes go to validators on this community or the communities in it.",
+    "Los stakes van a los validadores de esta comunidad o de sus subcomunidades.",
+    "Les stakes vont aux validateurs de cette communauté ou de ses sous-communautés.",
+    "质押将分配给该社区或其下级社区的验证节点。",
   ],
   "admin.community.topLevel": ["Top level", "Nivel superior", "Premier niveau", "顶层"],
   "admin.community.treeDescription": [
@@ -140,12 +145,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Comunidad actualizada",
     "Communauté mise à jour",
     "社区已更新",
-  ],
-  "admin.proposedDaoNamed": [
-    "Proposed DAO: {account}. Connect it to publish settings during approval.",
-    "DAO propuesto: {account}. Conéctalo para publicar la configuración durante la aprobación.",
-    "DAO proposée : {account}. Connectez-la pour publier ses paramètres lors de l’approbation.",
-    "提案中的 DAO：{account}。如需在批准时发布设置，请连接该 DAO。",
   ],
   "admin.decisionsFailed": [
     "Decisions could not be loaded. Try again.",
@@ -319,12 +318,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Conecta {dao} para aprobar.",
     "Connectez {dao} pour approuver.",
     "连接 {dao} 以批准。",
-  ],
-  "admin.proposal.daoFallback": [
-    "the proposed DAO",
-    "el DAO propuesto",
-    "la DAO proposée",
-    "提案中的 DAO",
   ],
   "admin.proposal.daoHint": [
     "Approval can proceed without a DAO connection. Publishing settings may need a follow-up.",
@@ -523,24 +516,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Proposition rejetée",
     "提案已拒绝",
   ],
-  "admin.proposalsDescription": [
-    "Every application and decision",
-    "Todas las solicitudes y decisiones",
-    "Toutes les demandes et décisions",
-    "所有申请和决定",
-  ],
-  "admin.proposalsFailed": [
-    "Proposals could not be loaded. Try again.",
-    "No se pudieron cargar las propuestas. Inténtalo de nuevo.",
-    "Impossible de charger les propositions. Réessayez.",
-    "无法加载提案。请重试。",
-  ],
-  "admin.queueEmpty": [
-    "New community applications and submissions show up here.",
-    "Las nuevas solicitudes y propuestas de comunidades aparecen aquí.",
-    "Les nouvelles demandes et propositions des communautés apparaissent ici.",
-    "新的社区申请和提交内容会显示在这里。",
-  ],
   "admin.rawJson": ["raw JSON", "JSON sin procesar", "JSON brut", "原始 JSON"],
   "admin.redeemedThisMonth": [
     "Redeemed a code this month, all communities",
@@ -599,12 +574,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "各社区兑换代码人数与新成员",
   ],
   "admin.relayer.addFunds": ["Add funds", "Añadir fondos", "Ajouter des fonds", "充值"],
-  "admin.relayer.balance": [
-    "Relayer balance",
-    "Saldo del relayer",
-    "Solde du relais",
-    "中继账户余额",
-  ],
   "admin.relayer.configureHint": [
     "No relayer configured. Add {setting} to {file} and publish.",
     "No hay relayer configurado. Añade {setting} a {file} y publica.",
@@ -726,12 +695,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Cuenta del relayer copiada",
     "Compte du relais copié",
     "已复制中继账户",
-  ],
-  "admin.relayerDescription": [
-    "Gas for gasless writes",
-    "Gas para publicaciones sin gas",
-    "Gas pour les publications sans frais",
-    "免燃料费发布所需的燃料",
   ],
   "admin.relayerNotConfigured": [
     "No relayer configured. Add <variable>app.auth.variables.siwn.relayer</variable> to <config>bos.config.json</config> and publish.",
@@ -1343,12 +1306,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Les mises vont aux validateurs de {name}.",
     "质押将转至 {name} 的验证节点。",
   ],
-  "admin.waitingReview": [
-    "Waiting for review",
-    "Esperando revisión",
-    "En attente de validation",
-    "等待审核",
-  ],
   "admin.walletConnected": [
     "Wallet connected",
     "Cartera conectada",
@@ -1514,12 +1471,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "La configuración se detuvo tras la aprobación. Ábrela para reanudarla.",
     "La configuration s’est arrêtée après l’approbation. Ouvrez-la pour reprendre.",
     "批准后设置已中断。打开以继续。",
-  ],
-  "admin.action.reviewCount": [
-    "{count, plural, one {# application waiting for review} other {# applications waiting for review}}",
-    "{count, plural, one {# solicitud pendiente de revisión} other {# solicitudes pendientes de revisión}}",
-    "{count, plural, one {# candidature en attente d’examen} other {# candidatures en attente d’examen}}",
-    "{count, plural, other {# 个申请待审核}}",
   ],
   "admin.action.reviewHint": [
     "Approve or reject new communities.",
@@ -1821,4 +1772,60 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Codes utilisés ce mois-ci",
     "本月已兑换码",
   ],
+  "admin.manage.communitiesCount": [
+    "{count, plural, one {# community with a site} other {# communities with a site}}",
+    "{count, plural, one {# comunidad con sitio} other {# comunidades con sitio}}",
+    "{count, plural, one {# communauté avec un site} other {# communautés avec un site}}",
+    "{count, plural, other {# 个有站点的社区}}",
+  ],
+  "admin.manage.proposalsPending": [
+    "{count, plural, one {# needs action} other {# need action}}",
+    "{count, plural, one {# requiere acción} other {# requieren acción}}",
+    "{count, plural, one {# à traiter} other {# à traiter}}",
+    "{count, plural, other {# 个待处理}}",
+  ],
+  "admin.manage.nothingPending": [
+    "Nothing waiting",
+    "Nada pendiente",
+    "Rien en attente",
+    "没有待处理事项",
+  ],
+  "admin.manage.requestsPending": [
+    "{count, plural, one {# request to review} other {# requests to review}}",
+    "{count, plural, one {# solicitud por revisar} other {# solicitudes por revisar}}",
+    "{count, plural, one {# demande à examiner} other {# demandes à examiner}}",
+    "{count, plural, other {# 个申请待审核}}",
+  ],
+  "admin.manage.relayerBalance": [
+    "{balance} NEAR available",
+    "{balance} NEAR disponibles",
+    "{balance} NEAR disponibles",
+    "可用 {balance} NEAR",
+  ],
+  "admin.action.allApplications": [
+    "{count, plural, one {# application} other {All # applications}}",
+    "{count, plural, one {# solicitud} other {Las # solicitudes}}",
+    "{count, plural, one {# candidature} other {Les # candidatures}}",
+    "{count, plural, other {全部 # 个申请}}",
+  ],
+  "admin.action.reviewNamed": ["Review {name}", "Revisar {name}", "Examiner {name}", "审核 {name}"],
+  "admin.action.moreApplications": [
+    "{count, plural, one {# more application waiting for review} other {# more applications waiting for review}}",
+    "{count, plural, one {# solicitud más pendiente de revisión} other {# solicitudes más pendientes de revisión}}",
+    "{count, plural, one {# autre candidature en attente d’examen} other {# autres candidatures en attente d’examen}}",
+    "{count, plural, other {还有 # 个申请待审核}}",
+  ],
+  "admin.redemptions.showTable": [
+    "Show numbers by community",
+    "Mostrar cifras por comunidad",
+    "Afficher les chiffres par communauté",
+    "按社区显示数字",
+  ],
+  "admin.redemptions.hideTable": [
+    "Hide numbers by community",
+    "Ocultar cifras por comunidad",
+    "Masquer les chiffres par communauté",
+    "隐藏按社区的数字",
+  ],
+  "admin.community.site": ["Site", "Sitio", "Site", "站点"],
 });

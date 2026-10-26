@@ -236,7 +236,7 @@ function ProposalDetailPage() {
       />
 
       <Card>
-        <CardContent className="grid gap-10 p-5 sm:p-6 lg:grid-cols-2 lg:gap-12">
+        <CardContent className="grid gap-10 lg:grid-cols-2 lg:gap-12">
           <section className="flex min-w-0 flex-col gap-6">
             <h2 className="text-xl font-semibold text-foreground">
               {proposal.pluginId === "node"

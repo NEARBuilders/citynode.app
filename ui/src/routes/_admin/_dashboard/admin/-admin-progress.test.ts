@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  APPLICATION_ITEMS_LIMIT,
   buildCommunityProgressRows,
   deriveNeedsAction,
   type NeedsActionProposal,
@@ -63,6 +64,20 @@ describe("buildCommunityProgressRows", () => {
     ]);
   });
 
+  it("reports a site once, on its top-most community", () => {
+    const rows = buildCommunityProgressRows(
+      [tenant("t1", "org-1")],
+      [
+        summary("a-city", "z-country", 0, "t1"),
+        summary("z-country", null, 0, "t1"),
+        summary("b-district", "a-city", 0, "t1"),
+      ],
+      undefined,
+      [],
+    );
+    expect(rows.map((row) => row.node.id)).toEqual(["z-country"]);
+  });
+
   it("shows zero joins and events for a community with no activity instead of dropping it", () => {
     const [row] = buildCommunityProgressRows(
       [tenant("t-berlin", null)],
@@ -85,6 +100,7 @@ describe("deriveNeedsAction", () => {
     entityId: "karachi",
     reviewStatus: "approved",
     title: "Karachi",
+    createdAt: "2026-10-20T00:00:00.000Z",
     setupNeedsAttention: true,
   };
 
@@ -100,11 +116,12 @@ describe("deriveNeedsAction", () => {
     ).toEqual([]);
   });
 
-  it("lists failed setups, relayer funding, reviews, organization requests and unstaked communities", () => {
+  it("lists failed setups, applications, relayer funding, organization requests and unstaked communities", () => {
+    const pending = { ...setup, id: "p2", reviewStatus: "pending", setupNeedsAttention: false };
     expect(
       deriveNeedsAction({
-        pendingReviewCount: 2,
-        proposals: [setup, { ...setup, id: "p2", reviewStatus: "pending" }],
+        pendingReviewCount: 1,
+        proposals: [setup, pending],
         relayerNeedsFunding: true,
         organizationRequestCount: 1,
         communities: [
@@ -114,11 +131,31 @@ describe("deriveNeedsAction", () => {
       }),
     ).toEqual([
       { kind: "setup", proposal: setup },
+      { kind: "application", proposal: pending },
       { kind: "relayer" },
-      { kind: "review", count: 2 },
       { kind: "organizations", count: 1 },
       { kind: "staking", nodeId: "berlin", name: "Berlin" },
     ]);
+  });
+
+  it("lists the first applications and counts the rest", () => {
+    const pending = Array.from({ length: APPLICATION_ITEMS_LIMIT + 2 }, (_, index) => ({
+      ...setup,
+      id: `p${index}`,
+      reviewStatus: "pending",
+      setupNeedsAttention: false,
+    }));
+    const items = deriveNeedsAction({
+      pendingReviewCount: APPLICATION_ITEMS_LIMIT + 4,
+      proposals: pending,
+      relayerNeedsFunding: false,
+      organizationRequestCount: 0,
+      communities: [],
+    });
+    expect(items.filter((item) => item.kind === "application")).toHaveLength(
+      APPLICATION_ITEMS_LIMIT,
+    );
+    expect(items.at(-1)).toEqual({ kind: "moreApplications", count: 4 });
   });
 
   it("folds many unstaked communities into one item", () => {

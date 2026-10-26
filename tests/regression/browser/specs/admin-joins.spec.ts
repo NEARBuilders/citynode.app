@@ -45,6 +45,7 @@ test.describe("admin overview joins", () => {
       .poll(async () => Number(await bar.getByTestId("admin-joins-chart-total").innerText()))
       .toBeGreaterThanOrEqual(3);
 
+    await page.getByTestId("admin-joins-table-toggle").click();
     await expect(page.getByTestId("admin-joins")).toBeVisible({ timeout: 15000 });
     const row = page.getByTestId(`admin-joins-row-${tenant.id}`);
     if (!(await row.isVisible())) await page.getByTestId("admin-joins-toggle").click();

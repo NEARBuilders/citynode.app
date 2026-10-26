@@ -284,7 +284,7 @@ function CommunityProfileSummary({ node, onEdit }: { node: Node; onEdit: () => v
 
   return (
     <Card data-testid="admin-community-profile">
-      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-3">
           {!node.tenantId ? (
             <p className="text-sm text-muted-foreground">
