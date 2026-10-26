@@ -1,47 +1,24 @@
-import { IdentificationCardIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
+import { IdentificationCardIcon } from "@phosphor-icons/react";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { DiscoveryLoadError } from "./discovery-load-error";
-
-type Profile = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryProfile"]>>>;
+import {
+  emptyDiscoveryProfile,
+  geocodeHintMessage,
+  type DiscoveryProfile as Profile,
+  ProfileFields,
+  validateProfile,
+} from "./profile-fields";
 
 function profileSaveErrorMessage(error: unknown, t: AppTranslator) {
   return appErrorMessage(error, t, "community.saveError");
-}
-
-export type DiscoveryProfile = Profile;
-
-export function validateProfile(profile: Profile): AppMessageId | null {
-  for (const channel of profile.channels) {
-    if (!channel.label.trim()) return "community.linkNameRequired";
-    if (!/^https?:\/\//i.test(channel.url.trim())) return "community.linkUrlRequired";
-  }
-  return null;
-}
-
-export function geocodeHintMessage(hint: string) {
-  return hint === "unavailable" || hint.startsWith("Map lookup is unavailable")
-    ? "community.geocodeUnavailable"
-    : "community.geocodeHint";
 }
 
 export function discoveryProfileQueryOptions(api: ApiClient, nodeId: string) {
@@ -73,22 +50,7 @@ export function ProfileEditor({ nodeId }: { nodeId: string }) {
         onRetry={() => query.refetch()}
       />
     );
-  return <ProfileForm key={nodeId} initial={query.data ?? emptyProfile(nodeId)} />;
-}
-
-export function emptyProfile(nodeId: string): Profile {
-  return {
-    nodeId,
-    summary: "",
-    location: "",
-    region: "",
-    latitude: null,
-    longitude: null,
-    channels: [],
-    published: false,
-    geocodedLocation: null,
-    geocodeHint: null,
-  };
+  return <ProfileForm key={nodeId} initial={query.data ?? emptyDiscoveryProfile(nodeId)} />;
 }
 
 function ProfileForm({ initial }: { initial: Profile }) {
@@ -158,172 +120,5 @@ function ProfileForm({ initial }: { initial: Profile }) {
         )}
       </div>
     </form>
-  );
-}
-
-export function ProfileFields({
-  profile,
-  onChange,
-}: {
-  profile: Profile;
-  onChange: (profile: Profile) => void;
-}) {
-  const translate = useAppTranslation();
-  const setChannel = (index: number, patch: Partial<Profile["channels"][number]>) =>
-    onChange({
-      ...profile,
-      channels: profile.channels.map((c, i) => (i === index ? { ...c, ...patch } : c)),
-    });
-  const setLocation = (location: string) => {
-    const trimmed = location.trim();
-    const stillMatchesGeocode =
-      trimmed.length > 0 && trimmed === (profile.geocodedLocation?.trim() ?? "");
-    onChange({
-      ...profile,
-      location,
-      ...(trimmed
-        ? stillMatchesGeocode
-          ? {}
-          : { geocodedLocation: null, geocodeHint: null }
-        : {
-            latitude: null,
-            longitude: null,
-            geocodedLocation: null,
-            geocodeHint: null,
-          }),
-    });
-  };
-  return (
-    <>
-      <Field orientation="horizontal">
-        <FieldContent>
-          <FieldLabel htmlFor="profile-published">{translate("community.showExplore")}</FieldLabel>
-          <FieldDescription>{translate("community.showExploreHint")}</FieldDescription>
-        </FieldContent>
-        <Switch
-          id="profile-published"
-          data-testid="discovery-profile-published"
-          checked={profile.published}
-          onCheckedChange={(checked) => onChange({ ...profile, published: checked === true })}
-        />
-      </Field>
-
-      <FieldSet>
-        <FieldLegend>{translate("about.title")}</FieldLegend>
-        <Field>
-          <FieldLabel htmlFor="profile-summary">{translate("common.description")}</FieldLabel>
-          <Textarea
-            id="profile-summary"
-            data-testid="discovery-profile-summary"
-            value={profile.summary}
-            placeholder={translate("community.profileExample")}
-            maxLength={1000}
-            onChange={(e) => onChange({ ...profile, summary: e.target.value })}
-          />
-        </Field>
-      </FieldSet>
-
-      <FieldSet>
-        <FieldLegend>{translate("community.whereMeet")}</FieldLegend>
-        <FieldGroup>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="profile-location">
-                {translate("community.cityExample")}
-              </FieldLabel>
-              <Input
-                id="profile-location"
-                data-testid="discovery-profile-location"
-                value={profile.location}
-                maxLength={120}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="profile-region">{translate("community.region")}</FieldLabel>
-              <Input
-                id="profile-region"
-                data-testid="discovery-profile-region"
-                value={profile.region}
-                maxLength={120}
-                onChange={(e) => onChange({ ...profile, region: e.target.value })}
-              />
-            </Field>
-          </div>
-          {profile.geocodeHint ? (
-            <p
-              role="status"
-              data-testid="discovery-profile-geocode-hint"
-              className="text-sm text-muted-foreground"
-            >
-              {translate(geocodeHintMessage(profile.geocodeHint))}
-            </p>
-          ) : null}
-        </FieldGroup>
-      </FieldSet>
-
-      <FieldSet>
-        <FieldLegend>{translate("community.joinLinks")}</FieldLegend>
-        <FieldGroup>
-          {profile.channels.map((channel, index) => (
-            <div key={index} className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
-              <Field className="w-full sm:w-36 sm:shrink-0">
-                <FieldLabel htmlFor={`channel-label-${index}`}>
-                  {translate("common.name")}
-                </FieldLabel>
-                <Input
-                  id={`channel-label-${index}`}
-                  data-testid={`discovery-profile-channel-label-${index}`}
-                  placeholder="Telegram"
-                  value={channel.label}
-                  onChange={(e) => setChannel(index, { label: e.target.value })}
-                />
-              </Field>
-              <Field className="min-w-0 flex-1">
-                <FieldLabel htmlFor={`channel-url-${index}`}>{translate("common.link")}</FieldLabel>
-                <Input
-                  id={`channel-url-${index}`}
-                  data-testid={`discovery-profile-channel-url-${index}`}
-                  type="url"
-                  placeholder="https://"
-                  value={channel.url}
-                  onChange={(e) => setChannel(index, { url: e.target.value })}
-                />
-              </Field>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={translate("common.removeNamed", {
-                  name: channel.label || translate("community.linkFallback"),
-                })}
-                onClick={() =>
-                  onChange({
-                    ...profile,
-                    channels: profile.channels.filter((_, i) => i !== index),
-                  })
-                }
-              >
-                <XIcon />
-              </Button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-start"
-            data-testid="discovery-profile-add-channel"
-            disabled={profile.channels.length >= 10}
-            onClick={() =>
-              onChange({ ...profile, channels: [...profile.channels, { label: "", url: "" }] })
-            }
-          >
-            <PlusIcon />
-            {translate("community.addLink")}
-          </Button>
-        </FieldGroup>
-      </FieldSet>
-    </>
   );
 }

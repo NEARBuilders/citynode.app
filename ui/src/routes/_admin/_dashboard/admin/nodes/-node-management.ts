@@ -37,59 +37,17 @@ export const NODE_DETAIL_TABS = ["overview", "validators", "management", "domain
 
 export type NodeDetailTab = (typeof NODE_DETAIL_TABS)[number];
 
-const LEGACY_TABS: Record<string, NodeDetailTab> = { sequence: "management" };
+const NODE_DETAIL_TAB_ALIASES: Record<string, NodeDetailTab> = {
+  sequence: "management",
+};
 
 export function parseNodeDetailTab(value: unknown): NodeDetailTab | undefined {
-  if (typeof value !== "string") return undefined;
-  return NODE_DETAIL_TABS.find((tab) => tab === value) ?? LEGACY_TABS[value];
+  const tab = typeof value === "string" ? (NODE_DETAIL_TAB_ALIASES[value] ?? value) : value;
+  return NODE_DETAIL_TABS.find((candidate) => candidate === tab);
 }
 
-export function parseNodeDetailSearch(search: Record<string, unknown>): {
-  tab?: NodeDetailTab;
-  edit?: true;
-} {
-  const edit = search.edit === true || search.edit === "true" || search.tab === "profile";
-  return { tab: parseNodeDetailTab(search.tab), ...(edit && { edit: true as const }) };
-}
-
-export interface CommunityDraft<P> {
-  name: string;
-  description: string;
-  metadata: string;
-  profile: P | null;
-}
-
-export class CommunitySaveError extends Error {
-  constructor(
-    readonly stage: "details" | "profile",
-    readonly reason: unknown,
-  ) {
-    super(stage === "details" ? "Community details were not saved" : "Profile was not saved");
-  }
-}
-
-export async function saveCommunity<N, P>(
-  api: {
-    updateNode: (input: {
-      nodeId: string;
-      name: string;
-      metadata: Record<string, unknown>;
-    }) => Promise<N>;
-    saveDiscoveryProfile: (profile: P) => Promise<P>;
-  },
-  nodeId: string,
-  draft: CommunityDraft<P>,
-) {
-  const metadata = parseNodeMetadata(draft.metadata, draft.description);
-  const node = await api
-    .updateNode({ nodeId, name: draft.name.trim(), metadata })
-    .catch((reason: unknown) => {
-      throw new CommunitySaveError("details", reason);
-    });
-  const profile = draft.profile
-    ? await api.saveDiscoveryProfile(draft.profile).catch((reason: unknown) => {
-        throw new CommunitySaveError("profile", reason);
-      })
-    : null;
-  return { node, profile };
+export function parseNodeEditSearch(search: Record<string, unknown>): true | undefined {
+  return search.edit === true || search.edit === "true" || search.tab === "profile"
+    ? true
+    : undefined;
 }

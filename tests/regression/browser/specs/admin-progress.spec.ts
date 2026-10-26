@@ -91,19 +91,19 @@ test.describe("admin progress and needs action", () => {
     await expect(page.getByTestId("app-header-breadcrumb")).toContainText(node.name, {
       timeout: 15000,
     });
-    await expect(page.getByTestId("admin-node-stat-events")).toContainText("1");
-    await expect(page.getByTestId("admin-node-stat-events")).toContainText("1 past");
+    await expect(page.getByTestId("admin-node.stat-events")).toContainText("1");
+    await expect(page.getByTestId("admin-node.stat-events")).toContainText("1 past event");
     await expect(page.getByTestId("admin-node-tab-management")).toHaveText("Node management");
-    await expect(page.getByTestId("admin-node-technical")).toBeVisible();
+    await expect(page.getByTestId("admin-node-technical-details")).toBeVisible();
     await expect(page.getByText(node.id, { exact: true })).toHaveCount(0);
 
-    await page.getByTestId("admin-community-profile-edit").click();
-    await expect(page.getByTestId("admin-community-editor")).toBeVisible();
+    await page.getByTestId("admin-node-edit").click();
+    await expect(page.getByTestId("admin-node-editor")).toBeVisible();
     await page.getByTestId("discovery-profile-summary").fill(`Summary for ${unique}`);
-    await page.getByTestId("admin-community-editor-name").fill(`Renamed ${unique}`);
-    await page.getByTestId("admin-node-edit-save").click();
-    await expect(page.getByTestId("admin-community-editor")).toBeHidden({ timeout: 15000 });
-    await expect(page.getByTestId("admin-community-profile-summary")).toHaveText(
+    await page.getByTestId("admin-node-editor-name").fill(`Renamed ${unique}`);
+    await page.getByTestId("admin-node-editor-save").click();
+    await expect(page.getByTestId("admin-node-editor")).toBeHidden({ timeout: 15000 });
+    await expect(page.getByTestId("admin-node-profile-summary")).toHaveText(
       `Summary for ${unique}`,
       { timeout: 15000 },
     );

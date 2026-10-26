@@ -1,11 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  CommunitySaveError,
   filterNodeRows,
-  parseNodeDetailSearch,
   parseNodeDetailTab,
+  parseNodeEditSearch,
   parseNodeMetadata,
-  saveCommunity,
 } from "./-node-management";
 
 describe("node metadata editing", () => {
@@ -70,83 +68,30 @@ describe("node detail tabs", () => {
     expect(parseNodeDetailTab(tab)).toBe(tab);
   });
 
-  it("opens Node management from old sequence links", () => {
+  it("opens Node management for old ?tab=sequence links", () => {
     expect(parseNodeDetailTab("sequence")).toBe("management");
   });
 
-  it.each([undefined, "", "bindings", "profile", 3])("ignores %s", (tab) => {
+  it.each([undefined, "", "bindings", "constructor", "profile", 3])("ignores %s", (tab) => {
     expect(parseNodeDetailTab(tab)).toBeUndefined();
-  });
-
-  it("opens the editor for edit links and old profile tab links", () => {
-    expect(parseNodeDetailSearch({ edit: true })).toEqual({ tab: undefined, edit: true });
-    expect(parseNodeDetailSearch({ edit: "true", tab: "domains" })).toEqual({
-      tab: "domains",
-      edit: true,
-    });
-    expect(parseNodeDetailSearch({ tab: "profile" })).toEqual({ tab: undefined, edit: true });
-    expect(parseNodeDetailSearch({ edit: "no" })).toEqual({ tab: undefined });
   });
 });
 
-describe("saveCommunity", () => {
-  const profile = { nodeId: "n1", summary: "Hack nights" };
-  const draft = {
-    name: " Chicago ",
-    description: "Admin note",
-    metadata: '{"poolAccountId":"chicago.poolv1.near"}',
-    profile,
-  };
-
-  function api() {
-    return {
-      updateNode: vi.fn(async (input: unknown) => input),
-      saveDiscoveryProfile: vi.fn(async (input: typeof profile) => input),
-    };
-  }
-
-  it("saves node details and then the profile", async () => {
-    const client = api();
-    await expect(saveCommunity(client, "n1", draft)).resolves.toEqual({
-      node: {
-        nodeId: "n1",
-        name: "Chicago",
-        metadata: { poolAccountId: "chicago.poolv1.near", description: "Admin note" },
-      },
-      profile,
-    });
-    expect(client.updateNode.mock.invocationCallOrder[0]).toBeLessThan(
-      client.saveDiscoveryProfile.mock.invocationCallOrder[0] ?? 0,
-    );
+describe("community editor search", () => {
+  it.each([
+    { edit: true },
+    { edit: "true" },
+    { tab: "profile" },
+  ])("opens the editor for %o", (search) => {
+    expect(parseNodeEditSearch(search)).toBe(true);
   });
 
-  it("saves only node details for a community without a profile", async () => {
-    const client = api();
-    await expect(saveCommunity(client, "n1", { ...draft, profile: null })).resolves.toMatchObject({
-      profile: null,
-    });
-    expect(client.saveDiscoveryProfile).not.toHaveBeenCalled();
-  });
-
-  it("saves nothing when the metadata is invalid", async () => {
-    const client = api();
-    await expect(saveCommunity(client, "n1", { ...draft, metadata: "[]" })).rejects.toThrow();
-    expect(client.updateNode).not.toHaveBeenCalled();
-    expect(client.saveDiscoveryProfile).not.toHaveBeenCalled();
-  });
-
-  it("reports which part failed", async () => {
-    const detailsFail = api();
-    detailsFail.updateNode.mockRejectedValueOnce(new Error("forbidden"));
-    const details = await saveCommunity(detailsFail, "n1", draft).catch((error) => error);
-    expect(details).toBeInstanceOf(CommunitySaveError);
-    expect(details).toMatchObject({ stage: "details" });
-    expect(detailsFail.saveDiscoveryProfile).not.toHaveBeenCalled();
-
-    const profileFail = api();
-    profileFail.saveDiscoveryProfile.mockRejectedValueOnce(new Error("bad link"));
-    await expect(saveCommunity(profileFail, "n1", draft)).rejects.toMatchObject({
-      stage: "profile",
-    });
+  it.each([
+    {},
+    { edit: false },
+    { edit: "1" },
+    { tab: "domains" },
+  ])("keeps it closed for %o", (search) => {
+    expect(parseNodeEditSearch(search)).toBeUndefined();
   });
 });

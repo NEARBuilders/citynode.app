@@ -147,12 +147,12 @@ test.describe("admin", () => {
       "true",
       { timeout: 15000 },
     );
-    await expect(page.getByTestId("admin-node-stat-events")).toBeVisible();
-    await expect(page.getByTestId("admin-community-profile")).toBeVisible();
+    await expect(page.getByTestId("admin-node.stat-events")).toBeVisible();
+    await expect(page.getByTestId("admin-node-profile")).toBeVisible();
 
     await page.goto(`/admin/nodes/${node.id}/edit`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await expect(page.getByTestId("admin-community-editor")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("admin-node-editor")).toBeVisible({ timeout: 15000 });
     await expect(page).toHaveURL(new RegExp(`/admin/nodes/${node.id}\\?edit=true`));
 
     expectNoHydrationFailure(pageErrors);
