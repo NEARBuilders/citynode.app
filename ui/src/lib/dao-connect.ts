@@ -192,7 +192,7 @@ export async function fetchDaoPolicy(daoAccountId: string): Promise<NearPolicy |
   if (!connected) {
     throw new Error("Connected wallet does not own the requested DAO account");
   }
-  const rpcUrl = "https://rpc.mainnet.near.org";
+  const rpcUrl = "https://rpc.mainnet.fastnear.com";
   const body = JSON.stringify({
     jsonrpc: "2.0",
     id: "dao-connect",

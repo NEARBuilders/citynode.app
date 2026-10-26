@@ -1,8 +1,14 @@
 import { ORPCError } from "@orpc/server";
-import { Data, Effect, Result } from "effect";
-import { Near } from "near-kit";
+import { Effect } from "effect";
+import {
+  type NearNetworkId,
+  NearRpcUnavailableError,
+  NearViewCallError,
+  resolveNetwork,
+  viewFunction,
+} from "./near-rpc";
 
-export type NearNetworkId = "mainnet" | "testnet";
+export type { NearNetworkId } from "./near-rpc";
 
 export interface PolicyRoleGroup {
   kind: { Group: string[] };
@@ -20,19 +26,7 @@ export interface DaoPolicy {
   roles: PolicyRole[];
 }
 
-const MAINNET_RPC_URL = "https://rpc.mainnet.near.org";
-const TESTNET_RPC_URL = "https://rpc.testnet.near.org";
-const GET_POLICY_MAX_RETRIES = 2;
-
-class DaoPolicyQueryError extends Data.TaggedError("DaoPolicyQueryError")<{
-  readonly cause: unknown;
-}> {
-  override get message() {
-    return `Failed to load DAO policy: ${
-      this.cause instanceof Error ? this.cause.message : String(this.cause)
-    }`;
-  }
-}
+export const NEAR_UNAVAILABLE_MESSAGE = "Couldn't reach NEAR, try again";
 
 export function parsePolicyGroupMembers(policy: unknown): string[] {
   if (!policy || typeof policy !== "object") return [];
@@ -73,7 +67,7 @@ export interface VerifyDaoMembershipResult {
 export const verifyDaoMembership = ({
   daoAccountId,
   memberAccountId,
-  network = "mainnet",
+  network,
 }: VerifyDaoMembershipInput): Effect.Effect<
   VerifyDaoMembershipResult,
   ORPCError<string, unknown>
@@ -83,40 +77,48 @@ export const verifyDaoMembership = ({
       return { isSputnikContract: false, isMember: false, policy: null };
     }
 
-    const rpcUrl = network === "testnet" ? TESTNET_RPC_URL : MAINNET_RPC_URL;
-    const near = new Near({ network: { rpcUrl, networkId: network } });
-
-    let policy: DaoPolicy | null = null;
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt <= GET_POLICY_MAX_RETRIES; attempt += 1) {
-      const outcome = yield* Effect.result(
-        Effect.tryPromise({
-          try: () => near.view<DaoPolicy>(daoAccountId, "get_policy", {}),
-          catch: (error) => new DaoPolicyQueryError({ cause: error }),
+    const resolvedNetwork = resolveNetwork(daoAccountId, network);
+    const policy = yield* Effect.tryPromise({
+      try: () =>
+        viewFunction<unknown>({
+          accountId: daoAccountId,
+          methodName: "get_policy",
+          network: resolvedNetwork,
         }),
-      );
-      if (Result.isSuccess(outcome)) {
-        policy = outcome.success ?? null;
-        lastError = null;
-        break;
-      }
-      lastError = outcome.failure;
-    }
+      catch: (error) => daoPolicyError(error, daoAccountId, resolvedNetwork),
+    });
 
-    if (!policy) {
+    if (!policy || typeof policy !== "object" || !Array.isArray((policy as DaoPolicy).roles)) {
       return yield* Effect.fail(
-        new ORPCError("BAD_REQUEST", {
-          message: "Target account is not a sputnik-dao contract (get_policy failed)",
-          data: { daoAccountId, cause: errorMessage(lastError), network },
-        }),
+        notSputnikError(daoAccountId, resolvedNetwork, "get_policy returned no roles"),
       );
     }
 
     const isMember = isExplicitDaoMember(policy, memberAccountId);
-    return { isSputnikContract: true, isMember, policy };
+    return { isSputnikContract: true, isMember, policy: policy as DaoPolicy };
   });
 
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
+function notSputnikError(daoAccountId: string, network: NearNetworkId, cause: string) {
+  return new ORPCError("BAD_REQUEST", {
+    message: "Target account is not a sputnik-dao contract (get_policy failed)",
+    data: { daoAccountId, cause, network },
+  });
+}
+export function daoPolicyError(
+  error: unknown,
+  daoAccountId: string,
+  network: NearNetworkId,
+): ORPCError<string, unknown> {
+  if (error instanceof NearViewCallError) {
+    return notSputnikError(daoAccountId, network, `${error.kind}: ${error.detail}`);
+  }
+  return new ORPCError("SERVICE_UNAVAILABLE", {
+    message: NEAR_UNAVAILABLE_MESSAGE,
+    data: {
+      reason: "NEAR_RPC_UNAVAILABLE",
+      daoAccountId,
+      network,
+      attempts: error instanceof NearRpcUnavailableError ? error.attempts : undefined,
+    },
+  });
 }

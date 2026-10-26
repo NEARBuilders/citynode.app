@@ -41,6 +41,17 @@ export function isWalletCancelled(error: unknown) {
   );
 }
 
+export function isNearUnavailableError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const data = Reflect.get(error, "data");
+  return (
+    Reflect.get(error, "code") === "SERVICE_UNAVAILABLE" &&
+    !!data &&
+    typeof data === "object" &&
+    Reflect.get(data, "reason") === "NEAR_RPC_UNAVAILABLE"
+  );
+}
+
 export function appErrorMessage(
   error: unknown,
   t: AppTranslator,
@@ -51,6 +62,7 @@ export function appErrorMessage(
   if (isSessionError(error)) return t("error.session");
   if (isPermissionError(error)) return t("error.permission");
   if (status === 409 || code === "CONFLICT") return t("error.conflict");
+  if (isNearUnavailableError(error)) return t("error.nearUnavailable");
   if (isWalletCancelled(error)) return t("wallet.cancelled");
   return t(fallback);
 }

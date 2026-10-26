@@ -1,3 +1,4 @@
+import { Near } from "near-kit";
 import {
   type DaoPlan,
   findPendingProposalForPlan,
@@ -9,6 +10,7 @@ import {
 
 export const VENEAR_ACCOUNT = "venear.dao";
 export const VOTING_ACCOUNT = "vote.dao";
+export const ARCHIVAL_RPC_URL = "https://archival-rpc.mainnet.fastnear.com";
 export const REGISTER_DEPOSIT = "100000000000000000000000";
 export const LOCKUP_DEPLOY_DEPOSIT = "2000000000000000000000000";
 export const DELEGATE_DEPOSIT = "100000000000000000000000";
@@ -76,6 +78,7 @@ export type NodeSequenceBlocker =
   | "endowmentNotLocked"
   | "endowmentNotStaked"
   | "teamNoVotingPower"
+  | "teamNoSnapshotPower"
   | "teamNotStaked"
   | "teamNothingUnstaked"
   | "teamWithdrawWait"
@@ -123,6 +126,7 @@ export interface NodeSequenceChain {
   teamPool: PoolAccount | null;
   endowmentPool: PoolAccount | null;
   teamVote: VoteOption | null;
+  teamSnapshotPower: bigint | null;
 }
 
 export interface NodeSequenceInputs {
@@ -168,6 +172,7 @@ export const EMPTY_CHAIN: NodeSequenceChain = {
   teamPool: null,
   endowmentPool: null,
   teamVote: null,
+  teamSnapshotPower: null,
 };
 
 export function yoctoOf(value: string | null | undefined): bigint {
@@ -227,6 +232,10 @@ export function buildNodeSequence(
   const selectedPool = chain.endowmentLockupState?.stakingPool ?? null;
   const selectedPoolInUse = balances.endowmentStaked > 0n || balances.endowmentUnstaked > 0n;
   const delegations = chain.endowmentVenear?.account.delegations ?? [];
+  const voteBlocker =
+    chain.teamSnapshotPower == null
+      ? firstBlocker([balances.teamVotingPower === 0n, "teamNoVotingPower"])
+      : firstBlocker([chain.teamSnapshotPower === 0n, "teamNoSnapshotPower"]);
 
   const lockupCall = (methodName: string, gas: string, args: Record<string, unknown> = {}) =>
     endowmentLockup ? call(endowmentLockup, methodName, gas, ONE_YOCTO, args) : null;
@@ -391,21 +400,21 @@ export function buildNodeSequence(
           treasury: "team",
           plan: null,
           done: chain.teamVote === "For",
-          blocker: firstBlocker([balances.teamVotingPower === 0n, "teamNoVotingPower"]),
+          blocker: voteBlocker,
         },
         {
           id: "vote-against",
           treasury: "team",
           plan: null,
           done: chain.teamVote === "Against",
-          blocker: firstBlocker([balances.teamVotingPower === 0n, "teamNoVotingPower"]),
+          blocker: voteBlocker,
         },
         {
           id: "vote-abstain",
           treasury: "team",
           plan: null,
           done: chain.teamVote === "Abstain",
-          blocker: firstBlocker([balances.teamVotingPower === 0n, "teamNoVotingPower"]),
+          blocker: voteBlocker,
         },
       ],
     },
@@ -659,6 +668,7 @@ export async function readNodeSequenceChain(input: {
     teamPool,
     endowmentPool,
     teamVote: null,
+    teamSnapshotPower: null,
   };
 }
 
@@ -690,6 +700,92 @@ export async function readVoteStorageFee(): Promise<string> {
   return config?.vote_storage_fee ?? VOTE_STORAGE_FEE_FALLBACK;
 }
 
-export function readGovProof(accountId: string) {
-  return view<[unknown, unknown]>(VENEAR_ACCOUNT, "get_proof", { account_id: accountId });
+export type GovProof = readonly [unknown, unknown];
+
+export interface GovSnapshot {
+  root: string;
+  length: number;
+  blockHeight: number;
+}
+
+export interface SnapshotVote {
+  snapshot: GovSnapshot;
+  votingPower: bigint;
+  proof: GovProof | null;
+}
+
+interface GovProposalDetail {
+  snapshot_and_state?: {
+    snapshot?: { root?: unknown; length?: unknown; block_height?: unknown };
+  } | null;
+}
+
+let _archivalNear: Near | null = null;
+
+export function getArchivalNear(): Near {
+  if (!_archivalNear) {
+    _archivalNear = new Near({ network: { networkId: "mainnet", rpcUrl: ARCHIVAL_RPC_URL } });
+  }
+  return _archivalNear;
+}
+
+export function govSnapshotOf(proposal: GovProposalDetail | null | undefined): GovSnapshot | null {
+  const snapshot = proposal?.snapshot_and_state?.snapshot;
+  if (!snapshot) return null;
+  const { root, length, block_height: blockHeight } = snapshot;
+  if (typeof root !== "string" || typeof length !== "number" || typeof blockHeight !== "number") {
+    throw new Error("Unreadable House of Stake proposal snapshot");
+  }
+  return { root, length, blockHeight };
+}
+
+export async function readGovSnapshot(proposalId: number): Promise<GovSnapshot | null> {
+  const proposal = await getNear().view<GovProposalDetail>(VOTING_ACCOUNT, "get_proposal", {
+    proposal_id: proposalId,
+  });
+  if (!proposal) throw new Error(`House of Stake proposal ${proposalId} not found`);
+  return govSnapshotOf(proposal);
+}
+
+function proofAccountId(proof: GovProof): string | null {
+  const vAccount = proof[1] as Record<string, { account_id?: unknown }> | null;
+  const account = vAccount ? Object.values(vAccount)[0] : null;
+  return typeof account?.account_id === "string" ? account.account_id : null;
+}
+
+export async function readSnapshotVote(
+  accountId: string,
+  snapshot: GovSnapshot,
+): Promise<SnapshotVote> {
+  const near = getArchivalNear();
+  const atSnapshot = { blockId: snapshot.blockHeight };
+  const balance = await near.view<string>(
+    VENEAR_ACCOUNT,
+    "ft_balance_of",
+    { account_id: accountId },
+    atSnapshot,
+  );
+  if (typeof balance !== "string" || !/^\d+$/.test(balance)) {
+    throw new Error(`Unreadable veNEAR balance for ${accountId} at block ${snapshot.blockHeight}`);
+  }
+  const votingPower = BigInt(balance);
+  if (votingPower === 0n) return { snapshot, votingPower, proof: null };
+  const proof = await near.view<GovProof>(
+    VENEAR_ACCOUNT,
+    "get_proof",
+    { account_id: accountId },
+    atSnapshot,
+  );
+  if (!Array.isArray(proof) || proof.length !== 2 || proofAccountId(proof) !== accountId) {
+    throw new Error(`Unreadable veNEAR proof for ${accountId} at block ${snapshot.blockHeight}`);
+  }
+  return { snapshot, votingPower, proof };
+}
+
+export async function readTeamSnapshotVote(
+  team: string,
+  proposalId: number,
+): Promise<SnapshotVote | null> {
+  const snapshot = await readGovSnapshot(proposalId);
+  return snapshot ? readSnapshotVote(team, snapshot) : null;
 }
