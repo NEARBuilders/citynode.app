@@ -149,7 +149,7 @@ function AdminNodes() {
       },
       {
         accessorKey: "status",
-        header: translate("common.tenant"),
+        header: translate("admin.community.site"),
         cell: ({ row }) => (
           <Badge variant={tenantStatusTone(row.original.status)}>
             {humanize(row.original.status, translate)}

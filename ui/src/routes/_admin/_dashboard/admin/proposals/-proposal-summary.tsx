@@ -1,78 +1,79 @@
 import { CheckCircleIcon, WarningCircleIcon, XCircleIcon } from "@phosphor-icons/react";
-import { Badge, InfoRow, LocalDate, SectionHeader } from "@/components";
+import { Badge, InfoRow, LocalDate } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { Proposal } from "@/lib/queries/proposals";
-import { humanize, RawJson, RawJsonDisclosure } from "../-admin-ui";
-import { NodeProposalDetails } from "./-node-proposal-details";
-import { proposalReviewStatusVariant, proposalSetupStatus } from "./-proposal-review";
+import { Disclosure, humanize, RawJson, RawJsonDisclosure } from "../-admin-ui";
+import { NodeProposalRequest } from "./-node-proposal-details";
+import { ProposalStatusCell } from "./-proposal-columns";
+import { proposalSetupStatus } from "./-proposal-review";
 
 export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
   const translate = useAppTranslation();
-  const setup = proposalSetupStatus(proposal, translate);
+  const showApply =
+    proposal.reviewStatus === "approved" &&
+    !proposalSetupStatus(proposal, translate) &&
+    proposal.applyStatus !== "not_started";
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Badge
-        variant={proposalReviewStatusVariant(proposal.reviewStatus)}
-        data-testid="admin-proposal-status"
-      >
-        {humanize(proposal.reviewStatus, translate)}
-      </Badge>
-      {setup ? (
-        <Badge variant={setup.variant} data-testid="admin-proposal-setup-status">
-          {setup.label}
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <ProposalStatusCell proposal={proposal} t={translate} />
+      {showApply && (
+        <Badge
+          variant={proposal.applyStatus === "applied" ? "success" : "outline"}
+          data-testid="admin-proposal-apply-status"
+        >
+          {humanize(proposal.applyStatus, translate)}
         </Badge>
-      ) : (
-        proposal.applyStatus !== "not_started" && (
-          <Badge variant={proposal.applyStatus === "applied" ? "success" : "outline"}>
-            {humanize(proposal.applyStatus, translate)}
-          </Badge>
-        )
       )}
-    </div>
+    </span>
   );
 }
 
-export function ProposalSubject({ proposal }: { proposal: Proposal }) {
-  const translate = useAppTranslation();
-  const isNode = proposal.pluginId === "node";
-  return (
-    <section className="flex flex-col gap-6">
-      <SectionHeader
-        title={isNode ? translate("common.application") : translate("common.submission")}
-      />
-      {isNode ? (
-        <>
-          <NodeProposalDetails payload={proposal.payload} />
-          <RawJsonDisclosure value={proposal.payload} label={translate("common.payload")} />
-        </>
-      ) : (
-        <RawJson value={proposal.payload} />
-      )}
-    </section>
+export function ProposalRequest({ proposal }: { proposal: Proposal }) {
+  return proposal.pluginId === "node" ? (
+    <NodeProposalRequest proposal={proposal} />
+  ) : (
+    <RawJson value={proposal.payload} />
   );
 }
 
-export function ProposalDetails({ proposal }: { proposal: Proposal }) {
+export function ProposalTechnicalDetails({ proposal }: { proposal: Proposal }) {
   const translate = useAppTranslation();
+  const slug = (proposal.payload as { slug?: unknown } | null)?.slug;
+  const orgId = (proposal.payload as { orgId?: unknown } | null)?.orgId;
   return (
-    <section className="flex flex-col gap-6">
-      <SectionHeader title={translate("common.details")} />
-      <div className="flex flex-col">
-        <InfoRow label={translate("admin.proposal.submittedBy")} value={proposal.createdBy} mono />
-        <InfoRow
-          label={translate("common.submitted")}
-          value={<LocalDate value={proposal.createdAt} format="datetime" />}
-        />
-        <InfoRow
-          label={translate("common.updated")}
-          value={<LocalDate value={proposal.updatedAt} format="datetime" />}
-        />
-        <InfoRow label={translate("admin.proposal.submissions")} value={proposal.submissionCount} />
-        <InfoRow label={translate("common.plugin")} value={proposal.pluginId} mono />
-        <InfoRow label={translate("common.entity")} value={proposal.entityId} mono />
-        <InfoRow label={translate("admin.proposal.id")} value={proposal.id} mono />
+    <Disclosure
+      label={translate("admin.showNamed", { label: translate("admin.technicalDetails") })}
+      openLabel={translate("admin.hideNamed", { label: translate("admin.technicalDetails") })}
+      testId="admin-proposal-technical"
+    >
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col">
+          {typeof slug === "string" && (
+            <InfoRow label={translate("common.slug")} value={slug} mono />
+          )}
+          {typeof orgId === "string" && (
+            <InfoRow label={translate("common.organization")} value={orgId} mono />
+          )}
+          <InfoRow
+            label={translate("admin.proposal.submittedBy")}
+            value={proposal.createdBy}
+            mono
+          />
+          <InfoRow
+            label={translate("common.updated")}
+            value={<LocalDate value={proposal.updatedAt} format="datetime" />}
+          />
+          <InfoRow
+            label={translate("admin.proposal.submissions")}
+            value={proposal.submissionCount}
+          />
+          <InfoRow label={translate("common.plugin")} value={proposal.pluginId} mono />
+          <InfoRow label={translate("common.entity")} value={proposal.entityId} mono />
+          <InfoRow label={translate("admin.proposal.id")} value={proposal.id} mono />
+        </div>
+        <RawJsonDisclosure value={proposal.payload} label={translate("common.payload")} />
       </div>
-    </section>
+    </Disclosure>
   );
 }
 
