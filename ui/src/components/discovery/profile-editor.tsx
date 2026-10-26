@@ -28,7 +28,9 @@ function profileSaveErrorMessage(error: unknown, t: AppTranslator) {
   return appErrorMessage(error, t, "community.saveError");
 }
 
-function validateProfile(profile: Profile): AppMessageId | null {
+export type DiscoveryProfile = Profile;
+
+export function validateProfile(profile: Profile): AppMessageId | null {
   for (const channel of profile.channels) {
     if (!channel.label.trim()) return "community.linkNameRequired";
     if (!/^https?:\/\//i.test(channel.url.trim())) return "community.linkUrlRequired";
@@ -71,25 +73,22 @@ export function ProfileEditor({ nodeId }: { nodeId: string }) {
         onRetry={() => query.refetch()}
       />
     );
-  return (
-    <ProfileForm
-      key={nodeId}
-      initial={
-        query.data ?? {
-          nodeId,
-          summary: "",
-          location: "",
-          region: "",
-          latitude: null,
-          longitude: null,
-          channels: [],
-          published: false,
-          geocodedLocation: null,
-          geocodeHint: null,
-        }
-      }
-    />
-  );
+  return <ProfileForm key={nodeId} initial={query.data ?? emptyProfile(nodeId)} />;
+}
+
+export function emptyProfile(nodeId: string): Profile {
+  return {
+    nodeId,
+    summary: "",
+    location: "",
+    region: "",
+    latitude: null,
+    longitude: null,
+    channels: [],
+    published: false,
+    geocodedLocation: null,
+    geocodeHint: null,
+  };
 }
 
 function ProfileForm({ initial }: { initial: Profile }) {
@@ -118,30 +117,6 @@ function ProfileForm({ initial }: { initial: Profile }) {
     },
     onError: (error: unknown) => toast.error(profileSaveErrorMessage(error, translate)),
   });
-  const setChannel = (index: number, patch: Partial<Profile["channels"][number]>) =>
-    setProfile({
-      ...profile,
-      channels: profile.channels.map((c, i) => (i === index ? { ...c, ...patch } : c)),
-    });
-  const setLocation = (location: string) => {
-    const trimmed = location.trim();
-    const stillMatchesGeocode =
-      trimmed.length > 0 && trimmed === (profile.geocodedLocation?.trim() ?? "");
-    setProfile({
-      ...profile,
-      location,
-      ...(trimmed
-        ? stillMatchesGeocode
-          ? {}
-          : { geocodedLocation: null, geocodeHint: null }
-        : {
-            latitude: null,
-            longitude: null,
-            geocodedLocation: null,
-            geocodeHint: null,
-          }),
-    });
-  };
   return (
     <form
       className="flex max-w-2xl flex-col gap-10"
@@ -159,6 +134,67 @@ function ProfileForm({ initial }: { initial: Profile }) {
         save.mutate();
       }}
     >
+      <ProfileFields profile={profile} onChange={setProfile} />
+
+      <div className="flex flex-col gap-2">
+        <Button
+          type="submit"
+          data-testid="discovery-profile-save"
+          className="self-start"
+          disabled={save.isPending}
+        >
+          {save.isPending ? translate("common.saving") : translate("community.saveProfile")}
+        </Button>
+        {(validationError || save.isError) && (
+          <p
+            role="alert"
+            data-testid="discovery-profile-save-error"
+            className="text-sm text-destructive"
+          >
+            {validationError
+              ? translate(validationError)
+              : profileSaveErrorMessage(save.error, translate)}
+          </p>
+        )}
+      </div>
+    </form>
+  );
+}
+
+export function ProfileFields({
+  profile,
+  onChange,
+}: {
+  profile: Profile;
+  onChange: (profile: Profile) => void;
+}) {
+  const translate = useAppTranslation();
+  const setChannel = (index: number, patch: Partial<Profile["channels"][number]>) =>
+    onChange({
+      ...profile,
+      channels: profile.channels.map((c, i) => (i === index ? { ...c, ...patch } : c)),
+    });
+  const setLocation = (location: string) => {
+    const trimmed = location.trim();
+    const stillMatchesGeocode =
+      trimmed.length > 0 && trimmed === (profile.geocodedLocation?.trim() ?? "");
+    onChange({
+      ...profile,
+      location,
+      ...(trimmed
+        ? stillMatchesGeocode
+          ? {}
+          : { geocodedLocation: null, geocodeHint: null }
+        : {
+            latitude: null,
+            longitude: null,
+            geocodedLocation: null,
+            geocodeHint: null,
+          }),
+    });
+  };
+  return (
+    <>
       <Field orientation="horizontal">
         <FieldContent>
           <FieldLabel htmlFor="profile-published">{translate("community.showExplore")}</FieldLabel>
@@ -168,7 +204,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
           id="profile-published"
           data-testid="discovery-profile-published"
           checked={profile.published}
-          onCheckedChange={(checked) => setProfile({ ...profile, published: checked === true })}
+          onCheckedChange={(checked) => onChange({ ...profile, published: checked === true })}
         />
       </Field>
 
@@ -182,7 +218,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
             value={profile.summary}
             placeholder={translate("community.profileExample")}
             maxLength={1000}
-            onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
+            onChange={(e) => onChange({ ...profile, summary: e.target.value })}
           />
         </Field>
       </FieldSet>
@@ -210,7 +246,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 data-testid="discovery-profile-region"
                 value={profile.region}
                 maxLength={120}
-                onChange={(e) => setProfile({ ...profile, region: e.target.value })}
+                onChange={(e) => onChange({ ...profile, region: e.target.value })}
               />
             </Field>
           </div>
@@ -262,7 +298,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                   name: channel.label || translate("community.linkFallback"),
                 })}
                 onClick={() =>
-                  setProfile({
+                  onChange({
                     ...profile,
                     channels: profile.channels.filter((_, i) => i !== index),
                   })
@@ -280,7 +316,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
             data-testid="discovery-profile-add-channel"
             disabled={profile.channels.length >= 10}
             onClick={() =>
-              setProfile({ ...profile, channels: [...profile.channels, { label: "", url: "" }] })
+              onChange({ ...profile, channels: [...profile.channels, { label: "", url: "" }] })
             }
           >
             <PlusIcon />
@@ -288,28 +324,6 @@ function ProfileForm({ initial }: { initial: Profile }) {
           </Button>
         </FieldGroup>
       </FieldSet>
-
-      <div className="flex flex-col gap-2">
-        <Button
-          type="submit"
-          data-testid="discovery-profile-save"
-          className="self-start"
-          disabled={save.isPending}
-        >
-          {save.isPending ? translate("common.saving") : translate("community.saveProfile")}
-        </Button>
-        {(validationError || save.isError) && (
-          <p
-            role="alert"
-            data-testid="discovery-profile-save-error"
-            className="text-sm text-destructive"
-          >
-            {validationError
-              ? translate(validationError)
-              : profileSaveErrorMessage(save.error, translate)}
-          </p>
-        )}
-      </div>
-    </form>
+    </>
   );
 }

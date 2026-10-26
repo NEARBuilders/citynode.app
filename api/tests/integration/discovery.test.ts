@@ -457,3 +457,39 @@ it("enforces a server-side report budget even when anonymous tokens rotate", asy
     }),
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
+
+it("counts upcoming and past published events per community for platform admins only", async () => {
+  const { node, editor, member } = await fixture();
+  const admin = await getPluginClient(authedContext("discovery-admin", "admin"));
+  const now = Date.now();
+  const event = (title: string, offsetDays: number, status: "published" | "draft") => ({
+    ownerNodeId: node.id,
+    nodeIds: [node.id],
+    kind: "event" as const,
+    title,
+    summary: "",
+    url: `https://example.com/${encodeURIComponent(title)}`,
+    source: "Community",
+    publishedAt: new Date(now - 30 * 86400000).toISOString(),
+    startsAt: new Date(now + offsetDays * 86400000).toISOString(),
+    endsAt: new Date(now + offsetDays * 86400000 + 3600000).toISOString(),
+    timezone: "UTC",
+    venue: "Online",
+    status,
+  });
+  await admin.saveDiscoveryActivity(event("Past meetup", -10, "published"));
+  await admin.saveDiscoveryActivity(event("Next meetup", 5, "published"));
+  await admin.saveDiscoveryActivity(event("Later meetup", 20, "published"));
+  await admin.saveDiscoveryActivity(event("Draft meetup", 7, "draft"));
+
+  const [stats] = await admin.getDiscoveryEventStats({ nodeId: node.id });
+  expect(stats).toMatchObject({ nodeId: node.id, upcoming: 2, past: 1 });
+  expect(Date.parse(stats?.lastActivityAt ?? "")).toBeLessThanOrEqual(Date.now());
+  expect(await admin.getDiscoveryEventStats({})).toEqual(
+    expect.arrayContaining([expect.objectContaining({ nodeId: node.id, upcoming: 2 })]),
+  );
+  await expect(editor.getDiscoveryEventStats({ nodeId: node.id })).rejects.toMatchObject({
+    code: "FORBIDDEN",
+  });
+  await expect(member.getDiscoveryEventStats({})).rejects.toMatchObject({ code: "FORBIDDEN" });
+});

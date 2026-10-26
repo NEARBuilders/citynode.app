@@ -429,6 +429,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.discovery.metrics(context);
       }),
+      getDiscoveryEventStats: builder.getDiscoveryEventStats.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.eventStats(input.nodeId, context);
+      }),
       getDiscoveryStudio: builder.getDiscoveryStudio.effect(function* ({ context }) {
         const services = yield* ApiServices;
         return yield* services.discovery.studio(context);

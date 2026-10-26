@@ -728,6 +728,32 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         );
         return { visits: totals?.visits ?? 0, activatedVisits: totals?.activatedVisits ?? 0, rows };
       }),
+    eventStats: (nodeId: string | undefined, context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* requireAdmin(context);
+        const now = new Date(yield* Clock.currentTimeMillis).toISOString();
+        const data = discoveryActivities.data;
+        return yield* query(() =>
+          db
+            .select({
+              nodeId: discoveryActivities.ownerNodeId,
+              upcoming: sql<number>`count(*) filter (where ${data}->>'kind' = 'event' and (${data}->>'startsAt')::timestamptz >= ${now})::int`,
+              past: sql<number>`count(*) filter (where ${data}->>'kind' = 'event' and (${data}->>'startsAt')::timestamptz < ${now})::int`,
+              lastActivityAt: sql<
+                string | null
+              >`to_char(least(max(greatest((${data}->>'publishedAt')::timestamptz, least((${data}->>'startsAt')::timestamptz, ${now}::timestamptz))), ${now}::timestamptz) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+            })
+            .from(discoveryActivities)
+            .where(
+              and(
+                sql`${data}->>'status' = 'published'`,
+                sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
+                nodeId ? eq(discoveryActivities.ownerNodeId, nodeId) : undefined,
+              ),
+            )
+            .groupBy(discoveryActivities.ownerNodeId),
+        );
+      }),
     studio: (context: AuthContext) =>
       Effect.gen(function* () {
         yield* requireCurator(context);

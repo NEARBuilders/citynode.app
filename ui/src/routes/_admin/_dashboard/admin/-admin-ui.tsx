@@ -1,4 +1,11 @@
-import { ArrowLeftIcon, CaretDownIcon, CaretRightIcon, DotsThreeIcon } from "@phosphor-icons/react";
+import {
+  ArrowClockwiseIcon,
+  ArrowLeftIcon,
+  CaretDownIcon,
+  CaretRightIcon,
+  DotsThreeIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cn } from "cn";
 import { type ReactNode, useState } from "react";
@@ -45,13 +52,16 @@ export function StatFigure({
   hint,
   testId,
   tone,
+  onRetry,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   testId?: string;
   tone?: "default" | "attention";
+  onRetry?: () => void;
 }) {
+  const translate = useAppTranslation();
   return (
     <div className="flex min-w-0 flex-col gap-1" data-testid={testId}>
       <span className="text-sm text-muted-foreground">{label}</span>
@@ -63,7 +73,16 @@ export function StatFigure({
       >
         {value}
       </span>
-      {hint && <span className="truncate text-sm text-muted-foreground">{hint}</span>}
+      {onRetry ? (
+        <span role="alert" className="flex items-center gap-1 text-sm text-destructive">
+          {translate("admin.loadFailed")}
+          <Button variant="link" size="xs" className="h-auto p-0" onClick={onRetry}>
+            {translate("common.retry")}
+          </Button>
+        </span>
+      ) : (
+        hint && <span className="truncate text-sm text-muted-foreground">{hint}</span>
+      )}
     </div>
   );
 }
@@ -117,11 +136,67 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
   );
 }
 
+export function LoadError({
+  message,
+  onRetry,
+  testId,
+}: {
+  message: string;
+  onRetry: () => void;
+  testId?: string;
+}) {
+  const translate = useAppTranslation();
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+      data-testid={testId}
+    >
+      <WarningCircleIcon className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1">{message}</span>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        <ArrowClockwiseIcon />
+        {translate("common.retry")}
+      </Button>
+    </div>
+  );
+}
+
 export function RawJson({ value }: { value: unknown }) {
   return (
     <pre className="max-h-96 overflow-auto rounded-2xl bg-muted p-4 font-mono text-xs text-foreground">
       {JSON.stringify(value, null, 2)}
     </pre>
+  );
+}
+
+export function Disclosure({
+  label,
+  openLabel,
+  testId,
+  children,
+}: {
+  label: string;
+  openLabel?: string;
+  testId?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-3">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="self-start"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        data-testid={testId}
+      >
+        {open ? <CaretDownIcon /> : <CaretRightIcon />}
+        {open ? (openLabel ?? label) : label}
+      </Button>
+      {open && children}
+    </div>
   );
 }
 
@@ -135,24 +210,15 @@ export function RawJsonDisclosure({
   testId?: string;
 }) {
   const translate = useAppTranslation();
-  const [open, setOpen] = useState(false);
+  const name = label ?? translate("admin.rawJson");
   return (
-    <div className="flex flex-col gap-3">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="self-start"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-        data-testid={testId}
-      >
-        {open ? <CaretDownIcon /> : <CaretRightIcon />}
-        {translate(open ? "admin.hideNamed" : "admin.showNamed", {
-          label: label ?? translate("admin.rawJson"),
-        })}
-      </Button>
-      {open && <RawJson value={value} />}
-    </div>
+    <Disclosure
+      label={translate("admin.showNamed", { label: name })}
+      openLabel={translate("admin.hideNamed", { label: name })}
+      testId={testId}
+    >
+      <RawJson value={value} />
+    </Disclosure>
   );
 }
 

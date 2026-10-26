@@ -190,6 +190,19 @@ export const discoveryContract = {
       }),
     )
     .errors({ UNAUTHORIZED, FORBIDDEN }),
+  getDiscoveryEventStats: oc
+    .input(z.object({ nodeId: z.uuid().optional() }))
+    .output(
+      z.array(
+        z.object({
+          nodeId: z.string(),
+          upcoming: z.number().int().nonnegative(),
+          past: z.number().int().nonnegative(),
+          lastActivityAt: z.string().nullable(),
+        }),
+      ),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
   getDiscoveryStudio: oc
     .output(
       z.object({

@@ -64,3 +64,60 @@ export function buildCommunityJoinRows<T extends JoinsTenant>(
 export function visibleCommunityJoinRows<T>(rows: readonly T[], showAll: boolean): readonly T[] {
   return showAll ? rows : rows.slice(0, COMMUNITY_JOINS_LIMIT);
 }
+
+export const JOIN_TREND_SERIES = 4;
+
+export type JoinMetric = keyof JoinCounts;
+
+export type JoinTrendSeries = { key: string; label: string; other?: true };
+
+export type JoinTrendMonth = {
+  month: string;
+  total: number;
+  values: Record<string, number>;
+};
+
+export function buildJoinTrend<T extends JoinsTenant>(
+  tenants: readonly T[],
+  months: readonly { month: string; joins: OrganizationJoins | undefined }[],
+  metric: JoinMetric,
+  seriesLimit = JOIN_TREND_SERIES,
+): { series: JoinTrendSeries[]; months: JoinTrendMonth[] } {
+  const perMonth = months.map(({ month, joins }) => ({
+    month,
+    rows: buildCommunityJoinRows(tenants, joins, undefined),
+  }));
+  const totals = new Map<string, { label: string; total: number }>();
+  for (const { rows } of perMonth) {
+    for (const row of rows) {
+      const entry = totals.get(row.tenant.id) ?? { label: row.tenant.name, total: 0 };
+      entry.total += row.thisMonth[metric];
+      totals.set(row.tenant.id, entry);
+    }
+  }
+  const ranked = [...totals.entries()]
+    .filter(([, entry]) => entry.total > 0)
+    .sort(([, a], [, b]) => b.total - a.total || a.label.localeCompare(b.label));
+  const top = ranked.slice(0, seriesLimit);
+  const topIds = new Set(top.map(([id]) => id));
+  const hasOther = ranked.length > top.length;
+  const series: JoinTrendSeries[] = [
+    ...top.map(([key, { label }]) => ({ key, label })),
+    ...(hasOther ? [{ key: "other", label: "other", other: true as const }] : []),
+  ];
+  return {
+    series,
+    months: perMonth.map(({ month, rows }) => {
+      const values: Record<string, number> = {};
+      let total = 0;
+      for (const row of rows) {
+        const value = row.thisMonth[metric];
+        if (!value) continue;
+        const key = topIds.has(row.tenant.id) ? row.tenant.id : "other";
+        values[key] = (values[key] ?? 0) + value;
+        total += value;
+      }
+      return { month, total, values };
+    }),
+  };
+}

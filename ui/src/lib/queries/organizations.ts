@@ -30,3 +30,10 @@ export function organizationsQueryOptions(apiClient: ApiClient) {
     retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 2000),
   });
 }
+
+export function organizationRequestsQueryOptions(apiClient: ApiClient) {
+  return queryOptions({
+    queryKey: ["organization-requests"] as const,
+    queryFn: () => apiClient.auth.listOrganizationRequests(),
+  });
+}

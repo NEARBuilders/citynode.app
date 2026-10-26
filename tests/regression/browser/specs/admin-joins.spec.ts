@@ -37,6 +37,14 @@ test.describe("admin overview joins", () => {
         .toBeGreaterThanOrEqual(atLeast);
     }
 
+    await expect(page.getByTestId("admin-joins-chart")).toBeVisible({ timeout: 15000 });
+    const month = new Date().toISOString().slice(0, 7);
+    const bar = page.getByTestId(`admin-joins-chart-month-${month}`);
+    await bar.hover();
+    await expect
+      .poll(async () => Number(await bar.getByTestId("admin-joins-chart-total").innerText()))
+      .toBeGreaterThanOrEqual(3);
+
     await expect(page.getByTestId("admin-joins")).toBeVisible({ timeout: 15000 });
     const row = page.getByTestId(`admin-joins-row-${tenant.id}`);
     if (!(await row.isVisible())) await page.getByTestId("admin-joins-toggle").click();

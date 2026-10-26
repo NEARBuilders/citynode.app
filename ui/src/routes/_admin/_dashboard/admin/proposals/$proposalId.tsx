@@ -29,10 +29,10 @@ import {
 import { ProposalReviewActions } from "./-proposal-review-actions";
 import { ProposalReviewHistory } from "./-proposal-review-history";
 import {
-  ProposalDetails,
   ProposalOutcome,
+  ProposalRequest,
   ProposalStatusBadges,
-  ProposalSubject,
+  ProposalTechnicalDetails,
 } from "./-proposal-summary";
 
 type ProposalDetailSearch = { pluginId?: string; entityId?: string };
@@ -226,57 +226,65 @@ function ProposalDetailPage() {
       <PageHeader
         label={<BackLink to="/admin/proposals">{translate("common.proposals")}</BackLink>}
         title={proposalTitle(proposal, translate)}
-        description={`${proposalTypeLabel(proposal.pluginId, translate)} · ${proposal.entityId}`}
-        actions={<ProposalStatusBadges proposal={proposal} />}
+        description={
+          <span className="flex flex-wrap items-center gap-3">
+            {proposalTypeLabel(proposal.pluginId, translate)}
+            <ProposalStatusBadges proposal={proposal} />
+          </span>
+        }
         headerTestId="admin-proposal.heading"
       />
 
-      <div className="grid gap-12 lg:grid-cols-3 lg:gap-10">
-        <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
-          <ProposalSubject proposal={proposal} />
-          <ProposalDetails proposal={proposal} />
-        </div>
-        <aside className="lg:sticky lg:top-6 lg:self-start">
-          <Card>
-            <CardContent className="flex flex-col gap-8 p-5 sm:p-6">
-              {proposal.pluginId === "node" && (
-                <ApplicationProgressList
-                  proposal={proposal}
-                  daoAccountId={proposalDaoAccountId}
-                  showResources
-                />
-              )}
-              {isPending || isRetry ? (
-                <ProposalReviewActions
-                  isPending={isPending}
-                  isRetry={isRetry}
-                  canReject={proposalCanBeRejected(proposal)}
-                  applyError={proposal.applyError}
-                  isNodeProposal={proposal.pluginId === "node"}
-                  proposalDaoAccountId={proposalDaoAccountId}
-                  daoIsVerified={daoIsVerified || (isRetry && publicationRecorded)}
-                  rejectionReason={rejectionReason}
-                  isReviewing={reviewMutation.isPending}
-                  onDaoVerified={handleDaoVerified}
-                  onRejectionReasonChange={(event) => setRejectionReason(event.target.value)}
-                  onApprove={() => reviewMutation.mutate({ proposal, action: "approve" })}
-                  onReject={() =>
-                    reviewMutation.mutate({
-                      proposal,
-                      action: "reject",
-                      reason: rejectionReason.trim(),
-                    })
-                  }
-                />
-              ) : (
-                <ProposalOutcome proposal={proposal} />
-              )}
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
+      <Card>
+        <CardContent className="grid gap-10 p-5 sm:p-6 lg:grid-cols-2 lg:gap-12">
+          <section className="flex min-w-0 flex-col gap-6">
+            <h2 className="text-xl font-semibold text-foreground">
+              {proposal.pluginId === "node"
+                ? translate("admin.proposal.request")
+                : translate("common.submission")}
+            </h2>
+            <ProposalRequest proposal={proposal} />
+          </section>
+          <div className="flex min-w-0 flex-col gap-8">
+            {isPending || isRetry ? (
+              <ProposalReviewActions
+                isPending={isPending}
+                isRetry={isRetry}
+                canReject={proposalCanBeRejected(proposal)}
+                applyError={proposal.applyError}
+                isNodeProposal={proposal.pluginId === "node"}
+                proposalDaoAccountId={proposalDaoAccountId}
+                daoIsVerified={daoIsVerified || (isRetry && publicationRecorded)}
+                rejectionReason={rejectionReason}
+                isReviewing={reviewMutation.isPending}
+                onDaoVerified={handleDaoVerified}
+                onRejectionReasonChange={(event) => setRejectionReason(event.target.value)}
+                onApprove={() => reviewMutation.mutate({ proposal, action: "approve" })}
+                onReject={() =>
+                  reviewMutation.mutate({
+                    proposal,
+                    action: "reject",
+                    reason: rejectionReason.trim(),
+                  })
+                }
+              />
+            ) : (
+              <ProposalOutcome proposal={proposal} />
+            )}
+            {proposal.pluginId === "node" && (
+              <ApplicationProgressList
+                proposal={proposal}
+                daoAccountId={proposalDaoAccountId}
+                showResources
+              />
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-      <ProposalReviewHistory pluginId={pluginId} query={reviewHistoryQuery} />
+      <ProposalTechnicalDetails proposal={proposal} />
+
+      <ProposalReviewHistory query={reviewHistoryQuery} />
     </>
   );
 }

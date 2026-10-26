@@ -1,0 +1,139 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildCommunityProgressRows,
+  deriveNeedsAction,
+  type NeedsActionProposal,
+  STAKING_ITEMS_LIMIT,
+  stakingStates,
+} from "./-admin-progress";
+
+function summary(id: string, parentId: string | null, validatorCount = 0, tenantId?: string) {
+  return { node: { id, name: id, parentId, tenantId: tenantId ?? null }, validatorCount };
+}
+
+function tenant(id: string, orgId: string | null, status = "active") {
+  return { id, name: id, orgId, status, createdAt: "2026-01-01T00:00:00.000Z" };
+}
+
+describe("stakingStates", () => {
+  it("separates own, below, inherited and missing validators", () => {
+    const states = stakingStates([
+      summary("usa", null, 1),
+      summary("chicago", "usa"),
+      summary("pakistan", null),
+      summary("lahore", "pakistan", 2),
+      summary("berlin", null),
+    ]);
+    expect(Object.fromEntries(states)).toEqual({
+      usa: "own",
+      chicago: "inherited",
+      pakistan: "below",
+      lahore: "own",
+      berlin: "none",
+    });
+  });
+
+  it("survives a parent cycle", () => {
+    const states = stakingStates([summary("a", "b"), summary("b", "a")]);
+    expect(states.get("a")).toBe("none");
+  });
+});
+
+describe("buildCommunityProgressRows", () => {
+  it("joins tenants, monthly joins and event counts per community node", () => {
+    const rows = buildCommunityProgressRows(
+      [tenant("t-chicago", "org-chicago"), tenant("t-gone", "org-gone", "pending_deletion")],
+      [
+        summary("usa", null, 1),
+        summary("chicago", "usa", 0, "t-chicago"),
+        summary("gone", null, 0, "t-gone"),
+      ],
+      { organizations: [{ organizationId: "org-chicago", redeemed: 6, newMembers: 4 }] },
+      [{ nodeId: "chicago", upcoming: 2, past: 3, lastActivityAt: "2026-10-20T00:00:00.000Z" }],
+    );
+    expect(rows).toEqual([
+      {
+        node: { id: "chicago", name: "chicago", parentId: "usa", tenantId: "t-chicago" },
+        tenant: tenant("t-chicago", "org-chicago"),
+        joins: { redeemed: 6, newMembers: 4 },
+        events: { upcoming: 2, past: 3 },
+        lastActivityAt: "2026-10-20T00:00:00.000Z",
+        staking: "inherited",
+      },
+    ]);
+  });
+
+  it("shows zero joins and events for a community with no activity instead of dropping it", () => {
+    const [row] = buildCommunityProgressRows(
+      [tenant("t-berlin", null)],
+      [summary("berlin", null, 0, "t-berlin")],
+      undefined,
+      [],
+    );
+    expect(row).toMatchObject({
+      joins: { redeemed: 0, newMembers: 0 },
+      events: { upcoming: 0, past: 0 },
+      staking: "none",
+    });
+  });
+});
+
+describe("deriveNeedsAction", () => {
+  const setup: NeedsActionProposal = {
+    id: "p1",
+    pluginId: "node",
+    entityId: "karachi",
+    reviewStatus: "approved",
+    title: "Karachi",
+    setupNeedsAttention: true,
+  };
+
+  it("returns nothing when every source is clear", () => {
+    expect(
+      deriveNeedsAction({
+        pendingReviewCount: 0,
+        proposals: [],
+        relayerNeedsFunding: false,
+        organizationRequestCount: 0,
+        communities: [{ node: { id: "a", name: "A" }, staking: "own" }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("lists failed setups, relayer funding, reviews, organization requests and unstaked communities", () => {
+    expect(
+      deriveNeedsAction({
+        pendingReviewCount: 2,
+        proposals: [setup, { ...setup, id: "p2", reviewStatus: "pending" }],
+        relayerNeedsFunding: true,
+        organizationRequestCount: 1,
+        communities: [
+          { node: { id: "berlin", name: "Berlin" }, staking: "none" },
+          { node: { id: "austin", name: "Austin" }, staking: "inherited" },
+        ],
+      }),
+    ).toEqual([
+      { kind: "setup", proposal: setup },
+      { kind: "relayer" },
+      { kind: "review", count: 2 },
+      { kind: "organizations", count: 1 },
+      { kind: "staking", nodeId: "berlin", name: "Berlin" },
+    ]);
+  });
+
+  it("folds many unstaked communities into one item", () => {
+    const communities = Array.from({ length: STAKING_ITEMS_LIMIT + 1 }, (_, index) => ({
+      node: { id: `n${index}`, name: `N${index}` },
+      staking: "none" as const,
+    }));
+    expect(
+      deriveNeedsAction({
+        pendingReviewCount: 0,
+        proposals: [],
+        relayerNeedsFunding: false,
+        organizationRequestCount: 0,
+        communities,
+      }),
+    ).toEqual([{ kind: "stakingMany", count: STAKING_ITEMS_LIMIT + 1 }]);
+  });
+});

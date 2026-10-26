@@ -1,15 +1,23 @@
 import {
+  ArrowSquareOutIcon,
   CalendarDotsIcon,
   CaretRightIcon,
+  CheckCircleIcon,
+  MapPinIcon,
   PencilIcon,
   TreeStructureIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
-import { getActiveRuntime, useApiClient } from "@/app";
+import type { ReactElement } from "react";
+import { getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import {
+  Badge,
   Button,
+  Card,
+  CardContent,
   EmptyState,
   InfoRow,
   NodeValidatorTable,
@@ -20,42 +28,71 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components";
-import { ProfileEditor } from "@/components/discovery/profile-editor";
+import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import {
   Item,
   ItemActions,
   ItemContent,
   ItemDescription,
   ItemGroup,
+  ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
 import type { AppMessageId } from "@/i18n/catalogs";
-import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import {
+  resolveAppLocale,
+  translateAppMessage,
+  useAppLocale,
+  useAppTranslation,
+} from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 import { savedEndowmentOf } from "@/lib/node-staking-proposals";
 import { pageTitle } from "@/lib/page-title";
-import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
-import { BackLink, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
+import { adminNodeDetailQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
+import {
+  onboardingJoinsQueryOptions,
+  onboardingRedemptionsQueryOptions,
+  recentUtcMonths,
+} from "@/lib/queries/onboarding-joins";
+import {
+  formatNearBalance,
+  resolveTeamAccountId,
+  stakePoolAccountQueryOptions,
+  toNetwork,
+} from "@/lib/queries/stake-pool";
+import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
+import { isPendingProposal, readRecentDaoProposals } from "@/lib/sputnik-proposals";
+import {
+  BackLink,
+  Disclosure,
+  LoadError,
+  RawJsonDisclosure,
+  StatFigure,
+  StatGrid,
+} from "../-admin-ui";
+import { CommunityJoinChart } from "../-community-join-chart";
+import { CommunityEditor } from "./-community-editor";
 import { NodeBindings } from "./-node-bindings";
-import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailTab } from "./-node-management";
+import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailSearch } from "./-node-management";
 import { NodeStakingSequence } from "./-node-staking-sequence";
 import { NodeValidators } from "./-node-validators";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type NodeSummary = Awaited<ReturnType<ApiClient["getNodeSummary"]>>;
+type Node = NodeSummary["node"];
+type Tenant = NonNullable<Awaited<ReturnType<ApiClient["resolveTenantById"]>>>;
 
 const TAB_LABELS: Record<NodeDetailTab, AppMessageId> = {
   overview: "common.overview",
   validators: "common.validators",
-  sequence: "admin.sequence.tab",
+  management: "admin.sequence.tab",
   domains: "admin.domain.title",
-  profile: "community.profile",
 };
 
+const TREND_MONTHS = 6;
+
 export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
-  validateSearch: (search: Record<string, unknown>): { tab?: NodeDetailTab } => ({
-    tab: parseNodeDetailTab(search.tab),
-  }),
+  validateSearch: parseNodeDetailSearch,
   head: ({ match }) => ({
     meta: [
       {
@@ -76,12 +113,19 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
 function AdminNodeDetail() {
   const translate = useAppTranslation();
   const { nodeId } = Route.useParams();
-  const { tab } = Route.useSearch();
+  const { tab, edit } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
   const nodeQuery = useQuery(adminNodeDetailQueryOptions(apiClient, nodeId));
+  const tenantId = nodeQuery.data?.summary.node.tenantId ?? "";
+  const tenantQuery = useQuery({
+    ...tenantByIdQueryOptions(apiClient, tenantId),
+    enabled: !!tenantId,
+  });
   const activeTab = tab ?? "overview";
+  const setEditing = (open: boolean) =>
+    void navigate({ search: (previous) => ({ ...previous, edit: open ? true : undefined }) });
 
   if (nodeQuery.isLoading) {
     return (
@@ -100,9 +144,14 @@ function AdminNodeDetail() {
         title={translate("admin.community.loadError")}
         description={translate("admin.community.loadErrorHint")}
         action={
-          <Button variant="outline" nativeButton={false} render={<Link to="/admin/nodes" />}>
-            {translate("admin.community.backNodes")}
-          </Button>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button variant="outline" onClick={() => void nodeQuery.refetch()}>
+              {translate("common.retry")}
+            </Button>
+            <Button variant="ghost" nativeButton={false} render={<Link to="/admin/nodes" />}>
+              {translate("admin.community.back")}
+            </Button>
+          </div>
         }
       />
     );
@@ -110,13 +159,13 @@ function AdminNodeDetail() {
 
   const { summary, sourceNode, parent } = nodeQuery.data;
   const { node } = summary;
+  const tenant = tenantQuery.data ?? null;
 
   return (
     <>
       <PageHeader
         label={<BackLink to="/admin/nodes">{translate("common.communities")}</BackLink>}
         title={node.name}
-        subtitle={node.slug}
         description={
           parent ? (
             <Trans
@@ -154,43 +203,31 @@ function AdminNodeDetail() {
               <CalendarDotsIcon />
               {translate("events.title")}
             </Button>
-            <Button
-              variant="outline"
-              nativeButton={false}
-              data-testid="admin-node-edit"
-              render={<Link to="/admin/nodes/$nodeId/edit" params={{ nodeId: node.id }} />}
-            >
+            <Button data-testid="admin-node-edit" onClick={() => setEditing(true)}>
               <PencilIcon />
-              {translate("org.editDetails")}
+              {translate("common.edit")}
             </Button>
           </>
         }
         headerTestId="admin-node.heading"
       />
 
-      <StatGrid>
-        <StatFigure
-          label={translate("admin.community.directChildren")}
-          value={summary.childrenCount}
-        />
-        <StatFigure
-          label={translate("admin.community.descendants")}
-          value={summary.subtreeNodeCount}
-        />
-        <StatFigure label={translate("common.validators")} value={summary.validators.length} />
-        <StatFigure
-          label={translate("admin.community.descendantValidators")}
-          value={summary.subtreeValidatorCount}
-        />
-      </StatGrid>
+      <CommunityProfileSummary node={node} onEdit={() => setEditing(true)} />
+
+      <CommunityStats summary={summary} tenant={tenant} tenantQuery={tenantQuery} />
 
       <div className="flex flex-col gap-6">
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <Tabs
             value={activeTab}
             onValueChange={(value) => {
-              const next = parseNodeDetailTab(value);
-              void navigate({ search: { tab: next === "overview" ? undefined : next } });
+              const next = NODE_DETAIL_TABS.find((entry) => entry === value) ?? "overview";
+              void navigate({
+                search: (previous) => ({
+                  ...previous,
+                  tab: next === "overview" ? undefined : next,
+                }),
+              });
             }}
           >
             <TabsList variant="line">
@@ -204,12 +241,12 @@ function AdminNodeDetail() {
         </div>
 
         {activeTab === "overview" && (
-          <NodeOverview summary={summary} sourceName={sourceNode?.name} />
+          <NodeOverview summary={summary} tenant={tenant} sourceName={sourceNode?.name} />
         )}
         {activeTab === "validators" && (
           <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
         )}
-        {activeTab === "sequence" && (
+        {activeTab === "management" && (
           <NodeStakingSequence
             key={`${node.id}:${savedEndowmentOf(node.metadata)}`}
             nodeId={node.id}
@@ -228,21 +265,231 @@ function AdminNodeDetail() {
           ) : (
             <p className="text-sm text-muted-foreground">{translate("admin.community.noTenant")}</p>
           ))}
-        {activeTab === "profile" && <ProfileEditor nodeId={node.id} />}
       </div>
+
+      <CommunityEditor node={node} open={!!edit} onOpenChange={setEditing} />
     </>
   );
 }
 
-function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceName?: string }) {
+function CommunityProfileSummary({ node, onEdit }: { node: Node; onEdit: () => void }) {
+  const translate = useAppTranslation();
+  const apiClient = useApiClient();
+  const profileQuery = useQuery({
+    ...discoveryProfileQueryOptions(apiClient, node.id),
+    enabled: !!node.tenantId,
+  });
+  const profile = profileQuery.data;
+  const place = [profile?.location, profile?.region].filter(Boolean).join(", ");
+
+  return (
+    <Card data-testid="admin-community-profile">
+      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+        <div className="flex min-w-0 flex-col gap-3">
+          {!node.tenantId ? (
+            <p className="text-sm text-muted-foreground">
+              {translate("admin.community.noProfile")}
+            </p>
+          ) : profileQuery.isPending ? (
+            <div className="flex flex-col gap-2" aria-busy="true">
+              <Skeleton className="h-5 w-96 max-w-full" />
+              <Skeleton className="h-4 w-48" />
+            </div>
+          ) : profileQuery.isError ? (
+            <LoadError
+              message={translate("community.loadProfileError")}
+              onRetry={() => void profileQuery.refetch()}
+              testId="admin-community-profile-error"
+            />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={profile?.published ? "success" : "outline"}>
+                  {translate(
+                    profile?.published
+                      ? "admin.community.profilePublished"
+                      : "admin.community.profileHidden",
+                  )}
+                </Badge>
+                {place && (
+                  <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                    <MapPinIcon className="size-4" />
+                    {place}
+                  </span>
+                )}
+              </div>
+              <p
+                className={
+                  profile?.summary
+                    ? "max-w-2xl text-base whitespace-pre-wrap text-foreground"
+                    : "text-sm text-muted-foreground"
+                }
+                data-testid="admin-community-profile-summary"
+              >
+                {profile?.summary || translate("admin.community.noSummary")}
+              </p>
+              {!!profile?.channels.length && (
+                <ul className="flex flex-wrap gap-x-4 gap-y-1">
+                  {profile.channels.map((channel) => (
+                    <li key={`${channel.label}-${channel.url}`}>
+                      <a
+                        href={channel.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-sm text-foreground hover:underline"
+                      >
+                        {channel.label}
+                        <ArrowSquareOutIcon className="size-3.5 text-muted-foreground" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={onEdit}
+          data-testid="admin-community-profile-edit"
+        >
+          <PencilIcon />
+          {translate("admin.community.editProfile")}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CommunityStats({
+  summary,
+  tenant,
+  tenantQuery,
+}: {
+  summary: NodeSummary;
+  tenant: Tenant | null;
+  tenantQuery: { isError: boolean; isLoading: boolean; refetch: () => unknown };
+}) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
+  const apiClient = useApiClient();
+  const authClient = useAuthClient();
+  const { node } = summary;
+  const orgId = tenant?.orgId ?? "";
+  const eventsQuery = useQuery(communityEventStatsQueryOptions(apiClient, node.id));
+  const membersQuery = useQuery({
+    queryKey: ["admin", "community-members", orgId],
+    queryFn: () => apiClient.auth.listMembers({ organizationId: orgId, limit: 1 }),
+    enabled: !!orgId,
+  });
+  const joinsQuery = useQuery({
+    ...onboardingRedemptionsQueryOptions(apiClient, orgId),
+    enabled: !!orgId,
+  });
+  const team = resolveTeamAccountId({
+    tenantAccountId: tenant?.accountId,
+    tenantOwnerKind: tenant?.ownerKind,
+  });
+  const pool =
+    summary.stakingValidators.validators.find((validator) => validator.isDefault) ??
+    summary.stakingValidators.validators[0];
+  const stakeQuery = useQuery({
+    ...stakePoolAccountQueryOptions({
+      poolAccountId: pool?.accountId ?? "",
+      stakerAccountId: team,
+      authClient,
+      network: toNetwork(pool?.network) ?? "mainnet",
+    }),
+    enabled: !!pool && !!team,
+  });
+  const events = eventsQuery.data?.find((row) => row.nodeId === node.id);
+  const noSite = !node.tenantId;
+  const retryTenant = tenantQuery.isError ? () => void tenantQuery.refetch() : undefined;
+
+  return (
+    <StatGrid>
+      <StatFigure
+        label={translate("admin.community.upcomingEvents")}
+        value={eventsQuery.data ? (events?.upcoming ?? 0) : "—"}
+        hint={
+          eventsQuery.data
+            ? translate("admin.community.pastEvents", { count: events?.past ?? 0 })
+            : undefined
+        }
+        onRetry={eventsQuery.isError ? () => void eventsQuery.refetch() : undefined}
+        testId="admin-node-stat-events"
+      />
+      <StatFigure
+        label={translate("org.members")}
+        value={membersQuery.data?.total ?? "—"}
+        hint={
+          noSite
+            ? translate("admin.community.noSite")
+            : joinsQuery.data
+              ? translate("admin.community.newThisMonth", {
+                  count: joinsQuery.data.thisMonth.newMembers,
+                })
+              : undefined
+        }
+        onRetry={
+          retryTenant ?? (membersQuery.isError ? () => void membersQuery.refetch() : undefined)
+        }
+        testId="admin-node-stat-members"
+      />
+      <StatFigure
+        label={translate("admin.redeemedThisMonthShort")}
+        value={joinsQuery.data?.thisMonth.redeemed ?? "—"}
+        hint={
+          noSite
+            ? translate("admin.community.noSite")
+            : joinsQuery.data
+              ? translate("admin.community.lastMonthCount", {
+                  count: joinsQuery.data.lastMonth.redeemed,
+                })
+              : undefined
+        }
+        onRetry={retryTenant ?? (joinsQuery.isError ? () => void joinsQuery.refetch() : undefined)}
+        testId="admin-node-stat-redeemed"
+      />
+      <StatFigure
+        label={translate("admin.community.teamStake")}
+        value={stakeQuery.data ? formatNearBalance(stakeQuery.data.stakedBalance, locale) : "—"}
+        hint={
+          !pool
+            ? translate("admin.progress.stakingNone")
+            : !team
+              ? translate("admin.community.noTeamDao")
+              : pool.accountId
+        }
+        tone={!pool ? "attention" : "default"}
+        onRetry={stakeQuery.isError ? () => void stakeQuery.refetch() : undefined}
+        testId="admin-node-stat-stake"
+      />
+    </StatGrid>
+  );
+}
+
+function NodeOverview({
+  summary,
+  tenant,
+  sourceName,
+}: {
+  summary: NodeSummary;
+  tenant: Tenant | null;
+  sourceName?: string;
+}) {
   const translate = useAppTranslation();
   const { node } = summary;
   const resolvedElsewhere = summary.stakingValidators.sourceNodeId !== node.id;
-  const description =
-    typeof node.metadata.description === "string" ? node.metadata.description : null;
 
   return (
     <div className="flex flex-col gap-12">
+      <PendingItems summary={summary} tenant={tenant} />
+
+      {tenant?.orgId && <CommunityTrend tenant={tenant} />}
+
       <section className="flex flex-col gap-6">
         <SectionHeader
           title={translate("common.staking")}
@@ -285,8 +532,7 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
                     <span className="min-w-0 truncate">{child.name}</span>
                   </ItemTitle>
                   <ItemDescription>
-                    {nodeKindLabel(child.kind, translate("label.node"), translate)} ·{" "}
-                    <span className="font-mono break-all">{child.slug}</span>
+                    {nodeKindLabel(child.kind, translate("label.node"), translate)}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -298,24 +544,143 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
         )}
       </section>
 
-      <section className="flex flex-col gap-6">
-        <SectionHeader title={translate("common.details")} />
-        {description && <p className="max-w-2xl text-base text-foreground">{description}</p>}
-        <div className="flex flex-col">
-          <InfoRow label={translate("admin.community.id")} value={node.id} mono />
-          <InfoRow
-            label={translate("admin.community.siteId")}
-            value={node.tenantId ?? translate("common.none")}
-            mono={!!node.tenantId}
-          />
-          <InfoRow
-            label={translate("admin.community.parentId")}
-            value={node.parentId ?? translate("common.none")}
-            mono={!!node.parentId}
-          />
+      <Disclosure
+        label={translate("admin.proposal.showTechnical")}
+        openLabel={translate("admin.proposal.hideTechnical")}
+        testId="admin-node-technical"
+      >
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col">
+            <InfoRow label={translate("common.slug")} value={node.slug} mono />
+            <InfoRow label={translate("admin.community.id")} value={node.id} mono />
+            <InfoRow
+              label={translate("admin.community.siteId")}
+              value={node.tenantId ?? translate("common.none")}
+              mono={!!node.tenantId}
+            />
+            <InfoRow
+              label={translate("admin.community.parentId")}
+              value={node.parentId ?? translate("common.none")}
+              mono={!!node.parentId}
+            />
+          </div>
+          <RawJsonDisclosure value={node.metadata} label={translate("admin.community.metadata")} />
         </div>
-        <RawJsonDisclosure value={node.metadata} label={translate("admin.community.metadata")} />
-      </section>
+      </Disclosure>
     </div>
+  );
+}
+
+function CommunityTrend({ tenant }: { tenant: Tenant }) {
+  const translate = useAppTranslation();
+  const apiClient = useApiClient();
+  const months = recentUtcMonths(TREND_MONTHS);
+  const monthQueries = useQueries({
+    queries: months.map((month) => onboardingJoinsQueryOptions(apiClient, month)),
+  });
+  return (
+    <section className="flex flex-col gap-6">
+      <SectionHeader title={translate("admin.community.joinsTitle")} />
+      {monthQueries.some((query) => query.isError) ? (
+        <LoadError
+          message={translate("admin.redemptions.failed")}
+          onRetry={() => {
+            for (const query of monthQueries) if (query.isError) void query.refetch();
+          }}
+        />
+      ) : monthQueries.every((query) => query.isSuccess) ? (
+        <CommunityJoinChart
+          tenants={[tenant]}
+          months={months.map((month, index) => ({ month, joins: monthQueries[index]?.data }))}
+        />
+      ) : (
+        <Skeleton className="h-56 w-full" />
+      )}
+    </section>
+  );
+}
+
+function PendingItems({ summary, tenant }: { summary: NodeSummary; tenant: Tenant | null }) {
+  const translate = useAppTranslation();
+  const { node } = summary;
+  const team = resolveTeamAccountId({
+    tenantAccountId: tenant?.accountId,
+    tenantOwnerKind: tenant?.ownerKind,
+  });
+  const proposalsQuery = useQuery({
+    queryKey: ["admin", "community-dao-proposals", team],
+    queryFn: () => readRecentDaoProposals(team, 25),
+    enabled: !!team,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const openProposals = proposalsQuery.data?.filter(isPendingProposal) ?? [];
+  const items: { key: string; title: string; description: string; link: ReactElement }[] = [];
+  if (summary.stakingValidators.validators.length === 0) {
+    items.push({
+      key: "validator",
+      title: translate("admin.action.stakingNamed", { name: node.name }),
+      description: translate("admin.action.stakingHint"),
+      link: (
+        <Link
+          to="/admin/nodes/$nodeId"
+          params={{ nodeId: node.id }}
+          search={{ tab: "validators" }}
+        />
+      ),
+    });
+  }
+  if (openProposals.length > 0) {
+    items.push({
+      key: "dao",
+      title: translate("admin.community.openDaoProposals", { count: openProposals.length }),
+      description: translate("admin.community.openDaoProposalsHint", { account: team }),
+      link: (
+        <Link
+          to="/admin/nodes/$nodeId"
+          params={{ nodeId: node.id }}
+          search={{ tab: "management" }}
+        />
+      ),
+    });
+  }
+
+  return (
+    <section className="flex flex-col gap-6">
+      <SectionHeader title={translate("admin.action.title")} sectionTestId="admin-node-pending" />
+      {proposalsQuery.isError && (
+        <LoadError
+          message={translate("admin.community.daoProposalsFailed")}
+          onRetry={() => void proposalsQuery.refetch()}
+        />
+      )}
+      {proposalsQuery.isLoading ? (
+        <Skeleton className="h-16 w-full" />
+      ) : items.length === 0 ? (
+        proposalsQuery.isError ? null : (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <CheckCircleIcon className="size-4" />
+            {translate("admin.action.empty")}
+          </p>
+        )
+      ) : (
+        <ItemGroup>
+          {items.map((item) => (
+            <Item key={item.key} variant="outline" size="sm" render={item.link}>
+              <ItemMedia variant="icon">
+                <WarningCircleIcon className="text-brand-strong" />
+              </ItemMedia>
+              <ItemContent className="min-w-0">
+                <ItemTitle>{item.title}</ItemTitle>
+                <ItemDescription>{item.description}</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <CaretRightIcon className="size-4 text-muted-foreground" />
+              </ItemActions>
+            </Item>
+          ))}
+        </ItemGroup>
+      )}
+    </section>
   );
 }

@@ -161,6 +161,14 @@ export function adminNodeDetailQueryOptions(apiClient: ApiClient, nodeId: string
   });
 }
 
+export function communityEventStatsQueryOptions(apiClient: ApiClient, nodeId?: string) {
+  return queryOptions({
+    queryKey: [...nodeQueryKeys.all, "event-stats", nodeId ?? "all"] as const,
+    queryFn: () => apiClient.getDiscoveryEventStats(nodeId ? { nodeId } : {}),
+    staleTime: NODE_STALE_TIME,
+  });
+}
+
 export function invalidateNodeQueries(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: nodeQueryKeys.all });
 }

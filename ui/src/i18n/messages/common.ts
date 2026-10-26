@@ -250,7 +250,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.address": ["Address", "Dirección", "Adresse", "地址"],
   "common.admin": ["Admin", "Administración", "Administration", "管理"],
   "common.amount": ["Amount", "Cantidad", "Montant", "金额"],
-  "common.application": ["Application", "Solicitud", "Demande", "申请"],
   "common.approve": ["Approve", "Aprobar", "Approuver", "批准"],
   "common.available": ["Available", "Disponible", "Disponible", "可用"],
   "common.backHome": ["Back home", "Volver al inicio", "Retour à l'accueil", "返回首页"],
@@ -444,7 +443,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.value": ["Value", "Valor", "Valeur", "值"],
   "common.verified": ["Verified", "Verificado", "Vérifié", "已验证"],
   "common.view": ["View", "Ver", "Voir", "查看"],
-  "common.wallet": ["Wallet", "Cartera", "Portefeuille", "钱包"],
   "common.working": ["Working…", "Procesando…", "Traitement…", "正在处理…"],
   "curators.added": ["Curator added", "Curador añadido", "Modérateur ajouté", "已添加管理员"],
   "curators.description": [
@@ -1531,7 +1529,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Impossible de vérifier l’appartenance à la DAO. Réessayez.",
     "无法验证 DAO 成员身份。请重试。",
   ],
-  "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
   "workspace.adminOnly": [
     "{area} is only for platform admins.",
     "{area} es solo para administradores de la plataforma.",
