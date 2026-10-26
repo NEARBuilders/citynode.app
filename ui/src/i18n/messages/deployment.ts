@@ -204,7 +204,6 @@ export const deploymentMessages = createMessageCatalogs(["en", "es", "fr", "zh"]
     "Le service de version est inaccessible.",
     "无法访问版本服务。",
   ],
-  "version.fingerprint": ["Fingerprint", "Huella", "Empreinte", "指纹"],
   "version.slots": ["Slots", "Componentes", "Composants", "组件槽位"],
   "version.clean": ["Up to date", "Actualizada", "À jour", "已是最新"],
   "version.swapped": ["Updated", "Actualizada", "Mise à jour", "已更新"],
@@ -220,4 +219,5 @@ export const deploymentMessages = createMessageCatalogs(["en", "es", "fr", "zh"]
     "Référence de version inaccessible",
     "无法访问版本引用",
   ],
+  "version.fingerprint": ["Fingerprint", "Huella", "Empreinte", "指纹"],
 });

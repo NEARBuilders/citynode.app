@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCommunityJoinRows,
+  buildJoinTrend,
   COMMUNITY_JOINS_LIMIT,
   type JoinsTenant,
   visibleCommunityJoinRows,
@@ -123,5 +124,39 @@ describe("buildCommunityJoinRows", () => {
       ),
     );
     expect(visibleCommunityJoinRows(rows, true)).toHaveLength(COMMUNITY_JOINS_LIMIT + 2);
+  });
+});
+
+describe("buildJoinTrend", () => {
+  const tenants = ["a", "b", "c", "d", "e", "f"].map((id) => tenant({ id }));
+  const months = [
+    { month: "2026-09", joins: joins({ "org-a": [5, 1], "org-b": [1, 1], "org-f": [2, 0] }) },
+    {
+      month: "2026-10",
+      joins: joins({ "org-a": [3, 3], "org-c": 4, "org-d": 2, "org-e": 1, "org-f": 1 }),
+    },
+  ];
+
+  it("keeps the busiest communities as series and folds the rest into other", () => {
+    const trend = buildJoinTrend(tenants, months, "redeemed");
+    expect(trend.series.map((series) => series.key)).toEqual(["a", "c", "f", "d", "other"]);
+    expect(trend.months).toEqual([
+      { month: "2026-09", total: 8, values: { a: 5, f: 2, other: 1 } },
+      { month: "2026-10", total: 11, values: { a: 3, c: 4, d: 2, f: 1, other: 1 } },
+    ]);
+  });
+
+  it("matches the table's counts for the same month", () => {
+    const trend = buildJoinTrend(tenants, months, "newMembers");
+    const table = buildCommunityJoinRows(tenants, months[1]?.joins, undefined);
+    const tableTotal = table.reduce((sum, row) => sum + row.thisMonth.newMembers, 0);
+    expect(trend.months[1]?.total).toBe(tableTotal);
+  });
+
+  it("has no series when nothing happened", () => {
+    expect(buildJoinTrend(tenants, [{ month: "2026-10", joins: undefined }], "redeemed")).toEqual({
+      series: [],
+      months: [{ month: "2026-10", total: 0, values: {} }],
+    });
   });
 });

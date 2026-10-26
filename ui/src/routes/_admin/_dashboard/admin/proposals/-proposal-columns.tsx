@@ -30,8 +30,11 @@ export function ProposalLink({ proposal, className }: { proposal: Proposal; clas
 export function ProposalStatusCell({ proposal, t }: { proposal: Proposal; t: AppTranslator }) {
   const setup = proposalSetupStatus(proposal, t);
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Badge variant={proposalReviewStatusVariant(proposal.reviewStatus)}>
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <Badge
+        variant={proposalReviewStatusVariant(proposal.reviewStatus)}
+        data-testid="admin-proposal-status"
+      >
         {humanize(proposal.reviewStatus, t)}
       </Badge>
       {setup && (
@@ -39,7 +42,7 @@ export function ProposalStatusCell({ proposal, t }: { proposal: Proposal; t: App
           {setup.label}
         </Badge>
       )}
-    </div>
+    </span>
   );
 }
 

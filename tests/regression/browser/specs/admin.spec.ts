@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
 import { injectAdminCookies, loadAdminSeedData } from "../helpers/seeded";
 
@@ -31,11 +32,16 @@ test.describe("admin", () => {
     await page.waitForLoadState("networkidle");
     await waitForApp(page);
 
-    await expect(page.getByTestId("admin.stat.role.label")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByTestId("admin.stat.platform-account.label")).toBeVisible({
-      timeout: 5000,
-    });
+    await expect(page.getByTestId("admin.stat.pending-proposals")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("admin.stat.tenants")).toHaveCount(0);
+    await expect(page.getByTestId("admin.section.needs-action")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("admin.section.progress")).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId("admin.section.manage")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("admin.section.manage")).toBeInViewport();
+
+    await expect(page.getByTestId("admin-version-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("admin.stat.role.label")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("admin.stat.platform-account.label")).toBeVisible();
     await expect(page.getByTestId("admin.heading.nodes")).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId("admin.heading.tenants")).toBeVisible({ timeout: 5000 });
 
@@ -117,5 +123,36 @@ test.describe("admin", () => {
     await expect(page.getByTestId("admin-relayer-fund")).toBeVisible();
     await page.getByLabel("Amount").fill("bad");
     await expect(page.getByTestId("admin-relayer-fund")).toBeDisabled();
+  });
+
+  test("community page keeps old tab and edit links working", async ({ page }) => {
+    const unique = `admin-node-${process.pid}-${Date.now().toString(36)}`;
+    const tenant = await seedTenant({
+      subdomain: unique,
+      name: unique,
+      accountId: `${unique}.near`,
+    });
+    const node = await seedNode({
+      tenantId: tenant.id,
+      slug: unique,
+      name: `Admin City ${unique}`,
+    });
+
+    await page.goto(`/admin/nodes/${node.id}?tab=sequence`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByTestId("admin-node-tab-management")).toHaveAttribute(
+      "aria-selected",
+      "true",
+      { timeout: 15000 },
+    );
+    await expect(page.getByTestId("admin-node.stat-events")).toBeVisible();
+    await expect(page.getByTestId("admin-node-profile")).toBeVisible();
+
+    await page.goto(`/admin/nodes/${node.id}/edit`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByTestId("admin-node-editor")).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(new RegExp(`/admin/nodes/${node.id}\\?edit=true`));
+
+    expectNoHydrationFailure(pageErrors);
   });
 });
