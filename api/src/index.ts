@@ -23,6 +23,7 @@ import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import { GeocodeLive } from "./services/discovery-geocode";
+import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import {
@@ -58,6 +59,7 @@ class ApiServices extends Context.Service<
     validators: ValidatorsService;
     discovery: DiscoveryService;
     storage: StorageService;
+    nearbuilders: ReturnType<typeof createNearbuilders>;
   }
 >()("api/ApiServices") {}
 
@@ -312,6 +314,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .string()
       .default("")
       .describe("Repository URL included in the Nominatim User-Agent"),
+    nearbuildersUrl: z
+      .string()
+      .default("https://nearbuilders.org")
+      .describe("NEAR Builders base URL for community builders and projects"),
   }),
 
   secrets: z.object({
@@ -357,6 +363,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           validators: Context.get(services, ValidatorsTag),
           discovery: Context.get(services, DiscoveryTag),
           storage: Context.get(services, StorageTag),
+          nearbuilders: createNearbuilders(config.variables.nearbuildersUrl),
         }),
       );
     }),
@@ -620,6 +627,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
       getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input }) {
         const services = yield* ApiServices;
         return yield* services.discovery.get(input.nodeId);
+      }),
+      getCommunityBuilders: builder.getCommunityBuilders.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const path = yield* communityPath(input.nodeId, (id) => services.nodes.getById(id));
+        if (!path) return null;
+        return yield* Effect.promise(() => services.nearbuilders.forPath(path));
       }),
       getDiscoveryProfile: builder.getDiscoveryProfile.effect(function* ({ input, context }) {
         const services = yield* ApiServices;

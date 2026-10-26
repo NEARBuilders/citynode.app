@@ -24,6 +24,7 @@ import {
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
+import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
 function discoveryProfileQueryOptions(apiClient: ApiClient, nodeId: string) {
@@ -300,6 +301,8 @@ function NodePage() {
         sourceNodeId={staking?.sourceNodeId ?? node.id}
         apiClient={apiClient}
       />
+
+      <NearbuildersSection nodeId={node.id} nodeName={node.name} />
     </PageContainer>
   );
 }

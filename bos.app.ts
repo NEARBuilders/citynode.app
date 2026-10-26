@@ -24,6 +24,7 @@ export default App({
       platformAccount: "v1.citynode.near",
       domain: "citynode.app",
       gatewayDomains: "citynode.app,testnet.citynode.app",
+      nearbuildersUrl: "https://nearbuilders.org",
     },
     secrets: ["API_DATABASE_URL", "LUMA_CALENDAR_API_KEYS"],
   },
