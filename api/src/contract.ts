@@ -268,6 +268,25 @@ export const StorageUploadResultSchema = z.object({
     ),
 });
 
+export const MemberDirectoryOptInSchema = z.object({ optedIn: z.boolean() });
+
+export const MemberDirectoryEntrySchema = z.object({
+  userId: z.string(),
+  name: z.string().nullable(),
+  accountId: z.string().nullable(),
+});
+
+export const MemberDirectorySchema = z.object({
+  count: z.number().int().nonnegative(),
+  observedAt: z.iso.datetime(),
+  members: z.array(MemberDirectoryEntrySchema),
+});
+
+export const MemberCountSchema = z.object({
+  count: z.number().int().nonnegative().nullable(),
+  observedAt: z.iso.datetime().nullable(),
+});
+
 export const contract = oc.router({
   ...discoveryContract,
 
@@ -868,6 +887,38 @@ export const contract = oc.router({
     )
     .output(StorageUploadResultSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, CONNECTION_ERROR }),
+  getMemberDirectoryOptIn: oc
+    .route({ method: "GET", path: "/members/directory/opt-in" })
+    .output(MemberDirectoryOptInSchema)
+    .errors({ UNAUTHORIZED }),
+
+  setMemberDirectoryOptIn: oc
+    .route({ method: "POST", path: "/members/directory/opt-in" })
+    .input(MemberDirectoryOptInSchema)
+    .output(MemberDirectoryOptInSchema)
+    .errors({ UNAUTHORIZED }),
+
+  getMemberDirectory: oc
+    .route({
+      method: "GET",
+      path: "/members/directory",
+      summary: "List a community's member count and opted-in names",
+      description:
+        "Members only — returns the upstream member count and the names of current members who opted in, without emails.",
+    })
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .output(MemberDirectorySchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  getNodeMemberCount: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/member-count",
+      summary: "Get a community's last observed member count",
+      description: "Public — the count a member's Overview last observed, with its time. No names.",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(MemberCountSchema),
 });
 
 export type ContractType = typeof contract;

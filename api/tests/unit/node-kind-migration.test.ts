@@ -31,11 +31,13 @@ async function applyMigration(db: PGlite, entry: JournalEntry) {
 describe("node kind generalization migration", () => {
   let db: PGlite;
   let entries: JournalEntry[];
+  let target: number;
 
   beforeAll(async () => {
     db = new PGlite();
     entries = loadJournal();
-    for (const entry of entries.slice(0, -1)) {
+    target = entries.findIndex((entry) => entry.tag === "0004_node-kind-generalization");
+    for (const entry of entries.slice(0, target)) {
       await applyMigration(db, entry);
     }
     await db.exec(`
@@ -52,7 +54,7 @@ describe("node kind generalization migration", () => {
         '{"poolAccountId":"legacy-pool.near"}'::jsonb
       );
     `);
-    await applyMigration(db, entries[entries.length - 1]!);
+    await applyMigration(db, entries[target]!);
   }, 30_000);
 
   it("moves the legacy kind column value into metadata.kind", async () => {
@@ -68,7 +70,7 @@ describe("node kind generalization migration", () => {
   });
 
   it("is idempotent when replayed against the migrated schema", async () => {
-    await applyMigration(db, entries[entries.length - 1]!);
+    await applyMigration(db, entries[target]!);
 
     const result = await db.query<{ metadata: Record<string, unknown> }>(
       "SELECT metadata FROM nodes WHERE slug = 'legacy-city'",

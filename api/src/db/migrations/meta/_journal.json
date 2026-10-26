@@ -36,6 +36,13 @@
       "when": 1790456490495,
       "tag": "0004_node-kind-generalization",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793027110029,
+      "tag": "0005_member-directory",
+      "breakpoints": true
     }
   ]
 }

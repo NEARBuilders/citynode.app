@@ -1739,4 +1739,43 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "common.wallet": ["Wallet", "Cartera", "Portefeuille", "钱包"],
   "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
+  "members.lastUpdated": [
+    "Last updated",
+    "Última actualización",
+    "Dernière mise à jour",
+    "最后更新",
+  ],
+  "members.loadFailed": [
+    "Couldn't load the member list.",
+    "No se pudo cargar la lista de miembros.",
+    "Impossible de charger la liste des membres.",
+    "无法加载成员列表。",
+  ],
+  "members.noneShared": [
+    "No members have shared their name yet.",
+    "Ningún miembro ha compartido su nombre todavía.",
+    "Aucun membre n'a encore partagé son nom.",
+    "还没有成员公开名字。",
+  ],
+  "members.notAvailable": ["Not available", "No disponible", "Non disponible", "暂无数据"],
+  "members.optInFailed": [
+    "Couldn't update your name setting. Try again.",
+    "No se pudo actualizar la configuración de tu nombre. Inténtalo de nuevo.",
+    "Impossible de mettre à jour le réglage de votre nom. Réessayez.",
+    "无法更新名字设置，请重试。",
+  ],
+  "members.showMyName": [
+    "Show my name to my communities",
+    "Mostrar mi nombre a mis comunidades",
+    "Afficher mon nom à mes communautés",
+    "向我的社区显示我的名字",
+  ],
+  "members.showMyNameHint": [
+    "Applies to every community you belong to. Your email is never shown.",
+    "Se aplica a todas las comunidades a las que perteneces. Tu correo nunca se muestra.",
+    "S'applique à toutes les communautés dont vous faites partie. Votre e-mail n'est jamais affiché.",
+    "适用于你加入的所有社区。你的邮箱永远不会显示。",
+  ],
+  "members.title": ["Members", "Miembros", "Membres", "成员"],
+  "members.unnamed": ["Unnamed member", "Miembro sin nombre", "Membre sans nom", "未命名成员"],
 });

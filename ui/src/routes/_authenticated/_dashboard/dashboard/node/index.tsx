@@ -40,6 +40,7 @@ import {
   findPendingProposalForPlan,
 } from "@/lib/sputnik-proposals";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
+import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
@@ -219,6 +220,8 @@ function NodeOverview() {
           </p>
         )}
       </div>
+
+      {orgId && <MemberDirectory organizationId={orgId} nodeId={selectedNode.id} />}
 
       {canManage && (
         <OwnerActions
