@@ -32,7 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { VersionCard } from "@/components/version-card";
 import {
   resolveAppLocale,
   translateAppMessage,
@@ -41,7 +40,6 @@ import {
 } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { presentationLabel } from "@/lib/presentation-label";
-import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
@@ -93,8 +91,6 @@ function AdminOverview() {
   const walletAccount = useNearAccount();
 
   const pendingQuery = useInfiniteQuery(adminProposalListQueryOptions(apiClient, "pending"));
-  const nodesQuery = useQuery(allNodesQueryOptions(apiClient));
-  const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
   const relayerQuery = useRelayerInfoQuery();
   const joinsQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(0)));
 
@@ -116,16 +112,6 @@ function AdminOverview() {
           value={pendingTotal ?? "—"}
           tone={pendingTotal ? "attention" : "default"}
           testId="admin.stat.pending-proposals"
-        />
-        <StatFigure
-          label={translate("common.communities")}
-          value={nodesQuery.data?.length ?? "—"}
-          testId="admin.stat.nodes"
-        />
-        <StatFigure
-          label={translate("nav.sites")}
-          value={tenantsQuery.data?.length ?? "—"}
-          testId="admin.stat.tenants"
         />
         <StatFigure
           label={translate("admin.relayer.balance")}
@@ -151,8 +137,6 @@ function AdminOverview() {
           testId="admin.stat.new-members"
         />
       </StatGrid>
-
-      <VersionCard />
 
       <section className="flex flex-col gap-6">
         <SectionHeader

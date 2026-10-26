@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAppTranslation } from "@/i18n/runtime";
+import { AppInfoMenu, showsAppInfo } from "./app-info-menu";
 import { crumbsFor } from "./breadcrumbs";
 import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
@@ -21,9 +22,10 @@ import { UserNav } from "./user-nav";
 
 interface AppHeaderProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
+  isAdmin?: boolean;
 }
 
-export function AppHeader({ runtimeConfig }: AppHeaderProps) {
+export function AppHeader({ runtimeConfig, isAdmin = false }: AppHeaderProps) {
   const translate = useAppTranslation();
   const { user, organizations } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
@@ -85,6 +87,7 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
           </div>
         )}
         <div className="flex shrink-0 items-center gap-1">
+          {showsAppInfo(isAdmin, pathname) && <AppInfoMenu />}
           <ThemeToggle />
           <UserNav />
         </div>

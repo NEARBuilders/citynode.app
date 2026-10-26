@@ -7,6 +7,7 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Alias de plateforme ajouté",
     "平台别名已添加",
   ],
+  "admin.appInfo": ["App info", "Información de la app", "Infos sur l’app", "应用信息"],
   "admin.allKinds": ["All kinds", "Todos los tipos", "Tous les types", "所有类型"],
   "admin.caughtUp": ["All caught up", "Todo al día", "Tout est à jour", "已处理完毕"],
   "admin.changeNetworkNamed": [

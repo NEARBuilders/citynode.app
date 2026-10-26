@@ -39,6 +39,33 @@ test.describe("admin", () => {
     await expect(page.getByTestId("admin.heading.nodes")).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId("admin.heading.tenants")).toBeVisible({ timeout: 5000 });
 
+    for (const id of ["pending-proposals", "relayer", "redeemed", "new-members"]) {
+      await expect(page.getByTestId(`admin.stat.${id}`)).toBeVisible({ timeout: 5000 });
+    }
+    await expect(page.getByTestId("admin.stat.tenants")).toHaveCount(0);
+    await expect(page.getByTestId("admin.stat.nodes")).toHaveCount(0);
+    await expect(page.getByTestId("admin-version-card")).toHaveCount(0);
+
+    expectNoHydrationFailure(pageErrors);
+  });
+
+  test("app info popover shows the deployed version on admin pages", async ({ page }) => {
+    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle");
+    await waitForApp(page);
+
+    const trigger = page.getByRole("button", { name: "App info" });
+    await expect(trigger).toBeVisible({ timeout: 10000 });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Deployed version" })).toBeVisible({
+      timeout: 5000,
+    });
+
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByTestId("admin-app-info-trigger")).toHaveCount(0);
+
     expectNoHydrationFailure(pageErrors);
   });
 

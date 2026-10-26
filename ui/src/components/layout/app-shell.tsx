@@ -41,7 +41,7 @@ function AppShellFrame({ runtimeConfig, isAdmin = false, pluginNav, children }: 
           className="sticky-offset-header flex min-h-0 flex-1 flex-col overflow-y-auto"
           data-testid="app-shell-main"
         >
-          <AppHeader runtimeConfig={runtimeConfig} />
+          <AppHeader runtimeConfig={runtimeConfig} isAdmin={isAdmin} />
           <div className="flex-1">{children ?? <Outlet />}</div>
         </div>
       </SidebarInset>
