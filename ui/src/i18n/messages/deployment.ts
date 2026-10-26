@@ -219,4 +219,5 @@ export const deploymentMessages = createMessageCatalogs(["en", "es", "fr", "zh"]
     "Référence de version inaccessible",
     "无法访问版本引用",
   ],
+  "version.fingerprint": ["Fingerprint", "Huella", "Empreinte", "指纹"],
 });

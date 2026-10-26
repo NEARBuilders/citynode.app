@@ -1575,7 +1575,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Aucun code utilisé ni nouveau membre sur cette période.",
     "此期间没有兑换码或新成员。",
   ],
-  "appInfo.title": ["App info", "Información de la app", "Infos sur l’app", "应用信息"],
   "admin.proposal.request": ["Request", "Solicitud", "Demande", "申请内容"],
   "admin.proposal.requestedBy": ["Requested by", "Solicitado por", "Demandé par", "申请人"],
   "admin.proposal.parentCommunity": [
@@ -1859,4 +1858,5 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "détails techniques",
     "技术详情",
   ],
+  "admin.runtime": ["This runtime", "Este entorno", "Cet environnement", "此运行环境"],
 });

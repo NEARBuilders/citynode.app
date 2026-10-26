@@ -1731,4 +1731,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Créer une DAO sur Trezu",
     "在 Trezu 上创建 DAO",
   ],
+  "common.wallet": ["Wallet", "Cartera", "Portefeuille", "钱包"],
+  "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
 });

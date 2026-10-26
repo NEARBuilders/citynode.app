@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
+import { cn } from "cn";
 import { Trans } from "everything-dev/ui/i18n";
 import { type ComponentType, type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { getAccount, useApiClient } from "@/app";
@@ -32,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { VersionCard } from "@/components/version-card";
 import type { AppMessageId } from "@/i18n/catalogs";
 import {
   resolveAppLocale,
@@ -40,10 +42,13 @@ import {
   useAppTranslation,
 } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { presentationLabel } from "@/lib/presentation-label";
 import { adminNodeListQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { organizationRequestsQueryOptions } from "@/lib/queries/organizations";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
+import { isSyntheticEmail } from "@/lib/synthetic-email";
+import { useNearAccount } from "@/lib/use-near-account";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
 import {
@@ -231,7 +236,74 @@ function AdminOverview() {
       <CommunityProgress progress={progress} />
 
       <CommunityJoins />
+
+      <VersionCard />
+
+      <RuntimeDetails />
     </>
+  );
+}
+
+function RuntimeDetails() {
+  const translate = useAppTranslation();
+  const { auth, tenant, tenantOrganizationSlug, runtimeConfig } = Route.useRouteContext();
+  const walletAccount = useNearAccount();
+  const user = auth?.user ?? null;
+  return (
+    <section className="flex flex-col gap-6">
+      <SectionHeader title={translate("admin.runtime")} />
+      <div className="flex flex-col">
+        <ContextRow
+          id="platform-account"
+          label={translate("admin.platformAccount")}
+          value={getAccount(runtimeConfig)}
+          mono
+        />
+        {tenant && <ContextRow id="site" label={translate("common.site")} value={tenant.name} />}
+        {tenant && (
+          <ContextRow
+            id="organization"
+            label={translate("common.organization")}
+            value={
+              tenantOrganizationSlug ? (
+                <Link
+                  to="/orgs/$slug"
+                  params={{ slug: tenantOrganizationSlug }}
+                  className="hover:underline"
+                >
+                  {tenantOrganizationSlug}
+                </Link>
+              ) : (
+                "—"
+              )
+            }
+          />
+        )}
+        {tenant?.createdAt && (
+          <ContextRow
+            id="created"
+            label={translate("common.created")}
+            value={<LocalDate value={tenant.createdAt} />}
+          />
+        )}
+        <ContextRow
+          id="name"
+          label={translate("common.name")}
+          value={user?.name || (isSyntheticEmail(user?.email) ? null : user?.email) || "—"}
+        />
+        <ContextRow
+          id="role"
+          label={translate("org.role")}
+          value={user?.role ? presentationLabel(user.role, translate) : "—"}
+        />
+        <ContextRow
+          id="wallet"
+          label={translate("common.wallet")}
+          value={walletAccount ?? translate("wallet.notConnected")}
+          mono={!!walletAccount}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -766,5 +838,34 @@ function ManageTile({
         <CaretRightIcon className="size-4 text-muted-foreground" />
       </ItemActions>
     </Item>
+  );
+}
+
+function ContextRow({
+  id,
+  label,
+  value,
+  mono,
+}: {
+  id: string;
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-1 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+      data-testid={`admin.stat.${id}`}
+    >
+      <span className="text-sm text-muted-foreground" data-testid={`admin.stat.${id}.label`}>
+        {label}
+      </span>
+      <span
+        className={cn("text-sm break-all text-foreground sm:text-right", mono && "font-mono")}
+        data-testid={`admin.stat.${id}.value`}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
