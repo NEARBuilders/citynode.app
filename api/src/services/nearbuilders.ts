@@ -5,6 +5,7 @@ export const NEARBUILDERS_PREVIEW_LIMIT = 6;
 const REQUEST_TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 2 * 60 * 1000;
 const STALE_TTL_MS = 60 * 60 * 1000;
+const FAILURE_BACKOFF_MS = 30 * 1000;
 const MAX_DEPTH = 10;
 
 const builderSchema = z.object({
@@ -113,6 +114,7 @@ export function createNearbuilders(baseUrlInput: string) {
   const baseUrl = normalizeBaseUrl(baseUrlInput);
   const cache = new Map<string, { loadedAt: number; value: CommunityBuilders }>();
   const pending = new Map<string, Promise<CommunityBuilders>>();
+  const failures = new Map<string, number>();
 
   async function request(path: string, params: Record<string, string>) {
     const url = new URL(`/api${path}`, baseUrl);
@@ -183,21 +185,27 @@ export function createNearbuilders(baseUrlInput: string) {
       const now = Date.now();
       const cached = cache.get(path);
       if (cached && now - cached.loadedAt < CACHE_TTL_MS) return Promise.resolve(cached.value);
+      const fallback = () =>
+        cached && now - cached.loadedAt < STALE_TTL_MS ? cached.value : empty(path, "unavailable");
+      const failedAt = failures.get(path);
+      if (failedAt !== undefined && now - failedAt < FAILURE_BACKOFF_MS) {
+        return Promise.resolve(fallback());
+      }
       const inFlight = pending.get(path);
       if (inFlight) return inFlight;
       const next = load(path)
         .then((value) => {
+          failures.delete(path);
           for (const [key, entry] of cache) {
             if (now - entry.loadedAt >= STALE_TTL_MS) cache.delete(key);
           }
           cache.set(path, { loadedAt: Date.now(), value });
           return value;
         })
-        .catch(() =>
-          cached && now - cached.loadedAt < STALE_TTL_MS
-            ? cached.value
-            : empty(path, "unavailable"),
-        )
+        .catch(() => {
+          failures.set(path, Date.now());
+          return fallback();
+        })
         .finally(() => pending.delete(path));
       pending.set(path, next);
       return next;

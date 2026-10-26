@@ -108,4 +108,22 @@ describe("createNearbuilders", () => {
     now += 2 * 60 * 60 * 1000;
     expect((await nearbuilders.forPath("testland")).status).toBe("unavailable");
   });
+
+  it("waits 30 seconds before asking nearbuilders.org again after a failure", async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const fetchMock = vi.fn(async () => new Response("Bad gateway", { status: 502 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const nearbuilders = createNearbuilders(BASE);
+    expect((await nearbuilders.forPath("testland")).status).toBe("unavailable");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    now += 10 * 1000;
+    expect((await nearbuilders.forPath("testland")).status).toBe("unavailable");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    now += 30 * 1000;
+    await nearbuilders.forPath("testland");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
 });
