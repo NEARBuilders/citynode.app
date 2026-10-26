@@ -143,6 +143,17 @@ describe("member session wallet", () => {
 
     await expect(wallet.ensureConnected()).rejects.toMatchObject({ failure: "credential" });
   });
+
+  it("replaces a stale connection to another account instead of reporting a mismatch", async () => {
+    const { executor } = stubExecutor({ connected: "previous.passkey.near" });
+    const wallet = createMemberSessionWallet({ sessionAccountId: MEMBER, executor });
+
+    await expect(wallet.ensureConnected()).resolves.toBe(true);
+
+    expect(executor.disconnect).toHaveBeenCalledTimes(1);
+    expect(executor.connect).toHaveBeenCalledTimes(1);
+    expect(wallet.getAccountId()).toBe(MEMBER);
+  });
 });
 
 describe("classifyMemberSigningError", () => {
@@ -186,6 +197,7 @@ describe("classifyMemberSigningError", () => {
     ["a near-kit NetworkError", new NetworkError("RPC down", 503, true)],
     ["a failed fetch", new TypeError("Failed to fetch")],
     ["a sender failure", new Error("Sponsor relay returned status 502")],
+    ["a Safari fetch failure", new TypeError("Load failed")],
   ])("maps %s to a network or sender failure", (_label, error) => {
     expect(classifyMemberSigningError(error)).toBe("network");
   });
@@ -200,6 +212,14 @@ describe("classifyMemberSigningError", () => {
   it("keeps unrecognised errors generic", () => {
     expect(classifyMemberSigningError(new Error("something odd"))).toBe("unknown");
     expect(classifyMemberSigningError(undefined)).toBe("unknown");
+  });
+
+  it("does not report programming errors as network failures", () => {
+    expect(
+      classifyMemberSigningError(
+        new TypeError("Cannot read properties of undefined (reading 'x')"),
+      ),
+    ).toBe("unknown");
   });
 
   it("has a message for every failure", () => {
@@ -304,5 +324,37 @@ describe("member signing controller", () => {
     await first;
 
     expect(controller.getState()).toMatchObject({ status: "idle", result: null });
+  });
+
+  it("does not resubmit after a success that returned nothing", async () => {
+    const { executor } = stubExecutor({ connected: MEMBER });
+    const controller = createMemberSigningController<void>(
+      createMemberSessionWallet({ sessionAccountId: MEMBER, executor }),
+    );
+    const task = vi.fn(async () => {});
+
+    await controller.submit(task);
+    await controller.submit(task);
+
+    expect(task).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps blocking new submits after reset until the earlier request settles", async () => {
+    const { executor } = stubExecutor({ connected: MEMBER });
+    const controller = createMemberSigningController<string>(
+      createMemberSessionWallet({ sessionAccountId: MEMBER, executor }),
+    );
+    const pending = deferred<string>();
+    const task = vi.fn(() => pending.promise);
+    const first = controller.submit(task);
+    await vi.waitFor(() => expect(controller.getState().status).toBe("signing"));
+
+    controller.reset();
+    const second = controller.submit(task);
+    pending.resolve("hash");
+
+    expect(await first).toBe("hash");
+    expect(await second).toBe("hash");
+    expect(task).toHaveBeenCalledTimes(1);
   });
 });

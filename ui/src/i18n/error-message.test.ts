@@ -5,6 +5,7 @@ import {
   appErrorMessage,
   isPermissionError,
   isSessionError,
+  isWalletCancelled,
 } from "./error-message";
 import { translateAppMessage } from "./runtime";
 
@@ -56,5 +57,14 @@ describe("localized action failures", () => {
       expect(isSessionError(failure)).toBe(false);
       expect(isPermissionError(failure)).toBe(false);
     }
+  });
+
+  it("recognises wallet cancellations from NEAR Connect wallets", () => {
+    expect(isWalletCancelled(new Error("Wallet closed"))).toBe(true);
+    expect(isWalletCancelled(new Error("User rejected the request"))).toBe(true);
+    expect(isWalletCancelled(Object.assign(new Error("x"), { code: "ACTION_REJECTED" }))).toBe(
+      true,
+    );
+    expect(isWalletCancelled(new Error("Smart contract panicked"))).toBe(false);
   });
 });

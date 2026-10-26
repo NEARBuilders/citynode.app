@@ -25,10 +25,9 @@ export function useMemberSigning<T>(
 
   const previousAccount = useRef(sessionAccountId);
   useEffect(() => {
-    if (previousAccount.current !== sessionAccountId) {
-      previousAccount.current = sessionAccountId;
-      void wallet.disconnect();
-    }
+    const previous = previousAccount.current;
+    previousAccount.current = sessionAccountId;
+    if (previous !== null && previous !== sessionAccountId) void wallet.disconnect();
     return () => controller.reset();
   }, [sessionAccountId, wallet, controller]);
 

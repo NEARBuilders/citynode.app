@@ -146,6 +146,16 @@ describe("useMemberSigning", () => {
     expect(task).not.toHaveBeenCalled();
   });
 
+  it("keeps the passkey connection when the session finishes loading", async () => {
+    const executor = stubExecutor();
+    const task = vi.fn(async () => "hash");
+    const view = render(<Harness sessionAccountId={null} executor={executor} task={task} />);
+
+    view.rerender(<Harness sessionAccountId={MEMBER} executor={executor} task={task} />);
+
+    expect(executor.disconnect).not.toHaveBeenCalled();
+  });
+
   it("disconnects and resets when the user switches or signs out", async () => {
     const executor = stubExecutor();
     const task = vi.fn(async () => "hash");

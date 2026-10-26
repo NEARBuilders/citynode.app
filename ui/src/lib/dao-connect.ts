@@ -33,6 +33,7 @@ import {
   type TenantPublishConfig,
   type TenantPublishConfigInput,
 } from "./dao-policy";
+import { prefixedStorage } from "./prefixed-storage";
 
 export type {
   NearPolicy,
@@ -59,28 +60,13 @@ async function writeSessionAuthAccount(accountId: string | null): Promise<void> 
   else await storage.remove(DAO_AUTH_ACCOUNT_KEY);
 }
 
-function prefixedStorage(): LocalStorage {
-  const inner = new LocalStorage();
-  return {
-    async get(key: string): Promise<string | null> {
-      return inner.get(`${DAO_STORAGE_PREFIX}${key}`);
-    },
-    async set(key: string, value: string): Promise<void> {
-      await inner.set(`${DAO_STORAGE_PREFIX}${key}`, value);
-    },
-    async remove(key: string): Promise<void> {
-      await inner.remove(`${DAO_STORAGE_PREFIX}${key}`);
-    },
-  };
-}
-
 let _connector: NearConnector | null = null;
 
 function getConnector(): NearConnector {
   if (_connector) return _connector;
   _connector = new NearConnector({
     network: "mainnet",
-    storage: prefixedStorage(),
+    storage: prefixedStorage(DAO_STORAGE_PREFIX),
     autoConnect: false,
     cspNonce: getCspNonce(),
   });

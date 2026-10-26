@@ -30,6 +30,17 @@ export function isNotFoundError(error: unknown) {
   return status === 404 || code === "NOT_FOUND";
 }
 
+const WALLET_CANCELLED_PATTERN =
+  /user (?:rejected|cancelled|canceled|closed)|request (?:rejected|cancelled|canceled)|cancelled by user|popup closed|wallet closed/i;
+
+export function isWalletCancelled(error: unknown) {
+  const { code } = errorStatusAndCode(error);
+  return (
+    code === "ACTION_REJECTED" ||
+    (error instanceof Error && WALLET_CANCELLED_PATTERN.test(error.message))
+  );
+}
+
 export function appErrorMessage(
   error: unknown,
   t: AppTranslator,
@@ -40,11 +51,6 @@ export function appErrorMessage(
   if (isSessionError(error)) return t("error.session");
   if (isPermissionError(error)) return t("error.permission");
   if (status === 409 || code === "CONFLICT") return t("error.conflict");
-  if (
-    code === "ACTION_REJECTED" ||
-    (error instanceof Error &&
-      /user (?:rejected|cancelled)|request (?:rejected|cancelled)/i.test(error.message))
-  )
-    return t("wallet.cancelled");
+  if (isWalletCancelled(error)) return t("wallet.cancelled");
   return t(fallback);
 }

@@ -1,4 +1,4 @@
-import { LocalStorage, NearConnector } from "@hot-labs/near-connect";
+import { NearConnector } from "@hot-labs/near-connect";
 import { passkeyWalletManifest } from "better-near-auth/client";
 import {
   FunctionCallError,
@@ -11,6 +11,9 @@ import {
 
 import { getCspNonce } from "@/app";
 import type { AppMessageId } from "@/i18n/catalogs";
+import { isWalletCancelled } from "@/i18n/error-message";
+
+import { prefixedStorage } from "./prefixed-storage";
 
 import type { SessionWallet } from "./sputnik-proposals";
 
@@ -25,28 +28,13 @@ export interface MemberWalletExecutor {
   disconnect(): Promise<void>;
 }
 
-function prefixedStorage(): LocalStorage {
-  const inner = new LocalStorage();
-  return {
-    async get(key: string): Promise<string | null> {
-      return inner.get(`${MEMBER_STORAGE_PREFIX}${key}`);
-    },
-    async set(key: string, value: string): Promise<void> {
-      await inner.set(`${MEMBER_STORAGE_PREFIX}${key}`, value);
-    },
-    async remove(key: string): Promise<void> {
-      await inner.remove(`${MEMBER_STORAGE_PREFIX}${key}`);
-    },
-  };
-}
-
 export function createPasskeyExecutor(): MemberWalletExecutor {
   let connector: NearConnector | null = null;
   const getConnector = () => {
     connector ??= new NearConnector({
       network: "mainnet",
       manifest: { wallets: [passkeyWalletManifest], version: passkeyWalletManifest.version },
-      storage: prefixedStorage(),
+      storage: prefixedStorage(MEMBER_STORAGE_PREFIX),
       autoConnect: false,
       cspNonce: getCspNonce(),
     });
@@ -120,7 +108,9 @@ export function createMemberSessionWallet({
   return {
     async ensureConnected() {
       if (!sessionAccountId) throw new MemberSigningError("signedOut");
-      const accountId = (await executor.getConnectedAccountId()) ?? (await executor.connect());
+      const cached = await executor.getConnectedAccountId();
+      if (cached && cached !== sessionAccountId) await executor.disconnect();
+      const accountId = cached === sessionAccountId ? cached : await executor.connect();
       if (!accountId) throw new MemberSigningError("credential");
       if (accountId !== sessionAccountId) {
         verified = null;
@@ -146,33 +136,21 @@ export function createMemberSessionWallet({
   };
 }
 
-const CANCELLED_PATTERN =
-  /user (?:rejected|cancelled|canceled|closed)|request (?:rejected|cancelled|canceled)|cancelled by user|popup closed|wallet closed/i;
 const CREDENTIAL_PATTERN =
   /credential|passkey (?:not found|unavailable)|no passkey|(?:signing in with|creating) your passkey|screen lock|passkey is not registered/i;
 const REJECTED_PATTERN = /smart contract panicked|executionerror|functioncallerror|actionerror/i;
 const NETWORK_PATTERN =
-  /failed to fetch|network|timeout|timed out|relay|sender|sponsor|status (?:429|5\d\d)/i;
+  /failed to fetch|load failed|network|timeout|timed out|relay|sender|sponsor|status (?:429|5\d\d)/i;
 
 function errorName(error: unknown): string | undefined {
   return error && typeof error === "object" ? (Reflect.get(error, "name") as string) : undefined;
 }
 
-function errorCode(error: unknown): string | undefined {
-  return error && typeof error === "object" ? (Reflect.get(error, "code") as string) : undefined;
-}
-
 export function classifyMemberSigningError(error: unknown): MemberSigningFailure {
   if (error instanceof MemberSigningError) return error.failure;
   const name = errorName(error);
-  const code = errorCode(error);
   const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
-  if (
-    code === "ACTION_REJECTED" ||
-    name === "NotAllowedError" ||
-    name === "AbortError" ||
-    CANCELLED_PATTERN.test(message)
-  )
+  if (isWalletCancelled(error) || name === "NotAllowedError" || name === "AbortError")
     return "cancelled";
   if (
     name === "InvalidStateError" ||
@@ -185,7 +163,6 @@ export function classifyMemberSigningError(error: unknown): MemberSigningFailure
   if (
     error instanceof NetworkError ||
     error instanceof TransactionTimeoutError ||
-    error instanceof TypeError ||
     NETWORK_PATTERN.test(message)
   )
     return "network";
@@ -225,6 +202,7 @@ export function createMemberSigningController<T>(
 ): MemberSigningController<T> {
   let state: MemberSigningState<T> = idleState;
   let inFlight: Promise<T> | null = null;
+  let requests = 0;
   let generation = 0;
   const listeners = new Set<() => void>();
   const update = (next: MemberSigningState<T>) => {
@@ -239,11 +217,11 @@ export function createMemberSigningController<T>(
     },
     submit(task) {
       if (inFlight) return inFlight;
-      if (state.status === "submitted" && state.result !== null)
-        return Promise.resolve(state.result);
+      if (state.status === "submitted") return Promise.resolve(state.result as T);
       const run = generation;
+      const request = ++requests;
       const isCurrent = () => run === generation;
-      inFlight = (async () => {
+      const pending = (async () => {
         try {
           update({ status: "connecting", failure: null, result: null });
           await wallet.ensureConnected();
@@ -263,14 +241,14 @@ export function createMemberSigningController<T>(
           }
           throw error;
         } finally {
-          if (isCurrent()) inFlight = null;
+          if (request === requests) inFlight = null;
         }
       })();
-      return inFlight;
+      inFlight = pending;
+      return pending;
     },
     reset() {
       generation += 1;
-      inFlight = null;
       update(idleState);
     },
   };
