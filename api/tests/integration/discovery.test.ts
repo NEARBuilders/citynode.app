@@ -481,13 +481,22 @@ it("counts upcoming and past published events per community for platform admins 
   await admin.saveDiscoveryActivity(event("Next meetup", 5, "published"));
   await admin.saveDiscoveryActivity(event("Later meetup", 20, "published"));
   await admin.saveDiscoveryActivity(event("Draft meetup", 7, "draft"));
+  await admin.saveDiscoveryActivity({
+    ...event("Running now", 0, "published"),
+    startsAt: new Date(now - 3600000).toISOString(),
+    endsAt: new Date(now + 3600000).toISOString(),
+  });
+  await admin.saveDiscoveryActivity({
+    ...event("Scheduled post", 30, "published"),
+    publishedAt: new Date(now + 7 * 86400000).toISOString(),
+  });
 
   const [stats] = await admin.getDiscoveryEventStats({ nodeId: node.id });
-  expect(stats).toMatchObject({ nodeId: node.id, upcoming: 2, past: 1 });
+  expect(stats).toMatchObject({ nodeId: node.id, upcoming: 3, past: 1 });
   const lastActivity = Date.parse(stats?.lastActivityAt ?? "");
-  expect(Math.abs(lastActivity - (now - 10 * 86400000))).toBeLessThan(1000);
+  expect(Math.abs(lastActivity - (now - 3600000))).toBeLessThan(1000);
   expect(await admin.getDiscoveryEventStats({})).toEqual(
-    expect.arrayContaining([expect.objectContaining({ nodeId: node.id, upcoming: 2 })]),
+    expect.arrayContaining([expect.objectContaining({ nodeId: node.id, upcoming: 3 })]),
   );
   await expect(editor.getDiscoveryEventStats({ nodeId: node.id })).rejects.toMatchObject({
     code: "FORBIDDEN",

@@ -52,6 +52,7 @@ import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
 import {
+  APPLICATION_ITEMS_LIMIT,
   buildCommunityProgressRows,
   deriveNeedsAction,
   type NeedsActionItem,
@@ -73,6 +74,7 @@ import {
 } from "./-community-joins";
 import {
   adminProposalListQueryOptions,
+  awaitingReviewQueryOptions,
   proposalTitle,
   proposalTypeLabel,
 } from "./proposals/-proposal-review";
@@ -108,16 +110,18 @@ function AdminOverview() {
   const apiClient = useApiClient();
 
   const pendingQuery = useInfiniteQuery(adminProposalListQueryOptions(apiClient, "pending"));
+  const awaitingQuery = useQuery(awaitingReviewQueryOptions(apiClient, APPLICATION_ITEMS_LIMIT));
   const relayerQuery = useRelayerInfoQuery();
   const requestsQuery = useQuery(organizationRequestsQueryOptions(apiClient));
   const progress = useCommunityProgress();
 
-  const queue = pendingQuery.data?.pages[0]?.data ?? [];
-  const setupCount = queue.filter(communitySetupNeedsAttention).length;
+  const setups = (pendingQuery.data?.pages[0]?.data ?? []).filter(communitySetupNeedsAttention);
+  const awaiting = awaitingQuery.data?.data ?? [];
   const pendingTotal = pendingQuery.data?.pages[0]?.meta.total;
-  const reviewTotal = pendingTotal === undefined ? undefined : pendingTotal - setupCount;
+  const reviewTotal = awaitingQuery.data?.meta.total ?? 0;
   const relayer = relayerQuery.data;
-  const relayerNeedsFunding = !!relayer && relayer.enabled === false && !!relayer.accountId;
+  const relayerReady = !!relayer?.accountId;
+  const relayerNeedsFunding = relayerReady && relayer?.enabled === false;
   const requestCount = requestsQuery.data?.length;
 
   return (
@@ -137,9 +141,9 @@ function AdminOverview() {
             title={translate("common.communities")}
             testId="admin.heading.nodes"
             status={
-              progress.isLoading || progress.isError
+              progress.nodeCount === undefined
                 ? translate("admin.communitiesDescription")
-                : translate("admin.manage.communitiesCount", { count: progress.rows.length })
+                : translate("admin.manage.communitiesCount", { count: progress.nodeCount })
             }
           />
           <ManageTile
@@ -186,15 +190,17 @@ function AdminOverview() {
             status={
               relayerQuery.isError
                 ? translate("admin.loadFailed")
-                : !relayer
-                  ? translate("admin.relayer.notConfigured")
-                  : relayerNeedsFunding || !relayer.enabled
-                    ? translate("admin.relayer.needsFunding")
-                    : translate("admin.manage.relayerBalance", {
-                        balance: formatNearFigure(relayer.balance, locale),
-                      })
+                : relayerQuery.isLoading
+                  ? translate("common.loading")
+                  : !relayerReady
+                    ? translate("admin.relayer.notConfigured")
+                    : relayerNeedsFunding
+                      ? translate("admin.relayer.needsFunding")
+                      : translate("admin.manage.relayerBalance", {
+                          balance: formatNearFigure(relayer?.balance, locale),
+                        })
             }
-            attention={relayerNeedsFunding || relayerQuery.isError}
+            attention={relayerNeedsFunding || relayerQuery.isError || (!!relayer && !relayerReady)}
             statusTestId="admin.stat.relayer"
           />
           <ManageTile
@@ -208,8 +214,8 @@ function AdminOverview() {
       </section>
 
       <NeedsAction
-        reviewTotal={reviewTotal ?? 0}
-        proposals={queue.map((proposal) => ({
+        reviewTotal={reviewTotal}
+        proposals={[...setups, ...awaiting].map((proposal) => ({
           id: proposal.id,
           pluginId: proposal.pluginId,
           entityId: proposal.entityId,
@@ -221,7 +227,7 @@ function AdminOverview() {
         relayerNeedsFunding={relayerNeedsFunding}
         organizationRequestCount={requestCount ?? 0}
         progress={progress}
-        sources={[pendingQuery, requestsQuery]}
+        sources={[pendingQuery, awaitingQuery, relayerQuery, requestsQuery]}
       />
 
       <CommunityProgress progress={progress} />
@@ -250,6 +256,7 @@ function useCommunityProgress() {
   );
   return {
     rows,
+    nodeCount: nodesQuery.data?.length,
     isLoading: queries.some((query) => query.isLoading),
     isError: queries.some((query) => query.isError),
     retry: () => {

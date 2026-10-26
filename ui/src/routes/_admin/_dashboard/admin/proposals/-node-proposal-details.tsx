@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import type { ReactNode } from "react";
 import { useApiClient } from "@/app";
-import { LocalDate } from "@/components";
+import { Button, LocalDate } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import type { Proposal } from "@/lib/queries/proposals";
@@ -59,6 +59,21 @@ function ParentName({ nodeId }: { nodeId: string }) {
   const apiClient = useApiClient();
   const parentQuery = useQuery(nodeByIdQueryOptions(apiClient, nodeId));
   if (parentQuery.isLoading) return <span className="text-muted-foreground">…</span>;
+  if (parentQuery.isError) {
+    return (
+      <span role="alert" className="flex flex-wrap items-center gap-1 text-destructive">
+        {translate("admin.proposal.parentFailed")}
+        <Button
+          variant="link"
+          size="xs"
+          className="h-auto p-0"
+          onClick={() => void parentQuery.refetch()}
+        >
+          {translate("common.retry")}
+        </Button>
+      </span>
+    );
+  }
   if (!parentQuery.data) {
     return (
       <span className="text-muted-foreground">{translate("admin.proposal.parentMissing")}</span>

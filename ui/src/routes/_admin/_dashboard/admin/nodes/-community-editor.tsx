@@ -118,9 +118,16 @@ function EditorForm({
   });
   const [profile, setProfile] = useState(initialProfile);
   const [validationError, setValidationError] = useState<AppMessageId | null>(null);
+  const profileChanged = JSON.stringify(profile) !== JSON.stringify(initialProfile);
 
   const save = useMutation({
-    mutationFn: () => saveCommunity(apiClient, node.id, { name, description, metadata, profile }),
+    mutationFn: () =>
+      saveCommunity(apiClient, node.id, {
+        name,
+        description,
+        metadata,
+        profile: profileChanged ? profile : null,
+      }),
     onSuccess: async ({ profile: saved }) => {
       if (saved?.geocodeHint) toast.warning(translate(geocodeHintMessage(saved.geocodeHint)));
       else toast.success(translate("admin.community.updated"));
@@ -161,7 +168,7 @@ function EditorForm({
           ? "admin.community.nameRequired"
           : !isValidMetadata(metadata)
             ? "admin.community.metadataInvalid"
-            : profile
+            : profile && profileChanged
               ? validateProfile(profile)
               : null;
         setValidationError(issue);

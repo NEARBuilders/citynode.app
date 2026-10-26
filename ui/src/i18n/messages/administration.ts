@@ -1669,12 +1669,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "{count} 个已结束",
   ],
   "admin.community.noSite": ["No site yet", "Aún sin sitio", "Pas encore de site", "尚无站点"],
-  "admin.community.newThisMonth": [
-    "{count} new this month",
-    "{count} nuevos este mes",
-    "{count} nouveaux ce mois-ci",
-    "本月新增 {count} 位",
-  ],
   "admin.community.lastMonthCount": [
     "{count} last month",
     "{count} el mes pasado",
@@ -1773,10 +1767,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "本月已兑换码",
   ],
   "admin.manage.communitiesCount": [
-    "{count, plural, one {# community with a site} other {# communities with a site}}",
-    "{count, plural, one {# comunidad con sitio} other {# comunidades con sitio}}",
-    "{count, plural, one {# communauté avec un site} other {# communautés avec un site}}",
-    "{count, plural, other {# 个有站点的社区}}",
+    "{count, plural, one {# community} other {# communities}}",
+    "{count, plural, one {# comunidad} other {# comunidades}}",
+    "{count, plural, one {# communauté} other {# communautés}}",
+    "{count, plural, other {# 个社区}}",
   ],
   "admin.manage.proposalsPending": [
     "{count, plural, one {# needs action} other {# need action}}",
@@ -1828,4 +1822,16 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "隐藏按社区的数字",
   ],
   "admin.community.site": ["Site", "Sitio", "Site", "站点"],
+  "admin.newMembersThisMonthShort": [
+    "New members this month",
+    "Nuevos miembros este mes",
+    "Nouveaux membres ce mois-ci",
+    "本月新成员",
+  ],
+  "admin.proposal.parentFailed": [
+    "Couldn't load the parent community.",
+    "No se pudo cargar la comunidad superior.",
+    "Impossible de charger la communauté parente.",
+    "无法加载上级社区。",
+  ],
 });

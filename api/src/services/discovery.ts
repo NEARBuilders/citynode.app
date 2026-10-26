@@ -733,21 +733,26 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         yield* requireAdmin(context);
         const now = new Date(yield* Clock.currentTimeMillis).toISOString();
         const data = discoveryActivities.data;
+        const isEvent = sql`${data}->>'kind' = 'event'`;
+        const endsAt = sql`(${data}->>'endsAt')::timestamptz`;
+        const startsAt = sql`(${data}->>'startsAt')::timestamptz`;
         return yield* query(() =>
           db
             .select({
               nodeId: discoveryActivities.ownerNodeId,
-              upcoming: sql<number>`count(*) filter (where ${data}->>'kind' = 'event' and (${data}->>'startsAt')::timestamptz >= ${now})::int`,
-              past: sql<number>`count(*) filter (where ${data}->>'kind' = 'event' and (${data}->>'startsAt')::timestamptz < ${now})::int`,
+              upcoming: sql<number>`count(*) filter (where ${isEvent} and ${endsAt} >= ${now})::int`,
+              past: sql<number>`count(*) filter (where ${isEvent} and ${endsAt} < ${now})::int`,
               lastActivityAt: sql<
                 string | null
-              >`to_char(least(max(greatest((${data}->>'publishedAt')::timestamptz, case when (${data}->>'startsAt')::timestamptz <= ${now}::timestamptz then (${data}->>'startsAt')::timestamptz end)), ${now}::timestamptz) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+              >`to_char(max(greatest((${data}->>'publishedAt')::timestamptz, case when ${startsAt} <= ${now}::timestamptz then ${startsAt} end)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
             })
             .from(discoveryActivities)
             .where(
               and(
                 sql`${data}->>'status' = 'published'`,
                 sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
+                sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
+                sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
                 nodeId ? eq(discoveryActivities.ownerNodeId, nodeId) : undefined,
               ),
             )

@@ -78,6 +78,33 @@ describe("buildCommunityProgressRows", () => {
     expect(rows.map((row) => row.node.id)).toEqual(["z-country"]);
   });
 
+  it("counts an organization's joins once and sums events across its communities", () => {
+    const rows = buildCommunityProgressRows(
+      [
+        { ...tenant("t-old", "org-1"), createdAt: "2025-01-01T00:00:00.000Z" },
+        { ...tenant("t-new", "org-1"), createdAt: "2026-05-01T00:00:00.000Z" },
+      ],
+      [
+        summary("city", null, 0, "t-old"),
+        summary("district", "city", 0, "t-old"),
+        summary("other", null, 0, "t-new"),
+      ],
+      { organizations: [{ organizationId: "org-1", redeemed: 12, newMembers: 5 }] },
+      [
+        { nodeId: "district", upcoming: 2, past: 1, lastActivityAt: "2026-10-01T00:00:00.000Z" },
+        { nodeId: "other", upcoming: 1, past: 0, lastActivityAt: "2026-10-05T00:00:00.000Z" },
+      ],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      node: { id: "city" },
+      tenant: { id: "t-old" },
+      joins: { redeemed: 12, newMembers: 5 },
+      events: { upcoming: 3, past: 1 },
+      lastActivityAt: "2026-10-05T00:00:00.000Z",
+    });
+  });
+
   it("shows zero joins and events for a community with no activity instead of dropping it", () => {
     const [row] = buildCommunityProgressRows(
       [tenant("t-berlin", null)],

@@ -105,6 +105,14 @@ export function pendingProposalCountQueryOptions(apiClient: ApiClient) {
   });
 }
 
+export function awaitingReviewQueryOptions(apiClient: ApiClient, limit: number) {
+  return queryOptions({
+    queryKey: [...proposalReviewQueryKeys.all, "awaiting-review", limit] as const,
+    queryFn: () => apiClient.proposals.getProposals({ reviewStatus: "pending", limit }),
+    staleTime: 15 * 1000,
+  });
+}
+
 export function adminProposalListQueryOptions(apiClient: ApiClient, filter: ProposalReviewFilter) {
   return infiniteQueryOptions({
     queryKey: proposalReviewQueryKeys.list(filter),

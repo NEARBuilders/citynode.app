@@ -51,8 +51,8 @@ import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
 import {
   onboardingJoinsQueryOptions,
-  onboardingRedemptionsQueryOptions,
   recentUtcMonths,
+  utcMonth,
 } from "@/lib/queries/onboarding-joins";
 import {
   formatNearBalance,
@@ -379,15 +379,7 @@ function CommunityStats({
   const { node } = summary;
   const orgId = tenant?.orgId ?? "";
   const eventsQuery = useQuery(communityEventStatsQueryOptions(apiClient, node.id));
-  const membersQuery = useQuery({
-    queryKey: ["admin", "community-members", orgId],
-    queryFn: () => apiClient.auth.listMembers({ organizationId: orgId, limit: 1 }),
-    enabled: !!orgId,
-  });
-  const joinsQuery = useQuery({
-    ...onboardingRedemptionsQueryOptions(apiClient, orgId),
-    enabled: !!orgId,
-  });
+  const joinsQuery = useOrganizationJoins(orgId);
   const team = resolveTeamAccountId({
     tenantAccountId: tenant?.accountId,
     tenantOwnerKind: tenant?.ownerKind,
@@ -422,20 +414,18 @@ function CommunityStats({
         testId="admin-node-stat-events"
       />
       <StatFigure
-        label={translate("org.members")}
-        value={membersQuery.data?.total ?? "—"}
+        label={translate("admin.newMembersThisMonthShort")}
+        value={joinsQuery.data?.thisMonth.newMembers ?? "—"}
         hint={
           noSite
             ? translate("admin.community.noSite")
             : joinsQuery.data
-              ? translate("admin.community.newThisMonth", {
-                  count: joinsQuery.data.thisMonth.newMembers,
+              ? translate("admin.community.lastMonthCount", {
+                  count: joinsQuery.data.lastMonth.newMembers,
                 })
               : undefined
         }
-        onRetry={
-          retryTenant ?? (membersQuery.isError ? () => void membersQuery.refetch() : undefined)
-        }
+        onRetry={retryTenant ?? (joinsQuery.isError ? () => void joinsQuery.refetch() : undefined)}
         testId="admin-node-stat-members"
       />
       <StatFigure
@@ -683,4 +673,29 @@ function PendingItems({ summary, tenant }: { summary: NodeSummary; tenant: Tenan
       )}
     </section>
   );
+}
+
+function useOrganizationJoins(orgId: string) {
+  const apiClient = useApiClient();
+  const [thisMonth, lastMonth] = useQueries({
+    queries: [utcMonth(0), utcMonth(-1)].map((month) => ({
+      ...onboardingJoinsQueryOptions(apiClient, month),
+      enabled: !!orgId,
+    })),
+  });
+  const pick = (data: typeof thisMonth.data) => {
+    const row = data?.organizations.find((entry) => entry.organizationId === orgId);
+    return { redeemed: row?.redeemed ?? 0, newMembers: row?.newMembers ?? 0 };
+  };
+  return {
+    data:
+      thisMonth?.data && lastMonth?.data
+        ? { thisMonth: pick(thisMonth.data), lastMonth: pick(lastMonth.data) }
+        : undefined,
+    isError: !!thisMonth?.isError || !!lastMonth?.isError,
+    refetch: () => {
+      if (thisMonth?.isError) void thisMonth.refetch();
+      if (lastMonth?.isError) void lastMonth.refetch();
+    },
+  };
 }

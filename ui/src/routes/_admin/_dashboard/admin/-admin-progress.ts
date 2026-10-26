@@ -1,4 +1,9 @@
-import type { JoinCounts, JoinsTenant, OrganizationJoins } from "./-community-joins";
+import {
+  type JoinCounts,
+  type JoinsTenant,
+  type OrganizationJoins,
+  olderTenant,
+} from "./-community-joins";
 
 export type StakingState = "own" | "below" | "inherited" | "none";
 
@@ -78,11 +83,17 @@ export function buildCommunityProgressRows<T extends JoinsTenant, N extends Prog
   joins: OrganizationJoins | undefined,
   eventStats: readonly EventStat[],
 ): CommunityProgressRow<T, N>[] {
-  const tenantById = new Map(
+  const groupOf = (tenant: T) => tenant.orgId ?? `tenant:${tenant.id}`;
+  const liveTenants = new Map(
     tenants
       .filter((tenant) => tenant.status !== "pending_deletion")
       .map((tenant) => [tenant.id, tenant]),
   );
+  const representative = new Map<string, T>();
+  for (const tenant of liveTenants.values()) {
+    const existing = representative.get(groupOf(tenant));
+    representative.set(groupOf(tenant), existing ? olderTenant(existing, tenant) : tenant);
+  }
   const joinsByOrg = new Map(
     joins?.organizations.map(({ organizationId, redeemed, newMembers }) => [
       organizationId,
@@ -90,35 +101,53 @@ export function buildCommunityProgressRows<T extends JoinsTenant, N extends Prog
     ]),
   );
   const eventsByNode = new Map(eventStats.map((stat) => [stat.nodeId, stat]));
-  const states = stakingStates(summaries);
-  const tenantOf = new Map(summaries.map(({ node }) => [node.id, node.tenantId]));
-  const primary = new Map<string, N>();
+  const tenantOfNode = new Map(summaries.map(({ node }) => [node.id, node.tenantId]));
+  const isTop = (node: N) => !node.parentId || tenantOfNode.get(node.parentId) !== node.tenantId;
+  const groups = new Map<string, { nodes: N[]; primary?: N }>();
   for (const { node } of summaries) {
-    if (!node.tenantId || !tenantById.has(node.tenantId)) continue;
-    const top = !node.parentId || tenantOf.get(node.parentId) !== node.tenantId;
-    const current = primary.get(node.tenantId);
-    const currentTop =
-      !!current && (!current.parentId || tenantOf.get(current.parentId) !== current.tenantId);
+    const tenant = node.tenantId ? liveTenants.get(node.tenantId) : undefined;
+    if (!tenant) continue;
+    const key = groupOf(tenant);
+    const group = groups.get(key) ?? { nodes: [] };
+    group.nodes.push(node);
+    const owned = node.tenantId === representative.get(key)?.id;
+    const current = group.primary;
+    const currentOwned = current?.tenantId === representative.get(key)?.id;
+    const rank = (candidate: N, ownedByRep: boolean) =>
+      (ownedByRep ? 2 : 0) + (isTop(candidate) ? 1 : 0);
     if (
       !current ||
-      (top && !currentTop) ||
-      (top === currentTop && node.name.localeCompare(current.name) < 0)
+      rank(node, owned) > rank(current, currentOwned) ||
+      (rank(node, owned) === rank(current, currentOwned) &&
+        node.name.localeCompare(current.name) < 0)
     ) {
-      primary.set(node.tenantId, node);
+      group.primary = node;
     }
+    groups.set(key, group);
   }
+  const states = stakingStates(summaries);
   const rows: CommunityProgressRow<T, N>[] = [];
-  for (const node of primary.values()) {
-    const tenant = tenantById.get(node.tenantId ?? "");
-    if (!tenant) continue;
-    const events = eventsByNode.get(node.id);
+  for (const [key, { nodes, primary }] of groups) {
+    const tenant = representative.get(key);
+    if (!tenant || !primary) continue;
+    const events = { upcoming: 0, past: 0 };
+    let lastActivityAt: string | null = null;
+    for (const node of nodes) {
+      const stat = eventsByNode.get(node.id);
+      if (!stat) continue;
+      events.upcoming += stat.upcoming;
+      events.past += stat.past;
+      if (stat.lastActivityAt && (!lastActivityAt || stat.lastActivityAt > lastActivityAt)) {
+        lastActivityAt = stat.lastActivityAt;
+      }
+    }
     rows.push({
-      node,
+      node: primary,
       tenant,
       joins: (tenant.orgId && joinsByOrg.get(tenant.orgId)) || NO_JOINS,
-      events: { upcoming: events?.upcoming ?? 0, past: events?.past ?? 0 },
-      lastActivityAt: events?.lastActivityAt ?? null,
-      staking: states.get(node.id) ?? "none",
+      events,
+      lastActivityAt,
+      staking: states.get(primary.id) ?? "none",
     });
   }
   return rows.sort(
