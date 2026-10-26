@@ -19,7 +19,7 @@ const ORG = "team-gating-org";
 
 const TEAM_DENIED = {
   code: "FORBIDDEN",
-  message: "Ask an organization owner to add you to a team with node-operations.",
+  message: "Ask an organization owner or admin to add you to a team with node-operations.",
   data: { requiredPermissions: ["node-operations"] },
 };
 

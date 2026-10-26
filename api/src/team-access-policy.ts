@@ -1,6 +1,6 @@
 import type { DecoratedMiddleware } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
-import { type FeatureArea, isFeatureArea } from "./feature-areas";
+import type { FeatureArea } from "./feature-areas";
 import type {
   AuthPluginContext as AuthContext,
   AuthOrganizationContext,
@@ -27,7 +27,6 @@ export interface TeamAccess {
   teams: WorkspaceTeam[];
   activeTeam: WorkspaceTeam | null;
   bypass: boolean;
-  allowedAreas: FeatureArea[] | null;
 }
 
 export type TeamAccessContext = {
@@ -44,21 +43,9 @@ export function resolveTeamAccess(context: TeamAccessContext | undefined): TeamA
   const activeTeam = teams.find((team) => team.id === context?.organization?.activeTeamId) ?? null;
   const orgRole = context?.organization?.member?.role;
   const bypass = context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
-  return {
-    teams,
-    activeTeam,
-    bypass,
-    allowedAreas: activeTeam && !bypass ? activeTeam.areas.filter(isFeatureArea) : null,
-  };
+  return { teams, activeTeam, bypass };
 }
 
-/**
- * Whether the caller may use a feature area in their active organization:
- * platform admins and organization owners/admins always may; other members
- * need any Team they belong to that is granted the area. The Active Team only
- * filters the view and never narrows access. A member with no granted Team,
- * such as one who joined through an Onboarding Code, may not.
- */
 export function canUseTeamArea(
   context: TeamAccessContext | undefined,
   area: FeatureArea,
@@ -71,7 +58,7 @@ export function canUseTeamArea(
 
 export function teamAreaForbidden(areas: readonly FeatureArea[]): ORPCError<"FORBIDDEN", unknown> {
   return new ORPCError("FORBIDDEN", {
-    message: `Ask an organization owner to add you to a team with ${areas.join(" or ")}.`,
+    message: `Ask an organization owner or admin to add you to a team with ${areas.join(" or ")}.`,
     data: { requiredPermissions: [...areas] },
   });
 }

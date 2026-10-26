@@ -1323,10 +1323,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "{area} 仅供平台管理员使用。",
   ],
   "permissions.teamDenied": [
-    "Ask an owner to add you to a team with access to {area}.",
-    "Pide a un propietario que te añada a un equipo con acceso a {area}.",
-    "Demandez à un propriétaire de vous ajouter à une équipe ayant accès à {area}.",
-    "请联系所有者将你加入可使用{area}的团队。",
+    "Ask an owner or admin to add you to a team with access to {area}.",
+    "Pide a un propietario o administrador que te añada a un equipo con acceso a {area}.",
+    "Demandez à un propriétaire ou à un administrateur de vous ajouter à une équipe ayant accès à {area}.",
+    "请联系所有者或管理员将你加入可使用{area}的团队。",
   ],
   "purchase.buyNear": [
     "Buy NEAR with PingPay",

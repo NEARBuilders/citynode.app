@@ -51,12 +51,12 @@ including their areas and membership. Teams start empty; admins explicitly assig
 members. A provisioning timestamp prevents duplicate creation and preserves later
 renames, area changes, and deletions across repeated activation.
 
-Owners, org admins, and platform admins bypass feature-area restrictions. A
-regular member may use an area when any team they belong to in the active
-organization is assigned it, whatever team is active; the active team only
-filters what the dashboard shows and never narrows access. A member with no such
-team, for example one who joined through an onboarding code, is refused and told
-to ask an owner to add them to a team with that area. Individual routes still
+Owners, org admins, and platform admins bypass feature-area restrictions. On the
+server, a regular member may use an area when any team they belong to in the
+active organization is assigned it, whatever team is active; the active team
+never narrows API access. A member with no such team, for example one who joined
+through an onboarding code, is refused and told to ask an owner or admin to add
+them to a team with that area. Individual routes still
 enforce their own authentication and organization checks.
 
 Node operations follow this rule. Node edits (`createNode`, `spawnNode`,
