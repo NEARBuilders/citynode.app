@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AppInfoMenu } from "@/components/layout/app-info-menu";
 import { AppShell } from "@/components/layout/app-shell";
 
 export const Route = createFileRoute("/_admin/_dashboard")({
@@ -14,6 +15,7 @@ function AdminDashboardLayout() {
       session={session}
       isAdmin={isAdmin}
       pluginNav={pluginNav}
+      headerActions={<AppInfoMenu />}
     />
   );
 }

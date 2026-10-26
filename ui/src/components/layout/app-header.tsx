@@ -1,6 +1,6 @@
 import { UsersIcon } from "@phosphor-icons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { ClientRuntimeConfig } from "@/app";
 import { getAppName } from "@/app";
 import {
@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAppTranslation } from "@/i18n/runtime";
-import { AppInfoMenu, showsAppInfo } from "./app-info-menu";
 import { crumbsFor } from "./breadcrumbs";
 import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
@@ -22,10 +21,10 @@ import { UserNav } from "./user-nav";
 
 interface AppHeaderProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
-  isAdmin?: boolean;
+  actions?: ReactNode;
 }
 
-export function AppHeader({ runtimeConfig, isAdmin = false }: AppHeaderProps) {
+export function AppHeader({ runtimeConfig, actions }: AppHeaderProps) {
   const translate = useAppTranslation();
   const { user, organizations } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
@@ -87,7 +86,7 @@ export function AppHeader({ runtimeConfig, isAdmin = false }: AppHeaderProps) {
           </div>
         )}
         <div className="flex shrink-0 items-center gap-1">
-          {showsAppInfo(isAdmin, pathname) && <AppInfoMenu />}
+          {actions}
           <ThemeToggle />
           <UserNav />
         </div>

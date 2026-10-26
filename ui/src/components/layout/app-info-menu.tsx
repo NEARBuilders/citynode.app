@@ -20,10 +20,6 @@ const OUTCOME_LABELS: Record<string, { label: AppMessageId; tone: "info" | "succ
     "pointer-unreachable": { label: "version.pointerUnreachable", tone: "danger" },
   };
 
-export function showsAppInfo(isAdmin: boolean, pathname: string) {
-  return isAdmin && (pathname === "/admin" || pathname.startsWith("/admin/"));
-}
-
 export function AppInfoMenu() {
   const translate = useAppTranslation();
   return (
@@ -62,34 +58,36 @@ function VersionDetails() {
   if (query.isLoading) {
     return <p className="text-muted-foreground text-sm">{translate("common.loading")}</p>;
   }
-  if (query.isError || !version?.fingerprint) {
+  if (!version?.fingerprint) {
     return <p className="text-muted-foreground text-sm">{translate("version.unreachable")}</p>;
   }
   return (
     <dl className="space-y-1 text-sm" data-testid="admin-app-info-version">
       <div className="flex flex-wrap items-center gap-2">
         <dt className="text-muted-foreground">{translate("version.fingerprint")}</dt>
-        <dd className="font-mono break-all">{version.fingerprint}</dd>
-        {outcomeMeta && (
-          <Badge
-            variant={
-              outcomeMeta.tone === "danger"
-                ? "destructive"
-                : outcomeMeta.tone === "success"
-                  ? "success"
-                  : "secondary"
-            }
-          >
-            {translate(outcomeMeta.label)}
-          </Badge>
-        )}
+        <dd className="flex flex-wrap items-center gap-2">
+          <span className="font-mono break-all">{version.fingerprint}</span>
+          {outcomeMeta && (
+            <Badge
+              variant={
+                outcomeMeta.tone === "danger"
+                  ? "destructive"
+                  : outcomeMeta.tone === "success"
+                    ? "success"
+                    : "secondary"
+              }
+            >
+              {translate(outcomeMeta.label)}
+            </Badge>
+          )}
+        </dd>
       </div>
       {Object.keys(version.slots ?? {}).length > 0 && (
         <div>
           <dt className="text-muted-foreground">{translate("version.slots")}</dt>
           <dd className="mt-1 space-y-0.5">
             {Object.entries(version.slots ?? {}).map(([slot, pin]) => (
-              <div key={slot} className="flex gap-2 font-mono text-xs">
+              <div key={slot} className="flex flex-col font-mono text-xs">
                 <span className="text-muted-foreground">{slot}</span>
                 <span className="break-all">{pin}</span>
               </div>
