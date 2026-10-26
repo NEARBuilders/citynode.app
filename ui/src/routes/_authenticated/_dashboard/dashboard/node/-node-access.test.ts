@@ -77,4 +77,18 @@ describe("resolveCommunityTools", () => {
 
     expect(tools(ctx)).toEqual({ inFinanceTeam: false, canOrganize: false });
   });
+
+  it("does not grant event tools to a platform admin who is not a member", () => {
+    const ctx = {
+      user: { role: "admin" },
+      organization: {
+        activeOrganizationId: "org-1",
+        member: null,
+        teams: [],
+        activeTeamId: null,
+      },
+    } as unknown as AuthRequestContext;
+
+    expect(tools(ctx).canOrganize).toBe(false);
+  });
 });
