@@ -34,6 +34,7 @@ function isNearNetwork(network: string): network is NearNetworkId {
 }
 
 const APPROVAL_TTL_MS = 5 * 60_000;
+const APPROVAL_CACHE_MAX = 1_000;
 
 export function makeStakingPools(
   whitelists: StakingPoolWhitelists,
@@ -59,6 +60,10 @@ export function makeStakingPools(
             }),
           catch: (cause) => new StakingPoolCheckFailed({ network, cause }),
         });
+        if (approvals.size >= APPROVAL_CACHE_MAX) {
+          const oldest = approvals.keys().next().value;
+          if (oldest !== undefined) approvals.delete(oldest);
+        }
         approvals.set(key, { approved: approved === true, expiresAt: now() + APPROVAL_TTL_MS });
         return approved === true;
       }),

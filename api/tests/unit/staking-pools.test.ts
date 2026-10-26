@@ -90,6 +90,20 @@ describe("makeStakingPools", () => {
     expect(near.view).toHaveBeenCalledTimes(2);
   });
 
+  it("drops the oldest cached answer once the cache is full", async () => {
+    near.view.mockResolvedValue(true);
+    const pools = makeStakingPools(whitelists);
+
+    for (let index = 0; index <= 1_000; index++) {
+      await Effect.runPromise(pools.isApproved(`pool-${index}.poolv1.near`, "mainnet"));
+    }
+    await Effect.runPromise(pools.isApproved("pool-1000.poolv1.near", "mainnet"));
+    expect(near.view).toHaveBeenCalledTimes(1_001);
+
+    await Effect.runPromise(pools.isApproved("pool-0.poolv1.near", "mainnet"));
+    expect(near.view).toHaveBeenCalledTimes(1_002);
+  });
+
   it("does not cache a failed check", async () => {
     near.view.mockRejectedValueOnce(new Error("rpc down")).mockResolvedValueOnce(true);
     const pools = makeStakingPools(whitelists);
