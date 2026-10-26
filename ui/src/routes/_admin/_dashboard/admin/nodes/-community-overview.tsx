@@ -18,13 +18,14 @@ import { useNow } from "@/hooks/use-client";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
-import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
+import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import { ListSkeleton, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
 import {
   type AttentionItem,
   communityAttention,
   communityJoinsState,
+  organizationJoinCounts,
   type ProgressState,
   progressState,
   type SplitEvents,
@@ -59,10 +60,25 @@ function useCommunityProgress(node: CommunityNode) {
   });
   const tenantQuery = useQuery(tenantByIdQueryOptions(apiClient, tenantId));
   const orgId = tenantQuery.data?.orgId ?? "";
-  const joinsQuery = useQuery({
-    ...onboardingRedemptionsQueryOptions(apiClient, orgId),
+  const currentJoins = useQuery({
+    ...onboardingJoinsQueryOptions(apiClient, utcMonth(0)),
     enabled: !!orgId,
   });
+  const previousJoins = useQuery({
+    ...onboardingJoinsQueryOptions(apiClient, utcMonth(-1)),
+    enabled: !!orgId,
+  });
+  const joinsQuery = {
+    isPending: currentJoins.isPending || previousJoins.isPending,
+    isError: currentJoins.isError || previousJoins.isError,
+    data:
+      currentJoins.data && previousJoins.data
+        ? {
+            thisMonth: organizationJoinCounts(currentJoins.data, orgId),
+            lastMonth: organizationJoinCounts(previousJoins.data, orgId),
+          }
+        : undefined,
+  };
 
   const events = progressState(tenantId ? eventsQuery : null, (activities) =>
     splitCommunityEvents(activities, now),
@@ -79,7 +95,11 @@ function useCommunityProgress(node: CommunityNode) {
     tenant: tenantQuery.data,
     hasSite: !!tenantId,
     retryEvents: () => void eventsQuery.refetch(),
-    retryJoins: () => void (tenantQuery.isError ? tenantQuery.refetch() : joinsQuery.refetch()),
+    retryJoins: () => {
+      if (tenantQuery.isError) void tenantQuery.refetch();
+      if (currentJoins.isError) void currentJoins.refetch();
+      if (previousJoins.isError) void previousJoins.refetch();
+    },
   };
 }
 

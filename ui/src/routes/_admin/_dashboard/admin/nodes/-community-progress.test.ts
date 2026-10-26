@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   communityAttention,
   communityJoinsState,
+  organizationJoinCounts,
   progressState,
   splitCommunityEvents,
 } from "./-community-progress";
@@ -106,6 +107,23 @@ describe("community stat states", () => {
       status: "ready",
       value: { redeemed: 4 },
     });
+  });
+});
+
+describe("community join counts", () => {
+  const joins = {
+    organizations: [
+      { organizationId: "org-1", redeemed: 4, newMembers: 2 },
+      { organizationId: "org-2", redeemed: 1, newMembers: 1 },
+    ],
+  };
+
+  it("picks this community's organization from the platform-wide figures", () => {
+    expect(organizationJoinCounts(joins, "org-1")).toEqual({ redeemed: 4, newMembers: 2 });
+  });
+
+  it("counts an organization with no redemptions that month as zero", () => {
+    expect(organizationJoinCounts(joins, "org-3")).toEqual({ redeemed: 0, newMembers: 0 });
   });
 });
 

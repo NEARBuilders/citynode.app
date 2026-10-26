@@ -48,6 +48,17 @@ export function progressState<T, V>(
   return { status: "ready", value: select(query.data) };
 }
 
+export type JoinCounts = { redeemed: number; newMembers: number };
+
+export type MonthlyJoins = {
+  organizations: readonly ({ organizationId: string } & JoinCounts)[];
+};
+
+export function organizationJoinCounts(joins: MonthlyJoins, orgId: string): JoinCounts {
+  const row = joins.organizations.find((entry) => entry.organizationId === orgId);
+  return { redeemed: row?.redeemed ?? 0, newMembers: row?.newMembers ?? 0 };
+}
+
 export function communityJoinsState<J>({
   hasSite,
   tenant,

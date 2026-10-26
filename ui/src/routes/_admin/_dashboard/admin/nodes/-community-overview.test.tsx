@@ -41,7 +41,11 @@ function summary(overrides: { tenantId?: string | null; validators?: number } = 
 function api({
   activities = async () => [] as unknown[],
   orgId = "org-1" as string | null,
-  stats = async () => ({ month: "2026-10", totals: { redeemed: 0, newMembers: 0 } }),
+  stats = async (_input: { month: string; organizationId?: string }) => ({
+    month: "2026-10",
+    totals: { redeemed: 0, newMembers: 0 },
+    organizations: [] as { organizationId: string; redeemed: number; newMembers: number }[],
+  }),
 } = {}) {
   const client = {
     listDiscoveryActivities: vi.fn(activities),
@@ -85,8 +89,16 @@ describe("community stats", () => {
           endsAt: "2020-01-01T02:00:00Z",
         },
       ],
-      stats: async () => ({ month: "2026-10", totals: { redeemed: 7, newMembers: 3 } }),
+      stats: async () => ({
+        month: "2026-10",
+        totals: { redeemed: 9, newMembers: 5 },
+        organizations: [
+          { organizationId: "org-1", redeemed: 7, newMembers: 3 },
+          { organizationId: "org-2", redeemed: 2, newMembers: 2 },
+        ],
+      }),
     });
+    const client = mocks.apiClient as ReturnType<typeof api>;
     renderStats(summary());
 
     const events = await screen.findByTestId("admin-node.stat-events");
@@ -97,6 +109,10 @@ describe("community stats", () => {
     expect(
       within(screen.getByTestId("admin-node.stat-new-members")).getAllByText("3"),
     ).toHaveLength(1);
+    expect(client.auth.getOnboardingStats).toHaveBeenCalled();
+    for (const [input] of client.auth.getOnboardingStats.mock.calls) {
+      expect(input).not.toHaveProperty("organizationId");
+    }
   });
 
   it("shows a failed events load as an error with retry, not zero", async () => {
