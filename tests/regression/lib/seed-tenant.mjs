@@ -239,6 +239,33 @@ export async function seedDiscoveryActivity(input) {
   });
 }
 
+export async function seedNodeProposal(input) {
+  const { slug, name, parentId, submitterAccountId, accountId, motivation } = input;
+  if (!slug || !name || !parentId)
+    throw new Error("seedNodeProposal requires slug, name and parentId");
+  const id = randomId();
+  const payload = {
+    kind: "city",
+    parentId,
+    name,
+    slug,
+    motivation: motivation ?? "Monthly meetups",
+    accountId: accountId ?? `${slug}.sputnik-dao.near`,
+    submitterAccountId: submitterAccountId ?? `${slug}-lead.near`,
+  };
+  return withApiTable("proposals", async (client) => {
+    await client.query(
+      "INSERT INTO proposals (id, plugin_id, entity_id, payload, created_by) VALUES ($1, 'node', $2, $3, $4)",
+      [id, slug, JSON.stringify(payload), payload.submitterAccountId],
+    );
+    await client.query(
+      "INSERT INTO proposal_submissions (id, proposal_id, plugin_id, entity_id, submitted_by, source, payload) VALUES ($1, $2, 'node', $3, $4, '/apply', $5)",
+      [randomId(), id, slug, payload.submitterAccountId, JSON.stringify(payload)],
+    );
+    return { id, ...payload };
+  });
+}
+
 const thisFile = path.resolve(fileURLToPath(import.meta.url));
 if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) {
   const payload = process.argv[2];

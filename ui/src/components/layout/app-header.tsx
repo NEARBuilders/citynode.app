@@ -1,8 +1,9 @@
 import { UsersIcon } from "@phosphor-icons/react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Fragment } from "react";
 import type { ClientRuntimeConfig } from "@/app";
-import { getAppName } from "@/app";
+import { getAppName, useApiClient } from "@/app";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAppTranslation } from "@/i18n/runtime";
+import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { crumbsFor } from "./breadcrumbs";
 import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
@@ -25,6 +27,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ runtimeConfig }: AppHeaderProps) {
   const translate = useAppTranslation();
+  const apiClient = useApiClient();
   const { user, organizations } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
   const activeTeamName = workspace?.activeTeam?.name;
@@ -35,10 +38,16 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
       return typeof value === "string" ? value : undefined;
     },
   });
+  const adminNodeId = /^\/admin\/nodes\/([^/]+)/.exec(pathname)?.[1];
+  const { data: adminNode } = useQuery({
+    ...adminNodeDetailQueryOptions(apiClient, adminNodeId ?? ""),
+    enabled: false,
+  });
   const crumbs = crumbsFor(
     pathname,
     {
       tab,
+      detailName: adminNodeId ? adminNode?.summary.node.name : undefined,
       appName: getAppName(runtimeConfig),
       orgName: (slug) => organizations.find((org) => org.slug === slug)?.name,
     },
