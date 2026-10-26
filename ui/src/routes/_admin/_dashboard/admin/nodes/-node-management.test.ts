@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { filterNodeRows, parseNodeDetailTab, parseNodeMetadata } from "./-node-management";
+import {
+  filterNodeRows,
+  parseNodeDetailTab,
+  parseNodeEditSearch,
+  parseNodeMetadata,
+} from "./-node-management";
 
 describe("node metadata editing", () => {
   it("preserves arbitrary JSON data while saving the description field", () => {
@@ -59,11 +64,34 @@ describe("node list search", () => {
 });
 
 describe("node detail tabs", () => {
-  it.each(["overview", "validators", "sequence", "domains", "profile"])("accepts %s", (tab) => {
+  it.each(["overview", "validators", "management", "domains"])("accepts %s", (tab) => {
     expect(parseNodeDetailTab(tab)).toBe(tab);
   });
 
-  it.each([undefined, "", "bindings", 3])("ignores %s", (tab) => {
+  it("opens Node management for old ?tab=sequence links", () => {
+    expect(parseNodeDetailTab("sequence")).toBe("management");
+  });
+
+  it.each([undefined, "", "bindings", "constructor", "profile", 3])("ignores %s", (tab) => {
     expect(parseNodeDetailTab(tab)).toBeUndefined();
+  });
+});
+
+describe("community editor search", () => {
+  it.each([
+    { edit: true },
+    { edit: "true" },
+    { tab: "profile" },
+  ])("opens the editor for %o", (search) => {
+    expect(parseNodeEditSearch(search)).toBe(true);
+  });
+
+  it.each([
+    {},
+    { edit: false },
+    { edit: "1" },
+    { tab: "domains" },
+  ])("keeps it closed for %o", (search) => {
+    expect(parseNodeEditSearch(search)).toBeUndefined();
   });
 });

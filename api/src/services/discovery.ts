@@ -728,6 +728,36 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         );
         return { visits: totals?.visits ?? 0, activatedVisits: totals?.activatedVisits ?? 0, rows };
       }),
+    eventStats: (context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* requireAdmin(context);
+        const now = new Date(yield* Clock.currentTimeMillis).toISOString();
+        const data = discoveryActivities.data;
+        const isEvent = sql`${data}->>'kind' = 'event'`;
+        const endsAt = sql`(${data}->>'endsAt')::timestamptz`;
+        const startsAt = sql`(${data}->>'startsAt')::timestamptz`;
+        return yield* query(() =>
+          db
+            .select({
+              nodeId: discoveryActivities.ownerNodeId,
+              upcoming: sql<number>`count(*) filter (where ${isEvent} and ${endsAt} >= ${now})::int`,
+              past: sql<number>`count(*) filter (where ${isEvent} and ${endsAt} < ${now})::int`,
+              lastActivityAt: sql<
+                string | null
+              >`to_char(max(greatest((${data}->>'publishedAt')::timestamptz, case when ${startsAt} <= ${now}::timestamptz then ${startsAt} end)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+            })
+            .from(discoveryActivities)
+            .where(
+              and(
+                sql`${data}->>'status' = 'published'`,
+                sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
+                sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
+                sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
+              ),
+            )
+            .groupBy(discoveryActivities.ownerNodeId),
+        );
+      }),
     studio: (context: AuthContext) =>
       Effect.gen(function* () {
         yield* requireCurator(context);

@@ -13,6 +13,10 @@ export function utcMonth(offset: number) {
     .slice(0, 7);
 }
 
+export function recentUtcMonths(count: number) {
+  return Array.from({ length: count }, (_, index) => utcMonth(index - count + 1));
+}
+
 export function onboardingJoinsQueryOptions(apiClient: ApiClient, month: string) {
   return queryOptions({
     queryKey: onboardingJoinQueryKeys.month(month),

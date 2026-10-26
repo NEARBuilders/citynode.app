@@ -11,7 +11,8 @@ export function useRelayerInfoQuery(): UseQueryResult<RelayerInfoData | null> {
   return useQuery({
     queryKey: relayerInfoQueryKey,
     queryFn: async () => {
-      const { data } = await auth.near.getRelayerInfo();
+      const { data, error } = await auth.near.getRelayerInfo();
+      if (error) throw error;
       return (data ?? null) as RelayerInfoData | null;
     },
     refetchInterval: 30_000,
