@@ -13,6 +13,7 @@ export interface Crumb {
 export interface CrumbContext {
   appName?: string;
   orgName?: (slug: string) => string | undefined;
+  detailName?: string;
   tab?: string;
 }
 
@@ -137,13 +138,17 @@ export function crumbsFor(
         return [
           ADMIN,
           sectionCrumb,
-          { label: section.detail, to: `/admin/${second}/${third}` },
+          { label: context.detailName ?? section.detail, to: `/admin/${second}/${third}` },
           page(t(section.edit)),
         ];
       return [
         ADMIN,
         sectionCrumb,
-        page(third === "new" && section.create ? t(section.create) : section.detail),
+        page(
+          third === "new" && section.create
+            ? t(section.create)
+            : (context.detailName ?? section.detail),
+        ),
       ];
     }
     case "settings": {

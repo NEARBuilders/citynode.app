@@ -24,12 +24,14 @@ const harness = vi.hoisted(() => ({
 vi.mock("@/app", async () => ({
   ...(await vi.importActual<object>("@/app")),
   useApiClient: () => ({
-    auth: { listOrganizations: harness.listOrganizations },
+    auth: {
+      listOrganizations: harness.listOrganizations,
+      listMembers: harness.listMembers,
+    },
     resolveTenantByOrgId: harness.resolveTenantByOrgId,
   }),
   useAuthClient: () => ({
     getSession: async () => ({ data: harness.session }),
-    organization: { listMembers: harness.listMembers },
   }),
 }));
 
@@ -75,8 +77,7 @@ function setup(options: {
       }
     : null;
   harness.listMembers.mockResolvedValue({
-    data: { members: [{ userId: "u1", role: options.orgRole ?? "owner" }] },
-    error: null,
+    members: [{ userId: "u1", role: options.orgRole ?? "owner" }],
   });
   harness.listOrganizations.mockResolvedValue(
     (options.orgs ?? []).map((org) => ({ status: "active", ...org })),
