@@ -4,6 +4,7 @@ import { z } from "zod";
 export const NEARBUILDERS_PREVIEW_LIMIT = 6;
 const REQUEST_TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 2 * 60 * 1000;
+const STALE_TTL_MS = 60 * 60 * 1000;
 const MAX_DEPTH = 10;
 
 const builderSchema = z.object({
@@ -21,6 +22,7 @@ const projectSchema = z.object({
   visibility: z.string().optional(),
   cityNode: z.string().nullable().optional(),
 });
+const taggedSchema = z.object({ cityNode: z.string().nullable().optional() });
 const pageSchema = z.object({
   data: z.array(z.unknown()),
   meta: z.object({ total: z.number().int().nonnegative() }).optional(),
@@ -65,45 +67,52 @@ export function communityPath<E>(
     const slugs: string[] = [];
     const seen = new Set<string>();
     let current: string | null = nodeId;
-    while (current && !seen.has(current) && slugs.length < MAX_DEPTH) {
+    while (current) {
+      if (seen.has(current) || slugs.length >= MAX_DEPTH) return null;
       seen.add(current);
       const node: { slug: string; parentId: string | null } | null = yield* getNode(current);
-      if (!node) break;
+      if (!node) return null;
       slugs.push(node.slug.toLowerCase());
       current = node.parentId;
     }
-    return slugs.length === 0 ? null : slugs.reverse().join("/");
+    return slugs.reverse().join("/");
   });
 }
 
-function httpUrl(value: string | null | undefined) {
+function httpsUrl(value: string | null | undefined) {
   if (!value) return null;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+    return url.protocol === "https:" ? url.href : null;
   } catch {
     return null;
   }
 }
 
-function matchedPage<T>(
+function matchedPage<T extends { cityNode?: string | null }>(
   raw: unknown,
   schema: z.ZodType<T>,
+  path: string,
   matches: (item: T) => boolean,
 ): { items: T[]; total: number } {
   const page = pageSchema.parse(raw);
   const items = page.data.flatMap((entry) => {
     const parsed = schema.safeParse(entry);
-    return parsed.success && matches(parsed.data) ? [parsed.data] : [];
+    return parsed.success && parsed.data.cityNode === path && matches(parsed.data)
+      ? [parsed.data]
+      : [];
   });
-  const filteredByServer = items.length === page.data.length;
+  const filteredByServer = page.data.every(
+    (entry) => taggedSchema.safeParse(entry).data?.cityNode === path,
+  );
   const total = filteredByServer ? Math.max(page.meta?.total ?? 0, items.length) : items.length;
   return { items, total };
 }
 
 export function createNearbuilders(baseUrlInput: string) {
   const baseUrl = normalizeBaseUrl(baseUrlInput);
-  const cache = new Map<string, { expiresAt: number; value: CommunityBuilders }>();
+  const cache = new Map<string, { loadedAt: number; value: CommunityBuilders }>();
+  const pending = new Map<string, Promise<CommunityBuilders>>();
 
   async function request(path: string, params: Record<string, string>) {
     const url = new URL(`/api${path}`, baseUrl);
@@ -134,13 +143,14 @@ export function createNearbuilders(baseUrlInput: string) {
     const builders = matchedPage(
       builderPage,
       builderSchema,
-      (builder) => builder.cityNode === path && !builder.withdrawnAt,
+      path,
+      (builder) => !builder.withdrawnAt,
     );
     const projects = matchedPage(
       projectPage,
       projectSchema,
-      (project) =>
-        project.cityNode === path && (!project.visibility || project.visibility === "public"),
+      path,
+      (project) => !project.visibility || project.visibility === "public",
     );
     const result = empty(path, "ok");
     return {
@@ -160,7 +170,7 @@ export function createNearbuilders(baseUrlInput: string) {
         items: projects.items.slice(0, NEARBUILDERS_PREVIEW_LIMIT).map((project) => ({
           title: project.title,
           description: project.description?.trim() || null,
-          logoUrl: httpUrl(project.logoUrl),
+          logoUrl: httpsUrl(project.logoUrl),
           url: `${baseUrl}/projects/${encodeURIComponent(project.kind)}/${encodeURIComponent(project.slug)}`,
         })),
       },
@@ -169,16 +179,28 @@ export function createNearbuilders(baseUrlInput: string) {
 
   return {
     baseUrl,
-    forPath: async (path: string): Promise<CommunityBuilders> => {
+    forPath: (path: string): Promise<CommunityBuilders> => {
+      const now = Date.now();
       const cached = cache.get(path);
-      if (cached && cached.expiresAt > Date.now()) return cached.value;
-      try {
-        const value = await load(path);
-        cache.set(path, { expiresAt: Date.now() + CACHE_TTL_MS, value });
-        return value;
-      } catch {
-        return cached?.value ?? empty(path, "unavailable");
-      }
+      if (cached && now - cached.loadedAt < CACHE_TTL_MS) return Promise.resolve(cached.value);
+      const inFlight = pending.get(path);
+      if (inFlight) return inFlight;
+      const next = load(path)
+        .then((value) => {
+          for (const [key, entry] of cache) {
+            if (now - entry.loadedAt >= STALE_TTL_MS) cache.delete(key);
+          }
+          cache.set(path, { loadedAt: Date.now(), value });
+          return value;
+        })
+        .catch(() =>
+          cached && now - cached.loadedAt < STALE_TTL_MS
+            ? cached.value
+            : empty(path, "unavailable"),
+        )
+        .finally(() => pending.delete(path));
+      pending.set(path, next);
+      return next;
     },
   };
 }

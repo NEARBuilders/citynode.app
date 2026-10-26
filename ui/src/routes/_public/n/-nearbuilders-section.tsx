@@ -37,7 +37,6 @@ export function NearbuildersSection({ nodeId, nodeName }: { nodeId: string; node
   const unavailable = isError || data?.status === "unavailable";
   const builders = data?.builders.items ?? [];
   const projects = data?.projects.items ?? [];
-  const joinUrl = `${data?.baseUrl ?? "https://nearbuilders.org"}/join`;
 
   return (
     <section className="flex flex-col gap-6" data-testid="node-page.nearbuilders">
@@ -70,7 +69,7 @@ export function NearbuildersSection({ nodeId, nodeName }: { nodeId: string; node
               render={(props) => (
                 <a
                   {...props}
-                  href={joinUrl}
+                  href={`${data.baseUrl}/join`}
                   target="_blank"
                   rel="noopener noreferrer"
                   data-testid="node-page.nearbuilders-join"
