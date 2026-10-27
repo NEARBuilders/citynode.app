@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
 import { useAppTranslation } from "@/i18n/runtime";
 import "leaflet/dist/leaflet.css";
-import { boundaryLatLngs, mapAreas } from "./map-areas";
+import { boundaryBounds, boundaryLatLngs, mapAreas } from "./map-areas";
 
 type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
 
@@ -171,8 +171,10 @@ export function GeographicMap({
           if (key !== fitted) {
             fitted = key;
             const bounds = L.latLngBounds(points.map((p) => p.point));
-            for (const { boundary } of areas)
-              bounds.extend(L.polygon(boundaryLatLngs(boundary)).getBounds());
+            for (const { boundary } of areas) {
+              const extent = boundaryBounds(boundary);
+              if (extent) bounds.extend(extent);
+            }
             if (points.length)
               map.fitBounds(bounds, {
                 padding: [35, 35],

@@ -1041,7 +1041,9 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           input.geocodedLocation !== undefined
             ? input.geocodedLocation
             : (previous?.geocodedLocation ?? null);
-        const place = profilePlace(input, nodeKindOf(record.node.metadata));
+        const kind = nodeKindOf(record.node.metadata);
+        const place = profilePlace(input, kind);
+        const missingBoundary = kind === "country" && !previous?.boundary;
         let next: DiscoveryProfile = {
           ...input,
           geocodedLocation,
@@ -1058,6 +1060,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             boundary: null,
           };
         } else if (
+          missingBoundary ||
           shouldGeocodeProfile({
             location: place,
             latitude: next.latitude,
@@ -1073,7 +1076,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               longitude: geocoded.longitude,
               geocodedLocation: place,
               geocodeHint: null,
-              boundary: geocoded.boundary ?? null,
+              boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
             };
           } else {
             next = {

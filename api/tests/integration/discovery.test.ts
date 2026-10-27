@@ -256,6 +256,23 @@ it("places a country community from its region and keeps its outline", async () 
   });
   expect(city).toMatchObject({ latitude: 19.07, longitude: 72.87, boundary: null });
 
+  await editor.saveDiscoveryProfile({ ...saved, location: "", region });
+  const state = await provisioner.createNode({
+    name: "State",
+    slug: `state-${tenant.id}`,
+    kind: "state",
+    tenantId: tenant.id,
+  });
+  const stateSaved = await editor.saveDiscoveryProfile({
+    nodeId: state.id,
+    ...profile,
+    location: "",
+    region,
+    latitude: null,
+    longitude: null,
+  });
+  expect(stateSaved).toMatchObject({ latitude: 22.35, longitude: 78.66, boundary: null });
+
   const cleared = await editor.saveDiscoveryProfile({
     ...saved,
     location: "",
@@ -264,6 +281,50 @@ it("places a country community from its region and keeps its outline", async () 
     longitude: null,
   });
   expect(cleared).toMatchObject({ latitude: null, longitude: null, boundary: null });
+  vi.unstubAllGlobals();
+});
+
+it("adds an outline to a country community geocoded before outlines existed", async () => {
+  const realFetch = globalThis.fetch;
+  const outline = [
+    [
+      [33, -5],
+      [42, -5],
+      [42, 5],
+      [33, -5],
+    ],
+  ];
+  const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (!url.includes("nominatim.openstreetmap.org")) return realFetch(input, init);
+    return Response.json([
+      {
+        lat: "0.17",
+        lon: "37.9",
+        addresstype: "country",
+        geojson: { type: "Polygon", coordinates: outline },
+      },
+    ]);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  const { tenant, provisioner, editor } = await fixture();
+  const country = await provisioner.createNode({
+    name: "Country",
+    slug: `legacy-country-${tenant.id}`,
+    kind: "country",
+    tenantId: tenant.id,
+  });
+  const location = `Kenya-${country.id.slice(0, 8)}`;
+  const saved = await editor.saveDiscoveryProfile({
+    nodeId: country.id,
+    ...profile,
+    location,
+    latitude: 0.17,
+    longitude: 37.9,
+    geocodedLocation: location,
+  });
+  expect(saved.boundary).toEqual({ type: "Polygon", coordinates: outline });
   vi.unstubAllGlobals();
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundaryLatLngs, mapAreas } from "./map-areas";
+import { boundaryBounds, boundaryLatLngs, mapAreas } from "./map-areas";
 
 const square = [
   [
@@ -41,5 +41,34 @@ describe("mapAreas", () => {
     expect(mapAreas([country, node(null)]).map((area) => area.node.nodeId)).toEqual([
       country.nodeId,
     ]);
+  });
+});
+
+describe("boundaryBounds", () => {
+  it("returns the south-west and north-east corners of an outline", () => {
+    expect(boundaryBounds({ type: "Polygon", coordinates: square })).toEqual([
+      [10, 70],
+      [20, 80],
+    ]);
+  });
+
+  it("skips outlines that wrap across the antimeridian", () => {
+    const east = [
+      [
+        [172, 52],
+        [180, 52],
+        [180, 55],
+        [172, 52],
+      ],
+    ];
+    const west = [
+      [
+        [-125, 30],
+        [-70, 30],
+        [-70, 48],
+        [-125, 30],
+      ],
+    ];
+    expect(boundaryBounds({ type: "MultiPolygon", coordinates: [west, east] })).toBeNull();
   });
 });
