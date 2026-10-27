@@ -16,7 +16,7 @@ import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
 import { ApplyApplicantFields } from "./-apply-applicant-fields";
-import { type ApplyStepId, resolveApplySteps } from "./-apply-flow";
+import { type ApplyStepId, applicationInProgress, resolveApplySteps } from "./-apply-flow";
 import { useApplicationForm } from "./-apply-form";
 import { loadNodeApplicationParents } from "./-apply-loader";
 import { ApplyNodeFields } from "./-apply-node-fields";
@@ -82,9 +82,12 @@ function ApplyPage() {
     [],
   );
   const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
+  const latestApplication = myApplications.data?.data[0];
   const existingApplication = submittedProposalId
     ? myApplications.data?.data.find((proposal) => proposal.id === submittedProposalId)
-    : myApplications.data?.data[0];
+    : latestApplication && applicationInProgress(latestApplication)
+      ? latestApplication
+      : undefined;
   const existingPayload = existingApplication?.payload as
     | { orgId?: unknown; name?: unknown; slug?: unknown; accountId?: unknown }
     | undefined;

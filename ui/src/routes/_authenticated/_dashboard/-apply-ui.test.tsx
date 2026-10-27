@@ -266,7 +266,7 @@ describe("apply route submission", () => {
 
   it.each([
     ["pending", "not_started", "Awaiting review"],
-    ["approved", "applied", "Live"],
+    ["approved", "applying", "Applying"],
     ["rejected", "not_started", "Rejected"],
     ["approved", "failed", "Apply failed"],
   ])("shows %s/%s application status after reload", async (reviewStatus, applyStatus, expected) => {
@@ -294,6 +294,36 @@ describe("apply route submission", () => {
       fireEvent.click(screen.getByTestId("apply.revise"));
       expect(screen.getByTestId("apply.steps")).toBeTruthy();
     }
+  });
+
+  it.each([
+    ["approved", "applied"],
+    ["removed", "not_started"],
+  ])("opens a fresh form when the latest application is %s/%s", async (reviewStatus, applyStatus) => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus,
+          applyStatus,
+          rejectionReason: null,
+          applySteps: {},
+          applyTimedOut: false,
+          appliedAt: "2026-09-10T00:04:00.000Z",
+          payload: { name: "Springfield", slug: "springfield" },
+        },
+      ],
+    });
+    const queryClient = createQueryClient();
+    renderApply(queryClient);
+    await waitFor(() =>
+      expect(queryClient.getQueryState(["my-node-applications", "applicant.near"])?.status).toBe(
+        "success",
+      ),
+    );
+    expect(screen.getByTestId("apply.steps")).toBeTruthy();
+    expect(screen.queryByTestId("apply.submitted")).toBeNull();
+    expect(screen.queryByText("existing-1")).toBeNull();
   });
 
   it("shows the applicant which setup step is waiting on their DAO", async () => {
@@ -385,7 +415,6 @@ describe("apply route submission", () => {
       ],
     });
     renderApply();
-    fireEvent.click(await screen.findByTestId("apply.new"));
     fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
     await fillValidApplication();
     const submitButton = screen.getByRole("button", { name: "Submit for review" });
