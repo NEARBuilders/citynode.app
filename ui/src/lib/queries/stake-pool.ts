@@ -1,6 +1,9 @@
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
-import type { AuthClient } from "@/app";
+import type { ApiClient, AuthClient } from "@/app";
+import { AppActionError } from "@/i18n/error-message";
+import type { NodeTreasury } from "@/lib/node-staking-proposals";
+import type { DaoPlan } from "@/lib/sputnik-proposals";
 
 type Network = "mainnet" | "testnet";
 
@@ -34,7 +37,48 @@ export const stakePoolQueryKeys = {
     [...stakePoolQueryKeys.pool(accountId, network), "account", stakerAccountId] as const,
   status: (accountId: string, network: string) =>
     [...stakePoolQueryKeys.pool(accountId, network), "status"] as const,
+  approval: (accountId: string, network: string) =>
+    [...stakePoolQueryKeys.pool(accountId, network), "approval"] as const,
 };
+
+export function stakingPoolApprovalQueryOptions(
+  apiClient: ApiClient,
+  accountId: string,
+  network = "mainnet",
+) {
+  return queryOptions({
+    queryKey: stakePoolQueryKeys.approval(accountId, network),
+    enabled: !!accountId,
+    staleTime: 5 * 60_000,
+    retry: 1,
+    queryFn: () => apiClient.getStakingPoolApproval({ accountId, network }),
+  });
+}
+
+export async function requireApprovedStakingPool(
+  queryClient: QueryClient,
+  apiClient: ApiClient,
+  accountId: string,
+  network = "mainnet",
+) {
+  const { approved } = await queryClient
+    .fetchQuery({ ...stakingPoolApprovalQueryOptions(apiClient, accountId, network), staleTime: 0 })
+    .catch(() => {
+      throw new AppActionError("stake.poolCheckFailed");
+    });
+  if (!approved) throw new AppActionError("stake.poolNotApproved", { account: accountId });
+}
+
+export async function requireApprovedStakeStep(
+  queryClient: QueryClient,
+  apiClient: ApiClient,
+  step: { treasury: NodeTreasury; plan: DaoPlan },
+) {
+  const { treasury, plan } = step;
+  if (treasury === "team" && plan.kind === "call" && plan.methodName === "deposit_and_stake") {
+    await requireApprovedStakingPool(queryClient, apiClient, plan.receiverId);
+  }
+}
 
 export interface StakePoolValidator {
   accountId: string;

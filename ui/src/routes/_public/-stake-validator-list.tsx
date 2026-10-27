@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { type useApiClient, useAuthClient } from "@/app";
+import { useApiClient, useAuthClient } from "@/app";
+import { StakingPoolApprovalBadge } from "@/components/staking-pool-approval-badge";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldContent, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -9,6 +10,7 @@ import {
   formatPoolFee,
   isFullCommission,
   stakePoolStatsQueryOptions,
+  stakingPoolApprovalQueryOptions,
   toNetwork,
 } from "@/lib/queries/stake-pool";
 
@@ -46,9 +48,7 @@ export function StakeValidatorList({
                   <span className="max-w-full min-w-0 truncate font-mono text-sm font-medium text-foreground">
                     {validator.accountId}
                   </span>
-                  {validator.isDefault && (
-                    <Badge variant="success">{translate("stake.recommended")}</Badge>
-                  )}
+                  <PoolApproval validator={validator} />
                   {validator.role === "community" && (
                     <Badge variant="outline">{translate("common.community")}</Badge>
                   )}
@@ -61,6 +61,28 @@ export function StakeValidatorList({
         ))}
       </RadioGroup>
     </FieldSet>
+  );
+}
+
+function PoolApproval({ validator }: { validator: StakeValidator }) {
+  const translate = useAppTranslation();
+  const apiClient = useApiClient();
+  const protocol = validator.protocol || "near";
+  const { data } = useQuery({
+    ...stakingPoolApprovalQueryOptions(apiClient, validator.accountId, validator.network),
+    enabled: protocol === "near",
+  });
+  return (
+    <>
+      {validator.isDefault && data?.approved !== false && (
+        <Badge variant="success">{translate("stake.recommended")}</Badge>
+      )}
+      <StakingPoolApprovalBadge
+        accountId={validator.accountId}
+        network={validator.network}
+        protocol={protocol}
+      />
+    </>
   );
 }
 
