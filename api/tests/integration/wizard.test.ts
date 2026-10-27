@@ -3,6 +3,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { isExplicitDaoMember } from "@/services/dao";
 import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
+vi.mock("@/services/staking-pools", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/staking-pools")>()),
+  makeStakingPools: () => ({ isApproved: () => Effect.succeed(true) }),
+}));
+
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
     Effect.succeed({ isSputnikContract: true, isMember: true, policy: { roles: [] } }),

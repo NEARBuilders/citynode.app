@@ -272,7 +272,7 @@ describe("apply route submission", () => {
   });
 
   it("starts as a standalone city and requires a country for a state", async () => {
-    renderApply();
+    await renderApply();
     fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
     await waitFor(() => expect(stepStatus("details")).toBe("current"));
     expect(screen.getByTestId("apply.kind-city").getAttribute("aria-pressed")).toBe("true");
