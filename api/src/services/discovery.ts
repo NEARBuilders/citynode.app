@@ -19,12 +19,18 @@ import type {
   DiscoveryActivity,
   DiscoveryMeasurement,
   DiscoveryProfile,
+  StoredDiscoveryProfile,
 } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
 import { resolveTeamAccess } from "../team-access-policy";
-import { type GeocodeService, GeocodeTag, shouldGeocodeProfile } from "./discovery-geocode";
+import {
+  type GeocodeService,
+  GeocodeTag,
+  profilePlace,
+  shouldGeocodeProfile,
+} from "./discovery-geocode";
 import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";
 
@@ -1067,7 +1073,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     saveProfile: (input: DiscoveryProfile, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(input.nodeId, context);
+        const record = yield* authorize(input.nodeId, context);
         const [existing] = yield* query(() =>
           db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, input.nodeId)),
         );
@@ -1076,43 +1082,49 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           input.geocodedLocation !== undefined
             ? input.geocodedLocation
             : (previous?.geocodedLocation ?? null);
-        let next: DiscoveryProfile = {
+        const kind = nodeKindOf(record.node.metadata);
+        const place = profilePlace(input, kind);
+        const missingBoundary = kind === "country" && !previous?.boundary;
+        const stale = shouldGeocodeProfile({
+          location: place,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          geocodedLocation,
+        });
+        let next: StoredDiscoveryProfile = {
           ...input,
           geocodedLocation,
           geocodeHint: null,
+          boundary: previous?.boundary ?? null,
         };
-        if (!next.location.trim()) {
+        if (!place) {
           next = {
             ...next,
             latitude: null,
             longitude: null,
             geocodedLocation: null,
             geocodeHint: null,
+            boundary: null,
           };
-        } else if (
-          shouldGeocodeProfile({
-            location: next.location,
-            latitude: next.latitude,
-            longitude: next.longitude,
-            geocodedLocation,
-          })
-        ) {
-          const geocoded = yield* geocode.geocode(next.location);
+        } else if (stale || missingBoundary) {
+          const geocoded = yield* geocode.geocode(place);
           if (geocoded.ok) {
             next = {
               ...next,
               latitude: geocoded.latitude,
               longitude: geocoded.longitude,
-              geocodedLocation: next.location.trim(),
+              geocodedLocation: place,
               geocodeHint: null,
+              boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
             };
-          } else {
+          } else if (stale) {
             next = {
               ...next,
               latitude: null,
               longitude: null,
               geocodedLocation: null,
               geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
+              boundary: null,
             };
           }
         }
