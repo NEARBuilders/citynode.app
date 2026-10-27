@@ -13,25 +13,20 @@ import {
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { organizationByIdQueryOptions } from "@/lib/queries/organizations";
+import { tenantByAccountQueryOptions } from "@/lib/queries/tenants";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin")({
   beforeLoad: async ({ context }) => {
     const { apiClient, queryClient, runtimeConfig } = context;
-    const accountId = getAccount(runtimeConfig);
-    let tenant: Awaited<ReturnType<typeof apiClient.resolveTenant>> | null = null;
-    try {
-      tenant = await apiClient.resolveTenant({ accountId });
-    } catch {
-      tenant = null;
+    const tenant = await queryClient.ensureQueryData(
+      tenantByAccountQueryOptions(apiClient, getAccount(runtimeConfig)),
+    );
+    if (tenant?.orgId) {
+      await queryClient
+        .ensureQueryData(organizationByIdQueryOptions(apiClient, tenant.orgId))
+        .catch(() => null);
     }
-    const tenantOrganization = tenant?.orgId
-      ? await queryClient
-          .ensureQueryData(organizationByIdQueryOptions(apiClient, tenant.orgId))
-          .catch(() => null)
-      : null;
-    const tenantOrganizationSlug = tenantOrganization?.slug ?? null;
-    return { tenant, tenantOrganizationSlug };
   },
   head: ({ match }) => ({
     meta: [

@@ -1,7 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { Near } from "near-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AuthClient } from "@/app";
+import type { ApiClient, AuthClient } from "@/app";
+import { buildNodeSequence, EMPTY_CHAIN } from "@/lib/node-staking-proposals";
 import {
   formatNearBalance,
   formatPoolFee,
@@ -9,9 +10,11 @@ import {
   invalidateStakePoolQueries,
   isFullCommission,
   readStakePoolStatus,
+  requireApprovedStakeStep,
   resolveTeamAccountId,
   resolveTeamStakeTarget,
   stakePoolAccountQueryOptions,
+  stakePoolQueryKeys,
   stakePoolStatsQueryOptions,
   stakePoolTopHoldersQueryOptions,
 } from "./stake-pool";
@@ -424,5 +427,113 @@ describe("readStakePoolStatus", () => {
     await expect(
       readStakePoolStatus({ accountId: pool, authClient: fakeAuthClient() }),
     ).rejects.toThrow();
+  });
+});
+
+describe("requireApprovedStakeStep", () => {
+  function approvalApi(answer: boolean | Error) {
+    const getStakingPoolApproval = vi.fn(async () => {
+      if (answer instanceof Error) throw answer;
+      return { approved: answer };
+    });
+    return { api: { getStakingPoolApproval } as unknown as ApiClient, getStakingPoolApproval };
+  }
+  const queryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const stakePlan = {
+    kind: "call" as const,
+    receiverId: "pool.poolv1.near",
+    methodName: "deposit_and_stake",
+    args: {},
+    gas: "200000000000000",
+    attachedDeposit: "1",
+  };
+  const teamStake = { treasury: "team" as const, plan: stakePlan };
+
+  it("checks the pool the team stakes into", async () => {
+    const { api, getStakingPoolApproval } = approvalApi(true);
+
+    await expect(requireApprovedStakeStep(queryClient(), api, teamStake)).resolves.toBeUndefined();
+    expect(getStakingPoolApproval).toHaveBeenCalledWith({
+      accountId: "pool.poolv1.near",
+      network: "mainnet",
+    });
+  });
+
+  it("refuses a team stake into an account that isn't an approved pool", async () => {
+    const { api } = approvalApi(false);
+
+    await expect(requireApprovedStakeStep(queryClient(), api, teamStake)).rejects.toMatchObject({
+      messageId: "stake.poolNotApproved",
+      values: { account: "pool.poolv1.near" },
+    });
+  });
+
+  it("refuses a team stake when the pool can't be checked", async () => {
+    const { api } = approvalApi(new Error("rpc down"));
+
+    await expect(requireApprovedStakeStep(queryClient(), api, teamStake)).rejects.toMatchObject({
+      messageId: "stake.poolCheckFailed",
+    });
+  }, 10_000);
+
+  it("reads approval fresh instead of trusting a cached answer", async () => {
+    const client = queryClient();
+    const { api, getStakingPoolApproval } = approvalApi(false);
+    client.setQueryData(stakePoolQueryKeys.approval("pool.poolv1.near", "mainnet"), {
+      approved: true,
+    });
+
+    await expect(requireApprovedStakeStep(client, api, teamStake)).rejects.toMatchObject({
+      messageId: "stake.poolNotApproved",
+    });
+    expect(getStakingPoolApproval).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { treasury: "team" as const, plan: { ...stakePlan, methodName: "unstake" } },
+    {
+      treasury: "team" as const,
+      plan: { kind: "transfer" as const, receiverId: "pool.poolv1.near", amountYocto: "1" },
+    },
+  ])("doesn't check team steps that don't stake: %o", async (step) => {
+    const { api, getStakingPoolApproval } = approvalApi(false);
+
+    await expect(requireApprovedStakeStep(queryClient(), api, step)).resolves.toBeUndefined();
+    expect(getStakingPoolApproval).not.toHaveBeenCalled();
+  });
+
+  it("checks only the team's direct stake across a real Node sequence", async () => {
+    const actions = buildNodeSequence(
+      {
+        team: "team.sputnik-dao.near",
+        endowment: "endowment.sputnik-dao.near",
+        pool: "pool.poolv1.near",
+        teamStakeYocto: 10n ** 24n,
+        endowmentFundYocto: 50n * 10n ** 24n,
+        endowmentStakeYocto: 40n * 10n ** 24n,
+      },
+      {
+        ...EMPTY_CHAIN,
+        teamLockup: "team-lockup.venear.dao",
+        endowmentLockup: "endowment-lockup.venear.dao",
+      },
+    );
+    const steps = actions.flatMap((action) => action.steps);
+    const endowmentStake = steps.find((entry) => entry.id === "stake-endowment");
+    expect(endowmentStake?.plan).toMatchObject({
+      receiverId: "endowment-lockup.venear.dao",
+      methodName: "deposit_and_stake",
+    });
+
+    const refused: string[] = [];
+    for (const entry of steps) {
+      if (!entry.plan) continue;
+      const { api } = approvalApi(false);
+      await requireApprovedStakeStep(queryClient(), api, {
+        treasury: entry.treasury,
+        plan: entry.plan,
+      }).catch(() => refused.push(entry.id));
+    }
+    expect(refused).toEqual(["stake"]);
   });
 });

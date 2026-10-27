@@ -19,6 +19,7 @@ import {
   Input,
   SectionHeader,
 } from "@/components";
+import { StakingPoolApprovalBadge } from "@/components/staking-pool-approval-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldGroup } from "@/components/ui/field";
 import {
@@ -125,6 +126,11 @@ export function NodeValidators({
                 {validator.isDefault && (
                   <Badge variant="success">{translate("common.default")}</Badge>
                 )}
+                <StakingPoolApprovalBadge
+                  accountId={validator.accountId}
+                  network={validator.network}
+                  protocol={validator.protocol}
+                />
                 <RowMenu
                   label={translate("common.actionsNamed", { name: validator.accountId ?? "" })}
                   actions={[

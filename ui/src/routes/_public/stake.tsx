@@ -1,5 +1,5 @@
 import { ArrowLeftIcon } from "@phosphor-icons/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
@@ -22,6 +22,7 @@ import {
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
+import { stakingPoolApprovalQueryOptions } from "@/lib/queries/stake-pool";
 import { stakeCommunitiesQueryOptions } from "@/lib/queries/tenants";
 import { requireTeamArea } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -30,7 +31,11 @@ import { StakeForm } from "./-stake-form";
 import { useStakeMutation, useStakeWalletConnection } from "./-stake-mutations";
 import { StakeNodeContent } from "./-stake-node-content";
 import { StakeOnramp } from "./-stake-onramp";
-import { getActiveOrganizationNodeId, getStakeScopeKey } from "./-stake-selection";
+import {
+  chooseDefaultValidator,
+  getActiveOrganizationNodeId,
+  getStakeScopeKey,
+} from "./-stake-selection";
 import { StakeSkeleton } from "./-stake-skeleton";
 
 export const Route = createFileRoute("/_public/stake")({
@@ -172,15 +177,25 @@ function StakePage() {
     ...childNodesQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId && validators.length === 0,
   });
+  const approvalQueries = useQueries({
+    queries: validators.map((validator) => ({
+      ...stakingPoolApprovalQueryOptions(apiClient, validator.accountId, validator.network),
+      enabled: (validator.protocol || "near") === "near",
+    })),
+  });
+  const unapprovedKey = validators
+    .filter((_, index) => approvalQueries[index]?.data?.approved === false)
+    .map((validator) => validator.id)
+    .join(",");
   const defaultValidator = useMemo(
-    () => validators.find((validator) => validator.isDefault) ?? validators[0] ?? null,
-    [validators],
+    () => chooseDefaultValidator(validators, new Set(unapprovedKey.split(","))),
+    [validators, unapprovedKey],
   );
   const selectedValidator =
     validators.find((validator) => validator.id === selectedValidatorId) ?? defaultValidator;
   const parsedYocto = useMemo(() => parseNearAmount(amount), [amount]);
 
-  const stakeMutation = useStakeMutation(auth, queryClient);
+  const stakeMutation = useStakeMutation(auth, apiClient, queryClient);
 
   const form = (
     <StakeForm
