@@ -52,6 +52,33 @@ export function isNearUnavailableError(error: unknown) {
   );
 }
 
+function errorData(error: unknown) {
+  if (!error || typeof error !== "object") return undefined;
+  const data = Reflect.get(error, "data");
+  return data && typeof data === "object" ? data : undefined;
+}
+
+function stakingPoolErrorMessage(error: unknown): AppMessageId | null {
+  const { code } = errorStatusAndCode(error);
+  const data = errorData(error);
+  if (
+    code === "CONNECTION_ERROR" &&
+    data &&
+    Reflect.get(data, "errorCode") === "STAKING_POOL_CHECK_FAILED"
+  ) {
+    return "stake.poolCheckFailed";
+  }
+  const validationErrors = data ? Reflect.get(data, "validationErrors") : undefined;
+  if (
+    code === "BAD_REQUEST" &&
+    Array.isArray(validationErrors) &&
+    validationErrors.some((entry) => entry?.code === "STAKING_POOL_NOT_APPROVED")
+  ) {
+    return "tenant.notApprovedPool";
+  }
+  return null;
+}
+
 export function appErrorMessage(
   error: unknown,
   t: AppTranslator,
@@ -63,6 +90,8 @@ export function appErrorMessage(
   if (isPermissionError(error)) return t("error.permission");
   if (status === 409 || code === "CONFLICT") return t("error.conflict");
   if (isNearUnavailableError(error)) return t("error.nearUnavailable");
+  const stakingPoolMessage = stakingPoolErrorMessage(error);
+  if (stakingPoolMessage) return t(stakingPoolMessage);
   if (isWalletCancelled(error)) return t("wallet.cancelled");
   return t(fallback);
 }

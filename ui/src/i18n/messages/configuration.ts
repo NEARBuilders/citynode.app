@@ -325,6 +325,18 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Elle a peut-être été supprimée ou vous n'y avez pas accès.",
     "社区可能已删除，或你没有访问权限。",
   ],
+  "tenant.notApprovedPool": [
+    "Not an approved staking pool",
+    "No es un pool de delegación aprobado",
+    "Pas un pool de staking approuvé",
+    "不是经批准的质押池",
+  ],
+  "tenant.notApprovedPoolDescription": [
+    "NEAR's staking pool whitelist doesn't list this account, so stake won't be sent to it. Replace it with an approved pool.",
+    "La lista de pools aprobados de NEAR no incluye esta cuenta, así que no se enviará stake a ella. Sustitúyela por un pool aprobado.",
+    "La liste des pools de staking approuvés de NEAR n'inclut pas ce compte : aucune mise n'y sera envoyée. Remplacez-le par un pool approuvé.",
+    "NEAR 的质押池白名单中没有此账户，因此不会向其发送质押。请替换为经批准的质押池。",
+  ],
   "tenant.notPool": [
     "Not a staking pool",
     "No es un pool de delegación",

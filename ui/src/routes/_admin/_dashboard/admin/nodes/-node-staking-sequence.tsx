@@ -56,7 +56,11 @@ import {
   withEndowment,
 } from "@/lib/node-staking-proposals";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
-import { formatNearBalance, resolveTeamAccountId } from "@/lib/queries/stake-pool";
+import {
+  formatNearBalance,
+  requireApprovedStakeStep,
+  resolveTeamAccountId,
+} from "@/lib/queries/stake-pool";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import {
   canAccountPropose,
@@ -308,6 +312,7 @@ export function NodeStakingSequence({
         });
       }
       if (!plan) throw new AppActionError("admin.sequence.needsInput");
+      await requireApprovedStakeStep(queryClient, apiClient, { treasury: step.treasury, plan });
       await proposeAsSession(
         auth.near,
         dao,
