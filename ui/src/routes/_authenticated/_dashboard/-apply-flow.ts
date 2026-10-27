@@ -29,6 +29,5 @@ export function applicationInProgress(application: {
   reviewStatus: ReviewStatus;
   applyStatus: ApplyStatus;
 }) {
-  if (application.reviewStatus === "approved") return application.applyStatus !== "applied";
-  return application.reviewStatus === "pending" || application.reviewStatus === "rejected";
+  return application.reviewStatus !== "approved" || application.applyStatus !== "applied";
 }

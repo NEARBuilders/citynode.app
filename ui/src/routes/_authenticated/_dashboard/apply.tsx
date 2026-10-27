@@ -7,6 +7,7 @@ import { getGatewayId, useApiClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
 import { AppActionError, appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
@@ -32,6 +33,10 @@ import {
 } from "./-node-application";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
+  validateSearch: (search: Record<string, unknown>): { application?: string } =>
+    typeof search.application === "string" && search.application
+      ? { application: search.application }
+      : {},
   loader: ({ context }) =>
     loadNodeApplicationParents({
       apiClient: context.apiClient,
@@ -68,6 +73,7 @@ function ApplyPage() {
   const queryClient = useQueryClient();
   const initialRootNodes = Route.useLoaderData();
   const { runtimeConfig } = Route.useRouteContext();
+  const { application: viewedApplicationId } = Route.useSearch();
   const gatewayId = getGatewayId(runtimeConfig);
   const nearAccountId = useNearAccount();
   const daoConnection = useDaoConnection();
@@ -82,12 +88,24 @@ function ApplyPage() {
     [],
   );
   const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
-  const latestApplication = myApplications.data?.data[0];
+  const latestApplication = myApplications.data?.data.reduce<
+    (typeof myApplications.data.data)[number] | undefined
+  >(
+    (latest, proposal) =>
+      !latest || Date.parse(proposal.createdAt) > Date.parse(latest.createdAt) ? proposal : latest,
+    undefined,
+  );
+  const shownProposalId = submittedProposalId ?? viewedApplicationId;
+  const viewedApplication = shownProposalId
+    ? myApplications.data?.data.find((proposal) => proposal.id === shownProposalId)
+    : undefined;
   const existingApplication = submittedProposalId
-    ? myApplications.data?.data.find((proposal) => proposal.id === submittedProposalId)
-    : latestApplication && applicationInProgress(latestApplication)
-      ? latestApplication
-      : undefined;
+    ? viewedApplication
+    : viewedApplication && !revising
+      ? viewedApplication
+      : latestApplication && applicationInProgress(latestApplication)
+        ? latestApplication
+        : undefined;
   const existingPayload = existingApplication?.payload as
     | { orgId?: unknown; name?: unknown; slug?: unknown; accountId?: unknown }
     | undefined;
@@ -178,6 +196,16 @@ function ApplyPage() {
         <Button variant="outline" onClick={() => void myApplications.refetch()}>
           {t("common.retry")}
         </Button>
+      </PageContainer>
+    );
+  }
+
+  if (nearAccountId && myApplications.isPending && !submittedProposalId) {
+    return (
+      <PageContainer variant="narrow">
+        <div className="flex justify-center py-12" data-testid="apply.loading">
+          <Spinner />
+        </div>
       </PageContainer>
     );
   }

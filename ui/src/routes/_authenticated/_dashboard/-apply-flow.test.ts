@@ -44,7 +44,7 @@ describe("application in progress", () => {
     ["approved", "failed", true],
     ["rejected", "not_started", true],
     ["approved", "applied", false],
-    ["removed", "not_started", false],
+    ["removed", "not_started", true],
   ] as const)("treats %s/%s as in progress: %s", (reviewStatus, applyStatus, expected) => {
     expect(applicationInProgress({ reviewStatus, applyStatus })).toBe(expected);
   });
