@@ -1859,4 +1859,5 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "技术详情",
   ],
   "admin.runtime": ["This runtime", "Este entorno", "Cet environnement", "此运行环境"],
+  "admin.appInfo": ["App info", "Información de la app", "Infos de l’app", "应用信息"],
 });

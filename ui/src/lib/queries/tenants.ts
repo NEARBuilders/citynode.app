@@ -15,6 +15,7 @@ export const tenantQueryKeys = {
     [...tenantQueryKeys.details(), "key", tenantKey, gatewayId] as const,
   byOrg: (orgId: string) => [...tenantQueryKeys.details(), "org", orgId] as const,
   byId: (tenantId: string) => [...tenantQueryKeys.details(), "id", tenantId] as const,
+  byAccount: (accountId: string) => [...tenantQueryKeys.details(), "account", accountId] as const,
   bindings: (tenantId: string) =>
     [...tenantQueryKeys.details(), "id", tenantId, "bindings"] as const,
   preflight: (hostname: string) => [...tenantQueryKeys.all, "binding-preflight", hostname] as const,
@@ -24,6 +25,14 @@ export function tenantsQueryOptions(apiClient: ApiClient) {
   return queryOptions({
     queryKey: tenantQueryKeys.list(),
     queryFn: () => apiClient.listTenants(),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function tenantByAccountQueryOptions(apiClient: ApiClient, accountId: string) {
+  return queryOptions({
+    queryKey: tenantQueryKeys.byAccount(accountId),
+    queryFn: () => apiClient.resolveTenant({ accountId }).catch(() => null),
     staleTime: 30 * 1000,
   });
 }
