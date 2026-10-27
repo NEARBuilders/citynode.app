@@ -68,8 +68,8 @@ export function GeographicMap({
             for (const offset of WORLD_COPY_OFFSETS) {
               const area = L.polygon(boundaryLatLngs(boundary, offset), {
                 className: active
-                  ? "fill-primary/40 stroke-primary"
-                  : "fill-primary/20 stroke-primary hover:fill-primary/30",
+                  ? "fill-brand/55 stroke-brand-strong"
+                  : "fill-brand/35 stroke-brand-strong hover:fill-brand/45",
                 fillOpacity: 1,
                 opacity: 1,
                 weight: active ? 2 : 1,
