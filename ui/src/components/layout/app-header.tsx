@@ -1,7 +1,7 @@
 import { UsersIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { ClientRuntimeConfig } from "@/app";
 import { getAppName, useApiClient } from "@/app";
 import {
@@ -23,9 +23,10 @@ import { UserNav } from "./user-nav";
 
 interface AppHeaderProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
+  actions?: ReactNode;
 }
 
-export function AppHeader({ runtimeConfig }: AppHeaderProps) {
+export function AppHeader({ runtimeConfig, actions }: AppHeaderProps) {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
   const { user, organizations } = useIdentity();
@@ -94,6 +95,7 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
           </div>
         )}
         <div className="flex shrink-0 items-center gap-1">
+          {actions}
           <ThemeToggle />
           <UserNav />
         </div>
