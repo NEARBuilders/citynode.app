@@ -51,12 +51,19 @@ including their areas and membership. Teams start empty; admins explicitly assig
 members. A provisioning timestamp prevents duplicate creation and preserves later
 renames, area changes, and deletions across repeated activation.
 
-Owners, org admins, and platform admins bypass feature-area restrictions. For a
-regular member with an active team, routes guarded by `requireTeamArea` require
-one of that team's assigned areas. A regular member without an active team needs
-at least one of their teams to have the area; a member with no such team, for
-example one who joined through an onboarding code, is rejected. Individual routes
-still enforce their own authentication and organization checks, and node and
-validator routes repeat the node-operations check when they resolve the node's
-organization. Feature areas never grant community settings access, regardless of
-team membership.
+Owners, org admins, and platform admins bypass feature-area restrictions. On the
+server, a regular member may use an area when any team they belong to in the
+active organization is assigned it, whatever team is active; the active team
+never narrows API access. A member with no such team, for example one who joined
+through an onboarding code, is refused and told to ask an owner or admin to add
+them to a team with that area. Individual routes still
+enforce their own authentication and organization checks.
+
+Node operations follow this rule. Node edits (`createNode`, `spawnNode`,
+`updateNode`, `setNodeBulletin`, `deleteNode`) and validator edits
+(`createValidator`, `updateValidator`, `setDefaultValidator`, `deleteValidator`)
+are open to platform admins, the node's organization owners and admins, and
+members of any of that organization's teams granted `node-operations`. A grant in
+another organization never reaches a node outside it, and organization API keys
+cannot make these edits. `deleteNode` also requires the org admin role. Feature
+areas never grant community settings access, regardless of team membership.
