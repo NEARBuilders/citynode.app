@@ -118,8 +118,17 @@ export async function requireTeamArea({
   }
 }
 
-export function canOrganizeEvents(context: AuthRequestContext | null | undefined): boolean {
-  if (canManageCommunity(context)) return true;
+export function canOrganizeEvents(
+  context: AuthRequestContext | null | undefined,
+  { includePlatformAdmin = true }: { includePlatformAdmin?: boolean } = {},
+): boolean {
+  if (
+    includePlatformAdmin
+      ? canManageCommunity(context)
+      : isCommunitySettingsRole(context?.organization?.member?.role)
+  ) {
+    return true;
+  }
   if (!context?.organization?.member?.role) return false;
   return (context.organization.teams ?? []).some((team) => team.areas.includes("events"));
 }

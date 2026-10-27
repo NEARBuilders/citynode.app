@@ -5,7 +5,7 @@ import { discoveryNodeQueryOptions } from "@/components/discovery/event-visibili
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
-import { canManageCommunity, teamWorkspaceQueryOptions } from "@/lib/team-workspace";
+import { canManageCommunity, resolveTeamWorkspace } from "@/lib/team-workspace";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
 import { hasNodeProposalReviewPermission, resolveCommunityTools } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
@@ -90,12 +90,9 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
     context.queryClient.setQueryData(nodeQueryKeys.tenant(tenant.id), nodes);
     context.queryClient.setQueryData(nodeQueryKeys.byId(selectedNode.id), selectedNode);
     const canManage = canReview || canManageCommunity(authContext);
-    const workspace = await context.queryClient
-      .ensureQueryData(teamWorkspaceQueryOptions(context.apiClient))
-      .catch(() => null);
     const { inFinanceTeam, canOrganize } = resolveCommunityTools(
       authContext,
-      workspace?.allowedAreas ?? null,
+      resolveTeamWorkspace(authContext).allowedAreas,
       selectedNode.id,
     );
 

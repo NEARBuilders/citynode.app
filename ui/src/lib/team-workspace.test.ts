@@ -299,6 +299,20 @@ describe("community permissions", () => {
     expect(canOrganizeEvents(context({ teams: [] }))).toBe(false);
     expect(canOrganizeEvents(null)).toBe(false);
   });
+
+  it("can omit the platform-admin bypass when Overview tools ask for membership", () => {
+    const adminOnly = {
+      user: { role: "admin" },
+      organization: {
+        activeOrganizationId: "org-1",
+        member: null,
+        teams: [],
+        activeTeamId: null,
+      },
+    } as unknown as AuthRequestContext;
+    expect(canOrganizeEvents(adminOnly)).toBe(true);
+    expect(canOrganizeEvents(adminOnly, { includePlatformAdmin: false })).toBe(false);
+  });
 });
 
 describe("teamWorkspaceQueryOptions", () => {
