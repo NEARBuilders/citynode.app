@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
 import { useAppTranslation } from "@/i18n/runtime";
 import "leaflet/dist/leaflet.css";
+import { boundaryLatLngs, mapAreas } from "./map-areas";
 
 type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
 
@@ -56,9 +57,29 @@ export function GeographicMap({
         }).addTo(map);
         tiles.on("tileerror", () => setFailed(true));
         let points: { node: Node; point: ReturnType<typeof L.latLng> }[] = [];
+        let areas: ReturnType<typeof mapAreas> = [];
         let fitted = "";
+        const regions = L.layerGroup().addTo(map);
         const markers = L.layerGroup().addTo(map);
         const draw = () => {
+          regions.clearLayers();
+          for (const { node, boundary } of areas) {
+            const active = node.nodeId === selected.current;
+            for (const offset of WORLD_COPY_OFFSETS) {
+              const area = L.polygon(boundaryLatLngs(boundary, offset), {
+                className: active
+                  ? "fill-primary/40 stroke-primary"
+                  : "fill-primary/20 stroke-primary hover:fill-primary/30",
+                fillOpacity: 1,
+                opacity: 1,
+                weight: active ? 2 : 1,
+              }).addTo(regions);
+              area.getElement()?.setAttribute("aria-hidden", "true");
+              if (offset === 0)
+                area.getElement()?.setAttribute("data-testid", `discovery-map-area-${node.nodeId}`);
+              area.on("click", () => select.current(node.nodeId));
+            }
+          }
           markers.clearLayers();
           const groups = new Map<string, typeof points>();
           for (const p of points) {
@@ -140,6 +161,7 @@ export function GeographicMap({
               ? [{ node, point: L.latLng(node.latitude, node.longitude) }]
               : [],
           );
+          areas = mapAreas(next);
           // Only move the viewport when the result set itself changed, so a
           // background refetch of the same communities leaves it alone.
           const key = points
@@ -148,8 +170,11 @@ export function GeographicMap({
             .join(",");
           if (key !== fitted) {
             fitted = key;
+            const bounds = L.latLngBounds(points.map((p) => p.point));
+            for (const { boundary } of areas)
+              bounds.extend(L.polygon(boundaryLatLngs(boundary)).getBounds());
             if (points.length)
-              map.fitBounds(L.latLngBounds(points.map((p) => p.point)), {
+              map.fitBounds(bounds, {
                 padding: [35, 35],
                 maxZoom: 8,
               });

@@ -190,6 +190,83 @@ it("derives coordinates from location via Nominatim and skips when already geoco
   vi.unstubAllGlobals();
 });
 
+it("places a country community from its region and keeps its outline", async () => {
+  const realFetch = globalThis.fetch;
+  const outline = [
+    [
+      [68, 8],
+      [97, 8],
+      [97, 35],
+      [68, 8],
+    ],
+  ];
+  const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (!url.includes("nominatim.openstreetmap.org")) return realFetch(input, init);
+    if (url.includes("Mumbai-"))
+      return Response.json([{ lat: "19.07", lon: "72.87", addresstype: "city" }]);
+    return Response.json([
+      {
+        lat: "22.35",
+        lon: "78.66",
+        addresstype: "country",
+        geojson: { type: "Polygon", coordinates: outline },
+      },
+    ]);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  const { tenant, provisioner, editor, publicClient } = await fixture();
+  const country = await provisioner.createNode({
+    name: "Country",
+    slug: `country-${tenant.id}`,
+    kind: "country",
+    tenantId: tenant.id,
+  });
+  const region = `India-${country.id.slice(0, 8)}`;
+  const saved = await editor.saveDiscoveryProfile({
+    nodeId: country.id,
+    ...profile,
+    location: "",
+    region,
+    latitude: null,
+    longitude: null,
+  });
+  expect(saved).toMatchObject({
+    latitude: 22.35,
+    longitude: 78.66,
+    geocodedLocation: region,
+    boundary: { type: "Polygon", coordinates: outline },
+  });
+  expect(await publicClient.getDiscoveryNode({ nodeId: country.id })).toMatchObject({
+    latitude: 22.35,
+    boundary: { type: "Polygon", coordinates: outline },
+  });
+
+  const resaved = await editor.saveDiscoveryProfile({
+    ...saved,
+    summary: "Updated",
+    boundary: null,
+  });
+  expect(resaved.boundary).toEqual({ type: "Polygon", coordinates: outline });
+
+  const city = await editor.saveDiscoveryProfile({
+    ...saved,
+    location: `Mumbai-${country.id.slice(0, 8)}`,
+  });
+  expect(city).toMatchObject({ latitude: 19.07, longitude: 72.87, boundary: null });
+
+  const cleared = await editor.saveDiscoveryProfile({
+    ...saved,
+    location: "",
+    region: "",
+    latitude: null,
+    longitude: null,
+  });
+  expect(cleared).toMatchObject({ latitude: null, longitude: null, boundary: null });
+  vi.unstubAllGlobals();
+});
+
 it("publishes attributed activity, shares events and removes cancelled evidence", async () => {
   const { node, editor, publicClient } = await fixture();
   const other = await fixture();

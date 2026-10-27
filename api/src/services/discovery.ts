@@ -24,7 +24,12 @@ import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
 import { resolveTeamAccess } from "../team-access-policy";
-import { type GeocodeService, GeocodeTag, shouldGeocodeProfile } from "./discovery-geocode";
+import {
+  type GeocodeService,
+  GeocodeTag,
+  profilePlace,
+  shouldGeocodeProfile,
+} from "./discovery-geocode";
 import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";
 
@@ -1027,7 +1032,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     saveProfile: (input: DiscoveryProfile, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(input.nodeId, context);
+        const record = yield* authorize(input.nodeId, context);
         const [existing] = yield* query(() =>
           db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, input.nodeId)),
         );
@@ -1036,35 +1041,39 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           input.geocodedLocation !== undefined
             ? input.geocodedLocation
             : (previous?.geocodedLocation ?? null);
+        const place = profilePlace(input, nodeKindOf(record.node.metadata));
         let next: DiscoveryProfile = {
           ...input,
           geocodedLocation,
           geocodeHint: null,
+          boundary: previous?.boundary ?? null,
         };
-        if (!next.location.trim()) {
+        if (!place) {
           next = {
             ...next,
             latitude: null,
             longitude: null,
             geocodedLocation: null,
             geocodeHint: null,
+            boundary: null,
           };
         } else if (
           shouldGeocodeProfile({
-            location: next.location,
+            location: place,
             latitude: next.latitude,
             longitude: next.longitude,
             geocodedLocation,
           })
         ) {
-          const geocoded = yield* geocode.geocode(next.location);
+          const geocoded = yield* geocode.geocode(place);
           if (geocoded.ok) {
             next = {
               ...next,
               latitude: geocoded.latitude,
               longitude: geocoded.longitude,
-              geocodedLocation: next.location.trim(),
+              geocodedLocation: place,
               geocodeHint: null,
+              boundary: geocoded.boundary ?? null,
             };
           } else {
             next = {
@@ -1073,6 +1082,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               longitude: null,
               geocodedLocation: null,
               geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
+              boundary: null,
             };
           }
         }
