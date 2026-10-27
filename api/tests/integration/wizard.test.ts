@@ -405,14 +405,33 @@ describe("Tenant + Node + Binding wizard flow", () => {
           accountId: fixture.accountId,
           status: "active",
         });
-        await client.createNode({
+        const node = await client.createNode({
           kind: "community",
           slug: fixture.slug,
           name: fixture.slug,
           parentId: null,
           tenantId: tenant.id,
         });
+        if (fixture.accountId === accounts.active) {
+          await client.createValidator({
+            nodeId: node.id,
+            accountId: "stake-scope-validator.near",
+            role: "community",
+            isDefault: true,
+          });
+        }
       }
+    });
+
+    it("flags which communities can be staked to", async () => {
+      const results = await (await getPluginClient()).listStakeCommunities();
+      const stakeable = Object.fromEntries(
+        results.map((result) => [result.accountId, result.stakeable]),
+      );
+
+      expect(stakeable[accounts.active]).toBe(true);
+      expect(stakeable[accounts.connected]).toBe(false);
+      expect(stakeable[accounts.unrelated]).toBe(false);
     });
 
     it("keeps the full directory for anonymous visitors", async () => {

@@ -1,6 +1,7 @@
 import { ArrowRightIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import { SectionHeader } from "@/components";
+import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
 
@@ -38,6 +39,16 @@ export function StakeNoValidator({ name, childNodes }: { name: string; childNode
           ))}
         </ul>
       )}
+      <div>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link to="/explore" data-testid="stake.explore-communities" />}
+        >
+          {translate("stake.exploreCommunities")}
+          <ArrowRightIcon />
+        </Button>
+      </div>
     </section>
   );
 }

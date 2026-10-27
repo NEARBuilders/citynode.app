@@ -11,7 +11,11 @@ import { AppActionError, appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
-import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
+import {
+  childNodesQueryOptions,
+  nodeByIdQueryOptions,
+  rootNodesQueryOptions,
+} from "@/lib/queries/nodes";
 import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -72,7 +76,7 @@ function ApplyPage() {
   const nearAccountId = useNearAccount();
   const daoConnection = useDaoConnection();
   const slugManuallyEdited = useRef(false);
-  const [rootParentId, setRootParentId] = useState(initialRootNodes[0]?.id ?? "");
+  const [rootParentId, setRootParentId] = useState("");
   const [submittedProposalId, setSubmittedProposalId] = useState<string | null>(null);
   const [revising, setRevising] = useState(false);
   const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
@@ -131,7 +135,9 @@ function ApplyPage() {
   const legacyOrgId = retainedOrgId(formValues.slug);
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
-  const rootNodes = queriedRootNodes ?? initialRootNodes;
+  const rootNodes = (queriedRootNodes ?? initialRootNodes).filter(
+    (node) => node.kind === "country",
+  );
   useEffect(() => {
     if (verifiedDaoAccountId && verifiedDaoAccountId !== daoConnection.daoAccountId) {
       setVerifiedDaoAccountId(null);
@@ -197,13 +203,29 @@ function ApplyPage() {
           existingApplication?.reviewStatus === "rejected" && !submittedProposalId
             ? () => {
                 const prior = existingApplication.payload as Partial<NodeApplicationValues>;
-                form.reset({
-                  kind: prior.kind ?? "country",
-                  parentId: prior.parentId ?? null,
-                  name: prior.name ?? "",
-                  slug: prior.slug ?? "",
-                  motivation: prior.motivation ?? "",
-                });
+                const parentId = prior.parentId ?? null;
+                const country = rootNodes.find((node) => node.id === parentId);
+                setRootParentId(country?.id ?? "");
+                if (parentId && !country) {
+                  queryClient
+                    .fetchQuery(nodeByIdQueryOptions(apiClient, parentId))
+                    .then((parent) =>
+                      parent
+                        ? setRootParentId(parent.parentId ?? "")
+                        : form.setFieldValue("parentId", null),
+                    )
+                    .catch(() => form.setFieldValue("parentId", null));
+                }
+                form.reset(
+                  {
+                    kind: prior.kind ?? "city",
+                    parentId: prior.parentId ?? null,
+                    name: prior.name ?? "",
+                    slug: prior.slug ?? "",
+                    motivation: prior.motivation ?? "",
+                  },
+                  { keepDefaultValues: true },
+                );
                 setRevising(true);
               }
             : undefined

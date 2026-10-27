@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { Clock, Context, DateTime, Effect, Layer, Schedule } from "effect";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
@@ -274,6 +274,52 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         })
         .filter((p) => (!input.active || p.active) && (!input.upcoming || p.upcoming))
         .sort((a, b) => a.name.localeCompare(b.name) || a.nodeId.localeCompare(b.nodeId));
+    });
+  }
+
+  function directory(input: {
+    query?: string;
+    region?: string;
+    active?: boolean;
+    upcoming?: boolean;
+  }) {
+    return Effect.gen(function* () {
+      const listed = yield* list(input);
+      if (input.region || input.active || input.upcoming) return listed;
+      const rows = yield* query(() =>
+        db
+          .select({ node: nodes })
+          .from(nodes)
+          .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+          .leftJoin(discoveryProfiles, eq(discoveryProfiles.nodeId, nodes.id))
+          .where(and(eq(tenants.status, "active"), isNull(discoveryProfiles.nodeId))),
+      );
+      const search = input.query?.toLowerCase();
+      const basic = rows
+        .filter(({ node }) => !search || node.name.toLowerCase().includes(search))
+        .map(({ node }) => ({
+          nodeId: node.id,
+          summary: "",
+          location: "",
+          region: "",
+          latitude: null,
+          longitude: null,
+          channels: [],
+          published: false,
+          featured: null,
+          active: false,
+          upcoming: false,
+          activityReason: "Quiet lately",
+          events: [],
+          updates: [],
+          name: node.name,
+          slug: node.slug,
+          parentId: node.parentId,
+          kind: nodeKindOf(node.metadata),
+        }));
+      return [...listed, ...basic].sort(
+        (a, b) => a.name.localeCompare(b.name) || a.nodeId.localeCompare(b.nodeId),
+      );
     });
   }
 
@@ -552,13 +598,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
   });
 
   return {
-    list: (input: {
-      query?: string;
-      region?: string;
-      active?: boolean;
-      upcoming?: boolean;
-      nodeId?: string;
-    }) => list(input),
+    directory,
     lumaCalendars: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
         yield* authorize(nodeId, context, EVENTS_AREA);
