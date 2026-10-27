@@ -23,7 +23,6 @@ export const profileSchema = z
     published: z.boolean(),
     geocodedLocation: z.string().trim().max(120).nullable().optional(),
     geocodeHint: z.string().trim().max(200).nullable().optional(),
-    boundary: boundarySchema.nullable().optional(),
   })
   .refine(
     (p) => (p.latitude === null) === (p.longitude === null),
@@ -34,6 +33,9 @@ export const profileSchema = z
     "Confirm the location label",
   );
 export type DiscoveryProfile = z.infer<typeof profileSchema>;
+export type StoredDiscoveryProfile = DiscoveryProfile & {
+  boundary?: z.infer<typeof boundarySchema> | null;
+};
 export const activitySchema = z.object({
   id: z.uuid(),
   ownerNodeId: z.uuid(),
@@ -90,6 +92,7 @@ export const activityInput = activitySchema
       });
   });
 export const discoveryNodeSchema = profileSchema.safeExtend({
+  boundary: boundarySchema.nullable().optional(),
   featured: z.string().nullable(),
   active: z.boolean(),
   activityReason: z.string(),

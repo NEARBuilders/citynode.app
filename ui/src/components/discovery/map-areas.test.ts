@@ -52,8 +52,31 @@ describe("boundaryBounds", () => {
     ]);
   });
 
-  it("skips outlines that wrap across the antimeridian", () => {
+  it("measures outlines that cross the antimeridian the short way round", () => {
     const east = [
+      [
+        [170, 60],
+        [180, 60],
+        [180, 70],
+        [170, 60],
+      ],
+    ];
+    const west = [
+      [
+        [-180, 60],
+        [-170, 60],
+        [-170, 70],
+        [-180, 60],
+      ],
+    ];
+    expect(boundaryBounds({ type: "MultiPolygon", coordinates: [east, west] })).toEqual([
+      [60, 170],
+      [70, 190],
+    ]);
+  });
+
+  it("keeps the USA with its Aleutians in one view", () => {
+    const aleutians = [
       [
         [172, 52],
         [180, 52],
@@ -61,7 +84,7 @@ describe("boundaryBounds", () => {
         [172, 52],
       ],
     ];
-    const west = [
+    const mainland = [
       [
         [-125, 30],
         [-70, 30],
@@ -69,6 +92,21 @@ describe("boundaryBounds", () => {
         [-125, 30],
       ],
     ];
-    expect(boundaryBounds({ type: "MultiPolygon", coordinates: [west, east] })).toBeNull();
+    expect(boundaryBounds({ type: "MultiPolygon", coordinates: [mainland, aleutians] })).toEqual([
+      [30, 172],
+      [55, 290],
+    ]);
+  });
+
+  it("skips outlines that span most of the globe either way", () => {
+    const band = [
+      [
+        [-100, 0],
+        [0, 0],
+        [100, 0],
+        [-100, 0],
+      ],
+    ];
+    expect(boundaryBounds({ type: "Polygon", coordinates: band })).toBeNull();
   });
 });

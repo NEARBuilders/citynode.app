@@ -232,29 +232,21 @@ it("places a country community from its region and keeps its outline", async () 
     latitude: null,
     longitude: null,
   });
-  expect(saved).toMatchObject({
-    latitude: 22.35,
-    longitude: 78.66,
-    geocodedLocation: region,
-    boundary: { type: "Polygon", coordinates: outline },
-  });
-  expect(await publicClient.getDiscoveryNode({ nodeId: country.id })).toMatchObject({
-    latitude: 22.35,
-    boundary: { type: "Polygon", coordinates: outline },
-  });
+  expect(saved).toMatchObject({ latitude: 22.35, longitude: 78.66, geocodedLocation: region });
+  expect(saved).not.toHaveProperty("boundary");
+  const outlineOf = async (nodeId: string) =>
+    (await publicClient.getDiscoveryNode({ nodeId }))?.boundary ?? null;
+  expect(await outlineOf(country.id)).toEqual({ type: "Polygon", coordinates: outline });
 
-  const resaved = await editor.saveDiscoveryProfile({
-    ...saved,
-    summary: "Updated",
-    boundary: null,
-  });
-  expect(resaved.boundary).toEqual({ type: "Polygon", coordinates: outline });
+  await editor.saveDiscoveryProfile({ ...saved, summary: "Updated" });
+  expect(await outlineOf(country.id)).toEqual({ type: "Polygon", coordinates: outline });
 
   const city = await editor.saveDiscoveryProfile({
     ...saved,
     location: `Mumbai-${country.id.slice(0, 8)}`,
   });
-  expect(city).toMatchObject({ latitude: 19.07, longitude: 72.87, boundary: null });
+  expect(city).toMatchObject({ latitude: 19.07, longitude: 72.87 });
+  expect(await outlineOf(country.id)).toBeNull();
 
   await editor.saveDiscoveryProfile({ ...saved, location: "", region });
   const state = await provisioner.createNode({
@@ -271,7 +263,8 @@ it("places a country community from its region and keeps its outline", async () 
     latitude: null,
     longitude: null,
   });
-  expect(stateSaved).toMatchObject({ latitude: 22.35, longitude: 78.66, boundary: null });
+  expect(stateSaved).toMatchObject({ latitude: null, longitude: null });
+  expect(await outlineOf(state.id)).toBeNull();
 
   const cleared = await editor.saveDiscoveryProfile({
     ...saved,
@@ -280,11 +273,12 @@ it("places a country community from its region and keeps its outline", async () 
     latitude: null,
     longitude: null,
   });
-  expect(cleared).toMatchObject({ latitude: null, longitude: null, boundary: null });
+  expect(cleared).toMatchObject({ latitude: null, longitude: null });
+  expect(await outlineOf(country.id)).toBeNull();
   vi.unstubAllGlobals();
 });
 
-it("adds an outline to a country community geocoded before outlines existed", async () => {
+it("adds an outline to an older country community and keeps its pin if the lookup fails", async () => {
   const realFetch = globalThis.fetch;
   const outline = [
     [
@@ -294,9 +288,11 @@ it("adds an outline to a country community geocoded before outlines existed", as
       [33, -5],
     ],
   ];
+  let outage = true;
   const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (!url.includes("nominatim.openstreetmap.org")) return realFetch(input, init);
+    if (outage) return new Response("[]", { status: 503 });
     return Response.json([
       {
         lat: "0.17",
@@ -308,7 +304,7 @@ it("adds an outline to a country community geocoded before outlines existed", as
   });
   vi.stubGlobal("fetch", fetchMock);
 
-  const { tenant, provisioner, editor } = await fixture();
+  const { tenant, provisioner, editor, publicClient } = await fixture();
   const country = await provisioner.createNode({
     name: "Country",
     slug: `legacy-country-${tenant.id}`,
@@ -316,15 +312,23 @@ it("adds an outline to a country community geocoded before outlines existed", as
     tenantId: tenant.id,
   });
   const location = `Kenya-${country.id.slice(0, 8)}`;
-  const saved = await editor.saveDiscoveryProfile({
+  const legacy = {
     nodeId: country.id,
     ...profile,
     location,
     latitude: 0.17,
     longitude: 37.9,
     geocodedLocation: location,
+  };
+  const kept = await editor.saveDiscoveryProfile(legacy);
+  expect(kept).toMatchObject({ latitude: 0.17, longitude: 37.9, geocodeHint: null });
+
+  outage = false;
+  await editor.saveDiscoveryProfile(legacy);
+  expect((await publicClient.getDiscoveryNode({ nodeId: country.id }))?.boundary).toEqual({
+    type: "Polygon",
+    coordinates: outline,
   });
-  expect(saved.boundary).toEqual({ type: "Polygon", coordinates: outline });
   vi.unstubAllGlobals();
 });
 

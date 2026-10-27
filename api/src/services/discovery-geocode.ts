@@ -31,7 +31,6 @@ const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const MIN_INTERVAL = Duration.millis(1100);
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const BOUNDARY_TOLERANCE = "0.05";
-const AREA_KINDS = new Set(["country", "state"]);
 
 function normalizeLocation(location: string) {
   return location.trim().replace(/\s+/g, " ").toLowerCase();
@@ -58,7 +57,7 @@ export function countryBoundary(row: NominatimRow): CountryBoundary | undefined 
 
 export function profilePlace(profile: { location: string; region: string }, kind: string | null) {
   const location = profile.location.trim();
-  if (location || !kind || !AREA_KINDS.has(kind)) return location;
+  if (location || kind !== "country") return location;
   return profile.region.trim();
 }
 

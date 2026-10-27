@@ -19,6 +19,7 @@ import type {
   DiscoveryActivity,
   DiscoveryMeasurement,
   DiscoveryProfile,
+  StoredDiscoveryProfile,
 } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
@@ -1044,7 +1045,13 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         const kind = nodeKindOf(record.node.metadata);
         const place = profilePlace(input, kind);
         const missingBoundary = kind === "country" && !previous?.boundary;
-        let next: DiscoveryProfile = {
+        const stale = shouldGeocodeProfile({
+          location: place,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          geocodedLocation,
+        });
+        let next: StoredDiscoveryProfile = {
           ...input,
           geocodedLocation,
           geocodeHint: null,
@@ -1059,15 +1066,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             geocodeHint: null,
             boundary: null,
           };
-        } else if (
-          missingBoundary ||
-          shouldGeocodeProfile({
-            location: place,
-            latitude: next.latitude,
-            longitude: next.longitude,
-            geocodedLocation,
-          })
-        ) {
+        } else if (stale || missingBoundary) {
           const geocoded = yield* geocode.geocode(place);
           if (geocoded.ok) {
             next = {
@@ -1078,7 +1077,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               geocodeHint: null,
               boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
             };
-          } else {
+          } else if (stale) {
             next = {
               ...next,
               latitude: null,

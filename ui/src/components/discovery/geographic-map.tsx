@@ -57,27 +57,16 @@ export function GeographicMap({
         }).addTo(map);
         tiles.on("tileerror", () => setFailed(true));
         let points: { node: Node; point: ReturnType<typeof L.latLng> }[] = [];
-        let areas: ReturnType<typeof mapAreas> = [];
+        let shapes: { nodeId: string; layers: ReturnType<typeof L.polygon>[] }[] = [];
         let fitted = "";
         const regions = L.layerGroup().addTo(map);
         const markers = L.layerGroup().addTo(map);
         const draw = () => {
-          regions.clearLayers();
-          for (const { node, boundary } of areas) {
-            const active = node.nodeId === selected.current;
-            for (const offset of WORLD_COPY_OFFSETS) {
-              const area = L.polygon(boundaryLatLngs(boundary, offset), {
-                className: active
-                  ? "fill-brand/55 stroke-brand-strong"
-                  : "fill-brand/35 stroke-brand-strong hover:fill-brand/45",
-                fillOpacity: 1,
-                opacity: 1,
-                weight: active ? 2 : 1,
-              }).addTo(regions);
-              area.getElement()?.setAttribute("aria-hidden", "true");
-              if (offset === 0)
-                area.getElement()?.setAttribute("data-testid", `discovery-map-area-${node.nodeId}`);
-              area.on("click", () => select.current(node.nodeId));
+          for (const { nodeId, layers } of shapes) {
+            const active = nodeId === selected.current;
+            for (const layer of layers) {
+              layer.setStyle({ weight: active ? 2 : 1 });
+              layer.getElement()?.setAttribute("data-active", String(active));
             }
           }
           markers.clearLayers();
@@ -161,7 +150,25 @@ export function GeographicMap({
               ? [{ node, point: L.latLng(node.latitude, node.longitude) }]
               : [],
           );
-          areas = mapAreas(next);
+          const areas = mapAreas(next);
+          regions.clearLayers();
+          shapes = areas.map(({ node, boundary }) => ({
+            nodeId: node.nodeId,
+            layers: WORLD_COPY_OFFSETS.map((offset) => {
+              const area = L.polygon(boundaryLatLngs(boundary, offset), {
+                className:
+                  "fill-brand/35 stroke-brand-strong hover:fill-brand/45 data-[active=true]:fill-brand/55",
+                fillOpacity: 1,
+                opacity: 1,
+                weight: 1,
+              }).addTo(regions);
+              area.getElement()?.setAttribute("aria-hidden", "true");
+              if (offset === 0)
+                area.getElement()?.setAttribute("data-testid", `discovery-map-area-${node.nodeId}`);
+              area.on("click", () => select.current(node.nodeId));
+              return area;
+            }),
+          }));
           // Only move the viewport when the result set itself changed, so a
           // background refetch of the same communities leaves it alone.
           const key = points
@@ -170,11 +177,11 @@ export function GeographicMap({
             .join(",");
           if (key !== fitted) {
             fitted = key;
-            const bounds = L.latLngBounds(points.map((p) => p.point));
-            for (const { boundary } of areas) {
-              const extent = boundaryBounds(boundary);
-              if (extent) bounds.extend(extent);
-            }
+            const outlines = new Map(
+              areas.map((area) => [area.node.nodeId, boundaryBounds(area.boundary)]),
+            );
+            const bounds = L.latLngBounds([]);
+            for (const p of points) bounds.extend(outlines.get(p.node.nodeId) ?? p.point);
             if (points.length)
               map.fitBounds(bounds, {
                 padding: [35, 35],

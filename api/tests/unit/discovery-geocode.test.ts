@@ -81,12 +81,12 @@ describe("profilePlace", () => {
     expect(profilePlace({ location: " Mumbai ", region: "India" }, "country")).toBe("Mumbai");
   });
 
-  it("falls back to the region for country and state communities", () => {
+  it("falls back to the region for country communities", () => {
     expect(profilePlace({ location: "", region: " India " }, "country")).toBe("India");
-    expect(profilePlace({ location: "", region: "Ohio" }, "state")).toBe("Ohio");
   });
 
-  it("keeps cities and unknown kinds off the map without a location", () => {
+  it("keeps states, cities and unknown kinds off the map without a location", () => {
+    expect(profilePlace({ location: "", region: "IL" }, "state")).toBe("");
     expect(profilePlace({ location: "", region: "Pakistan" }, "city")).toBe("");
     expect(profilePlace({ location: "", region: "Pakistan" }, null)).toBe("");
   });
