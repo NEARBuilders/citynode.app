@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AuthClient } from "@/app";
+import type { ApiClient, AuthClient } from "@/app";
 import { render, renderHook } from "@/i18n/test-render";
 import { stakePoolQueryKeys } from "@/lib/queries/stake-pool";
 import { useStakeMutation } from "./-stake-mutations";
@@ -73,6 +73,14 @@ function authWithTransaction(
   return { auth, functionCall, transaction, getNearClient };
 }
 
+function apiApproving(approved: boolean | Error = true) {
+  const getStakingPoolApproval = vi.fn(async () => {
+    if (approved instanceof Error) throw approved;
+    return { approved };
+  });
+  return { api: { getStakingPoolApproval } as unknown as ApiClient, getStakingPoolApproval };
+}
+
 function withQueryClient(queryClient: QueryClient) {
   return function QueryClientHarness({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
@@ -91,7 +99,7 @@ describe("stake transaction behavior", () => {
     queryClient.setQueryData(affectedTopHolders, []);
     queryClient.setQueryData(unrelatedStats, { totalStaked: 2n });
 
-    const { result } = renderHook(() => useStakeMutation(auth, queryClient), {
+    const { result } = renderHook(() => useStakeMutation(auth, apiApproving().api, queryClient), {
       wrapper: withQueryClient(queryClient),
     });
     await act(async () => {
@@ -126,7 +134,7 @@ describe("stake transaction behavior", () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const poolStats = stakePoolQueryKeys.stats("pool.testnet", "testnet");
     queryClient.setQueryData(poolStats, { totalStaked: 1n });
-    const { result } = renderHook(() => useStakeMutation(auth, queryClient), {
+    const { result } = renderHook(() => useStakeMutation(auth, apiApproving().api, queryClient), {
       wrapper: withQueryClient(queryClient),
     });
 
@@ -148,7 +156,7 @@ describe("stake transaction behavior", () => {
     const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
     const { auth, getNearClient } = authWithTransaction(send, "mainnet");
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { result } = renderHook(() => useStakeMutation(auth, queryClient), {
+    const { result } = renderHook(() => useStakeMutation(auth, apiApproving().api, queryClient), {
       wrapper: withQueryClient(queryClient),
     });
 
@@ -171,7 +179,7 @@ describe("stake transaction behavior", () => {
     const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
     const { auth, getNearClient } = authWithTransaction(send);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { result } = renderHook(() => useStakeMutation(auth, queryClient), {
+    const { result } = renderHook(() => useStakeMutation(auth, apiApproving().api, queryClient), {
       wrapper: withQueryClient(queryClient),
     });
 
@@ -194,7 +202,7 @@ describe("stake transaction behavior", () => {
     const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
     const { auth, getNearClient } = authWithTransaction(send);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { result } = renderHook(() => useStakeMutation(auth, queryClient), {
+    const { result } = renderHook(() => useStakeMutation(auth, apiApproving().api, queryClient), {
       wrapper: withQueryClient(queryClient),
     });
 
@@ -231,5 +239,81 @@ describe("stake onramp", () => {
     expect(harness.options?.destinationAddress).toBe("alice.near");
     unmount();
     expect(harness.close).toHaveBeenCalledTimes(1);
+  });
+  it("checks the selected pool is approved before staking", async () => {
+    const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
+    const { auth } = authWithTransaction(send);
+    const { api, getStakingPoolApproval } = apiApproving(true);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useStakeMutation(auth, api, queryClient), {
+      wrapper: withQueryClient(queryClient),
+    });
+
+    await act(async () => {
+      result.current.mutate({
+        amount: 1n,
+        network: "testnet",
+        poolAccountId: "pool.testnet",
+        protocol: "near",
+      });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(getStakingPoolApproval).toHaveBeenCalledWith({
+      accountId: "pool.testnet",
+      network: "testnet",
+    });
+  });
+
+  it("refuses an unapproved pool before connecting the wallet", async () => {
+    const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
+    const { auth, getNearClient } = authWithTransaction(send);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(
+      () => useStakeMutation(auth, apiApproving(false).api, queryClient),
+      { wrapper: withQueryClient(queryClient) },
+    );
+
+    await act(async () => {
+      result.current.mutate({
+        amount: 1n,
+        network: "testnet",
+        poolAccountId: "not-a-pool.testnet",
+        protocol: "near",
+      });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(auth.near.ensureConnected).not.toHaveBeenCalled();
+    expect(getNearClient).not.toHaveBeenCalled();
+    expect(harness.error).toHaveBeenCalledWith(
+      "not-a-pool.testnet isn't an approved staking pool, so you can't stake to it.",
+    );
+  });
+
+  it("refuses to stake when the pool can't be checked", async () => {
+    const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
+    const { auth, getNearClient } = authWithTransaction(send);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(
+      () => useStakeMutation(auth, apiApproving(new Error("rpc down")).api, queryClient),
+      { wrapper: withQueryClient(queryClient) },
+    );
+
+    await act(async () => {
+      result.current.mutate({
+        amount: 1n,
+        network: "testnet",
+        poolAccountId: "pool.testnet",
+        protocol: "near",
+      });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5_000 });
+    expect(auth.near.ensureConnected).not.toHaveBeenCalled();
+    expect(getNearClient).not.toHaveBeenCalled();
+    expect(harness.error).toHaveBeenCalledWith(
+      "Couldn't confirm this is an approved staking pool. Try again in a moment.",
+    );
   });
 });

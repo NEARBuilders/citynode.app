@@ -66,4 +66,31 @@ describe("localized action failures", () => {
       expect(isPermissionError(failure)).toBe(false);
     }
   });
+
+  it("explains a rejected or unverifiable staking pool instead of a generic failure", () => {
+    const t = ((id: string) => id) as AppTranslator;
+    expect(
+      appErrorMessage(
+        {
+          code: "BAD_REQUEST",
+          data: {
+            invalidFields: ["accountId"],
+            validationErrors: [
+              { field: "accountId", message: "x", code: "STAKING_POOL_NOT_APPROVED" },
+            ],
+          },
+        },
+        t,
+      ),
+    ).toBe("tenant.notApprovedPool");
+    expect(
+      appErrorMessage(
+        { code: "CONNECTION_ERROR", data: { errorCode: "STAKING_POOL_CHECK_FAILED" } },
+        t,
+      ),
+    ).toBe("stake.poolCheckFailed");
+    expect(
+      appErrorMessage({ code: "BAD_REQUEST", data: { invalidFields: ["accountId"] } }, t),
+    ).toBe("error.action");
+  });
 });

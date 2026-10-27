@@ -537,6 +537,7 @@ export const contract = oc.router({
       FORBIDDEN,
       BAD_REQUEST,
       NOT_FOUND,
+      CONNECTION_ERROR,
       CONFLICT: {
         status: 409,
         message: "Node proposal resources already exist",
@@ -779,6 +780,18 @@ export const contract = oc.router({
     .input(z.object({ nodeId: z.string() }))
     .output(StakingValidatorsSchema),
 
+  getStakingPoolApproval: oc
+    .route({
+      method: "GET",
+      path: "/validators/staking-pool-approval",
+      summary: "Check whether an account is an approved staking pool",
+      description:
+        "Asks the network's staking pool whitelist (is_whitelisted) whether the account is an approved staking pool.",
+    })
+    .input(z.object({ accountId: z.string(), network: z.string().default("mainnet") }))
+    .output(z.object({ approved: z.boolean() }))
+    .errors({ BAD_REQUEST, CONNECTION_ERROR }),
+
   createValidator: oc
     .route({ method: "POST", path: "/validators" })
     .input(
@@ -793,7 +806,7 @@ export const contract = oc.router({
       }),
     )
     .output(ValidatorSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST, CONNECTION_ERROR }),
 
   updateValidator: oc
     .route({ method: "PATCH", path: "/validators/{validatorId}" })
@@ -809,7 +822,7 @@ export const contract = oc.router({
       }),
     )
     .output(ValidatorSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST, CONNECTION_ERROR }),
 
   deleteValidator: oc
     .route({ method: "POST", path: "/validators/{validatorId}/delete" })
@@ -821,7 +834,7 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/validators/{validatorId}/default" })
     .input(z.object({ validatorId: z.string() }))
     .output(ValidatorSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST, CONNECTION_ERROR }),
 
   testError: oc
     .route({
