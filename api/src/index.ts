@@ -1228,7 +1228,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               ...(payload.applicantUserId ? { proposerUserId: payload.applicantUserId } : {}),
               applicantAccountId: proposal.createdBy,
               reviewerUserId: context.userId ?? context.user?.id ?? "",
-              ...(payload.orgId ? { legacyOrgId: payload.orgId } : {}),
+              ...(payload.orgId && payload.applicantUserId ? { legacyOrgId: payload.orgId } : {}),
             }),
           catch: (error) =>
             error instanceof ORPCError
@@ -1276,7 +1276,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const community = yield* services.tenants.releaseNodeProposal({
             proposalId: proposal.id,
           });
-          if (payload.orgId) {
+          if (payload.orgId && payload.applicantUserId) {
             return {
               community,
               organization: { released: false, keptReason: "existing" as const },

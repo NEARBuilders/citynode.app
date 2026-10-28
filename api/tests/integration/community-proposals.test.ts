@@ -784,7 +784,7 @@ describe("approved community proposal provisioning", () => {
     );
   });
 
-  it("keeps the legacy organization's requester as owner when the application saved no applicant user", async () => {
+  it("leaves an unverified legacy organization untouched when the application saved no applicant user", async () => {
     organizations.set("legacy-harlem", {
       id: "legacy-harlem",
       name: "Harlem Builders",
@@ -808,19 +808,39 @@ describe("approved community proposal provisioning", () => {
       savedProposal("prop-harlem", "harlem", { orgId: "legacy-harlem", applicantUserId: null }),
     );
     const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
-    inviteMember.mockClear();
     const applied = await admin.applyCommunityProposal({
       proposalId: "prop-harlem",
       entityId: "harlem",
       hostname: "harlem.citynode.app",
     });
-    expect(applied.applicantInvited).toBe(false);
-    expect(inviteMember).not.toHaveBeenCalled();
+    expect(applied.applicantInvited).toBe(true);
     const legacy = organizations.get("legacy-harlem")!;
-    expect(legacy.metadata).toMatchObject({ communityApplicantId: "user-legacy-requester" });
+    expect(legacy.metadata).toEqual({});
+    expect(legacy.members.map((member) => [member.userId, member.role])).toEqual([
+      ["user-legacy-requester", "owner"],
+    ]);
+    expect(legacy.invitations).toEqual([]);
+    const created = organizations.get("org-harlem")!;
     expect(
-      Object.fromEntries(legacy.members.map((member) => [member.userId, member.role])),
-    ).toEqual({ "user-legacy-requester": "owner", "platform-reviewer": "admin" });
+      Object.fromEntries(created.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "platform-reviewer": "owner" });
+    expect(created.invitations).toMatchObject([{ nearAccountId: applicant, role: "owner" }]);
+    const node = await admin.getNode({ nodeId: applied.nodeId });
+    const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
+    expect(tenant?.orgId).toBe("org-harlem");
+
+    const failed: Record<string, unknown> | undefined = proposals.get("harlem");
+    if (failed) failed.applyStatus = "failed";
+    deleteOrganization.mockClear();
+    expect(
+      await admin.releaseCommunityProposal({
+        proposalId: "prop-harlem",
+        entityId: "harlem",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).toMatchObject({ organization: { released: true, keptReason: null } });
+    expect(deleteOrganization).toHaveBeenCalledWith({ organizationId: "org-harlem" });
+    expect(organizations.has("legacy-harlem")).toBe(true);
   });
 
   it("removes a failed setup whose only invitation is the applicant's", async () => {

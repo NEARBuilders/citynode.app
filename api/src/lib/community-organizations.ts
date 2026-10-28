@@ -132,7 +132,8 @@ export async function provisionCommunityOrganization(
     legacyOrgId?: string;
   },
 ): Promise<{ id: string; name: string; slug: string; applicantInvited: boolean }> {
-  if (input.legacyOrgId) {
+  if (input.legacyOrgId && input.proposerUserId) {
+    const proposerUserId = input.proposerUserId;
     const organization = await fetchOrganization(auth, input.legacyOrgId);
     if (!organization) {
       throw conflict("The application's existing organization was removed");
@@ -141,7 +142,6 @@ export async function provisionCommunityOrganization(
     if (metadata.communityProposalId && metadata.communityProposalId !== input.proposalId) {
       throw conflict("This organization belongs to another community application");
     }
-    const proposerUserId = input.proposerUserId ?? organization.requestedBy ?? null;
     if (organization.requestedBy && organization.requestedBy !== proposerUserId) {
       const proposerMember = organization.members.find(
         (member) => member.userId === proposerUserId,
@@ -166,9 +166,8 @@ export async function provisionCommunityOrganization(
         organizationId: organization.id,
       });
     }
-    const ownerUserId = proposerUserId ?? input.reviewerUserId;
-    await grantProposerOwnership(auth, organization.id, ownerUserId);
-    if (input.reviewerUserId !== ownerUserId) {
+    await grantProposerOwnership(auth, organization.id, proposerUserId);
+    if (input.reviewerUserId !== proposerUserId) {
       const reviewerMember = organization.members.find(
         (member) => member.userId === input.reviewerUserId,
       );
@@ -180,15 +179,12 @@ export async function provisionCommunityOrganization(
         });
       }
     }
-    if (!proposerUserId) {
-      await inviteApplicant(auth, organization.id, input.applicantAccountId);
-    }
     await provisionDefaultTeams(auth, organization.id);
     return {
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
-      applicantInvited: !proposerUserId,
+      applicantInvited: false,
     };
   }
 
