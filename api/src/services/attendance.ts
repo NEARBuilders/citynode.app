@@ -1,0 +1,428 @@
+import { ORPCError } from "@orpc/server";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { Context, Effect, Layer } from "effect";
+import { DatabaseTag } from "../db/layer";
+import {
+  attendanceCheckIns,
+  attendanceCodeCheckpoints,
+  attendanceEventReconciliations,
+} from "../db/schema";
+import { toOrpcError } from "../lib/errors";
+
+export type AttendanceEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
+
+export const UPSTREAM_CODE_PAGE_LIMIT = 20;
+
+export const ORGANIZATION_SWEEP = "*";
+
+const SETTLED_AFTER_MS = 14 * 24 * 3_600_000;
+
+export interface CommunityEvent {
+  id: string;
+  title: string;
+  startsAt: string | null;
+}
+
+export interface UpstreamCode {
+  id: string;
+  eventId: string | null;
+  usedCount: number;
+}
+
+export interface UpstreamCodeStatus {
+  eventId: string | null;
+  eventName: string;
+  joined: Array<{ userId: string; createdAt: Date }>;
+}
+
+export interface AttendanceUpstream {
+  listCodes(eventId?: string): Promise<UpstreamCode[]>;
+  codeStatus(codeId: string): Promise<UpstreamCodeStatus>;
+}
+
+export interface ReconcileSummary {
+  events: number;
+  truncated: string[];
+  failed: string[];
+}
+
+export type CoverageReason = "not_synced" | "truncated" | "failed";
+
+export interface AttendanceRecord {
+  events: Array<{
+    organizationId: string;
+    communityName: string;
+    eventId: string;
+    eventName: string;
+    checkedInAt: string;
+    startsAt: string | null;
+  }>;
+  unclassified: Array<{
+    organizationId: string;
+    communityName: string;
+    codeId: string;
+    eventName: string;
+    checkedInAt: string;
+  }>;
+  communities: Array<{
+    organizationId: string;
+    communityName: string;
+    status: "synced" | "incomplete";
+    reasons: CoverageReason[];
+    syncedAt: string | null;
+  }>;
+}
+
+export interface AttendanceService {
+  reconcile(input: {
+    organizationId: string;
+    communityName: string;
+    events: CommunityEvent[];
+    upstream: AttendanceUpstream;
+  }): AttendanceEffect<ReconcileSummary>;
+  recordedOrganizations(userId: string): AttendanceEffect<string[]>;
+  history(input: {
+    userId: string;
+    communities: Array<{ organizationId: string; communityName: string; events: CommunityEvent[] }>;
+  }): AttendanceEffect<AttendanceRecord>;
+}
+
+export class AttendanceTag extends Context.Service<AttendanceTag, AttendanceService>()(
+  "api/Attendance",
+) {}
+
+const isAccessError = (error: unknown) =>
+  error instanceof ORPCError && ["UNAUTHORIZED", "FORBIDDEN"].includes(error.code);
+
+export const AttendanceLive = Layer.effect(
+  AttendanceTag,
+  Effect.gen(function* () {
+    const db = yield* DatabaseTag;
+
+    const query = <T>(run: () => Promise<T>): AttendanceEffect<T> =>
+      Effect.tryPromise({ try: run, catch: toOrpcError });
+
+    const recordCode = (input: {
+      organizationId: string;
+      communityName: string;
+      code: UpstreamCode;
+      known: Set<string>;
+      upstream: AttendanceUpstream;
+    }) =>
+      Effect.gen(function* () {
+        const { organizationId, code } = input;
+        const [checkpoint] = yield* query(() =>
+          db
+            .select({ usedCount: attendanceCodeCheckpoints.usedCount })
+            .from(attendanceCodeCheckpoints)
+            .where(
+              and(
+                eq(attendanceCodeCheckpoints.organizationId, organizationId),
+                eq(attendanceCodeCheckpoints.codeId, code.id),
+              ),
+            ),
+        );
+        if (checkpoint?.usedCount === code.usedCount) return true;
+        const status = yield* Effect.tryPromise(() => input.upstream.codeStatus(code.id)).pipe(
+          Effect.option,
+        );
+        if (status._tag === "None") return false;
+        const { eventId, eventName, joined } = status.value;
+        const classified = !!eventId && input.known.has(eventId);
+        yield* query(() =>
+          db.transaction(async (tx) => {
+            if (joined.length > 0) {
+              await tx
+                .insert(attendanceCheckIns)
+                .values(
+                  joined.map((join) => ({
+                    organizationId,
+                    codeId: code.id,
+                    userId: join.userId,
+                    eventId,
+                    eventName,
+                    communityName: input.communityName,
+                    classified,
+                    checkedInAt: join.createdAt,
+                  })),
+                )
+                .onConflictDoUpdate({
+                  target: [
+                    attendanceCheckIns.organizationId,
+                    attendanceCheckIns.codeId,
+                    attendanceCheckIns.userId,
+                  ],
+                  set: {
+                    eventId: sql`excluded.event_id`,
+                    eventName: sql`excluded.event_name`,
+                    checkedInAt: sql`excluded.checked_in_at`,
+                    classified: sql`${attendanceCheckIns.classified} or excluded.classified`,
+                  },
+                });
+            }
+            const reconciledAt = new Date();
+            await tx
+              .insert(attendanceCodeCheckpoints)
+              .values({ organizationId, codeId: code.id, usedCount: code.usedCount, reconciledAt })
+              .onConflictDoUpdate({
+                target: [
+                  attendanceCodeCheckpoints.organizationId,
+                  attendanceCodeCheckpoints.codeId,
+                ],
+                set: { usedCount: code.usedCount, reconciledAt },
+              });
+          }),
+        );
+        return true;
+      });
+
+    const service: AttendanceService = {
+      reconcile: ({ organizationId, communityName, events, upstream }) =>
+        Effect.gen(function* () {
+          const known = new Set(events.map((event) => event.id));
+          const forbidden = () =>
+            new ORPCError("FORBIDDEN", {
+              message: "Only this community's organizers can confirm attendance",
+            });
+          const listCodes = (eventId?: string) =>
+            Effect.tryPromise({
+              try: () => upstream.listCodes(eventId),
+              catch: (error) => error,
+            }).pipe(
+              Effect.catch((error) =>
+                isAccessError(error) ? Effect.fail(forbidden()) : Effect.succeed(null),
+              ),
+            );
+          const latest = yield* listCodes();
+          const previous = new Map(
+            (yield* query(() =>
+              db
+                .select()
+                .from(attendanceEventReconciliations)
+                .where(eq(attendanceEventReconciliations.organizationId, organizationId)),
+            )).map((row) => [row.eventId, row]),
+          );
+          const checkpoints = new Map(
+            (yield* query(() =>
+              db
+                .select()
+                .from(attendanceCodeCheckpoints)
+                .where(eq(attendanceCodeCheckpoints.organizationId, organizationId)),
+            )).map((row) => [row.codeId, row.usedCount]),
+          );
+          const freshCodes = new Set(
+            (latest ?? [])
+              .filter((code) => checkpoints.get(code.id) !== code.usedCount)
+              .map((code) => code.eventId),
+          );
+          const settledBefore = Date.now() - SETTLED_AFTER_MS;
+          const due = events.filter((event) => {
+            const row = previous.get(event.id);
+            if (!row || row.failed || row.truncated || !latest) return true;
+            if (freshCodes.has(event.id)) return true;
+            return !event.startsAt || Date.parse(event.startsAt) > settledBefore;
+          });
+          const results = yield* Effect.forEach(
+            due,
+            (event) =>
+              Effect.gen(function* () {
+                const codes = yield* listCodes(event.id);
+                if (!codes) return { id: event.id, truncated: false, ok: false };
+                const recorded = yield* Effect.forEach(codes, (code) =>
+                  recordCode({
+                    organizationId,
+                    communityName,
+                    code,
+                    known,
+                    upstream,
+                  }),
+                );
+                return {
+                  id: event.id,
+                  truncated: codes.length >= UPSTREAM_CODE_PAGE_LIMIT,
+                  ok: recorded.every(Boolean),
+                };
+              }),
+            { concurrency: 4 },
+          );
+          const outside = (latest ?? []).filter(
+            (code) => !code.eventId || !known.has(code.eventId),
+          );
+          const outsideRecorded = yield* Effect.forEach(outside, (code) =>
+            recordCode({ organizationId, communityName, code, known, upstream }),
+          );
+          results.push({
+            id: ORGANIZATION_SWEEP,
+            truncated: false,
+            ok: !!latest && outsideRecorded.every(Boolean),
+          });
+          const reconciledAt = new Date();
+          const target = [
+            attendanceEventReconciliations.organizationId,
+            attendanceEventReconciliations.eventId,
+          ];
+          const succeeded = results.filter((result) => result.ok);
+          const failed = results.filter((result) => !result.ok);
+          if (succeeded.length > 0) {
+            yield* query(() =>
+              db
+                .insert(attendanceEventReconciliations)
+                .values(
+                  succeeded.map((result) => ({
+                    organizationId,
+                    eventId: result.id,
+                    truncated: result.truncated,
+                    failed: false,
+                    reconciledAt,
+                  })),
+                )
+                .onConflictDoUpdate({
+                  target,
+                  set: {
+                    truncated: sql`excluded.truncated`,
+                    failed: false,
+                    reconciledAt,
+                  },
+                }),
+            );
+          }
+          if (failed.length > 0) {
+            yield* query(() =>
+              db
+                .insert(attendanceEventReconciliations)
+                .values(
+                  failed.map((result) => ({
+                    organizationId,
+                    eventId: result.id,
+                    truncated: false,
+                    failed: true,
+                    reconciledAt,
+                  })),
+                )
+                .onConflictDoUpdate({ target, set: { failed: true } }),
+            );
+          }
+          return {
+            events: due.length,
+            truncated: results.filter((result) => result.truncated).map((result) => result.id),
+            failed: results.filter((result) => !result.ok).map((result) => result.id),
+          };
+        }),
+
+      recordedOrganizations: (userId) =>
+        query(async () => {
+          const rows = await db
+            .selectDistinct({ organizationId: attendanceCheckIns.organizationId })
+            .from(attendanceCheckIns)
+            .where(eq(attendanceCheckIns.userId, userId));
+          return rows.map((row) => row.organizationId);
+        }),
+
+      history: ({ userId, communities }) =>
+        Effect.gen(function* () {
+          const organizationIds = communities.map((community) => community.organizationId);
+          if (organizationIds.length === 0)
+            return { events: [], unclassified: [], communities: [] };
+          const rows = yield* query(() =>
+            db
+              .select()
+              .from(attendanceCheckIns)
+              .where(
+                and(
+                  eq(attendanceCheckIns.userId, userId),
+                  inArray(attendanceCheckIns.organizationId, organizationIds),
+                ),
+              ),
+          );
+          const reconciliations = yield* query(() =>
+            db
+              .select()
+              .from(attendanceEventReconciliations)
+              .where(inArray(attendanceEventReconciliations.organizationId, organizationIds)),
+          );
+          const startsAt = new Map(
+            communities.flatMap((community) =>
+              community.events.map((event) => [
+                `${community.organizationId}:${event.id}`,
+                event.startsAt,
+              ]),
+            ),
+          );
+          const currentName = new Map(
+            communities.map((community) => [community.organizationId, community.communityName]),
+          );
+          const attended = new Map<string, AttendanceRecord["events"][number]>();
+          const unclassified: AttendanceRecord["unclassified"] = [];
+          for (const row of rows) {
+            const checkedInAt = row.checkedInAt.toISOString();
+            if (!row.classified || !row.eventId) {
+              unclassified.push({
+                organizationId: row.organizationId,
+                communityName: currentName.get(row.organizationId) ?? row.communityName,
+                codeId: row.codeId,
+                eventName: row.eventName,
+                checkedInAt,
+              });
+              continue;
+            }
+            const key = `${row.organizationId}:${row.eventId}`;
+            const current = attended.get(key);
+            if (current && current.checkedInAt <= checkedInAt) continue;
+            attended.set(key, {
+              organizationId: row.organizationId,
+              communityName: currentName.get(row.organizationId) ?? row.communityName,
+              eventId: row.eventId,
+              eventName: row.eventName,
+              checkedInAt,
+              startsAt: startsAt.get(key) ?? null,
+            });
+          }
+          const newestFirst = <T extends { checkedInAt: string }>(
+            a: T,
+            b: T,
+            tieBreak: (item: T) => string,
+          ) => b.checkedInAt.localeCompare(a.checkedInAt) || tieBreak(a).localeCompare(tieBreak(b));
+          const coverage = communities.flatMap((community) => {
+            const ownRows = reconciliations.filter(
+              (row) => row.organizationId === community.organizationId,
+            );
+            const byEvent = new Map(ownRows.map((row) => [row.eventId, row]));
+            const hasHistory = rows.some((row) => row.organizationId === community.organizationId);
+            if (community.events.length === 0 && !hasHistory) return [];
+            const reasons = new Set<CoverageReason>();
+            if (byEvent.get(ORGANIZATION_SWEEP)?.failed) reasons.add("failed");
+            for (const event of community.events) {
+              const row = byEvent.get(event.id);
+              if (!row) reasons.add("not_synced");
+              if (row?.failed) reasons.add("failed");
+              if (row?.truncated) reasons.add("truncated");
+            }
+            const synced = ownRows.map((row) => row.reconciledAt);
+            return [
+              {
+                organizationId: community.organizationId,
+                communityName: community.communityName,
+                status: reasons.size === 0 ? ("synced" as const) : ("incomplete" as const),
+                reasons: [...reasons].sort(),
+                syncedAt:
+                  synced.length > 0
+                    ? new Date(Math.max(...synced.map((date) => date.getTime()))).toISOString()
+                    : null,
+              },
+            ];
+          });
+          return {
+            events: [...attended.values()].sort((a, b) =>
+              newestFirst(a, b, (item) => `${item.organizationId}:${item.eventId}`),
+            ),
+            unclassified: unclassified.sort((a, b) =>
+              newestFirst(a, b, (item) => `${item.organizationId}:${item.codeId}`),
+            ),
+            communities: coverage,
+          };
+        }),
+    };
+
+    return service;
+  }),
+);
