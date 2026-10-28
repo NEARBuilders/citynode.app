@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   boolean,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -201,4 +202,17 @@ export const discoveryLumaConnections = pgTable("discovery_luma_connections", {
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull(),
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull(),
   error: text("error"),
+});
+
+export const memberDirectoryOptIns = pgTable("member_directory_opt_ins", {
+  userId: text("user_id").primaryKey(),
+  optedIn: boolean("opted_in").default(false).notNull(),
+  primaryAccountId: text("primary_account_id"),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+});
+
+export const memberCountObservations = pgTable("member_count_observations", {
+  organizationId: text("organization_id").primaryKey(),
+  count: integer("count").notNull(),
+  observedAt: timestamp("observed_at", { mode: "date", withTimezone: true }).notNull(),
 });
