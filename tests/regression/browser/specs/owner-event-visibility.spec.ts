@@ -69,6 +69,13 @@ async function seedEventStates(nodeId: string) {
       status: "published",
       ...eventWindow(-3),
     }),
+    endedImport: await seedDiscoveryActivity({
+      nodeId,
+      title: "Ended import",
+      status: "draft",
+      luma: { available: true, hidden: true },
+      ...eventWindow(-2),
+    }),
   };
 }
 
@@ -156,6 +163,13 @@ test.describe("owner event visibility", () => {
     await expect(badge(events.ended.id)).toHaveAttribute("data-state", "ended", {
       timeout: 15000,
     });
+    const report = page.getByTestId(`activity-editor.submit-report-${events.ended.id}`);
+    await expect(report).toHaveAttribute("href", /^https:\/\/docs\.google\.com\/forms\//);
+    await expect(report).toHaveAttribute("target", "_blank");
+    await expect(badge(events.endedImport.id)).toHaveAttribute("data-state", "hiddenImport");
+    await expect(
+      page.getByTestId(`activity-editor.submit-report-${events.endedImport.id}`),
+    ).toHaveCount(0);
     await page.getByTestId("activity-editor.tab-upcoming").click();
 
     await badge(events.live.id).click();
