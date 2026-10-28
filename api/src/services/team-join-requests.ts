@@ -1,9 +1,11 @@
 import type { ORPCError } from "@orpc/server";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, gte, inArray, or } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import { teamJoinEndorsements, teamJoinRequests } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
+
+const CLOSED_REQUEST_VISIBLE_MS = 30 * 24 * 3_600_000;
 
 export type TeamJoinRequestEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
@@ -91,7 +93,14 @@ export const TeamJoinRequestsLive = Layer.effect(
                 and(
                   eq(teamJoinRequests.organizationId, organizationId),
                   or(
-                    inArray(teamJoinRequests.status, ["pending", "closed"]),
+                    eq(teamJoinRequests.status, "pending"),
+                    and(
+                      eq(teamJoinRequests.status, "closed"),
+                      gte(
+                        teamJoinRequests.decidedAt,
+                        new Date(Date.now() - CLOSED_REQUEST_VISIBLE_MS),
+                      ),
+                    ),
                     eq(teamJoinRequests.requesterUserId, viewerUserId),
                   ),
                 ),

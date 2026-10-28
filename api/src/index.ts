@@ -680,8 +680,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       if (request.requesterUserId === community.userId) {
         return request.status !== "withdrawn" && request.status !== "approved";
       }
-      if (request.status !== "pending" && request.status !== "closed") return false;
-      return community.canReview || community.ownTeamIds.has(request.teamId);
+      if (request.status === "pending") {
+        return community.canReview || community.ownTeamIds.has(request.teamId);
+      }
+      return request.status === "closed" && community.canReview;
     };
 
     const loadTeamRequest = (context: Parameters<typeof memberAuthClient>[0], requestId: string) =>

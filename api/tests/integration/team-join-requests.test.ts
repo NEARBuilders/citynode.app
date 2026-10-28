@@ -355,6 +355,16 @@ describe("closing requests that can no longer be approved", () => {
     expect(addCalls).toEqual([]);
   });
 
+  it("shows other people's closed requests to reviewers only", async () => {
+    const { organizationId, org, ops } = community();
+    const request = await (await as("member")).requestToJoinTeam({ organizationId, teamId: ops });
+    org.members.delete("member");
+    expect((await (await as("owner")).getTeamJoinBoard({ organizationId })).requests).toEqual([
+      expect.objectContaining({ id: request.id, status: "closed" }),
+    ]);
+    expect((await (await as("steward")).getTeamJoinBoard({ organizationId })).requests).toEqual([]);
+  });
+
   it("closes a request whose team was deleted and keeps its name for display", async () => {
     const { organizationId, org, ops } = community();
     const request = await (await as("member")).requestToJoinTeam({ organizationId, teamId: ops });

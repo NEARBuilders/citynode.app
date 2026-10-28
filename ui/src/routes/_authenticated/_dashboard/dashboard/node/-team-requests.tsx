@@ -223,16 +223,18 @@ function RequestList({
   renderActions: (request: TeamJoinRequest) => ReactNode;
 }) {
   const translate = useAppTranslation();
-  if (requests.length === 0) {
-    return canReview ? (
+  const nonePending = !requests.some((request) => request.status === "pending");
+  const empty =
+    canReview && nonePending ? (
       <p className="text-sm text-muted-foreground" data-testid="dashboard-node.team-requests-empty">
         {translate("teamRequests.noRequests")}
       </p>
     ) : null;
-  }
+  if (requests.length === 0) return empty;
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <h3 className="text-sm font-medium">{translate("teamRequests.requestsTitle")}</h3>
+      {empty}
       <ItemGroup data-testid="dashboard-node.team-requests">
         {requests.map((request) => (
           <Item

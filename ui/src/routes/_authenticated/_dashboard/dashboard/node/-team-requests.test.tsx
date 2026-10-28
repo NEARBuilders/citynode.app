@@ -182,6 +182,21 @@ describe("Teams on Overview", () => {
     );
   });
 
+  it("tells owners nothing is waiting when only closed requests remain", async () => {
+    api.getTeamJoinBoard.mockResolvedValue({
+      canReview: true,
+      teams: [{ ...ops, isMember: false, pendingRequestId: null }],
+      requests: [request({ status: "closed", closedReason: "team_deleted" })],
+    });
+    renderTeams();
+    expect((await screen.findByTestId("dashboard-node.team-requests-empty")).textContent).toBe(
+      "No team requests waiting.",
+    );
+    expect(screen.getByTestId("dashboard-node.team-request-closed-request-1").textContent).toBe(
+      "The team was deleted",
+    );
+  });
+
   it("tells owners when nothing is waiting and members when no team is open", async () => {
     api.getTeamJoinBoard.mockResolvedValue({ canReview: true, teams: [], requests: [] });
     renderTeams();
