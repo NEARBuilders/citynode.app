@@ -12,6 +12,7 @@ export default App({
   // The gateway: FastKV lookup key and public ingress for this runtime.
   domain: "citynode.app",
   // CI settings: runtime image name, Railway service.
+  "repository": "https://github.com/nearbuilders/citynode.app",
   ci: {
     railway: {
       service: "app",
