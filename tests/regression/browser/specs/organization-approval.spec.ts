@@ -126,8 +126,8 @@ for (const decision of ["approve", "reject"] as const) {
       if (decision === "approve") {
         await expect(page.getByTestId("orgs-tab-members")).toBeVisible();
         await expect(page.getByTestId("org-badges")).toContainText("Owner");
-        await page.getByTestId("org-make-active").click();
-        await expect(page.getByTestId("org-badges")).toContainText("Active");
+        await expect(page.getByTestId("org-badges")).toContainText("Active", { timeout: 15000 });
+        await expect(page.getByTestId("org-make-active")).toHaveCount(0);
       } else {
         await expect(page.getByTestId("orgs-request-status")).toContainText("Request rejected");
         await expect(page.getByTestId("orgs-request-reason")).toHaveText(

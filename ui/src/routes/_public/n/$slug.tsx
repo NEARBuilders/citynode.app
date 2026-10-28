@@ -6,13 +6,15 @@ import {
   MapPinIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { z } from "zod";
-import { type ApiClient, buildTenantUrl, getGatewayId, useApiClient } from "@/app";
+import { buildTenantUrl, getGatewayId, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
+import { ChannelLinks, CommunityUpdates } from "@/components/discovery/community-updates";
 import { EventList } from "@/components/discovery/event-list";
+import { discoveryNodeQueryOptions } from "@/components/discovery/event-visibility";
 import { PageContainer } from "@/components/layout/page-container";
 import { MemberCountValue } from "@/components/member-count";
 import { NodeDirectorySkeleton } from "@/components/node-directory-skeleton";
@@ -29,16 +31,6 @@ import {
 } from "@/lib/queries/nodes";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
-function discoveryProfileQueryOptions(apiClient: ApiClient, nodeId: string) {
-  return queryOptions({
-    queryKey: ["discovery-node", nodeId],
-    queryFn: () => apiClient.getDiscoveryNode({ nodeId }),
-    enabled: !!nodeId,
-    retry: false,
-    staleTime: 30_000,
-  });
-}
-
 export const Route = createFileRoute("/_public/n/$slug")({
   validateSearch: z.object({ parentId: z.uuid().optional() }),
   loaderDeps: ({ search }) => ({ parentId: search.parentId }),
@@ -54,7 +46,7 @@ export const Route = createFileRoute("/_public/n/$slug")({
       await Promise.all([
         queryClient.prefetchQuery(childNodesQueryOptions(apiClient, node.id)),
         queryClient.prefetchQuery(stakingValidatorsQueryOptions(apiClient, node.id)),
-        queryClient.prefetchQuery(discoveryProfileQueryOptions(apiClient, node.id)),
+        queryClient.prefetchQuery(discoveryNodeQueryOptions(apiClient, node.id)),
       ]);
     }
 
@@ -114,7 +106,7 @@ function NodePage() {
     enabled: !!nodeId,
   });
 
-  const { data: profile } = useQuery(discoveryProfileQueryOptions(apiClient, nodeId ?? ""));
+  const { data: profile } = useQuery(discoveryNodeQueryOptions(apiClient, nodeId ?? ""));
 
   const { data: memberCount } = useQuery({
     ...nodeMemberCountQueryOptions(apiClient, nodeId ?? ""),
@@ -231,22 +223,7 @@ function NodePage() {
           </div>
         </div>
         {profile && profile.channels.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {profile.channels.map((channel) => (
-              <Button
-                key={channel.url}
-                variant="ghost"
-                size="sm"
-                nativeButton={false}
-                render={(props) => (
-                  <a {...props} href={channel.url} target="_blank" rel="noopener noreferrer" />
-                )}
-              >
-                {channel.label}
-                <ArrowUpRightIcon />
-              </Button>
-            ))}
-          </div>
+          <ChannelLinks channels={profile.channels} variant="ghost" />
         )}
       </header>
 
@@ -293,6 +270,15 @@ function NodePage() {
           </div>
         )}
       </section>
+
+      {profile && (
+        <CommunityUpdates
+          updates={profile.updates}
+          nodeId={node.id}
+          layout="page"
+          testId="node-page.updates"
+        />
+      )}
 
       {(childrenLoading || children.length > 0) && (
         <section className="flex flex-col gap-6" data-testid="node-page.children">

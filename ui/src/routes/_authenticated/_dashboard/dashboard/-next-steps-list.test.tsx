@@ -34,11 +34,11 @@ describe("Home next steps for platform admins", () => {
       isAnonymous: false,
       hasPasskey: true,
       hasNear: true,
-      hasRealEmail: true,
-      organizationCount: 0,
-      activeOrganizationName: null,
+      membership: "none",
+      communityCount: 0,
       community: null,
       canManageCommunity: false,
+      canOrganizeEvents: false,
       isAdmin: true,
     });
     render(<NextStepsList steps={steps} primary={false} />);
@@ -74,11 +74,11 @@ describe("Home next steps for team members", () => {
       isAnonymous: false,
       hasPasskey: true,
       hasNear: true,
-      hasRealEmail: true,
-      organizationCount: 1,
-      activeOrganizationName: "Harbor",
+      membership: "active",
+      communityCount: 0,
       community: { name: "Harbor", tenantId: "tenant-1" },
       canManageCommunity: false,
+      canOrganizeEvents: false,
       isAdmin: false,
     });
     render(<NextStepsList steps={steps} primary={false} />);
@@ -91,5 +91,33 @@ describe("Home next steps for team members", () => {
       const href = screen.getByTestId(`home-step-${step.id}`).getAttribute("href") ?? "";
       expect(isPathAllowed(workspace, href)).toBe(true);
     }
+  });
+});
+
+describe("Home next steps for a plain member", () => {
+  it("features their community first, then staking, and never asks for an email", () => {
+    const steps = getNextSteps({
+      isAnonymous: false,
+      hasPasskey: true,
+      hasNear: false,
+      membership: "active",
+      communityCount: 0,
+      community: { name: "Harbor", tenantId: "tenant-1" },
+      canManageCommunity: false,
+      canOrganizeEvents: false,
+      isAdmin: false,
+    });
+    render(<NextStepsList steps={steps} primary />);
+
+    const items = screen
+      .getByTestId("home-next-steps")
+      .querySelectorAll("[data-testid^=home-step-]");
+    expect([...items].map((item) => item.getAttribute("data-testid"))).toEqual([
+      "home-step-open-community",
+      "home-step-stake",
+    ]);
+    expect(screen.getByTestId("home-step-open-community").textContent).toContain("Open Harbor");
+    expect(screen.getByRole("link", { name: "Open" }).getAttribute("href")).toBe("/dashboard/node");
+    expect(screen.queryByText(/email/i)).toBeNull();
   });
 });
