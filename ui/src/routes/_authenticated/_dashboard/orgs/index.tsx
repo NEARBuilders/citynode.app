@@ -314,36 +314,53 @@ function OrganizationsList() {
                     )}
                     <div className="mt-auto flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">
-                        {members ? translate("org.memberCount", { count: members.length }) : " "}
+                        {members ? translate("org.memberCount", { count: members.length }) : " "}
                       </span>
-                      {org.status !== "active" ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          nativeButton={false}
-                          render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
-                        >
-                          {translate("orgApproval.view")}
-                        </Button>
-                      ) : isActive ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          nativeButton={false}
-                          render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
-                        >
-                          {translate("common.open")}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => switchOrgMutation.mutate(org.id)}
-                          disabled={switchOrgMutation.isPending}
-                        >
-                          {translate("org.makeActive")}
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {org.status === "active" &&
+                          myRole === "owner" &&
+                          !isPersonal &&
+                          !tenantOrgIds.has(org.id) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              nativeButton={false}
+                              render={<Link to="/apply" search={{ org: org.slug }} />}
+                              data-testid={`orgs-start-community-${org.slug}`}
+                            >
+                              <RocketLaunchIcon />
+                              {translate("dashboard.startCommunity")}
+                            </Button>
+                          )}
+                        {org.status !== "active" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            nativeButton={false}
+                            render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                          >
+                            {translate("orgApproval.view")}
+                          </Button>
+                        ) : isActive ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            nativeButton={false}
+                            render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                          >
+                            {translate("common.open")}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => switchOrgMutation.mutate(org.id)}
+                            disabled={switchOrgMutation.isPending}
+                          >
+                            {translate("org.makeActive")}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
