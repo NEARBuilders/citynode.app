@@ -19,6 +19,7 @@ import {
 } from "./lib/community-organizations";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
+import { AttendanceLive, type AttendanceService, AttendanceTag } from "./services/attendance";
 import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
@@ -70,6 +71,7 @@ class ApiServices extends Context.Service<
     storage: StorageService;
     nearbuilders: ReturnType<typeof createNearbuilders>;
     memberDirectory: MemberDirectoryService;
+    attendance: AttendanceService;
     stakingPools: StakingPoolsService;
   }
 >()("api/ApiServices") {}
@@ -422,6 +424,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ),
           StorageLive,
           MemberDirectoryLive,
+          AttendanceLive,
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
@@ -436,6 +439,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           storage: Context.get(services, StorageTag),
           nearbuilders: createNearbuilders(config.variables.nearbuildersUrl),
           memberDirectory: Context.get(services, MemberDirectoryTag),
+          attendance: Context.get(services, AttendanceTag),
           stakingPools: makeStakingPools({
             mainnet: config.variables.mainnetStakingPoolWhitelist,
             testnet: config.variables.testnetStakingPoolWhitelist,
@@ -841,6 +845,67 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return (yield* services.memberDirectory.latestCount(tenant.orgId)) ?? unavailable;
       }),
 
+      reconcileAttendance: builder.reconcileAttendance.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const auth = yield* memberAuthClient(context);
+        const { organizationId } = input;
+        const community = (yield* services.discovery.organizationEvents([organizationId])).get(
+          organizationId,
+        );
+        return yield* services.attendance.reconcile({
+          organizationId,
+          communityName: community?.communityName ?? organizationId,
+          events: community?.events ?? [],
+          upstream: {
+            listCodes: (eventId) =>
+              auth.listOnboardingCodes({ organizationId, ...(eventId ? { eventId } : {}) }),
+            codeStatus: (codeId) => auth.getOnboardingStatus({ codeId, organizationId }),
+          },
+        });
+      }),
+
+      getMyAttendance: builder.getMyAttendance.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const auth = yield* memberAuthClient(context);
+        const memberships = yield* Effect.tryPromise({
+          try: () => auth.listOrganizations(),
+          catch: () =>
+            new ORPCError("INTERNAL_SERVER_ERROR", {
+              message: "Could not load your communities",
+            }),
+        });
+        const names = new Map(
+          memberships.map((organization) => [organization.id, organization.name]),
+        );
+        if (input.organizationId && !names.has(input.organizationId)) {
+          return yield* Effect.fail(notACommunityMember());
+        }
+        const organizationIds = input.organizationId
+          ? [input.organizationId]
+          : [
+              ...new Set([
+                ...names.keys(),
+                ...(yield* services.attendance.recordedOrganizations(context.userId)),
+              ]),
+            ];
+        const eventsByOrganization = yield* services.discovery.organizationEvents(organizationIds);
+        const communities = organizationIds.map((organizationId) => {
+          const community = eventsByOrganization.get(organizationId);
+          return {
+            organizationId,
+            communityName: community?.communityName ?? names.get(organizationId) ?? organizationId,
+            events: community?.events ?? [],
+          };
+        });
+        return yield* services.attendance.history({ userId: context.userId, communities });
+      }),
+
       ping: builder.ping.handler(async () => ({
         status: "ok",
         timestamp: new Date().toISOString(),
@@ -1232,24 +1297,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("BAD_REQUEST", { message: "Hostname does not match the community slug" }),
           );
         }
-        const proposerUserId = payload.applicantUserId;
-        if (!proposerUserId) {
-          return yield* Effect.fail(
-            new ORPCError("CONFLICT", {
-              message:
-                "The saved application has no applicant identity to attribute the organization to",
-            }),
-          );
-        }
         const organization = yield* Effect.tryPromise({
           try: () =>
             provisionCommunityOrganization(auth, {
               proposalId: proposal.id,
               name: payload.name,
               slug: payload.slug,
-              proposerUserId,
+              ...(payload.applicantUserId ? { proposerUserId: payload.applicantUserId } : {}),
+              applicantAccountId: proposal.createdBy,
               reviewerUserId: context.userId ?? context.user?.id ?? "",
-              ...(payload.orgId ? { legacyOrgId: payload.orgId } : {}),
+              ...(payload.orgId && payload.applicantUserId ? { legacyOrgId: payload.orgId } : {}),
             }),
           catch: (error) =>
             error instanceof ORPCError
@@ -1271,7 +1328,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           proposalId: proposal.id,
         });
         yield* recordStep("community", community.nodeId);
-        return community;
+        return { ...community, applicantInvited: organization.applicantInvited };
       }),
 
       releaseCommunityProposal: builder.releaseCommunityProposal
@@ -1297,7 +1354,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const community = yield* services.tenants.releaseNodeProposal({
             proposalId: proposal.id,
           });
-          if (payload.orgId) {
+          if (payload.orgId && payload.applicantUserId) {
             return {
               community,
               organization: { released: false, keptReason: "existing" as const },

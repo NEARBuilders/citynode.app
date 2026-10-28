@@ -18,7 +18,9 @@ const POOL = "example.poolv1.near";
 const harness = vi.hoisted(() => ({
   nearAccount: null as string | null,
   routeContext: {} as Record<string, unknown>,
+  listing: (() => Promise.resolve(null)) as () => Promise<unknown>,
   getOnboardingRedemptions: (() => Promise.resolve(null)) as (input: unknown) => Promise<unknown>,
+  attendanceCalls: [] as string[],
   memberDirectory: {
     optedIn: false,
     directory: (() => Promise.resolve({ count: 0, observedAt: "", members: [] })) as (input: {
@@ -41,11 +43,22 @@ vi.mock("@tanstack/react-router", () => ({
     children,
     to,
     params,
+    hash,
+    "data-testid": testId,
   }: {
     children?: ReactNode;
     to?: string;
     params?: { accountId?: string };
-  }) => <a href={to === "/$accountId" ? `/${params?.accountId}` : "/dashboard"}>{children}</a>,
+    hash?: string;
+    "data-testid"?: string;
+  }) => (
+    <a
+      href={`${to === "/$accountId" ? `/${params?.accountId}` : "/dashboard"}${hash ? `#${hash}` : ""}`}
+      data-testid={testId}
+    >
+      {children}
+    </a>
+  ),
   redirect: (options: unknown) => ({ redirect: options }),
 }));
 
@@ -58,6 +71,7 @@ vi.mock("@/app", () => ({
       getOnboardingRedemptions: (input: unknown) => harness.getOnboardingRedemptions(input),
     },
     listDiscoveryActivities: async () => [],
+    getDiscoveryNode: () => harness.listing(),
     getMemberDirectoryOptIn: async () =>
       harness.memberDirectory.readOptIn
         ? harness.memberDirectory.readOptIn()
@@ -70,6 +84,27 @@ vi.mock("@/app", () => ({
     getMemberDirectory: (input: { organizationId: string }) =>
       harness.memberDirectory.directory(input),
     getNodeMemberCount: (input: { nodeId: string }) => harness.memberDirectory.nodeCount(input),
+    reconcileAttendance: async (input: { organizationId: string }) => {
+      harness.attendanceCalls.push(`reconcile:${input.organizationId}`);
+      return { events: 1, truncated: [], failed: [] };
+    },
+    getMyAttendance: async (input: { organizationId?: string }) => {
+      harness.attendanceCalls.push(`read:${input.organizationId}`);
+      return {
+        events: [
+          {
+            organizationId: "org-1",
+            communityName: "Example city",
+            eventId: "event-1",
+            eventName: "Builders Night",
+            checkedInAt: "2026-10-10T18:30:00.000Z",
+            startsAt: null,
+          },
+        ],
+        unclassified: [],
+        communities: [],
+      };
+    },
   }),
   useAuthClient: () => ({
     near: { getNearClient: () => new Near({ network: "mainnet" }) },
@@ -102,6 +137,8 @@ afterEach(() => {
   harness.memberDirectory.nodeCount = () => Promise.resolve({ count: null, observedAt: null });
   harness.memberDirectory.setOptIn = null;
   harness.memberDirectory.readOptIn = null;
+  harness.listing = () => Promise.resolve(null);
+  harness.attendanceCalls.length = 0;
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
 });
@@ -348,9 +385,10 @@ describe("node overview team area gating", () => {
     );
   }
 
-  it("lets a Treasury-active member open the overview but not the other community pages", async () => {
+  it("lets a Treasury-active member open the overview and proposals but not the work-area pages", async () => {
     expect(await gate("/dashboard/node", "team-fin")).toBe("allowed");
-    expect(await gate("/dashboard/node/proposals", "team-fin")).toBe("restricted:node-operations");
+    expect(await gate("/dashboard/node/proposals", "team-fin")).toBe("allowed");
+    expect(await gate("/stake", "team-fin")).toBe("allowed");
     expect(await gate("/nodes/node-1/content", "team-fin")).toBe("restricted:node-operations");
     expect(await gate("/tenant/tenant-1", "team-fin")).toBe("restricted:node-operations");
   });
@@ -563,5 +601,101 @@ describe("node overview member directory", () => {
     expect((await screen.findByTestId("dashboard-node.member-count-unavailable")).textContent).toBe(
       "Not available",
     );
+  });
+});
+
+const listing = {
+  updates: [
+    {
+      id: "00000000-0000-4000-8000-0000000000a1",
+      ownerNodeId: "node-1",
+      nodeIds: ["node-1"],
+      kind: "social",
+      title: "Recap of the October meetup",
+      summary: "",
+      url: "https://example.com/posts/october-recap",
+      source: "Example Blog",
+      publishedAt: "2026-10-20T10:00:00.000Z",
+      startsAt: null,
+      endsAt: null,
+      timezone: "UTC",
+      venue: "",
+      status: "published",
+    },
+  ],
+  channels: [
+    { label: "A very long community channel label for phones", url: "https://t.me/example" },
+  ],
+  events: [],
+};
+
+describe("node overview for members", () => {
+  it("says what membership gives them, linking only to sections on the page", async () => {
+    stubChain();
+    harness.listing = () => Promise.resolve(listing);
+    renderOverview({ nearAccount: null });
+    await screen.findByTestId("dashboard-node.updates");
+    const intro = screen.getByTestId("dashboard-node.member-intro");
+    expect(intro.textContent).toContain("What membership gives you:");
+    const targets = [...intro.querySelectorAll("a")].map(
+      (link) => link.getAttribute("href")?.split("#")[1],
+    );
+    expect(targets).toEqual(["coming-up", "updates", "people"]);
+    for (const target of targets) expect(document.getElementById(target ?? "")).toBeTruthy();
+  });
+
+  it("shows Social Updates and channels from the public listing", async () => {
+    stubChain();
+    harness.listing = () => Promise.resolve(listing);
+    renderOverview({ nearAccount: null });
+    const updates = await screen.findByTestId("dashboard-node.updates");
+    expect(updates.textContent).toContain("Latest updates");
+    expect(
+      screen.getByTestId(`discovery-activity-outbound-${listing.updates[0]?.id}`).textContent,
+    ).toContain("Example Blog");
+    const channels = screen.getByTestId("dashboard-node.channels");
+    expect(channels.textContent).toContain("Where to find them");
+    expect(channels.querySelector("a")?.getAttribute("href")).toBe("https://t.me/example");
+  });
+
+  it("leaves both sections out when the community has no public listing", async () => {
+    stubChain();
+    renderOverview({ nearAccount: null });
+    await screen.findByTestId("dashboard-node.members");
+    expect(screen.queryByTestId("dashboard-node.updates")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.channels")).toBeNull();
+    const intro = screen.getByTestId("dashboard-node.member-intro");
+    expect(intro.querySelector('[data-testid="dashboard-node.member-intro-updates"]')).toBeNull();
+  });
+
+  it("keeps the rest of Overview when the public listing can't be read", async () => {
+    stubChain();
+    harness.listing = () => Promise.reject(new Error("discovery unavailable"));
+    const client = renderOverview({ nearAccount: null });
+    await waitFor(() =>
+      expect(client.getQueryState(["discovery-node", "node-1"])?.status).toBe("error"),
+    );
+    expect(screen.getByTestId("dashboard-node.member-intro")).toBeTruthy();
+    expect(screen.getByTestId("node-validators")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-node.members")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-node.updates")).toBeNull();
+  });
+});
+
+describe("node overview attendance", () => {
+  it("shows a plain member their events in this community without syncing", async () => {
+    stubChain();
+    renderOverview({ nearAccount: null });
+    expect((await screen.findByTestId("dashboard-node.attendance-event")).textContent).toContain(
+      "Builders Night",
+    );
+    expect(harness.attendanceCalls).toEqual(["read:org-1"]);
+  });
+
+  it("syncs the community's check-ins first when an organizer opens Overview", async () => {
+    stubChain();
+    renderOverview({ nearAccount: null, canOrganize: true });
+    await screen.findByTestId("dashboard-node.attendance-event");
+    expect(harness.attendanceCalls).toEqual(["reconcile:org-1", "read:org-1"]);
   });
 });

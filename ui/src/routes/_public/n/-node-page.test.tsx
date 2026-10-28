@@ -53,6 +53,7 @@ const validator = {
 };
 const clients: QueryClient[] = [];
 const memberCounts = new Map<string, { count: number | null; observedAt: string | null }>();
+const listings = new Map<string, Record<string, unknown> | "fail">();
 
 afterEach(() => {
   cleanup();
@@ -60,6 +61,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   memberCounts.clear();
+  listings.clear();
 });
 
 function communityBuilders(path: string, overrides: Record<string, unknown> = {}) {
@@ -123,8 +125,11 @@ function mockApi(
           return Response.json({
             json: memberCounts.get(args.nodeId) ?? { count: null, observedAt: null },
           });
-        case "getDiscoveryNode":
-          return Response.json({ json: null });
+        case "getDiscoveryNode": {
+          const listing = listings.get(args.nodeId);
+          if (listing === "fail") return Response.json({ json: null }, { status: 500 });
+          return Response.json({ json: listing ?? null });
+        }
         case "getCommunityBuilders":
           return Response.json({ json: nearbuilders(args.nodeId) });
         case "getNode":
@@ -261,16 +266,14 @@ it("lets anonymous visitors browse a pool and asks them to sign in to stake", as
   expect(screen.queryByTestId("stake.connect-wallet")).toBeNull();
 });
 
-it("sends signed-in members of a team without the stake area to Home", async () => {
+it.each([
+  ["stake"],
+  ["events"],
+  ["finance"],
+  ["node-operations"],
+])("keeps signed-in members of an active %s team on the staking page", async (area) => {
   mockApi([parent, child], child.id);
-  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["events"]);
-  await vi.waitFor(() => expect(router.state.location.pathname).toBe("/dashboard"));
-  expect(router.state.location.search).toEqual({ restricted: "stake" });
-});
-
-it("keeps signed-in members of a stake team on the staking page", async () => {
-  mockApi([parent, child], child.id);
-  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["stake"]);
+  const router = await showNode(`/stake?nodeId=${child.id}`, true, [area]);
   expect(router.state.location.pathname).toBe("/stake");
   expect(await screen.findByTestId("stake.connect-wallet")).toBeTruthy();
   expect(screen.queryByTestId("stake.sign-in")).toBeNull();
@@ -444,4 +447,87 @@ it("says the member count is not available before it was ever observed", async (
     "Not available",
   );
   expect(screen.queryByTestId("node-page.member-count-value")).toBeNull();
+});
+
+function listing(nodeId: string, updates: Record<string, unknown>[]) {
+  return {
+    nodeId,
+    summary: "Builders meeting every month.",
+    location: "Chicago",
+    region: "North America",
+    latitude: null,
+    longitude: null,
+    channels: [{ label: "Telegram", url: "https://t.me/example" }],
+    published: true,
+    featured: null,
+    active: true,
+    activityReason: "Recently active",
+    upcoming: false,
+    events: [],
+    updates,
+    name: "Chicago",
+    slug: "chicago",
+    parentId: parent.id,
+    kind: "city",
+  };
+}
+
+const update = {
+  id: "00000000-0000-4000-8000-0000000000a1",
+  ownerNodeId: child.id,
+  nodeIds: [child.id],
+  kind: "social",
+  title: "Recap of the October meetup",
+  summary: "",
+  url: "https://example.com/posts/october-recap",
+  source: "Example Blog",
+  publishedAt: "2026-10-20T10:00:00.000Z",
+  startsAt: null,
+  endsAt: null,
+  timezone: "UTC",
+  venue: "",
+  status: "published",
+};
+
+it("shows the latest Social Updates with their source, date and original link", async () => {
+  mockApi();
+  listings.set(child.id, listing(child.id, [update]));
+  await showNode("/n/chicago");
+  const section = await screen.findByTestId("node-page.updates");
+  expect(section.textContent).toContain("Latest updates");
+  expect(section.textContent).toContain("Recap of the October meetup");
+  expect(section.textContent).toContain("Oct");
+  expect(section.textContent).toContain("20");
+  const original = screen.getByTestId(`discovery-activity-outbound-${update.id}`);
+  expect(original.textContent).toContain("Example Blog");
+  expect(original.getAttribute("href")).toBe(update.url);
+  expect(screen.getByRole("link", { name: /Telegram/ }).getAttribute("href")).toBe(
+    "https://t.me/example",
+  );
+});
+
+it("leaves out the updates section when the listing has none", async () => {
+  mockApi();
+  listings.set(child.id, listing(child.id, []));
+  await showNode("/n/chicago");
+  expect(await screen.findByText("Builders meeting every month.")).toBeTruthy();
+  expect(screen.queryByTestId("node-page.updates")).toBeNull();
+  expect(screen.queryByText("Latest updates")).toBeNull();
+});
+
+it("still shows the community when its public listing can't be read", async () => {
+  mockApi();
+  listings.set(child.id, "fail");
+  await showNode("/n/chicago");
+  expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
+  expect(await screen.findByTestId("node-page.stats")).toBeTruthy();
+  expect(screen.queryByTestId("node-page.updates")).toBeNull();
+});
+
+it("never shows the members-only bulletin on the public page", async () => {
+  mockApi([parent, { ...child, metadata: { bulletin: "Members meet at the back door" } }]);
+  listings.set(child.id, listing(child.id, [update]));
+  await showNode("/n/chicago");
+  await screen.findByTestId("node-page.updates");
+  expect(screen.queryByText("Members meet at the back door")).toBeNull();
 });

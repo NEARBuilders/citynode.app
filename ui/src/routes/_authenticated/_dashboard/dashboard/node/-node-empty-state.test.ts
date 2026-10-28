@@ -36,4 +36,13 @@ describe("My community empty state", () => {
       actionLabel: "Start a community",
     });
   });
+
+  it("asks a member with communities to choose one instead of starting a new one", () => {
+    expect(getNodeEmptyStateContent("choose", false, undefined, 2)).toEqual({
+      title: "Choose a community",
+      description: "You belong to 2 communities. Pick the one to open.",
+      actionLabel: "Choose",
+      actionTo: "/orgs",
+    });
+  });
 });

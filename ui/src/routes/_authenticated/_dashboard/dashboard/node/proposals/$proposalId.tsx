@@ -86,7 +86,7 @@ function NodeProposalDetail() {
       <div className="flex flex-col gap-3">
         {back}
         <SectionHeader
-          title={proposalTitle(proposal.payload, "Proposal", translate)}
+          title={proposalTitle(proposal.payload, translate("dashboard.application"), translate)}
           description={
             <>
               {translate("common.submitted")}

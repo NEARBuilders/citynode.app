@@ -93,7 +93,7 @@ describe.sequential("node applications", () => {
     } as unknown as Parameters<typeof loaded.createClient>[0]);
   }
 
-  it("binds the authenticated applicant and rejects identity or organization spoofing", async () => {
+  it("binds the authenticated applicant and rejects identity spoofing", async () => {
     await expect(
       client("alice.near").propose({
         pluginId: "node",
@@ -101,20 +101,6 @@ describe.sequential("node applications", () => {
         payload: { ...payload, slug: "spoof", submitterAccountId: "bob.near" },
       }),
     ).rejects.toThrow(/Applicant identity/);
-    await expect(
-      client("alice.near", "other-org").propose({
-        pluginId: "node",
-        entityId: "wrong-org",
-        payload: { ...payload, slug: "wrong-org", orgId: "org-1" },
-      }),
-    ).rejects.toThrow(/organization/);
-    await expect(
-      client("alice.near").propose({
-        pluginId: "node",
-        entityId: "existing-org",
-        payload: { ...payload, slug: "existing-org", orgId: "org-1" },
-      }),
-    ).rejects.toThrow(/organization/);
     await expect(
       client("alice.near").propose({ pluginId: "node", entityId: "mismatch", payload }),
     ).rejects.toThrow(/Invalid community/);
@@ -129,6 +115,15 @@ describe.sequential("node applications", () => {
       submitterAccountId: "alice.near",
       applicantUserId: "user-alice.near",
     });
+  });
+
+  it("accepts an organization reference on a fresh application", async () => {
+    const result = await client("alice.near", "other-org").propose({
+      pluginId: "node",
+      entityId: "existing-org",
+      payload: { ...payload, slug: "existing-org", orgId: "org-1" },
+    });
+    expect(result.data.payload).toMatchObject({ slug: "existing-org", orgId: "org-1" });
   });
 
   it("accepts an eligible applicant without an organization and stamps their user identity", async () => {
@@ -243,23 +238,41 @@ describe.sequential("node applications", () => {
         payload: { ...payload, submitterAccountId: "bob.near" },
       }),
     ).rejects.toThrow(/another applicant/);
+    const linkedRevision = await client("alice.near", "org-2").propose({
+      pluginId: "node",
+      entityId: "chicago",
+      payload: { ...payload, motivation: "Linked to our organization", orgId: "org-2" },
+    });
+    expect(linkedRevision.data.payload).toMatchObject({ orgId: "org-2" });
+    await admin.reject({
+      pluginId: "node",
+      entityId: "chicago",
+      expectedUpdatedAt: linkedRevision.data.updatedAt,
+      reason: "More detail needed",
+    });
     await expect(
-      client("alice.near", "org-2").propose({
+      client("alice.near").propose({
         pluginId: "node",
         entityId: "chicago",
-        payload: { ...payload, orgId: "org-2" },
+        payload: { ...payload, orgId: "org-3" },
       }),
-    ).rejects.toThrow(/existing organization/);
+    ).rejects.toThrow(/another organization/);
+    await expect(
+      client("alice.near").propose({
+        pluginId: "node",
+        entityId: "chicago",
+        payload,
+      }),
+    ).rejects.toThrow(/another organization/);
     const revised = await client("alice.near", null).propose({
       pluginId: "node",
       entityId: "chicago",
-      payload: { ...payload, motivation: "Expanded plan" },
+      payload: { ...payload, motivation: "Expanded plan", orgId: "org-2" },
     });
     expect(revised.data.reviewStatus).toBe("pending");
-    expect(revised.data.payload).toMatchObject({ motivation: "Expanded plan" });
-    expect(revised.data.payload).not.toHaveProperty("orgId");
+    expect(revised.data.payload).toMatchObject({ motivation: "Expanded plan", orgId: "org-2" });
     expect(revised.data.createdBy).toBe("alice.near");
-    expect(revised.data.submissionCount).toBe(2);
+    expect(revised.data.submissionCount).toBe(3);
 
     const approved = await admin.approve({
       pluginId: "node",

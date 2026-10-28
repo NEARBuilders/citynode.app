@@ -6,7 +6,6 @@ import manifestJson from "@/manifest.gen.json" with { type: "json" };
 import {
   appendPluginSidebarItems,
   buildNavItems,
-  filterSidebarByArea,
   filterSidebarByRole,
   filterSidebarByRoutes,
   getUserRole,
@@ -40,7 +39,7 @@ export function useShellNav(
   pluginNav?: { items: Parameters<typeof pluginNavToSidebar>[0] },
 ) {
   const translate = useAppTranslation();
-  const { user, activeOrg, organizations, isOrganizationsLoading } = useIdentity();
+  const { user, activeOrg, organizations, membership, isOrganizationsLoading } = useIdentity();
   const signedIn = Boolean(user);
   const { data: workspace = resolveTeamWorkspace(null) } = useTeamWorkspace(signedIn);
   const canCurate = useCanCurate(signedIn && !isAdmin);
@@ -49,7 +48,9 @@ export function useShellNav(
   const builtin = buildNavItems(
     {
       activeOrgSlug: activeOrg?.slug ?? null,
-      hasOrganization: isOrganizationsLoading || organizations.length > 0,
+      hasOrganization: isAdmin
+        ? isOrganizationsLoading || organizations.length > 0
+        : membership.status !== "none",
       canManageOrganization: workspace.canManageOrganization ?? false,
       canOrganizeEvents: workspace.teams.some((team) => team.areas.includes("events")),
       canCurate,
@@ -61,5 +62,5 @@ export function useShellNav(
   const withPlugins = pluginNav?.items?.length
     ? appendPluginSidebarItems(withRoutes, pluginNavToSidebar(pluginNav.items))
     : withRoutes;
-  return filterSidebarByArea(filterSidebarByRole(withPlugins, role), workspace.allowedAreas);
+  return filterSidebarByRole(withPlugins, role);
 }

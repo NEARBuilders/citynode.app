@@ -1618,6 +1618,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "此期间没有兑换码或新成员。",
   ],
   "admin.proposal.request": ["Request", "Solicitud", "Demande", "申请内容"],
+  "admin.proposal.applicantInvited": [
+    "This application didn't record the applicant's sign-in, so you own the organization for now. The applicant's NEAR account has been invited to join as an owner.",
+    "Esta solicitud no registró el inicio de sesión del solicitante, así que por ahora eres el propietario de la organización. Se invitó a la cuenta NEAR del solicitante a unirse como propietario.",
+    "Cette demande n’a pas enregistré la connexion du demandeur : vous êtes donc propriétaire de l’organisation pour l’instant. Le compte NEAR du demandeur a été invité à la rejoindre en tant que propriétaire.",
+    "此申请未记录申请人的登录信息，因此你暂时是该组织的所有者。已邀请申请人的 NEAR 账户以所有者身份加入。",
+  ],
   "admin.proposal.requestedBy": ["Requested by", "Solicitado por", "Demandé par", "申请人"],
   "admin.proposal.parentCommunity": [
     "Parent community",

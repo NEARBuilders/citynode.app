@@ -24,7 +24,6 @@ import {
 } from "@/lib/queries/nodes";
 import { stakingPoolApprovalQueryOptions } from "@/lib/queries/stake-pool";
 import { stakeCommunitiesQueryOptions } from "@/lib/queries/tenants";
-import { requireTeamArea } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
 import { StakeDirectory } from "./-stake-directory";
 import { StakeForm } from "./-stake-form";
@@ -40,12 +39,6 @@ import { StakeSkeleton } from "./-stake-skeleton";
 
 export const Route = createFileRoute("/_public/stake")({
   validateSearch: z.object({ node: z.string().optional(), nodeId: z.uuid().optional() }),
-  beforeLoad: async ({ context, location }) => {
-    const session = await context.queryClient
-      .query(sessionQueryOptions(context.authClient))
-      .catch(() => null);
-    if (session?.user) await requireTeamArea({ context, location });
-  },
   head: ({ match }) => ({
     meta: [
       {

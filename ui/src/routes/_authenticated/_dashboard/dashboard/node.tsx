@@ -3,11 +3,14 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { Button, EmptyState, PageContainer } from "@/components";
 import { discoveryNodeQueryOptions } from "@/components/discovery/event-visibility";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { selectCommunityNode, sortCommunityNodes } from "@/lib/community-node";
 import { pageTitle } from "@/lib/page-title";
+import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
-import { canManageCommunity } from "@/lib/team-workspace";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
+import { canManageCommunity, resolveTeamWorkspace } from "@/lib/team-workspace";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
-import { hasNodeProposalReviewPermission } from "./node/-node-access";
+import { hasNodeProposalReviewPermission, resolveCommunityTools } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
 
 type NodeDashboardSearch = { nodeId?: string };
@@ -18,7 +21,25 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
   }),
   beforeLoad: async ({ context, search }) => {
     const activeOrganizationId = context.auth.activeOrganizationId;
-    if (!activeOrganizationId) {
+    const organizationsQuery = { ...organizationsQueryOptions(context.apiClient), retry: false };
+    const cached = await context.queryClient
+      .ensureQueryData(organizationsQuery)
+      .catch(() => undefined);
+    const organizations =
+      cached && activeOrganizationId && !cached.some((org) => org.id === activeOrganizationId)
+        ? await context.queryClient
+            .fetchQuery({ ...organizationsQuery, staleTime: 0 })
+            .catch(() => undefined)
+        : cached;
+    const membership = resolveCommunityMembership({
+      organizations,
+      activeOrganizationId,
+      userId: context.auth.user?.id,
+      isAdmin: context.auth.user?.role === "admin",
+    });
+    const communityOrgId =
+      membership.status === "unknown" ? activeOrganizationId : communityOrganizationId(membership);
+    if (!communityOrgId) {
       return {
         tenant: null,
         nodes: [],
@@ -29,12 +50,13 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         canManage: false,
         inFinanceTeam: false,
         canOrganize: false,
-        emptyReason: "no-org" as const,
+        emptyReason: membership.status === "choose" ? ("choose" as const) : ("no-org" as const),
+        communityCount: membership.status === "choose" ? membership.count : 0,
       };
     }
 
     const tenant = await context.apiClient
-      .resolveTenantByOrgId({ orgId: activeOrganizationId })
+      .resolveTenantByOrgId({ orgId: communityOrgId })
       .catch(() => null);
     if (!tenant) {
       return {
@@ -48,13 +70,12 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         inFinanceTeam: false,
         canOrganize: false,
         emptyReason: "no-tenant" as const,
+        communityCount: 0,
       };
     }
 
-    const nodes = (await context.apiClient.listNodes({ tenantId: tenant.id })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-    const selectedNode = nodes.find((node) => node.id === search.nodeId) ?? nodes[0] ?? null;
+    const nodes = sortCommunityNodes(await context.apiClient.listNodes({ tenantId: tenant.id }));
+    const selectedNode = selectCommunityNode(nodes, search.nodeId);
     if (!selectedNode) {
       return {
         tenant,
@@ -67,6 +88,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         inFinanceTeam: false,
         canOrganize: false,
         emptyReason: "no-node" as const,
+        communityCount: 0,
       };
     }
 
@@ -89,14 +111,12 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       .catch(() => null);
     context.queryClient.setQueryData(nodeQueryKeys.tenant(tenant.id), nodes);
     context.queryClient.setQueryData(nodeQueryKeys.byId(selectedNode.id), selectedNode);
-    const orgRole = authContext?.organization?.member?.role;
     const canManage = canReview || canManageCommunity(authContext);
-    const inFinanceTeam =
-      authContext?.organization?.teams?.some((team) => team.areas.includes("finance")) ?? false;
-    const canOrganize =
-      orgRole === "owner" ||
-      orgRole === "admin" ||
-      (authContext?.organization?.teams?.some((team) => team.areas.includes("events")) ?? false);
+    const { inFinanceTeam, canOrganize } = resolveCommunityTools(
+      authContext,
+      resolveTeamWorkspace(authContext).allowedAreas,
+      selectedNode.id,
+    );
 
     return {
       tenant,
@@ -109,6 +129,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       inFinanceTeam,
       canOrganize,
       emptyReason: null,
+      communityCount: 0,
     };
   },
   head: ({ match }) => ({
@@ -140,13 +161,14 @@ function NodeDashboardLayout() {
   const translate = useAppTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const context = Route.useRouteContext();
-  const { selectedNode, summary, emptyReason } = context;
+  const { selectedNode, summary, emptyReason, communityCount } = context;
 
   if (!selectedNode || !summary) {
     const emptyState = getNodeEmptyStateContent(
       emptyReason ?? "no-node",
       context.auth.user?.role === "admin",
       translate,
+      communityCount,
     );
     return (
       <PageContainer>
