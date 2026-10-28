@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/item";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
+import { DaoProposalsNote } from "./-dao-proposals-note";
 import { NODE_PLUGIN_ID, nodeProposalsQueryOptions } from "./-node-proposals-query";
 import {
   applyStatusLabel,
@@ -94,9 +95,10 @@ function NodeProposals() {
 
   return (
     <section className="flex flex-col gap-6">
+      <DaoProposalsNote />
       <SectionHeader
-        title={translate("dashboard.changes")}
-        description={translate("dashboard.changesHint")}
+        title={translate("dashboard.applications")}
+        description={translate("dashboard.applicationsHint")}
         action={
           <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/apply" />}>
             {translate("dashboard.proposeChild")}
@@ -119,7 +121,7 @@ function NodeProposals() {
       ) : proposals.length === 0 ? (
         <EmptyState
           icon={SealCheckIcon}
-          title={translate("dashboard.noProposals")}
+          title={translate("dashboard.noApplications")}
           description={translate("proposal.noneWaitingNamed", { name: selectedNode.name ?? "" })}
         />
       ) : (
@@ -139,7 +141,11 @@ function NodeProposals() {
                 <ItemContent className="min-w-0">
                   <ItemTitle className="max-w-full">
                     <span className="truncate">
-                      {proposalTitle(proposal.payload, "Proposal", translate)}
+                      {proposalTitle(
+                        proposal.payload,
+                        translate("dashboard.application"),
+                        translate,
+                      )}
                     </span>
                   </ItemTitle>
                   <div className="flex flex-wrap items-center gap-2">

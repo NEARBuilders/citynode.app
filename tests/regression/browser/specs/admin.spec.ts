@@ -39,9 +39,9 @@ test.describe("admin", () => {
     await expect(page.getByTestId("admin.section.manage")).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId("admin.section.manage")).toBeInViewport();
 
-    await expect(page.getByTestId("admin-version-card")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByTestId("admin.stat.role.label")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByTestId("admin.stat.platform-account.label")).toBeVisible();
+    await expect(page.getByTestId("admin-version-card")).toHaveCount(0);
+    await expect(page.getByTestId("admin.stat.role")).toHaveCount(0);
+    await expect(page.getByTestId("admin.stat.platform-account")).toHaveCount(0);
 
     const appInfo = page.getByTestId("admin-app-info-trigger");
     await appInfo.focus();

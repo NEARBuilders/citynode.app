@@ -7,6 +7,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -216,6 +217,50 @@ export const memberCountObservations = pgTable("member_count_observations", {
   count: integer("count").notNull(),
   observedAt: timestamp("observed_at", { mode: "date", withTimezone: true }).notNull(),
 });
+
+export const attendanceCheckIns = pgTable(
+  "attendance_check_ins",
+  {
+    organizationId: text("organization_id").notNull(),
+    codeId: text("code_id").notNull(),
+    userId: text("user_id").notNull(),
+    eventId: text("event_id"),
+    eventName: text("event_name").notNull(),
+    communityName: text("community_name").notNull(),
+    classified: boolean("classified").notNull(),
+    checkedInAt: timestamp("checked_in_at", { mode: "date", withTimezone: true }).notNull(),
+    recordedAt: timestamp("recorded_at", { mode: "date", withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.organizationId, t.codeId, t.userId] }),
+    userIdx: index("attendance_check_in_user").on(t.userId, t.organizationId),
+  }),
+);
+
+export const attendanceCodeCheckpoints = pgTable(
+  "attendance_code_checkpoints",
+  {
+    organizationId: text("organization_id").notNull(),
+    codeId: text("code_id").notNull(),
+    usedCount: integer("used_count").notNull(),
+    reconciledAt: timestamp("reconciled_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.organizationId, t.codeId] }) }),
+);
+
+export const attendanceEventReconciliations = pgTable(
+  "attendance_event_reconciliations",
+  {
+    organizationId: text("organization_id").notNull(),
+    eventId: text("event_id").notNull(),
+    truncated: boolean("truncated").notNull(),
+    failed: boolean("failed").notNull(),
+    reconciledAt: timestamp("reconciled_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.organizationId, t.eventId] }) }),
+);
 
 export const teamJoinRequestStatus = pgEnum("team_join_request_status", [
   "pending",

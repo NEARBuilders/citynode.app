@@ -31,6 +31,17 @@ export function isNotFoundError(error: unknown) {
   return status === 404 || code === "NOT_FOUND";
 }
 
+const WALLET_CANCELLED_PATTERN =
+  /user (?:rejected|cancelled|canceled|closed)|request (?:rejected|cancelled|canceled)|cancelled by user|popup closed|wallet closed/i;
+
+export function isWalletCancelled(error: unknown) {
+  const { code } = errorStatusAndCode(error);
+  return (
+    code === "ACTION_REJECTED" ||
+    (error instanceof Error && WALLET_CANCELLED_PATTERN.test(error.message))
+  );
+}
+
 export function isNearUnavailableError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const data = Reflect.get(error, "data");
@@ -94,11 +105,6 @@ export function appErrorMessage(
   if (isNearUnavailableError(error)) return t("error.nearUnavailable");
   const stakingPoolMessage = stakingPoolErrorMessage(error);
   if (stakingPoolMessage) return t(stakingPoolMessage);
-  if (
-    code === "ACTION_REJECTED" ||
-    (error instanceof Error &&
-      /user (?:rejected|cancelled)|request (?:rejected|cancelled)/i.test(error.message))
-  )
-    return t("wallet.cancelled");
+  if (isWalletCancelled(error)) return t("wallet.cancelled");
   return t(fallback);
 }

@@ -47,8 +47,15 @@
     {
       "idx": 6,
       "version": "7",
-      "when": 1793155440928,
-      "tag": "0006_team-join-requests",
+      "when": 1793155380760,
+      "tag": "0006_attendance-record",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793206062784,
+      "tag": "0007_team-join-requests",
       "breakpoints": true
     }
   ]

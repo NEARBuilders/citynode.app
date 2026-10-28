@@ -287,6 +287,43 @@ export const MemberCountSchema = z.object({
   observedAt: z.iso.datetime().nullable(),
 });
 
+export const AttendanceRecordSchema = z.object({
+  events: z.array(
+    z.object({
+      organizationId: z.string(),
+      communityName: z.string(),
+      eventId: z.string(),
+      eventName: z.string(),
+      checkedInAt: z.iso.datetime(),
+      startsAt: z.iso.datetime().nullable(),
+    }),
+  ),
+  unclassified: z.array(
+    z.object({
+      organizationId: z.string(),
+      communityName: z.string(),
+      codeId: z.string(),
+      eventName: z.string(),
+      checkedInAt: z.iso.datetime(),
+    }),
+  ),
+  communities: z.array(
+    z.object({
+      organizationId: z.string(),
+      communityName: z.string(),
+      status: z.enum(["synced", "incomplete"]),
+      reasons: z.array(z.enum(["failed", "not_synced", "truncated"])),
+      syncedAt: z.iso.datetime().nullable(),
+    }),
+  ),
+});
+
+export const AttendanceReconcileSchema = z.object({
+  events: z.number().int().nonnegative(),
+  truncated: z.array(z.string()),
+  failed: z.array(z.string()),
+});
+
 export const FeatureAreaSchema = z.enum(["node-operations", "finance", "stake", "events"]);
 
 export const TeamJoinRequestStatusSchema = z.enum([
@@ -651,7 +688,7 @@ export const contract = oc.router({
         hostname: z.string().min(1),
       }),
     )
-    .output(z.object({ nodeId: z.string() }))
+    .output(z.object({ nodeId: z.string(), applicantInvited: z.boolean() }))
     .errors({
       UNAUTHORIZED,
       FORBIDDEN,
@@ -991,6 +1028,30 @@ export const contract = oc.router({
     })
     .input(z.object({ nodeId: z.string() }))
     .output(MemberCountSchema),
+
+  getMyAttendance: oc
+    .route({
+      method: "GET",
+      path: "/attendance/me",
+      summary: "List the events the caller checked in at",
+      description:
+        "Caller only — distinct events per community, unclassified check-ins and each community's sync coverage. With organizationId, only that community, and only while the caller is a member.",
+    })
+    .input(z.object({ organizationId: z.string().min(1).optional() }))
+    .output(AttendanceRecordSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  reconcileAttendance: oc
+    .route({
+      method: "POST",
+      path: "/attendance/reconcile",
+      summary: "Confirm a community's check-ins from its onboarding codes",
+      description:
+        "Organizers only — reads each community event's codes and their check-ins from auth and records them. Idempotent.",
+    })
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .output(AttendanceReconcileSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
 
   getTeamJoinBoard: oc
     .route({

@@ -8,6 +8,7 @@ import {
   useAuthClient,
 } from "@/app";
 import { Bulletin, Button, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
+import { AttendanceRecord } from "@/components/attendance-record";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
@@ -230,6 +231,7 @@ function Home() {
               </>
             )}
           </section>
+          <AttendanceRecord testId="home.attendance" />
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
           {user ? (
