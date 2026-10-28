@@ -1,4 +1,4 @@
-import { BankIcon, EnvelopeSimpleIcon, PlusIcon, WalletIcon } from "@phosphor-icons/react";
+import { BankIcon, EnvelopeSimpleIcon, RocketLaunchIcon, WalletIcon } from "@phosphor-icons/react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
@@ -156,19 +156,6 @@ function OrganizationsList() {
         title={translate("common.organizations")}
         description={translate("org.listDescription")}
         headerTestId="orgs.heading"
-        actions={
-          orgs.length > 0 ? (
-            <Button
-              variant={hasInvitations ? "outline" : "default"}
-              nativeButton={false}
-              render={<Link to="/orgs/new" />}
-              data-testid="orgs-new-button"
-            >
-              <PlusIcon />
-              {translate("org.new")}
-            </Button>
-          ) : null
-        }
       />
 
       {hasInvitations && (
@@ -258,11 +245,15 @@ function OrganizationsList() {
         <EmptyState
           icon={BankIcon}
           title={translate("org.empty")}
-          description={translate("org.createHint")}
+          description={translate("dashboard.startCommunityHint")}
           action={
-            <Button nativeButton={false} render={<Link to="/orgs/new" />}>
-              <PlusIcon />
-              {translate("org.create")}
+            <Button
+              nativeButton={false}
+              render={<Link to="/apply" />}
+              data-testid="orgs-start-community"
+            >
+              <RocketLaunchIcon />
+              {translate("dashboard.startCommunity")}
             </Button>
           }
         />
