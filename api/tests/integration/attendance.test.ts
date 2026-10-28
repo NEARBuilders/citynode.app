@@ -26,6 +26,8 @@ const memberships = new Map<string, Array<{ id: string; name: string }>>();
 const failingStatus = new Set<string>();
 const failingEventListings = new Set<string>();
 const statusCalls: string[] = [];
+const listCalls: string[] = [];
+let failingLatestListing = false;
 const UPSTREAM_LIMIT = 20;
 
 function callerId(context: unknown) {
@@ -62,6 +64,8 @@ const authStub = {
     listOnboardingCodes: async (input: { organizationId?: string; eventId?: string }) => {
       const organizationId = input.organizationId ?? "";
       if (!organizers.has(`${organizationId}:${callerId(context)}`)) throw deny();
+      listCalls.push(input.eventId ?? "latest");
+      if (!input.eventId && failingLatestListing) throw new Error("listing failed");
       if (input.eventId && failingEventListings.has(input.eventId)) {
         throw new Error("listing failed");
       }
@@ -144,6 +148,7 @@ async function community(name = "Attendance city") {
       (await getPluginClient(orgContext(`admin-${id}`, org, "admin"))).deleteNode({
         nodeId: popUp.id,
       }),
+    rename: (next: string) => provisioner.updateTenant({ tenantId: tenant.id, name: next }),
     organizer: () => client(organizerId),
   };
 }
@@ -194,6 +199,8 @@ beforeEach(() => {
   failingStatus.clear();
   failingEventListings.clear();
   statusCalls.length = 0;
+  listCalls.length = 0;
+  failingLatestListing = false;
 });
 
 describe("confirming attendance from an organizer session", () => {
@@ -415,5 +422,53 @@ describe("confirming attendance from an organizer session", () => {
     await expect(traveller.getMyAttendance({ organizationId: north.org })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+  });
+
+  it("stops re-listing settled past events until one of them gets a new code", async () => {
+    const city = await community();
+    const old = await city.addEvent("Last month", past(30 * 24));
+    const recent = await city.addEvent("This week", past(48));
+    addCode(city.org, old.id, "Last month", [["settled", past(30 * 24 - 1)]], past(30 * 24));
+    const organizer = await city.organizer();
+
+    await organizer.reconcileAttendance({ organizationId: city.org });
+    expect(listCalls.sort()).toEqual(["latest", old.id, recent.id].sort());
+
+    listCalls.length = 0;
+    await organizer.reconcileAttendance({ organizationId: city.org });
+    expect(listCalls.sort()).toEqual(["latest", recent.id].sort());
+
+    listCalls.length = 0;
+    addCode(city.org, old.id, "Last month", [["late-scan", past(1)]]);
+    await organizer.reconcileAttendance({ organizationId: city.org });
+    expect(listCalls.sort()).toEqual(["latest", old.id, recent.id].sort());
+    expect(
+      (await (await member("late-scan", city)).getMyAttendance({})).events.map((e) => e.eventId),
+    ).toEqual([old.id]);
+  });
+
+  it("shows a failed read of the latest codes as incomplete", async () => {
+    const city = await community();
+    await city.addEvent("Listed", past(20));
+    failingLatestListing = true;
+    const summary = await (await city.organizer()).reconcileAttendance({
+      organizationId: city.org,
+    });
+    expect(summary.failed).toContain("*");
+    const record = await (await member("sweep-member", city)).getMyAttendance({
+      organizationId: city.org,
+    });
+    expect(record.communities[0]).toMatchObject({ status: "incomplete", reasons: ["failed"] });
+  });
+
+  it("names events by the community's current name", async () => {
+    const city = await community("Old name");
+    const event = await city.addEvent("Meetup", past(10));
+    addCode(city.org, event.id, "Meetup", [["renamed-member", past(9)]]);
+    await (await city.organizer()).reconcileAttendance({ organizationId: city.org });
+    await city.rename("New name");
+    const record = await (await member("renamed-member", city)).getMyAttendance({});
+    expect(record.events[0]?.communityName).toBe("New name");
+    expect(record.communities[0]?.communityName).toBe("New name");
   });
 });

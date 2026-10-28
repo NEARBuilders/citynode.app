@@ -13,6 +13,10 @@ export type AttendanceEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
 export const UPSTREAM_CODE_PAGE_LIMIT = 20;
 
+export const ORGANIZATION_SWEEP = "*";
+
+const SETTLED_AFTER_MS = 14 * 24 * 3_600_000;
+
 export interface CommunityEvent {
   id: string;
   title: string;
@@ -176,29 +180,55 @@ export const AttendanceLive = Layer.effect(
       reconcile: ({ organizationId, communityName, events, upstream }) =>
         Effect.gen(function* () {
           const known = new Set(events.map((event) => event.id));
-          const latest = yield* Effect.tryPromise({
-            try: () => upstream.listCodes(),
-            catch: (error) => error,
-          }).pipe(
-            Effect.catch((error) =>
-              isAccessError(error)
-                ? Effect.fail(
-                    new ORPCError("FORBIDDEN", {
-                      message: "Only this community's organizers can confirm attendance",
-                    }),
-                  )
-                : Effect.succeed(null),
-            ),
+          const forbidden = () =>
+            new ORPCError("FORBIDDEN", {
+              message: "Only this community's organizers can confirm attendance",
+            });
+          const listCodes = (eventId?: string) =>
+            Effect.tryPromise({
+              try: () => upstream.listCodes(eventId),
+              catch: (error) => error,
+            }).pipe(
+              Effect.catch((error) =>
+                isAccessError(error) ? Effect.fail(forbidden()) : Effect.succeed(null),
+              ),
+            );
+          const latest = yield* listCodes();
+          const previous = new Map(
+            (yield* query(() =>
+              db
+                .select()
+                .from(attendanceEventReconciliations)
+                .where(eq(attendanceEventReconciliations.organizationId, organizationId)),
+            )).map((row) => [row.eventId, row]),
           );
+          const checkpoints = new Map(
+            (yield* query(() =>
+              db
+                .select()
+                .from(attendanceCodeCheckpoints)
+                .where(eq(attendanceCodeCheckpoints.organizationId, organizationId)),
+            )).map((row) => [row.codeId, row.usedCount]),
+          );
+          const freshCodes = new Set(
+            (latest ?? [])
+              .filter((code) => checkpoints.get(code.id) !== code.usedCount)
+              .map((code) => code.eventId),
+          );
+          const settledBefore = Date.now() - SETTLED_AFTER_MS;
+          const due = events.filter((event) => {
+            const row = previous.get(event.id);
+            if (!row || row.failed || row.truncated || !latest) return true;
+            if (freshCodes.has(event.id)) return true;
+            return !event.startsAt || Date.parse(event.startsAt) > settledBefore;
+          });
           const results = yield* Effect.forEach(
-            events,
+            due,
             (event) =>
               Effect.gen(function* () {
-                const codes = yield* Effect.tryPromise(() => upstream.listCodes(event.id)).pipe(
-                  Effect.option,
-                );
-                if (codes._tag === "None") return { id: event.id, truncated: false, ok: false };
-                const recorded = yield* Effect.forEach(codes.value, (code) =>
+                const codes = yield* listCodes(event.id);
+                if (!codes) return { id: event.id, truncated: false, ok: false };
+                const recorded = yield* Effect.forEach(codes, (code) =>
                   recordCode({
                     organizationId,
                     communityName,
@@ -209,7 +239,7 @@ export const AttendanceLive = Layer.effect(
                 );
                 return {
                   id: event.id,
-                  truncated: codes.value.length >= UPSTREAM_CODE_PAGE_LIMIT,
+                  truncated: codes.length >= UPSTREAM_CODE_PAGE_LIMIT,
                   ok: recorded.every(Boolean),
                 };
               }),
@@ -218,9 +248,14 @@ export const AttendanceLive = Layer.effect(
           const outside = (latest ?? []).filter(
             (code) => !code.eventId || !known.has(code.eventId),
           );
-          yield* Effect.forEach(outside, (code) =>
+          const outsideRecorded = yield* Effect.forEach(outside, (code) =>
             recordCode({ organizationId, communityName, code, known, upstream }),
           );
+          results.push({
+            id: ORGANIZATION_SWEEP,
+            truncated: false,
+            ok: !!latest && outsideRecorded.every(Boolean),
+          });
           const reconciledAt = new Date();
           const target = [
             attendanceEventReconciliations.organizationId,
@@ -268,7 +303,7 @@ export const AttendanceLive = Layer.effect(
             );
           }
           return {
-            events: events.length,
+            events: due.length,
             truncated: results.filter((result) => result.truncated).map((result) => result.id),
             failed: results.filter((result) => !result.ok).map((result) => result.id),
           };
@@ -313,6 +348,9 @@ export const AttendanceLive = Layer.effect(
               ]),
             ),
           );
+          const currentName = new Map(
+            communities.map((community) => [community.organizationId, community.communityName]),
+          );
           const attended = new Map<string, AttendanceRecord["events"][number]>();
           const unclassified: AttendanceRecord["unclassified"] = [];
           for (const row of rows) {
@@ -320,7 +358,7 @@ export const AttendanceLive = Layer.effect(
             if (!row.classified || !row.eventId) {
               unclassified.push({
                 organizationId: row.organizationId,
-                communityName: row.communityName,
+                communityName: currentName.get(row.organizationId) ?? row.communityName,
                 codeId: row.codeId,
                 eventName: row.eventName,
                 checkedInAt,
@@ -332,7 +370,7 @@ export const AttendanceLive = Layer.effect(
             if (current && current.checkedInAt <= checkedInAt) continue;
             attended.set(key, {
               organizationId: row.organizationId,
-              communityName: row.communityName,
+              communityName: currentName.get(row.organizationId) ?? row.communityName,
               eventId: row.eventId,
               eventName: row.eventName,
               checkedInAt,
@@ -352,15 +390,14 @@ export const AttendanceLive = Layer.effect(
             const hasHistory = rows.some((row) => row.organizationId === community.organizationId);
             if (community.events.length === 0 && !hasHistory) return [];
             const reasons = new Set<CoverageReason>();
+            if (byEvent.get(ORGANIZATION_SWEEP)?.failed) reasons.add("failed");
             for (const event of community.events) {
               const row = byEvent.get(event.id);
               if (!row) reasons.add("not_synced");
               if (row?.failed) reasons.add("failed");
               if (row?.truncated) reasons.add("truncated");
             }
-            const synced = community.events
-              .map((event) => byEvent.get(event.id)?.reconciledAt)
-              .filter((date): date is Date => !!date);
+            const synced = ownRows.map((row) => row.reconciledAt);
             return [
               {
                 organizationId: community.organizationId,
@@ -369,7 +406,7 @@ export const AttendanceLive = Layer.effect(
                 reasons: [...reasons].sort(),
                 syncedAt:
                   synced.length > 0
-                    ? new Date(Math.min(...synced.map((date) => date.getTime()))).toISOString()
+                    ? new Date(Math.max(...synced.map((date) => date.getTime()))).toISOString()
                     : null,
               },
             ];
