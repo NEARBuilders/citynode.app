@@ -45,6 +45,7 @@ import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-sect
 import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
 import { ReturningMembers } from "./-returning-members";
+import { TeamRequests } from "./-team-requests";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,
@@ -258,6 +259,12 @@ function NodeOverview() {
       {orgId && (
         <div id="people" className="scroll-mt-20">
           <MemberDirectory organizationId={orgId} nodeId={selectedNode.id} />
+        </div>
+      )}
+
+      {orgId && (
+        <div id="teams" className="scroll-mt-20">
+          <TeamRequests organizationId={orgId} />
         </div>
       )}
 

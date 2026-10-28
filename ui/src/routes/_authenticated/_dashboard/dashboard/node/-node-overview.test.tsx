@@ -90,6 +90,7 @@ vi.mock("@/app", () => ({
     getMemberDirectory: (input: { organizationId: string }) =>
       harness.memberDirectory.directory(input),
     getNodeMemberCount: (input: { nodeId: string }) => harness.memberDirectory.nodeCount(input),
+    getTeamJoinBoard: async () => ({ canReview: false, teams: [], requests: [] }),
   }),
   useAuthClient: () => ({
     near: { getNearClient: () => new Near({ network: "mainnet" }) },
