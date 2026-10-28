@@ -261,3 +261,56 @@ export const attendanceEventReconciliations = pgTable(
   },
   (t) => ({ pk: primaryKey({ columns: [t.organizationId, t.eventId] }) }),
 );
+
+export const teamJoinRequestStatus = pgEnum("team_join_request_status", [
+  "pending",
+  "approved",
+  "declined",
+  "withdrawn",
+  "closed",
+]);
+
+export const teamJoinRequestClosedReason = pgEnum("team_join_request_closed_reason", [
+  "requester_left",
+  "team_deleted",
+  "team_not_joinable",
+]);
+
+export const teamJoinRequests = pgTable(
+  "team_join_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    teamId: text("team_id").notNull(),
+    teamName: text("team_name").notNull(),
+    teamAreas: jsonb("team_areas").$type<string[]>().default([]).notNull(),
+    requesterUserId: text("requester_user_id").notNull(),
+    requesterName: text("requester_name"),
+    status: teamJoinRequestStatus("status").default("pending").notNull(),
+    decidedByUserId: text("decided_by_user_id"),
+    decidedAt: timestamp("decided_at", { mode: "date", withTimezone: true }),
+    closedReason: teamJoinRequestClosedReason("closed_reason"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    organizationIdx: index("team_join_requests_organization").on(t.organizationId, t.status),
+    onePendingPerTeam: uniqueIndex("team_join_requests_one_pending")
+      .on(t.teamId, t.requesterUserId)
+      .where(sql`${t.status} = 'pending'`),
+  }),
+);
+
+export const teamJoinEndorsements = pgTable(
+  "team_join_endorsements",
+  {
+    requestId: uuid("request_id")
+      .notNull()
+      .references(() => teamJoinRequests.id, { onDelete: "cascade" }),
+    endorserUserId: text("endorser_user_id").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    oncePerEndorser: uniqueIndex("team_join_endorsements_once").on(t.requestId, t.endorserUserId),
+  }),
+);

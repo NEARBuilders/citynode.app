@@ -868,6 +868,42 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "提交者将看到提案已被拒绝，此操作无法撤销。",
   ],
   "dashboard.removed": ["Removed", "Eliminado", "Retiré", "已移除"],
+  "dashboard.returningMembers": [
+    "Returning members",
+    "Miembros que regresan",
+    "Membres qui reviennent",
+    "回访成员",
+  ],
+  "dashboard.returningMembersCounts": [
+    "{returning} of {total} people checked in at 2 or more events",
+    "{returning} de {total} personas se registraron en 2 o más eventos",
+    "{returning} personnes sur {total} se sont enregistrées à 2 événements ou plus",
+    "{total} 人中有 {returning} 人在 2 场或更多活动签到",
+  ],
+  "dashboard.returningMembersFailed": [
+    "Couldn't load returning members",
+    "No se pudieron cargar los miembros que regresan",
+    "Impossible de charger les membres qui reviennent",
+    "无法加载回访成员",
+  ],
+  "dashboard.returningMembersIncomplete": [
+    "May be incomplete",
+    "Puede estar incompleto",
+    "Peut être incomplet",
+    "可能不完整",
+  ],
+  "dashboard.returningMembersNone": [
+    "No eligible check-ins yet",
+    "Aún no hay registros válidos",
+    "Aucun enregistrement éligible pour l'instant",
+    "暂无符合条件的签到",
+  ],
+  "dashboard.returningMembersScope": [
+    "All time, from the check-ins on record. Read {readAt}",
+    "Desde el inicio, según los registros guardados. Leído {readAt}",
+    "Depuis le début, d'après les enregistrements conservés. Lu le {readAt}",
+    "全部时间，基于现有签到记录。读取于 {readAt}",
+  ],
   "dashboard.saveAccount": [
     "Save your account",
     "Conserva tu cuenta",

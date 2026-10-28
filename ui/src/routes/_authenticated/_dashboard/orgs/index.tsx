@@ -316,7 +316,6 @@ function OrganizationsList() {
                       <div className="flex items-center gap-2">
                         {org.status === "active" &&
                           myRole === "owner" &&
-                          !isPersonal &&
                           !tenantOrgIds.has(org.id) && (
                             <Button
                               variant="outline"

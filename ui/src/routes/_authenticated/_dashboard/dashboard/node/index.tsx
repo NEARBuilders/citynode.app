@@ -45,6 +45,8 @@ import {
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
 import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
+import { ReturningMembers } from "./-returning-members";
+import { TeamRequests } from "./-team-requests";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,
@@ -90,6 +92,7 @@ function NodeOverview() {
   const translate = useAppTranslation();
   const {
     runtimeConfig,
+    nodes,
     selectedNode,
     summary,
     stakingSourceNode,
@@ -249,6 +252,9 @@ function NodeOverview() {
             {translate("dashboard.redemptionsFailed")}
           </p>
         )}
+        {canOrganize && orgId && (
+          <ReturningMembers organizationId={orgId} nodeIds={nodes.map((node) => node.id)} />
+        )}
       </div>
 
       {orgId && (
@@ -263,6 +269,12 @@ function NodeOverview() {
           reconcile={!!canOrganize}
           testId="dashboard-node.attendance"
         />
+      )}
+
+      {orgId && (
+        <div id="teams" className="scroll-mt-20">
+          <TeamRequests organizationId={orgId} />
+        </div>
       )}
 
       {canManage && (
