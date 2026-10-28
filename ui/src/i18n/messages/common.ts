@@ -588,18 +588,23 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "En attente de validation",
     "等待审核",
   ],
+  "dashboard.applications": [
+    "Community applications",
+    "Solicitudes de la comunidad",
+    "Demandes de la communauté",
+    "社区申请",
+  ],
+  "dashboard.applicationsHint": [
+    "Requests the platform reviews, like a new sub-community. These aren't Node DAO proposals.",
+    "Solicitudes que revisa la plataforma, como una nueva subcomunidad. No son propuestas de la DAO del nodo.",
+    "Demandes examinées par la plateforme, comme une nouvelle sous-communauté. Ce ne sont pas des propositions de la DAO du nœud.",
+    "由平台审核的申请，例如新的子社区。这些不是节点 DAO 提案。",
+  ],
   "dashboard.awaitingVotes": [
     "Awaiting votes · #{id}",
     "Esperando votos · #{id}",
     "En attente de votes · nº {id}",
     "等待投票 · #{id}",
-  ],
-  "dashboard.changes": ["Changes", "Cambios", "Modifications", "更改"],
-  "dashboard.changesHint": [
-    "Proposed changes to this community.",
-    "Cambios propuestos para esta comunidad.",
-    "Modifications proposées pour cette communauté.",
-    "对此社区提出的更改。",
   ],
   "dashboard.chooseOrg": [
     "Choose an organization",
@@ -687,11 +692,11 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Rien de prévu. Ajoutez un événement pour apparaître dans Explorer.",
     "暂无安排，添加活动后即可显示在探索页面。",
   ],
-  "dashboard.noProposals": [
-    "No proposals yet",
-    "Aún no hay propuestas",
-    "Aucune proposition pour le moment",
-    "暂无提案",
+  "dashboard.noApplications": [
+    "No community applications yet",
+    "Aún no hay solicitudes de la comunidad",
+    "Aucune demande de la communauté pour le moment",
+    "暂无社区申请",
   ],
   "dashboard.notAdded": ["Not added", "Sin añadir", "Non ajouté", "未添加"],
   "dashboard.openCommunity": [
@@ -749,6 +754,18 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Proponer una subcomunidad",
     "Proposer une sous-communauté",
     "提出子社区",
+  ],
+  "dashboard.daoProposals": [
+    "Node DAO proposals",
+    "Propuestas de la DAO del nodo",
+    "Propositions de la DAO du nœud",
+    "节点 DAO 提案",
+  ],
+  "dashboard.daoProposalsUnavailable": [
+    "Members can't submit proposals to this community's Node DAO here yet. It will need your wallet to be activated for signing, and the DAO's proposal policy to let members propose.",
+    "Los miembros aún no pueden enviar propuestas a la DAO del nodo de esta comunidad desde aquí. Hará falta activar tu billetera para firmar y que la política de propuestas de la DAO permita proponer a los miembros.",
+    "Les membres ne peuvent pas encore soumettre de propositions à la DAO du nœud de cette communauté ici. Il faudra activer votre portefeuille pour signer, et que la politique de propositions de la DAO autorise les membres à proposer.",
+    "成员暂时还不能在此向该社区的节点 DAO 提交提案。这需要先激活你的钱包以进行签名，并且 DAO 的提案规则允许成员提案。",
   ],
   "dashboard.newMembersLastMonth": [
     "New members last month",
