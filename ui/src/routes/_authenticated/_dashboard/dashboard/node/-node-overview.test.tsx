@@ -20,6 +20,11 @@ const harness = vi.hoisted(() => ({
   routeContext: {} as Record<string, unknown>,
   listing: (() => Promise.resolve(null)) as () => Promise<unknown>,
   getOnboardingRedemptions: (() => Promise.resolve(null)) as (input: unknown) => Promise<unknown>,
+  activities: (() => Promise.resolve([])) as (input: { nodeId: string }) => Promise<unknown>,
+  listOnboardingCodes: (() => Promise.resolve([])) as (input: unknown) => Promise<unknown>,
+  getOnboardingStatus: (() => Promise.resolve({ joined: [] })) as (
+    input: unknown,
+  ) => Promise<unknown>,
   memberDirectory: {
     optedIn: false,
     directory: (() => Promise.resolve({ count: 0, observedAt: "", members: [] })) as (input: {
@@ -68,8 +73,10 @@ vi.mock("@/app", () => ({
     auth: {
       getDao: async () => ({ daoAccountId: DAO, daoNetwork: "mainnet" }),
       getOnboardingRedemptions: (input: unknown) => harness.getOnboardingRedemptions(input),
+      listOnboardingCodes: (input: unknown) => harness.listOnboardingCodes(input),
+      getOnboardingStatus: (input: unknown) => harness.getOnboardingStatus(input),
     },
-    listDiscoveryActivities: async () => [],
+    listDiscoveryActivities: (input: { nodeId: string }) => harness.activities(input),
     getDiscoveryNode: () => harness.listing(),
     getMemberDirectoryOptIn: async () =>
       harness.memberDirectory.readOptIn
@@ -116,6 +123,9 @@ afterEach(() => {
   harness.memberDirectory.setOptIn = null;
   harness.memberDirectory.readOptIn = null;
   harness.listing = () => Promise.resolve(null);
+  harness.activities = () => Promise.resolve([]);
+  harness.listOnboardingCodes = () => Promise.resolve([]);
+  harness.getOnboardingStatus = () => Promise.resolve({ joined: [] });
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
 });
@@ -185,6 +195,7 @@ function renderOverview({
   harness.nearAccount = nearAccount;
   harness.routeContext = {
     runtimeConfig: {},
+    nodes: [{ id: "node-1" }, { id: "node-2" }],
     selectedNode: { id: "node-1", metadata: {} },
     summary: {
       validators: [],
@@ -407,6 +418,123 @@ describe("node overview code redemptions", () => {
     await screen.findByTestId("node-validators");
     for (const testId of stats) expect(screen.queryByTestId(testId)).toBeNull();
     expect(requested).toEqual([]);
+  });
+});
+
+describe("node overview returning members", () => {
+  function seedCheckIns() {
+    const requestedNodes: string[] = [];
+    harness.activities = async ({ nodeId }) => {
+      requestedNodes.push(nodeId);
+      const past = { startsAt: "2026-01-10T18:00:00.000Z", endsAt: "2026-01-10T20:00:00.000Z" };
+      return nodeId === "node-1"
+        ? [{ id: "event-a", kind: "event", ...past }]
+        : [{ id: "event-b", kind: "event", ...past }];
+    };
+    harness.listOnboardingCodes = async (input) => {
+      const { eventId } = input as { eventId: string };
+      return [{ id: `code-${eventId}`, eventId }];
+    };
+    harness.getOnboardingStatus = async (input) => {
+      const { codeId } = input as { codeId: string };
+      return {
+        joined:
+          codeId === "code-event-a"
+            ? [
+                { userId: "user-1" },
+                { userId: "user-2" },
+                { userId: "user-3" },
+                { userId: "user-4" },
+              ]
+            : [{ userId: "user-1" }],
+      };
+    };
+    return requestedNodes;
+  }
+
+  it("shows organizers the returning share across every node of the community", async () => {
+    stubChain();
+    const requestedNodes = seedCheckIns();
+    renderOverview({ nearAccount: null, canOrganize: true });
+    expect((await screen.findByTestId("dashboard-node.returning-members-share")).textContent).toBe(
+      "25%",
+    );
+    expect(screen.getByTestId("dashboard-node.returning-members-counts").textContent).toBe(
+      "1 of 4 people checked in at 2 or more events",
+    );
+    expect(screen.getByTestId("dashboard-node.returning-members-scope").textContent).toContain(
+      "All time, from the check-ins on record.",
+    );
+    expect(screen.queryByTestId("dashboard-node.returning-members-incomplete")).toBeNull();
+    expect([...new Set(requestedNodes)].sort()).toEqual(["node-1", "node-2"]);
+  });
+
+  it("labels the share as possibly incomplete when an event lists the full page of codes", async () => {
+    stubChain();
+    seedCheckIns();
+    harness.listOnboardingCodes = async (input) => {
+      const { eventId } = input as { eventId: string };
+      return Array.from({ length: 20 }, (_, index) => ({
+        id: `code-${eventId}-${index}`,
+        eventId,
+      }));
+    };
+    harness.getOnboardingStatus = async () => ({ joined: [{ userId: "user-1" }] });
+    renderOverview({ nearAccount: null, canOrganize: true });
+    expect(
+      (await screen.findByTestId("dashboard-node.returning-members-incomplete")).textContent,
+    ).toBe("May be incomplete");
+    expect(screen.getByTestId("dashboard-node.returning-members-share").textContent).toBe("100%");
+  });
+
+  it("says there are no eligible check-ins instead of showing a percentage", async () => {
+    stubChain();
+    seedCheckIns();
+    harness.getOnboardingStatus = async () => ({ joined: [] });
+    renderOverview({ nearAccount: null, canOrganize: true });
+    expect((await screen.findByTestId("dashboard-node.returning-members-empty")).textContent).toBe(
+      "No eligible check-ins yet",
+    );
+    expect(screen.queryByTestId("dashboard-node.returning-members-share")).toBeNull();
+  });
+
+  it("omits the stat when the community has no codes", async () => {
+    stubChain();
+    seedCheckIns();
+    harness.listOnboardingCodes = async () => [];
+    renderOverview({ nearAccount: null, canOrganize: true });
+    await waitFor(() =>
+      expect(screen.queryByTestId("dashboard-node.returning-members")).toBeNull(),
+    );
+    await screen.findByTestId("node-validators");
+    expect(screen.queryByTestId("dashboard-node.returning-members-error")).toBeNull();
+  });
+
+  it("shows a retryable unavailable state when a read fails, never a zero", async () => {
+    stubChain();
+    seedCheckIns();
+    let fail = true;
+    harness.getOnboardingStatus = async () => {
+      if (fail) throw new Error("unavailable");
+      return { joined: [{ userId: "user-1" }] };
+    };
+    renderOverview({ nearAccount: null, canOrganize: true });
+    await screen.findByTestId("dashboard-node.returning-members-error");
+    expect(screen.queryByTestId("dashboard-node.returning-members-share")).toBeNull();
+    fail = false;
+    fireEvent.click(screen.getByTestId("dashboard-node.returning-members-retry"));
+    expect((await screen.findByTestId("dashboard-node.returning-members-share")).textContent).toBe(
+      "100%",
+    );
+  });
+
+  it("neither shows nor reads the stat without organizer access", async () => {
+    stubChain();
+    const requestedNodes = seedCheckIns();
+    renderOverview({ nearAccount: null, canManage: true });
+    await screen.findByTestId("node-validators");
+    expect(screen.queryByTestId("dashboard-node.returning-members")).toBeNull();
+    expect(requestedNodes).toEqual(["node-1"]);
   });
 });
 

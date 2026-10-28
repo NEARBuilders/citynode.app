@@ -44,6 +44,7 @@ import {
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
 import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
+import { ReturningMembers } from "./-returning-members";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,
@@ -89,6 +90,7 @@ function NodeOverview() {
   const translate = useAppTranslation();
   const {
     runtimeConfig,
+    nodes,
     selectedNode,
     summary,
     stakingSourceNode,
@@ -247,6 +249,9 @@ function NodeOverview() {
           >
             {translate("dashboard.redemptionsFailed")}
           </p>
+        )}
+        {canOrganize && orgId && (
+          <ReturningMembers organizationId={orgId} nodeIds={nodes.map((node) => node.id)} />
         )}
       </div>
 
