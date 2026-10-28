@@ -1,6 +1,5 @@
 import {
   ArrowRightIcon,
-  ArrowUpRightIcon,
   BroadcastIcon,
   CalendarDotsIcon,
   CompassIcon,
@@ -39,6 +38,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { CommunityChannels, CommunityUpdates } from "./community-updates";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, EventList } from "./event-list";
 import { ReportContent } from "./report-content";
@@ -444,36 +444,10 @@ export function DiscoveryExplorer({
                   {shareMessage ? t(shareMessage) : null}
                 </p>
               </div>
-              {selected.channels.length > 0 && (
-                <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    {t("explore.detail.channels")}
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selected.channels.map((channel) => (
-                      <Button
-                        key={channel.url}
-                        variant="outline"
-                        size="sm"
-                        nativeButton={false}
-                        render={
-                          <a
-                            onClick={() =>
-                              measurement.track("channel", selected.nodeId, channel.url)
-                            }
-                            href={channel.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {channel.label}
-                            <ArrowUpRightIcon />
-                          </a>
-                        }
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
+              <CommunityChannels
+                channels={selected.channels}
+                onOpen={(channel) => measurement.track("channel", selected.nodeId, channel.url)}
+              />
               <section className="flex flex-col gap-4">
                 <h3 className="text-lg font-medium">{t("explore.detail.upcoming")}</h3>
                 {selected.events.length ? (
@@ -490,20 +464,15 @@ export function DiscoveryExplorer({
                   <p className="text-sm text-muted-foreground">{t("explore.detail.noEvents")}</p>
                 )}
               </section>
-              {selected.updates.length > 0 && (
-                <section className="flex flex-col gap-4">
-                  <h3 className="text-lg font-medium">{t("explore.detail.updates")}</h3>
-                  <EventList
-                    events={selected.updates}
-                    nodeId={selected.nodeId}
-                    campaign={search.campaign}
-                    onOutbound={(activity) => {
-                      if (activity.kind === "event")
-                        measurement.track("event", selected.nodeId, activity.id);
-                    }}
-                  />
-                </section>
-              )}
+              <CommunityUpdates
+                updates={selected.updates}
+                nodeId={selected.nodeId}
+                campaign={search.campaign}
+                onOpen={(activity) => {
+                  if (activity.kind === "event")
+                    measurement.track("event", selected.nodeId, activity.id);
+                }}
+              />
               <div className="border-t border-border pt-4">
                 <ReportContent targetId={selected.nodeId} kind="profile" />
               </div>

@@ -114,3 +114,37 @@ it("keeps the Start a community action reachable at 375 CSS pixels", async () =>
   expect(action.textContent).toBe("Start a community");
   expect(isHiddenByClass(action)).toBe(false);
 });
+
+it("hides the personal organization and treats personal-only as having none", async () => {
+  harness.organizations = [
+    {
+      id: "org-p",
+      name: "Personal",
+      slug: "personal",
+      status: "active",
+      metadata: { isPersonal: true },
+    },
+    { id: "org-u", name: "Legacy", slug: "user-1", status: "active", metadata: null },
+  ];
+  renderOrganizations();
+  expect(await screen.findByTestId("orgs-start-community")).toBeTruthy();
+  expect(screen.queryByTestId("orgs-card-personal")).toBeNull();
+  expect(screen.queryByTestId("orgs-card-user-1")).toBeNull();
+});
+
+it("lists communities next to a hidden personal organization", async () => {
+  harness.organizations = [
+    {
+      id: "org-p",
+      name: "Personal",
+      slug: "personal",
+      status: "active",
+      metadata: { isPersonal: true },
+    },
+    { id: "org-1", name: "Chicago", slug: "chicago", status: "active", metadata: null },
+  ];
+  renderOrganizations();
+  expect(await screen.findByTestId("orgs-card-chicago")).toBeTruthy();
+  expect(screen.queryByTestId("orgs-card-personal")).toBeNull();
+  expect(screen.queryByText("Personal")).toBeNull();
+});

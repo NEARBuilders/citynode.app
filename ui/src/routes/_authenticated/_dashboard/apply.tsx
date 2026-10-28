@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getGatewayId, useApiClient } from "@/app";
+import { getGatewayId, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
@@ -17,6 +17,7 @@ import {
   nodeByIdQueryOptions,
   rootNodesQueryOptions,
 } from "@/lib/queries/nodes";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -37,10 +38,12 @@ import {
 } from "./-node-application";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
-  validateSearch: (search: Record<string, unknown>): { application?: string } =>
-    typeof search.application === "string" && search.application
+  validateSearch: (search: Record<string, unknown>): { application?: string; org?: string } => ({
+    ...(typeof search.application === "string" && search.application
       ? { application: search.application }
-      : {},
+      : {}),
+    ...(typeof search.org === "string" && search.org ? { org: search.org } : {}),
+  }),
   loader: ({ context }) =>
     loadNodeApplicationParents({
       apiClient: context.apiClient,
@@ -74,10 +77,11 @@ export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
 function ApplyPage() {
   const t = useAppTranslation();
   const apiClient = useApiClient();
+  const authClient = useAuthClient();
   const queryClient = useQueryClient();
   const initialRootNodes = Route.useLoaderData();
   const { runtimeConfig } = Route.useRouteContext();
-  const { application: viewedApplicationId } = Route.useSearch();
+  const { application: viewedApplicationId, org: orgSlugParam } = Route.useSearch();
   const gatewayId = getGatewayId(runtimeConfig);
   const nearAccountId = useNearAccount();
   const daoConnection = useDaoConnection();
@@ -87,11 +91,14 @@ function ApplyPage() {
   const [revising, setRevising] = useState(false);
   const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
   const [reopenedStep, setReopenedStep] = useState<ApplyStepId | null>(null);
+  const [slugUnlocked, setSlugUnlocked] = useState(false);
   const handleDaoVerified = useCallback(
     ({ daoAccountId }: { daoAccountId: string }) => setVerifiedDaoAccountId(daoAccountId),
     [],
   );
   const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
+  const { data: session } = useQuery(sessionQueryOptions(authClient));
+  const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
   const latestApplication = myApplications.data?.data.reduce<
     (typeof myApplications.data.data)[number] | undefined
   >(
@@ -129,7 +136,7 @@ function ApplyPage() {
       if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
         throw new AppActionError("apply.error.dao");
       }
-      const orgId = retainedOrgId(values.slug);
+      const orgId = retainedOrgId(values.slug) ?? linkedOrganization?.id ?? null;
       return proposeNodeApplication(apiClient, values, {
         ...(orgId ? { orgId } : {}),
         daoAccountId: daoConnection.daoAccountId,
@@ -154,6 +161,46 @@ function ApplyPage() {
   const formValues = useSelector(form.store, (state) => state.values);
   const hostname = formValues.slug && gatewayId ? `${formValues.slug}.${gatewayId}` : "";
   const legacyOrgId = retainedOrgId(formValues.slug);
+  const linkedOrgCandidate = (organizations ?? []).find(
+    (organization) =>
+      organization.slug === formValues.slug &&
+      organization.status !== "rejected" &&
+      !organization.metadata?.communityProposalId,
+  );
+  const { data: linkedMembers, isFetching: linkedMembersLoading } = useQuery({
+    queryKey: ["apply-linked-org-members", linkedOrgCandidate?.id],
+    queryFn: async () => {
+      const { members } = await apiClient.auth.listMembers({
+        organizationId: linkedOrgCandidate!.id,
+      });
+      return members;
+    },
+    enabled: !!linkedOrgCandidate,
+    staleTime: 30 * 1000,
+  });
+  const linkedOrganization =
+    linkedOrgCandidate &&
+    !slugUnlocked &&
+    (linkedMembers ?? []).some(
+      (member) => member.userId === session?.user?.id && member.role === "owner",
+    )
+      ? linkedOrgCandidate
+      : undefined;
+  useEffect(() => {
+    if (formValues.slug) return;
+    setSlugUnlocked(false);
+  }, [formValues.slug]);
+  useEffect(() => {
+    if (!orgSlugParam || !organizations) return;
+    const requested = organizations.find((organization) => organization.slug === orgSlugParam);
+    if (!requested) return;
+    if (!form.getFieldValue("slug")) {
+      form.setFieldValue("slug", requested.slug, { dontUpdateMeta: true });
+    }
+    if (!form.getFieldValue("name")) {
+      form.setFieldValue("name", requested.name, { dontUpdateMeta: true });
+    }
+  }, [form, orgSlugParam, organizations]);
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
   const rootNodes = (queriedRootNodes ?? initialRootNodes).filter(
@@ -176,9 +223,10 @@ function ApplyPage() {
   const { data: organizationSlug, isFetching: organizationSlugLoading } = useQuery({
     queryKey: ["apply-organization-slug", formValues.slug],
     queryFn: () => apiClient.auth.checkSlug({ slug: formValues.slug }),
-    enabled: !!formValues.slug && !legacyOrgId,
+    enabled: !!formValues.slug && !legacyOrgId && !linkedOrganization,
   });
-  const organizationSlugAvailable = !!legacyOrgId || organizationSlug?.status === true;
+  const organizationSlugAvailable =
+    !!legacyOrgId || !!linkedOrganization || organizationSlug?.status === true;
 
   const canSubmit = canSubmitNodeApplication({
     values: formValues,
@@ -187,7 +235,8 @@ function ApplyPage() {
     submitterAccountId: nearAccountId,
     hostnameAvailable: preflight?.hostname.available === true,
     organizationSlugAvailable,
-    preflightLoading: preflightLoading || organizationSlugLoading,
+    preflightLoading:
+      preflightLoading || organizationSlugLoading || (!!linkedOrgCandidate && linkedMembersLoading),
     submitting: submitMutation.isPending,
   });
 
@@ -318,8 +367,20 @@ function ApplyPage() {
                 gatewayId={gatewayId}
                 hostname={hostname}
                 preflight={preflight}
-                preflightLoading={preflightLoading || organizationSlugLoading}
-                organizationSlugAvailable={legacyOrgId ? true : organizationSlug?.status}
+                preflightLoading={
+                  preflightLoading ||
+                  organizationSlugLoading ||
+                  (!!linkedOrgCandidate && linkedMembersLoading)
+                }
+                organizationSlugAvailable={
+                  legacyOrgId || linkedOrganization
+                    ? true
+                    : linkedOrgCandidate && linkedMembersLoading
+                      ? undefined
+                      : organizationSlug?.status
+                }
+                linkedOrganizationSlug={linkedOrganization ? formValues.slug : undefined}
+                onUnlockSlug={() => setSlugUnlocked(true)}
                 rootNodes={rootNodes}
                 rootParentId={rootParentId}
                 setRootParentId={setRootParentId}

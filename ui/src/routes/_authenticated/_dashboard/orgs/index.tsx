@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/item";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { visibleOrganizations } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
@@ -100,7 +101,7 @@ function OrganizationsList() {
     staleTime: 30 * 1000,
   });
 
-  const orgs = organizations || [];
+  const orgs = visibleOrganizations(organizations ?? [], session?.user?.id);
 
   const { data: tenantOrgIds = new Set<string>() } = useQuery({
     ...tenantOrganizationIdsQueryOptions(
@@ -265,9 +266,6 @@ function OrganizationsList() {
               const members = memberQueries[index]?.data;
               const myRole = members?.find((member) => member.userId === user?.id)?.role;
               const isActive = org.id === activeOrgId;
-              const isPersonal = user
-                ? org.slug === user.id || org.metadata?.isPersonal === true
-                : false;
               return (
                 <Card key={org.id} data-testid={`orgs-card-${org.slug}`}>
                   <CardContent className="flex h-full flex-col gap-5 p-5">
@@ -299,7 +297,6 @@ function OrganizationsList() {
                         </Badge>
                       )}
                       {isActive && <Badge variant="success">{translate("common.active")}</Badge>}
-                      {isPersonal && <Badge variant="outline">{translate("org.personal")}</Badge>}
                       {tenantOrgIds.has(org.id) && (
                         <Badge variant="outline">{translate("common.community")}</Badge>
                       )}
@@ -314,36 +311,53 @@ function OrganizationsList() {
                     )}
                     <div className="mt-auto flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">
-                        {members ? translate("org.memberCount", { count: members.length }) : " "}
+                        {members ? translate("org.memberCount", { count: members.length }) : " "}
                       </span>
-                      {org.status !== "active" ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          nativeButton={false}
-                          render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
-                        >
-                          {translate("orgApproval.view")}
-                        </Button>
-                      ) : isActive ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          nativeButton={false}
-                          render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
-                        >
-                          {translate("common.open")}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => switchOrgMutation.mutate(org.id)}
-                          disabled={switchOrgMutation.isPending}
-                        >
-                          {translate("org.makeActive")}
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {org.status === "active" &&
+                          myRole === "owner" &&
+                          !isPersonal &&
+                          !tenantOrgIds.has(org.id) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              nativeButton={false}
+                              render={<Link to="/apply" search={{ org: org.slug }} />}
+                              data-testid={`orgs-start-community-${org.slug}`}
+                            >
+                              <RocketLaunchIcon />
+                              {translate("dashboard.startCommunity")}
+                            </Button>
+                          )}
+                        {org.status !== "active" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            nativeButton={false}
+                            render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                          >
+                            {translate("orgApproval.view")}
+                          </Button>
+                        ) : isActive ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            nativeButton={false}
+                            render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                          >
+                            {translate("common.open")}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => switchOrgMutation.mutate(org.id)}
+                            disabled={switchOrgMutation.isPending}
+                          >
+                            {translate("org.makeActive")}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

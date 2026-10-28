@@ -27,6 +27,7 @@ import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
 import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { isPersonalOrganization } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isCommunitySettingsRole } from "@/lib/team-workspace";
@@ -189,10 +190,7 @@ function OrganizationDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
-  const isPersonal = session?.user
-    ? org?.slug === session.user.id ||
-      (org?.metadata as { isPersonal?: boolean } | null | undefined)?.isPersonal === true
-    : false;
+  const isPersonal = org ? isPersonalOrganization(org, session?.user?.id) : false;
   const { cancelInvitationMutation, inviteMutation, resendInvitationMutation } =
     useOrganizationInvitationActions(apiClient, orgId);
   const { createApiKeyMutation, deleteApiKeyMutation } = useOrganizationApiKeyActions(
@@ -333,6 +331,11 @@ function OrganizationDetail() {
         onSwitch={() => switchOrg.mutate(orgId)}
         org={org}
         settingsTenantId={settingsTenantId}
+        startCommunitySlug={
+          org.status === "active" && isOwner && !isPersonal && !settingsTenantId
+            ? org.slug
+            : undefined
+        }
       />
       {isOwner && (
         <OrganizationEditForm
