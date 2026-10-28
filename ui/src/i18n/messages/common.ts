@@ -588,6 +588,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "En attente de validation",
     "等待审核",
   ],
+  "dashboard.application": [
+    "Community application",
+    "Solicitud de la comunidad",
+    "Demande de la communauté",
+    "社区申请",
+  ],
   "dashboard.applications": [
     "Community applications",
     "Solicitudes de la comunidad",

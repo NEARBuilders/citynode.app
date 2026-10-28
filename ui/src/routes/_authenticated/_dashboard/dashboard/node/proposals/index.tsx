@@ -141,7 +141,11 @@ function NodeProposals() {
                 <ItemContent className="min-w-0">
                   <ItemTitle className="max-w-full">
                     <span className="truncate">
-                      {proposalTitle(proposal.payload, "Proposal", translate)}
+                      {proposalTitle(
+                        proposal.payload,
+                        translate("dashboard.application"),
+                        translate,
+                      )}
                     </span>
                   </ItemTitle>
                   <div className="flex flex-wrap items-center gap-2">

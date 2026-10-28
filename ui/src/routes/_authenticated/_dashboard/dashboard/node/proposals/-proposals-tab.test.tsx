@@ -112,6 +112,15 @@ describe("community Proposals tab", () => {
     expect(screen.getByTestId("dashboard-node.dao-proposals-note")).toBeTruthy();
   });
 
+  it("names an untitled platform record as a community application", async () => {
+    harness.getProposals = () =>
+      Promise.resolve({ data: [{ ...application("a3", "pending"), payload: null }] });
+    renderTab();
+    const row = await screen.findByTestId("dashboard-node.proposal-a3");
+    expect(row.textContent).toContain("Community application");
+    expect(row.textContent).not.toContain("Proposal");
+  });
+
   it("keeps the approve action for reviewers", async () => {
     harness.getProposals = () => Promise.resolve({ data: [application("a1", "pending")] });
     harness.approve.mockResolvedValue({});
