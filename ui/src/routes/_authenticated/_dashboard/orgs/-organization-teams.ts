@@ -18,7 +18,11 @@ import {
 import { orgTeamMembersQueryKey, orgTeamsQueryKey } from "./-organization-query-keys";
 import type { TeamMembershipStatus, TeamsTabTeam } from "./-teams-tab";
 
-export function useOrganizationTeams(orgId: string, membershipsEnabled = false) {
+export function useOrganizationTeams(
+  orgId: string,
+  membershipsEnabled = false,
+  teamsEnabled = true,
+) {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
   const auth = useAuthClient();
@@ -29,7 +33,7 @@ export function useOrganizationTeams(orgId: string, membershipsEnabled = false) 
   const teamsQuery = useQuery({
     queryKey: orgTeamsQueryKey(orgId),
     queryFn: () => apiClient.auth.listTeams({ organizationId: orgId }),
-    enabled: !!orgId,
+    enabled: !!orgId && teamsEnabled,
   });
   const teamList = teamsQuery.data ?? [];
   const memberQueries = useQueries({

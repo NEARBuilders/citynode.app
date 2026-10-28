@@ -554,6 +554,12 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "撤销此站点？",
   ],
   "org.role": ["Role", "Rol", "Rôle", "角色"],
+  "org.roleLoadFailed": [
+    "Couldn't check your role in this organization.",
+    "No se pudo comprobar tu rol en esta organización.",
+    "Impossible de vérifier votre rôle dans cette organisation.",
+    "无法确认你在此组织中的角色。",
+  ],
   "org.stations": ["Stations", "Puntos de incorporación", "Points d'inscription", "加入站点"],
   "org.stationsDescription": [
     "Pick an upcoming event to start a station; people who scan it join.",
