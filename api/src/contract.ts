@@ -637,7 +637,7 @@ export const contract = oc.router({
         hostname: z.string().min(1),
       }),
     )
-    .output(z.object({ nodeId: z.string() }))
+    .output(z.object({ nodeId: z.string(), applicantInvited: z.boolean() }))
     .errors({
       UNAUTHORIZED,
       FORBIDDEN,

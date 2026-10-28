@@ -1,4 +1,5 @@
 import "@orpc/openapi/extensions/route";
+import type { InferContractRouterInputs, InferContractRouterOutputs } from "@orpc/contract";
 import { z } from "zod";
 export declare const ApplyStepSchema: z.ZodObject<{
     status: z.ZodEnum<{
@@ -1404,7 +1405,7 @@ export declare const contract: {
         removeStatus: "failed" | "not_started" | "removed" | "removing";
         submissionCount: number;
         timestamp: string;
-    }, unknown, void>, import("@standard-server/shared").AsyncIteratorClass<{
+    }, unknown, void>, import("@orpc/server").AsyncIteratorClass<{
         action: string;
         pluginId: string;
         entityId: string;
@@ -1416,3 +1417,5 @@ export declare const contract: {
     }, unknown, void>>, object>;
 };
 export type ContractType = typeof contract;
+export type InferOutput<K extends keyof InferContractRouterOutputs<ContractType>> = InferContractRouterOutputs<ContractType>[K];
+export type InferInput<K extends keyof InferContractRouterInputs<ContractType>> = InferContractRouterInputs<ContractType>[K];
