@@ -116,9 +116,15 @@ function ProposalDetailPage() {
           proposal,
           reason: reason?.trim() ?? "",
         });
-        return { action, proposal: rejected.proposal, kept: keptResources(rejected.released) };
+        return {
+          action,
+          proposal: rejected.proposal,
+          kept: keptResources(rejected.released),
+          applicantInvited: false,
+        };
       }
 
+      let applicantInvited = false;
       const reviewedProposal = await approveAndApplyProposal({
         apiClient,
         proposal,
@@ -128,10 +134,13 @@ function ProposalDetailPage() {
         findOpenTenantConfigProposal,
         onProposalChange: (nextProposal) =>
           queryClient.setQueryData(proposalQueryKey, nextProposal),
+        onApplicantInvited: () => {
+          applicantInvited = true;
+        },
       });
-      return { action, proposal: reviewedProposal, kept: [] };
+      return { action, proposal: reviewedProposal, kept: [], applicantInvited };
     },
-    onSuccess: async ({ action, proposal, kept }) => {
+    onSuccess: async ({ action, proposal, kept, applicantInvited }) => {
       toast.success(
         action === "reject"
           ? translate("admin.proposalRejected")
@@ -148,7 +157,9 @@ function ProposalDetailPage() {
                     : "admin.proposal.keptCommunity",
               ),
             }
-          : undefined,
+          : applicantInvited
+            ? { description: translate("admin.proposal.applicantInvited") }
+            : undefined,
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),

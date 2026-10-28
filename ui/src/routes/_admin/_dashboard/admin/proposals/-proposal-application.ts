@@ -7,7 +7,7 @@ import { parseNodeProposalPayload } from "@/routes/_authenticated/_dashboard/-no
 
 type ProposalApplicationInput = Pick<Proposal, "pluginId" | "entityId" | "payload" | "updatedAt">;
 
-type AppliedResource = { id: string; label: string };
+type AppliedResource = { id: string; label: string; applicantInvited?: boolean };
 type ApplyStepStatus = Parameters<ApiClient["proposals"]["recordApplyStep"]>[0]["status"];
 export type TenantConfigPublisher = (input: DaoTenantPublishInput) => Promise<unknown>;
 export type OpenTenantConfigProposalFinder = (
@@ -94,7 +94,7 @@ const proposalApplicationHandlers = {
       }
     }
     await recordPublication("completed");
-    return { id: node.nodeId, label: "Node" };
+    return { id: node.nodeId, label: "Node", applicantInvited: node.applicantInvited };
   },
 } satisfies Record<string, ProposalApplicationHandler>;
 
@@ -143,6 +143,7 @@ export async function approveAndApplyProposal({
   publishTenantConfig,
   findOpenTenantConfigProposal,
   onProposalChange,
+  onApplicantInvited,
 }: {
   apiClient: ApiClient;
   proposal: ProposalApplicationInput;
@@ -151,6 +152,7 @@ export async function approveAndApplyProposal({
   publishTenantConfig: TenantConfigPublisher;
   findOpenTenantConfigProposal: OpenTenantConfigProposalFinder;
   onProposalChange?: (proposal: Proposal) => void;
+  onApplicantInvited?: () => void;
 }) {
   const approved = await apiClient.proposals.approve({
     pluginId: proposal.pluginId,
@@ -197,6 +199,7 @@ export async function approveAndApplyProposal({
   }
 
   if (!resource) return reviewedProposal;
+  if (resource.applicantInvited) onApplicantInvited?.();
 
   try {
     const applied = await apiClient.proposals.markApplied({

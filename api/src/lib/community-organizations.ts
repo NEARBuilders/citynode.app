@@ -1,6 +1,7 @@
 import type { ContractRouterClient } from "@orpc/contract";
 import { ORPCError } from "@orpc/server";
 import type { ContractType as authContract } from "../../../.bos/generated/auth/contract.d.ts";
+import { resolveNetwork } from "../services/near-rpc";
 
 type AuthClient = ContractRouterClient<authContract>;
 
@@ -39,19 +40,14 @@ async function createCommunityOrganization(
     proposalId: string;
     name: string;
     slug: string;
-    proposerUserId: string;
-    reviewerUserId: string;
+    metadata: Record<string, string>;
   },
 ) {
   try {
     return await auth.createOrganization({
       name: input.name,
       slug: input.slug,
-      metadata: {
-        communityProposalId: input.proposalId,
-        communityApplicantId: input.proposerUserId,
-        communityReviewerId: input.reviewerUserId,
-      },
+      metadata: input.metadata,
     });
   } catch (error) {
     // Another admin applying the same proposal concurrently won the unique-slug insert.
@@ -60,6 +56,40 @@ async function createCommunityOrganization(
     if (!raced || raced.metadata?.communityProposalId !== input.proposalId) throw error;
     return raced;
   }
+}
+
+function applicantMetadata(input: {
+  proposalId: string;
+  proposerUserId: string | null;
+  applicantAccountId: string;
+  reviewerUserId: string;
+}) {
+  return {
+    communityProposalId: input.proposalId,
+    ...(input.proposerUserId
+      ? { communityApplicantId: input.proposerUserId }
+      : { communityApplicantAccountId: input.applicantAccountId }),
+    communityReviewerId: input.reviewerUserId,
+  };
+}
+
+async function inviteApplicant(auth: AuthClient, organizationId: string, accountId: string) {
+  const invitations = await auth.listInvitations({ organizationId });
+  const now = Date.now();
+  const existing = invitations.find(
+    (invitation) =>
+      invitation.nearAccountId === accountId &&
+      (invitation.status === "accepted" ||
+        (invitation.status === "pending" && new Date(invitation.expiresAt).getTime() > now)),
+  );
+  if (existing) return;
+  await auth.inviteMember({
+    nearAccountId: accountId,
+    nearNetwork: resolveNetwork(accountId),
+    role: "owner",
+    organizationId,
+    resend: true,
+  });
 }
 
 async function provisionDefaultTeams(auth: AuthClient, organizationId: string) {
@@ -96,11 +126,12 @@ export async function provisionCommunityOrganization(
     proposalId: string;
     name: string;
     slug: string;
-    proposerUserId: string;
+    proposerUserId?: string;
+    applicantAccountId: string;
     reviewerUserId: string;
     legacyOrgId?: string;
   },
-): Promise<{ id: string; name: string; slug: string }> {
+): Promise<{ id: string; name: string; slug: string; applicantInvited: boolean }> {
   if (input.legacyOrgId) {
     const organization = await fetchOrganization(auth, input.legacyOrgId);
     if (!organization) {
@@ -110,9 +141,10 @@ export async function provisionCommunityOrganization(
     if (metadata.communityProposalId && metadata.communityProposalId !== input.proposalId) {
       throw conflict("This organization belongs to another community application");
     }
-    if (organization.requestedBy && organization.requestedBy !== input.proposerUserId) {
+    const proposerUserId = input.proposerUserId ?? organization.requestedBy ?? null;
+    if (organization.requestedBy && organization.requestedBy !== proposerUserId) {
       const proposerMember = organization.members.find(
-        (member) => member.userId === input.proposerUserId,
+        (member) => member.userId === proposerUserId,
       );
       if (proposerMember?.role !== "owner") {
         throw conflict("The applicant does not own the existing organization");
@@ -127,25 +159,16 @@ export async function provisionCommunityOrganization(
         decision: "approve",
       });
     }
-    if (
-      metadata.communityProposalId !== input.proposalId ||
-      metadata.communityApplicantId !== input.proposerUserId ||
-      metadata.communityReviewerId !== input.reviewerUserId
-    ) {
+    const applicant = applicantMetadata({ ...input, proposerUserId });
+    if (Object.entries(applicant).some(([key, value]) => metadata[key] !== value)) {
       await auth.updateOrganization({
-        data: {
-          metadata: {
-            ...metadata,
-            communityProposalId: input.proposalId,
-            communityApplicantId: input.proposerUserId,
-            communityReviewerId: input.reviewerUserId,
-          },
-        },
+        data: { metadata: { ...metadata, ...applicant } },
         organizationId: organization.id,
       });
     }
-    await grantProposerOwnership(auth, organization.id, input.proposerUserId);
-    if (input.reviewerUserId !== input.proposerUserId) {
+    const ownerUserId = proposerUserId ?? input.reviewerUserId;
+    await grantProposerOwnership(auth, organization.id, ownerUserId);
+    if (input.reviewerUserId !== ownerUserId) {
       const reviewerMember = organization.members.find(
         (member) => member.userId === input.reviewerUserId,
       );
@@ -157,8 +180,16 @@ export async function provisionCommunityOrganization(
         });
       }
     }
+    if (!proposerUserId) {
+      await inviteApplicant(auth, organization.id, input.applicantAccountId);
+    }
     await provisionDefaultTeams(auth, organization.id);
-    return { id: organization.id, name: organization.name, slug: organization.slug };
+    return {
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      applicantInvited: !proposerUserId,
+    };
   }
 
   const slugStatus = await auth.checkSlug({ slug: input.slug });
@@ -166,9 +197,16 @@ export async function provisionCommunityOrganization(
   if (existing && existing.metadata?.communityProposalId !== input.proposalId) {
     throw conflict("The community slug is already used by another organization");
   }
-  const organization = existing ?? (await createCommunityOrganization(auth, input));
-  await grantProposerOwnership(auth, organization.id, input.proposerUserId);
-  if (input.reviewerUserId !== input.proposerUserId) {
+  const proposerUserId = input.proposerUserId ?? null;
+  const organization =
+    existing ??
+    (await createCommunityOrganization(auth, {
+      ...input,
+      metadata: applicantMetadata({ ...input, proposerUserId }),
+    }));
+  const ownerUserId = proposerUserId ?? input.reviewerUserId;
+  await grantProposerOwnership(auth, organization.id, ownerUserId);
+  if (input.reviewerUserId !== ownerUserId) {
     const { members } = await auth.listMembers({ organizationId: organization.id });
     const reviewerMember = members.find((member) => member.userId === input.reviewerUserId);
     if (!reviewerMember) {
@@ -185,8 +223,16 @@ export async function provisionCommunityOrganization(
       });
     }
   }
+  if (!proposerUserId) {
+    await inviteApplicant(auth, organization.id, input.applicantAccountId);
+  }
   await provisionDefaultTeams(auth, organization.id);
-  return { id: organization.id, name: organization.name, slug: organization.slug };
+  return {
+    id: organization.id,
+    name: organization.name,
+    slug: organization.slug,
+    applicantInvited: !proposerUserId,
+  };
 }
 
 export async function releaseCommunityOrganization(
@@ -207,7 +253,11 @@ export async function releaseCommunityOrganization(
   if (organization.members.some((member) => !provisioned.has(member.userId))) {
     return { released: false, keptReason: "in_use" };
   }
-  if ((organization.invitations?.length ?? 0) > 0) {
+  const applicantAccountId = organization.metadata?.communityApplicantAccountId;
+  const otherInvitations = (organization.invitations ?? []).filter(
+    (invitation) => !applicantAccountId || invitation.nearAccountId !== applicantAccountId,
+  );
+  if (otherInvitations.length > 0) {
     return { released: false, keptReason: "in_use" };
   }
   const codes = await auth.listOnboardingCodes({ organizationId: organization.id });

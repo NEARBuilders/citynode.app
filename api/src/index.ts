@@ -1219,22 +1219,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("BAD_REQUEST", { message: "Hostname does not match the community slug" }),
           );
         }
-        const proposerUserId = payload.applicantUserId;
-        if (!proposerUserId) {
-          return yield* Effect.fail(
-            new ORPCError("CONFLICT", {
-              message:
-                "The saved application has no applicant identity to attribute the organization to",
-            }),
-          );
-        }
         const organization = yield* Effect.tryPromise({
           try: () =>
             provisionCommunityOrganization(auth, {
               proposalId: proposal.id,
               name: payload.name,
               slug: payload.slug,
-              proposerUserId,
+              ...(payload.applicantUserId ? { proposerUserId: payload.applicantUserId } : {}),
+              applicantAccountId: proposal.createdBy,
               reviewerUserId: context.userId ?? context.user?.id ?? "",
               ...(payload.orgId ? { legacyOrgId: payload.orgId } : {}),
             }),
@@ -1258,7 +1250,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           proposalId: proposal.id,
         });
         yield* recordStep("community", community.nodeId);
-        return community;
+        return { ...community, applicantInvited: organization.applicantInvited };
       }),
 
       releaseCommunityProposal: builder.releaseCommunityProposal
