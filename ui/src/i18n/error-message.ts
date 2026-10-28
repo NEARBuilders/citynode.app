@@ -1,4 +1,5 @@
 import { Data } from "effect";
+import { FEATURE_AREA_MESSAGES, isFeatureArea } from "@/lib/feature-areas";
 import type { AppMessageId, AppTranslator } from "./catalogs";
 
 export class AppActionError extends Data.TaggedError("AppActionError")<{
@@ -41,6 +42,40 @@ export function isNearUnavailableError(error: unknown) {
   );
 }
 
+function errorData(error: unknown) {
+  if (!error || typeof error !== "object") return undefined;
+  const data = Reflect.get(error, "data");
+  return data && typeof data === "object" ? data : undefined;
+}
+
+function stakingPoolErrorMessage(error: unknown): AppMessageId | null {
+  const { code } = errorStatusAndCode(error);
+  const data = errorData(error);
+  if (
+    code === "CONNECTION_ERROR" &&
+    data &&
+    Reflect.get(data, "errorCode") === "STAKING_POOL_CHECK_FAILED"
+  ) {
+    return "stake.poolCheckFailed";
+  }
+  const validationErrors = data ? Reflect.get(data, "validationErrors") : undefined;
+  if (
+    code === "BAD_REQUEST" &&
+    Array.isArray(validationErrors) &&
+    validationErrors.some((entry) => entry?.code === "STAKING_POOL_NOT_APPROVED")
+  ) {
+    return "tenant.notApprovedPool";
+  }
+  return null;
+}
+
+function deniedFeatureArea(error: unknown) {
+  const data = errorData(error);
+  const required = data ? Reflect.get(data, "requiredPermissions") : undefined;
+  if (!Array.isArray(required)) return undefined;
+  return required.filter((permission) => typeof permission === "string").find(isFeatureArea);
+}
+
 export function appErrorMessage(
   error: unknown,
   t: AppTranslator,
@@ -49,9 +84,16 @@ export function appErrorMessage(
   if (error instanceof AppActionError) return t(error.messageId, error.values);
   const { status, code } = errorStatusAndCode(error);
   if (isSessionError(error)) return t("error.session");
-  if (isPermissionError(error)) return t("error.permission");
+  if (isPermissionError(error)) {
+    const area = deniedFeatureArea(error);
+    return area
+      ? t("permissions.teamDenied", { area: t(FEATURE_AREA_MESSAGES[area]) })
+      : t("error.permission");
+  }
   if (status === 409 || code === "CONFLICT") return t("error.conflict");
   if (isNearUnavailableError(error)) return t("error.nearUnavailable");
+  const stakingPoolMessage = stakingPoolErrorMessage(error);
+  if (stakingPoolMessage) return t(stakingPoolMessage);
   if (
     code === "ACTION_REJECTED" ||
     (error instanceof Error &&

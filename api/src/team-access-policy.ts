@@ -1,6 +1,6 @@
 import type { DecoratedMiddleware } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
-import { type FeatureArea, isFeatureArea } from "./feature-areas";
+import type { FeatureArea } from "./feature-areas";
 import type {
   AuthPluginContext as AuthContext,
   AuthOrganizationContext,
@@ -25,9 +25,7 @@ export type WorkspaceTeam =
 
 export interface TeamAccess {
   teams: WorkspaceTeam[];
-  activeTeam: WorkspaceTeam | null;
   bypass: boolean;
-  allowedAreas: FeatureArea[] | null;
 }
 
 export type TeamAccessContext = {
@@ -41,71 +39,37 @@ export type TeamAccessContext = {
 
 export function resolveTeamAccess(context: TeamAccessContext | undefined): TeamAccess {
   const teams = [...(context?.organization?.teams ?? [])];
-  const activeTeam = teams.find((team) => team.id === context?.organization?.activeTeamId) ?? null;
   const orgRole = context?.organization?.member?.role;
   const bypass = context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
-  return {
-    teams,
-    activeTeam,
-    bypass,
-    allowedAreas: activeTeam && !bypass ? activeTeam.areas.filter(isFeatureArea) : null,
-  };
+  return { teams, bypass };
 }
 
-/**
- * Whether the caller may use a feature area in their active organization:
- * platform admins and organization owners/admins always may; other members
- * need a Team granted the area — their Active Team when one is selected,
- * otherwise any Team they belong to. A member with no granted Team, such as
- * one who joined through an Onboarding Code, may not.
- */
 export function canUseTeamArea(
   context: TeamAccessContext | undefined,
   area: FeatureArea,
   access: TeamAccess = resolveTeamAccess(context),
 ): boolean {
-  const { teams, activeTeam, bypass } = access;
-  if (bypass) return true;
+  if (access.bypass) return true;
   if (!context?.organization?.member?.role) return false;
-  if (activeTeam) return activeTeam.areas.includes(area);
-  return teams.some((team) => team.areas.includes(area));
+  return access.teams.some((team) => team.areas.includes(area));
 }
 
-export function teamAreaForbidden(
-  activeTeam: WorkspaceTeam | null,
-  areas: readonly FeatureArea[],
-): ORPCError<"FORBIDDEN", unknown> {
+export function teamAreaForbidden(areas: readonly FeatureArea[]): ORPCError<"FORBIDDEN", unknown> {
   return new ORPCError("FORBIDDEN", {
-    message: activeTeam
-      ? `Your active team "${activeTeam.name}" is not granted ${areas.join(" or ")}. Switch teams or ask an organization owner to grant it.`
-      : `This requires an organization owner or admin, or a team granted ${areas.join(" or ")}.`,
-    data: {
-      requiredPermissions: [...areas],
-      ...(activeTeam && { action: "switch-team" }),
-    },
+    message: `Ask an organization owner or admin to add you to a team with ${areas.join(" or ")}.`,
+    data: { requiredPermissions: [...areas] },
   });
 }
 
-/**
- * Gates a route on the caller being granted one of the given areas (see
- * `canUseTeamArea`). Assumes `requireAuth` already ran on the route — it only
- * adds the team-specific check on top, rather than re-deriving auth from scratch.
- */
 export function createRequireTeamArea(builder: any) {
-  type TeamAreaMiddleware = DecoratedMiddleware<
-    AuthContext,
-    { activeTeam: WorkspaceTeam | null },
-    any,
-    any,
-    any
-  >;
+  type TeamAreaMiddleware = DecoratedMiddleware<AuthContext, Record<never, never>, any, any, any>;
 
   return <TAreas extends readonly FeatureArea[]>(...areas: TAreas) =>
     builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
       const access = resolveTeamAccess(context);
       if (!areas.some((area) => canUseTeamArea(context, area, access))) {
-        throw teamAreaForbidden(access.activeTeam, areas);
+        throw teamAreaForbidden(areas);
       }
-      return next({ context: { activeTeam: access.activeTeam } });
+      return next();
     }) as TeamAreaMiddleware;
 }

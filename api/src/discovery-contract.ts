@@ -6,6 +6,11 @@ export const webUrl = z
   .url()
   .max(2000)
   .refine((value) => /^https?:\/\//i.test(value), "Use an HTTP(S) URL");
+const ring = z.array(z.array(z.number()).min(2));
+export const boundarySchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("Polygon"), coordinates: z.array(ring) }),
+  z.object({ type: z.literal("MultiPolygon"), coordinates: z.array(z.array(ring)) }),
+]);
 export const profileSchema = z
   .object({
     nodeId: z.uuid(),
@@ -23,8 +28,14 @@ export const profileSchema = z
     (p) => (p.latitude === null) === (p.longitude === null),
     "Provide both coordinates or neither",
   )
-  .refine((p) => p.latitude === null || p.location.length > 0, "Confirm the location label");
+  .refine(
+    (p) => p.latitude === null || p.location.length > 0 || p.region.length > 0,
+    "Confirm the location label",
+  );
 export type DiscoveryProfile = z.infer<typeof profileSchema>;
+export type StoredDiscoveryProfile = DiscoveryProfile & {
+  boundary?: z.infer<typeof boundarySchema> | null;
+};
 export const activitySchema = z.object({
   id: z.uuid(),
   ownerNodeId: z.uuid(),
@@ -81,6 +92,7 @@ export const activityInput = activitySchema
       });
   });
 export const discoveryNodeSchema = profileSchema.safeExtend({
+  boundary: boundarySchema.nullable().optional(),
   featured: z.string().nullable(),
   active: z.boolean(),
   activityReason: z.string(),

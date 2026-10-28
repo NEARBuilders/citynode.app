@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveApplySteps } from "./-apply-flow";
+import { applicationInProgress, resolveApplySteps } from "./-apply-flow";
 
 const none = { near: false, dao: false };
 const all = { near: true, dao: true };
@@ -33,5 +33,19 @@ describe("apply stepper", () => {
     const steps = resolveApplySteps({ near: false, dao: true }, null);
     expect(steps.current).toBe("near");
     expect(steps.status("dao")).toBe("complete");
+  });
+});
+
+describe("application in progress", () => {
+  it.each([
+    ["pending", "not_started", true],
+    ["approved", "not_started", true],
+    ["approved", "applying", true],
+    ["approved", "failed", true],
+    ["rejected", "not_started", true],
+    ["approved", "applied", false],
+    ["removed", "not_started", true],
+  ] as const)("treats %s/%s as in progress: %s", (reviewStatus, applyStatus, expected) => {
+    expect(applicationInProgress({ reviewStatus, applyStatus })).toBe(expected);
   });
 });

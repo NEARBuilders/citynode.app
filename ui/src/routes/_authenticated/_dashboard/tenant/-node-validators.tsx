@@ -17,6 +17,7 @@ import {
   FieldLabel,
   Input,
   SectionHeader,
+  StakingPoolApprovalBadge,
 } from "@/components";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
@@ -45,6 +46,7 @@ import {
   nodeValidatorsQueryOptions,
   tenantNodesQueryOptions,
 } from "@/lib/queries/nodes";
+import { stakingPoolApprovalQueryOptions } from "@/lib/queries/stake-pool";
 import { roleLabel } from "../orgs/-org-avatar";
 import { RowMenu } from "../orgs/-row-menu";
 
@@ -110,12 +112,25 @@ interface ValidatorRow {
   isDefault: boolean;
 }
 
-function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; network: string }) {
+function PoolOwnerBadge({
+  poolAccountId,
+  network,
+  protocol,
+}: {
+  poolAccountId: string;
+  network: string;
+  protocol: string;
+}) {
   const translate = useAppTranslation();
+  const apiClient = useApiClient();
   const { data: owner, isLoading } = useQuery({
     queryKey: ["pool-owner", network, poolAccountId],
     queryFn: () => fetchPoolOwner(poolAccountId, network),
     staleTime: 5 * 60 * 1000,
+  });
+  const { data: approval } = useQuery({
+    ...stakingPoolApprovalQueryOptions(apiClient, poolAccountId, network),
+    enabled: protocol === "near",
   });
 
   if (isLoading) {
@@ -127,6 +142,7 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
   }
 
   if (!owner) {
+    if (approval) return null;
     return (
       <span
         className="text-sm text-muted-foreground"
@@ -228,11 +244,17 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                     {validator.isDefault && (
                       <Badge variant="secondary">{translate("common.default")}</Badge>
                     )}
+                    <StakingPoolApprovalBadge
+                      accountId={validator.accountId}
+                      network={validator.network}
+                      protocol={validator.protocol}
+                    />
                   </ItemTitle>
                   <ItemDescription>
                     <PoolOwnerBadge
                       poolAccountId={validator.accountId}
                       network={validator.network}
+                      protocol={validator.protocol}
                     />
                   </ItemDescription>
                 </ItemContent>
