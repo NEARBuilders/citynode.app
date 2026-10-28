@@ -49,17 +49,12 @@ jobs:
   # browser leg: test-database service containers, then the full retained
   # suite against a local `bos dev` stack (base host remote, local workspaces).
   # Once upstream's consumer-regression.yml (everything-dev#368) ships, this
-  # job can move onto it. Red for an upstream reason — the parent's remote
-  # host injects an auth context without user.role/organization into child
-  # plugin RPCs (everything-dev#531) — so kept non-gating until that lands.
+  # job can move onto it. Gating: the suite is green against the current
+  # platform pin and the historical blocker (everything-dev#531) is closed.
   regression-browser:
     name: Regression browser (dev:ssr)
     needs: [filter]
     if: ${{ github.event_name != 'pull_request' || needs.filter.outputs.ci == 'true' }}
-    # Deliberately non-gating until the upstream session wall (everything-dev#531)
-    # lands: without this flag a red suite reds the whole child-ci call (reusable
-    # workflow results aggregate their jobs) and trips the merge gate.
-    continue-on-error: true
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:

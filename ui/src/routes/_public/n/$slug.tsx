@@ -8,17 +8,20 @@ import {
 } from "@phosphor-icons/react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { z } from "zod";
 import { type ApiClient, buildTenantUrl, getGatewayId, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { EventList } from "@/components/discovery/event-list";
 import { PageContainer } from "@/components/layout/page-container";
+import { MemberCountValue } from "@/components/member-count";
 import { NodeDirectorySkeleton } from "@/components/node-directory-skeleton";
 import { NodeStakeSection } from "@/components/node-stake-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
+import { nodeMemberCountQueryOptions } from "@/lib/queries/member-directory";
 import {
   childNodesQueryOptions,
   nodeBySlugQueryOptions,
@@ -112,6 +115,11 @@ function NodePage() {
   });
 
   const { data: profile } = useQuery(discoveryProfileQueryOptions(apiClient, nodeId ?? ""));
+
+  const { data: memberCount } = useQuery({
+    ...nodeMemberCountQueryOptions(apiClient, nodeId ?? ""),
+    enabled: !!nodeId,
+  });
 
   if (nodeLoading) {
     return (
@@ -244,8 +252,19 @@ function NodePage() {
 
       <dl
         data-testid="node-page.stats"
-        className="grid grid-cols-3 gap-4 border-y border-border py-6 sm:gap-6"
+        className="grid grid-cols-2 gap-4 border-y border-border py-6 sm:grid-cols-4 sm:gap-6"
       >
+        <Stat
+          label={translate("members.title")}
+          testId="node-page.member-count"
+          value={
+            <MemberCountValue
+              count={memberCount?.count}
+              observedAt={memberCount?.observedAt}
+              testId="node-page.member-count"
+            />
+          }
+        />
         <Stat label={translate("community.upcoming")} value={events.length} />
         <Stat
           label={
@@ -304,9 +323,9 @@ function NodePage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, testId }: { label: string; value: ReactNode; testId?: string }) {
   return (
-    <div className="flex min-w-0 flex-col-reverse justify-end gap-1">
+    <div className="flex min-w-0 flex-col-reverse justify-end gap-1" data-testid={testId}>
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="text-3xl font-semibold tabular-nums text-foreground">{value}</dd>
     </div>

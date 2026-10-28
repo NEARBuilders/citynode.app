@@ -20,8 +20,6 @@ import {
 } from "@phosphor-icons/react";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
-import type { FeatureArea } from "@/lib/feature-areas";
-import { areasAllowPath } from "@/lib/team-workspace";
 
 export type SidebarRole = "anon" | "member" | "admin";
 
@@ -256,22 +254,6 @@ export function filterSidebarByRole(items: SidebarItem[], userRole: SidebarRole)
   };
 
   return items.map(filterChildren).filter((item): item is SidebarItem => item !== null);
-}
-
-export function filterSidebarByArea(
-  items: SidebarItem[],
-  allowedAreas: readonly FeatureArea[] | null,
-): SidebarItem[] {
-  if (!allowedAreas) return items;
-  const visible = (item: SidebarItem): SidebarItem | null => {
-    if (!areasAllowPath(allowedAreas, item.to)) return null;
-    if (!item.children) return item;
-    const children = item.children
-      .map(visible)
-      .filter((child): child is SidebarItem => child !== null);
-    return { ...item, children };
-  };
-  return items.map(visible).filter((item): item is SidebarItem => item !== null);
 }
 
 export interface ManifestRoute {

@@ -1,36 +1,22 @@
 import { call, os } from "@orpc/server";
 import { describe, expect, it } from "vitest";
 import type { AuthPluginContext as AuthContext } from "../../src/lib/auth-types.gen";
-import { createRequireTeamArea, resolveTeamAccess } from "../../src/team-access-policy";
+import {
+  canUseTeamArea,
+  createRequireTeamArea,
+  resolveTeamAccess,
+} from "../../src/team-access-policy";
 
 describe("team access policy", () => {
-  it.each([
-    null,
-    "stale-team",
-  ])("does not restrict an unresolved active team: %s", (activeTeamId) => {
-    const finance = { id: "finance", name: "Finance", areas: ["finance"], permissions: {} };
-    expect(resolveTeamAccess({ organization: { teams: [finance], activeTeamId } })).toEqual({
-      teams: [finance],
-      activeTeam: null,
-      bypass: false,
-      allowedAreas: null,
-    });
-  });
-
-  it("treats missing organization context as unrestricted without an active team", () => {
-    expect(resolveTeamAccess(null)).toEqual({
-      teams: [],
-      activeTeam: null,
-      bypass: false,
-      allowedAreas: null,
-    });
+  it("resolves missing organization context to no teams", () => {
+    expect(resolveTeamAccess(null)).toEqual({ teams: [], bypass: false });
   });
 
   it.each([
     { userRole: "user", orgRole: "owner" },
     { userRole: "user", orgRole: "admin" },
     { userRole: "admin", orgRole: "member" },
-  ])("leaves $userRole / $orgRole unrestricted", ({ userRole, orgRole }) => {
+  ])("bypasses area checks for $userRole / $orgRole", ({ userRole, orgRole }) => {
     const finance = { id: "finance", name: "Finance", areas: ["finance"], permissions: {} };
     expect(
       resolveTeamAccess({
@@ -41,10 +27,10 @@ describe("team access policy", () => {
           activeTeamId: finance.id,
         },
       }),
-    ).toEqual({ teams: [finance], activeTeam: finance, bypass: true, allowedAreas: null });
+    ).toEqual({ teams: [finance], bypass: true });
   });
 
-  it("grants a member only recognized areas of their selected team", () => {
+  it("does not bypass area checks for a plain member", () => {
     const finance = {
       id: "finance",
       name: "Finance",
@@ -61,16 +47,27 @@ describe("team access policy", () => {
           activeTeamId: "finance",
         },
       }),
-    ).toEqual({ teams: [finance], activeTeam: finance, bypass: false, allowedAreas: ["finance"] });
+    ).toEqual({ teams: [finance], bypass: false });
+  });
+});
+
+describe("canUseTeamArea", () => {
+  const ops = { id: "team-ops", name: "Operations", areas: ["node-operations"], permissions: {} };
+
+  it("refuses an organization caller with no member, even with a team granted the area", () => {
+    expect(
+      canUseTeamArea(
+        { organization: { member: null, teams: [ops], activeTeamId: ops.id } },
+        "node-operations",
+      ),
+    ).toBe(false);
   });
 });
 
 describe("createRequireTeamArea", () => {
   const builder = os.$context<AuthContext>();
   const requireNodeOperations = createRequireTeamArea(builder)("node-operations");
-  const whoAmI = builder
-    .use(requireNodeOperations)
-    .handler(({ context }) => context.activeTeam?.id ?? null);
+  const whoAmI = builder.use(requireNodeOperations).handler(() => "allowed");
 
   function member(
     orgRole: string,
@@ -122,15 +119,27 @@ describe("createRequireTeamArea", () => {
       call(whoAmI, undefined, {
         context: member("member", { teams: [ops], activeTeamId: ops.id }),
       }),
-    ).resolves.toBe("team-ops");
+    ).resolves.toBe("allowed");
   });
 
-  it("rejects a member whose active team lacks the area", async () => {
+  it("rejects a member none of whose teams has the area and tells them to ask an owner or admin", async () => {
     await expect(
       call(whoAmI, undefined, {
         context: member("member", { teams: [finance], activeTeamId: finance.id }),
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("Finance") });
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Ask an organization owner or admin to add you to a team with node-operations.",
+      data: { requiredPermissions: ["node-operations"] },
+    });
+  });
+
+  it("allows a member through another team granted the area, whatever team is active", async () => {
+    await expect(
+      call(whoAmI, undefined, {
+        context: member("member", { teams: [finance, ops], activeTeamId: finance.id }),
+      }),
+    ).resolves.toBe("allowed");
   });
 
   it("rejects a member with no active team and no team granted the area", async () => {
@@ -148,7 +157,7 @@ describe("createRequireTeamArea", () => {
   it("lets a member with no active team through when one of their teams has the area", async () => {
     await expect(
       call(whoAmI, undefined, { context: member("member", { teams: [finance, ops] }) }),
-    ).resolves.toBeNull();
+    ).resolves.toBe("allowed");
   });
 
   it("rejects a caller with no organization membership", async () => {
@@ -163,11 +172,11 @@ describe("createRequireTeamArea", () => {
       call(whoAmI, undefined, {
         context: member("owner", { teams: [finance], activeTeamId: finance.id }),
       }),
-    ).resolves.toBe("team-finance");
+    ).resolves.toBe("allowed");
     await expect(
       call(whoAmI, undefined, {
         context: member("member", { teams: [finance], activeTeamId: finance.id }, "admin"),
       }),
-    ).resolves.toBe("team-finance");
+    ).resolves.toBe("allowed");
   });
 });

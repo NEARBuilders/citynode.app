@@ -50,6 +50,31 @@ describe("localized action failures", () => {
     }
   });
 
+  it("tells members missing a team area to ask an owner for one", () => {
+    const failure = {
+      code: "FORBIDDEN",
+      status: 403,
+      message: "Ask an organization owner to add you to a team with node-operations.",
+      data: { requiredPermissions: ["node-operations"] },
+    };
+    const messages = APP_LOCALES.map((locale) => {
+      const t: AppTranslator = (id, values) => translateAppMessage(id, values, locale);
+      const message = appErrorMessage(failure, t);
+      expect(message).toBe(t("permissions.teamDenied", { area: t("feature.nodeOperations") }));
+      expect(message).toContain(t("feature.nodeOperations"));
+      expect(message).not.toMatch(/\{area\}/);
+      return message;
+    });
+    expect(new Set(messages).size).toBe(APP_LOCALES.length);
+  });
+
+  it("keeps the generic permission message for unknown required permissions", () => {
+    const t: AppTranslator = (id, values) => translateAppMessage(id, values, "en");
+    expect(
+      appErrorMessage({ status: 403, data: { requiredPermissions: ["proposals:create"] } }, t),
+    ).toBe(t("error.permission"));
+  });
+
   it("tells expired sessions, denied access and other failures apart", () => {
     expect(isSessionError({ code: "UNAUTHORIZED" })).toBe(true);
     expect(isSessionError({ status: 401 })).toBe(true);

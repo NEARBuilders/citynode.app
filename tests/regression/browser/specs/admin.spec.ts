@@ -42,6 +42,17 @@ test.describe("admin", () => {
     await expect(page.getByTestId("admin-version-card")).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId("admin.stat.role.label")).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId("admin.stat.platform-account.label")).toBeVisible();
+
+    const appInfo = page.getByTestId("admin-app-info-trigger");
+    await appInfo.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Deployed version" })).toBeVisible();
+    await expect(page.getByTestId("admin-app-info-platform-account")).toBeVisible();
+    await expect(page.getByTestId("admin-app-info-role")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("admin-app-info")).toHaveCount(0);
+    await expect(appInfo).toBeFocused();
+
     await expect(page.getByTestId("admin.heading.nodes")).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId("admin.heading.tenants")).toBeVisible({ timeout: 5000 });
 
@@ -71,6 +82,7 @@ test.describe("admin", () => {
     await waitForApp(page);
 
     await expect(page.getByTestId("orgs.heading")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("orgs-new-button")).toHaveCount(0);
 
     expectNoHydrationFailure(pageErrors);
   });

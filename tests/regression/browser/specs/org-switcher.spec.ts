@@ -28,6 +28,8 @@ test.describe("orgSwitcher", () => {
     await expect(page.getByRole("menuitem").filter({ hasText: orgBName })).toBeVisible({
       timeout: 5000,
     });
+    await expect(page.getByTestId("org-switcher-all")).toBeVisible();
+    await expect(page.getByTestId("org-switcher-new")).toHaveCount(0);
 
     expectNoHydrationFailure(pageErrors);
   });

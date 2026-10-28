@@ -769,7 +769,10 @@ export const TenantsLive = Layer.effect(
                 const parentIsValid =
                   (input.kind === "country" && input.parentId === null) ||
                   (input.kind === "state" && parentKind === "country") ||
-                  (input.kind === "city" && (parentKind === "country" || parentKind === "state"));
+                  (input.kind === "city" &&
+                    (input.parentId === null ||
+                      parentKind === "country" ||
+                      parentKind === "state"));
                 if (!parentIsValid) {
                   throw new ORPCError("BAD_REQUEST", { message: "Invalid parent for node kind" });
                 }

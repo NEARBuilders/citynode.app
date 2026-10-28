@@ -52,12 +52,14 @@ const validator = {
   updatedAt: parent.updatedAt,
 };
 const clients: QueryClient[] = [];
+const memberCounts = new Map<string, { count: number | null; observedAt: string | null }>();
 
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  memberCounts.clear();
 });
 
 function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
@@ -102,6 +104,10 @@ function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
             json: { sourceNodeId, validators: [{ ...validator, nodeId: sourceNodeId }] },
           });
         }
+        case "getNodeMemberCount":
+          return Response.json({
+            json: memberCounts.get(args.nodeId) ?? { count: null, observedAt: null },
+          });
         case "getDiscoveryNode":
           return Response.json({ json: null });
         case "getNode":
@@ -238,16 +244,14 @@ it("lets anonymous visitors browse a pool and asks them to sign in to stake", as
   expect(screen.queryByTestId("stake.connect-wallet")).toBeNull();
 });
 
-it("sends signed-in members of a team without the stake area to Home", async () => {
+it.each([
+  ["stake"],
+  ["events"],
+  ["finance"],
+  ["node-operations"],
+])("keeps signed-in members of an active %s team on the staking page", async (area) => {
   mockApi([parent, child], child.id);
-  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["events"]);
-  await vi.waitFor(() => expect(router.state.location.pathname).toBe("/dashboard"));
-  expect(router.state.location.search).toEqual({ restricted: "stake" });
-});
-
-it("keeps signed-in members of a stake team on the staking page", async () => {
-  mockApi([parent, child], child.id);
-  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["stake"]);
+  const router = await showNode(`/stake?nodeId=${child.id}`, true, [area]);
   expect(router.state.location.pathname).toBe("/stake");
   expect(await screen.findByTestId("stake.connect-wallet")).toBeTruthy();
   expect(screen.queryByTestId("stake.sign-in")).toBeNull();
@@ -332,4 +336,24 @@ it("offers a way back to Explore when the community does not exist", async () =>
   await showNode("/n/atlantis");
   expect(await screen.findByRole("heading", { name: "Community not found" })).toBeTruthy();
   expect(screen.getByTestId("node-page.back-to-explore").getAttribute("href")).toBe("/explore");
+});
+
+it("shows the community's last observed member count with its observation time", async () => {
+  mockApi();
+  memberCounts.set(child.id, { count: 42, observedAt: "2026-10-20T10:00:00.000Z" });
+  await showNode("/n/chicago");
+  expect((await screen.findByTestId("node-page.member-count-value")).textContent).toBe("42");
+  const observed = screen.getByTestId("node-page.member-count-observed");
+  expect(observed.textContent).toContain("Last updated");
+  expect(observed.querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-20T10:00:00.000Z");
+  expect(screen.getByTestId("node-page.member-count").textContent).toContain("Members");
+});
+
+it("says the member count is not available before it was ever observed", async () => {
+  mockApi();
+  await showNode("/n/chicago");
+  expect((await screen.findByTestId("node-page.member-count-unavailable")).textContent).toBe(
+    "Not available",
+  );
+  expect(screen.queryByTestId("node-page.member-count-value")).toBeNull();
 });

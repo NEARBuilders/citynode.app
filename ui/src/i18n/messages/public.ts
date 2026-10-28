@@ -469,6 +469,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Aucun participant pour le moment.",
     "暂无质押者。",
   ],
+  "stake.exploreCommunities": [
+    "Explore communities",
+    "Explorar comunidades",
+    "Explorer les communautés",
+    "探索社区",
+  ],
   "stake.explorerAccount": [
     "View account on Nearblocks",
     "Ver cuenta en Nearblocks",
@@ -581,6 +587,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Este nodo aún no tiene un validador.",
     "Ce nœud n'exploite pas encore de validateur.",
     "此节点尚未运行验证节点。",
+  ],
+  "stake.noValidatorBadge": [
+    "No validator yet",
+    "Sin validador aún",
+    "Pas encore de validateur",
+    "尚无验证节点",
   ],
   "stake.noValidatorNamed": [
     "{name} doesn't have a validator yet",
