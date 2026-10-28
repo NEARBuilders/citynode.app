@@ -23,6 +23,11 @@ import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import { GeocodeLive } from "./services/discovery-geocode";
+import {
+  MemberDirectoryLive,
+  type MemberDirectoryService,
+  MemberDirectoryTag,
+} from "./services/member-directory";
 import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
@@ -64,11 +69,14 @@ class ApiServices extends Context.Service<
     discovery: DiscoveryService;
     storage: StorageService;
     nearbuilders: ReturnType<typeof createNearbuilders>;
+    memberDirectory: MemberDirectoryService;
     stakingPools: StakingPoolsService;
   }
 >()("api/ApiServices") {}
 
 const ONBOARDING_GRACE_MS = 48 * 3_600_000;
+
+const MEMBER_PAGE_SIZE = 100;
 
 const ACCOUNT_ID_REGEX =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
@@ -413,6 +421,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             ),
           ),
           StorageLive,
+          MemberDirectoryLive,
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
@@ -426,6 +435,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           discovery: Context.get(services, DiscoveryTag),
           storage: Context.get(services, StorageTag),
           nearbuilders: createNearbuilders(config.variables.nearbuildersUrl),
+          memberDirectory: Context.get(services, MemberDirectoryTag),
           stakingPools: makeStakingPools({
             mainnet: config.variables.mainnetStakingPoolWhitelist,
             testnet: config.variables.testnetStakingPoolWhitelist,
@@ -529,6 +539,61 @@ export default createPlugin.withPlugins<PluginsClient>()({
           proposalsClient,
           auth: authPlugin.client(reviewerContext),
         };
+      });
+
+    const memberAuthClient = (context: {
+      reqHeaders?: ConstructorParameters<typeof Headers>[0];
+      userId: string;
+      user?: AuthContext["user"];
+    }) =>
+      Effect.gen(function* () {
+        const authPlugin = plugins.auth;
+        if (!authPlugin) {
+          return yield* Effect.fail(
+            new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
+          );
+        }
+        return authPlugin.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+          userId: context.userId,
+          user: context.user,
+        });
+      });
+
+    type MemberAuthClient = Effect.Success<ReturnType<typeof memberAuthClient>>;
+
+    const notACommunityMember = () =>
+      new ORPCError("FORBIDDEN", { message: "You are not a member of this community" });
+
+    const readOwnPrimaryAccount = (auth: MemberAuthClient) =>
+      Effect.tryPromise(() => auth.nearListAccounts()).pipe(
+        Effect.map(
+          ({ accounts }) => accounts.find((account) => account.isPrimary)?.accountId ?? null,
+        ),
+        Effect.orElseSucceed(() => null),
+      );
+
+    const listAllMembers = (auth: MemberAuthClient, organizationId: string) =>
+      Effect.gen(function* () {
+        const members: Awaited<ReturnType<MemberAuthClient["listMembers"]>>["members"] = [];
+        let total = 0;
+        while (true) {
+          const page = yield* Effect.tryPromise({
+            try: () =>
+              auth.listMembers({ organizationId, limit: MEMBER_PAGE_SIZE, offset: members.length }),
+            catch: (error) =>
+              error instanceof ORPCError &&
+              ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
+                ? notACommunityMember()
+                : new ORPCError("INTERNAL_SERVER_ERROR", {
+                    message: "Could not load the community's members",
+                  }),
+          });
+          total = page.total;
+          members.push(...page.members);
+          if (page.members.length === 0 || members.length >= page.total) break;
+        }
+        return { members, total };
       });
 
     const router = {
@@ -708,6 +773,74 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.discovery.saveProfile(input, context);
       }),
+      getMemberDirectoryOptIn: builder.getMemberDirectoryOptIn.use(requireAuth).effect(function* ({
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return { optedIn: yield* services.memberDirectory.isOptedIn(context.userId) };
+      }),
+
+      setMemberDirectoryOptIn: builder.setMemberDirectoryOptIn.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const primaryAccountId = input.optedIn
+          ? yield* readOwnPrimaryAccount(yield* memberAuthClient(context))
+          : null;
+        return {
+          optedIn: yield* services.memberDirectory.setOptIn(
+            context.userId,
+            input.optedIn,
+            primaryAccountId,
+          ),
+        };
+      }),
+
+      getMemberDirectory: builder.getMemberDirectory.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const auth = yield* memberAuthClient(context);
+        const { members, total } = yield* listAllMembers(auth, input.organizationId);
+        const current = members.filter((member) => member.organizationId === input.organizationId);
+        if (!current.some((member) => member.userId === context.userId)) {
+          return yield* Effect.fail(notACommunityMember());
+        }
+        yield* services.memberDirectory.refreshPrimaryAccount(
+          context.userId,
+          yield* readOwnPrimaryAccount(auth),
+        );
+        const observation = yield* services.memberDirectory.recordCount(
+          input.organizationId,
+          total,
+        );
+        const accounts = yield* services.memberDirectory.optedInAccounts(
+          current.map((member) => member.userId),
+        );
+        return {
+          ...observation,
+          members: current
+            .filter((member) => accounts.has(member.userId))
+            .map((member) => ({
+              userId: member.userId,
+              name: member.user?.name?.trim() || null,
+              accountId: accounts.get(member.userId) ?? null,
+            })),
+        };
+      }),
+
+      getNodeMemberCount: builder.getNodeMemberCount.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const unavailable = { count: null, observedAt: null };
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (!node?.tenantId) return unavailable;
+        const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
+        if (!tenant?.orgId) return unavailable;
+        return (yield* services.memberDirectory.latestCount(tenant.orgId)) ?? unavailable;
+      }),
+
       ping: builder.ping.handler(async () => ({
         status: "ok",
         timestamp: new Date().toISOString(),

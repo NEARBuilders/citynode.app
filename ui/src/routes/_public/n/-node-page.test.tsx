@@ -52,12 +52,14 @@ const validator = {
   updatedAt: parent.updatedAt,
 };
 const clients: QueryClient[] = [];
+const memberCounts = new Map<string, { count: number | null; observedAt: string | null }>();
 
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  memberCounts.clear();
 });
 
 function communityBuilders(path: string, overrides: Record<string, unknown> = {}) {
@@ -117,6 +119,10 @@ function mockApi(
             json: { sourceNodeId, validators: [{ ...validator, nodeId: sourceNodeId }] },
           });
         }
+        case "getNodeMemberCount":
+          return Response.json({
+            json: memberCounts.get(args.nodeId) ?? { count: null, observedAt: null },
+          });
         case "getDiscoveryNode":
           return Response.json({ json: null });
         case "getCommunityBuilders":
@@ -418,4 +424,24 @@ it("keeps the community page working when nearbuilders.org is unavailable", asyn
   ).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Illinois", level: 1 })).toBeTruthy();
   expect(screen.queryByTestId("node-page.nearbuilders-join")).toBeNull();
+});
+
+it("shows the community's last observed member count with its observation time", async () => {
+  mockApi();
+  memberCounts.set(child.id, { count: 42, observedAt: "2026-10-20T10:00:00.000Z" });
+  await showNode("/n/chicago");
+  expect((await screen.findByTestId("node-page.member-count-value")).textContent).toBe("42");
+  const observed = screen.getByTestId("node-page.member-count-observed");
+  expect(observed.textContent).toContain("Last updated");
+  expect(observed.querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-20T10:00:00.000Z");
+  expect(screen.getByTestId("node-page.member-count").textContent).toContain("Members");
+});
+
+it("says the member count is not available before it was ever observed", async () => {
+  mockApi();
+  await showNode("/n/chicago");
+  expect((await screen.findByTestId("node-page.member-count-unavailable")).textContent).toBe(
+    "Not available",
+  );
+  expect(screen.queryByTestId("node-page.member-count-value")).toBeNull();
 });
