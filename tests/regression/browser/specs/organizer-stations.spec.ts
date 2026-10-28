@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { type OrganizerCommunity, seedOrganizerCommunity } from "../helpers/organizer-seed";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
+import { injectSessionCookies } from "../helpers/seeded";
 
 test.use({ trace: "on" });
 
@@ -35,7 +36,7 @@ test.describe("organizer onboarding stations", () => {
   });
 
   test("an events-team member starts a station from Organization → Onboard", async ({ page }) => {
-    await page.context().addCookies(community.cookies.organizer);
+    await injectSessionCookies(page, community.cookies.organizer);
 
     await startFromOnboardTab(page, community);
 
@@ -45,7 +46,7 @@ test.describe("organizer onboarding stations", () => {
   test("an events-team member with the team active starts one from My community", async ({
     page,
   }) => {
-    await page.context().addCookies(community.cookies.organizerWithTeamActive);
+    await injectSessionCookies(page, community.cookies.organizerWithTeamActive);
 
     await page.goto(`/dashboard/node?nodeId=${community.nodeId}`, {
       waitUntil: "domcontentloaded",
@@ -71,7 +72,7 @@ test.describe("organizer onboarding stations", () => {
   });
 
   test("an owner starts a station from Organization → Onboard", async ({ page }) => {
-    await page.context().addCookies(community.cookies.owner);
+    await injectSessionCookies(page, community.cookies.owner);
 
     await startFromOnboardTab(page, community);
 
@@ -81,7 +82,7 @@ test.describe("organizer onboarding stations", () => {
   test("a member without the events area can't manage events or start a station", async ({
     page,
   }) => {
-    await page.context().addCookies(community.cookies.member);
+    await injectSessionCookies(page, community.cookies.member);
 
     await page.goto(`/orgs/${community.organizationSlug}?tab=onboard`, {
       waitUntil: "domcontentloaded",

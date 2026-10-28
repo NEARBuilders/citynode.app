@@ -1,17 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
+import { addSessionCookies } from "../../lib/playwright-cookies.mjs";
+import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 import { seedNode } from "../../lib/seed-tenant.mjs";
 import { waitForApp } from "./page-ready";
 
 interface CookieEntry {
   name: string;
   value: string;
-  domain: string;
-  path: string;
-  httpOnly: boolean;
-  secure: boolean;
-  sameSite: "Strict" | "Lax" | "None";
+  domain?: string;
+  path?: string;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: "Strict" | "Lax" | "None";
+  expires?: number;
 }
 
 interface SeedData {
@@ -44,19 +47,20 @@ function readJsonFile(filePath: string) {
   return JSON.parse(fs.readFileSync(resolved, "utf-8"));
 }
 
+export async function injectSessionCookies(page: Page, cookies: CookieEntry[]) {
+  await addSessionCookies(page.context(), cookies, computeRegressionEnv().baseUrl);
+}
+
 export async function injectCookies(page: Page) {
-  const cookies: CookieEntry[] = readJsonFile(COOKIES_PATH);
-  await page.context().addCookies(cookies);
+  await injectSessionCookies(page, readJsonFile(COOKIES_PATH));
 }
 
 export async function injectAdminCookies(page: Page) {
-  const cookies: CookieEntry[] = readJsonFile(ADMIN_COOKIES_PATH);
-  await page.context().addCookies(cookies);
+  await injectSessionCookies(page, readJsonFile(ADMIN_COOKIES_PATH));
 }
 
 export async function injectLogoutCookies(page: Page) {
-  const cookies: CookieEntry[] = readJsonFile(LOGOUT_COOKIES_PATH);
-  await page.context().addCookies(cookies);
+  await injectSessionCookies(page, readJsonFile(LOGOUT_COOKIES_PATH));
 }
 
 export function loadSeedData(): SeedData {
