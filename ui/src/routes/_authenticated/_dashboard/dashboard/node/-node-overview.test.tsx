@@ -348,9 +348,10 @@ describe("node overview team area gating", () => {
     );
   }
 
-  it("lets a Treasury-active member open the overview but not the other community pages", async () => {
+  it("lets a Treasury-active member open the overview and proposals but not the work-area pages", async () => {
     expect(await gate("/dashboard/node", "team-fin")).toBe("allowed");
-    expect(await gate("/dashboard/node/proposals", "team-fin")).toBe("restricted:node-operations");
+    expect(await gate("/dashboard/node/proposals", "team-fin")).toBe("allowed");
+    expect(await gate("/stake", "team-fin")).toBe("allowed");
     expect(await gate("/nodes/node-1/content", "team-fin")).toBe("restricted:node-operations");
     expect(await gate("/tenant/tenant-1", "team-fin")).toBe("restricted:node-operations");
   });

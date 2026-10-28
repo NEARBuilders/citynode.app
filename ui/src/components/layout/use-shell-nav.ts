@@ -6,7 +6,6 @@ import manifestJson from "@/manifest.gen.json" with { type: "json" };
 import {
   appendPluginSidebarItems,
   buildNavItems,
-  filterSidebarByArea,
   filterSidebarByRole,
   filterSidebarByRoutes,
   getUserRole,
@@ -61,5 +60,5 @@ export function useShellNav(
   const withPlugins = pluginNav?.items?.length
     ? appendPluginSidebarItems(withRoutes, pluginNavToSidebar(pluginNav.items))
     : withRoutes;
-  return filterSidebarByArea(filterSidebarByRole(withPlugins, role), workspace.allowedAreas);
+  return filterSidebarByRole(withPlugins, role);
 }
