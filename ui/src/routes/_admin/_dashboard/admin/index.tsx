@@ -11,7 +11,6 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
-import { cn } from "cn";
 import { Trans } from "everything-dev/ui/i18n";
 import { type ComponentType, type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { getAccount, useApiClient } from "@/app";
@@ -33,7 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { VersionCard } from "@/components/version-card";
 import type { AppMessageId } from "@/i18n/catalogs";
 import {
   resolveAppLocale,
@@ -69,7 +67,6 @@ import {
   COMMUNITY_JOINS_LIMIT,
   visibleCommunityJoinRows,
 } from "./-community-joins";
-import { useRuntimeRows } from "./-runtime-rows";
 import {
   awaitingReviewQueryOptions,
   pendingProposalCountQueryOptions,
@@ -234,27 +231,7 @@ function AdminOverview() {
       <CommunityProgress progress={progress} />
 
       <CommunityJoins />
-
-      <VersionCard />
-
-      <RuntimeDetails />
     </>
-  );
-}
-
-function RuntimeDetails() {
-  const translate = useAppTranslation();
-  const { auth, runtimeConfig } = Route.useRouteContext();
-  const rows = useRuntimeRows({ runtimeConfig, user: auth?.user });
-  return (
-    <section className="flex flex-col gap-6">
-      <SectionHeader title={translate("admin.runtime")} />
-      <div className="flex flex-col">
-        {rows.map((row) => (
-          <ContextRow key={row.id} {...row} />
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -789,34 +766,5 @@ function ManageTile({
         <CaretRightIcon className="size-4 text-muted-foreground" />
       </ItemActions>
     </Item>
-  );
-}
-
-function ContextRow({
-  id,
-  label,
-  value,
-  mono,
-}: {
-  id: string;
-  label: string;
-  value: ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <div
-      className="flex flex-col gap-1 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
-      data-testid={`admin.stat.${id}`}
-    >
-      <span className="text-sm text-muted-foreground" data-testid={`admin.stat.${id}.label`}>
-        {label}
-      </span>
-      <span
-        className={cn("text-sm break-all text-foreground sm:text-right", mono && "font-mono")}
-        data-testid={`admin.stat.${id}.value`}
-      >
-        {value}
-      </span>
-    </div>
   );
 }
