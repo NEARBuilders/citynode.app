@@ -17,7 +17,6 @@ export interface CommunityEvent {
   id: string;
   title: string;
   startsAt: string | null;
-  communityName: string;
 }
 
 export interface UpstreamCode {
@@ -202,7 +201,7 @@ export const AttendanceLive = Layer.effect(
                 const recorded = yield* Effect.forEach(codes.value, (code) =>
                   recordCode({
                     organizationId,
-                    communityName: event.communityName,
+                    communityName,
                     code,
                     known,
                     upstream,

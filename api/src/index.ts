@@ -838,16 +838,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
-        const events =
-          (yield* services.discovery.organizationEvents([input.organizationId])).get(
-            input.organizationId,
-          ) ?? [];
-        const tenant = yield* services.tenants.resolveTenantByOrgId(input.organizationId);
         const { organizationId } = input;
+        const community = (yield* services.discovery.organizationEvents([organizationId])).get(
+          organizationId,
+        );
         return yield* services.attendance.reconcile({
           organizationId,
-          communityName: events[0]?.communityName ?? tenant?.name ?? organizationId,
-          events,
+          communityName: community?.communityName ?? organizationId,
+          events: community?.events ?? [],
           upstream: {
             listCodes: (eventId) =>
               auth.listOnboardingCodes({ organizationId, ...(eventId ? { eventId } : {}) }),
@@ -885,11 +883,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
             ];
         const eventsByOrganization = yield* services.discovery.organizationEvents(organizationIds);
         const communities = organizationIds.map((organizationId) => {
-          const events = eventsByOrganization.get(organizationId) ?? [];
+          const community = eventsByOrganization.get(organizationId);
           return {
             organizationId,
-            communityName: events[0]?.communityName ?? names.get(organizationId) ?? organizationId,
-            events,
+            communityName: community?.communityName ?? names.get(organizationId) ?? organizationId,
+            events: community?.events ?? [],
           };
         });
         return yield* services.attendance.history({ userId: context.userId, communities });

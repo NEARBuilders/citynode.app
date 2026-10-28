@@ -1055,39 +1055,35 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     organizationEvents: (organizationIds: string[]) =>
       Effect.gen(function* () {
-        const rows =
-          organizationIds.length === 0
-            ? []
-            : yield* query(() =>
-                db
-                  .select({
-                    event: discoveryActivities.data,
-                    organizationId: tenants.orgId,
-                    communityName: tenants.name,
-                  })
-                  .from(discoveryActivities)
-                  .innerJoin(nodes, eq(discoveryActivities.ownerNodeId, nodes.id))
-                  .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-                  .where(inArray(tenants.orgId, organizationIds)),
-              );
-        const byOrganization = new Map(
-          organizationIds.map((id) => [
-            id,
-            [] as Array<{
-              id: string;
-              title: string;
-              startsAt: string | null;
-              communityName: string;
-            }>,
-          ]),
+        const byOrganization = new Map<
+          string,
+          {
+            communityName: string | null;
+            events: Array<{ id: string; title: string; startsAt: string | null }>;
+          }
+        >(organizationIds.map((id) => [id, { communityName: null, events: [] }]));
+        if (organizationIds.length === 0) return byOrganization;
+        const rows = yield* query(() =>
+          db
+            .select({
+              organizationId: tenants.orgId,
+              communityName: tenants.name,
+              event: discoveryActivities.data,
+            })
+            .from(tenants)
+            .leftJoin(nodes, eq(nodes.tenantId, tenants.id))
+            .leftJoin(discoveryActivities, eq(discoveryActivities.ownerNodeId, nodes.id))
+            .where(inArray(tenants.orgId, organizationIds)),
         );
         for (const row of rows) {
-          if (row.event.kind !== "event" || !row.organizationId) continue;
-          byOrganization.get(row.organizationId)?.push({
+          const entry = row.organizationId ? byOrganization.get(row.organizationId) : undefined;
+          if (!entry) continue;
+          entry.communityName ??= row.communityName;
+          if (row.event?.kind !== "event") continue;
+          entry.events.push({
             id: row.event.id,
             title: row.event.title,
             startsAt: row.event.startsAt,
-            communityName: row.communityName,
           });
         }
         return byOrganization;
