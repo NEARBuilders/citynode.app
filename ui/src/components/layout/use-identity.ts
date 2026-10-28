@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { clearAuthenticatedQueries, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { useAppTranslation } from "@/i18n/runtime";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
+import { resolveCommunityMembership, visibleOrganizations } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -30,6 +31,20 @@ export function useIdentity() {
   const activeOrg = useMemo(() => {
     return organizations?.find((org) => org.id === activeOrgId);
   }, [organizations, activeOrgId]);
+  const communities = useMemo(
+    () => visibleOrganizations(organizations ?? [], user?.id),
+    [organizations, user?.id],
+  );
+  const membership = useMemo(
+    () =>
+      resolveCommunityMembership({
+        organizations,
+        activeOrganizationId: activeOrgId,
+        userId: user?.id,
+        refreshing: organizationsQuery.isFetching,
+      }),
+    [organizations, activeOrgId, user?.id, organizationsQuery.isFetching],
+  );
 
   const { data: nearProfile } = useQuery({
     queryKey: ["near-profile", nearAccountId],
@@ -74,6 +89,8 @@ export function useIdentity() {
     isSessionLoading: sessionQuery.isLoading,
     nearAccountId,
     organizations: organizations ?? [],
+    communities,
+    membership,
     isOrganizationsLoading: sessionQuery.isPending || (!!user && organizationsQuery.isPending),
     organizationsError: sessionQuery.error ?? organizationsQuery.error,
     retryOrganizations: () =>

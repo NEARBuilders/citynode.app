@@ -10,8 +10,8 @@ const base: NextStepsState = {
   isAnonymous: false,
   hasPasskey: true,
   hasNear: false,
-  organizationCount: 1,
-  activeOrganizationName: "Harbor",
+  membership: "active",
+  communityCount: 0,
   community: null,
   canManageCommunity: false,
   canOrganizeEvents: false,
@@ -31,16 +31,26 @@ describe("home next steps", () => {
     );
   });
 
-  it("sends a user without organizations straight to starting a community", () => {
-    expect(ids({ organizationCount: 0, activeOrganizationName: null })).toEqual([
+  it("sends someone without a community straight to starting one", () => {
+    expect(ids({ membership: "none" })).toEqual(["start-community", "stake", "explore"]);
+    expect(ids({ membership: "none", isAnonymous: true, hasPasskey: true })[0]).toBe(
       "start-community",
-      "stake",
-      "explore",
-    ]);
+    );
   });
 
-  it("asks a member of several organizations to pick an active one", () => {
-    expect(ids({ organizationCount: 2, activeOrganizationName: null })[0]).toBe("choose-org");
+  it("asks to choose a community, not an organization", () => {
+    const steps = getNextSteps({ ...base, membership: "choose", communityCount: 2 });
+    expect(steps[0]?.id).toBe("choose-org");
+    expect(steps[0]?.title).toBe("Choose a community");
+    expect(steps[0]?.description).toBe("You belong to 2 communities. Pick the one to open.");
+  });
+
+  it("offers no community action while organizations are unknown", () => {
+    expect(ids({ membership: "unknown" })).toEqual(["stake", "explore"]);
+  });
+
+  it("opens the community it is opening for a returning member", () => {
+    expect(ids({ membership: "open", community: harbor })).toEqual(["open-community", "stake"]);
   });
 
   it("offers Start a community when the active organization has no community", () => {
@@ -86,7 +96,7 @@ describe("home next steps", () => {
   });
 
   it("leads admins with launching a node and the review queue", () => {
-    expect(ids({ organizationCount: 0, activeOrganizationName: null, isAdmin: true })).toEqual([
+    expect(ids({ membership: "none", isAdmin: true })).toEqual([
       "launch-node",
       "admin",
       "stake",

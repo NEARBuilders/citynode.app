@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/item";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { visibleOrganizations } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
@@ -100,7 +101,7 @@ function OrganizationsList() {
     staleTime: 30 * 1000,
   });
 
-  const orgs = organizations || [];
+  const orgs = visibleOrganizations(organizations ?? [], session?.user?.id);
 
   const { data: tenantOrgIds = new Set<string>() } = useQuery({
     ...tenantOrganizationIdsQueryOptions(
@@ -265,9 +266,6 @@ function OrganizationsList() {
               const members = memberQueries[index]?.data;
               const myRole = members?.find((member) => member.userId === user?.id)?.role;
               const isActive = org.id === activeOrgId;
-              const isPersonal = user
-                ? org.slug === user.id || org.metadata?.isPersonal === true
-                : false;
               return (
                 <Card key={org.id} data-testid={`orgs-card-${org.slug}`}>
                   <CardContent className="flex h-full flex-col gap-5 p-5">
@@ -299,7 +297,6 @@ function OrganizationsList() {
                         </Badge>
                       )}
                       {isActive && <Badge variant="success">{translate("common.active")}</Badge>}
-                      {isPersonal && <Badge variant="outline">{translate("org.personal")}</Badge>}
                       {tenantOrgIds.has(org.id) && (
                         <Badge variant="outline">{translate("common.community")}</Badge>
                       )}

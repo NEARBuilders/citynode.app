@@ -7,12 +7,14 @@ import {
   useApiClient,
   useAuthClient,
 } from "@/app";
-import { Bulletin, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
+import { Bulletin, Button, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
+import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { selectCommunityNode } from "@/lib/community-node";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
+import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
@@ -88,7 +90,15 @@ function Home() {
     },
     staleTime: 30 * 1000,
   });
-  const tenant = useQuery(tenantByOrgQueryOptions(apiClient, activeOrgId));
+  const user = session?.user;
+  const membership = resolveCommunityMembership({
+    organizations: organizations.data,
+    activeOrganizationId: activeOrgId,
+    userId: user?.id,
+    refreshing: organizations.isFetching,
+  });
+  const communityOrgId = communityOrganizationId(membership) ?? "";
+  const tenant = useQuery(tenantByOrgQueryOptions(apiClient, communityOrgId));
   const nodes = useQuery({
     ...tenantNodesQueryOptions(apiClient, tenant.data?.id ?? ""),
     enabled: !!tenant.data?.id,
@@ -100,7 +110,6 @@ function Home() {
     staleTime: 30 * 1000,
   });
 
-  const user = session?.user;
   const canManage = user?.role === "admin" || canManageCommunity(authContext.data);
   const node = selectCommunityNode(nodes.data ?? []);
   const nodeId = node?.id ?? "";
@@ -124,20 +133,21 @@ function Home() {
   const bulletin = node?.metadata?.bulletin;
 
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
-  const orgs = organizations.data ?? [];
-  const activeOrg = orgs.find((org) => org.id === activeOrgId) ?? null;
   const isAdmin = user?.role === "admin";
   const community = tenant.data ? { name: tenant.data.name, tenantId: tenant.data.id } : null;
   const loading =
-    !user || organizations.isPending || (!!activeOrgId && tenant.isPending) || passkeys.isPending;
+    !user ||
+    organizations.isPending ||
+    (!!communityOrgId && tenant.isPending) ||
+    passkeys.isPending;
 
   const steps = getNextSteps(
     {
       isAnonymous: user?.isAnonymous ?? false,
       hasPasskey: (passkeys.data?.length ?? 0) > 0,
       hasNear: !!nearAccountId,
-      organizationCount: orgs.length,
-      activeOrganizationName: activeOrg?.name ?? null,
+      membership: membership.status,
+      communityCount: membership.status === "choose" ? membership.count : 0,
       community,
       canManageCommunity: canManage,
       canOrganizeEvents: canOrganizeEvents(authContext.data),
@@ -196,7 +206,26 @@ function Home() {
                 <Skeleton className="h-16 w-full rounded-2xl" />
               </div>
             ) : (
-              <NextStepsList steps={steps} primary={pending.length === 0 && !showSetup} />
+              <>
+                {organizations.isError && !organizations.data && (
+                  <Item variant="outline" data-testid="home-organizations-error">
+                    <ItemContent className="min-w-0">
+                      <ItemTitle>{translate("org.loadFailed")}</ItemTitle>
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void organizations.refetch()}
+                        data-testid="home-organizations-retry"
+                      >
+                        {translate("common.retry")}
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                )}
+                <NextStepsList steps={steps} primary={pending.length === 0 && !showSetup} />
+              </>
             )}
           </section>
         </div>

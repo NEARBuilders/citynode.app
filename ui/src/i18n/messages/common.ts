@@ -570,11 +570,11 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Modifications proposées pour cette communauté.",
     "对此社区提出的更改。",
   ],
-  "dashboard.chooseOrg": [
-    "Choose an organization",
-    "Elige una organización",
-    "Choisissez une organisation",
-    "选择组织",
+  "dashboard.chooseCommunity": [
+    "Choose a community",
+    "Elige una comunidad",
+    "Choisissez une communauté",
+    "选择社区",
   ],
   "dashboard.comingUp": ["Coming up", "Próximamente", "À venir", "即将举行"],
   "dashboard.communitySettings": [
@@ -682,11 +682,11 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ouvrir la page publique",
     "打开公开页面",
   ],
-  "dashboard.orgCount": [
-    "You belong to {count, plural, one {# organization} other {# organizations}}. Pick one to work in.",
-    "Perteneces a {count, plural, one {# organización} other {# organizaciones}}. Elige una para trabajar.",
-    "Vous faites partie de {count, plural, one {# organisation} other {# organisations}}. Choisissez-en une pour travailler.",
-    "你属于 {count} 个组织，请选择一个进行操作。",
+  "dashboard.communityCount": [
+    "You belong to {count, plural, one {# community} other {# communities}}. Pick the one to open.",
+    "Perteneces a {count, plural, one {# comunidad} other {# comunidades}}. Elige cuál abrir.",
+    "Vous faites partie de {count, plural, one {# communauté} other {# communautés}}. Choisissez celle à ouvrir.",
+    "你属于 {count} 个社区，请选择要打开的社区。",
   ],
   "dashboard.orgFallback": ["an organization", "una organización", "une organisation", "一个组织"],
   "dashboard.orgsRunCommunities": [
