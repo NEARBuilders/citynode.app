@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -39,6 +40,8 @@ export function ApplyNodeFields({
   preflight,
   preflightLoading,
   organizationSlugAvailable,
+  linkedOrganizationSlug,
+  onUnlockSlug,
   rootNodes,
   rootParentId,
   setRootParentId,
@@ -53,6 +56,8 @@ export function ApplyNodeFields({
   preflight: { hostname: { available: boolean } } | undefined;
   preflightLoading: boolean;
   organizationSlugAvailable?: boolean;
+  linkedOrganizationSlug?: string;
+  onUnlockSlug?: () => void;
   rootNodes: NodeOption[];
   rootParentId: string;
   setRootParentId: (value: string) => void;
@@ -61,6 +66,7 @@ export function ApplyNodeFields({
   statesLoading: boolean;
 }) {
   const t = useAppTranslation();
+  const linkedSlug = linkedOrganizationSlug ?? "";
   const stateOptions = stateNodes.filter((node) => node.kind === "state");
   const standaloneCity = formValues.kind === "city";
   const countryItems = [
@@ -193,6 +199,7 @@ export function ApplyNodeFields({
                 onChange={(event) => {
                   const nextName = event.target.value;
                   field.handleChange(nextName);
+                  if (linkedSlug) return;
                   form.setFieldValue(
                     "slug",
                     deriveSlug(nextName, form.getFieldValue("slug"), slugManuallyEdited.current),
@@ -226,7 +233,8 @@ export function ApplyNodeFields({
                   data-testid="apply.slug"
                   className="font-mono"
                   name={field.name}
-                  value={field.state.value}
+                  value={linkedSlug || field.state.value}
+                  readOnly={!!linkedSlug}
                   onBlur={field.handleBlur}
                   onChange={(event) => {
                     slugManuallyEdited.current = true;
@@ -246,18 +254,32 @@ export function ApplyNodeFields({
                 </InputGroupAddon>
               </InputGroup>
               <FieldDescription data-testid="apply.slug-status">
-                {!hostname
-                  ? t("apply.slug.rules")
-                  : preflightLoading
-                    ? t("apply.slug.checking")
-                    : organizationTaken
-                      ? t("apply.slug.organizationTaken")
-                      : available === true
-                        ? t("apply.slug.available", { hostname })
-                        : available === false
-                          ? t("apply.slug.taken", { hostname })
-                          : hostname}
+                {linkedSlug
+                  ? t("apply.slug.usesOrganization", { slug: linkedSlug })
+                  : !hostname
+                    ? t("apply.slug.rules")
+                    : preflightLoading
+                      ? t("apply.slug.checking")
+                      : organizationTaken
+                        ? t("apply.slug.organizationTaken")
+                        : available === true
+                          ? t("apply.slug.available", { hostname })
+                          : available === false
+                            ? t("apply.slug.taken", { hostname })
+                            : hostname}
               </FieldDescription>
+              {linkedSlug && onUnlockSlug && (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="self-start px-0"
+                  onClick={onUnlockSlug}
+                  data-testid="apply.slug-unlock"
+                >
+                  {t("apply.slug.useDifferentAddress")}
+                </Button>
+              )}
               <FieldError errors={errors} />
             </Field>
           );

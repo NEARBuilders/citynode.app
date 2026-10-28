@@ -331,6 +331,11 @@ function OrganizationDetail() {
         onSwitch={() => switchOrg.mutate(orgId)}
         org={org}
         settingsTenantId={settingsTenantId}
+        startCommunitySlug={
+          org.status === "active" && isOwner && !isPersonal && !settingsTenantId
+            ? org.slug
+            : undefined
+        }
       />
       {isOwner && (
         <OrganizationEditForm
