@@ -20,6 +20,7 @@ const harness = vi.hoisted(() => ({
   routeContext: {} as Record<string, unknown>,
   listing: (() => Promise.resolve(null)) as () => Promise<unknown>,
   getOnboardingRedemptions: (() => Promise.resolve(null)) as (input: unknown) => Promise<unknown>,
+  attendanceCalls: [] as string[],
   memberDirectory: {
     optedIn: false,
     directory: (() => Promise.resolve({ count: 0, observedAt: "", members: [] })) as (input: {
@@ -83,6 +84,27 @@ vi.mock("@/app", () => ({
     getMemberDirectory: (input: { organizationId: string }) =>
       harness.memberDirectory.directory(input),
     getNodeMemberCount: (input: { nodeId: string }) => harness.memberDirectory.nodeCount(input),
+    reconcileAttendance: async (input: { organizationId: string }) => {
+      harness.attendanceCalls.push(`reconcile:${input.organizationId}`);
+      return { events: 1, truncated: [], failed: [] };
+    },
+    getMyAttendance: async (input: { organizationId?: string }) => {
+      harness.attendanceCalls.push(`read:${input.organizationId}`);
+      return {
+        events: [
+          {
+            organizationId: "org-1",
+            communityName: "Example city",
+            eventId: "event-1",
+            eventName: "Builders Night",
+            checkedInAt: "2026-10-10T18:30:00.000Z",
+            startsAt: null,
+          },
+        ],
+        unclassified: [],
+        communities: [],
+      };
+    },
   }),
   useAuthClient: () => ({
     near: { getNearClient: () => new Near({ network: "mainnet" }) },
@@ -116,6 +138,7 @@ afterEach(() => {
   harness.memberDirectory.setOptIn = null;
   harness.memberDirectory.readOptIn = null;
   harness.listing = () => Promise.resolve(null);
+  harness.attendanceCalls.length = 0;
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
 });
@@ -656,5 +679,23 @@ describe("node overview for members", () => {
     expect(screen.getByTestId("node-validators")).toBeTruthy();
     expect(screen.getByTestId("dashboard-node.members")).toBeTruthy();
     expect(screen.queryByTestId("dashboard-node.updates")).toBeNull();
+  });
+});
+
+describe("node overview attendance", () => {
+  it("shows a plain member their events in this community without syncing", async () => {
+    stubChain();
+    renderOverview({ nearAccount: null });
+    expect((await screen.findByTestId("dashboard-node.attendance-event")).textContent).toContain(
+      "Builders Night",
+    );
+    expect(harness.attendanceCalls).toEqual(["read:org-1"]);
+  });
+
+  it("syncs the community's check-ins first when an organizer opens Overview", async () => {
+    stubChain();
+    renderOverview({ nearAccount: null, canOrganize: true });
+    await screen.findByTestId("dashboard-node.attendance-event");
+    expect(harness.attendanceCalls).toEqual(["reconcile:org-1", "read:org-1"]);
   });
 });

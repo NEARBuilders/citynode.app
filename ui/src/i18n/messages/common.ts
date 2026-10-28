@@ -2,6 +2,81 @@ import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "about.build": ["Build on it", "Desarrollar sobre él", "Développer dessus", "基于它开发"],
+  "attendance.checkedInOn": ["Checked in on", "Registrado el", "Enregistré le", "签到时间"],
+  "attendance.deletedTeamsHint": [
+    "Check-ins from deleted Event Teams can't be shown.",
+    "Los registros de equipos de evento eliminados no se pueden mostrar.",
+    "Les enregistrements des équipes d'événement supprimées ne peuvent pas être affichés.",
+    "已删除的活动团队的签到记录无法显示。",
+  ],
+  "attendance.description": [
+    "Events of this community you checked in at.",
+    "Eventos de esta comunidad en los que te registraste.",
+    "Les événements de cette communauté auxquels vous vous êtes enregistré.",
+    "你在本社区签到过的活动。",
+  ],
+  "attendance.descriptionEverywhere": [
+    "Events you checked in at, across your communities.",
+    "Eventos en los que te registraste, en todas tus comunidades.",
+    "Les événements auxquels vous vous êtes enregistré, dans toutes vos communautés.",
+    "你在所有社区签到过的活动。",
+  ],
+  "attendance.empty": [
+    "No check-ins recorded yet.",
+    "Todavía no hay registros.",
+    "Aucun enregistrement pour l'instant.",
+    "还没有签到记录。",
+  ],
+  "attendance.eventDate": ["Event date", "Fecha del evento", "Date de l'événement", "活动日期"],
+  "attendance.incomplete": [
+    "May be incomplete.",
+    "Puede estar incompleto.",
+    "Peut être incomplet.",
+    "可能不完整。",
+  ],
+  "attendance.loadFailed": [
+    "Couldn't load your events.",
+    "No se pudieron cargar tus eventos.",
+    "Impossible de charger vos événements.",
+    "无法加载你的活动。",
+  ],
+  "attendance.otherHint": [
+    "These codes aren't tied to one of the community's events, so they don't count as event attendance.",
+    "Estos códigos no están vinculados a un evento de la comunidad, así que no cuentan como asistencia.",
+    "Ces codes ne sont liés à aucun événement de la communauté, ils ne comptent donc pas comme participation.",
+    "这些签到码未关联到社区的活动，因此不计入活动出席。",
+  ],
+  "attendance.otherTitle": [
+    "Other check-ins",
+    "Otros registros",
+    "Autres enregistrements",
+    "其他签到",
+  ],
+  "attendance.reasonFailed": [
+    "The last sync couldn't read every event, so this shows what was recorded before.",
+    "La última sincronización no pudo leer todos los eventos, así que se muestra lo registrado antes.",
+    "La dernière synchronisation n'a pas pu lire tous les événements ; voici ce qui avait été enregistré.",
+    "上次同步未能读取所有活动，因此显示的是之前的记录。",
+  ],
+  "attendance.reasonNotSynced": [
+    "Some events haven't been synced by an organizer yet.",
+    "Un organizador aún no ha sincronizado algunos eventos.",
+    "Certains événements n'ont pas encore été synchronisés par un organisateur.",
+    "部分活动还没有被组织者同步。",
+  ],
+  "attendance.reasonTruncated": [
+    "Some events have more check-in codes than can be read, so check-ins may be missing.",
+    "Algunos eventos tienen más códigos de los que se pueden leer, así que pueden faltar registros.",
+    "Certains événements ont plus de codes que ce qui peut être lu ; des enregistrements peuvent manquer.",
+    "部分活动的签到码超出可读取数量，可能缺少签到记录。",
+  ],
+  "attendance.syncedUpTo": [
+    "Synced up to",
+    "Sincronizado hasta",
+    "Synchronisé jusqu'au",
+    "同步截至",
+  ],
+  "attendance.title": ["Your events", "Tus eventos", "Vos événements", "你的活动"],
   "error.apiConnection": [
     "Unable to connect to API",
     "No se pudo conectar con la API",

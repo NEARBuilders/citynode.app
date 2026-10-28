@@ -1053,6 +1053,25 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         );
         return row ?? null;
       }),
+    organizationEvents: (organizationId: string) =>
+      Effect.gen(function* () {
+        const rows = yield* query(() =>
+          db
+            .select({ event: discoveryActivities.data, communityName: tenants.name })
+            .from(discoveryActivities)
+            .innerJoin(nodes, eq(discoveryActivities.ownerNodeId, nodes.id))
+            .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+            .where(eq(tenants.orgId, organizationId)),
+        );
+        return rows
+          .filter((row) => row.event.kind === "event")
+          .map((row) => ({
+            id: row.event.id,
+            title: row.event.title,
+            startsAt: row.event.startsAt,
+            communityName: row.communityName,
+          }));
+      }),
     activity: (id: string) =>
       Effect.gen(function* () {
         yield* Effect.forkDetach(syncDueLuma);

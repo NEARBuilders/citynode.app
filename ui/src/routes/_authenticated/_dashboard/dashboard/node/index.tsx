@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import { Bulletin, Button, LocalDate, NodeValidatorTable, SectionHeader } from "@/components";
+import { AttendanceRecord } from "@/components/attendance-record";
 import { CommunityMapStatus } from "@/components/discovery/community-map-status";
 import { CommunityChannels, CommunityUpdates } from "@/components/discovery/community-updates";
 import {
@@ -254,6 +255,14 @@ function NodeOverview() {
         <div id="people" className="scroll-mt-20">
           <MemberDirectory organizationId={orgId} nodeId={selectedNode.id} />
         </div>
+      )}
+
+      {orgId && (
+        <AttendanceRecord
+          organizationId={orgId}
+          reconcile={!!canOrganize}
+          testId="dashboard-node.attendance"
+        />
       )}
 
       {canManage && (

@@ -24,6 +24,8 @@ const harness = vi.hoisted(() => ({
   tenants: { "org-1": "Example Community" } as Record<string, string>,
   nodes: [] as { id: string; name: string; metadata: Record<string, unknown> }[],
   authContext: null as unknown,
+  attendance: { events: [], unclassified: [], communities: [] } as Record<string, unknown>,
+  attendanceReads: [] as string[],
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -77,6 +79,10 @@ const api = {
   }),
   getNode: async () => null,
   getDiscoveryNode: async () => null,
+  getMyAttendance: async (input: { organizationId?: string }) => {
+    harness.attendanceReads.push(input.organizationId ?? "all");
+    return harness.attendance;
+  },
 };
 
 const session = () => ({
@@ -118,6 +124,8 @@ afterEach(() => {
   harness.nodes = [];
   setActive.mockClear();
   harness.authContext = null;
+  harness.attendance = { events: [], unclassified: [], communities: [] };
+  harness.attendanceReads.length = 0;
 });
 
 function Switcher() {
@@ -222,6 +230,33 @@ describe("Home for a member who joined by QR", () => {
     expect(steps).toEqual(["home-step-open-community", "home-step-stake"]);
     expect(screen.getByTestId("home-identity").textContent).not.toMatch(/Add\b/);
     expect(screen.queryByText(/add your email/i)).toBeNull();
+  });
+
+  it("lists the events they checked in at across every community", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = "org-1";
+    harness.organizations = [{ id: "org-1", name: "Example Community", slug: "example" }];
+    harness.nodes = [node("node-a", "Berlin")];
+    harness.attendance = {
+      events: [
+        {
+          organizationId: "org-2",
+          communityName: "Left Community",
+          eventId: "event-2",
+          eventName: "Harbor meetup",
+          checkedInAt: "2026-10-20T10:00:00.000Z",
+          startsAt: null,
+        },
+      ],
+      unclassified: [],
+      communities: [],
+    };
+    renderHome();
+
+    const row = await screen.findByTestId("home.attendance-event");
+    expect(row.textContent).toContain("Harbor meetup");
+    expect(row.textContent).toContain("Left Community");
+    expect(harness.attendanceReads).toEqual(["all"]);
   });
 });
 
