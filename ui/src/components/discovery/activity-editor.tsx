@@ -45,7 +45,7 @@ import { useClientValue } from "@/hooks";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { buildEventTimeline } from "@/lib/event-timeline";
-import { isWaitingImport } from "@/lib/event-visibility";
+import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
 import { type Activity, activitiesQueryOptions } from "./activity-form";
 import { DiscoveryLoadError } from "./discovery-load-error";
 import { useOpenEventStation } from "./event-onboarding";
@@ -53,6 +53,9 @@ import { EventTimeline } from "./event-timeline";
 import { EventVisibilityBadge, ImportsWaiting, useVisibilityContext } from "./event-visibility";
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
+
+const postEventReportUrl =
+  "https://docs.google.com/forms/d/e/1FAIpQLSdGTdQ9znOJbObaeef7NHAzXc04OygTLIOu6Qv1dKRx8Fwxxw/viewform";
 
 export function ActivityEditor({
   nodeId,
@@ -171,6 +174,20 @@ export function ActivityEditor({
           }
         >
           {translate("common.edit")}
+        </Button>
+      )}
+      {eventVisibility(a, visibilityContext) === "ended" && (
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid={`activity-editor.submit-report-${a.id}`}
+          nativeButton={false}
+          render={(props) => (
+            <a {...props} href={postEventReportUrl} target="_blank" rel="noopener noreferrer" />
+          )}
+        >
+          {translate("events.submitReport")}
+          <ArrowUpRightIcon />
         </Button>
       )}
       {canOnboard && a.kind === "event" && a.status !== "cancelled" && (

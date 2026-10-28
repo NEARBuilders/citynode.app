@@ -434,6 +434,7 @@ export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
     "Lancer un point d'inscription",
     "开始站点",
   ],
+  "events.submitReport": ["Submit report", "Enviar informe", "Envoyer le rapport", "提交报告"],
   "events.summary": ["Summary", "Resumen", "Résumé", "摘要"],
   "events.syncFailed": [
     "Sync failed",
