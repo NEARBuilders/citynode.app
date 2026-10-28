@@ -136,6 +136,17 @@ describe("proposal application dispatcher", () => {
     api.applyCommunityProposal.mockResolvedValue({ nodeId: "node-id", applicantInvited: true });
     await approveAndApplyProposal(publish);
     expect(onApplicantInvited).toHaveBeenCalledOnce();
+
+    const waiting = client(proposal("node", nodePayload));
+    waiting.applyCommunityProposal.mockResolvedValue({ nodeId: "node-id", applicantInvited: true });
+    await expect(
+      approveAndApplyProposal({
+        ...publish,
+        apiClient: waiting as unknown as ApiClient,
+        findOpenTenantConfigProposal: () => Promise.resolve({ id: 7 }),
+      }),
+    ).rejects.toMatchObject({ messageId: "proposal.publicationAwaitingVote" });
+    expect(onApplicantInvited).toHaveBeenCalledTimes(2);
   });
 
   it("marks node application failures", async () => {

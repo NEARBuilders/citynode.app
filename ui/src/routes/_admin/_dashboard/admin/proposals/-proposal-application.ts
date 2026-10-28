@@ -7,7 +7,7 @@ import { parseNodeProposalPayload } from "@/routes/_authenticated/_dashboard/-no
 
 type ProposalApplicationInput = Pick<Proposal, "pluginId" | "entityId" | "payload" | "updatedAt">;
 
-type AppliedResource = { id: string; label: string; applicantInvited?: boolean };
+type AppliedResource = { id: string; label: string };
 type ApplyStepStatus = Parameters<ApiClient["proposals"]["recordApplyStep"]>[0]["status"];
 export type TenantConfigPublisher = (input: DaoTenantPublishInput) => Promise<unknown>;
 export type OpenTenantConfigProposalFinder = (
@@ -20,6 +20,7 @@ type ProposalApplicationHandler = (input: {
   baseAccount: string;
   publishTenantConfig: TenantConfigPublisher;
   findOpenTenantConfigProposal: OpenTenantConfigProposalFinder;
+  onApplicantInvited?: () => void;
 }) => Promise<AppliedResource>;
 
 const proposalApplicationHandlers = {
@@ -30,6 +31,7 @@ const proposalApplicationHandlers = {
     baseAccount,
     publishTenantConfig,
     findOpenTenantConfigProposal,
+    onApplicantInvited,
   }) => {
     const payload = parseNodeProposalPayload(proposal.payload);
     const hostname = `${payload.slug}.${gatewayId}`;
@@ -38,6 +40,7 @@ const proposalApplicationHandlers = {
       entityId: proposal.entityId,
       hostname,
     });
+    if (node.applicantInvited) onApplicantInvited?.();
     const expected = { accountId: payload.accountId, gatewayId, hostname, title: payload.name };
     const published = () => isTenantConfigPublished(apiClient, expected);
     const recordPublication = (status: ApplyStepStatus, resourceId?: string) =>
@@ -94,7 +97,7 @@ const proposalApplicationHandlers = {
       }
     }
     await recordPublication("completed");
-    return { id: node.nodeId, label: "Node", applicantInvited: node.applicantInvited };
+    return { id: node.nodeId, label: "Node" };
   },
 } satisfies Record<string, ProposalApplicationHandler>;
 
@@ -173,6 +176,7 @@ export async function approveAndApplyProposal({
         baseAccount,
         publishTenantConfig,
         findOpenTenantConfigProposal,
+        onApplicantInvited,
       });
     }
   } catch (error) {
@@ -199,7 +203,6 @@ export async function approveAndApplyProposal({
   }
 
   if (!resource) return reviewedProposal;
-  if (resource.applicantInvited) onApplicantInvited?.();
 
   try {
     const applied = await apiClient.proposals.markApplied({
