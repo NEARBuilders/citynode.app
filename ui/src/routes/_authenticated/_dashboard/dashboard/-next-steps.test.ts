@@ -10,13 +10,15 @@ const base: NextStepsState = {
   isAnonymous: false,
   hasPasskey: true,
   hasNear: false,
-  hasRealEmail: true,
   organizationCount: 1,
   activeOrganizationName: "Harbor",
   community: null,
   canManageCommunity: false,
+  canOrganizeEvents: false,
   isAdmin: false,
 };
+
+const harbor = { name: "Harbor City", tenantId: "t1" };
 
 const ids = (state: Partial<NextStepsState>) =>
   getNextSteps({ ...base, ...state }).map((step) => step.id);
@@ -41,27 +43,46 @@ describe("home next steps", () => {
     expect(ids({ organizationCount: 2, activeOrganizationName: null })[0]).toBe("choose-org");
   });
 
-  it("nudges a signed-in user without a real email to add one", () => {
-    expect(ids({ hasRealEmail: false })).toContain("add-email");
-    expect(ids({ hasRealEmail: true })).not.toContain("add-email");
-    expect(ids({ isAnonymous: true, hasRealEmail: false })).not.toContain("add-email");
-  });
-
   it("offers Start a community when the active organization has no community", () => {
     expect(ids({})).toEqual(["start-community", "stake", "explore"]);
   });
 
-  it("opens My community once the organization runs one", () => {
-    expect(ids({ community: { name: "Harbor City", tenantId: "t1" } })).toEqual([
+  it("opens a plain member's community first, naming only what members can open", () => {
+    const steps = getNextSteps({ ...base, community: harbor });
+    expect(steps.map((step) => step.id)).toEqual(["open-community", "stake"]);
+    expect(steps[0]?.title).toBe("Open Harbor City");
+    expect(steps[0]?.description).toBe("See its Overview and Proposals.");
+  });
+
+  it("keeps a member who joined without a real email on the same steps", () => {
+    expect(ids({ community: harbor, hasNear: false, hasPasskey: true })).toEqual([
       "open-community",
       "stake",
     ]);
   });
 
-  it("adds payouts for owners", () => {
-    expect(
-      ids({ community: { name: "Harbor City", tenantId: "t1" }, canManageCommunity: true }),
-    ).toEqual(["open-community", "payouts", "stake"]);
+  it("keeps the owner steps for owners, with payouts", () => {
+    const steps = getNextSteps({ ...base, community: harbor, canManageCommunity: true });
+    expect(steps.map((step) => step.id)).toEqual(["open-community", "payouts", "stake"]);
+    expect(steps[0]?.title).toBe("Open My community");
+    expect(steps[0]?.description).toBe("Harbor City: events, onboarding, proposals.");
+  });
+
+  it("keeps the organizer steps for events-team organizers", () => {
+    const steps = getNextSteps({ ...base, community: harbor, canOrganizeEvents: true });
+    expect(steps.map((step) => step.id)).toEqual(["open-community", "stake"]);
+    expect(steps[0]?.title).toBe("Open My community");
+  });
+
+  it("keeps the current steps for platform admins in a community", () => {
+    const steps = getNextSteps({ ...base, community: harbor, isAdmin: true });
+    expect(steps.map((step) => step.id)).toEqual([
+      "launch-node",
+      "admin",
+      "open-community",
+      "stake",
+    ]);
+    expect(steps[2]?.title).toBe("Open My community");
   });
 
   it("leads admins with launching a node and the review queue", () => {

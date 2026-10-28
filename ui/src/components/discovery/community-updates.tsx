@@ -80,6 +80,7 @@ export function CommunityUpdates({
   campaign,
   layout = "panel",
   onOpen,
+  id,
   testId,
 }: {
   updates: PublicActivity[];
@@ -87,13 +88,17 @@ export function CommunityUpdates({
   campaign?: string;
   layout?: Layout;
   onOpen?: (activity: PublicActivity) => void;
+  id?: string;
   testId?: string;
 }) {
   const t = useAppTranslation();
   if (updates.length === 0) return null;
   return (
     <section
-      className={layout === "page" ? "flex flex-col gap-6" : "flex flex-col gap-4"}
+      id={id}
+      className={
+        layout === "page" ? "flex scroll-mt-20 flex-col gap-6" : "flex scroll-mt-20 flex-col gap-4"
+      }
       data-testid={testId}
     >
       {layout === "page" ? (

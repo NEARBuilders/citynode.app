@@ -2,7 +2,6 @@ import {
   CaretRightIcon,
   CoinsIcon,
   CompassIcon,
-  EnvelopeIcon,
   FingerprintIcon,
   type Icon,
   NetworkIcon,
@@ -28,7 +27,6 @@ import type { NextStep, NextStepId } from "./-next-steps";
 
 const STEP_ICONS: Record<NextStepId, Icon> = {
   "save-account": FingerprintIcon,
-  "add-email": EnvelopeIcon,
   "choose-org": UsersThreeIcon,
   "start-community": RocketLaunchIcon,
   "open-community": NetworkIcon,
@@ -41,7 +39,6 @@ const STEP_ICONS: Record<NextStepId, Icon> = {
 
 interface StepProps {
   step: NextStep;
-  onAddEmail?: () => void;
 }
 
 function stepLink(step: NextStep) {
@@ -67,24 +64,8 @@ function stepLink(step: NextStep) {
   }
 }
 
-function stepAction(step: NextStep, onAddEmail: (() => void) | undefined) {
-  if (step.id === "add-email" && onAddEmail) {
-    return (
-      <Button
-        className="w-full sm:w-auto"
-        onClick={onAddEmail}
-        data-testid="home-step-add-email-cta"
-      >
-        {step.actionLabel}
-      </Button>
-    );
-  }
-  return null;
-}
-
-function FeaturedStep({ step, onAddEmail }: StepProps) {
+function FeaturedStep({ step }: StepProps) {
   const StepIcon = STEP_ICONS[step.id];
-  const action = stepAction(step, onAddEmail);
   return (
     <Item variant="muted" data-testid={`home-step-${step.id}`}>
       <ItemMedia variant="icon">
@@ -95,33 +76,16 @@ function FeaturedStep({ step, onAddEmail }: StepProps) {
         <ItemDescription>{step.description}</ItemDescription>
       </ItemContent>
       <ItemActions className="w-full sm:w-auto">
-        {action ?? (
-          <Button className="w-full sm:w-auto" nativeButton={false} render={stepLink(step)}>
-            {step.actionLabel}
-          </Button>
-        )}
+        <Button className="w-full sm:w-auto" nativeButton={false} render={stepLink(step)}>
+          {step.actionLabel}
+        </Button>
       </ItemActions>
     </Item>
   );
 }
 
-function StepRow({ step, onAddEmail }: StepProps) {
+function StepRow({ step }: StepProps) {
   const StepIcon = STEP_ICONS[step.id];
-  const action = stepAction(step, onAddEmail);
-  if (action) {
-    return (
-      <Item variant="outline" data-testid={`home-step-${step.id}`}>
-        <ItemMedia variant="icon">
-          <StepIcon />
-        </ItemMedia>
-        <ItemContent className="min-w-0">
-          <ItemTitle>{step.title}</ItemTitle>
-          <ItemDescription>{step.description}</ItemDescription>
-        </ItemContent>
-        <ItemActions className="w-full sm:w-auto">{action}</ItemActions>
-      </Item>
-    );
-  }
   return (
     <Item variant="outline" render={stepLink(step)} data-testid={`home-step-${step.id}`}>
       <ItemMedia variant="icon">
@@ -138,23 +102,15 @@ function StepRow({ step, onAddEmail }: StepProps) {
   );
 }
 
-export function NextStepsList({
-  steps,
-  primary,
-  onAddEmail,
-}: {
-  steps: NextStep[];
-  primary: boolean;
-  onAddEmail?: () => void;
-}) {
+export function NextStepsList({ steps, primary }: { steps: NextStep[]; primary: boolean }) {
   const [first, ...rest] = steps;
   const featured = primary && first ? first : null;
   const rows = featured ? rest : steps;
   return (
     <ItemGroup data-testid="home-next-steps">
-      {featured && <FeaturedStep step={featured} onAddEmail={onAddEmail} />}
+      {featured && <FeaturedStep step={featured} />}
       {rows.map((step) => (
-        <StepRow key={step.id} step={step} onAddEmail={onAddEmail} />
+        <StepRow key={step.id} step={step} />
       ))}
     </ItemGroup>
   );

@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import {
   type Passkey,
   type SessionData,
@@ -9,25 +7,16 @@ import {
   useApiClient,
   useAuthClient,
 } from "@/app";
-import {
-  AddEmailDialog,
-  Bulletin,
-  PageContainer,
-  PageHeader,
-  SectionHeader,
-  Skeleton,
-} from "@/components";
+import { Bulletin, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
-import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
 import { selectCommunityNode } from "@/lib/community-node";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
-import { isSyntheticEmail } from "@/lib/synthetic-email";
-import { canManageCommunity } from "@/lib/team-workspace";
+import { canManageCommunity, canOrganizeEvents } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
@@ -142,17 +131,16 @@ function Home() {
   const loading =
     !user || organizations.isPending || (!!activeOrgId && tenant.isPending) || passkeys.isPending;
 
-  const hasRealEmail = !isSyntheticEmail(user?.email);
   const steps = getNextSteps(
     {
       isAnonymous: user?.isAnonymous ?? false,
       hasPasskey: (passkeys.data?.length ?? 0) > 0,
       hasNear: !!nearAccountId,
-      hasRealEmail,
       organizationCount: orgs.length,
       activeOrganizationName: activeOrg?.name ?? null,
       community,
       canManageCommunity: canManage,
+      canOrganizeEvents: canOrganizeEvents(authContext.data),
       isAdmin,
     },
     translate,
@@ -167,20 +155,6 @@ function Home() {
         })
       : null;
   const showSetup = !!setupSteps && setupSteps.some((step) => !step.done);
-
-  const [addEmailOpen, setAddEmailOpen] = useState(false);
-
-  useEffect(() => {
-    if (loading || !user || user.isAnonymous || hasRealEmail) return;
-    if (!consumeAddEmailPromptPending()) return;
-    toast.info(translate("dashboard.addEmailHint"), {
-      duration: Infinity,
-      action: {
-        label: translate("dashboard.addEmailAction"),
-        onClick: () => setAddEmailOpen(true),
-      },
-    });
-  }, [loading, user, hasRealEmail]);
 
   const firstName = user?.isAnonymous ? null : user?.name?.split(" ")[0];
 
@@ -222,11 +196,7 @@ function Home() {
                 <Skeleton className="h-16 w-full rounded-2xl" />
               </div>
             ) : (
-              <NextStepsList
-                steps={steps}
-                primary={pending.length === 0 && !showSetup}
-                onAddEmail={() => setAddEmailOpen(true)}
-              />
+              <NextStepsList steps={steps} primary={pending.length === 0 && !showSetup} />
             )}
           </section>
         </div>
@@ -236,14 +206,12 @@ function Home() {
               user={user}
               nearAccountId={nearAccountId}
               passkeyCount={passkeys.data?.length ?? 0}
-              onAddEmail={() => setAddEmailOpen(true)}
             />
           ) : (
             <Skeleton className="h-56 w-full rounded-2xl" />
           )}
         </aside>
       </div>
-      <AddEmailDialog open={addEmailOpen} onOpenChange={setAddEmailOpen} />
     </PageContainer>
   );
 }

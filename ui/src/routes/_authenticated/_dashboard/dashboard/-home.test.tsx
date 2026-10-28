@@ -155,3 +155,22 @@ describe("Home and My community pick the same node", () => {
     expect((await loadCommunity("missing")).selectedNode?.id).toBe("node-a");
   });
 });
+
+describe("Home for a member who joined by QR", () => {
+  it("leads with their community, then staking, with no email prompt anywhere", async () => {
+    harness.user = { id: "user-1", name: "", email: "passkey-0a1b2c3d@example.com" };
+    harness.activeOrganizationId = "org-1";
+    harness.organizations = [{ id: "org-1", name: "Example Community", slug: "example" }];
+    harness.nodes = [node("node-a", "Berlin")];
+    renderHome();
+
+    const first = await screen.findByTestId("home-step-open-community");
+    expect(first.textContent).toContain("Open Example Community");
+    const steps = [
+      ...screen.getByTestId("home-next-steps").querySelectorAll("[data-testid^=home-step-]"),
+    ].map((step) => step.getAttribute("data-testid"));
+    expect(steps).toEqual(["home-step-open-community", "home-step-stake"]);
+    expect(screen.getByTestId("home-identity").textContent).not.toMatch(/Add\b/);
+    expect(screen.queryByText(/add your email/i)).toBeNull();
+  });
+});

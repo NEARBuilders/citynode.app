@@ -2,7 +2,6 @@ import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
 export type NextStepId =
   | "save-account"
-  | "add-email"
   | "choose-org"
   | "start-community"
   | "open-community"
@@ -23,11 +22,11 @@ export interface NextStepsState {
   isAnonymous: boolean;
   hasPasskey: boolean;
   hasNear: boolean;
-  hasRealEmail: boolean;
   organizationCount: number;
   activeOrganizationName: string | null;
   community: { name: string; tenantId: string } | null;
   canManageCommunity: boolean;
+  canOrganizeEvents: boolean;
   isAdmin: boolean;
 }
 
@@ -43,15 +42,6 @@ export function getNextSteps(
       title: t("dashboard.saveAccount"),
       description: t("dashboard.passkeyHint"),
       actionLabel: t("common.addPasskey"),
-    });
-  }
-
-  if (!state.isAnonymous && !state.hasRealEmail) {
-    steps.push({
-      id: "add-email",
-      title: t("dashboard.addEmail"),
-      description: t("dashboard.emailHint"),
-      actionLabel: t("dashboard.addEmailAction"),
     });
   }
 
@@ -93,7 +83,7 @@ export function getNextSteps(
       description: t("dashboard.startCommunityHint"),
       actionLabel: t("dashboard.startCommunity"),
     });
-  } else {
+  } else if (state.canManageCommunity || state.canOrganizeEvents || state.isAdmin) {
     steps.push({
       id: "open-community",
       title: t("dashboard.openCommunity"),
@@ -108,6 +98,13 @@ export function getNextSteps(
         actionLabel: t("common.open"),
       });
     }
+  } else {
+    steps.push({
+      id: "open-community",
+      title: t("dashboard.openCommunityNamed", { name: state.community.name }),
+      description: t("dashboard.memberCommunityHint"),
+      actionLabel: t("common.open"),
+    });
   }
 
   steps.push({

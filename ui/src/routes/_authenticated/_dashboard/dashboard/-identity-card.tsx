@@ -1,6 +1,5 @@
 import { CheckCircleIcon, GearSixIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import { pluginPath, type SessionData } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
@@ -11,15 +10,7 @@ function initials(name: string) {
   return (parts.length > 1 ? `${parts[0]?.[0]}${parts[1]?.[0]}` : name.slice(0, 2)).toUpperCase();
 }
 
-function MethodRow({
-  label,
-  value,
-  action,
-}: {
-  label: string;
-  value: string | null;
-  action?: ReactNode;
-}) {
+function MethodRow({ label, value }: { label: string; value: string | null }) {
   const translate = useAppTranslation();
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
@@ -29,8 +20,6 @@ function MethodRow({
           <CheckCircleIcon className="size-4 shrink-0 text-success" />
           <span className="truncate">{value}</span>
         </span>
-      ) : action ? (
-        action
       ) : (
         <span className="text-sm text-muted-foreground">{translate("dashboard.notAdded")}</span>
       )}
@@ -42,12 +31,10 @@ export function IdentityCard({
   user,
   nearAccountId,
   passkeyCount,
-  onAddEmail,
 }: {
   user: SessionData["user"];
   nearAccountId: string | null;
   passkeyCount: number;
-  onAddEmail?: () => void;
 }) {
   const translate = useAppTranslation();
   const name = user.name || nearAccountId || translate("lifecycle.you");
@@ -80,22 +67,7 @@ export function IdentityCard({
           }
         />
         <MethodRow label={translate("dashboard.nearWallet")} value={nearAccountId} />
-        <MethodRow
-          label={translate("common.email")}
-          value={realEmail}
-          action={
-            !user.isAnonymous && onAddEmail ? (
-              <Button
-                variant="link"
-                size="xs"
-                onClick={onAddEmail}
-                data-testid="home-identity-add-email"
-              >
-                {translate("common.add")}
-              </Button>
-            ) : undefined
-          }
-        />
+        <MethodRow label={translate("common.email")} value={realEmail} />
       </div>
       <Button
         variant="outline"
