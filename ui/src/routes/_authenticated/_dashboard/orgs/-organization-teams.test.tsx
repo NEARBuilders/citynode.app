@@ -209,4 +209,22 @@ describe("useOrganizationTeams", () => {
     hook.unmount();
     hook.queryClient.clear();
   });
+
+  it("loads no teams or memberships while teams are disabled for the viewer", async () => {
+    const listTeams = vi.fn().mockResolvedValue([]);
+    const listTeamMembers = vi.fn().mockResolvedValue([]);
+    mocks.apiClient = { auth: { listTeams, listTeamMembers } } as unknown as ApiClient;
+    mocks.auth = { getSession: vi.fn() } as unknown as AuthClient;
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const hook = renderHook(() => useOrganizationTeams("org-1", true, false), { wrapper });
+    await act(async () => {});
+    expect(hook.result.current.teams).toEqual([]);
+    expect(listTeams).not.toHaveBeenCalled();
+    expect(listTeamMembers).not.toHaveBeenCalled();
+    hook.unmount();
+    queryClient.clear();
+  });
 });

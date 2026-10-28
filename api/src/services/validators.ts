@@ -62,6 +62,7 @@ export interface ValidatorsService {
     nodeId: string,
   ): ValidatorEffect<{ validators: ValidatorRecord[]; sourceNodeId: string }>;
   resolveByAccountId(accountId: string): ValidatorEffect<ValidatorRecord | null>;
+  stakeableNodeIds(nodeIds: string[]): ValidatorEffect<Set<string>>;
 }
 
 export class ValidatorsTag extends Context.Service<ValidatorsTag, ValidatorsService>()(
@@ -114,6 +115,43 @@ function ancestorIdsQuery(nodeId: string) {
       WHERE NOT (n.id = ANY(ancestors.path))
     )
     SELECT id FROM ancestors ORDER BY depth
+  `;
+}
+
+function stakeableIdsQuery(nodeIds: string[]) {
+  const ids = sql.join(
+    nodeIds.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  );
+  return sql`
+    WITH RECURSIVE descendants AS (
+      SELECT id AS root, id, ARRAY[id] AS path
+      FROM nodes
+      WHERE id IN (${ids})
+      UNION ALL
+      SELECT descendants.root, n.id, descendants.path || n.id
+      FROM nodes n
+      INNER JOIN descendants ON n.parent_id = descendants.id
+      WHERE NOT (n.id = ANY(descendants.path))
+    ),
+    ancestors AS (
+      SELECT id AS root, id, parent_id, ARRAY[id] AS path
+      FROM nodes
+      WHERE id IN (${ids})
+      UNION ALL
+      SELECT ancestors.root, n.id, n.parent_id, ancestors.path || n.id
+      FROM nodes n
+      INNER JOIN ancestors ON n.id = ancestors.parent_id
+      WHERE NOT (n.id = ANY(ancestors.path))
+    ),
+    related AS (
+      SELECT root, id FROM descendants
+      UNION
+      SELECT root, id FROM ancestors
+    )
+    SELECT DISTINCT related.root AS id
+    FROM related
+    INNER JOIN validators v ON v.node_id = related.id
   `;
 }
 
@@ -380,6 +418,13 @@ export const ValidatorsLive = Layer.effect(
           );
           return row ? toRecord(row) : null;
         }),
+
+      stakeableNodeIds: (nodeIds) =>
+        nodeIds.length === 0
+          ? Effect.succeed(new Set<string>())
+          : query(() => readIds(db, stakeableIdsQuery(nodeIds))).pipe(
+              Effect.map((ids) => new Set(ids)),
+            ),
     };
 
     return service;

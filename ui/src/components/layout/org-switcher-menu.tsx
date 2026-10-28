@@ -1,4 +1,4 @@
-import { BuildingsIcon, CheckIcon, PlusIcon } from "@phosphor-icons/react";
+import { BuildingsIcon, CheckIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import {
   DropdownMenuContent,
@@ -79,10 +79,6 @@ export function OrgSwitcherMenuContent({
         )}
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
-      <DropdownMenuItem render={<Link to="/orgs/new" />} data-testid="org-switcher-new">
-        <PlusIcon />
-        {translate("org.new")}
-      </DropdownMenuItem>
       <DropdownMenuItem render={<Link to="/orgs" />} data-testid="org-switcher-all">
         <BuildingsIcon />
         {translate("org.all")}

@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { Clock, Context, DateTime, Effect, Layer, Schedule } from "effect";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
@@ -19,12 +19,18 @@ import type {
   DiscoveryActivity,
   DiscoveryMeasurement,
   DiscoveryProfile,
+  StoredDiscoveryProfile,
 } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
 import { resolveTeamAccess } from "../team-access-policy";
-import { type GeocodeService, GeocodeTag, shouldGeocodeProfile } from "./discovery-geocode";
+import {
+  type GeocodeService,
+  GeocodeTag,
+  profilePlace,
+  shouldGeocodeProfile,
+} from "./discovery-geocode";
 import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";
 
@@ -274,6 +280,52 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         })
         .filter((p) => (!input.active || p.active) && (!input.upcoming || p.upcoming))
         .sort((a, b) => a.name.localeCompare(b.name) || a.nodeId.localeCompare(b.nodeId));
+    });
+  }
+
+  function directory(input: {
+    query?: string;
+    region?: string;
+    active?: boolean;
+    upcoming?: boolean;
+  }) {
+    return Effect.gen(function* () {
+      const listed = yield* list(input);
+      if (input.region || input.active || input.upcoming) return listed;
+      const rows = yield* query(() =>
+        db
+          .select({ node: nodes })
+          .from(nodes)
+          .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+          .leftJoin(discoveryProfiles, eq(discoveryProfiles.nodeId, nodes.id))
+          .where(and(eq(tenants.status, "active"), isNull(discoveryProfiles.nodeId))),
+      );
+      const search = input.query?.toLowerCase();
+      const basic = rows
+        .filter(({ node }) => !search || node.name.toLowerCase().includes(search))
+        .map(({ node }) => ({
+          nodeId: node.id,
+          summary: "",
+          location: "",
+          region: "",
+          latitude: null,
+          longitude: null,
+          channels: [],
+          published: false,
+          featured: null,
+          active: false,
+          upcoming: false,
+          activityReason: "Quiet lately",
+          events: [],
+          updates: [],
+          name: node.name,
+          slug: node.slug,
+          parentId: node.parentId,
+          kind: nodeKindOf(node.metadata),
+        }));
+      return [...listed, ...basic].sort(
+        (a, b) => a.name.localeCompare(b.name) || a.nodeId.localeCompare(b.nodeId),
+      );
     });
   }
 
@@ -552,13 +604,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
   });
 
   return {
-    list: (input: {
-      query?: string;
-      region?: string;
-      active?: boolean;
-      upcoming?: boolean;
-      nodeId?: string;
-    }) => list(input),
+    directory,
     lumaCalendars: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
         yield* authorize(nodeId, context, EVENTS_AREA);
@@ -1027,7 +1073,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     saveProfile: (input: DiscoveryProfile, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(input.nodeId, context);
+        const record = yield* authorize(input.nodeId, context);
         const [existing] = yield* query(() =>
           db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, input.nodeId)),
         );
@@ -1036,43 +1082,49 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           input.geocodedLocation !== undefined
             ? input.geocodedLocation
             : (previous?.geocodedLocation ?? null);
-        let next: DiscoveryProfile = {
+        const kind = nodeKindOf(record.node.metadata);
+        const place = profilePlace(input, kind);
+        const missingBoundary = kind === "country" && !previous?.boundary;
+        const stale = shouldGeocodeProfile({
+          location: place,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          geocodedLocation,
+        });
+        let next: StoredDiscoveryProfile = {
           ...input,
           geocodedLocation,
           geocodeHint: null,
+          boundary: previous?.boundary ?? null,
         };
-        if (!next.location.trim()) {
+        if (!place) {
           next = {
             ...next,
             latitude: null,
             longitude: null,
             geocodedLocation: null,
             geocodeHint: null,
+            boundary: null,
           };
-        } else if (
-          shouldGeocodeProfile({
-            location: next.location,
-            latitude: next.latitude,
-            longitude: next.longitude,
-            geocodedLocation,
-          })
-        ) {
-          const geocoded = yield* geocode.geocode(next.location);
+        } else if (stale || missingBoundary) {
+          const geocoded = yield* geocode.geocode(place);
           if (geocoded.ok) {
             next = {
               ...next,
               latitude: geocoded.latitude,
               longitude: geocoded.longitude,
-              geocodedLocation: next.location.trim(),
+              geocodedLocation: place,
               geocodeHint: null,
+              boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
             };
-          } else {
+          } else if (stale) {
             next = {
               ...next,
               latitude: null,
               longitude: null,
               geocodedLocation: null,
               geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
+              boundary: null,
             };
           }
         }

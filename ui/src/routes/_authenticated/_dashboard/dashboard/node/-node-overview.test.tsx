@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Near } from "near-kit";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@/app";
 import { render } from "@/i18n/test-render";
 import type { AuthRequestContext } from "@/lib/auth";
+import { memberDirectoryChannelName } from "@/lib/queries/member-directory";
 import { requireTeamArea } from "@/lib/team-workspace";
 import { Route } from "./index";
 
@@ -18,6 +19,17 @@ const harness = vi.hoisted(() => ({
   nearAccount: null as string | null,
   routeContext: {} as Record<string, unknown>,
   getOnboardingRedemptions: (() => Promise.resolve(null)) as (input: unknown) => Promise<unknown>,
+  memberDirectory: {
+    optedIn: false,
+    directory: (() => Promise.resolve({ count: 0, observedAt: "", members: [] })) as (input: {
+      organizationId: string;
+    }) => Promise<unknown>,
+    nodeCount: (() => Promise.resolve({ count: null, observedAt: null })) as (input: {
+      nodeId: string;
+    }) => Promise<unknown>,
+    setOptIn: null as ((optedIn: boolean) => Promise<unknown>) | null,
+    readOptIn: null as (() => Promise<{ optedIn: boolean }>) | null,
+  },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -25,7 +37,15 @@ vi.mock("@tanstack/react-router", () => ({
     options,
     useRouteContext: () => harness.routeContext,
   }),
-  Link: ({ children }: { children?: ReactNode }) => <a href="/dashboard">{children}</a>,
+  Link: ({
+    children,
+    to,
+    params,
+  }: {
+    children?: ReactNode;
+    to?: string;
+    params?: { accountId?: string };
+  }) => <a href={to === "/$accountId" ? `/${params?.accountId}` : "/dashboard"}>{children}</a>,
   redirect: (options: unknown) => ({ redirect: options }),
 }));
 
@@ -38,6 +58,18 @@ vi.mock("@/app", () => ({
       getOnboardingRedemptions: (input: unknown) => harness.getOnboardingRedemptions(input),
     },
     listDiscoveryActivities: async () => [],
+    getMemberDirectoryOptIn: async () =>
+      harness.memberDirectory.readOptIn
+        ? harness.memberDirectory.readOptIn()
+        : { optedIn: harness.memberDirectory.optedIn },
+    setMemberDirectoryOptIn: async ({ optedIn }: { optedIn: boolean }) => {
+      if (harness.memberDirectory.setOptIn) return harness.memberDirectory.setOptIn(optedIn);
+      harness.memberDirectory.optedIn = optedIn;
+      return { optedIn };
+    },
+    getMemberDirectory: (input: { organizationId: string }) =>
+      harness.memberDirectory.directory(input),
+    getNodeMemberCount: (input: { nodeId: string }) => harness.memberDirectory.nodeCount(input),
   }),
   useAuthClient: () => ({
     near: { getNearClient: () => new Near({ network: "mainnet" }) },
@@ -64,6 +96,12 @@ const clients: QueryClient[] = [];
 
 afterEach(() => {
   cleanup();
+  harness.memberDirectory.optedIn = false;
+  harness.memberDirectory.directory = () =>
+    Promise.resolve({ count: 0, observedAt: "", members: [] });
+  harness.memberDirectory.nodeCount = () => Promise.resolve({ count: null, observedAt: null });
+  harness.memberDirectory.setOptIn = null;
+  harness.memberDirectory.readOptIn = null;
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
 });
@@ -355,5 +393,176 @@ describe("node overview code redemptions", () => {
     await screen.findByTestId("node-validators");
     for (const testId of stats) expect(screen.queryByTestId(testId)).toBeNull();
     expect(requested).toEqual([]);
+  });
+});
+
+describe("node overview member directory", () => {
+  const observedAt = "2026-10-20T10:00:00.000Z";
+  const longName = "Alexandria Catherine Montgomery-Wellington of the Greater Chicago Area";
+
+  function directoryWith(members: unknown[], count = 3) {
+    const requested: string[] = [];
+    harness.memberDirectory.directory = async ({ organizationId }) => {
+      requested.push(organizationId);
+      return {
+        count,
+        observedAt,
+        members: harness.memberDirectory.optedIn
+          ? [...members, { userId: "self", name: "Me Myself", accountId: "me.near" }]
+          : members,
+      };
+    };
+    return requested;
+  }
+
+  it("keeps the toggle off by default and says it applies to every community", async () => {
+    stubChain();
+    directoryWith([]);
+    renderOverview({ nearAccount: null });
+    const toggle = await screen.findByTestId("dashboard-node.member-opt-in");
+    await waitFor(() => expect(toggle.getAttribute("aria-disabled")).not.toBe("true"));
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText("Show my name to my communities")).toBeTruthy();
+    expect(
+      screen.getByText("Applies to every community you belong to. Your email is never shown."),
+    ).toBeTruthy();
+  });
+
+  it("shows the member count and only the names members chose to share", async () => {
+    stubChain();
+    const requested = directoryWith([
+      { userId: "alice", name: "Alice", accountId: "alice.near" },
+      { userId: "bob", name: "Bob", accountId: null },
+      { userId: "blank", name: null, accountId: null },
+    ]);
+    renderOverview({ nearAccount: null });
+    expect((await screen.findByTestId("dashboard-node.member-count-value")).textContent).toBe("3");
+    const names = screen.getAllByTestId("dashboard-node.member").map((item) => item.textContent);
+    expect(names).toEqual(["Alice", "Bob", "Unnamed member"]);
+    expect(screen.getByRole("link", { name: "Alice" }).getAttribute("href")).toBe("/alice.near");
+    expect(screen.queryByRole("link", { name: "Bob" })).toBeNull();
+    expect(screen.queryByText(/@/)).toBeNull();
+    expect(requested).toEqual(["org-1"]);
+  });
+
+  it("wraps long names inside a 375px screen instead of overflowing", async () => {
+    stubChain();
+    directoryWith([{ userId: "long", name: longName, accountId: null }]);
+    renderOverview({ nearAccount: null });
+    const item = await screen.findByTestId("dashboard-node.member");
+    expect(item.textContent).toBe(longName);
+    expect(item.className).toContain("break-words");
+    expect(item.className).toContain("min-w-0");
+    expect(screen.getByTestId("dashboard-node.member-list").className).toContain("min-w-0");
+  });
+
+  it("reloads my own view once when I change the toggle", async () => {
+    stubChain();
+    const requested = directoryWith([]);
+    renderOverview({ nearAccount: null });
+    expect(await screen.findByTestId("dashboard-node.members-empty")).toBeTruthy();
+    const toggle = screen.getByTestId("dashboard-node.member-opt-in");
+    await waitFor(() => expect(toggle.getAttribute("aria-disabled")).not.toBe("true"));
+    await act(async () => fireEvent.click(toggle));
+    expect(await screen.findByRole("link", { name: "Me Myself" })).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(requested).toEqual(["org-1", "org-1"]);
+  });
+
+  it("adds my name when I turn the toggle on and removes it when I turn it off", async () => {
+    stubChain();
+    directoryWith([]);
+    renderOverview({ nearAccount: null });
+    expect(await screen.findByTestId("dashboard-node.members-empty")).toBeTruthy();
+    const toggle = screen.getByTestId("dashboard-node.member-opt-in");
+    await waitFor(() => expect(toggle.getAttribute("aria-disabled")).not.toBe("true"));
+    await act(async () => fireEvent.click(toggle));
+    expect((await screen.findByRole("link", { name: "Me Myself" })).getAttribute("href")).toBe(
+      "/me.near",
+    );
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    await waitFor(() => expect(toggle.getAttribute("aria-disabled")).not.toBe("true"));
+    await act(async () => fireEvent.click(toggle));
+    expect(await screen.findByTestId("dashboard-node.members-empty")).toBeTruthy();
+    expect(screen.queryByText("Me Myself")).toBeNull();
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("refreshes a second open view's names after I opt out elsewhere, not on every focus", async () => {
+    stubChain();
+    harness.memberDirectory.optedIn = true;
+    const requested = directoryWith([]);
+    renderOverview({ nearAccount: null });
+    expect(await screen.findByText("Me Myself")).toBeTruthy();
+    await act(async () => {
+      window.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(requested).toEqual(["org-1"]);
+    harness.memberDirectory.optedIn = false;
+    const otherView = new BroadcastChannel(memberDirectoryChannelName);
+    otherView.postMessage("changed");
+    otherView.close();
+    await waitFor(() => expect(screen.queryByText("Me Myself")).toBeNull());
+  });
+
+  it("explains a failed setting read and lets me retry it", async () => {
+    stubChain();
+    directoryWith([]);
+    const readOptIn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("unavailable"))
+      .mockResolvedValue({ optedIn: true });
+    harness.memberDirectory.readOptIn = readOptIn;
+    renderOverview({ nearAccount: null });
+    expect(
+      (await screen.findByTestId("dashboard-node.member-opt-in-load-error")).textContent,
+    ).toContain("Couldn't load your name setting.");
+    const toggle = screen.getByTestId("dashboard-node.member-opt-in");
+    expect(toggle.getAttribute("aria-disabled")).toBe("true");
+    await act(async () =>
+      fireEvent.click(screen.getByTestId("dashboard-node.member-opt-in-retry")),
+    );
+    await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("true"));
+    expect(toggle.getAttribute("aria-disabled")).not.toBe("true");
+    expect(screen.queryByTestId("dashboard-node.member-opt-in-load-error")).toBeNull();
+    expect(readOptIn).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps my setting and explains the failure when saving it fails", async () => {
+    stubChain();
+    directoryWith([]);
+    harness.memberDirectory.setOptIn = () => Promise.reject(new Error("unavailable"));
+    renderOverview({ nearAccount: null });
+    const toggle = await screen.findByTestId("dashboard-node.member-opt-in");
+    await waitFor(() => expect(toggle.getAttribute("aria-disabled")).not.toBe("true"));
+    await act(async () => fireEvent.click(toggle));
+    expect((await screen.findByTestId("dashboard-node.member-opt-in-error")).textContent).toBe(
+      "Couldn't update your name setting. Try again.",
+    );
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("falls back to the last observed count when the live list fails", async () => {
+    stubChain();
+    harness.memberDirectory.directory = () => Promise.reject(new Error("unavailable"));
+    harness.memberDirectory.nodeCount = async () => ({ count: 7, observedAt });
+    renderOverview({ nearAccount: null });
+    expect((await screen.findByTestId("dashboard-node.member-count-value")).textContent).toBe("7");
+    expect(screen.getByTestId("dashboard-node.member-count-observed").textContent).toContain(
+      "Last updated",
+    );
+    expect(screen.getByTestId("dashboard-node.members-error").textContent).toBe(
+      "Couldn't load the member list.",
+    );
+  });
+
+  it("says the count is not available when nothing was ever observed", async () => {
+    stubChain();
+    harness.memberDirectory.directory = () => Promise.reject(new Error("unavailable"));
+    renderOverview({ nearAccount: null });
+    expect((await screen.findByTestId("dashboard-node.member-count-unavailable")).textContent).toBe(
+      "Not available",
+    );
   });
 });

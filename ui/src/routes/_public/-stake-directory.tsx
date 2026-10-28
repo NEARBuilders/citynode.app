@@ -14,6 +14,7 @@ type DirectoryNode = {
   name: string;
   slug: string;
   hostname: string | null;
+  stakeable: boolean;
 };
 
 export function StakeDirectory({
@@ -70,6 +71,11 @@ export function StakeDirectory({
               </ItemDescription>
             </ItemContent>
             <ItemActions>
+              {!node.stakeable && (
+                <Badge variant="outline" data-testid={`stake.no-validator-${node.slug}`}>
+                  {translate("stake.noValidatorBadge")}
+                </Badge>
+              )}
               <Badge variant="secondary">
                 <span className="capitalize">{nodeKindLabel(node.kind, undefined, translate)}</span>
               </Badge>

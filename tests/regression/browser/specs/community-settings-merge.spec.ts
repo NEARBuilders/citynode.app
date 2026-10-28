@@ -105,11 +105,10 @@ test.describe("community settings merge", () => {
 
     await memberPage.goto(`/orgs/${unique}?tab=homepage`, { waitUntil: "domcontentloaded" });
     await waitForApp(memberPage);
-    await expect(memberPage.getByTestId("orgs-tab-members")).toHaveAttribute(
-      "aria-selected",
-      "true",
-      { timeout: 15000 },
-    );
+    await expect(memberPage.getByTestId("org-badges")).toBeVisible({ timeout: 15000 });
+    await expect(memberPage.getByTestId("orgs-tabs-loading")).toHaveCount(0, { timeout: 15000 });
+    await expect(memberPage.getByRole("tablist")).toHaveCount(0);
+    await expect(memberPage.getByTestId("orgs-tab-members")).toHaveCount(0);
     expect(new URL(memberPage.url()).pathname).toBe(`/orgs/${unique}`);
     await expect(memberPage.getByTestId("org-community-settings")).toHaveCount(0);
 
