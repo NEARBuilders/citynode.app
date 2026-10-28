@@ -8,13 +8,16 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import { Bulletin, Button, LocalDate, NodeValidatorTable, SectionHeader } from "@/components";
+import { AttendanceRecord } from "@/components/attendance-record";
 import { CommunityMapStatus } from "@/components/discovery/community-map-status";
+import { CommunityChannels, CommunityUpdates } from "@/components/discovery/community-updates";
 import {
   EventDate,
   OpenEventStationButton,
   upcomingEvents,
 } from "@/components/discovery/event-onboarding";
 import {
+  discoveryNodeQueryOptions,
   EventVisibilityBadge,
   ImportsWaiting,
   useVisibilityContext,
@@ -115,6 +118,7 @@ function NodeOverview() {
     enabled: !!nodeId,
     retry: false,
   });
+  const listing = useQuery(discoveryNodeQueryOptions(apiClient, nodeId));
   const visibilityContext = useVisibilityContext(nodeId);
   const { now } = visibilityContext;
   const redemptions = useQuery({
@@ -154,9 +158,35 @@ function NodeOverview() {
   ).length;
 
   const bulletin = selectedNode.metadata?.bulletin;
+  const updates = listing.data?.updates ?? [];
+  const channels = listing.data?.channels ?? [];
+  const introLinks = [
+    { hash: "coming-up", label: translate("dashboard.comingUp") },
+    ...(updates.length > 0
+      ? [{ hash: "updates", label: translate("explore.detail.updates") }]
+      : []),
+    ...(orgId ? [{ hash: "people", label: translate("members.title") }] : []),
+  ];
 
   return (
     <div className="flex flex-col gap-12">
+      <p className="text-sm text-muted-foreground" data-testid="dashboard-node.member-intro">
+        {translate("dashboard.memberIntro")}{" "}
+        {introLinks.map((link, index) => (
+          <span key={link.hash}>
+            {index > 0 && " · "}
+            <Link
+              to="/dashboard/node"
+              search={{ nodeId: selectedNode.id }}
+              hash={link.hash}
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+              data-testid={`dashboard-node.member-intro-${link.hash}`}
+            >
+              {link.label}
+            </Link>
+          </span>
+        ))}
+      </p>
       <CommunityMapStatus
         nodeId={selectedNode.id}
         tenantStatus={tenant?.status}
@@ -221,7 +251,19 @@ function NodeOverview() {
         )}
       </div>
 
-      {orgId && <MemberDirectory organizationId={orgId} nodeId={selectedNode.id} />}
+      {orgId && (
+        <div id="people" className="scroll-mt-20">
+          <MemberDirectory organizationId={orgId} nodeId={selectedNode.id} />
+        </div>
+      )}
+
+      {orgId && (
+        <AttendanceRecord
+          organizationId={orgId}
+          reconcile={!!canOrganize}
+          testId="dashboard-node.attendance"
+        />
+      )}
 
       {canManage && (
         <OwnerActions
@@ -263,7 +305,7 @@ function NodeOverview() {
         </Item>
       )}
 
-      <section className="flex flex-col gap-6">
+      <section id="coming-up" className="flex scroll-mt-20 flex-col gap-6">
         <SectionHeader
           title={translate("dashboard.comingUp")}
           action={
@@ -328,6 +370,16 @@ function NodeOverview() {
           </ItemGroup>
         )}
       </section>
+
+      <CommunityUpdates
+        updates={updates}
+        nodeId={selectedNode.id}
+        layout="page"
+        id="updates"
+        testId="dashboard-node.updates"
+      />
+
+      <CommunityChannels channels={channels} layout="page" testId="dashboard-node.channels" />
 
       {showTeamStake && (
         <div id="payouts" className="scroll-mt-20">

@@ -1053,6 +1053,41 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         );
         return row ?? null;
       }),
+    organizationEvents: (organizationIds: string[]) =>
+      Effect.gen(function* () {
+        const byOrganization = new Map<
+          string,
+          {
+            communityName: string | null;
+            events: Array<{ id: string; title: string; startsAt: string | null }>;
+          }
+        >(organizationIds.map((id) => [id, { communityName: null, events: [] }]));
+        if (organizationIds.length === 0) return byOrganization;
+        const rows = yield* query(() =>
+          db
+            .select({
+              organizationId: tenants.orgId,
+              communityName: tenants.name,
+              event: discoveryActivities.data,
+            })
+            .from(tenants)
+            .leftJoin(nodes, eq(nodes.tenantId, tenants.id))
+            .leftJoin(discoveryActivities, eq(discoveryActivities.ownerNodeId, nodes.id))
+            .where(inArray(tenants.orgId, organizationIds)),
+        );
+        for (const row of rows) {
+          const entry = row.organizationId ? byOrganization.get(row.organizationId) : undefined;
+          if (!entry) continue;
+          entry.communityName ??= row.communityName;
+          if (row.event?.kind !== "event") continue;
+          entry.events.push({
+            id: row.event.id,
+            title: row.event.title,
+            startsAt: row.event.startsAt,
+          });
+        }
+        return byOrganization;
+      }),
     activity: (id: string) =>
       Effect.gen(function* () {
         yield* Effect.forkDetach(syncDueLuma);

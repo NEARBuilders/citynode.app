@@ -2,7 +2,6 @@ import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
 export type NextStepId =
   | "save-account"
-  | "add-email"
   | "choose-org"
   | "start-community"
   | "open-community"
@@ -23,11 +22,11 @@ export interface NextStepsState {
   isAnonymous: boolean;
   hasPasskey: boolean;
   hasNear: boolean;
-  hasRealEmail: boolean;
-  organizationCount: number;
-  activeOrganizationName: string | null;
+  membership: "unknown" | "none" | "open" | "choose" | "active";
+  communityCount: number;
   community: { name: string; tenantId: string } | null;
   canManageCommunity: boolean;
+  canOrganizeEvents: boolean;
   isAdmin: boolean;
 }
 
@@ -46,15 +45,6 @@ export function getNextSteps(
     });
   }
 
-  if (!state.isAnonymous && !state.hasRealEmail) {
-    steps.push({
-      id: "add-email",
-      title: t("dashboard.addEmail"),
-      description: t("dashboard.emailHint"),
-      actionLabel: t("dashboard.addEmailAction"),
-    });
-  }
-
   if (state.isAdmin) {
     steps.push({
       id: "launch-node",
@@ -70,7 +60,7 @@ export function getNextSteps(
     });
   }
 
-  if (state.organizationCount === 0) {
+  if (state.membership === "none") {
     if (!state.isAdmin) {
       steps.push({
         id: "start-community",
@@ -79,35 +69,15 @@ export function getNextSteps(
         actionLabel: t("dashboard.startCommunity"),
       });
     }
-  } else if (!state.activeOrganizationName) {
+  } else if (state.membership === "choose") {
     steps.push({
       id: "choose-org",
-      title: t("dashboard.chooseOrg"),
-      description: t("dashboard.orgCount", { count: state.organizationCount }),
+      title: t("dashboard.chooseCommunity"),
+      description: t("dashboard.communityCount", { count: state.communityCount }),
       actionLabel: t("common.choose"),
     });
-  } else if (!state.community) {
-    steps.push({
-      id: "start-community",
-      title: t("dashboard.startCommunity"),
-      description: t("dashboard.startCommunityHint"),
-      actionLabel: t("dashboard.startCommunity"),
-    });
-  } else {
-    steps.push({
-      id: "open-community",
-      title: t("dashboard.openCommunity"),
-      description: t("dashboard.communityTasks", { name: state.community.name }),
-      actionLabel: t("common.open"),
-    });
-    if (state.canManageCommunity) {
-      steps.push({
-        id: "payouts",
-        title: t("ownerActions.payouts"),
-        description: t("ownerActions.payoutsHint"),
-        actionLabel: t("common.open"),
-      });
-    }
+  } else if (state.membership !== "unknown") {
+    steps.push(...communitySteps(state, t));
   }
 
   steps.push({
@@ -127,6 +97,47 @@ export function getNextSteps(
   }
 
   return steps;
+}
+
+function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
+  if (!state.community) {
+    return [
+      {
+        id: "start-community",
+        title: t("dashboard.startCommunity"),
+        description: t("dashboard.startCommunityHint"),
+        actionLabel: t("dashboard.startCommunity"),
+      },
+    ];
+  }
+  if (state.canManageCommunity || state.canOrganizeEvents || state.isAdmin) {
+    return [
+      {
+        id: "open-community",
+        title: t("dashboard.openCommunity"),
+        description: t("dashboard.communityTasks", { name: state.community.name }),
+        actionLabel: t("common.open"),
+      },
+      ...(state.canManageCommunity
+        ? [
+            {
+              id: "payouts" as const,
+              title: t("ownerActions.payouts"),
+              description: t("ownerActions.payoutsHint"),
+              actionLabel: t("common.open"),
+            },
+          ]
+        : []),
+    ];
+  }
+  return [
+    {
+      id: "open-community",
+      title: t("dashboard.openCommunityNamed", { name: state.community.name }),
+      description: t("dashboard.memberCommunityHint"),
+      actionLabel: t("common.open"),
+    },
+  ];
 }
 
 export type NodeSetupStepId = "map" | "profile" | "event" | "qr";

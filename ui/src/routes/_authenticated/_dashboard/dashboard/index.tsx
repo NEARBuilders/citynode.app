@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import {
   type Passkey,
   type SessionData,
@@ -9,24 +7,19 @@ import {
   useApiClient,
   useAuthClient,
 } from "@/app";
-import {
-  AddEmailDialog,
-  Bulletin,
-  PageContainer,
-  PageHeader,
-  SectionHeader,
-  Skeleton,
-} from "@/components";
+import { Bulletin, Button, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
+import { AttendanceRecord } from "@/components/attendance-record";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
+import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
-import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
+import { selectCommunityNode } from "@/lib/community-node";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
+import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
-import { isSyntheticEmail } from "@/lib/synthetic-email";
-import { canManageCommunity } from "@/lib/team-workspace";
+import { canManageCommunity, canOrganizeEvents } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
@@ -98,7 +91,17 @@ function Home() {
     },
     staleTime: 30 * 1000,
   });
-  const tenant = useQuery(tenantByOrgQueryOptions(apiClient, activeOrgId));
+  const user = session?.user;
+  const membership = resolveCommunityMembership({
+    organizations: organizations.data,
+    activeOrganizationId: activeOrgId,
+    userId: user?.id,
+    refreshing: organizations.isFetching,
+    isAdmin: user?.role === "admin",
+  });
+  const communityOrgId =
+    membership.status === "unknown" ? activeOrgId : (communityOrganizationId(membership) ?? "");
+  const tenant = useQuery(tenantByOrgQueryOptions(apiClient, communityOrgId));
   const nodes = useQuery({
     ...tenantNodesQueryOptions(apiClient, tenant.data?.id ?? ""),
     enabled: !!tenant.data?.id,
@@ -110,9 +113,8 @@ function Home() {
     staleTime: 30 * 1000,
   });
 
-  const user = session?.user;
   const canManage = user?.role === "admin" || canManageCommunity(authContext.data);
-  const node = nodes.data?.[0] ?? null;
+  const node = selectCommunityNode(nodes.data ?? []);
   const nodeId = node?.id ?? "";
   const profile = useQuery({
     ...discoveryProfileQueryOptions(apiClient, nodeId),
@@ -134,24 +136,24 @@ function Home() {
   const bulletin = node?.metadata?.bulletin;
 
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
-  const orgs = organizations.data ?? [];
-  const activeOrg = orgs.find((org) => org.id === activeOrgId) ?? null;
   const isAdmin = user?.role === "admin";
   const community = tenant.data ? { name: tenant.data.name, tenantId: tenant.data.id } : null;
   const loading =
-    !user || organizations.isPending || (!!activeOrgId && tenant.isPending) || passkeys.isPending;
+    !user ||
+    organizations.isPending ||
+    (!!communityOrgId && tenant.isPending) ||
+    passkeys.isPending;
 
-  const hasRealEmail = !isSyntheticEmail(user?.email);
   const steps = getNextSteps(
     {
       isAnonymous: user?.isAnonymous ?? false,
       hasPasskey: (passkeys.data?.length ?? 0) > 0,
       hasNear: !!nearAccountId,
-      hasRealEmail,
-      organizationCount: orgs.length,
-      activeOrganizationName: activeOrg?.name ?? null,
+      membership: membership.status === "unknown" && community ? "active" : membership.status,
+      communityCount: membership.status === "choose" ? membership.count : 0,
       community,
       canManageCommunity: canManage,
+      canOrganizeEvents: canOrganizeEvents(authContext.data),
       isAdmin,
     },
     translate,
@@ -166,20 +168,6 @@ function Home() {
         })
       : null;
   const showSetup = !!setupSteps && setupSteps.some((step) => !step.done);
-
-  const [addEmailOpen, setAddEmailOpen] = useState(false);
-
-  useEffect(() => {
-    if (loading || !user || user.isAnonymous || hasRealEmail) return;
-    if (!consumeAddEmailPromptPending()) return;
-    toast.info(translate("dashboard.addEmailHint"), {
-      duration: Infinity,
-      action: {
-        label: translate("dashboard.addEmailAction"),
-        onClick: () => setAddEmailOpen(true),
-      },
-    });
-  }, [loading, user, hasRealEmail]);
 
   const firstName = user?.isAnonymous ? null : user?.name?.split(" ")[0];
 
@@ -221,13 +209,29 @@ function Home() {
                 <Skeleton className="h-16 w-full rounded-2xl" />
               </div>
             ) : (
-              <NextStepsList
-                steps={steps}
-                primary={pending.length === 0 && !showSetup}
-                onAddEmail={() => setAddEmailOpen(true)}
-              />
+              <>
+                {organizations.isError && !organizations.data && (
+                  <Item variant="outline" data-testid="home-organizations-error">
+                    <ItemContent className="min-w-0">
+                      <ItemTitle>{translate("org.loadFailed")}</ItemTitle>
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void organizations.refetch()}
+                        data-testid="home-organizations-retry"
+                      >
+                        {translate("common.retry")}
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                )}
+                <NextStepsList steps={steps} primary={pending.length === 0 && !showSetup} />
+              </>
             )}
           </section>
+          <AttendanceRecord testId="home.attendance" />
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
           {user ? (
@@ -235,14 +239,12 @@ function Home() {
               user={user}
               nearAccountId={nearAccountId}
               passkeyCount={passkeys.data?.length ?? 0}
-              onAddEmail={() => setAddEmailOpen(true)}
             />
           ) : (
             <Skeleton className="h-56 w-full rounded-2xl" />
           )}
         </aside>
       </div>
-      <AddEmailDialog open={addEmailOpen} onOpenChange={setAddEmailOpen} />
     </PageContainer>
   );
 }

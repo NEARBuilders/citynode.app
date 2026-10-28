@@ -10,27 +10,27 @@ import {
 } from "./catalogs";
 
 describe("app message catalogs", () => {
-  it("uses singular and plural organization and passkey counts on the dashboard", () => {
+  it("uses singular and plural community and passkey counts on the dashboard", () => {
     const en = setupI18n({ locale: "en", messages: { en: getAppMessages("en") } });
     const es = setupI18n({ locale: "es", messages: { es: getAppMessages("es") } });
     const fr = setupI18n({ locale: "fr", messages: { fr: getAppMessages("fr") } });
-    expect(en._("dashboard.orgCount", { count: 1 })).toBe(
-      "You belong to 1 organization. Pick one to work in.",
+    expect(en._("dashboard.communityCount", { count: 1 })).toBe(
+      "You belong to 1 community. Pick the one to open.",
     );
-    expect(en._("dashboard.orgCount", { count: 2 })).toBe(
-      "You belong to 2 organizations. Pick one to work in.",
+    expect(en._("dashboard.communityCount", { count: 2 })).toBe(
+      "You belong to 2 communities. Pick the one to open.",
     );
-    expect(es._("dashboard.orgCount", { count: 1 })).toBe(
-      "Perteneces a 1 organización. Elige una para trabajar.",
+    expect(es._("dashboard.communityCount", { count: 1 })).toBe(
+      "Perteneces a 1 comunidad. Elige cuál abrir.",
     );
-    expect(es._("dashboard.orgCount", { count: 2 })).toBe(
-      "Perteneces a 2 organizaciones. Elige una para trabajar.",
+    expect(es._("dashboard.communityCount", { count: 2 })).toBe(
+      "Perteneces a 2 comunidades. Elige cuál abrir.",
     );
-    expect(fr._("dashboard.orgCount", { count: 1 })).toBe(
-      "Vous faites partie de 1 organisation. Choisissez-en une pour travailler.",
+    expect(fr._("dashboard.communityCount", { count: 1 })).toBe(
+      "Vous faites partie de 1 communauté. Choisissez celle à ouvrir.",
     );
-    expect(fr._("dashboard.orgCount", { count: 2 })).toBe(
-      "Vous faites partie de 2 organisations. Choisissez-en une pour travailler.",
+    expect(fr._("dashboard.communityCount", { count: 2 })).toBe(
+      "Vous faites partie de 2 communautés. Choisissez celle à ouvrir.",
     );
     expect(es._("dashboard.passkeysAdded", { count: 1 })).toBe("1 añadida");
     expect(es._("dashboard.passkeysAdded", { count: 2 })).toBe("2 añadidas");
