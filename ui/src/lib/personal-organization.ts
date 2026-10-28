@@ -53,16 +53,17 @@ export function resolveCommunityMembership<T extends OrganizationLike>({
     (organization) => organization.id === activeOrganizationId && isOpenable(organization),
   );
   if (active) return { status: "active", organization: active };
-  if (visible.length === 0) return { status: "none" };
+  const openable = visible.filter(isOpenable);
+  if (openable.length === 0) return { status: "none" };
   const activeIsPersonal = organizations.some(
     (organization) =>
       organization.id === activeOrganizationId && isPersonalOrganization(organization, userId),
   );
-  const [only] = visible;
-  if (!activeIsPersonal && visible.length === 1 && only && isOpenable(only)) {
+  const [only] = openable;
+  if (!activeIsPersonal && openable.length === 1 && only) {
     return { status: "open", organization: only };
   }
-  return { status: "choose", count: visible.length };
+  return { status: "choose", count: openable.length };
 }
 
 export function communityOrganizationId(

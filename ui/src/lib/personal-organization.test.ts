@@ -86,12 +86,24 @@ describe("resolveCommunityMembership", () => {
     });
   });
 
-  it("never treats a pending request as an active or openable community", () => {
-    expect(resolve([personal, pending], pending.id)).toEqual({
+  it("never treats a pending or rejected request as a community", () => {
+    const rejected: Org = {
+      id: "org-rejected",
+      slug: "rejected",
+      status: "rejected",
+      metadata: {},
+    };
+    expect(resolve([personal, pending], pending.id)).toEqual({ status: "none" });
+    expect(resolve([personal, rejected], personal.id)).toEqual({ status: "none" });
+    expect(resolve([pending, rejected], null)).toEqual({ status: "none" });
+    expect(resolve([personal, pending, harbor], null)).toEqual({
+      status: "open",
+      organization: harbor,
+    });
+    expect(resolve([personal, pending, harbor], personal.id)).toEqual({
       status: "choose",
       count: 1,
     });
-    expect(resolve([pending], null)).toEqual({ status: "choose", count: 1 });
   });
 
   it("gives the organization to load a community from", () => {
