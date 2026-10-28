@@ -18,11 +18,16 @@ type ApplyApiClient = {
   listChildren: ReturnType<typeof vi.fn>;
   getNode: ReturnType<typeof vi.fn>;
   bindingPreflight: ReturnType<typeof vi.fn>;
-  auth: { checkSlug: ReturnType<typeof vi.fn> };
+  auth: {
+    checkSlug: ReturnType<typeof vi.fn>;
+    listOrganizations: ReturnType<typeof vi.fn>;
+    listMembers: ReturnType<typeof vi.fn>;
+  };
   proposals: { propose: ReturnType<typeof vi.fn>; getMyNodeApplications: ReturnType<typeof vi.fn> };
 };
 
 type ApplyAuthClient = {
+  getSession: ReturnType<typeof vi.fn>;
   organization: { list: ReturnType<typeof vi.fn> };
 };
 
@@ -54,7 +59,7 @@ const harness = vi.hoisted(() => ({
   },
   daoAccountIdForVerification: "dao.sputnik",
   nearAccount: "applicant.near" as string | null,
-  search: {} as { application?: string },
+  search: {} as { application?: string; org?: string },
   initialRootNodes: [{ id: "country-1", name: "United States", kind: "country" }],
   routeContext: {
     auth: { activeOrganizationId: "org-1" as string | null },
@@ -132,7 +137,15 @@ function createApiClient(): ApplyApiClient {
     bindingPreflight: vi.fn().mockResolvedValue({
       hostname: { available: true, format: "valid" },
     }),
-    auth: { checkSlug: vi.fn().mockResolvedValue({ status: true }) },
+    auth: {
+      checkSlug: vi.fn().mockResolvedValue({ status: true }),
+      listOrganizations: vi
+        .fn()
+        .mockResolvedValue([
+          { id: "org-1", name: "CityNode", slug: "citynode", status: "active", metadata: null },
+        ]),
+      listMembers: vi.fn().mockResolvedValue({ members: [{ userId: "user-1", role: "owner" }] }),
+    },
     proposals: {
       propose: vi.fn().mockResolvedValue({ data: { id: "proposal-1" } }),
       getMyNodeApplications: vi.fn().mockResolvedValue({ data: [] }),
@@ -142,6 +155,10 @@ function createApiClient(): ApplyApiClient {
 
 function createAuthClient(): ApplyAuthClient {
   return {
+    getSession: vi.fn().mockResolvedValue({
+      data: { user: { id: "user-1" }, session: { activeOrganizationId: "org-1" } },
+      error: null,
+    }),
     organization: {
       list: vi.fn().mockResolvedValue({
         data: [{ id: "org-1", name: "CityNode" }],
@@ -578,6 +595,101 @@ describe("apply route submission", () => {
       slug: "chicago",
       orgId: "legacy-org",
     });
+  });
+
+  function malaysiaOrganization() {
+    harness.apiClient?.auth.listOrganizations.mockResolvedValue([
+      { id: "org-malaysia", name: "Malaysia", slug: "malaysia", status: "active", metadata: null },
+    ]);
+    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: false });
+  }
+
+  async function fillMalaysiaApplication() {
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Malaysia" } });
+    fireEvent.change(screen.getByLabelText("Why you want to run it"), {
+      target: { value: "Serve the local community." },
+    });
+  }
+
+  it("links the applicant's own organization instead of reporting the address as taken", async () => {
+    malaysiaOrganization();
+    await renderApply();
+    await fillMalaysiaApplication();
+    await waitFor(() =>
+      expect(screen.getByTestId("apply.slug-status").textContent).toContain("@malaysia"),
+    );
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
+      slug: "malaysia",
+      orgId: "org-malaysia",
+    });
+  });
+
+  it("still reports the address as taken when the matching organization has another owner", async () => {
+    malaysiaOrganization();
+    harness.apiClient?.auth.listMembers.mockResolvedValue({
+      members: [
+        { userId: "user-9", role: "owner" },
+        { userId: "user-1", role: "member" },
+      ],
+    });
+    await renderApply();
+    await fillMalaysiaApplication();
+    await waitFor(() =>
+      expect(screen.getByTestId("apply.slug-status").textContent).toContain(
+        "An organization already uses this address",
+      ),
+    );
+    expect(
+      (screen.getByRole("button", { name: "Submit for review" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(harness.apiClient?.proposals.propose).not.toHaveBeenCalled();
+  });
+
+  it("prefills the organization name and locks the address when arriving with ?org=", async () => {
+    harness.search = { org: "malaysia" };
+    malaysiaOrganization();
+    await renderApply();
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await waitFor(() =>
+      expect((screen.getByTestId("apply.name") as HTMLInputElement).value).toBe("Malaysia"),
+    );
+    const slugInput = screen.getByTestId("apply.slug") as HTMLInputElement;
+    expect(slugInput.value).toBe("malaysia");
+    expect(slugInput.readOnly).toBe(true);
+    fireEvent.change(screen.getByLabelText("Why you want to run it"), {
+      target: { value: "Serve the local community." },
+    });
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
+      slug: "malaysia",
+      orgId: "org-malaysia",
+    });
+  });
+
+  it("releases the locked address when the applicant chooses a different one", async () => {
+    harness.search = { org: "malaysia" };
+    malaysiaOrganization();
+    await renderApply();
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await waitFor(() =>
+      expect((screen.getByTestId("apply.slug") as HTMLInputElement).readOnly).toBe(true),
+    );
+    fireEvent.click(screen.getByTestId("apply.slug-unlock"));
+    await waitFor(() =>
+      expect(screen.getByTestId("apply.slug-status").textContent).toContain(
+        "An organization already uses this address",
+      ),
+    );
   });
 
   it("starts with the NEAR account when there is no active organization", async () => {
