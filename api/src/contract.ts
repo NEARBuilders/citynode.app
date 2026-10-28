@@ -324,6 +324,57 @@ export const AttendanceReconcileSchema = z.object({
   failed: z.array(z.string()),
 });
 
+export const FeatureAreaSchema = z.enum(["node-operations", "finance", "stake", "events"]);
+
+export const TeamJoinRequestStatusSchema = z.enum([
+  "pending",
+  "approved",
+  "declined",
+  "withdrawn",
+  "closed",
+]);
+
+export const TeamJoinClosedReasonSchema = z.enum([
+  "requester_left",
+  "team_deleted",
+  "team_not_joinable",
+]);
+
+export const JoinableTeamSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  areas: z.array(FeatureAreaSchema),
+  isMember: z.boolean(),
+  pendingRequestId: z.string().nullable(),
+});
+
+export const TeamJoinRequestSchema = z.object({
+  id: z.string(),
+  teamId: z.string(),
+  teamName: z.string(),
+  teamAreas: z.array(FeatureAreaSchema),
+  requesterName: z.string().nullable(),
+  isMine: z.boolean(),
+  status: TeamJoinRequestStatusSchema,
+  closedReason: TeamJoinClosedReasonSchema.nullable(),
+  endorsementCount: z.number().int().nonnegative(),
+  endorsedByMe: z.boolean(),
+  canEndorse: z.boolean(),
+  canDecide: z.boolean(),
+  createdAt: z.iso.datetime(),
+  decidedAt: z.iso.datetime().nullable(),
+});
+
+export const TeamJoinBoardSchema = z.object({
+  canReview: z.boolean(),
+  teams: z.array(JoinableTeamSchema),
+  requests: z.array(TeamJoinRequestSchema),
+});
+
+const TEAM_JOIN_CONFLICT = {
+  CONFLICT: { status: 409, message: "This team request can't change any more" },
+} as const;
+
 export const contract = oc.router({
   ...discoveryContract,
 
@@ -1001,6 +1052,56 @@ export const contract = oc.router({
     .input(z.object({ organizationId: z.string().min(1) }))
     .output(AttendanceReconcileSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  getTeamJoinBoard: oc
+    .route({
+      method: "GET",
+      path: "/members/teams",
+      summary: "List a community's joinable teams and the team requests the caller may see",
+      description:
+        "Members only — teams with a recognized Feature Area, the caller's own requests, requests on teams the caller belongs to, and every request for owners and admins. No emails.",
+    })
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .output(TeamJoinBoardSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  requestToJoinTeam: oc
+    .route({ method: "POST", path: "/members/teams/requests", summary: "Ask to join a team" })
+    .input(z.object({ organizationId: z.string().min(1), teamId: z.string().min(1) }))
+    .output(TeamJoinRequestSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, ...TEAM_JOIN_CONFLICT }),
+
+  withdrawTeamJoinRequest: oc
+    .route({
+      method: "POST",
+      path: "/members/teams/requests/{requestId}/withdraw",
+      summary: "Withdraw your own pending team request",
+    })
+    .input(z.object({ requestId: z.uuid() }))
+    .output(TeamJoinRequestSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...TEAM_JOIN_CONFLICT }),
+
+  endorseTeamJoinRequest: oc
+    .route({
+      method: "POST",
+      path: "/members/teams/requests/{requestId}/endorse",
+      summary: "Endorse a pending request to join a team you belong to",
+    })
+    .input(z.object({ requestId: z.uuid() }))
+    .output(TeamJoinRequestSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...TEAM_JOIN_CONFLICT }),
+
+  decideTeamJoinRequest: oc
+    .route({
+      method: "POST",
+      path: "/members/teams/requests/{requestId}/decision",
+      summary: "Approve or decline a team request",
+      description:
+        "Owners and admins only. Approval adds the requester to the team upstream in the approver's context and is recorded only when that succeeds.",
+    })
+    .input(z.object({ requestId: z.uuid(), decision: z.enum(["approve", "decline"]) }))
+    .output(TeamJoinRequestSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONNECTION_ERROR, ...TEAM_JOIN_CONFLICT }),
 });
 
 export type ContractType = typeof contract;

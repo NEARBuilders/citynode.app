@@ -50,6 +50,12 @@ import {
   validateObjectPath,
   validateUploadSize,
 } from "./services/storage";
+import {
+  type TeamJoinRequestRecord,
+  TeamJoinRequestsLive,
+  type TeamJoinRequestsService,
+  TeamJoinRequestsTag,
+} from "./services/team-join-requests";
 import type { TenantRecord, TenantsService } from "./services/tenants";
 import { TenantsConfigLive, TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
@@ -60,6 +66,13 @@ import {
   type TeamAccessContext,
   teamAreaForbidden,
 } from "./team-access-policy";
+import {
+  closureReason,
+  isJoinableTeam,
+  memberDisplayName,
+  recognizedAreas,
+  type UpstreamTeam,
+} from "./team-join-policy";
 
 class ApiServices extends Context.Service<
   ApiServices,
@@ -72,6 +85,7 @@ class ApiServices extends Context.Service<
     nearbuilders: ReturnType<typeof createNearbuilders>;
     memberDirectory: MemberDirectoryService;
     attendance: AttendanceService;
+    teamJoinRequests: TeamJoinRequestsService;
     stakingPools: StakingPoolsService;
   }
 >()("api/ApiServices") {}
@@ -425,6 +439,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           StorageLive,
           MemberDirectoryLive,
           AttendanceLive,
+          TeamJoinRequestsLive,
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
@@ -440,6 +455,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           nearbuilders: createNearbuilders(config.variables.nearbuildersUrl),
           memberDirectory: Context.get(services, MemberDirectoryTag),
           attendance: Context.get(services, AttendanceTag),
+          teamJoinRequests: Context.get(services, TeamJoinRequestsTag),
           stakingPools: makeStakingPools({
             mainnet: config.variables.mainnetStakingPoolWhitelist,
             testnet: config.variables.testnetStakingPoolWhitelist,
@@ -599,6 +615,124 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
         return { members, total };
       });
+
+    const teamJoinConflict = (message: string) => new ORPCError("CONFLICT", { message });
+
+    const loadTeamCommunity = (auth: MemberAuthClient, organizationId: string, userId: string) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        const { members } = yield* listAllMembers(auth, organizationId);
+        const current = members.filter((member) => member.organizationId === organizationId);
+        const caller = current.find((member) => member.userId === userId);
+        if (!caller) return yield* Effect.fail(notACommunityMember());
+        const [teams, ownTeams] = yield* Effect.tryPromise({
+          try: () =>
+            Promise.all([
+              auth.listTeams({ organizationId }),
+              auth.listUserTeams({ organizationId }),
+            ]),
+          catch: () =>
+            new ORPCError("INTERNAL_SERVER_ERROR", {
+              message: "Could not load the community's teams",
+            }),
+        });
+        const community = {
+          memberIds: new Set(current.map((member) => member.userId)),
+          names: new Map(current.map((member) => [member.userId, member.user?.name ?? null])),
+          teams: new Map<string, UpstreamTeam>(teams.map((team) => [team.id, team])),
+        };
+        const stored = yield* services.teamJoinRequests.list(organizationId, userId);
+        const closures = stored.flatMap((request) => {
+          if (request.status !== "pending") return [];
+          const reason = closureReason(request, community);
+          return reason ? [{ id: request.id, reason }] : [];
+        });
+        if (closures.length > 0) yield* services.teamJoinRequests.close(closures);
+        const requests =
+          closures.length > 0
+            ? yield* services.teamJoinRequests.list(organizationId, userId)
+            : stored;
+        return {
+          ...community,
+          userId,
+          organizationId,
+          canReview: isCommunitySettingsRole(caller.role),
+          ownTeamIds: new Set(ownTeams.map((team) => team.id)),
+          requests,
+        };
+      });
+
+    type TeamCommunity = Effect.Success<ReturnType<typeof loadTeamCommunity>>;
+
+    const presentTeamRequest = (community: TeamCommunity, request: TeamJoinRequestRecord) => {
+      const pending = request.status === "pending";
+      const onTeam = community.ownTeamIds.has(request.teamId);
+      return {
+        id: request.id,
+        teamId: request.teamId,
+        teamName: community.teams.get(request.teamId)?.name ?? request.teamName,
+        teamAreas: recognizedAreas(community.teams.get(request.teamId)?.areas ?? request.teamAreas),
+        requesterName:
+          memberDisplayName(community.names.get(request.requesterUserId)) ??
+          memberDisplayName(request.requesterName),
+        isMine: request.requesterUserId === community.userId,
+        status: request.status,
+        closedReason: request.closedReason,
+        endorsementCount: request.endorserUserIds.length,
+        endorsedByMe: request.endorserUserIds.includes(community.userId),
+        canEndorse: pending && onTeam && request.requesterUserId !== community.userId,
+        canDecide: pending && community.canReview,
+        createdAt: request.createdAt.toISOString(),
+        decidedAt: request.decidedAt?.toISOString() ?? null,
+      };
+    };
+
+    const canSeeTeamRequest = (community: TeamCommunity, request: TeamJoinRequestRecord) => {
+      if (request.requesterUserId === community.userId) {
+        return request.status !== "withdrawn" && request.status !== "approved";
+      }
+      if (request.status === "pending") {
+        return community.canReview || community.ownTeamIds.has(request.teamId);
+      }
+      return request.status === "closed" && community.canReview;
+    };
+
+    const loadTeamRequest = (context: Parameters<typeof memberAuthClient>[0], requestId: string) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        const stored = yield* services.teamJoinRequests.get(requestId);
+        if (!stored) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", { message: "Team request not found" }),
+          );
+        }
+        const auth = yield* memberAuthClient(context);
+        const community = yield* loadTeamCommunity(auth, stored.organizationId, context.userId);
+        const request = community.requests.find((candidate) => candidate.id === requestId);
+        if (!request || !canSeeTeamRequest(community, request)) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", { message: "Team request not found" }),
+          );
+        }
+        return { auth, community, request };
+      });
+
+    const refreshTeamRequest = (community: TeamCommunity, requestId: string) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        const request = yield* services.teamJoinRequests.get(requestId);
+        if (!request) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", { message: "Team request not found" }),
+          );
+        }
+        return presentTeamRequest(community, request);
+      });
+
+    const requirePendingTeamRequest = (request: TeamJoinRequestRecord) =>
+      request.status === "pending"
+        ? Effect.void
+        : Effect.fail(teamJoinConflict("This team request is no longer pending"));
 
     const router = {
       trackDiscovery: builder.trackDiscovery.effect(function* ({ input, context }) {
@@ -904,6 +1038,142 @@ export default createPlugin.withPlugins<PluginsClient>()({
           };
         });
         return yield* services.attendance.history({ userId: context.userId, communities });
+      }),
+
+      getTeamJoinBoard: builder.getTeamJoinBoard.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const auth = yield* memberAuthClient(context);
+        const community = yield* loadTeamCommunity(auth, input.organizationId, context.userId);
+        const pendingByTeam = new Map(
+          community.requests
+            .filter(
+              (request) =>
+                request.status === "pending" && request.requesterUserId === community.userId,
+            )
+            .map((request) => [request.teamId, request.id]),
+        );
+        return {
+          canReview: community.canReview,
+          teams: [...community.teams.values()].filter(isJoinableTeam).map((team) => ({
+            id: team.id,
+            name: team.name,
+            areas: recognizedAreas(team.areas),
+            isMember: community.ownTeamIds.has(team.id),
+            pendingRequestId: pendingByTeam.get(team.id) ?? null,
+          })),
+          requests: community.requests
+            .filter((request) => canSeeTeamRequest(community, request))
+            .map((request) => presentTeamRequest(community, request)),
+        };
+      }),
+
+      requestToJoinTeam: builder.requestToJoinTeam.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const auth = yield* memberAuthClient(context);
+        const community = yield* loadTeamCommunity(auth, input.organizationId, context.userId);
+        const team = community.teams.get(input.teamId);
+        if (!isJoinableTeam(team)) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", { message: "This team isn't open to requests" }),
+          );
+        }
+        if (community.ownTeamIds.has(team.id)) {
+          return yield* Effect.fail(teamJoinConflict("You're already on this team"));
+        }
+        const created = yield* services.teamJoinRequests.create({
+          organizationId: input.organizationId,
+          teamId: team.id,
+          teamName: team.name,
+          teamAreas: recognizedAreas(team.areas),
+          requesterUserId: context.userId,
+          requesterName: memberDisplayName(community.names.get(context.userId)),
+        });
+        if (!created) {
+          return yield* Effect.fail(teamJoinConflict("You already asked to join this team"));
+        }
+        return presentTeamRequest(community, created);
+      }),
+
+      withdrawTeamJoinRequest: builder.withdrawTeamJoinRequest.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const { community, request } = yield* loadTeamRequest(context, input.requestId);
+        if (request.requesterUserId !== context.userId) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", { message: "Only the requester can withdraw it" }),
+          );
+        }
+        yield* requirePendingTeamRequest(request);
+        if (!(yield* services.teamJoinRequests.settle(request.id, "withdrawn", context.userId))) {
+          return yield* Effect.fail(teamJoinConflict("This team request is no longer pending"));
+        }
+        return yield* refreshTeamRequest(community, request.id);
+      }),
+
+      endorseTeamJoinRequest: builder.endorseTeamJoinRequest.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const { community, request } = yield* loadTeamRequest(context, input.requestId);
+        yield* requirePendingTeamRequest(request);
+        if (!presentTeamRequest(community, request).canEndorse) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
+              message: "Only current members of this team can endorse it",
+            }),
+          );
+        }
+        yield* services.teamJoinRequests.endorse(request.id, context.userId);
+        return yield* refreshTeamRequest(community, request.id);
+      }),
+
+      decideTeamJoinRequest: builder.decideTeamJoinRequest.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const { auth, community, request } = yield* loadTeamRequest(context, input.requestId);
+        if (!community.canReview) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
+              message: "Only the community's owners and admins can decide team requests",
+            }),
+          );
+        }
+        yield* requirePendingTeamRequest(request);
+        if (input.decision === "approve") {
+          yield* Effect.tryPromise({
+            try: () =>
+              auth.addTeamMember({
+                teamId: request.teamId,
+                userId: request.requesterUserId,
+                organizationId: request.organizationId,
+              }),
+            catch: (error) =>
+              error instanceof ORPCError
+                ? error
+                : new ORPCError("CONNECTION_ERROR", {
+                    message: "Couldn't add them to the team. Try again.",
+                  }),
+          });
+        }
+        const settled = yield* services.teamJoinRequests.settle(
+          request.id,
+          input.decision === "approve" ? "approved" : "declined",
+          context.userId,
+        );
+        if (!settled) {
+          return yield* Effect.fail(teamJoinConflict("This team request is no longer pending"));
+        }
+        return yield* refreshTeamRequest(community, request.id);
       }),
 
       ping: builder.ping.handler(async () => ({
