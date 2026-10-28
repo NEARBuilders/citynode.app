@@ -223,26 +223,49 @@ export const AttendanceLive = Layer.effect(
             recordCode({ organizationId, communityName, code, known, upstream }),
           );
           const reconciledAt = new Date();
-          for (const result of results) {
+          const target = [
+            attendanceEventReconciliations.organizationId,
+            attendanceEventReconciliations.eventId,
+          ];
+          const succeeded = results.filter((result) => result.ok);
+          const failed = results.filter((result) => !result.ok);
+          if (succeeded.length > 0) {
             yield* query(() =>
               db
                 .insert(attendanceEventReconciliations)
-                .values({
-                  organizationId,
-                  eventId: result.id,
-                  truncated: result.truncated,
-                  failed: !result.ok,
-                  reconciledAt,
-                })
+                .values(
+                  succeeded.map((result) => ({
+                    organizationId,
+                    eventId: result.id,
+                    truncated: result.truncated,
+                    failed: false,
+                    reconciledAt,
+                  })),
+                )
                 .onConflictDoUpdate({
-                  target: [
-                    attendanceEventReconciliations.organizationId,
-                    attendanceEventReconciliations.eventId,
-                  ],
-                  set: result.ok
-                    ? { truncated: result.truncated, failed: false, reconciledAt }
-                    : { failed: true },
+                  target,
+                  set: {
+                    truncated: sql`excluded.truncated`,
+                    failed: false,
+                    reconciledAt,
+                  },
                 }),
+            );
+          }
+          if (failed.length > 0) {
+            yield* query(() =>
+              db
+                .insert(attendanceEventReconciliations)
+                .values(
+                  failed.map((result) => ({
+                    organizationId,
+                    eventId: result.id,
+                    truncated: false,
+                    failed: true,
+                    reconciledAt,
+                  })),
+                )
+                .onConflictDoUpdate({ target, set: { failed: true } }),
             );
           }
           return {
@@ -333,8 +356,8 @@ export const AttendanceLive = Layer.effect(
             for (const event of community.events) {
               const row = byEvent.get(event.id);
               if (!row) reasons.add("not_synced");
-              else if (row.failed) reasons.add("failed");
-              else if (row.truncated) reasons.add("truncated");
+              if (row?.failed) reasons.add("failed");
+              if (row?.truncated) reasons.add("truncated");
             }
             const synced = community.events
               .map((event) => byEvent.get(event.id)?.reconciledAt)

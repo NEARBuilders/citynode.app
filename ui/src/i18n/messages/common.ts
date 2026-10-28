@@ -4,10 +4,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "about.build": ["Build on it", "Desarrollar sobre él", "Développer dessus", "基于它开发"],
   "attendance.checkedInOn": ["Checked in on", "Registrado el", "Enregistré le", "签到时间"],
   "attendance.deletedTeamsHint": [
-    "Check-ins from deleted Event Teams can't be shown.",
-    "Los registros de equipos de evento eliminados no se pueden mostrar.",
-    "Les enregistrements des équipes d'événement supprimées ne peuvent pas être affichés.",
-    "已删除的活动团队的签到记录无法显示。",
+    "Check-ins from deleted Event Teams, or from codes not tied to a listed event, may be missing.",
+    "Pueden faltar registros de equipos de evento eliminados o de códigos no vinculados a un evento de la lista.",
+    "Des enregistrements d'équipes d'événement supprimées, ou de codes non liés à un événement listé, peuvent manquer.",
+    "来自已删除活动团队或未关联到已列出活动的签到码的签到记录可能缺失。",
   ],
   "attendance.description": [
     "Events of this community you checked in at.",

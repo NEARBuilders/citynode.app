@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/client";
 import { CalendarCheckIcon } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, SectionHeader, Skeleton } from "@/components";
 import { LocalDate } from "@/components/local-date";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
 import {
+  attendanceQueryKeys,
   attendanceReconcileQueryOptions,
   attendanceRecordQueryOptions,
 } from "@/lib/queries/attendance";
@@ -46,6 +48,12 @@ export function AttendanceRecord({
     ...attendanceRecordQueryOptions(apiClient, organizationId),
     enabled: !reconcile || !organizationId || reconciled.isFetched,
   });
+  const queryClient = useQueryClient();
+  const reconciledAt = reconciled.dataUpdatedAt;
+  useEffect(() => {
+    if (!reconciledAt) return;
+    void queryClient.invalidateQueries({ queryKey: attendanceQueryKeys.records() });
+  }, [queryClient, reconciledAt]);
   const everyCommunity = !organizationId;
 
   if (record.error instanceof ORPCError && record.error.code === "FORBIDDEN") return null;
@@ -192,8 +200,12 @@ function CoverageNotes({
             </>
           ) : (
             <>
-              {translate("attendance.syncedUpTo")}{" "}
-              <LocalDate value={community.syncedAt} format="datetime" />.{" "}
+              {community.syncedAt && (
+                <>
+                  {translate("attendance.syncedUpTo")}{" "}
+                  <LocalDate value={community.syncedAt} format="datetime" />.{" "}
+                </>
+              )}
               {translate("attendance.deletedTeamsHint")}
             </>
           )}

@@ -3,8 +3,9 @@ import type { ApiClient } from "@/app";
 
 export const attendanceQueryKeys = {
   all: ["attendance"] as const,
+  records: () => [...attendanceQueryKeys.all, "record"] as const,
   record: (organizationId: string | null) =>
-    [...attendanceQueryKeys.all, "record", organizationId] as const,
+    [...attendanceQueryKeys.records(), organizationId] as const,
   reconcile: (organizationId: string) =>
     [...attendanceQueryKeys.all, "reconcile", organizationId] as const,
 };

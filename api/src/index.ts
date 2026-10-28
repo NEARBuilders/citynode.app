@@ -838,7 +838,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
-        const events = yield* services.discovery.organizationEvents(input.organizationId);
+        const events =
+          (yield* services.discovery.organizationEvents([input.organizationId])).get(
+            input.organizationId,
+          ) ?? [];
         const tenant = yield* services.tenants.resolveTenantByOrgId(input.organizationId);
         const { organizationId } = input;
         return yield* services.attendance.reconcile({
@@ -880,16 +883,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 ...(yield* services.attendance.recordedOrganizations(context.userId)),
               ]),
             ];
-        const communities = yield* Effect.forEach(organizationIds, (organizationId) =>
-          services.discovery.organizationEvents(organizationId).pipe(
-            Effect.map((events) => ({
-              organizationId,
-              communityName:
-                events[0]?.communityName ?? names.get(organizationId) ?? organizationId,
-              events,
-            })),
-          ),
-        );
+        const eventsByOrganization = yield* services.discovery.organizationEvents(organizationIds);
+        const communities = organizationIds.map((organizationId) => {
+          const events = eventsByOrganization.get(organizationId) ?? [];
+          return {
+            organizationId,
+            communityName: events[0]?.communityName ?? names.get(organizationId) ?? organizationId,
+            events,
+          };
+        });
         return yield* services.attendance.history({ userId: context.userId, communities });
       }),
 

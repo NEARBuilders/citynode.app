@@ -1053,24 +1053,44 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         );
         return row ?? null;
       }),
-    organizationEvents: (organizationId: string) =>
+    organizationEvents: (organizationIds: string[]) =>
       Effect.gen(function* () {
-        const rows = yield* query(() =>
-          db
-            .select({ event: discoveryActivities.data, communityName: tenants.name })
-            .from(discoveryActivities)
-            .innerJoin(nodes, eq(discoveryActivities.ownerNodeId, nodes.id))
-            .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-            .where(eq(tenants.orgId, organizationId)),
+        const rows =
+          organizationIds.length === 0
+            ? []
+            : yield* query(() =>
+                db
+                  .select({
+                    event: discoveryActivities.data,
+                    organizationId: tenants.orgId,
+                    communityName: tenants.name,
+                  })
+                  .from(discoveryActivities)
+                  .innerJoin(nodes, eq(discoveryActivities.ownerNodeId, nodes.id))
+                  .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+                  .where(inArray(tenants.orgId, organizationIds)),
+              );
+        const byOrganization = new Map(
+          organizationIds.map((id) => [
+            id,
+            [] as Array<{
+              id: string;
+              title: string;
+              startsAt: string | null;
+              communityName: string;
+            }>,
+          ]),
         );
-        return rows
-          .filter((row) => row.event.kind === "event")
-          .map((row) => ({
+        for (const row of rows) {
+          if (row.event.kind !== "event" || !row.organizationId) continue;
+          byOrganization.get(row.organizationId)?.push({
             id: row.event.id,
             title: row.event.title,
             startsAt: row.event.startsAt,
             communityName: row.communityName,
-          }));
+          });
+        }
+        return byOrganization;
       }),
     activity: (id: string) =>
       Effect.gen(function* () {
