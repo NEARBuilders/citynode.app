@@ -4,6 +4,8 @@ import { App } from "everything-dev/descriptor";
 // from this file; dev-only overrides live in bos.dev.ts (never published).
 export default App({
   name: "citynode.app",
+  // Display title for the runtime — shown in the document title, sidebar, and root breadcrumb.
+  title: "City Nodes",
   // The base runtime this app extends — inherit the platform, override only what you change.
   extends: "bos://dev.everything.near/everything.dev",
   platform: "2.0.0-rc.25",
@@ -12,7 +14,7 @@ export default App({
   // The gateway: FastKV lookup key and public ingress for this runtime.
   domain: "citynode.app",
   // CI settings: runtime image name, Railway service.
-  "repository": "https://github.com/nearbuilders/citynode.app",
+  repository: "https://github.com/nearbuilders/citynode.app",
   ci: {
     railway: {
       service: "app",
