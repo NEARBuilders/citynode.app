@@ -3,6 +3,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { verifyDaoMembership } from "@/services/dao";
 import { authedContext, getPluginClient, teardown } from "../setup";
 
+const pools = vi.hoisted(() => ({ isApproved: vi.fn() }));
+
+vi.mock("@/services/staking-pools", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/staking-pools")>()),
+  makeStakingPools: () => ({ isApproved: pools.isApproved }),
+}));
+
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
     Effect.succeed({ isSputnikContract: true, isMember: true, policy: { roles: [] } }),
@@ -213,6 +220,28 @@ describe("node proposal application", () => {
     ).rejects.toBeTruthy();
   });
 
+  it("provisions a standalone city without a parent", async () => {
+    const admin = await getPluginClient(adminContext);
+
+    const result = await admin.applyNodeProposal({
+      kind: "city",
+      name: "Standalone Proposal City",
+      slug: "standalone-proposal-city",
+      parentId: null,
+      orgId: "standalone-proposal-org",
+      motivation: "Run a city community that is not listed under a country.",
+      accountId: "standalone-proposal.near",
+      submitterAccountId: "standalone-proposal.near",
+      hostname: "standalone-proposal-city.citynode.app",
+    });
+
+    expect(await admin.getNode({ nodeId: result.nodeId })).toMatchObject({
+      kind: "city",
+      slug: "standalone-proposal-city",
+      parentId: null,
+    });
+  });
+
   it("does not leave a tenant behind when proposal resources conflict", async () => {
     const admin = await getPluginClient(adminContext);
     await admin.applyNodeProposal({
@@ -244,5 +273,54 @@ describe("node proposal application", () => {
     const tenants = await admin.listTenants();
     expect(tenants.some((tenant) => tenant.accountId === "conflicting-proposal.near")).toBe(false);
     expect(await admin.resolveNodeBySlug({ slug: "conflicting-proposal-country" })).toBeNull();
+  });
+  describe("with a staking pool", () => {
+    const proposal = (suffix: string, poolAccountId: string) => ({
+      kind: "country" as const,
+      name: `Pool Country ${suffix}`,
+      slug: `pool-country-${suffix}`,
+      parentId: null,
+      orgId: `pool-org-${suffix}`,
+      motivation: "I want to operate the country node for my community.",
+      accountId: `pool-${suffix}.sputnik-dao.near`,
+      submitterAccountId: "proposal-applicant.near",
+      hostname: `pool-country-${suffix}.citynode.app`,
+      poolAccountId,
+    });
+
+    it("refuses a pool that isn't approved and creates nothing", async () => {
+      const admin = await getPluginClient(adminContext);
+      pools.isApproved.mockReturnValue(Effect.succeed(false));
+
+      await expect(
+        admin.applyNodeProposal(proposal("unapproved", "not-a-pool.near")),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect(pools.isApproved).toHaveBeenCalledWith("not-a-pool.near", "mainnet");
+      expect(await admin.resolveNodeBySlug({ slug: "pool-country-unapproved" })).toBeNull();
+    });
+
+    it("refuses when the pool can't be checked", async () => {
+      const admin = await getPluginClient(adminContext);
+      const { StakingPoolCheckFailed } = await import("@/services/staking-pools");
+      pools.isApproved.mockReturnValue(
+        Effect.fail(new StakingPoolCheckFailed({ network: "mainnet", cause: new Error("rpc") })),
+      );
+
+      await expect(
+        admin.applyNodeProposal(proposal("unchecked", "approved.poolv1.near")),
+      ).rejects.toMatchObject({ code: "CONNECTION_ERROR" });
+      expect(await admin.resolveNodeBySlug({ slug: "pool-country-unchecked" })).toBeNull();
+    });
+
+    it("saves an approved pool as the default validator", async () => {
+      const admin = await getPluginClient(adminContext);
+      pools.isApproved.mockReturnValue(Effect.succeed(true));
+
+      const result = await admin.applyNodeProposal(proposal("approved", "approved.poolv1.near"));
+
+      expect(await admin.listValidatorsByNode({ nodeId: result.nodeId })).toEqual([
+        expect.objectContaining({ accountId: "approved.poolv1.near", isDefault: true }),
+      ]);
+    });
   });
 });

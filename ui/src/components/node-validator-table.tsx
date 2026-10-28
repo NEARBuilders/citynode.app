@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
 import { presentationLabel } from "@/lib/presentation-label";
+import { StakingPoolApprovalBadge } from "./staking-pool-approval-badge";
 
 type Validator = InferClientOutputs<ApiClient>["getNodeSummary"]["validators"][number];
 
@@ -41,6 +42,11 @@ export function NodeValidatorTable({
             </ItemDescription>
           </ItemContent>
           <ItemActions className="flex-wrap">
+            <StakingPoolApprovalBadge
+              accountId={validator.accountId}
+              network={validator.network}
+              protocol={validator.protocol}
+            />
             {validator.isDefault && <Badge variant="success">{translate("common.default")}</Badge>}
             <Badge variant="outline">
               {presentationLabel(validator.role ?? "member", translate)}

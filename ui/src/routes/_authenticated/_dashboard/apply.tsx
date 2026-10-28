@@ -7,16 +7,21 @@ import { getGatewayId, useApiClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
 import { AppActionError, appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
-import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
+import {
+  childNodesQueryOptions,
+  nodeByIdQueryOptions,
+  rootNodesQueryOptions,
+} from "@/lib/queries/nodes";
 import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
 import { ApplyApplicantFields } from "./-apply-applicant-fields";
-import { type ApplyStepId, resolveApplySteps } from "./-apply-flow";
+import { type ApplyStepId, applicationInProgress, resolveApplySteps } from "./-apply-flow";
 import { useApplicationForm } from "./-apply-form";
 import { loadNodeApplicationParents } from "./-apply-loader";
 import { ApplyNodeFields } from "./-apply-node-fields";
@@ -32,6 +37,10 @@ import {
 } from "./-node-application";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
+  validateSearch: (search: Record<string, unknown>): { application?: string } =>
+    typeof search.application === "string" && search.application
+      ? { application: search.application }
+      : {},
   loader: ({ context }) =>
     loadNodeApplicationParents({
       apiClient: context.apiClient,
@@ -68,11 +77,12 @@ function ApplyPage() {
   const queryClient = useQueryClient();
   const initialRootNodes = Route.useLoaderData();
   const { runtimeConfig } = Route.useRouteContext();
+  const { application: viewedApplicationId } = Route.useSearch();
   const gatewayId = getGatewayId(runtimeConfig);
   const nearAccountId = useNearAccount();
   const daoConnection = useDaoConnection();
   const slugManuallyEdited = useRef(false);
-  const [rootParentId, setRootParentId] = useState(initialRootNodes[0]?.id ?? "");
+  const [rootParentId, setRootParentId] = useState("");
   const [submittedProposalId, setSubmittedProposalId] = useState<string | null>(null);
   const [revising, setRevising] = useState(false);
   const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
@@ -82,9 +92,24 @@ function ApplyPage() {
     [],
   );
   const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
+  const latestApplication = myApplications.data?.data.reduce<
+    (typeof myApplications.data.data)[number] | undefined
+  >(
+    (latest, proposal) =>
+      !latest || Date.parse(proposal.createdAt) > Date.parse(latest.createdAt) ? proposal : latest,
+    undefined,
+  );
+  const shownProposalId = submittedProposalId ?? viewedApplicationId;
+  const viewedApplication = shownProposalId
+    ? myApplications.data?.data.find((proposal) => proposal.id === shownProposalId)
+    : undefined;
   const existingApplication = submittedProposalId
-    ? myApplications.data?.data.find((proposal) => proposal.id === submittedProposalId)
-    : myApplications.data?.data[0];
+    ? viewedApplication
+    : viewedApplication && !revising
+      ? viewedApplication
+      : latestApplication && applicationInProgress(latestApplication)
+        ? latestApplication
+        : undefined;
   const existingPayload = existingApplication?.payload as
     | { orgId?: unknown; name?: unknown; slug?: unknown; accountId?: unknown }
     | undefined;
@@ -131,7 +156,9 @@ function ApplyPage() {
   const legacyOrgId = retainedOrgId(formValues.slug);
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
-  const rootNodes = queriedRootNodes ?? initialRootNodes;
+  const rootNodes = (queriedRootNodes ?? initialRootNodes).filter(
+    (node) => node.kind === "country",
+  );
   useEffect(() => {
     if (verifiedDaoAccountId && verifiedDaoAccountId !== daoConnection.daoAccountId) {
       setVerifiedDaoAccountId(null);
@@ -179,6 +206,16 @@ function ApplyPage() {
     );
   }
 
+  if (nearAccountId && myApplications.isPending && !submittedProposalId) {
+    return (
+      <PageContainer variant="narrow">
+        <div className="flex justify-center py-12" data-testid="apply.loading">
+          <Spinner />
+        </div>
+      </PageContainer>
+    );
+  }
+
   if (submittedProposalId || (existingApplication && !revising)) {
     return (
       <ApplySubmitted
@@ -197,13 +234,29 @@ function ApplyPage() {
           existingApplication?.reviewStatus === "rejected" && !submittedProposalId
             ? () => {
                 const prior = existingApplication.payload as Partial<NodeApplicationValues>;
-                form.reset({
-                  kind: prior.kind ?? "country",
-                  parentId: prior.parentId ?? null,
-                  name: prior.name ?? "",
-                  slug: prior.slug ?? "",
-                  motivation: prior.motivation ?? "",
-                });
+                const parentId = prior.parentId ?? null;
+                const country = rootNodes.find((node) => node.id === parentId);
+                setRootParentId(country?.id ?? "");
+                if (parentId && !country) {
+                  queryClient
+                    .fetchQuery(nodeByIdQueryOptions(apiClient, parentId))
+                    .then((parent) =>
+                      parent
+                        ? setRootParentId(parent.parentId ?? "")
+                        : form.setFieldValue("parentId", null),
+                    )
+                    .catch(() => form.setFieldValue("parentId", null));
+                }
+                form.reset(
+                  {
+                    kind: prior.kind ?? "city",
+                    parentId: prior.parentId ?? null,
+                    name: prior.name ?? "",
+                    slug: prior.slug ?? "",
+                    motivation: prior.motivation ?? "",
+                  },
+                  { keepDefaultValues: true },
+                );
                 setRevising(true);
               }
             : undefined

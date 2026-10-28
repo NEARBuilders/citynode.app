@@ -22,3 +22,16 @@ export function getActiveOrganizationNodeId({
   if (!activeOrganizationId || hasRequestedNode) return null;
   return communities.find((community) => community.node)?.node?.id ?? null;
 }
+
+export function chooseDefaultValidator<T extends { id: string; isDefault: boolean }>(
+  validators: readonly T[],
+  unapprovedIds: ReadonlySet<string>,
+): T | undefined {
+  const usable = validators.filter((validator) => !unapprovedIds.has(validator.id));
+  return (
+    usable.find((validator) => validator.isDefault) ??
+    usable[0] ??
+    validators.find((validator) => validator.isDefault) ??
+    validators[0]
+  );
+}

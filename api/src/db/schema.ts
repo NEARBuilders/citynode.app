@@ -118,7 +118,7 @@ export const discoveryProfiles = pgTable("discovery_profiles", {
   nodeId: uuid("node_id")
     .primaryKey()
     .references(() => nodes.id, { onDelete: "cascade" }),
-  data: jsonb("data").$type<import("../discovery-contract").DiscoveryProfile>().notNull(),
+  data: jsonb("data").$type<import("../discovery-contract").StoredDiscoveryProfile>().notNull(),
 });
 
 export const discoveryHistory = pgTable("discovery_history", {

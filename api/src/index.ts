@@ -31,6 +31,11 @@ import {
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import {
+  makeStakingPools,
+  StakingPoolCheckFailed,
+  type StakingPoolsService,
+} from "./services/staking-pools";
+import {
   buildBundleKey,
   bundleCacheControl,
   bundleContentType,
@@ -50,7 +55,6 @@ import { ValidatorsLive, ValidatorsTag } from "./services/validators";
 import {
   canUseTeamArea,
   createRequireTeamArea,
-  resolveTeamAccess,
   type TeamAccessContext,
   teamAreaForbidden,
 } from "./team-access-policy";
@@ -64,6 +68,7 @@ class ApiServices extends Context.Service<
     discovery: DiscoveryService;
     storage: StorageService;
     memberDirectory: MemberDirectoryService;
+    stakingPools: StakingPoolsService;
   }
 >()("api/ApiServices") {}
 
@@ -88,6 +93,55 @@ const validateAccountId = (accountId: string): NodeEffect<void> =>
           data: { hint: "Must be a valid NEAR account ID" },
         }),
       );
+
+const checkStakingPool = (
+  stakingPools: StakingPoolsService,
+  accountId: string,
+  network: string,
+): NodeEffect<boolean> =>
+  validateAccountId(accountId).pipe(
+    Effect.andThen(() =>
+      stakingPools.isApproved(accountId, network).pipe(
+        Effect.mapError((error) =>
+          error instanceof StakingPoolCheckFailed
+            ? new ORPCError("CONNECTION_ERROR", {
+                message: `Could not check the staking pool whitelist on ${error.network}`,
+                data: {
+                  errorCode: "STAKING_POOL_CHECK_FAILED",
+                  suggestion: "Try again in a moment",
+                },
+              })
+            : new ORPCError("BAD_REQUEST", { message: error.message }),
+        ),
+      ),
+    ),
+  );
+
+const requireApprovedStakingPool = (
+  stakingPools: StakingPoolsService,
+  validator: { accountId: string; network: string; protocol: string },
+): NodeEffect<void> =>
+  Effect.gen(function* () {
+    if (validator.protocol.trim().toLowerCase() !== "near") return;
+    const approved = yield* checkStakingPool(stakingPools, validator.accountId, validator.network);
+    if (!approved) {
+      return yield* Effect.fail(
+        new ORPCError("BAD_REQUEST", {
+          message: `${validator.accountId} is not an approved staking pool on ${validator.network}`,
+          data: {
+            invalidFields: ["accountId"],
+            validationErrors: [
+              {
+                field: "accountId",
+                message: "Not an approved staking pool",
+                code: "STAKING_POOL_NOT_APPROVED",
+              },
+            ],
+          },
+        }),
+      );
+    }
+  });
 
 const validateHostname = (hostname: string): NodeEffect<void> => {
   const normalized = hostname.toLowerCase();
@@ -117,7 +171,7 @@ type NodeAccessContext = NonNullable<TeamAccessContext> & {
 const requireNodeOperationsAccess = (context: NodeAccessContext): NodeEffect<void> =>
   canUseTeamArea(context, "node-operations")
     ? Effect.void
-    : Effect.fail(teamAreaForbidden(resolveTeamAccess(context).activeTeam, ["node-operations"]));
+    : Effect.fail(teamAreaForbidden(["node-operations"]));
 
 const resolveNodeForAccess = (
   services: { nodes: NodesService },
@@ -320,6 +374,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .string()
       .default("")
       .describe("Repository URL included in the Nominatim User-Agent"),
+    mainnetStakingPoolWhitelist: z
+      .string()
+      .default("lockup-whitelist.near")
+      .describe("Mainnet contract whose is_whitelisted approves staking pools for validators"),
+    testnetStakingPoolWhitelist: z
+      .string()
+      .default("whitelist.f863973.m0")
+      .describe("Testnet contract whose is_whitelisted approves staking pools for validators"),
   }),
 
   secrets: z.object({
@@ -367,6 +429,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
           discovery: Context.get(services, DiscoveryTag),
           storage: Context.get(services, StorageTag),
           memberDirectory: Context.get(services, MemberDirectoryTag),
+          stakingPools: makeStakingPools({
+            mainnet: config.variables.mainnetStakingPoolWhitelist,
+            testnet: config.variables.testnetStakingPoolWhitelist,
+          }),
         }),
       );
     }),
@@ -680,7 +746,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }),
       listDiscovery: builder.listDiscovery.effect(function* ({ input }) {
         const services = yield* ApiServices;
-        return yield* services.discovery.list(input);
+        return yield* services.discovery.directory(input);
       }),
       getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input }) {
         const services = yield* ApiServices;
@@ -965,14 +1031,22 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listStakeCommunities: builder.listStakeCommunities.effect(function* ({ context }) {
         const services = yield* ApiServices;
-        if (!context.user || context.user.isAnonymous === true) {
-          return yield* services.tenants.listTenantApps();
-        }
         const activeOrganizationId = context.organization?.activeOrganizationId;
-        const organizationIds = activeOrganizationId
-          ? [activeOrganizationId]
-          : (context.organizations ?? []).map((organization) => organization.id);
-        return yield* services.tenants.listTenantApps(organizationIds);
+        const apps =
+          !context.user || context.user.isAnonymous === true
+            ? yield* services.tenants.listTenantApps()
+            : yield* services.tenants.listTenantApps(
+                activeOrganizationId
+                  ? [activeOrganizationId]
+                  : (context.organizations ?? []).map((organization) => organization.id),
+              );
+        const stakeable = yield* services.validators.stakeableNodeIds(
+          apps.flatMap((app) => (app.node ? [app.node.id] : [])),
+        );
+        return apps.map((app) => ({
+          ...app,
+          stakeable: app.node ? stakeable.has(app.node.id) : false,
+        }));
       }),
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
@@ -1049,7 +1123,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const services = yield* ApiServices;
           yield* validateAccountId(input.accountId);
           yield* validateAccountId(input.submitterAccountId);
-          if (input.poolAccountId) yield* validateAccountId(input.poolAccountId);
+          if (input.poolAccountId) {
+            yield* requireApprovedStakingPool(services.stakingPools, {
+              accountId: input.poolAccountId,
+              network: "mainnet",
+              protocol: "near",
+            });
+          }
           yield* validateHostname(input.hostname);
           const result = yield* verifyDaoMembership({
             daoAccountId: input.accountId,
@@ -1464,12 +1544,23 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return yield* services.validators.resolveForStaking(input.nodeId);
       }),
 
+      getStakingPoolApproval: builder.getStakingPoolApproval.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const approved = yield* checkStakingPool(
+          services.stakingPools,
+          input.accountId,
+          input.network,
+        );
+        return { approved };
+      }),
+
       createValidator: builder.createValidator
         .use(requireAuth)
         .use(requireNodeOperations)
         .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
           yield* authorizedNodeForValidators(services, input.nodeId, context);
+          yield* requireApprovedStakingPool(services.stakingPools, input);
           return yield* services.validators.create({
             nodeId: input.nodeId,
             accountId: input.accountId,
@@ -1496,6 +1587,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
             );
           }
           yield* authorizedNodeForValidators(services, validator.nodeId, context);
+          const next = {
+            accountId: input.accountId ?? validator.accountId,
+            network: input.network ?? validator.network,
+            protocol: input.protocol ?? validator.protocol,
+          };
+          if (
+            next.accountId !== validator.accountId ||
+            next.network !== validator.network ||
+            next.protocol !== validator.protocol ||
+            (input.isDefault === true && !validator.isDefault)
+          ) {
+            yield* requireApprovedStakingPool(services.stakingPools, next);
+          }
           return yield* services.validators.update(input.validatorId, {
             ...(input.accountId !== undefined && {
               accountId: input.accountId,
@@ -1544,6 +1648,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             );
           }
           yield* authorizedNodeForValidators(services, target.nodeId, context);
+          yield* requireApprovedStakingPool(services.stakingPools, target);
           return yield* services.validators.setDefault(target.nodeId, input.validatorId);
         }),
 

@@ -469,6 +469,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Aucun participant pour le moment.",
     "暂无质押者。",
   ],
+  "stake.exploreCommunities": [
+    "Explore communities",
+    "Explorar comunidades",
+    "Explorer les communautés",
+    "探索社区",
+  ],
   "stake.explorerAccount": [
     "View account on Nearblocks",
     "Ver cuenta en Nearblocks",
@@ -582,6 +588,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ce nœud n'exploite pas encore de validateur.",
     "此节点尚未运行验证节点。",
   ],
+  "stake.noValidatorBadge": [
+    "No validator yet",
+    "Sin validador aún",
+    "Pas encore de validateur",
+    "尚无验证节点",
+  ],
   "stake.noValidatorNamed": [
     "{name} doesn't have a validator yet",
     "{name} aún no tiene validador",
@@ -619,6 +631,18 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Comisión del {fee} · {balance} en stake",
     "{fee} de frais · {balance} misés",
     "费用 {fee} · 已质押 {balance}",
+  ],
+  "stake.poolCheckFailed": [
+    "Couldn't confirm this is an approved staking pool. Try again in a moment.",
+    "No se pudo confirmar que sea un pool de delegación aprobado. Inténtalo de nuevo en un momento.",
+    "Impossible de confirmer qu'il s'agit d'un pool de staking approuvé. Réessayez dans un instant.",
+    "无法确认这是经批准的质押池。请稍后重试。",
+  ],
+  "stake.poolNotApproved": [
+    "{account} isn't an approved staking pool, so you can't stake to it.",
+    "{account} no es un pool de delegación aprobado, así que no puedes delegar en él.",
+    "{account} n'est pas un pool de staking approuvé : vous ne pouvez pas y placer de mise.",
+    "{account} 不是经批准的质押池，因此无法向其质押。",
   ],
   "stake.positiveAmount": [
     "Enter a positive stake amount.",
