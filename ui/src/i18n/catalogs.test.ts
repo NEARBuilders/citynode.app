@@ -56,6 +56,13 @@ describe("app message catalogs", () => {
     }
   });
 
+  it("translates the member directory opt-in in every locale", () => {
+    expect(appCatalogs.es["members.showMyName"]).toBe("Mostrar mi nombre a mis comunidades");
+    expect(appCatalogs.fr["members.showMyName"]).toBe("Afficher mon nom à mes communautés");
+    expect(appCatalogs.zh["members.showMyName"]).toBe("向我的社区显示我的名字");
+    expect(appCatalogs.zh["members.notAvailable"]).toBe("暂无数据");
+  });
+
   it("loads translated landing headings", () => {
     expect(appCatalogs.es["landing.title"]).toBe("Tu ciudad, en la red.");
     expect(appCatalogs.fr["landing.title"]).toBe("Votre ville, sur le réseau.");
