@@ -87,7 +87,9 @@ test.describe("organizer onboarding stations", () => {
       waitUntil: "domcontentloaded",
     });
     await waitForApp(page);
-    await expect(page.getByTestId("orgs-tab-members")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("org-badges")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("orgs-tabs-loading")).toHaveCount(0, { timeout: 15000 });
+    await expect(page.getByRole("tablist")).toHaveCount(0);
     await expect(page.getByTestId("orgs-tab-onboard")).toHaveCount(0);
     await expect(page.getByTestId("onboard.event-picker")).toHaveCount(0);
 

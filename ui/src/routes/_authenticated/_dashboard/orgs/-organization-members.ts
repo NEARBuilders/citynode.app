@@ -1,10 +1,10 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { type ApiClient, type AuthClient, useApiClient } from "@/app";
-import { appErrorMessage } from "@/i18n/error-message";
+import { appErrorMessage, isPermissionError } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { MemberCardMember } from "./-member-card";
-import { orgMembersQueryKey } from "./-organization-query-keys";
+import { orgActiveRoleQueryKey, orgMembersQueryKey } from "./-organization-query-keys";
 
 export type OrgMember = {
   id: string;
@@ -22,6 +22,21 @@ export function orgMembersQueryOptions(apiClient: ApiClient, orgId: string) {
   return queryOptions({
     queryKey: orgMembersQueryKey(orgId),
     queryFn: () => fetchOrgMembers(apiClient, orgId),
+  });
+}
+
+export function orgActiveRoleQueryOptions(apiClient: ApiClient, orgId: string) {
+  return queryOptions({
+    queryKey: orgActiveRoleQueryKey(orgId),
+    queryFn: async (): Promise<string | null> => {
+      try {
+        const { role } = await apiClient.auth.getActiveMemberRole({ organizationId: orgId });
+        return role;
+      } catch (error) {
+        if (isPermissionError(error)) return null;
+        throw error;
+      }
+    },
   });
 }
 
