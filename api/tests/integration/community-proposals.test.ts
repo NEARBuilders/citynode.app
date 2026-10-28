@@ -143,7 +143,7 @@ const createOrganization = vi.fn(
       id: `org-${slug}`,
       name,
       slug,
-      status: "active",
+      status: "pending",
       requestedBy,
       metadata: metadata ? { ...metadata } : {},
       members: [],
@@ -172,6 +172,11 @@ const inviteMember = vi.fn(
   ) => {
     const organization = organizations.get(organizationId ?? "");
     if (!organization) throw notFound("Organization not found");
+    if (organization.status !== "active") {
+      throw new ORPCError("FORBIDDEN", {
+        message: "Organization requires platform-admin approval",
+      });
+    }
     const invitation: FakeInvitation = {
       id: `invitation-${++invitationCounter}`,
       organizationId: organization.id,
@@ -401,6 +406,7 @@ describe("approved community proposal provisioning", () => {
       requestedBy: "platform-reviewer",
     });
     const organization = organizations.get("org-chicago")!;
+    expect(organization.status).toBe("active");
     expect(organization.metadata).toMatchObject({
       communityProposalId: "prop-chicago",
       communityApplicantId: "user-applicant",

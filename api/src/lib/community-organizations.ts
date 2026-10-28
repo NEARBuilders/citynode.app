@@ -204,6 +204,12 @@ export async function provisionCommunityOrganization(
       ...input,
       metadata: applicantMetadata({ ...input, proposerUserId }),
     }));
+  if (organization.status === "rejected") {
+    throw conflict("The community organization request was rejected");
+  }
+  if (organization.status === "pending") {
+    await auth.reviewOrganization({ organizationId: organization.id, decision: "approve" });
+  }
   const ownerUserId = proposerUserId ?? input.reviewerUserId;
   await grantProposerOwnership(auth, organization.id, ownerUserId);
   if (input.reviewerUserId !== ownerUserId) {
