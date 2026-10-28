@@ -26,6 +26,12 @@ describe("node application", () => {
     expect(
       nodeApplicationSchema.safeParse({ ...base, kind: "city", parentId: "state-id" }).success,
     ).toBe(true);
+    expect(nodeApplicationSchema.safeParse({ ...base, kind: "city", parentId: null }).success).toBe(
+      true,
+    );
+    expect(
+      nodeApplicationSchema.safeParse({ ...base, kind: "country", parentId: "country-id" }).success,
+    ).toBe(false);
   });
 
   it("always derives the slug from the node name", () => {

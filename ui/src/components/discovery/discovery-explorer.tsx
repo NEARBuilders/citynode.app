@@ -133,6 +133,11 @@ export function DiscoveryExplorer({
   };
   const filtered = !!(search.query || search.region || search.active || search.upcoming);
   const nodes = list.data ?? [];
+  const basic = selected
+    ? undefined
+    : [...nodes, ...(regions.data ?? [])].find(
+        (node) => node.nodeId === search.node && !node.published,
+      );
   const upcomingCount = nodes.filter((node) => node.upcoming).length;
 
   return (
@@ -339,7 +344,9 @@ export function DiscoveryExplorer({
           }}
         >
           <SheetHeader className="gap-2 px-6 pt-8 pr-16 pb-2">
-            <SheetTitle>{selected?.name ?? t("explore.detail.community")}</SheetTitle>
+            <SheetTitle>
+              {selected?.name ?? basic?.name ?? t("explore.detail.community")}
+            </SheetTitle>
             <SheetDescription>
               <span className="flex min-w-0 items-center gap-1.5">
                 <MapPinIcon className="size-4 shrink-0" />
@@ -362,7 +369,27 @@ export function DiscoveryExplorer({
               {t("explore.detail.error")}
             </p>
           ) : !selected ? (
-            search.node ? (
+            basic ? (
+              <div className="flex flex-col gap-4 px-6 pb-8">
+                <p className="text-sm text-muted-foreground">{t("explore.detail.basic")}</p>
+                <div>
+                  <Button
+                    nativeButton={false}
+                    render={
+                      <Link
+                        to="/n/$slug"
+                        params={{ slug: basic.slug }}
+                        search={{ parentId: basic.parentId ?? undefined }}
+                        data-testid="explore-open-community"
+                      />
+                    }
+                  >
+                    {t("explore.detail.open")}
+                    <ArrowRightIcon />
+                  </Button>
+                </div>
+              </div>
+            ) : search.node ? (
               <p className="px-6 text-sm">{t("explore.detail.unavailable")}</p>
             ) : null
           ) : (

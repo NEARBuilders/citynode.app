@@ -10,11 +10,13 @@ import { render } from "@/i18n/test-render";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
+import type { NodeApplicationValues } from "./-node-application";
 import { Route } from "./apply";
 
 type ApplyApiClient = {
   listRootNodes: ReturnType<typeof vi.fn>;
   listChildren: ReturnType<typeof vi.fn>;
+  getNode: ReturnType<typeof vi.fn>;
   bindingPreflight: ReturnType<typeof vi.fn>;
   auth: { checkSlug: ReturnType<typeof vi.fn> };
   proposals: { propose: ReturnType<typeof vi.fn>; getMyNodeApplications: ReturnType<typeof vi.fn> };
@@ -52,6 +54,7 @@ const harness = vi.hoisted(() => ({
   },
   daoAccountIdForVerification: "dao.sputnik",
   nearAccount: "applicant.near" as string | null,
+  search: {} as { application?: string },
   initialRootNodes: [{ id: "country-1", name: "United States", kind: "country" }],
   routeContext: {
     auth: { activeOrganizationId: "org-1" as string | null },
@@ -113,6 +116,7 @@ vi.mock("@tanstack/react-router", async () => {
       options,
       useLoaderData: () => harness.initialRootNodes,
       useRouteContext: () => harness.routeContext,
+      useSearch: () => harness.search,
     }),
     Link: ({ children, to }: { children?: ReactNode; to?: unknown }) => (
       <a href={typeof to === "string" ? to : "#"}>{children}</a>
@@ -124,6 +128,7 @@ function createApiClient(): ApplyApiClient {
   return {
     listRootNodes: vi.fn().mockResolvedValue(harness.initialRootNodes),
     listChildren: vi.fn().mockResolvedValue([]),
+    getNode: vi.fn().mockResolvedValue(null),
     bindingPreflight: vi.fn().mockResolvedValue({
       hostname: { available: true, format: "valid" },
     }),
@@ -155,7 +160,7 @@ function createQueryClient() {
   });
 }
 
-function renderApply(queryClient = createQueryClient()) {
+async function renderApply(queryClient = createQueryClient()) {
   const Component = Route.options.component;
   if (!Component) throw new Error("Apply route has no component");
   render(
@@ -165,6 +170,7 @@ function renderApply(queryClient = createQueryClient()) {
       </QueryClientProvider>
     </AppI18nProvider>,
   );
+  await waitFor(() => expect(screen.queryByTestId("apply.loading")).toBeNull());
   return queryClient;
 }
 
@@ -192,6 +198,7 @@ beforeEach(() => {
   harness.daoConnection = { status: "connected", daoAccountId: "dao.sputnik" };
   harness.daoAccountIdForVerification = "dao.sputnik";
   harness.nearAccount = "applicant.near";
+  harness.search = {};
   harness.initialRootNodes = [{ id: "country-1", name: "United States", kind: "country" }];
   harness.routeContext = {
     auth: { activeOrganizationId: "org-1" },
@@ -215,7 +222,7 @@ describe("apply route submission", () => {
     queryClient.setQueryData(tenantQueryKeys.preflight("chicago.citynode.app"), {
       hostname: { available: true, format: "valid" },
     });
-    renderApply(queryClient);
+    await renderApply(queryClient);
 
     expect(stepStatus("near")).toBe("complete");
     expect(stepStatus("dao")).toBe("current");
@@ -233,7 +240,7 @@ describe("apply route submission", () => {
         pluginId: "node",
         entityId: "chicago",
         payload: {
-          kind: "country",
+          kind: "city",
           parentId: null,
           name: "Chicago",
           slug: "chicago",
@@ -264,11 +271,26 @@ describe("apply route submission", () => {
     ).toBe(false);
   });
 
+  it("starts as a standalone city and requires a country for a state", async () => {
+    await renderApply();
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await waitFor(() => expect(stepStatus("details")).toBe("current"));
+    expect(screen.getByTestId("apply.kind-city").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("No country (standalone city)")).toBeTruthy();
+    await fillValidApplication();
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(screen.getByTestId("apply.kind-state"));
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", true));
+    expect(screen.queryByText("No country (standalone city)")).toBeNull();
+  });
+
   it.each([
     ["pending", "not_started", "Awaiting review"],
-    ["approved", "applied", "Live"],
+    ["approved", "applying", "Applying"],
     ["rejected", "not_started", "Rejected"],
     ["approved", "failed", "Apply failed"],
+    ["removed", "not_started", "Removed"],
   ])("shows %s/%s application status after reload", async (reviewStatus, applyStatus, expected) => {
     harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
       data: [
@@ -284,7 +306,7 @@ describe("apply route submission", () => {
         },
       ],
     });
-    renderApply();
+    await renderApply();
     expect((await screen.findByTestId("apply.current-status")).textContent).toBe(expected);
     expect(screen.getByText("existing-1")).toBeTruthy();
     expect(screen.queryByTestId("apply.submit")).toBeNull();
@@ -294,6 +316,82 @@ describe("apply route submission", () => {
       fireEvent.click(screen.getByTestId("apply.revise"));
       expect(screen.getByTestId("apply.steps")).toBeTruthy();
     }
+  });
+
+  const application = (
+    id: string,
+    reviewStatus: string,
+    applyStatus: string,
+    createdAt: string,
+  ) => ({
+    id,
+    reviewStatus,
+    applyStatus,
+    rejectionReason: null,
+    applySteps: {},
+    applyTimedOut: false,
+    appliedAt: null,
+    createdAt,
+    payload: { name: id },
+  });
+
+  it("opens a fresh form when the latest application is live", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [application("live-1", "approved", "applied", "2026-09-10T00:00:00.000Z")],
+    });
+    await renderApply();
+    expect(screen.getByTestId("apply.steps")).toBeTruthy();
+    expect(screen.queryByTestId("apply.submitted")).toBeNull();
+  });
+
+  it("picks the latest application by submission time, not last update", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        application("live-1", "approved", "applied", "2026-09-01T00:00:00.000Z"),
+        application("pending-2", "pending", "not_started", "2026-09-10T00:00:00.000Z"),
+      ],
+    });
+    await renderApply();
+    expect((await screen.findByTestId("apply.current-status")).textContent).toBe("Awaiting review");
+    expect(screen.getByText("pending-2", { selector: "p.font-mono" })).toBeTruthy();
+  });
+
+  it("does not let an older rejected application hide a newer live one", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        application("rejected-1", "rejected", "not_started", "2026-09-01T00:00:00.000Z"),
+        application("live-2", "approved", "applied", "2026-09-10T00:00:00.000Z"),
+      ],
+    });
+    await renderApply();
+    expect(screen.getByTestId("apply.steps")).toBeTruthy();
+  });
+
+  it("shows a live application's status when opened from its status link", async () => {
+    harness.search = { application: "live-1" };
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [application("live-1", "approved", "applied", "2026-09-10T00:00:00.000Z")],
+    });
+    await renderApply();
+    expect((await screen.findByTestId("apply.current-status")).textContent).toBe("Live");
+    fireEvent.click(screen.getByTestId("apply.new"));
+    expect(screen.getByTestId("apply.steps")).toBeTruthy();
+  });
+
+  it("waits for the applicant's applications before showing the form", async () => {
+    harness.apiClient?.proposals.getMyNodeApplications.mockReturnValue(new Promise(() => {}));
+    const queryClient = createQueryClient();
+    const Component = Route.options.component;
+    if (!Component) throw new Error("Apply route has no component");
+    render(
+      <AppI18nProvider>
+        <QueryClientProvider client={queryClient}>
+          <Component />
+        </QueryClientProvider>
+      </AppI18nProvider>,
+    );
+    expect(screen.getByTestId("apply.loading")).toBeTruthy();
+    expect(screen.queryByTestId("apply.steps")).toBeNull();
   });
 
   it("shows the applicant which setup step is waiting on their DAO", async () => {
@@ -327,7 +425,7 @@ describe("apply route submission", () => {
         },
       ],
     });
-    renderApply();
+    await renderApply();
     const publication = await screen.findByTestId("application-progress-publication");
     expect(publication.getAttribute("data-state")).toBe("waiting");
     expect(screen.getByTestId("application-progress-community").getAttribute("data-state")).toBe(
@@ -350,7 +448,7 @@ describe("apply route submission", () => {
     },
   ])("keeps the details step locked with a $label", async ({ daoConnection }) => {
     harness.daoConnection = daoConnection;
-    renderApply();
+    await renderApply();
 
     expect(stepStatus("dao")).toBe("current");
     expect(stepStatus("details")).toBe("upcoming");
@@ -359,7 +457,7 @@ describe("apply route submission", () => {
   });
 
   it("returns to details after reopening a verified DAO step", async () => {
-    renderApply();
+    await renderApply();
     fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
     await waitFor(() => expect(stepStatus("details")).toBe("current"));
 
@@ -384,8 +482,7 @@ describe("apply route submission", () => {
         },
       ],
     });
-    renderApply();
-    fireEvent.click(await screen.findByTestId("apply.new"));
+    await renderApply();
     fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
     await fillValidApplication();
     const submitButton = screen.getByRole("button", { name: "Submit for review" });
@@ -397,6 +494,52 @@ describe("apply route submission", () => {
       "orgId",
     );
     expect(harness.apiClient?.auth.checkSlug).toHaveBeenCalledWith({ slug: "chicago" });
+  });
+
+  function rejectedApplication(payload: Partial<NodeApplicationValues>) {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus: "rejected",
+          applyStatus: "not_started",
+          rejectionReason: "More detail needed",
+          applySteps: {},
+          applyTimedOut: false,
+          appliedAt: null,
+          payload: { name: "Chicago", slug: "chicago", motivation: "Serve.", ...payload },
+        },
+      ],
+    });
+  }
+
+  it("only offers countries as the country of a new community", async () => {
+    harness.initialRootNodes = [
+      { id: "country-1", name: "United States", kind: "country" },
+      { id: "city-root", name: "Lonely City", kind: "city" },
+    ];
+    rejectedApplication({ kind: "state", parentId: "city-root" });
+    harness.apiClient?.getNode.mockResolvedValue({ id: "city-root", parentId: null });
+    renderApply();
+    fireEvent.click(await screen.findByTestId("apply.revise"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await waitFor(() => expect(harness.apiClient?.getNode).toHaveBeenCalled());
+    expect(screen.queryByText("Lonely City")).toBeNull();
+  });
+
+  it("restores the country and state when revising a city under a state", async () => {
+    rejectedApplication({ kind: "city", parentId: "state-1" });
+    harness.apiClient?.getNode.mockResolvedValue({ id: "state-1", parentId: "country-1" });
+    harness.apiClient?.listChildren.mockResolvedValue([
+      { id: "state-1", name: "Illinois", kind: "state" },
+    ]);
+    renderApply();
+    fireEvent.click(await screen.findByTestId("apply.revise"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    expect(await screen.findByText("Illinois")).toBeTruthy();
+    expect(screen.getByText("United States")).toBeTruthy();
+    expect(screen.queryByText("No country (standalone city)")).toBeNull();
+    expect(harness.apiClient?.getNode).toHaveBeenCalledWith({ nodeId: "state-1" });
   });
 
   it("keeps the organization when revising a rejected legacy application", async () => {
@@ -422,7 +565,7 @@ describe("apply route submission", () => {
       ],
     });
     harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: false });
-    renderApply();
+    await renderApply();
     fireEvent.click(await screen.findByTestId("apply.revise"));
     fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
     await fillValidApplication();
@@ -443,7 +586,7 @@ describe("apply route submission", () => {
       runtimeConfig: TEST_RUNTIME_CONFIG,
     };
     harness.nearAccount = null;
-    renderApply();
+    await renderApply();
 
     expect(stepStatus("near")).toBe("current");
     expect(screen.queryByTestId("apply.step-organization")).toBeNull();

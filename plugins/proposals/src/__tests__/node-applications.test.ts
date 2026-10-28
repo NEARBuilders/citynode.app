@@ -145,6 +145,22 @@ describe.sequential("node applications", () => {
     expect(result.data.payload).not.toHaveProperty("orgId");
   });
 
+  it("accepts a standalone city and still requires a country for a state", async () => {
+    const result = await client("alice.near", null).propose({
+      pluginId: "node",
+      entityId: "standalone-city",
+      payload: { ...payload, kind: "city", parentId: null, slug: "standalone-city" },
+    });
+    expect(result.data.payload).toMatchObject({ kind: "city", parentId: null });
+    await expect(
+      client("alice.near", null).propose({
+        pluginId: "node",
+        entityId: "orphan-state",
+        payload: { ...payload, kind: "state", parentId: null, slug: "orphan-state" },
+      }),
+    ).rejects.toThrow(/Invalid community application payload/);
+  });
+
   it("blocks duplicate pending submissions and another applicant's slug collision", async () => {
     await expect(
       client("alice.near").propose({

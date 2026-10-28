@@ -8,6 +8,9 @@ import { render } from "@/i18n/test-render";
 import { type StakeValidator, StakeValidatorList } from "./-stake-validator-list";
 
 vi.mock("@/app", () => ({
+  useApiClient: () => ({
+    getStakingPoolApproval: async () => ({ approved: true }),
+  }),
   useAuthClient: () => ({
     near: { getNearClient: () => new Near({ network: "mainnet" }) },
   }),

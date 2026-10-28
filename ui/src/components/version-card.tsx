@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import { Badge, SectionHeader } from "@/components";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
@@ -19,7 +20,16 @@ const OUTCOME_LABELS: Record<string, { label: AppMessageId; tone: "info" | "succ
 
 export function VersionCard() {
   const translate = useAppTranslation();
-  const query = useQuery({
+  return (
+    <div data-testid="admin-version-card" className="rounded-lg border bg-background p-4">
+      <SectionHeader title={translate("version.title")} sectionTestId="admin-version-heading" />
+      <VersionDetails className="mt-2" />
+    </div>
+  );
+}
+
+export function useDeployedVersion() {
+  return useQuery({
     queryKey: ["deployed-version"],
     queryFn: async (): Promise<VersionEndpointResponse> => {
       const response = await fetch("/.well-known/version");
@@ -28,52 +38,59 @@ export function VersionCard() {
     },
     refetchInterval: 30_000,
   });
+}
 
-  const version = query.data;
-  const outcome = version?.watch?.lastOutcome;
+export function VersionOutcomeBadge({ outcome }: { outcome?: string }) {
+  const translate = useAppTranslation();
   const outcomeMeta = outcome ? OUTCOME_LABELS[outcome] : undefined;
-
+  if (!outcomeMeta) return null;
   return (
-    <div data-testid="admin-version-card" className="rounded-lg border bg-background p-4">
-      <SectionHeader title={translate("version.title")} sectionTestId="admin-version-heading" />
-      {query.isLoading ? (
-        <p className="text-muted-foreground text-sm">{translate("common.loading")}</p>
-      ) : query.isError || !version?.fingerprint ? (
-        <p className="text-muted-foreground text-sm">{translate("version.unreachable")}</p>
-      ) : (
-        <dl className="mt-2 space-y-1 text-sm">
-          <div className="flex items-center gap-2">
-            <dt className="text-muted-foreground">{translate("version.fingerprint")}</dt>
-            <dd className="font-mono">{version.fingerprint}</dd>
-            {outcomeMeta && (
-              <Badge
-                variant={
-                  outcomeMeta.tone === "danger"
-                    ? "destructive"
-                    : outcomeMeta.tone === "success"
-                      ? "success"
-                      : "secondary"
-                }
-              >
-                {translate(outcomeMeta.label)}
-              </Badge>
-            )}
-          </div>
-          {Object.keys(version.slots ?? {}).length > 0 && (
-            <div>
-              <dt className="text-muted-foreground">{translate("version.slots")}</dt>
-              <dd className="mt-1 space-y-0.5">
-                {Object.entries(version.slots ?? {}).map(([slot, pin]) => (
-                  <div key={slot} className="flex gap-2 font-mono text-xs">
-                    <span className="text-muted-foreground">{slot}</span>
-                    <span>{pin}</span>
-                  </div>
-                ))}
-              </dd>
-            </div>
-          )}
-        </dl>
+    <Badge
+      variant={
+        outcomeMeta.tone === "danger"
+          ? "destructive"
+          : outcomeMeta.tone === "success"
+            ? "success"
+            : "secondary"
+      }
+    >
+      {translate(outcomeMeta.label)}
+    </Badge>
+  );
+}
+
+export function VersionDetails({ className }: { className?: string }) {
+  const translate = useAppTranslation();
+  const query = useDeployedVersion();
+  const version = query.data;
+  const slots = Object.entries(version?.slots ?? {});
+
+  if (query.isLoading) {
+    return <p className="text-muted-foreground text-sm">{translate("common.loading")}</p>;
+  }
+  if (!version?.fingerprint) {
+    return <p className="text-muted-foreground text-sm">{translate("version.unreachable")}</p>;
+  }
+  return (
+    <dl className={cn("space-y-1 text-sm", className)} data-testid="version-details">
+      <div className="flex flex-wrap items-center gap-2">
+        <dt className="text-muted-foreground">{translate("version.fingerprint")}</dt>
+        <dd className="font-mono break-all">{version.fingerprint}</dd>
+        <VersionOutcomeBadge outcome={version.watch?.lastOutcome} />
+      </div>
+      {slots.length > 0 && (
+        <div>
+          <dt className="text-muted-foreground">{translate("version.slots")}</dt>
+          <dd className="mt-1 space-y-0.5">
+            {slots.map(([slot, pin]) => (
+              <div key={slot} className="flex flex-wrap gap-x-2 font-mono text-xs">
+                <span className="text-muted-foreground">{slot}</span>
+                <span className="break-all">{pin}</span>
+              </div>
+            ))}
+          </dd>
+        </div>
       )}
-    </div>
+    </dl>
   );
 }
