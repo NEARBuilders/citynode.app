@@ -370,4 +370,27 @@ describe("My community without a valid active community", () => {
     });
     expect(result.tenant?.orgId).toBe(delta.id);
   });
+
+  it("lets a platform admin open a community they aren't a member of", async () => {
+    harness.activeOrganizationId = harbor.id;
+    harness.organizations = [personal];
+    harness.tenants = { [harbor.id]: "Harbor" };
+    harness.nodes = [node("node-a", "Harbor")];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    clients.push(queryClient);
+    const beforeLoad = (
+      CommunityRoute as unknown as {
+        options: { beforeLoad: (args: unknown) => Promise<{ tenant: { orgId: string } | null }> };
+      }
+    ).options.beforeLoad;
+    const result = await beforeLoad({
+      context: {
+        apiClient: api,
+        queryClient,
+        auth: { activeOrganizationId: harbor.id, user: { id: "user-1", role: "admin" } },
+      },
+      search: {},
+    });
+    expect(result.tenant?.orgId).toBe(harbor.id);
+  });
 });

@@ -131,4 +131,15 @@ describe("resolveCommunityMembership", () => {
       }),
     ).toEqual({ status: "active", organization: harbor });
   });
+
+  it("keeps a platform admin's active organization even when they aren't a member", () => {
+    expect(
+      resolveCommunityMembership({
+        organizations: [personal, harbor],
+        activeOrganizationId: "org-admin-viewing",
+        userId,
+        isAdmin: true,
+      }),
+    ).toEqual({ status: "unknown" });
+  });
 });

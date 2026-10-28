@@ -96,8 +96,10 @@ function Home() {
     activeOrganizationId: activeOrgId,
     userId: user?.id,
     refreshing: organizations.isFetching,
+    isAdmin: user?.role === "admin",
   });
-  const communityOrgId = communityOrganizationId(membership) ?? "";
+  const communityOrgId =
+    membership.status === "unknown" ? activeOrgId : (communityOrganizationId(membership) ?? "");
   const tenant = useQuery(tenantByOrgQueryOptions(apiClient, communityOrgId));
   const nodes = useQuery({
     ...tenantNodesQueryOptions(apiClient, tenant.data?.id ?? ""),
@@ -146,7 +148,7 @@ function Home() {
       isAnonymous: user?.isAnonymous ?? false,
       hasPasskey: (passkeys.data?.length ?? 0) > 0,
       hasNear: !!nearAccountId,
-      membership: membership.status,
+      membership: membership.status === "unknown" && community ? "active" : membership.status,
       communityCount: membership.status === "choose" ? membership.count : 0,
       community,
       canManageCommunity: canManage,

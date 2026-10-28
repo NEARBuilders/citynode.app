@@ -42,8 +42,9 @@ export function useIdentity() {
         activeOrganizationId: activeOrgId,
         userId: user?.id,
         refreshing: organizationsQuery.isFetching,
+        isAdmin: user?.role === "admin",
       }),
-    [organizations, activeOrgId, user?.id, organizationsQuery.isFetching],
+    [organizations, activeOrgId, user?.id, user?.role, organizationsQuery.isFetching],
   );
 
   const { data: nearProfile } = useQuery({

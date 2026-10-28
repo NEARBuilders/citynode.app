@@ -37,17 +37,21 @@ export function resolveCommunityMembership<T extends OrganizationLike>({
   activeOrganizationId,
   userId,
   refreshing = false,
+  isAdmin = false,
 }: {
   organizations: readonly T[] | undefined;
   activeOrganizationId: string | null | undefined;
   userId: string | null | undefined;
   refreshing?: boolean;
+  isAdmin?: boolean;
 }): CommunityMembership<T> {
   if (!organizations || !userId) return { status: "unknown" };
   const activeListed = organizations.some(
     (organization) => organization.id === activeOrganizationId,
   );
-  if (activeOrganizationId && !activeListed && refreshing) return { status: "unknown" };
+  if (activeOrganizationId && !activeListed && (refreshing || isAdmin)) {
+    return { status: "unknown" };
+  }
   const visible = visibleOrganizations(organizations, userId);
   const active = visible.find(
     (organization) => organization.id === activeOrganizationId && isOpenable(organization),

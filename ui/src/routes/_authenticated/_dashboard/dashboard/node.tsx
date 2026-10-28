@@ -35,6 +35,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       organizations,
       activeOrganizationId,
       userId: context.auth.user?.id,
+      isAdmin: context.auth.user?.role === "admin",
     });
     const communityOrgId =
       membership.status === "unknown" ? activeOrganizationId : communityOrganizationId(membership);
