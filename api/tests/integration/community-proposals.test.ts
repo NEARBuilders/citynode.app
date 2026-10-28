@@ -16,6 +16,7 @@ function savedProposal(
     status?: string;
     applyStatus?: string;
     updatedAt?: string;
+    applicantUserId?: string | null;
   },
 ) {
   return {
@@ -35,7 +36,9 @@ function savedProposal(
       motivation: "Serve the local community",
       accountId: `${slug}.sputnik-dao.near`,
       submitterAccountId: options?.submitterAccountId ?? applicant,
-      applicantUserId: "user-applicant",
+      ...(options?.applicantUserId === null
+        ? {}
+        : { applicantUserId: options?.applicantUserId ?? "user-applicant" }),
       ...(options?.orgId ? { orgId: options.orgId } : {}),
     },
   };
@@ -71,13 +74,27 @@ type FakeOrganization = {
   requestedBy: string | null;
   metadata: Record<string, unknown>;
   members: FakeMember[];
-  invitations: unknown[];
+  invitations: FakeInvitation[];
   teams: FakeTeam[];
+};
+
+type FakeInvitation = {
+  id: string;
+  organizationId: string;
+  email: string | null;
+  role: string | null;
+  status: string;
+  expiresAt: Date;
+  inviterId: string;
+  teamId: string | null;
+  nearAccountId: string | null;
+  nearNetwork: "mainnet" | "testnet" | null;
 };
 
 const organizations = new Map<string, FakeOrganization>();
 let memberCounter = 0;
 let teamCounter = 0;
+let invitationCounter = 0;
 
 const fakeNow = () => new Date("2026-09-10T00:00:00.000Z");
 
@@ -126,7 +143,7 @@ const createOrganization = vi.fn(
       id: `org-${slug}`,
       name,
       slug,
-      status: "active",
+      status: "pending",
       requestedBy,
       metadata: metadata ? { ...metadata } : {},
       members: [],
@@ -135,6 +152,45 @@ const createOrganization = vi.fn(
     };
     organizations.set(organization.id, organization);
     return fakeOrgOutput(organization);
+  },
+);
+
+const inviteMember = vi.fn(
+  async (
+    inviterId: string,
+    {
+      nearAccountId,
+      nearNetwork,
+      role,
+      organizationId,
+    }: {
+      nearAccountId?: string;
+      nearNetwork?: "mainnet" | "testnet";
+      role: string;
+      organizationId?: string;
+    },
+  ) => {
+    const organization = organizations.get(organizationId ?? "");
+    if (!organization) throw notFound("Organization not found");
+    if (organization.status !== "active") {
+      throw new ORPCError("FORBIDDEN", {
+        message: "Organization requires platform-admin approval",
+      });
+    }
+    const invitation: FakeInvitation = {
+      id: `invitation-${++invitationCounter}`,
+      organizationId: organization.id,
+      email: `${nearAccountId}@${nearNetwork}.invite`,
+      role,
+      status: "pending",
+      expiresAt: new Date(Date.now() + 86_400_000),
+      inviterId,
+      teamId: null,
+      nearAccountId: nearAccountId ?? null,
+      nearNetwork: nearNetwork ?? null,
+    };
+    organization.invitations.push(invitation);
+    return invitation;
   },
 );
 
@@ -304,6 +360,15 @@ describe("approved community proposal provisioning", () => {
               organizations.get(organizationId ?? "")?.teams.push(team);
               return { ...team, createdAt: fakeNow(), updatedAt: fakeNow() };
             },
+            listInvitations: async ({ organizationId }: { organizationId?: string }) => [
+              ...(organizations.get(organizationId ?? "")?.invitations ?? []),
+            ],
+            inviteMember: (input: {
+              nearAccountId?: string;
+              nearNetwork?: "mainnet" | "testnet";
+              role: string;
+              organizationId?: string;
+            }) => inviteMember(sessionId ?? "", input),
             listOnboardingCodes: async () => [],
             deleteOrganization: (input: { organizationId: string }) => deleteOrganization(input),
           };
@@ -341,6 +406,7 @@ describe("approved community proposal provisioning", () => {
       requestedBy: "platform-reviewer",
     });
     const organization = organizations.get("org-chicago")!;
+    expect(organization.status).toBe("active");
     expect(organization.metadata).toMatchObject({
       communityProposalId: "prop-chicago",
       communityApplicantId: "user-applicant",
@@ -360,6 +426,8 @@ describe("approved community proposal provisioning", () => {
       orgId: "org-chicago",
       accountId: "chicago.sputnik-dao.near",
     });
+    expect(first.applicantInvited).toBe(false);
+    expect(organization.invitations).toEqual([]);
     const second = await admin.applyCommunityProposal(input);
     expect(second.nodeId).toBe(first.nodeId);
     expect(
@@ -654,5 +722,148 @@ describe("approved community proposal provisioning", () => {
       organization: { released: false, keptReason: "existing" },
     });
     expect(deleteOrganization).not.toHaveBeenCalled();
+  });
+  it("makes the reviewer owner and invites the applicant when the application saved no applicant user", async () => {
+    proposals.set(
+      "brooklyn",
+      savedProposal("prop-brooklyn", "brooklyn", { applicantUserId: null }),
+    );
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = {
+      proposalId: "prop-brooklyn",
+      entityId: "brooklyn",
+      hostname: "brooklyn.citynode.app",
+    };
+    inviteMember.mockClear();
+    const first = await admin.applyCommunityProposal(input);
+    expect(first.applicantInvited).toBe(true);
+    const organization = organizations.get("org-brooklyn")!;
+    expect(organization.metadata).toEqual({
+      communityProposalId: "prop-brooklyn",
+      communityApplicantAccountId: applicant,
+      communityReviewerId: "platform-reviewer",
+    });
+    expect(
+      Object.fromEntries(organization.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "platform-reviewer": "owner" });
+    expect(organization.invitations).toMatchObject([
+      { nearAccountId: applicant, nearNetwork: "mainnet", role: "owner", status: "pending" },
+    ]);
+    expect(organization.teams).toHaveLength(3);
+    const node = await admin.getNode({ nodeId: first.nodeId });
+    const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
+    expect(tenant?.orgId).toBe("org-brooklyn");
+
+    const resumed = await admin.applyCommunityProposal(input);
+    expect(resumed).toEqual({ nodeId: first.nodeId, applicantInvited: true });
+    expect(inviteMember).toHaveBeenCalledTimes(1);
+    expect(organization.invitations).toHaveLength(1);
+
+    organization.invitations[0]!.status = "accepted";
+    await admin.applyCommunityProposal(input);
+    expect(inviteMember).toHaveBeenCalledTimes(1);
+  });
+
+  it("invites the applicant again once the earlier invitation expired", async () => {
+    proposals.set("queens", savedProposal("prop-queens", "queens", { applicantUserId: null }));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = {
+      proposalId: "prop-queens",
+      entityId: "queens",
+      hostname: "queens.citynode.app",
+    };
+    await admin.applyCommunityProposal(input);
+    const organization = organizations.get("org-queens")!;
+    organization.invitations[0]!.expiresAt = new Date("2026-01-01T00:00:00.000Z");
+    inviteMember.mockClear();
+    await admin.applyCommunityProposal(input);
+    expect(inviteMember).toHaveBeenCalledTimes(1);
+    expect(inviteMember).toHaveBeenCalledWith(
+      "platform-reviewer",
+      expect.objectContaining({ nearAccountId: applicant, resend: true }),
+    );
+  });
+
+  it("leaves an unverified legacy organization untouched when the application saved no applicant user", async () => {
+    organizations.set("legacy-harlem", {
+      id: "legacy-harlem",
+      name: "Harlem Builders",
+      slug: "harlem-builders",
+      status: "active",
+      requestedBy: "user-legacy-requester",
+      metadata: {},
+      members: [
+        {
+          id: "member-legacy-owner",
+          userId: "user-legacy-requester",
+          organizationId: "legacy-harlem",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    proposals.set(
+      "harlem",
+      savedProposal("prop-harlem", "harlem", { orgId: "legacy-harlem", applicantUserId: null }),
+    );
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const applied = await admin.applyCommunityProposal({
+      proposalId: "prop-harlem",
+      entityId: "harlem",
+      hostname: "harlem.citynode.app",
+    });
+    expect(applied.applicantInvited).toBe(true);
+    const legacy = organizations.get("legacy-harlem")!;
+    expect(legacy.metadata).toEqual({});
+    expect(legacy.members.map((member) => [member.userId, member.role])).toEqual([
+      ["user-legacy-requester", "owner"],
+    ]);
+    expect(legacy.invitations).toEqual([]);
+    const created = organizations.get("org-harlem")!;
+    expect(
+      Object.fromEntries(created.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "platform-reviewer": "owner" });
+    expect(created.invitations).toMatchObject([{ nearAccountId: applicant, role: "owner" }]);
+    const node = await admin.getNode({ nodeId: applied.nodeId });
+    const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
+    expect(tenant?.orgId).toBe("org-harlem");
+
+    const failed: Record<string, unknown> | undefined = proposals.get("harlem");
+    if (failed) failed.applyStatus = "failed";
+    deleteOrganization.mockClear();
+    expect(
+      await admin.releaseCommunityProposal({
+        proposalId: "prop-harlem",
+        entityId: "harlem",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).toMatchObject({ organization: { released: true, keptReason: null } });
+    expect(deleteOrganization).toHaveBeenCalledWith({ organizationId: "org-harlem" });
+    expect(organizations.has("legacy-harlem")).toBe(true);
+  });
+
+  it("removes a failed setup whose only invitation is the applicant's", async () => {
+    proposals.set("bronx", savedProposal("prop-bronx", "bronx", { applicantUserId: null }));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    await admin.applyCommunityProposal({
+      proposalId: "prop-bronx",
+      entityId: "bronx",
+      hostname: "bronx.citynode.app",
+    });
+    const failed: Record<string, unknown> | undefined = proposals.get("bronx");
+    if (failed) failed.applyStatus = "failed";
+    deleteOrganization.mockClear();
+    expect(
+      await admin.releaseCommunityProposal({
+        proposalId: "prop-bronx",
+        entityId: "bronx",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).toEqual({
+      community: { released: true, keptReason: null },
+      organization: { released: true, keptReason: null },
+    });
+    expect(deleteOrganization).toHaveBeenCalledWith({ organizationId: "org-bronx" });
   });
 });

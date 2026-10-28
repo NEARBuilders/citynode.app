@@ -44,7 +44,9 @@ function client(initialProposal = proposal("node", nodePayload)) {
       }),
       recordApplyStep: vi.fn().mockResolvedValue({ data: approved }),
     },
-    applyCommunityProposal: vi.fn().mockResolvedValue({ nodeId: "node-id" }),
+    applyCommunityProposal: vi
+      .fn()
+      .mockResolvedValue({ nodeId: "node-id", applicantInvited: false }),
     registry: {
       getRegistryApp: vi
         .fn()
@@ -114,6 +116,37 @@ describe("proposal application dispatcher", () => {
       status: "completed",
     });
     expect(result.applyStatus).toBe("applied");
+  });
+
+  it("reports when setup invited the applicant instead of making them owner", async () => {
+    const api = client(proposal("node", nodePayload));
+    const onApplicantInvited = vi.fn();
+    const publish = {
+      apiClient: api as unknown as ApiClient,
+      proposal: proposal("node", nodePayload),
+      gatewayId: "citynode.app",
+      baseAccount: "everything.near",
+      publishTenantConfig: vi.fn().mockResolvedValue(undefined),
+      findOpenTenantConfigProposal: noOpenProposal,
+      onApplicantInvited,
+    };
+    await approveAndApplyProposal(publish);
+    expect(onApplicantInvited).not.toHaveBeenCalled();
+
+    api.applyCommunityProposal.mockResolvedValue({ nodeId: "node-id", applicantInvited: true });
+    await approveAndApplyProposal(publish);
+    expect(onApplicantInvited).toHaveBeenCalledOnce();
+
+    const waiting = client(proposal("node", nodePayload));
+    waiting.applyCommunityProposal.mockResolvedValue({ nodeId: "node-id", applicantInvited: true });
+    await expect(
+      approveAndApplyProposal({
+        ...publish,
+        apiClient: waiting as unknown as ApiClient,
+        findOpenTenantConfigProposal: () => Promise.resolve({ id: 7 }),
+      }),
+    ).rejects.toMatchObject({ messageId: "proposal.publicationAwaitingVote" });
+    expect(onApplicantInvited).toHaveBeenCalledTimes(2);
   });
 
   it("marks node application failures", async () => {

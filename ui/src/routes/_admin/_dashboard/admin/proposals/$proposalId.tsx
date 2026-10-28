@@ -128,6 +128,9 @@ function ProposalDetailPage() {
         findOpenTenantConfigProposal,
         onProposalChange: (nextProposal) =>
           queryClient.setQueryData(proposalQueryKey, nextProposal),
+        onApplicantInvited: () => {
+          toast.info(translate("admin.proposal.applicantInvited"));
+        },
       });
       return { action, proposal: reviewedProposal, kept: [] };
     },

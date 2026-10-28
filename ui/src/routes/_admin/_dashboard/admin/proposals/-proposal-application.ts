@@ -20,6 +20,7 @@ type ProposalApplicationHandler = (input: {
   baseAccount: string;
   publishTenantConfig: TenantConfigPublisher;
   findOpenTenantConfigProposal: OpenTenantConfigProposalFinder;
+  onApplicantInvited?: () => void;
 }) => Promise<AppliedResource>;
 
 const proposalApplicationHandlers = {
@@ -30,6 +31,7 @@ const proposalApplicationHandlers = {
     baseAccount,
     publishTenantConfig,
     findOpenTenantConfigProposal,
+    onApplicantInvited,
   }) => {
     const payload = parseNodeProposalPayload(proposal.payload);
     const hostname = `${payload.slug}.${gatewayId}`;
@@ -38,6 +40,7 @@ const proposalApplicationHandlers = {
       entityId: proposal.entityId,
       hostname,
     });
+    if (node.applicantInvited) onApplicantInvited?.();
     const expected = { accountId: payload.accountId, gatewayId, hostname, title: payload.name };
     const published = () => isTenantConfigPublished(apiClient, expected);
     const recordPublication = (status: ApplyStepStatus, resourceId?: string) =>
@@ -143,6 +146,7 @@ export async function approveAndApplyProposal({
   publishTenantConfig,
   findOpenTenantConfigProposal,
   onProposalChange,
+  onApplicantInvited,
 }: {
   apiClient: ApiClient;
   proposal: ProposalApplicationInput;
@@ -151,6 +155,7 @@ export async function approveAndApplyProposal({
   publishTenantConfig: TenantConfigPublisher;
   findOpenTenantConfigProposal: OpenTenantConfigProposalFinder;
   onProposalChange?: (proposal: Proposal) => void;
+  onApplicantInvited?: () => void;
 }) {
   const approved = await apiClient.proposals.approve({
     pluginId: proposal.pluginId,
@@ -171,6 +176,7 @@ export async function approveAndApplyProposal({
         baseAccount,
         publishTenantConfig,
         findOpenTenantConfigProposal,
+        onApplicantInvited,
       });
     }
   } catch (error) {
