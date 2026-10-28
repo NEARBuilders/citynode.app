@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAppTranslation } from "@/i18n/runtime";
+import { sortCommunityNodes } from "@/lib/community-node";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import {
@@ -88,7 +89,7 @@ export function CommunityHeader({
   const siblings = useQuery({
     ...tenantNodesQueryOptions(api, node?.tenantId ?? ""),
     enabled: !!node?.tenantId,
-    select: (nodes) => [...nodes].sort((a, b) => a.name.localeCompare(b.name)),
+    select: sortCommunityNodes,
   });
   const nodes = siblings.data ?? [];
 

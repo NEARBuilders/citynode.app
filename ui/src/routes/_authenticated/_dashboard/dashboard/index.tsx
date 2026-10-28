@@ -20,6 +20,7 @@ import {
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
+import { selectCommunityNode } from "@/lib/community-node";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
@@ -112,7 +113,7 @@ function Home() {
 
   const user = session?.user;
   const canManage = user?.role === "admin" || canManageCommunity(authContext.data);
-  const node = nodes.data?.[0] ?? null;
+  const node = selectCommunityNode(nodes.data ?? []);
   const nodeId = node?.id ?? "";
   const profile = useQuery({
     ...discoveryProfileQueryOptions(apiClient, nodeId),

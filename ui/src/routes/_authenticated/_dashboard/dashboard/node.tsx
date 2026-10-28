@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { Button, EmptyState, PageContainer } from "@/components";
 import { discoveryNodeQueryOptions } from "@/components/discovery/event-visibility";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { selectCommunityNode, sortCommunityNodes } from "@/lib/community-node";
 import { pageTitle } from "@/lib/page-title";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { canManageCommunity, resolveTeamWorkspace } from "@/lib/team-workspace";
@@ -51,10 +52,8 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       };
     }
 
-    const nodes = (await context.apiClient.listNodes({ tenantId: tenant.id })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-    const selectedNode = nodes.find((node) => node.id === search.nodeId) ?? nodes[0] ?? null;
+    const nodes = sortCommunityNodes(await context.apiClient.listNodes({ tenantId: tenant.id }));
+    const selectedNode = selectCommunityNode(nodes, search.nodeId);
     if (!selectedNode) {
       return {
         tenant,

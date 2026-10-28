@@ -106,10 +106,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "控制台公告",
   ],
   "bulletin.editorHint": [
-    "A short announcement shown on your community's dashboard and public page. Supports markdown. Leave blank to remove it.",
-    "Un anuncio breve en el panel y la página pública de tu comunidad. Admite Markdown. Déjalo vacío para eliminarlo.",
-    "Une courte annonce affichée sur le tableau de bord et la page publique de votre communauté. Accepte Markdown. Laissez vide pour la supprimer.",
-    "显示在社区控制台和公开页面上的简短公告，支持 Markdown，留空即可移除。",
+    "A short announcement only members see, on your community's dashboard. Supports markdown. Leave blank to remove it.",
+    "Un anuncio breve que solo ven los miembros, en el panel de tu comunidad. Admite Markdown. Déjalo vacío para eliminarlo.",
+    "Une courte annonce visible uniquement par les membres, sur le tableau de bord de votre communauté. Accepte Markdown. Laissez vide pour la supprimer.",
+    "仅成员可见的简短公告，显示在社区控制台上。支持 Markdown，留空即可移除。",
   ],
   "bulletin.example": [
     "More features are coming soon…",
