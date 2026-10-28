@@ -90,7 +90,7 @@ export function ApplySubmitted({
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
           <Button
             nativeButton={false}
-            render={<Link to="/apply" reloadDocument />}
+            render={<Link to="/apply" search={{ application: proposalId }} reloadDocument />}
             data-testid="apply.view-status"
           >
             {t("apply.status.view")}

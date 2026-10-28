@@ -511,4 +511,46 @@ describe("ValidatorsService", () => {
       expect((error as ORPCError<string, unknown>).code).toBe("NOT_FOUND");
     });
   });
+
+  describe("stakeableNodeIds", () => {
+    it("matches resolveForStaking for every node in one call", async () => {
+      const layer = freshLayer();
+      const tenant = await runService(layer, ({ tenants }) =>
+        tenants.createTenant({
+          name: "Test Tenant",
+          accountId: "test.example.near",
+          orgId: "org-1",
+        }),
+      );
+      const spawn = (kind: "country" | "state" | "city", slug: string, parentId: string | null) =>
+        runService(layer, ({ nodes }) =>
+          nodes.spawn({ kind, slug, name: slug, parentId, tenantId: tenant.id }),
+        );
+      const country = await spawn("country", "testland", null);
+      const state = await spawn("state", "north", country.id);
+      const city = await spawn("city", "alpha", state.id);
+      const otherCountry = await spawn("country", "otherland", null);
+      const standalone = await spawn("city", "lonely", null);
+      await runService(layer, ({ validators }) =>
+        validators.create({ nodeId: state.id, accountId: "valState.near" }),
+      );
+      const missing = "00000000-0000-0000-0000-000000000000";
+
+      const stakeable = await runService(layer, ({ validators }) =>
+        validators.stakeableNodeIds([
+          country.id,
+          state.id,
+          city.id,
+          otherCountry.id,
+          standalone.id,
+          missing,
+        ]),
+      );
+
+      expect([...stakeable].sort()).toEqual([country.id, state.id, city.id].sort());
+      expect(await runService(layer, ({ validators }) => validators.stakeableNodeIds([]))).toEqual(
+        new Set(),
+      );
+    });
+  });
 });

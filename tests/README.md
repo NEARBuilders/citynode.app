@@ -74,9 +74,9 @@ pnpm run regression:dev:ssr   # or regression:dev:csr
   pays the boot. One spec is not cheaper than all of them.
 - `workers: 1`, `fullyParallel: false`, `retries: 1`. A stall watchdog fails the
   suite after ~2 minutes of zero progress and prints a runner snapshot.
-- CI: the browser suite is currently **non-gating** (`continue-on-error`) until
-  upstream everything-dev#531 lands. A green CI run does not prove E2E; run it
-  locally when your change touches pages or sessions.
+- CI: the browser suite is **gating** — a red suite reds the merge gate. Run
+  it locally when your change touches pages or sessions; infra reds (parent
+  host, Docker, network) are triaged like CI outages, not code bugs.
 
 ### Stack and variant
 

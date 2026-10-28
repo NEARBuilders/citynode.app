@@ -21,6 +21,7 @@ import type { NodeApplicationValues } from "./-node-application";
 import { nodeApplicationKinds } from "./-node-application";
 
 const DIRECT_COUNTRY_PARENT = "__direct-country__";
+const NO_COUNTRY_PARENT = "__no-country__";
 
 const kindMessages = {
   country: "apply.kind.country",
@@ -61,6 +62,11 @@ export function ApplyNodeFields({
 }) {
   const t = useAppTranslation();
   const stateOptions = stateNodes.filter((node) => node.kind === "state");
+  const standaloneCity = formValues.kind === "city";
+  const countryItems = [
+    ...(standaloneCity ? [{ label: t("apply.country.none"), value: NO_COUNTRY_PARENT }] : []),
+    ...rootNodes.map((node) => ({ label: node.name, value: node.id })),
+  ];
   return (
     <>
       <form.Field name="kind">
@@ -99,10 +105,18 @@ export function ApplyNodeFields({
                 <Field className="sm:flex-1" data-invalid={errors.length > 0 || undefined}>
                   <FieldLabel htmlFor="application-country">{t("apply.country.label")}</FieldLabel>
                   <Select
-                    items={rootNodes.map((node) => ({ label: node.name, value: node.id }))}
-                    value={rootParentId || null}
+                    items={countryItems}
+                    value={
+                      rootParentId ||
+                      (standaloneCity && !field.state.value ? NO_COUNTRY_PARENT : null)
+                    }
                     onValueChange={(countryId) => {
                       if (countryId === null) return;
+                      if (countryId === NO_COUNTRY_PARENT) {
+                        setRootParentId("");
+                        field.handleChange(null);
+                        return;
+                      }
                       setRootParentId(countryId);
                       field.handleChange(countryId);
                     }}
@@ -111,9 +125,9 @@ export function ApplyNodeFields({
                       <SelectValue placeholder={t("apply.country.choose")} />
                     </SelectTrigger>
                     <SelectContent>
-                      {rootNodes.map((node) => (
-                        <SelectItem key={node.id} value={node.id}>
-                          {node.name}
+                      {countryItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
