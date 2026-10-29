@@ -723,6 +723,195 @@ describe("approved community proposal provisioning", () => {
     });
     expect(deleteOrganization).not.toHaveBeenCalled();
   });
+
+  it("binds the applicant's own unbound organization at the community slug", async () => {
+    organizations.set("own-rosendale", {
+      id: "own-rosendale",
+      name: "Rosendale Collective",
+      slug: "rosendale",
+      status: "pending",
+      requestedBy: "user-applicant",
+      metadata: { seeded: true },
+      members: [],
+      invitations: [],
+      teams: [],
+    });
+    proposals.set("rosendale", savedProposal("prop-rosendale", "rosendale"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = {
+      proposalId: "prop-rosendale",
+      entityId: "rosendale",
+      hostname: "rosendale.citynode.app",
+    };
+    const applied = await admin.applyCommunityProposal(input);
+    expect(applied.applicantInvited).toBe(false);
+    const adopted = organizations.get("own-rosendale")!;
+    expect(adopted.status).toBe("active");
+    expect(adopted.metadata).toEqual({
+      seeded: true,
+      communityProposalId: "prop-rosendale",
+      communityApplicantId: "user-applicant",
+      communityReviewerId: "platform-reviewer",
+      communityLinkedOrg: "true",
+    });
+    expect(
+      Object.fromEntries(adopted.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
+    expect(adopted.invitations).toEqual([]);
+    expect(adopted.teams).toHaveLength(3);
+    const node = await admin.getNode({ nodeId: applied.nodeId });
+    const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
+    expect(tenant?.orgId).toBe("own-rosendale");
+
+    const resumed = await admin.applyCommunityProposal(input);
+    expect(resumed.nodeId).toBe(applied.nodeId);
+    expect(resumed.applicantInvited).toBe(false);
+  });
+
+  it("binds an unbound slug-matched organization when the application saved no applicant user", async () => {
+    organizations.set("own-oak-park", {
+      id: "own-oak-park",
+      name: "Oak Park Collective",
+      slug: "oak-park",
+      status: "active",
+      requestedBy: "user-organizer",
+      metadata: {},
+      members: [
+        {
+          id: "member-oak-owner",
+          userId: "user-organizer",
+          organizationId: "own-oak-park",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    proposals.set(
+      "oak-park",
+      savedProposal("prop-oak-park", "oak-park", { applicantUserId: null }),
+    );
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = {
+      proposalId: "prop-oak-park",
+      entityId: "oak-park",
+      hostname: "oak-park.citynode.app",
+    };
+    const applied = await admin.applyCommunityProposal(input);
+    expect(applied.applicantInvited).toBe(false);
+    const adopted = organizations.get("own-oak-park")!;
+    expect(adopted.status).toBe("active");
+    expect(adopted.metadata).toEqual({
+      communityProposalId: "prop-oak-park",
+      communityApplicantAccountId: applicant,
+      communityReviewerId: "platform-reviewer",
+      communityLinkedOrg: "true",
+    });
+    expect(
+      Object.fromEntries(adopted.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "user-organizer": "owner", "platform-reviewer": "admin" });
+    expect(adopted.invitations).toEqual([]);
+    expect(adopted.teams).toHaveLength(3);
+    const node = await admin.getNode({ nodeId: applied.nodeId });
+    const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
+    expect(tenant?.orgId).toBe("own-oak-park");
+
+    const resumed = await admin.applyCommunityProposal(input);
+    expect(resumed.nodeId).toBe(applied.nodeId);
+
+    const failed: Record<string, unknown> | undefined = proposals.get("oak-park");
+    if (failed) failed.applyStatus = "failed";
+    deleteOrganization.mockClear();
+    expect(
+      await admin.releaseCommunityProposal({
+        proposalId: "prop-oak-park",
+        entityId: "oak-park",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).toEqual({
+      community: { released: true, keptReason: null },
+      organization: { released: false, keptReason: "existing" },
+    });
+    expect(deleteOrganization).not.toHaveBeenCalled();
+    expect(organizations.has("own-oak-park")).toBe(true);
+
+    const resumable: Record<string, unknown> | undefined = proposals.get("oak-park");
+    if (resumable) resumable.applyStatus = "applying";
+    const reapplied = await admin.applyCommunityProposal(input);
+    expect(await admin.getNode({ nodeId: reapplied.nodeId })).toMatchObject({ slug: "oak-park" });
+  });
+
+  it("still refuses a slug-matched organization held by another application or another owner", async () => {
+    organizations.set("taken-bound", {
+      id: "taken-bound",
+      name: "Bound Collective",
+      slug: "bound-slug",
+      status: "active",
+      requestedBy: "user-organizer",
+      metadata: { communityProposalId: "prop-other" },
+      members: [
+        {
+          id: "member-bound-owner",
+          userId: "user-organizer",
+          organizationId: "taken-bound",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    organizations.set("taken-owned", {
+      id: "taken-owned",
+      name: "Stranger Collective",
+      slug: "owned-slug",
+      status: "active",
+      requestedBy: "user-stranger",
+      metadata: {},
+      members: [
+        {
+          id: "member-stranger-owner",
+          userId: "user-stranger",
+          organizationId: "taken-owned",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    proposals.set(
+      "bound-slug",
+      savedProposal("prop-bound-slug", "bound-slug", { applicantUserId: null }),
+    );
+    proposals.set("owned-slug", savedProposal("prop-owned-slug", "owned-slug"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    await expect(
+      admin.applyCommunityProposal({
+        proposalId: "prop-bound-slug",
+        entityId: "bound-slug",
+        hostname: "bound-slug.citynode.app",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "The community slug is already used by another organization",
+    });
+    await expect(
+      admin.applyCommunityProposal({
+        proposalId: "prop-owned-slug",
+        entityId: "owned-slug",
+        hostname: "owned-slug.citynode.app",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "The applicant does not own the existing organization",
+    });
+    expect(
+      (await admin.listTenants()).some((item) => item.accountId === "bound-slug.sputnik-dao.near"),
+    ).toBe(false);
+    expect(
+      (await admin.listTenants()).some((item) => item.accountId === "owned-slug.sputnik-dao.near"),
+    ).toBe(false);
+    expect(organizations.get("taken-bound")?.metadata.communityProposalId).toBe("prop-other");
+  });
   it("makes the reviewer owner and invites the applicant when the application saved no applicant user", async () => {
     proposals.set(
       "brooklyn",

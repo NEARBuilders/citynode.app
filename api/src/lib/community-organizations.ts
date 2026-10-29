@@ -34,6 +34,8 @@ async function fetchOrganization(
   }
 }
 
+const SLUG_CONFLICT = "The community slug is already used by another organization";
+
 async function createCommunityOrganization(
   auth: AuthClient,
   input: {
@@ -120,6 +122,71 @@ async function grantProposerOwnership(
   }
 }
 
+type CommunityOrganization = NonNullable<Awaited<ReturnType<typeof fetchOrganization>>>;
+
+async function bindCommunityOrganization(
+  auth: AuthClient,
+  organization: CommunityOrganization,
+  input: {
+    proposalId: string;
+    proposerUserId?: string;
+    applicantAccountId: string;
+    reviewerUserId: string;
+  },
+  adopted = false,
+) {
+  const proposerUserId = input.proposerUserId ?? null;
+  const metadata = organization.metadata ?? {};
+  if (metadata.communityProposalId && metadata.communityProposalId !== input.proposalId) {
+    throw conflict(
+      adopted ? SLUG_CONFLICT : "This organization belongs to another community application",
+    );
+  }
+  if (organization.requestedBy && proposerUserId && organization.requestedBy !== proposerUserId) {
+    const proposerMember = organization.members.find((member) => member.userId === proposerUserId);
+    if (proposerMember?.role !== "owner") {
+      throw conflict("The applicant does not own the existing organization");
+    }
+  }
+  if (organization.status === "rejected") {
+    throw conflict(adopted ? SLUG_CONFLICT : "The existing organization request was rejected");
+  }
+  if (organization.status === "pending") {
+    await auth.reviewOrganization({ organizationId: organization.id, decision: "approve" });
+  }
+  const stamp = {
+    ...applicantMetadata({ ...input, proposerUserId }),
+    ...(adopted ? { communityLinkedOrg: "true" } : {}),
+  };
+  if (Object.entries(stamp).some(([key, value]) => metadata[key] !== value)) {
+    await auth.updateOrganization({
+      data: { metadata: { ...metadata, ...stamp } },
+      organizationId: organization.id,
+    });
+  }
+  if (proposerUserId) {
+    await grantProposerOwnership(auth, organization.id, proposerUserId);
+  }
+  if (input.reviewerUserId !== proposerUserId) {
+    const { members } = await auth.listMembers({ organizationId: organization.id });
+    const reviewerMember = members.find((member) => member.userId === input.reviewerUserId);
+    if (!reviewerMember) {
+      await auth.addMember({
+        userId: input.reviewerUserId,
+        role: "admin",
+        organizationId: organization.id,
+      });
+    } else if (adopted && reviewerMember.role === "owner") {
+      await auth.updateMemberRole({
+        memberId: reviewerMember.id,
+        role: "admin",
+        organizationId: organization.id,
+      });
+    }
+  }
+  await provisionDefaultTeams(auth, organization.id);
+}
+
 export async function provisionCommunityOrganization(
   auth: AuthClient,
   input: {
@@ -132,54 +199,13 @@ export async function provisionCommunityOrganization(
     legacyOrgId?: string;
   },
 ): Promise<{ id: string; name: string; slug: string; applicantInvited: boolean }> {
-  if (input.legacyOrgId && input.proposerUserId) {
-    const proposerUserId = input.proposerUserId;
+  const proposerUserId = input.proposerUserId ?? null;
+  if (input.legacyOrgId && proposerUserId) {
     const organization = await fetchOrganization(auth, input.legacyOrgId);
     if (!organization) {
       throw conflict("The application's existing organization was removed");
     }
-    const metadata = organization.metadata ?? {};
-    if (metadata.communityProposalId && metadata.communityProposalId !== input.proposalId) {
-      throw conflict("This organization belongs to another community application");
-    }
-    if (organization.requestedBy && organization.requestedBy !== proposerUserId) {
-      const proposerMember = organization.members.find(
-        (member) => member.userId === proposerUserId,
-      );
-      if (proposerMember?.role !== "owner") {
-        throw conflict("The applicant does not own the existing organization");
-      }
-    }
-    if (organization.status === "rejected") {
-      throw conflict("The existing organization request was rejected");
-    }
-    if (organization.status === "pending") {
-      await auth.reviewOrganization({
-        organizationId: organization.id,
-        decision: "approve",
-      });
-    }
-    const applicant = applicantMetadata({ ...input, proposerUserId });
-    if (Object.entries(applicant).some(([key, value]) => metadata[key] !== value)) {
-      await auth.updateOrganization({
-        data: { metadata: { ...metadata, ...applicant } },
-        organizationId: organization.id,
-      });
-    }
-    await grantProposerOwnership(auth, organization.id, proposerUserId);
-    if (input.reviewerUserId !== proposerUserId) {
-      const reviewerMember = organization.members.find(
-        (member) => member.userId === input.reviewerUserId,
-      );
-      if (!reviewerMember) {
-        await auth.addMember({
-          userId: input.reviewerUserId,
-          role: "admin",
-          organizationId: organization.id,
-        });
-      }
-    }
-    await provisionDefaultTeams(auth, organization.id);
+    await bindCommunityOrganization(auth, organization, input);
     return {
       id: organization.id,
       name: organization.name,
@@ -191,9 +217,14 @@ export async function provisionCommunityOrganization(
   const slugStatus = await auth.checkSlug({ slug: input.slug });
   const existing = slugStatus.status ? null : await fetchOrganization(auth, undefined, input.slug);
   if (existing && existing.metadata?.communityProposalId !== input.proposalId) {
-    throw conflict("The community slug is already used by another organization");
+    await bindCommunityOrganization(auth, existing, input, true);
+    return {
+      id: existing.id,
+      name: existing.name,
+      slug: existing.slug,
+      applicantInvited: false,
+    };
   }
-  const proposerUserId = input.proposerUserId ?? null;
   const organization =
     existing ??
     (await createCommunityOrganization(auth, {
@@ -205,6 +236,23 @@ export async function provisionCommunityOrganization(
   }
   if (organization.status === "pending") {
     await auth.reviewOrganization({ organizationId: organization.id, decision: "approve" });
+  }
+  if (!proposerUserId && organization.metadata?.communityLinkedOrg === "true") {
+    const { members } = await auth.listMembers({ organizationId: organization.id });
+    if (!members.some((member) => member.userId === input.reviewerUserId)) {
+      await auth.addMember({
+        userId: input.reviewerUserId,
+        role: "admin",
+        organizationId: organization.id,
+      });
+    }
+    await provisionDefaultTeams(auth, organization.id);
+    return {
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      applicantInvited: false,
+    };
   }
   const ownerUserId = proposerUserId ?? input.reviewerUserId;
   await grantProposerOwnership(auth, organization.id, ownerUserId);
@@ -240,10 +288,13 @@ export async function provisionCommunityOrganization(
 export async function releaseCommunityOrganization(
   auth: AuthClient,
   input: { organizationId: string; proposalId: string },
-): Promise<{ released: boolean; keptReason: "not_found" | "in_use" | null }> {
+): Promise<{ released: boolean; keptReason: "not_found" | "in_use" | "existing" | null }> {
   const organization = await fetchOrganization(auth, input.organizationId);
   if (!organization || organization.metadata?.communityProposalId !== input.proposalId) {
     return { released: false, keptReason: "not_found" };
+  }
+  if (organization.metadata?.communityLinkedOrg === "true") {
+    return { released: false, keptReason: "existing" };
   }
   const provisioned = new Set(
     [
