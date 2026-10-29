@@ -20,6 +20,7 @@ import {
   useAppTranslation,
 } from "@/i18n/runtime";
 import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
+import { socialMeta } from "@/lib/social-meta";
 
 const PREVIEW_COUNT = 6;
 
@@ -46,21 +47,27 @@ export const Route = createFileRoute("/_public/")({
     await context.queryClient.prefetchQuery(tenantAppsQueryOptions(context.apiClient));
     return { runtimeConfig: context.runtimeConfig };
   },
-  head: ({ loaderData, match }) => ({
-    meta: [
-      {
-        title: getActiveRuntime(loaderData?.runtimeConfig)?.title ?? "CityNode",
-      },
-      {
-        name: "description",
-        content: translateAppMessage(
-          "meta.landingDescription",
-          undefined,
-          resolveAppLocale(undefined, match.context.locale),
-        ),
-      },
-    ],
-  }),
+  head: ({ loaderData, match }) => {
+    const title = getActiveRuntime(loaderData?.runtimeConfig)?.title ?? "CityNode";
+    const description = translateAppMessage(
+      "meta.landingDescription",
+      undefined,
+      resolveAppLocale(undefined, match.context.locale),
+    );
+
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        ...socialMeta({
+          title,
+          description,
+          path: "",
+          runtimeConfig: loaderData?.runtimeConfig,
+        }),
+      ],
+    };
+  },
   component: LandingPage,
 });
 
