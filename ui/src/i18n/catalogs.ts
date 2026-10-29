@@ -129,6 +129,8 @@ const englishApplyMessages = {
   "apply.organization.choose": "Choose an organization",
   "apply.organization.continue": "Continue",
   "apply.organization.manage": "Manage organizations",
+  "apply.organization.pickPrompt":
+    "This organization can't start a community — it may be a personal workspace, already run one, or you aren't its owner. Open your organizations and pick one you own.",
   "apply.near.description": "Link the NEAR account you're applying with.",
   "apply.near.link": "Link NEAR account",
   "apply.kind.label": "Type",
@@ -152,7 +154,6 @@ const englishApplyMessages = {
   "apply.slug.taken": "{hostname} is taken",
   "apply.slug.organizationTaken": "An organization already uses this address. Choose another one.",
   "apply.slug.usesOrganization": "Will use your organization @{slug}.",
-  "apply.slug.useDifferentAddress": "Use a different address",
   "apply.motivation.label": "Why you want to run it",
   "apply.motivation.placeholder": "Who is the community, and what will you do for it?",
   "apply.motivation.description": "Reviewers read this before approving.",
@@ -326,6 +327,8 @@ const spanishAppMessages = {
   "apply.organization.choose": "Elige una organización",
   "apply.organization.continue": "Continuar",
   "apply.organization.manage": "Gestionar organizaciones",
+  "apply.organization.pickPrompt":
+    "Esta organización no puede crear una comunidad: puede ser un espacio personal, tener ya una, o no eres su dueño. Abre tus organizaciones y elige una que te pertenezca.",
   "apply.near.description": "Vincula la cuenta de NEAR con la que presentas la solicitud.",
   "apply.near.link": "Vincular cuenta de NEAR",
   "apply.kind.label": "Tipo",
@@ -349,7 +352,6 @@ const spanishAppMessages = {
   "apply.slug.taken": "{hostname} está ocupado",
   "apply.slug.organizationTaken": "Una organización ya usa esta dirección. Elige otra.",
   "apply.slug.usesOrganization": "Usará tu organización @{slug}.",
-  "apply.slug.useDifferentAddress": "Usar otra dirección",
   "apply.motivation.label": "Por qué quieres gestionarla",
   "apply.motivation.placeholder": "¿A quién sirve la comunidad y qué harás por ella?",
   "apply.motivation.description": "Los revisores leen esto antes de aprobar.",
@@ -506,6 +508,8 @@ const frenchAppMessages = {
   "apply.organization.choose": "Choisir une organisation",
   "apply.organization.continue": "Continuer",
   "apply.organization.manage": "Gérer les organisations",
+  "apply.organization.pickPrompt":
+    "Cette organisation ne peut pas créer de communauté : il se peut que ce soit un espace personnel, qu'elle en ait déjà une, ou que vous n'en soyez pas le propriétaire. Ouvrez vos organisations et choisissez-en une qui vous appartient.",
   "apply.near.description": "Associez le compte NEAR utilisé pour votre demande.",
   "apply.near.link": "Associer un compte NEAR",
   "apply.kind.label": "Type",
@@ -530,7 +534,6 @@ const frenchAppMessages = {
   "apply.slug.organizationTaken":
     "Une organisation utilise déjà cette adresse. Choisissez-en une autre.",
   "apply.slug.usesOrganization": "Utilisera votre organisation @{slug}.",
-  "apply.slug.useDifferentAddress": "Utiliser une autre adresse",
   "apply.motivation.label": "Pourquoi souhaitez-vous la gérer ?",
   "apply.motivation.placeholder": "À qui s’adresse la communauté et que ferez-vous pour elle ?",
   "apply.motivation.description":
@@ -686,6 +689,8 @@ const chineseAppMessages = {
   "apply.organization.choose": "选择组织",
   "apply.organization.continue": "继续",
   "apply.organization.manage": "管理组织",
+  "apply.organization.pickPrompt":
+    "该组织无法创建社区：它可能是个人工作区、已有社区，或者你不是它的所有者。打开你的组织页面，选择一个你拥有的组织。",
   "apply.near.description": "关联你用于申请的 NEAR 账户。",
   "apply.near.link": "关联 NEAR 账户",
   "apply.kind.label": "类型",
@@ -709,7 +714,6 @@ const chineseAppMessages = {
   "apply.slug.taken": "{hostname} 已被占用",
   "apply.slug.organizationTaken": "已有组织使用此地址。请选择其他地址。",
   "apply.slug.usesOrganization": "将使用你的组织 @{slug}。",
-  "apply.slug.useDifferentAddress": "使用其他地址",
   "apply.motivation.label": "为什么要运营它",
   "apply.motivation.placeholder": "社区面向哪些人？你会为社区做什么？",
   "apply.motivation.description": "审核人员会在批准前阅读此内容。",
