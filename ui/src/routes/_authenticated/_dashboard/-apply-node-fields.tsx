@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -41,7 +40,6 @@ export function ApplyNodeFields({
   preflightLoading,
   organizationSlugAvailable,
   linkedOrganizationSlug,
-  onUnlockSlug,
   rootNodes,
   rootParentId,
   setRootParentId,
@@ -57,7 +55,6 @@ export function ApplyNodeFields({
   preflightLoading: boolean;
   organizationSlugAvailable?: boolean;
   linkedOrganizationSlug?: string;
-  onUnlockSlug?: () => void;
   rootNodes: NodeOption[];
   rootParentId: string;
   setRootParentId: (value: string) => void;
@@ -220,6 +217,24 @@ export function ApplyNodeFields({
           const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
           const available = preflight?.hostname.available;
           const organizationTaken = organizationSlugAvailable === false;
+          if (linkedSlug) {
+            return (
+              <Field data-invalid={errors.length > 0 || undefined}>
+                <FieldLabel htmlFor="application-slug">{t("apply.slug.label")}</FieldLabel>
+                <p
+                  className="break-all font-mono text-sm text-foreground"
+                  data-testid="apply.slug-locked"
+                >
+                  {linkedSlug}
+                  {gatewayId ? `.${gatewayId}` : ""}
+                </p>
+                <FieldDescription data-testid="apply.slug-status">
+                  {t("apply.slug.usesOrganization", { slug: linkedSlug })}
+                </FieldDescription>
+                <FieldError errors={errors} />
+              </Field>
+            );
+          }
           return (
             <Field
               data-invalid={
@@ -233,8 +248,7 @@ export function ApplyNodeFields({
                   data-testid="apply.slug"
                   className="font-mono"
                   name={field.name}
-                  value={linkedSlug || field.state.value}
-                  readOnly={!!linkedSlug}
+                  value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => {
                     slugManuallyEdited.current = true;
@@ -254,32 +268,18 @@ export function ApplyNodeFields({
                 </InputGroupAddon>
               </InputGroup>
               <FieldDescription data-testid="apply.slug-status">
-                {linkedSlug
-                  ? t("apply.slug.usesOrganization", { slug: linkedSlug })
-                  : !hostname
-                    ? t("apply.slug.rules")
-                    : preflightLoading
-                      ? t("apply.slug.checking")
-                      : organizationTaken
-                        ? t("apply.slug.organizationTaken")
-                        : available === true
-                          ? t("apply.slug.available", { hostname })
-                          : available === false
-                            ? t("apply.slug.taken", { hostname })
-                            : hostname}
+                {!hostname
+                  ? t("apply.slug.rules")
+                  : preflightLoading
+                    ? t("apply.slug.checking")
+                    : organizationTaken
+                      ? t("apply.slug.organizationTaken")
+                      : available === true
+                        ? t("apply.slug.available", { hostname })
+                        : available === false
+                          ? t("apply.slug.taken", { hostname })
+                          : hostname}
               </FieldDescription>
-              {linkedSlug && onUnlockSlug && (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="self-start px-0"
-                  onClick={onUnlockSlug}
-                  data-testid="apply.slug-unlock"
-                >
-                  {t("apply.slug.useDifferentAddress")}
-                </Button>
-              )}
               <FieldError errors={errors} />
             </Field>
           );

@@ -1,10 +1,11 @@
+import { RocketLaunchIcon } from "@phosphor-icons/react";
 import { useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getGatewayId, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
-import { PageContainer, PageHeader } from "@/components";
+import { EmptyState, PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
@@ -12,6 +13,7 @@ import { AppActionError, appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
+import { isPersonalOrganization } from "@/lib/personal-organization";
 import {
   childNodesQueryOptions,
   nodeByIdQueryOptions,
@@ -91,14 +93,15 @@ function ApplyPage() {
   const [revising, setRevising] = useState(false);
   const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
   const [reopenedStep, setReopenedStep] = useState<ApplyStepId | null>(null);
-  const [slugUnlocked, setSlugUnlocked] = useState(false);
   const handleDaoVerified = useCallback(
     ({ daoAccountId }: { daoAccountId: string }) => setVerifiedDaoAccountId(daoAccountId),
     [],
   );
   const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
-  const { data: session } = useQuery(sessionQueryOptions(authClient));
-  const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
+  const { data: session, isPending: sessionPending } = useQuery(sessionQueryOptions(authClient));
+  const { data: organizations, isPending: organizationsPending } = useQuery(
+    organizationsQueryOptions(apiClient),
+  );
   const latestApplication = myApplications.data?.data.reduce<
     (typeof myApplications.data.data)[number] | undefined
   >(
@@ -161,46 +164,52 @@ function ApplyPage() {
   const formValues = useSelector(form.store, (state) => state.values);
   const hostname = formValues.slug && gatewayId ? `${formValues.slug}.${gatewayId}` : "";
   const legacyOrgId = retainedOrgId(formValues.slug);
-  const linkedOrgCandidate = (organizations ?? []).find(
-    (organization) =>
-      organization.slug === formValues.slug &&
-      organization.status !== "rejected" &&
-      !organization.metadata?.communityProposalId,
-  );
-  const { data: linkedMembers, isFetching: linkedMembersLoading } = useQuery({
-    queryKey: ["apply-linked-org-members", linkedOrgCandidate?.id],
+  const activeOrgId = session?.session?.activeOrganizationId;
+  const requestedOrg = orgSlugParam
+    ? (organizations ?? []).find((organization) => organization.slug === orgSlugParam)
+    : undefined;
+  const activeOrg = activeOrgId
+    ? (organizations ?? []).find((organization) => organization.id === activeOrgId)
+    : undefined;
+  const candidateOrg = requestedOrg ?? activeOrg;
+  const candidateOrgEligible =
+    !!candidateOrg &&
+    candidateOrg.status === "active" &&
+    !candidateOrg.metadata?.communityProposalId &&
+    !isPersonalOrganization(candidateOrg, session?.user?.id);
+  const { data: orgMembers, isFetching: orgMembersLoading } = useQuery({
+    queryKey: ["apply-linked-org-members", candidateOrg?.id],
     queryFn: async () => {
       const { members } = await apiClient.auth.listMembers({
-        organizationId: linkedOrgCandidate!.id,
+        organizationId: candidateOrg!.id,
       });
       return members;
     },
-    enabled: !!linkedOrgCandidate,
+    enabled: candidateOrgEligible,
     staleTime: 30 * 1000,
   });
-  const linkedOrganization =
-    linkedOrgCandidate &&
-    !slugUnlocked &&
-    (linkedMembers ?? []).some(
-      (member) => member.userId === session?.user?.id && member.role === "owner",
-    )
-      ? linkedOrgCandidate
-      : undefined;
+  const linkedOrganization = candidateOrgEligible
+    ? (orgMembers ?? []).some(
+        (member) => member.userId === session?.user?.id && member.role === "owner",
+      )
+      ? candidateOrg
+      : undefined
+    : undefined;
+  const organizationEditMode = !!linkedOrganization && !revising;
+  const organizationPrompt = !!candidateOrg && !organizationEditMode && !revising;
   useEffect(() => {
-    if (formValues.slug) return;
-    setSlugUnlocked(false);
-  }, [formValues.slug]);
-  useEffect(() => {
-    if (!orgSlugParam || !organizations) return;
-    const requested = organizations.find((organization) => organization.slug === orgSlugParam);
-    if (!requested) return;
-    if (!form.getFieldValue("slug")) {
-      form.setFieldValue("slug", requested.slug, { dontUpdateMeta: true });
+    if (!organizationEditMode || !linkedOrganization) return;
+    if (form.getFieldValue("slug") !== linkedOrganization.slug) {
+      form.setFieldValue("slug", linkedOrganization.slug, { dontUpdateMeta: true });
     }
     if (!form.getFieldValue("name")) {
-      form.setFieldValue("name", requested.name, { dontUpdateMeta: true });
+      form.setFieldValue("name", linkedOrganization.name, { dontUpdateMeta: true });
     }
-  }, [form, orgSlugParam, organizations]);
+  }, [form, linkedOrganization, organizationEditMode]);
+  const resolutionPending =
+    organizationsPending ||
+    sessionPending ||
+    (candidateOrgEligible && orgMembers === undefined && orgMembersLoading);
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
   const rootNodes = (queriedRootNodes ?? initialRootNodes).filter(
@@ -220,13 +229,14 @@ function ApplyPage() {
     ...bindingPreflightQueryOptions(apiClient, hostname),
     enabled: !!hostname,
   });
+  const freeFormApplication = !candidateOrg || revising;
   const { data: organizationSlug, isFetching: organizationSlugLoading } = useQuery({
     queryKey: ["apply-organization-slug", formValues.slug],
     queryFn: () => apiClient.auth.checkSlug({ slug: formValues.slug }),
-    enabled: !!formValues.slug && !legacyOrgId && !linkedOrganization,
+    enabled: freeFormApplication && !!formValues.slug && !legacyOrgId,
   });
   const organizationSlugAvailable =
-    !!legacyOrgId || !!linkedOrganization || organizationSlug?.status === true;
+    !!legacyOrgId || (!!linkedOrganization && !revising) || organizationSlug?.status === true;
 
   const canSubmit = canSubmitNodeApplication({
     values: formValues,
@@ -235,14 +245,15 @@ function ApplyPage() {
     submitterAccountId: nearAccountId,
     hostnameAvailable: preflight?.hostname.available === true,
     organizationSlugAvailable,
-    preflightLoading:
-      preflightLoading || organizationSlugLoading || (!!linkedOrgCandidate && linkedMembersLoading),
+    preflightLoading: preflightLoading || organizationSlugLoading,
     submitting: submitMutation.isPending,
   });
 
   const daoVerified =
     !!daoConnection.daoAccountId && verifiedDaoAccountId === daoConnection.daoAccountId;
   const steps = resolveApplySteps({ near: !!nearAccountId, dao: daoVerified }, reopenedStep);
+
+  const routePending = (!!nearAccountId && myApplications.isPending) || resolutionPending;
 
   if (nearAccountId && myApplications.isError && !submittedProposalId) {
     return (
@@ -255,7 +266,7 @@ function ApplyPage() {
     );
   }
 
-  if (nearAccountId && myApplications.isPending && !submittedProposalId) {
+  if (routePending && !submittedProposalId) {
     return (
       <PageContainer variant="narrow">
         <div className="flex justify-center py-12" data-testid="apply.loading">
@@ -353,45 +364,53 @@ function ApplyPage() {
           status={steps.status("details")}
           last
         >
-          <form
-            className="flex flex-col gap-6"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void form.handleSubmit();
-            }}
-          >
-            <FieldGroup>
-              <ApplyNodeFields
-                form={form}
-                formValues={formValues}
-                gatewayId={gatewayId}
-                hostname={hostname}
-                preflight={preflight}
-                preflightLoading={
-                  preflightLoading ||
-                  organizationSlugLoading ||
-                  (!!linkedOrgCandidate && linkedMembersLoading)
-                }
-                organizationSlugAvailable={
-                  legacyOrgId || linkedOrganization
-                    ? true
-                    : linkedOrgCandidate && linkedMembersLoading
-                      ? undefined
+          {organizationPrompt ? (
+            <EmptyState
+              icon={RocketLaunchIcon}
+              title={t("apply.organization.choose")}
+              description={t("apply.organization.pickPrompt")}
+              action={
+                <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+                  {t("apply.organization.manage")}
+                </Button>
+              }
+            />
+          ) : (
+            <form
+              className="flex flex-col gap-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void form.handleSubmit();
+              }}
+            >
+              <FieldGroup>
+                <ApplyNodeFields
+                  form={form}
+                  formValues={formValues}
+                  gatewayId={gatewayId}
+                  hostname={hostname}
+                  preflight={preflight}
+                  preflightLoading={preflightLoading || organizationSlugLoading}
+                  organizationSlugAvailable={
+                    legacyOrgId || (!revising && linkedOrganization)
+                      ? true
                       : organizationSlug?.status
-                }
-                linkedOrganizationSlug={linkedOrganization ? formValues.slug : undefined}
-                onUnlockSlug={() => setSlugUnlocked(true)}
-                rootNodes={rootNodes}
-                rootParentId={rootParentId}
-                setRootParentId={setRootParentId}
-                slugManuallyEdited={slugManuallyEdited}
-                stateNodes={stateNodes}
-                statesLoading={statesLoading}
-              />
-              <ApplyApplicantFields form={form} />
-            </FieldGroup>
-            <ApplySubmit canSubmit={canSubmit} isSubmitting={submitMutation.isPending} />
-          </form>
+                  }
+                  linkedOrganizationSlug={
+                    !revising && linkedOrganization ? linkedOrganization.slug : undefined
+                  }
+                  rootNodes={rootNodes}
+                  rootParentId={rootParentId}
+                  setRootParentId={setRootParentId}
+                  slugManuallyEdited={slugManuallyEdited}
+                  stateNodes={stateNodes}
+                  statesLoading={statesLoading}
+                />
+                <ApplyApplicantFields form={form} />
+              </FieldGroup>
+              <ApplySubmit canSubmit={canSubmit} isSubmitting={submitMutation.isPending} />
+            </form>
+          )}
         </ApplyStep>
       </ol>
     </PageContainer>
