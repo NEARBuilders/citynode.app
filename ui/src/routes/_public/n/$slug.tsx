@@ -29,6 +29,7 @@ import {
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
+import { socialMeta } from "@/lib/social-meta";
 import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
@@ -53,35 +54,29 @@ export const Route = createFileRoute("/_public/n/$slug")({
 
     return { slug, parentId, runtimeConfig, nodeName: node?.name ?? null };
   },
-  head: ({ loaderData, match }) => ({
-    meta: [
-      {
-        title: pageTitle(
-          loaderData?.nodeName ??
-            translateAppMessage(
-              "nav.community",
-              undefined,
-              resolveAppLocale(undefined, match.context.locale),
-            ),
-          loaderData?.runtimeConfig,
-        ),
-      },
-      {
-        name: "description",
-        content: loaderData?.nodeName
-          ? translateAppMessage(
-              "meta.communityDescriptionNamed",
-              { name: loaderData.nodeName },
-              resolveAppLocale(undefined, match.context.locale),
-            )
-          : translateAppMessage(
-              "meta.communityDescription",
-              undefined,
-              resolveAppLocale(undefined, match.context.locale),
-            ),
-      },
-    ],
-  }),
+  head: ({ loaderData, match, params }) => {
+    const locale = resolveAppLocale(undefined, match.context.locale);
+    const title = pageTitle(
+      loaderData?.nodeName ?? translateAppMessage("nav.community", undefined, locale),
+      loaderData?.runtimeConfig,
+    );
+    const description = loaderData?.nodeName
+      ? translateAppMessage("meta.communityDescriptionNamed", { name: loaderData.nodeName }, locale)
+      : translateAppMessage("meta.communityDescription", undefined, locale);
+
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        ...socialMeta({
+          title,
+          description,
+          path: `/n/${params.slug}`,
+          runtimeConfig: loaderData?.runtimeConfig,
+        }),
+      ],
+    };
+  },
   component: NodePage,
 });
 

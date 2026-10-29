@@ -1,7 +1,7 @@
 {
-  "name": "everything.dev",
-  "short_name": "everything.dev",
-  "description": "Open runtime for apps on NEAR, composed from published config and loaded at runtime.",
+  "name": "City Nodes",
+  "short_name": "City Nodes",
+  "description": "CityNodes are local communities that each run a NEAR validator. Find yours, join its events, and stake to keep it online.",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -43,6 +43,6 @@
   "display": "standalone",
   "theme_color": "#ffffff",
   "background_color": "#fafafa",
-  "categories": ["developer tools", "productivity", "web development"],
+  "categories": ["social", "lifestyle"],
   "orientation": "portrait-primary"
 }
