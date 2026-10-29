@@ -1,15 +1,15 @@
 import { ArrowUpRightIcon, CompassIcon, UserIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { getSocialImageMeta } from "everything-dev/ui/metadata";
 import { useAuthClient } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage, Button, PageContainer } from "@/components";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
+import { socialMeta } from "@/lib/social-meta";
 
 export const Route = createFileRoute("/_public/$accountId")({
   loader: async ({ params, context }) => {
-    const { queryClient, authClient, runtimeConfig } = context;
+    const { queryClient, authClient } = context;
     const accountId = params.accountId;
 
     await queryClient.prefetchQuery({
@@ -21,12 +21,10 @@ export const Route = createFileRoute("/_public/$accountId")({
       staleTime: 5 * 60 * 1000,
     });
 
-    return { accountId, hostUrl: runtimeConfig?.hostUrl ?? "" };
+    return { accountId };
   },
-  head: ({ loaderData, params, match }) => {
+  head: ({ params, match }) => {
     const accountId = params.accountId;
-    const hostUrl = (loaderData?.hostUrl ?? "").replace(/\/$/, "");
-    const siteUrl = hostUrl ? `${hostUrl}/${accountId}` : "";
     const title = `${accountId} | CityNode`;
     const description = translateAppMessage(
       "meta.profileDescriptionNamed",
@@ -38,13 +36,12 @@ export const Route = createFileRoute("/_public/$accountId")({
       meta: [
         { title },
         { name: "description", content: description },
-        ...getSocialImageMeta({
-          imageUrl: hostUrl ? `${hostUrl}/metadata.png` : "/metadata.png",
+        ...socialMeta({
           title,
           description,
-          siteUrl,
+          path: `/${accountId}`,
+          runtimeConfig: match.context.runtimeConfig,
           type: "profile",
-          alt: description,
         }),
       ],
     };

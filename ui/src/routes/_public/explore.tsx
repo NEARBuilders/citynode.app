@@ -5,6 +5,7 @@ import { DiscoveryExplorer } from "@/components/discovery/discovery-explorer";
 import { PageContainer } from "@/components/layout/page-container";
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { socialMeta } from "@/lib/social-meta";
 export const Route = createFileRoute("/_public/explore")({
   validateSearch: z.object({
     campaign: z
@@ -20,28 +21,27 @@ export const Route = createFileRoute("/_public/explore")({
     region: z.string().max(120).optional().catch(undefined),
     view: z.enum(["list", "map"]).optional().catch(undefined),
   }),
-  head: ({ match }) => ({
-    meta: [
-      {
-        title: pageTitle(
-          translateAppMessage(
-            "nav.explore",
-            undefined,
-            resolveAppLocale(undefined, match.context.locale),
-          ),
-          match.context.runtimeConfig,
-        ),
-      },
-      {
-        name: "description",
-        content: translateAppMessage(
-          "meta.exploreDescription",
-          undefined,
-          resolveAppLocale(undefined, match.context.locale),
-        ),
-      },
-    ],
-  }),
+  head: ({ match }) => {
+    const locale = resolveAppLocale(undefined, match.context.locale);
+    const title = pageTitle(
+      translateAppMessage("nav.explore", undefined, locale),
+      match.context.runtimeConfig,
+    );
+    const description = translateAppMessage("meta.exploreDescription", undefined, locale);
+
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        ...socialMeta({
+          title,
+          description,
+          path: "/explore",
+          runtimeConfig: match.context.runtimeConfig,
+        }),
+      ],
+    };
+  },
   component: Explore,
 });
 function Explore() {
