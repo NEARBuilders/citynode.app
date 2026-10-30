@@ -58,6 +58,12 @@ Members never get `VoteApprove`, `VoteReject`, `VoteRemove`, `RemoveProposal` or
 | What #407 checks | No overlapping Everyone grant, and an unrelated account is refused | An unrelated account succeeds, and the exposure difference |
 | Council and thresholds | Unchanged | Unchanged |
 
+### First, keep the signers able to propose
+
+Both variants take `AddProposal` away from the Everyone role. In the default policy the council keeps its own `*:AddProposal` ([policy.rs:194-208][default-policy]), so nothing else changes. But a DAO that isn't default-shaped may let its signers propose only through Everyone, for example a council with vote and `Finalize` permissions and no `AddProposal`. Sputnik only grants what a role the caller matches lists ([policy.rs:333-359][can-execute]), so narrowing Everyone there would leave nobody able to add a proposal, including the `ChangePolicy` that would undo it.
+
+Before narrowing Everyone, check the current `get_policy`: a signer role other than Everyone must grant `AddProposal` for `policy` and every other kind the signers file, in one of the four forms. If none does, add that grant (`*:AddProposal`, as the default council has) to the signer role in the same change.
+
 ### Variant 1: a Members group
 
 The role to add:
@@ -71,7 +77,7 @@ The role to add:
 }
 ```
 
-The Everyone role must not grant `AddProposal` for the same kinds in any of the four forms, or anyone can still propose them. The default `all` role has `*:AddProposal`, which covers every kind, so remove that permission (leaving `"permissions": []`) or remove the role in the same change.
+The Everyone role must not grant `AddProposal` for the same kinds in any of the four forms, or anyone can still propose them. The default `all` role has `*:AddProposal`, which covers every kind, so remove that permission (leaving `"permissions": []`) or remove the role in the same change, after the [signer check](#first-keep-the-signers-able-to-propose).
 
 ### Variant 2: Everyone
 
@@ -86,7 +92,7 @@ The Everyone role, narrowed from the default `*:AddProposal` to the chosen kinds
 }
 ```
 
-If the DAO has no Everyone role, add this one. Leaving the default `*:AddProposal` in place would also work for decision B's kinds, but it lets any account propose transfers, policy changes and upgrades too.
+Run the [signer check](#first-keep-the-signers-able-to-propose) before narrowing it. If the DAO has no Everyone role, add this one. Leaving the default `*:AddProposal` in place would also work for decision B's kinds, but it lets any account propose transfers, policy changes and upgrades too.
 
 ## Bond
 
@@ -117,7 +123,7 @@ A signer whose role allows the proposal kind files it, attaching the DAO's **cur
 One proposal changes the role and the bond together, as #407 tests ("one policy change for role plus bond"). `ChangePolicy` (label `policy`) **replaces the whole policy** ([proposals.rs:363-366][execute]), so:
 
 1. Read the DAO's current policy with `get_policy` on `example.sputnik-dao.near`.
-2. Copy it, and change only the roles for your decision A variant and `proposal_bond`. Keep the council roles, vote policies, `proposal_period` and bounty settings exactly as they are.
+2. Copy it, and change only the roles for your decision A variant and `proposal_bond`. First run the [signer check](#first-keep-the-signers-able-to-propose): if no signer role other than Everyone grants `AddProposal` for `policy` and the other kinds the signers file, add that grant to the signer role in this change. Otherwise keep the council roles, vote policies, `proposal_period` and bounty settings exactly as they are.
 3. File it. Sputnik accepts only a full policy object here, not the council-list shorthand ([proposals.rs:546-551][add-validate]). Policy, role and vote policy JSON reject unknown fields ([policy.rs:14, 68, 124, 152][policy-types]), so keep the field names exact.
 
 The proposer needs `policy:AddProposal` (or one of the other three forms covering `policy`).
@@ -191,7 +197,13 @@ If the signers would rather not resubmit the whole policy, the same result takes
   { "ChangePolicyUpdateParameters": { "parameters": { "proposal_bond": "0" } } }
   ```
 
-Between the proposals the DAO is half changed. With variant 1, file the Everyone change last, so no member is shut out in between. The proposer needs `AddProposal` for each of those labels.
+Between the proposals the DAO is half changed, so the order in which the council approves them matters:
+
+1. Any signer-role grant the [signer check](#first-keep-the-signers-able-to-propose) calls for.
+2. The member role. With variant 1, approve `members` before the Everyone change, so no member is shut out in between.
+3. **The bond change, last**, once every other proposal from this change, and any other pending proposal, has been approved or rejected. Sputnik refunds the bond in force when it pays the refund ([proposals.rs:339-349][return-bonds]), so a role proposal approved after the bond drops to 0 refunds its proposer 0 and the 1 NEAR they attached stays in the DAO. The bond proposal itself runs under the policy read before it executes ([proposals.rs:607, 641][act]), so its own proposer still gets the old bond back.
+
+The proposer needs `AddProposal` for each of those labels.
 
 ## What City Node reads
 
