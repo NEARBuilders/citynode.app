@@ -201,7 +201,7 @@ Between the proposals the DAO is half changed, so the order in which the council
 
 1. Any signer-role grant the [signer check](#first-keep-the-signers-able-to-propose) calls for.
 2. The member role. With variant 1, approve `members` before the Everyone change, so no member is shut out in between.
-3. **The bond change, last**, once every other proposal from this change, and any other pending proposal, has been approved or rejected. Sputnik refunds the bond in force when it pays the refund ([proposals.rs:339-349][return-bonds]), so a role proposal approved after the bond drops to 0 refunds its proposer 0 and the 1 NEAR they attached stays in the DAO. The bond proposal itself runs under the policy read before it executes ([proposals.rs:607, 641][act]), so its own proposer still gets the old bond back.
+3. **The bond change, last**, once every other proposal from this change, and any other pending proposal, has been settled: approved or rejected, and any expired or `Failed` one finalized ([proposals.rs:658-685][finalize]). Sputnik refunds the bond in force when it pays the refund ([proposals.rs:339-349][return-bonds]), so a role proposal approved after the bond drops to 0 refunds its proposer 0 and the 1 NEAR they attached stays in the DAO. The bond proposal itself runs under the policy read before it executes ([proposals.rs:607, 641][act]), so its own proposer still gets the old bond back.
 
 The proposer needs `AddProposal` for each of those labels.
 
