@@ -155,15 +155,15 @@ export function DaoProposalList({
       />
       {pages.isPending ? (
         <ListSkeleton />
-      ) : pages.isError && proposals.length === 0 ? (
+      ) : pages.isError && !pages.data ? (
         <RetryNotice
           message={translate("daoProposals.loadError", { dao: daoAccountId })}
           onRetry={() => void pages.refetch()}
           testId="dao-proposals.load-error"
         />
-      ) : proposals.length === 0 ? (
+      ) : proposals.length === 0 && !pages.hasNextPage ? (
         <Notice testId="dao-proposals.empty">{translate("daoProposals.empty")}</Notice>
-      ) : (
+      ) : proposals.length === 0 ? null : (
         <ul className="flex flex-col gap-2">
           {proposals.map((proposal) => (
             <li key={proposal.id}>
@@ -195,14 +195,14 @@ export function DaoProposalList({
           ))}
         </ul>
       )}
-      {proposals.length > 0 && pages.isFetchNextPageError && (
+      {pages.data && pages.isFetchNextPageError && (
         <RetryNotice
           message={translate("daoProposals.loadError", { dao: daoAccountId })}
           onRetry={() => void pages.fetchNextPage()}
           testId="dao-proposals.older-error"
         />
       )}
-      {proposals.length > 0 && pages.hasNextPage && !pages.isFetchNextPageError && (
+      {pages.data && pages.hasNextPage && !pages.isFetchNextPageError && (
         <Button
           variant="outline"
           className="self-center"

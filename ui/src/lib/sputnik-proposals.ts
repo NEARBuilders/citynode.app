@@ -91,29 +91,39 @@ export interface DaoProposalPage {
   nextBefore: number | null;
 }
 
+/** ID ranges one page may read past when every proposal in them was removed. */
+const MAX_EMPTY_RANGES = 5;
+
 /**
  * Reads one page of proposals by ID range, newest first: IDs in
  * `[before - pageSize, before)`, or the newest IDs when `before` is omitted.
- * Removed proposals leave gaps, so a page can hold fewer than `pageSize`.
+ * Removed proposals leave gaps, so a page can hold fewer than `pageSize`; a
+ * range with nothing left in it is skipped, up to MAX_EMPTY_RANGES, so a page
+ * is only empty with a non-null `nextBefore` after a long run of removals.
  * Throws when the DAO can't be read.
  */
 export async function readDaoProposalPage(
   daoAccountId: string,
   { before, pageSize = 20 }: { before?: number; pageSize?: number } = {},
 ): Promise<DaoProposalPage> {
-  const end =
+  let end =
     before ?? Number((await getNear().view<number>(daoAccountId, "get_last_proposal_id", {})) ?? 0);
-  if (end <= 0) return { proposals: [], nextBefore: null };
-  const fromIndex = Math.max(0, end - pageSize);
-  const proposals =
-    (await getNear().view<SputnikProposal[]>(daoAccountId, "get_proposals", {
-      from_index: fromIndex,
-      limit: end - fromIndex,
-    })) ?? [];
-  return {
-    proposals: [...proposals].sort((a, b) => b.id - a.id),
-    nextBefore: fromIndex > 0 ? fromIndex : null,
-  };
+  for (let range = 0; end > 0 && range < MAX_EMPTY_RANGES; range++) {
+    const fromIndex = Math.max(0, end - pageSize);
+    const proposals =
+      (await getNear().view<SputnikProposal[]>(daoAccountId, "get_proposals", {
+        from_index: fromIndex,
+        limit: end - fromIndex,
+      })) ?? [];
+    end = fromIndex;
+    if (proposals.length > 0) {
+      return {
+        proposals: [...proposals].sort((a, b) => b.id - a.id),
+        nextBefore: end > 0 ? end : null,
+      };
+    }
+  }
+  return { proposals: [], nextBefore: end > 0 ? end : null };
 }
 
 /** Reads one proposal by ID; null when it never existed or was removed. Throws on RPC failure. */

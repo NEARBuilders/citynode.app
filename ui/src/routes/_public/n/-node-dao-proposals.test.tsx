@@ -37,6 +37,7 @@ type DaoResponse = { daoAccountId: string | null; network: string | null } | "fa
 const state: {
   dao: DaoResponse;
   last: number;
+  removed: Set<number>;
   kinds: Map<number, SputnikProposal["kind"]>;
   failPagesBelow: number | null;
   failNext: number;
@@ -44,6 +45,7 @@ const state: {
 } = {
   dao: { daoAccountId: DAO, network: "mainnet" },
   last: 0,
+  removed: new Set(),
   kinds: new Map(),
   failPagesBelow: null,
   failNext: 0,
@@ -58,6 +60,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   state.dao = { daoAccountId: DAO, network: "mainnet" };
   state.last = 0;
+  state.removed.clear();
   state.kinds.clear();
   state.failPagesBelow = null;
   state.failNext = 0;
@@ -102,7 +105,7 @@ function mockBackends() {
       return Promise.reject(new Error("RPC unavailable"));
     }
     const ids = Array.from({ length: limit }, (_, i) => from_index + i).filter(
-      (id) => id < state.last,
+      (id) => id < state.last && !state.removed.has(id),
     );
     return Promise.resolve(ids.map(proposal));
   });
@@ -246,6 +249,20 @@ describe("public Node DAO proposal list", () => {
     state.failPagesBelow = null;
     fireEvent.click(screen.getByTestId("dao-proposals.older-error-retry"));
     expect(await screen.findByText("Proposal #0")).toBeTruthy();
+  });
+
+  it("still reaches older proposals when the newest ones were all removed", async () => {
+    state.last = 125;
+    for (let id = 25; id < 125; id++) state.removed.add(id);
+    await show("/n/lisbon/proposals");
+
+    const older = await screen.findByTestId("dao-proposals.show-older");
+    expect(screen.queryByTestId("dao-proposals.empty")).toBeNull();
+    expect(screen.queryAllByTestId("dao-proposals.item")).toHaveLength(0);
+
+    fireEvent.click(older);
+    expect(await screen.findByText("Proposal #24")).toBeTruthy();
+    expect(screen.getAllByTestId("dao-proposals.item")).toHaveLength(20);
   });
 
   it("says when the DAO has no proposals yet", async () => {

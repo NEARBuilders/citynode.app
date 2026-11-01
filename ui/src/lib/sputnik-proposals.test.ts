@@ -401,6 +401,29 @@ describe("readDaoProposalPage", () => {
     expect(page.nextBefore).toBe(5);
   });
 
+  it("skips ranges whose proposals were all removed", async () => {
+    stubDao(
+      30,
+      Array.from({ length: 12 }, (_, i) => 29 - i),
+    );
+    const page = await readDaoProposalPage(dao, { pageSize: 5 });
+    expect(page.proposals.map((proposal) => proposal.id)).toEqual([17, 16, 15]);
+    expect(page.nextBefore).toBe(15);
+  });
+
+  it("stops after a few empty ranges and still points at older proposals", async () => {
+    const view = stubDao(
+      40,
+      Array.from({ length: 30 }, (_, i) => 39 - i),
+    );
+    const page = await readDaoProposalPage(dao, { pageSize: 5 });
+    expect(page).toEqual({ proposals: [], nextBefore: 15 });
+    expect(view.mock.calls.filter(([, method]) => method === "get_proposals")).toHaveLength(5);
+
+    const older = await readDaoProposalPage(dao, { before: 15, pageSize: 5 });
+    expect(older.proposals.map((proposal) => proposal.id)).toEqual([9, 8, 7, 6, 5]);
+  });
+
   it("returns an empty page for a DAO without proposals", async () => {
     stubDao(0);
     expect(await readDaoProposalPage(dao)).toEqual({ proposals: [], nextBefore: null });
