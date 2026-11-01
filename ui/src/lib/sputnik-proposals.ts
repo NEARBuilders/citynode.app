@@ -85,6 +85,52 @@ export async function readRecentDaoProposals(
   return [...(proposals ?? [])].sort((a, b) => b.id - a.id);
 }
 
+export interface DaoProposalPage {
+  proposals: SputnikProposal[];
+  /** Pass as `before` to read the next, older page; null when this page reaches proposal 0. */
+  nextBefore: number | null;
+}
+
+/**
+ * Reads one page of proposals by ID range, newest first: IDs in
+ * `[before - pageSize, before)`, or the newest IDs when `before` is omitted.
+ * Removed proposals leave gaps, so a page can hold fewer than `pageSize`.
+ * Throws when the DAO can't be read.
+ */
+export async function readDaoProposalPage(
+  daoAccountId: string,
+  { before, pageSize = 20 }: { before?: number; pageSize?: number } = {},
+): Promise<DaoProposalPage> {
+  const end =
+    before ?? Number((await getNear().view<number>(daoAccountId, "get_last_proposal_id", {})) ?? 0);
+  if (end <= 0) return { proposals: [], nextBefore: null };
+  const fromIndex = Math.max(0, end - pageSize);
+  const proposals =
+    (await getNear().view<SputnikProposal[]>(daoAccountId, "get_proposals", {
+      from_index: fromIndex,
+      limit: end - fromIndex,
+    })) ?? [];
+  return {
+    proposals: [...proposals].sort((a, b) => b.id - a.id),
+    nextBefore: fromIndex > 0 ? fromIndex : null,
+  };
+}
+
+/** Reads one proposal by ID; null when it never existed or was removed. Throws on RPC failure. */
+export async function readDaoProposal(
+  daoAccountId: string,
+  id: number,
+): Promise<SputnikProposal | null> {
+  try {
+    return (await getNear().view<SputnikProposal>(daoAccountId, "get_proposal", { id })) ?? null;
+  } catch (error) {
+    if (String(error instanceof Error ? error.message : error).includes("ERR_NO_PROPOSAL")) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /** Reads the most recent proposals, newest first. */
 export async function fetchDaoProposals(
   daoAccountId: string,

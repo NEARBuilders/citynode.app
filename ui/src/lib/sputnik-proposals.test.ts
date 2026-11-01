@@ -8,6 +8,8 @@ import {
   needsDelegationBalance,
   proposalCallsMethod,
   proposalMatchesPlan,
+  readDaoProposal,
+  readDaoProposalPage,
   readDaoProposalsSince,
   readDelegationBalance,
   readOpenDaoProposals,
@@ -348,5 +350,94 @@ describe("readOpenDaoProposals", () => {
   ])("fails instead of reporting no pending proposals when %s fails", async (method) => {
     stubDao([proposalRecord({ id: 0, submission_time: nowNs.toString() })], method);
     await expect(readOpenDaoProposals(dao)).rejects.toThrow(`${method} failed`);
+  });
+});
+
+describe("readDaoProposalPage", () => {
+  const dao = "example.sputnik-dao.near";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function stubDao(last: number, removed: number[] = []) {
+    return vi.spyOn(Near.prototype, "view").mockImplementation((_contractId, method, args) => {
+      if (method === "get_last_proposal_id") return Promise.resolve(last);
+      const { from_index, limit } = args as { from_index: number; limit: number };
+      const ids = Array.from({ length: limit }, (_, offset) => from_index + offset).filter(
+        (id) => id < last && !removed.includes(id),
+      );
+      return Promise.resolve(ids.map((id) => proposalRecord({ id })));
+    });
+  }
+
+  it("reads the newest page first and pages backwards by ID", async () => {
+    const view = stubDao(45);
+
+    const first = await readDaoProposalPage(dao, { pageSize: 20 });
+    expect(first.proposals.map((proposal) => proposal.id)).toEqual(
+      Array.from({ length: 20 }, (_, i) => 44 - i),
+    );
+    expect(first.nextBefore).toBe(25);
+
+    const second = await readDaoProposalPage(dao, { before: 25, pageSize: 20 });
+    expect(second.proposals.map((proposal) => proposal.id)).toEqual(
+      Array.from({ length: 20 }, (_, i) => 24 - i),
+    );
+    expect(second.nextBefore).toBe(5);
+
+    const last = await readDaoProposalPage(dao, { before: 5, pageSize: 20 });
+    expect(last.proposals.map((proposal) => proposal.id)).toEqual([4, 3, 2, 1, 0]);
+    expect(last.nextBefore).toBeNull();
+    expect(view.mock.calls.filter(([, method]) => method === "get_last_proposal_id")).toHaveLength(
+      1,
+    );
+  });
+
+  it("keeps page boundaries stable when proposals were removed", async () => {
+    stubDao(10, [8, 6]);
+    const page = await readDaoProposalPage(dao, { pageSize: 5 });
+    expect(page.proposals.map((proposal) => proposal.id)).toEqual([9, 7, 5]);
+    expect(page.nextBefore).toBe(5);
+  });
+
+  it("returns an empty page for a DAO without proposals", async () => {
+    stubDao(0);
+    expect(await readDaoProposalPage(dao)).toEqual({ proposals: [], nextBefore: null });
+  });
+
+  it("throws when the DAO can't be read, instead of returning an empty list", async () => {
+    vi.spyOn(Near.prototype, "view").mockRejectedValue(new Error("RPC unavailable"));
+    await expect(readDaoProposalPage(dao)).rejects.toThrow("RPC unavailable");
+  });
+});
+
+describe("readDaoProposal", () => {
+  const dao = "example.sputnik-dao.near";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("reads a proposal by ID, including ones older than the first page", async () => {
+    const view = vi
+      .spyOn(Near.prototype, "view")
+      .mockResolvedValue(proposalRecord({ id: 3, proposer: "member.near" }));
+    expect(await readDaoProposal(dao, 3)).toMatchObject({ id: 3, proposer: "member.near" });
+    expect(view).toHaveBeenCalledWith(dao, "get_proposal", { id: 3 });
+  });
+
+  it("returns null for a missing or removed proposal", async () => {
+    vi.spyOn(Near.prototype, "view").mockRejectedValue(
+      new Error(
+        'Contract call failed: example.sputnik-dao.near.get_proposal - wasm execution failed with error: HostError(GuestPanic { panic_msg: "panicked at sputnikdao2/src/views.rs:100:48:\\nERR_NO_PROPOSAL" })',
+      ),
+    );
+    expect(await readDaoProposal(dao, 999)).toBeNull();
+  });
+
+  it("throws on any other failure", async () => {
+    vi.spyOn(Near.prototype, "view").mockRejectedValue(new Error("RPC unavailable"));
+    await expect(readDaoProposal(dao, 1)).rejects.toThrow("RPC unavailable");
   });
 });

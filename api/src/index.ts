@@ -29,6 +29,7 @@ import {
   type MemberDirectoryService,
   MemberDirectoryTag,
 } from "./services/member-directory";
+import { resolveNetwork } from "./services/near-rpc";
 import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
@@ -977,6 +978,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
         if (!tenant?.orgId) return unavailable;
         return (yield* services.memberDirectory.latestCount(tenant.orgId)) ?? unavailable;
+      }),
+
+      getNodeDao: builder.getNodeDao.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const none = { daoAccountId: null, network: null };
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (!node?.tenantId) return none;
+        const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
+        if (!tenant || tenant.ownerKind !== "dao") return none;
+        return { daoAccountId: tenant.accountId, network: resolveNetwork(tenant.accountId) };
       }),
 
       reconcileAttendance: builder.reconcileAttendance.use(requireAuth).effect(function* ({

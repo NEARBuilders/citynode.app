@@ -54,6 +54,7 @@ const validator = {
 const clients: QueryClient[] = [];
 const memberCounts = new Map<string, { count: number | null; observedAt: string | null }>();
 const listings = new Map<string, Record<string, unknown> | "fail">();
+const nodeDaos = new Map<string, string>();
 
 afterEach(() => {
   cleanup();
@@ -62,6 +63,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   memberCounts.clear();
   listings.clear();
+  nodeDaos.clear();
 });
 
 function communityBuilders(path: string, overrides: Record<string, unknown> = {}) {
@@ -125,6 +127,12 @@ function mockApi(
           return Response.json({
             json: memberCounts.get(args.nodeId) ?? { count: null, observedAt: null },
           });
+        case "getNodeDao": {
+          const daoAccountId = nodeDaos.get(args.nodeId) ?? null;
+          return Response.json({
+            json: { daoAccountId, network: daoAccountId ? "mainnet" : null },
+          });
+        }
         case "getDiscoveryNode": {
           const listing = listings.get(args.nodeId);
           if (listing === "fail") return Response.json({ json: null }, { status: 500 });
@@ -530,4 +538,19 @@ it("never shows the members-only bulletin on the public page", async () => {
   await showNode("/n/chicago");
   await screen.findByTestId("node-page.updates");
   expect(screen.queryByText("Members meet at the back door")).toBeNull();
+});
+
+it("links to the Node DAO's proposals only when the community has one", async () => {
+  nodeDaos.set(parent.id, "illinois.sputnik-dao.near");
+  mockApi();
+  await showNode("/n/illinois");
+  const link = await screen.findByTestId("node-page.proposals");
+  expect(link.getAttribute("href")).toBe("/n/illinois/proposals");
+
+  cleanup();
+  nodeDaos.clear();
+  mockApi();
+  await showNode("/n/chicago");
+  expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
+  expect(screen.queryByTestId("node-page.proposals")).toBeNull();
 });
