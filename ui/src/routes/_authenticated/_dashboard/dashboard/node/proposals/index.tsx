@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/item";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
-import { DaoProposalsNote } from "./-dao-proposals-note";
+import { NodeDaoSection } from "./-node-dao-section";
 import { NODE_PLUGIN_ID, nodeProposalsQueryOptions } from "./-node-proposals-query";
 import {
   applyStatusLabel,
@@ -95,7 +95,7 @@ function NodeProposals() {
 
   return (
     <section className="flex flex-col gap-6">
-      <DaoProposalsNote />
+      <NodeDaoSection node={selectedNode} />
       <SectionHeader
         title={translate("dashboard.applications")}
         description={translate("dashboard.applicationsHint")}
