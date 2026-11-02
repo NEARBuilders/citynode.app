@@ -5,8 +5,10 @@ import type { ReactNode } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, SectionHeader } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
+import { PollVote } from "@/components/node-dao-member";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppTranslation } from "@/i18n/runtime";
+import { isPollProposal } from "@/lib/node-dao-contributors";
 import {
   chainTimeQueryOptions,
   daoPolicyQueryOptions,
@@ -308,6 +310,7 @@ export function DaoProposalDetail({
       <p className="text-sm whitespace-pre-wrap wrap-anywhere text-foreground">
         {proposalText(proposal.description) || translate("daoProposals.noDescription")}
       </p>
+      <PollVote daoAccountId={daoAccountId} proposal={proposal} />
       <TrezuLink daoAccountId={daoAccountId} />
     </article>
   );
@@ -356,6 +359,14 @@ export function proposalKindSummary(proposal: SputnikProposal, translate: Transl
     return translate("daoProposals.kindCall", {
       method: call.actions.map((action) => action.method_name).join(", "),
       receiver: call.receiver_id,
+    });
+  }
+  if (isPollProposal(proposal)) return translate("daoProposals.kindPoll");
+  const addMember = kind.AddMemberToRole as { member_id: string; role: string } | undefined;
+  if (addMember) {
+    return translate("daoProposals.kindAddMember", {
+      member: addMember.member_id,
+      role: addMember.role,
     });
   }
   const transfer = kind.Transfer as { receiver_id: string } | undefined;

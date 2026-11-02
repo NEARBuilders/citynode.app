@@ -11,6 +11,16 @@ const harness = vi.hoisted(() => ({
   routeContext: {} as Record<string, unknown>,
   getProposals: (() => Promise.resolve({ data: [] })) as (input: unknown) => Promise<unknown>,
   approve: vi.fn(),
+  dao: { daoAccountId: null, network: null } as {
+    daoAccountId: string | null;
+    network: string | null;
+  },
+}));
+
+vi.mock("@/components/node-dao-member", () => ({
+  MemberDaoPanel: ({ daoAccountId }: { daoAccountId: string }) => (
+    <div data-testid="member-dao">{daoAccountId}</div>
+  ),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -41,6 +51,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("@/app", () => ({
   useApiClient: () => ({
+    getNodeDao: () => Promise.resolve(harness.dao),
     proposals: {
       getProposals: (input: unknown) => harness.getProposals(input),
       approve: harness.approve,
@@ -49,13 +60,14 @@ vi.mock("@/app", () => ({
   }),
 }));
 
-const NODE = { id: "node-1", name: "Example City" };
+const NODE = { id: "node-1", name: "Example City", slug: "example-city", parentId: null };
 
 const clients: QueryClient[] = [];
 
 afterEach(() => {
   cleanup();
   harness.getProposals = () => Promise.resolve({ data: [] });
+  harness.dao = { daoAccountId: null, network: null };
   harness.approve.mockReset();
   for (const client of clients.splice(0)) client.clear();
 });
@@ -90,8 +102,8 @@ describe("community Proposals tab", () => {
   it("shows a plain member with no records the DAO note, an empty applications list and the propose action", async () => {
     renderTab();
     expect(await screen.findByText("No community applications yet")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-node.dao-proposals-note").textContent).toContain(
-      "can't submit proposals",
+    expect((await screen.findByTestId("dashboard-node.dao-proposals-note")).textContent).toContain(
+      "doesn't have a Node DAO yet",
     );
     expect(screen.getByRole("heading", { name: "Community applications" })).toBeTruthy();
     expect(screen.queryByText("No proposals yet")).toBeNull();
@@ -110,6 +122,13 @@ describe("community Proposals tab", () => {
     );
     expect(screen.queryByTestId("dashboard-node.proposal-approve-a1")).toBeNull();
     expect(screen.getByTestId("dashboard-node.dao-proposals-note")).toBeTruthy();
+  });
+
+  it("shows the member panel for a community with a mainnet Node DAO", async () => {
+    harness.dao = { daoAccountId: "example.sputnik-dao.near", network: "mainnet" };
+    renderTab();
+    expect((await screen.findByTestId("member-dao")).textContent).toBe("example.sputnik-dao.near");
+    expect(screen.queryByTestId("dashboard-node.dao-proposals-note")).toBeNull();
   });
 
   it("names an untitled platform record as a community application", async () => {

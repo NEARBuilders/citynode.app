@@ -5,7 +5,7 @@
  * proposal matching and the call preview in the UI.
  */
 
-import { Amount, type FinalExecutionOutcome, Near } from "near-kit";
+import { AccountDoesNotExistError, Amount, type FinalExecutionOutcome, Near } from "near-kit";
 
 let _near: Near | null = null;
 
@@ -299,6 +299,19 @@ export function canAccountPropose(
   return accountInRoles(proposerRoles(policy), accountId, delegationBalance);
 }
 
+/** Whether `accountId` may take `action` (`VoteApprove`, `VoteReject`, …) on proposals of `kind`. */
+export function canAccountAct(
+  policy: unknown,
+  accountId: string | null,
+  kind: SputnikProposalKindLabel,
+  action: string,
+  delegationBalance?: bigint,
+): boolean {
+  if (!accountId || !readableRoles(policy)) return false;
+  const roles = policy.roles.filter((role) => permits(role.permissions, kind, action));
+  return accountInRoles(roles, accountId, delegationBalance);
+}
+
 export function canAccountApprove(
   policy: SputnikPolicy | null | undefined,
   accountId: string | null,
@@ -410,30 +423,41 @@ export type DaoPlan =
     }
   | { kind: "transfer"; receiverId: string; amountYocto: string };
 
+/** What a member files: a poll, or a request to join a role (decision A, #408). */
+export type MemberProposalPlan =
+  | { kind: "vote" }
+  | { kind: "add_member_to_role"; memberId: string; role: string };
+
 function gasToRaw(gas: string): string {
   const match = gas.match(/([\d.]+)\s*Tgas/);
   if (!match) return gas.replace(/\D/g, "") || "0";
   return BigInt(Math.round(Number(match[1]) * 1e12)).toString();
 }
 
-export function buildAddProposalArgs(plan: DaoPlan, description: string) {
-  const kind =
-    plan.kind === "transfer"
-      ? { Transfer: { token_id: "", receiver_id: plan.receiverId, amount: plan.amountYocto } }
-      : {
-          FunctionCall: {
-            receiver_id: plan.receiverId,
-            actions: [
-              {
-                method_name: plan.methodName,
-                args: btoa(JSON.stringify(plan.args)),
-                deposit: plan.attachedDeposit ?? "0",
-                gas: gasToRaw(plan.gas),
-              },
-            ],
-          },
-        };
-  return { proposal: { description, kind } };
+function proposalKindArgs(plan: DaoPlan | MemberProposalPlan) {
+  if (plan.kind === "vote") return "Vote";
+  if (plan.kind === "add_member_to_role") {
+    return { AddMemberToRole: { member_id: plan.memberId, role: plan.role } };
+  }
+  return plan.kind === "transfer"
+    ? { Transfer: { token_id: "", receiver_id: plan.receiverId, amount: plan.amountYocto } }
+    : {
+        FunctionCall: {
+          receiver_id: plan.receiverId,
+          actions: [
+            {
+              method_name: plan.methodName,
+              args: btoa(JSON.stringify(plan.args)),
+              deposit: plan.attachedDeposit ?? "0",
+              gas: gasToRaw(plan.gas),
+            },
+          ],
+        },
+      };
+}
+
+export function buildAddProposalArgs(plan: DaoPlan | MemberProposalPlan, description: string) {
+  return { proposal: { description, kind: proposalKindArgs(plan) } };
 }
 
 export async function fetchProposalBond(daoAccountId: string): Promise<string> {
@@ -473,6 +497,83 @@ export async function proposeAsSession(
     )
     .send({ waitUntil: "EXECUTED" });
 }
+
+async function connectedAccount(wallet: SessionWallet): Promise<string> {
+  const connected = await wallet.ensureConnected();
+  const accountId = wallet.getAccountId();
+  if (!connected || !accountId) throw new Error("Connect your NEAR wallet first");
+  return accountId;
+}
+
+/**
+ * Files a proposal with exactly `bondYocto` attached, the bond read from the
+ * policy the member was shown. Unlike `proposeAsSession` it never falls back to
+ * a zero deposit when the bond can't be read.
+ */
+export async function submitProposalWithBond(
+  wallet: SessionWallet,
+  daoAccountId: string,
+  plan: DaoPlan | MemberProposalPlan,
+  description: string,
+  bondYocto: bigint,
+): Promise<FinalExecutionOutcome> {
+  const accountId = await connectedAccount(wallet);
+  return wallet
+    .getNearClient()
+    .transaction(accountId)
+    .functionCall(
+      daoAccountId,
+      "add_proposal",
+      buildAddProposalArgs(plan, description) as unknown as Record<string, never>,
+      { gas: "100 Tgas", attachedDeposit: Amount.yocto(bondYocto) },
+    )
+    .send({ waitUntil: "EXECUTED" });
+}
+
+export type SputnikVoteAction = "VoteApprove" | "VoteReject";
+
+/**
+ * Votes on `proposal`. Sputnik's `act_proposal` takes the proposal's kind as
+ * read, and refuses the vote if the stored kind differs.
+ */
+export async function voteOnProposal(
+  wallet: SessionWallet,
+  daoAccountId: string,
+  proposal: Pick<SputnikProposal, "id" | "kind">,
+  action: SputnikVoteAction,
+): Promise<FinalExecutionOutcome> {
+  const accountId = await connectedAccount(wallet);
+  return wallet
+    .getNearClient()
+    .transaction(accountId)
+    .functionCall(
+      daoAccountId,
+      "act_proposal",
+      { id: proposal.id, action, proposal: proposal.kind } as unknown as Record<string, never>,
+      { gas: "200 Tgas" },
+    )
+    .send({ waitUntil: "EXECUTED" });
+}
+
+/**
+ * The NEAR an account can spend, in yoctoNEAR: its balance less what its
+ * storage holds back. An account that doesn't exist on chain yet has none.
+ */
+export async function readSpendableYocto(accountId: string): Promise<bigint> {
+  try {
+    const view = await getNear().rpc.getAccount(accountId);
+    const storageYocto = BigInt(view.storage_usage) * STORAGE_YOCTO_PER_BYTE;
+    const locked = BigInt(view.locked);
+    const reserved = storageYocto > locked ? storageYocto - locked : 0n;
+    const amount = BigInt(view.amount);
+    return amount > reserved ? amount - reserved : 0n;
+  } catch (error) {
+    if (error instanceof AccountDoesNotExistError) return 0n;
+    throw error;
+  }
+}
+
+const STORAGE_YOCTO_PER_BYTE = 10n ** 19n;
 
 /** `receiverId` on a plan; `ANY_RECEIVER` matches on method name alone. */
 export const ANY_RECEIVER = "*";

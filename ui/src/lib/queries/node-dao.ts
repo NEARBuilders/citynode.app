@@ -4,6 +4,8 @@ import {
   readChainTimeNs,
   readDaoProposal,
   readDaoProposalPage,
+  readOpenDaoProposals,
+  readSpendableYocto,
   readSputnikPolicy,
 } from "@/lib/sputnik-proposals";
 
@@ -14,6 +16,8 @@ export const nodeDaoQueryKeys = {
     ["node-dao", "proposal", daoAccountId, id] as const,
   policy: (daoAccountId: string) => ["node-dao", "policy", daoAccountId] as const,
   chainTime: () => ["node-dao", "chain-time"] as const,
+  open: (daoAccountId: string) => ["node-dao", "open", daoAccountId] as const,
+  spendable: (accountId: string) => ["node-dao", "spendable", accountId] as const,
 };
 
 export function nodeDaoQueryOptions(apiClient: ApiClient, nodeId: string) {
@@ -60,6 +64,24 @@ export function chainTimeQueryOptions() {
     queryKey: nodeDaoQueryKeys.chainTime(),
     queryFn: readChainTimeNs,
     staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function daoOpenProposalsQueryOptions(daoAccountId: string) {
+  return queryOptions({
+    queryKey: nodeDaoQueryKeys.open(daoAccountId),
+    queryFn: () => readOpenDaoProposals(daoAccountId),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function spendableYoctoQueryOptions(accountId: string) {
+  return queryOptions({
+    queryKey: nodeDaoQueryKeys.spendable(accountId),
+    queryFn: () => readSpendableYocto(accountId),
+    staleTime: 15_000,
     retry: false,
   });
 }
