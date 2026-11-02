@@ -1266,6 +1266,14 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "label.voteAbstain": ["Abstain", "Abstenerse", "Abstention", "弃权"],
   "label.voteAgainst": ["Against", "En contra", "Contre", "反对"],
   "label.voteFor": ["For", "A favor", "Pour", "赞成"],
+  "me.description": [
+    "Your profile and the events you checked in at, across every community.",
+    "Tu perfil y los eventos en los que te registraste, en todas tus comunidades.",
+    "Votre profil et les événements auxquels vous vous êtes enregistré, dans toutes vos communautés.",
+    "你的资料，以及你在所有社区签到过的活动。",
+  ],
+  "me.editProfile": ["Edit profile", "Editar perfil", "Modifier le profil", "编辑资料"],
+  "me.publicProfile": ["Public profile", "Perfil público", "Profil public", "公开资料"],
   "measurement.copyLink": ["Copied a link", "Copió un enlace", "Copie d’un lien", "复制链接"],
   "measurement.openCommunity": [
     "Opened a community",
@@ -1291,6 +1299,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ouverture d’Explorer",
     "打开探索页面",
   ],
+  "nav.activity": ["Your activity", "Tu actividad", "Votre activité", "你的动态"],
   "nav.admin": ["Admin", "Administración", "Administration", "管理"],
   "nav.apiKeys": ["API keys", "Claves API", "Clés API", "API 密钥"],
   "nav.community": ["Community", "Comunidad", "Communauté", "社区"],

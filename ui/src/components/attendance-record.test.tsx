@@ -191,6 +191,17 @@ describe("AttendanceRecord", () => {
     expect(screen.queryByTestId("home")).toBeNull();
   });
 
+  it("keeps every community's section, with loading and empty states, when asked to", async () => {
+    let resolve: (value: unknown) => void = () => {};
+    harness.getMyAttendance = () => new Promise((done) => (resolve = done));
+    show({ alwaysShow: true, testId: "me" });
+    expect(screen.getByTestId("me-loading")).toBeTruthy();
+
+    resolve({ events: [], unclassified: [], communities: [] });
+    expect((await screen.findByTestId("me-empty")).textContent).toBe("No check-ins recorded yet.");
+    expect(screen.getByTestId("me")).toBeTruthy();
+  });
+
   it("hides itself when the caller isn't a member of the community", async () => {
     harness.getMyAttendance = async () => {
       throw new ORPCError("FORBIDDEN", { message: "You are not a member of this community" });

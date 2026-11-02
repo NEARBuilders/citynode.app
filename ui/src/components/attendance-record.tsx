@@ -32,10 +32,13 @@ const REASON_MESSAGES = {
 export function AttendanceRecord({
   organizationId = null,
   reconcile = false,
+  alwaysShow = false,
   testId,
 }: {
   organizationId?: string | null;
   reconcile?: boolean;
+  /** Keep the section, with its loading and empty states, when showing every community. */
+  alwaysShow?: boolean;
   testId: string;
 }) {
   const translate = useAppTranslation();
@@ -55,11 +58,12 @@ export function AttendanceRecord({
     void queryClient.invalidateQueries({ queryKey: attendanceQueryKeys.records() });
   }, [queryClient, reconciledAt]);
   const everyCommunity = !organizationId;
+  const hideWhenEmpty = everyCommunity && !alwaysShow;
 
   if (record.error instanceof ORPCError && record.error.code === "FORBIDDEN") return null;
-  if (everyCommunity && record.isPending) return null;
+  if (hideWhenEmpty && record.isPending) return null;
   if (
-    everyCommunity &&
+    hideWhenEmpty &&
     record.data &&
     record.data.communities.length === 0 &&
     record.data.events.length === 0 &&
