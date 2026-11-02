@@ -1,98 +1,83 @@
 # Letting members propose to a Node DAO
 
-> **Draft, not validated.** Nobody has run this recipe on mainnet yet. Spike #407 runs it and records the transaction. Decision A picks the role members propose under, and decision B picks the proposal kinds (epic #408). Until #407 has run and both decisions are recorded, this page describes both decision A variants side by side, and the kinds are decision B's candidates. Don't hand it to a DAO's signers as final.
+> **Draft, not validated.** Decisions A and B are recorded (epic #408, 2026-11-02): members propose and vote on polls as **Contributors**, a group in each Node DAO's policy. Nobody has run this recipe on mainnet yet. #407's observed run (James and Rhyme) still has to run it and record the transaction. Don't hand it to a DAO's signers as final until then.
 
 | Check | Status |
 | --- | --- |
-| #407 mainnet transaction | _pending #407: add the transaction link here_ |
-| Decision A (Everyone or a Members group) | _open_ |
-| Decision B (which kinds members propose) | _open_ |
+| #407 observed mainnet run | _pending (James and Rhyme): add the transaction link here_ |
+| Decision A: who proposes | Contributors, a group in the Node DAO's policy |
+| Decision B: what they propose | Polls first; other kinds later |
 
-Each Node DAO makes one policy change that does two things: it lets its members add proposals, and it lowers the proposal bond to an amount a member can pay, ideally 0. The DAO's signers propose and approve that change in the tool they already use (Trezu). City Node doesn't change DAO policy and has no screen for it. It only reads the result (see [What City Node reads](#what-city-node-reads)).
+Anyone who joined a community (by QR or invite) is a member. A member who wants to propose asks to become a Contributor, or the DAO's signers add them directly. Contributors can then file polls and vote on them.
+
+Each Node DAO makes one policy change for this. Its signers propose and approve it in the tool they already use (Trezu). City Node doesn't change DAO policy and has no screen for it. It only reads the result (see [What City Node reads](#what-city-node-reads)).
 
 Sputnik claims below cite [near-daos/sputnik-dao-contract][sdc] at `5434a59d`, the commit #412 was code-read against. All paths are under `sputnikdao2/src/`.
 
-## How Sputnik decides who may propose
+## What changes
 
-- `add_proposal` asks the policy whether the caller may perform `AddProposal` on the proposal's kind, and panics with `ERR_PERMISSION_DENIED` if not ([proposals.rs:566-576][add-perm]).
-- The caller matches every role whose kind fits them: `Everyone` always matches, `Group` matches listed accounts, and `Member` matches a delegated token weight at or above the threshold ([policy.rs:24-32][match-user]). The comment on `Everyone` says "who is not matched by other roles" ([policy.rs:16][everyone-doc]), but the code matches every account, council members included.
-- A matched role allows the action if its `permissions` contain any of four strings ([policy.rs:333-359][can-execute]):
-  1. `<kind>:AddProposal`
-  2. `<kind>:*`
-  3. `*:AddProposal`
-  4. `*:*`
-- `<kind>` is the proposal kind's policy label ([proposals.rs:125-147][labels]). A permission for one kind never authorizes another.
-- The default policy gives an `all` role (kind `Everyone`) the permission `*:AddProposal`, and a `council` group everything except `RemoveProposal` ([policy.rs:179-216][default-policy]).
+Node DAOs set up in Trezu don't use Sputnik's default policy. Trezu's roles are `Requestor` (files transfers and function calls), `Approver` (shown as "Financial", votes on them) and `Admin` (shown as "Governance", handles membership and policy, including `add_member_to_role`). None of them has an Everyone role or a `vote` permission today. The change:
 
-### Permission strings for decision B's candidates
+1. **Adds a `Contributors` group**, empty or with the first Contributors, that may add polls and vote approve or reject on them, with a poll threshold the group can reach.
+2. **Lets members ask to become Contributors**, by granting `add_member_to_role:AddProposal` to an Everyone role (#477).
+3. **Sets `proposal_bond`.** It doesn't have to be 0 (product owner, 2026-11-02); see [Bond](#bond).
 
-| Decision B candidate | Sputnik proposal kind | Policy label | Exact permission |
-| --- | --- | --- | --- |
-| Polls | `Vote` | `vote` | `vote:AddProposal` |
-| Community page changes | `FunctionCall` (config write) | `call` | `call:AddProposal` |
-| House of Stake votes | `FunctionCall` (vote with the snapshot proof) | `call` | `call:AddProposal` |
+Every other role, vote policy, `proposal_period` and bounty setting stays as it is. Use the role name `Contributors` in every Node DAO, because a member's request names the role it adds them to.
 
-Labels: `Vote` is `vote` ([proposals.rs:138][labels]) and `FunctionCall` is `call` ([proposals.rs:131][labels]).
+## How Sputnik checks permissions
 
-What each of the four forms would grant a member role, for kind `vote` (the same holds for `call`):
+- `add_proposal` asks the policy whether the caller may perform `AddProposal` on the proposal's kind, and panics with `ERR_PERMISSION_DENIED` if not ([proposals.rs:566-576][add-perm]). Votes go through the same check with `VoteApprove`, `VoteReject` or `VoteRemove` ([proposals.rs:609-612][act]).
+- The caller matches every role whose kind fits them: `Everyone` always matches, `Group` matches listed accounts, and `Member` matches a delegated token weight at or above the threshold ([policy.rs:24-32][match-user]). The comment on `Everyone` says "who is not matched by other roles" ([policy.rs:16][everyone-doc]), but the code matches every account, signers included.
+- A matched role allows an action if its `permissions` contain any of four strings ([policy.rs:333-359][can-execute]): `<kind>:<action>`, `<kind>:*`, `*:<action>` or `*:*`.
+- `<kind>` is the proposal kind's policy label ([proposals.rs:125-147][labels]). A poll (`Vote`) is `vote` and a membership request (`AddMemberToRole`) is `add_member_to_role`. A permission for one kind never authorizes another.
 
-| Form | Example | What it grants | Use for members? |
-| --- | --- | --- | --- |
-| `<kind>:AddProposal` | `vote:AddProposal` | Adding polls only | **Yes.** Grant one per kind decision B picks |
-| `<kind>:*` | `vote:*` | Adding polls, and also voting on, removing and finalizing them | No: members would approve their own proposals |
-| `*:AddProposal` | `*:AddProposal` | Adding every kind, including `policy`, `transfer` and `upgrade_self` | No: the default Everyone grant, and broader than decision B |
-| `*:*` | `*:*` | Every action on every kind | Never |
+## The Contributors role
 
-`call:AddProposal` lets a member propose any function call, not only the ones City Node builds. Sputnik can't scope a permission by receiver or method. The council's approval is what stops other calls, so approvers should check what a call does before approving it.
+```json
+{
+  "name": "Contributors",
+  "kind": { "Group": [] },
+  "permissions": ["vote:AddProposal", "vote:VoteApprove", "vote:VoteReject"],
+  "vote_policy": {
+    "vote": { "weight_kind": "RoleWeight", "quorum": "0", "threshold": [1, 2] }
+  }
+}
+```
 
-Members never get `VoteApprove`, `VoteReject`, `VoteRemove`, `RemoveProposal` or `Finalize`. Proposing isn't voting: every member proposal still passes only under the council's installed threshold.
+- **Exact permissions only.** `vote:*` would also give `VoteRemove` and `Finalize`, and `*:AddProposal` would let Contributors file transfers and policy changes. Contributors never get `VoteRemove` (removing a poll deletes it and forfeits its bond, [proposals.rs:644-648][vote-outcome]) or `Finalize`.
+- **A threshold the group can reach.** Votes are counted per role, and a poll is approved or rejected as soon as one role's count reaches that role's threshold for the `vote` label ([policy.rs:378-434][proposal-status], [proposals.rs:256-283][update-votes]). The vote policy above is the default ratio: more than half of the group. A ratio grows with the group, so a large group where few people vote leaves polls to expire. A fixed weight such as `"threshold": "3"` needs that many votes, capped at the group's size ([policy.rs:96-107][weight]). #407 records which one it ran.
+- **A poll only records the outcome.** Approving a `Vote` proposal executes nothing ([proposals.rs:431][execute]); its bond is returned at once.
+- **Leave polls to Contributors.** A signer role that can vote on polls, including through `*:VoteApprove` or `*:*`, has its own threshold, and a small signer group would settle a poll before the Contributors do. Don't add `vote` grants to signer roles, and check that no signer wildcard covers `vote`.
 
-## Decision A, side by side
+## Becoming a Contributor
 
-| | Variant 1: a Members group | Variant 2: Everyone |
-| --- | --- | --- |
-| Roles that change | Add a `members` group role. Remove the overlapping `AddProposal` grant from the Everyone role (or remove that role). | Narrow (or add) the Everyone role to the chosen kinds only. |
-| Who can propose | Only accounts listed in the group | Any NEAR account |
-| Per join | Each new member's Passkey Wallet account is added by an `AddMemberToRole` proposal the council approves (label `add_member_to_role`, [proposals.rs:129][labels]; executed by [policy.rs:292-305][add-member]) | Nothing |
-| Spam exposure | Low: only members | Anyone can file polls and calls. With a zero bond nothing discourages it, and the council rejects or removes them |
-| What #407 checks | No overlapping Everyone grant, and an unrelated account is refused | An unrelated account succeeds, and the exposure difference |
-| Council and thresholds | Unchanged | Unchanged |
+There are two ways, and the Node DAO approves both (#477):
+
+- **The member asks.** Their Passkey Wallet files an `AddMemberToRole` proposal for the `Contributors` role. That needs an Everyone role with `add_member_to_role:AddProposal`:
+
+  ```json
+  {
+    "name": "all",
+    "kind": "Everyone",
+    "permissions": ["add_member_to_role:AddProposal"],
+    "vote_policy": {}
+  }
+  ```
+
+- **Signers add them.** A Governance (`Admin`) signer files the same proposal in Trezu. Trezu's `Admin` role already has `add_member_to_role`.
+
+The proposal is `{ "AddMemberToRole": { "member_id": "member-one.near", "role": "Contributors" } }` ([proposals.rs:72-73][add-member-kind]). On approval it adds the account to the group ([policy.rs:292-305][add-member]). It passes under the signer roles' vote policy for `add_member_to_role`, as it does today.
+
+Watch for two things:
+
+- **Anyone can file a request.** The Everyone grant lets any NEAR account file one, not only members. With a bond of 0 that's free, so requests from accounts that aren't members can pile up. A positive bond discourages that, but the member pays it.
+- **A request can name any role.** `add_member_to_role:AddProposal` doesn't limit the role. Before approving, check that the role is `Contributors` and that the account is the member's Passkey Wallet. Never approve a request that adds someone to a signer role.
 
 ### First, keep the signers able to propose
 
-Both variants take `AddProposal` away from the Everyone role. In the default policy the council keeps its own `*:AddProposal` ([policy.rs:194-208][default-policy]), so nothing else changes. But a DAO that isn't default-shaped may let its signers propose only through Everyone, for example a council with vote and `Finalize` permissions and no `AddProposal`. Sputnik only grants what a role the caller matches lists ([policy.rs:333-359][can-execute]), so narrowing Everyone there would leave nobody able to add a proposal, including the `ChangePolicy` that would undo it.
+If a DAO already has an Everyone role, don't replace it with the one above without checking. A DAO whose signers can only propose through Everyone, for example through the default `*:AddProposal` ([policy.rs:185-192][default-policy]), would leave nobody able to add a proposal, including the `ChangePolicy` that would undo it. Sputnik only grants what a role the caller matches lists ([policy.rs:333-359][can-execute]).
 
-Before narrowing Everyone, check the current `get_policy`: a signer role other than Everyone must grant `AddProposal` for `policy` and every other kind the signers file, in one of the four forms. If none does, add that grant (`*:AddProposal`, as the default council has) to the signer role in the same change.
-
-### Variant 1: a Members group
-
-The role to add:
-
-```json
-{
-  "name": "members",
-  "kind": { "Group": ["member-one.near", "member-two.near"] },
-  "permissions": ["vote:AddProposal", "call:AddProposal"],
-  "vote_policy": {}
-}
-```
-
-The Everyone role must not grant `AddProposal` for the same kinds in any of the four forms, or anyone can still propose them. The default `all` role has `*:AddProposal`, which covers every kind, so remove that permission (leaving `"permissions": []`) or remove the role in the same change, after the [signer check](#first-keep-the-signers-able-to-propose).
-
-### Variant 2: Everyone
-
-The Everyone role, narrowed from the default `*:AddProposal` to the chosen kinds:
-
-```json
-{
-  "name": "all",
-  "kind": "Everyone",
-  "permissions": ["vote:AddProposal", "call:AddProposal"],
-  "vote_policy": {}
-}
-```
-
-Run the [signer check](#first-keep-the-signers-able-to-propose) before narrowing it. If the DAO has no Everyone role, add this one. Leaving the default `*:AddProposal` in place would also work for decision B's kinds, but it lets any account propose transfers, policy changes and upgrades too.
+Before narrowing an existing Everyone role, check the current `get_policy`: a signer role other than Everyone must grant `AddProposal` for `policy` and every other kind the signers file, in one of the four forms. If none does, add that grant to the signer role in the same change. Narrowing it is still right: a leftover `*:AddProposal` on Everyone would let any account file polls, transfers and policy changes. If the DAO has no Everyone role, as in Trezu's setup, just add the one above.
 
 ## Bond
 
@@ -106,60 +91,84 @@ Run the [signer check](#first-keep-the-signers-able-to-propose) before narrowing
 | `Failed`, then finalized | Re-executed if still approved (returned on success); returned if it has expired | [proposals.rs:658-685][finalize] |
 | Rejected by vote | Returned | [proposals.rs:649-652][vote-outcome], [500-510][reject] |
 | Expired, then finalized | Returned | [proposals.rs:676-679][finalize] |
-| Expired, not yet finalized | Kept locked until someone with `Finalize` finalizes it. Members don't have that permission, so the council does | [proposals.rs:665-685][finalize] |
+| Expired, not yet finalized | Kept locked until someone with `Finalize` finalizes it. Contributors don't have that permission, so a signer does | [proposals.rs:665-685][finalize] |
 | Removed by vote (`VoteRemove`) | Forfeited; the proposal is deleted | [proposals.rs:644-648][vote-outcome] |
 | Deleted with `RemoveProposal` | Forfeited | [proposals.rs:620-623][remove] |
 
-**The DAO returns its current bond, not the one the proposer paid.** `internal_return_bonds` transfers `policy.proposal_bond` from the policy at the time of return ([proposals.rs:339-349][return-bonds]). The policy change itself is safe: it's executed with the policy read before it ran ([proposals.rs:607, 641][act]), so its proposer gets the old bond back. But a proposal that was pending when the bond dropped from 1 NEAR to 0 gets 0 back later. Approve, reject or finalize pending proposals before lowering the bond.
+**The DAO returns its current bond, not the one the proposer paid.** `internal_return_bonds` transfers `policy.proposal_bond` from the policy at the time of return ([proposals.rs:339-349][return-bonds]). The policy change itself is safe: it's executed with the policy read before it ran ([proposals.rs:607, 641][act]), so its proposer gets the old bond back. But a proposal that was pending when the bond changed gets the new amount back: one filed at 1 NEAR gets 0 if the bond dropped to 0. Approve, reject or finalize pending proposals before changing the bond.
 
-**A positive bond means the member's Passkey Wallet must hold that NEAR**, plus gas, before they sign. A new wallet starts empty. Per the product owner (2026-10-23), a DAO may keep a bond above zero; the proposal screen (#413) then shows the amount and the wallet's address before the member signs, and City Node doesn't fund wallets.
+**A positive bond means the member's Passkey Wallet must hold that NEAR**, plus gas, before they sign. A new wallet starts empty. The bond doesn't have to be 0 (product owner, 2026-11-02). Node DAOs set up in Trezu have 0 today. A positive bond discourages spam requests (see [Becoming a Contributor](#becoming-a-contributor)), but members pay it. With a positive bond, the proposal screen (#413) shows the amount and the wallet's address before the member signs, and City Node doesn't fund wallets.
 
 ## Submitting the change from Trezu
 
-A signer whose role allows the proposal kind files it, attaching the DAO's **current** bond as the deposit. It passes under that kind's vote policy, the same as any other policy change. Use the policy-change or custom-proposal option in Trezu. If Trezu's form can't express the change, file `add_proposal` with the arguments below. #407 records which Trezu path it used.
+A Governance (`Admin`) signer files it, attaching the DAO's **current** bond as the deposit. It passes under that role's vote policy, the same as any other policy change. Use the policy-change or custom-proposal option in Trezu. If Trezu's form can't express the change, file `add_proposal` with the arguments below. #407 records which Trezu path it used.
 
 ### Recommended: one `ChangePolicy`
 
-One proposal changes the role and the bond together, as #407 tests ("one policy change for role plus bond"). `ChangePolicy` (label `policy`) **replaces the whole policy** ([proposals.rs:363-366][execute]), so:
+One proposal adds both roles and sets the bond together. `ChangePolicy` (label `policy`) **replaces the whole policy** ([proposals.rs:363-366][execute]), so:
 
 1. Read the DAO's current policy with `get_policy` on `example.sputnik-dao.near`.
-2. Copy it, and change only the roles for your decision A variant and `proposal_bond`. First run the [signer check](#first-keep-the-signers-able-to-propose): if no signer role other than Everyone grants `AddProposal` for `policy` and the other kinds the signers file, add that grant to the signer role in this change. Otherwise keep the council roles, vote policies, `proposal_period` and bounty settings exactly as they are.
+2. Copy it, and add the `Contributors` and Everyone roles and set `proposal_bond`. If the DAO already has an Everyone role, run the [signer check](#first-keep-the-signers-able-to-propose) first. Keep every other role, vote policy, `proposal_period` and bounty setting exactly as it is.
 3. File it. Sputnik accepts only a full policy object here, not the council-list shorthand ([proposals.rs:546-551][add-validate]). Policy, role and vote policy JSON reject unknown fields ([policy.rs:14, 68, 124, 152][policy-types]), so keep the field names exact.
 
 The proposer needs `policy:AddProposal` (or one of the other three forms covering `policy`).
 
-Example `add_proposal` arguments, variant 1, starting from a default-shaped policy with a two-signer council and lowering the bond to 0. Attach the current bond, 1 NEAR (`1000000000000000000000000` yoctoNEAR), as the deposit:
+Example `add_proposal` arguments. The `Requestor`, `Approver` and `Admin` roles stand in for whatever the DAO's `get_policy` returns; copy those, don't use these. The bond stays 0 here, so the deposit is 0:
 
 ```json
 {
   "proposal": {
-    "description": "Let members propose polls and function calls, and lower the proposal bond to 0",
+    "description": "Add the Contributors group for polls, and let members ask to join it",
     "kind": {
       "ChangePolicy": {
         "policy": {
           "roles": [
             {
-              "name": "all",
-              "kind": "Everyone",
-              "permissions": [],
+              "name": "Requestor",
+              "kind": { "Group": ["signer-one.near", "signer-two.near"] },
+              "permissions": ["call:AddProposal", "transfer:AddProposal"],
               "vote_policy": {}
             },
             {
-              "name": "council",
+              "name": "Approver",
               "kind": { "Group": ["signer-one.near", "signer-two.near"] },
               "permissions": [
-                "*:AddProposal",
-                "*:VoteApprove",
-                "*:VoteReject",
-                "*:VoteRemove",
-                "*:Finalize"
+                "call:VoteApprove",
+                "call:VoteReject",
+                "call:VoteRemove",
+                "transfer:VoteApprove",
+                "transfer:VoteReject",
+                "transfer:VoteRemove"
               ],
               "vote_policy": {}
             },
             {
-              "name": "members",
-              "kind": { "Group": ["member-one.near", "member-two.near"] },
-              "permissions": ["vote:AddProposal", "call:AddProposal"],
+              "name": "Admin",
+              "kind": { "Group": ["signer-one.near", "signer-two.near"] },
+              "permissions": [
+                "config:*",
+                "policy:*",
+                "add_member_to_role:*",
+                "remove_member_from_role:*",
+                "policy_add_or_update_role:*",
+                "policy_remove_role:*",
+                "policy_update_default_vote_policy:*",
+                "policy_update_parameters:*"
+              ],
+              "vote_policy": {}
+            },
+            {
+              "name": "Contributors",
+              "kind": { "Group": [] },
+              "permissions": ["vote:AddProposal", "vote:VoteApprove", "vote:VoteReject"],
+              "vote_policy": {
+                "vote": { "weight_kind": "RoleWeight", "quorum": "0", "threshold": [1, 2] }
+              }
+            },
+            {
+              "name": "all",
+              "kind": "Everyone",
+              "permissions": ["add_member_to_role:AddProposal"],
               "vote_policy": {}
             }
           ],
@@ -179,29 +188,27 @@ Example `add_proposal` arguments, variant 1, starting from a default-shaped poli
 }
 ```
 
-For variant 2, the `roles` list is the `all` role from [Variant 2](#variant-2-everyone) plus the unchanged `council` role, with no `members` role.
-
 ### Alternative: smaller proposals
 
 If the signers would rather not resubmit the whole policy, the same result takes two or three proposals, each voted on separately:
 
-- **The role:** `ChangePolicyAddOrUpdateRole` (label `policy_add_or_update_role`). A role with an existing name replaces it, otherwise it's added ([policy.rs:245-259][add-or-update]). Variant 1 needs two: add `members`, and replace `all` with empty permissions. Variant 2 needs one: replace (or add) `all`.
+- **The roles:** `ChangePolicyAddOrUpdateRole` (label `policy_add_or_update_role`), once for `Contributors` and once for `all`. A role with an existing name replaces it, otherwise it's added ([policy.rs:245-259][add-or-update]).
 
   ```json
-  { "ChangePolicyAddOrUpdateRole": { "role": { "name": "members", "kind": { "Group": ["member-one.near"] }, "permissions": ["vote:AddProposal", "call:AddProposal"], "vote_policy": {} } } }
+  { "ChangePolicyAddOrUpdateRole": { "role": { "name": "Contributors", "kind": { "Group": [] }, "permissions": ["vote:AddProposal", "vote:VoteApprove", "vote:VoteReject"], "vote_policy": { "vote": { "weight_kind": "RoleWeight", "quorum": "0", "threshold": [1, 2] } } } } }
   ```
 
-- **The bond:** `ChangePolicyUpdateParameters` (label `policy_update_parameters`). It changes only the parameters it's given ([proposals.rs:55-60][parameters], [policy.rs:276-290][update-parameters]; executed at [proposals.rs:454-459][execute]).
+- **The bond**, only if it changes: `ChangePolicyUpdateParameters` (label `policy_update_parameters`). It changes only the parameters it's given ([proposals.rs:55-60][parameters], [policy.rs:276-290][update-parameters]; executed at [proposals.rs:454-459][execute]).
 
   ```json
   { "ChangePolicyUpdateParameters": { "parameters": { "proposal_bond": "0" } } }
   ```
 
-Between the proposals the DAO is half changed, so the order in which the council approves them matters:
+Between the proposals the DAO is half changed, so the order in which the signers approve them matters:
 
 1. Any signer-role grant the [signer check](#first-keep-the-signers-able-to-propose) calls for.
-2. The member role. With variant 1, approve `members` before the Everyone change, so no member is shut out in between.
-3. **The bond change, last**, once every other proposal from this change, and any other pending proposal, has been settled: approved or rejected, and any expired or `Failed` one finalized ([proposals.rs:658-685][finalize]). Sputnik refunds the bond in force when it pays the refund ([proposals.rs:339-349][return-bonds]), so a role proposal approved after the bond drops to 0 refunds its proposer 0 and the 1 NEAR they attached stays in the DAO. The bond proposal itself runs under the policy read before it executes ([proposals.rs:607, 641][act]), so its own proposer still gets the old bond back.
+2. `Contributors`, then `all`, so a member's request has a role to name.
+3. **The bond change, last**, once every other proposal from this change, and any other pending proposal, has been settled: approved or rejected, and any expired or `Failed` one finalized ([proposals.rs:658-685][finalize]). Sputnik refunds the bond in force when it pays the refund ([proposals.rs:339-349][return-bonds]), so a proposal settled after the bond changes refunds the new amount, not what its proposer attached. The bond proposal itself runs under the policy read before it executes ([proposals.rs:607, 641][act]), so its own proposer gets back what they paid.
 
 The proposer needs `AddProposal` for each of those labels.
 
@@ -210,13 +217,19 @@ The proposer needs `AddProposal` for each of those labels.
 `ui/src/lib/sputnik-proposals.ts` (from #435) reads the result; nothing in City Node writes it.
 
 - `fetchSputnikPolicy(daoAccountId)` (`:164`) reads `get_policy` over public RPC, or returns `null`.
-- `proposalPermission(policy, accountId, kind, delegationBalance?)` (`:301-315`) evaluates that policy the way `can_execute_action` does. It matches Everyone, Group and token-weighted Member roles (`accountInRoles`, `:217-230`) and the four permission forms (`permits`, `:195-208`) for one `SputnikProposalKindLabel` (`:176-193`). It returns `{ canPropose, reason, bondYocto }`, where `reason` is `allowed`, `no-account`, `no-policy`, `no-permission` or `bond-unavailable`, and `bondYocto` is the exact deposit in yoctoNEAR.
+- `proposalPermission(policy, accountId, kind, delegationBalance?)` (`:301-315`) evaluates that policy the way `can_execute_action` does for `AddProposal`. It matches Everyone, Group and token-weighted Member roles (`accountInRoles`, `:217-230`) and the four permission forms (`permits`, `:195-208`) for one `SputnikProposalKindLabel` (`:176-193`). It returns `{ canPropose, reason, bondYocto }`, where `reason` is `allowed`, `no-account`, `no-policy`, `no-permission` or `bond-unavailable`, and `bondYocto` is the exact deposit in yoctoNEAR.
 - A missing or unreadable policy, or a missing or malformed `proposal_bond`, never allows submission, and a malformed bond is never read as zero (`proposalBondYocto`, `:288-291`). Pass `delegationBalance` (`readDelegationBalance`, `:146`) only when the DAO has token-weighted Member roles.
 - `proposerRoles(policy, kind)` (`:239-245`) and `canAccountPropose` (`:247-254`) are the older helpers; `canAccountPropose` still checks `call` only.
 
-For the proposal screen (#413): read the policy with `fetchSputnikPolicy`, then call `proposalPermission(policy, walletAccountId, "vote")` or `"call"` for each kind decision B picks, and show the bond from `bondYocto`. Don't take the bond from `fetchProposalBond` (`:393-398`): it returns `"0"` when the read fails, and `proposeAsSession` (`:406-429`) attaches that value as the deposit.
+For the Proposals tab:
 
-The tests in `ui/src/lib/sputnik-proposal-permission.test.ts` cover both decision A variants, each permission form, a permission for another kind, and zero, positive, missing and malformed bonds.
+- **Can this member ask to become a Contributor?** `proposalPermission(policy, walletAccountId, "add_member_to_role")` (#477).
+- **Is this member a Contributor, and can they file a poll?** `proposalPermission(policy, walletAccountId, "vote")` (#413). Show the bond from `bondYocto`.
+- **Can they vote on a poll?** #412 now also asks the helper for `VoteApprove` and `VoteReject` on a kind. That read isn't on main yet.
+
+Don't take the bond from `fetchProposalBond` (`:393-398`): it returns `"0"` when the read fails, and `proposeAsSession` (`:406-429`) attaches that value as the deposit.
+
+The tests in `ui/src/lib/sputnik-proposal-permission.test.ts` cover a group role, Everyone with and without `AddProposal`, each permission form, a permission for another kind, and zero, positive, missing and malformed bonds.
 
 [sdc]: https://github.com/near-daos/sputnik-dao-contract/tree/5434a59dec23ee0c49df8c8c4350c208a7e75b0b
 [everyone-doc]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/policy.rs#L16
@@ -243,3 +256,7 @@ The tests in `ui/src/lib/sputnik-proposal-permission.test.ts` cover both decisio
 [vote-outcome]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/proposals.rs#L637-L656
 [finalize]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/proposals.rs#L658-L685
 [callback]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/proposals.rs#L698-L722
+[weight]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/policy.rs#L96-L107
+[proposal-status]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/policy.rs#L378-L434
+[add-member-kind]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/proposals.rs#L72-L73
+[update-votes]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/proposals.rs#L256-L283
