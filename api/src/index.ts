@@ -990,6 +990,28 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return { daoAccountId: tenant.accountId, network: resolveNetwork(tenant.accountId) };
       }),
 
+      getOnboardCommunity: builder.getOnboardCommunity.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const notFound = () =>
+          new ORPCError("NOT_FOUND", { message: "No City Node for this organization" });
+        const tenant = yield* services.tenants.resolveTenantByOrgId(input.organizationId);
+        if (!tenant || tenant.status !== "active") return yield* Effect.fail(notFound());
+        const [node] = (yield* services.nodes.list({ tenantId: tenant.id })).sort(
+          (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+        );
+        if (!node) return yield* Effect.fail(notFound());
+        const listing = yield* services.discovery
+          .get(node.id)
+          .pipe(Effect.orElseSucceed(() => null));
+        return {
+          name: node.name,
+          href: `/n/${encodeURIComponent(node.slug)}${
+            node.parentId ? `?parentId=${encodeURIComponent(node.parentId)}` : ""
+          }`,
+          channels: (listing?.channels ?? []).map(({ label, url }) => ({ label, url })),
+        };
+      }),
+
       reconcileAttendance: builder.reconcileAttendance.use(requireAuth).effect(function* ({
         input,
         context,

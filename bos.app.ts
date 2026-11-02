@@ -45,6 +45,13 @@ export default App({
   auth: {
     variables: {
       organizationMembershipLimit: 1000,
+      // Joined screen after an onboarding code (everything-dev #662): "Visit
+      // {community}" plus its channels. The default next/home/explore links fit.
+      onboard: {
+        community: {
+          url: "/api/communities/by-organization/{organizationId}",
+        },
+      },
       deviceLink: {
         clientId: "citynode-web",
       },
