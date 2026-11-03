@@ -17,6 +17,7 @@ import {
 import { nodeBySlugQueryOptions } from "@/lib/queries/nodes";
 import {
   displayedProposalStatus,
+  isPendingProposal,
   type SputnikProposal,
   trezuDaoUrl,
 } from "@/lib/sputnik-proposals";
@@ -150,8 +151,8 @@ export function DaoProposalList({
 }) {
   const translate = useAppTranslation();
   const pages = useInfiniteQuery(daoProposalPagesQueryOptions(daoAccountId));
-  const statusOf = useDisplayedStatus(daoAccountId);
   const proposals = pages.data?.pages.flatMap((page) => page.proposals) ?? [];
+  const statusOf = useDisplayedStatus(daoAccountId, proposals.some(isPendingProposal));
 
   return (
     <section className="flex flex-col gap-6" data-testid="dao-proposals.list">
@@ -235,7 +236,10 @@ export function DaoProposalDetail({
     ...daoProposalQueryOptions(daoAccountId, proposalId ?? -1),
     enabled: proposalId !== null,
   });
-  const statusOf = useDisplayedStatus(daoAccountId, proposalId !== null);
+  const statusOf = useDisplayedStatus(
+    daoAccountId,
+    proposalId !== null && !!query.data && isPendingProposal(query.data),
+  );
   const allLink = (
     <Button
       variant="outline"
@@ -318,10 +322,11 @@ export function DaoProposalDetail({
 
 /**
  * Shows an `InProgress` proposal past the DAO's proposal period as Expired.
- * Until the policy and chain time load (or if they can't be read), the stored
- * status is shown.
+ * The policy and chain time are read only when `enabled` (some shown proposal
+ * is stored as in progress). Until they load, or if they can't be read, the
+ * stored status is shown.
  */
-function useDisplayedStatus(daoAccountId: string, enabled = true) {
+function useDisplayedStatus(daoAccountId: string, enabled: boolean) {
   const policy = useQuery({ ...daoPolicyQueryOptions(daoAccountId), enabled });
   const chainTime = useQuery({ ...chainTimeQueryOptions(), enabled });
   return (proposal: SputnikProposal) =>
