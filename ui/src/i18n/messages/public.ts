@@ -1260,10 +1260,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "无法读取该 Node DAO 的提案保证金，目前无法提交。",
   ],
   "memberDao.bond": [
-    "Submitting takes a {amount} NEAR bond from your wallet. You get it back when the proposal is approved, rejected or expires, but not if it's removed.",
-    "Enviar retiene una fianza de {amount} NEAR de tu billetera. Se devuelve si la propuesta se aprueba, se rechaza o vence, pero no si se elimina.",
-    "La soumission prélève une caution de {amount} NEAR sur votre portefeuille. Elle est rendue si la proposition est approuvée, rejetée ou expire, mais pas si elle est supprimée.",
-    "提交需要从你的钱包支付 {amount} NEAR 保证金。提案通过、被拒绝或过期后会退还，被移除则不退还。",
+    "Submitting takes a {amount} NEAR bond from your wallet. You get it back when the proposal is approved and runs, is rejected, or is closed after it expires. It's kept if the proposal is removed.",
+    "Enviar retiene una fianza de {amount} NEAR de tu billetera. Se devuelve cuando la propuesta se aprueba y se ejecuta, se rechaza o se cierra tras vencer. Se pierde si la propuesta se elimina.",
+    "La soumission prélève une caution de {amount} NEAR sur votre portefeuille. Elle est rendue quand la proposition est approuvée et exécutée, rejetée, ou clôturée après son expiration. Elle est perdue si la proposition est supprimée.",
+    "提交需要从你的钱包支付 {amount} NEAR 保证金。提案通过并执行、被拒绝，或过期后被关闭时会退还；提案被移除则不退还。",
   ],
   "memberDao.insufficient": [
     "Your wallet needs {amount} more NEAR. Send it to",
