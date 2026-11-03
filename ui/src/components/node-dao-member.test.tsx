@@ -18,6 +18,7 @@ const harness = vi.hoisted(() => ({
   policy: null as unknown,
   open: [] as unknown[],
   spendable: 0n as bigint | Error,
+  chainNowNs: 1_760_000_000_000n * 1_000_000n,
   signing: { status: "idle", failure: null, result: null } as MemberSigningState,
   tasks: [] as ((wallet: unknown) => Promise<unknown>)[],
   submitProposalWithBond: vi.fn(async (..._args: unknown[]) => ({})),
@@ -68,6 +69,7 @@ vi.mock("@/lib/sputnik-proposals", async (importOriginal) => {
       return harness.policy;
     },
     readOpenDaoProposals: async () => harness.open,
+    readChainTimeNs: async () => harness.chainNowNs,
     readSpendableYocto: async () => {
       if (harness.spendable instanceof Error) throw harness.spendable;
       return harness.spendable;
@@ -260,10 +262,12 @@ function poll(overrides: Partial<SputnikProposal> = {}): SputnikProposal {
     status: "InProgress",
     vote_counts: {},
     votes: {},
-    submission_time: "0",
+    submission_time: (harness.chainNowNs - 1n).toString(),
     ...overrides,
   };
 }
+
+const WEEK_NS = 604_800_000_000_000n;
 
 describe("PollVote", () => {
   it("lets a Contributor approve an open poll", async () => {
@@ -285,6 +289,14 @@ describe("PollVote", () => {
   it("shows no vote buttons to someone who can't vote", async () => {
     harness.policy = policy();
     renderWithQuery(<PollVote daoAccountId={DAO} proposal={poll()} />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByTestId("poll-vote")).toBeNull();
+  });
+
+  it("shows no vote buttons on a poll past its period", async () => {
+    harness.policy = { ...policy({ contributors: [MEMBER] }), proposal_period: WEEK_NS.toString() };
+    const expired = poll({ submission_time: (harness.chainNowNs - WEEK_NS - 1n).toString() });
+    renderWithQuery(<PollVote daoAccountId={DAO} proposal={expired} />);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByTestId("poll-vote")).toBeNull();
   });

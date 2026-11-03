@@ -8,6 +8,7 @@
 
 import {
   canAccountAct,
+  isOpenProposal,
   type ProposalPermission,
   proposalPermission,
   roleMembers,
@@ -92,18 +93,23 @@ export type PollVoteAccess =
   | { status: "can-vote" };
 
 /**
- * Whether `accountId` sees vote buttons on `proposal`: an open poll, and a
- * policy that lets them both approve and reject polls. Signers vote in Trezu.
+ * Whether `accountId` sees vote buttons on `proposal`: a poll still within the
+ * policy's proposal period, and a policy that lets them both approve and
+ * reject polls. Sputnik keeps an expired poll stored as `InProgress`, and a
+ * vote on it can't change the result, so without the chain time no buttons
+ * show. Signers vote in Trezu.
  */
 export function pollVoteAccess(
   policy: SputnikPolicy | null | undefined,
   accountId: string | null,
   proposal: SputnikProposal,
+  chainNowNs: bigint | null | undefined,
 ): PollVoteAccess {
   if (!accountId || !isPollProposal(proposal)) return { status: "hidden" };
   const vote = proposal.votes?.[accountId];
   if (vote) return { status: "voted", vote };
-  if (proposal.status !== "InProgress") return { status: "hidden" };
+  if (proposal.status !== "InProgress" || chainNowNs == null) return { status: "hidden" };
+  if (!isOpenProposal(proposal, policy, chainNowNs)) return { status: "hidden" };
   const canVote =
     canAccountAct(policy, accountId, "vote", "VoteApprove") &&
     canAccountAct(policy, accountId, "vote", "VoteReject");
