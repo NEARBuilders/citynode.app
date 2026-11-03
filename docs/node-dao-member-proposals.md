@@ -84,10 +84,11 @@ There are two ways, and the Node DAO approves both (#477):
 
 The proposal is `{ "AddMemberToRole": { "member_id": "member-one.near", "role": "Contributor" } }` ([proposals.rs:72-73][add-member-kind]). On approval it adds the account to the group ([policy.rs:292-305][add-member]). It passes under the signer roles' vote policy for `add_member_to_role`, as it does today.
 
-Watch for two things:
+Watch for three things:
 
 - **Anyone can file a request.** The Everyone grant lets any NEAR account file one, not only members. With a bond of 0 that's free, so requests from accounts that aren't members can pile up. A positive bond discourages that, but the member pays it.
 - **A request can name any role.** `add_member_to_role:AddProposal` doesn't limit the role. Before approving, check that the role is `Contributor` and that the account is the member's Passkey Wallet. Never approve a request that adds someone to a signer role.
+- **Only Governance can close an expired request.** Finalizing an `AddMemberToRole` request needs `add_member_to_role:Finalize` ([proposals.rs:609-612][act]), which in Trezu's setup only `Admin` holds, through `add_member_to_role:*`. Contributors' `vote:Finalize` covers polls, not requests. With a positive bond, an expired request's bond stays locked until a signer finalizes it.
 
 ### First, keep the signers able to propose
 
