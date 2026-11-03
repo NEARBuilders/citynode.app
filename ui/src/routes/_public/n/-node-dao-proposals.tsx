@@ -8,12 +8,18 @@ import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppTranslation } from "@/i18n/runtime";
 import {
+  chainTimeQueryOptions,
+  daoPolicyQueryOptions,
   daoProposalPagesQueryOptions,
   daoProposalQueryOptions,
   nodeDaoQueryOptions,
 } from "@/lib/queries/node-dao";
 import { nodeBySlugQueryOptions } from "@/lib/queries/nodes";
-import { type SputnikProposal, trezuDaoUrl } from "@/lib/sputnik-proposals";
+import {
+  displayedProposalStatus,
+  type SputnikProposal,
+  trezuDaoUrl,
+} from "@/lib/sputnik-proposals";
 
 type Translate = ReturnType<typeof useAppTranslation>;
 
@@ -144,6 +150,7 @@ export function DaoProposalList({
 }) {
   const translate = useAppTranslation();
   const pages = useInfiniteQuery(daoProposalPagesQueryOptions(daoAccountId));
+  const statusOf = useDisplayedStatus(daoAccountId);
   const proposals = pages.data?.pages.flatMap((page) => page.proposals) ?? [];
 
   return (
@@ -178,7 +185,7 @@ export function DaoProposalList({
                   <span className="font-medium text-foreground tabular-nums">
                     {translate("daoProposals.number", { id: proposal.id })}
                   </span>
-                  <StatusBadge status={proposal.status} translate={translate} />
+                  <StatusBadge status={statusOf(proposal)} translate={translate} />
                   <span>{proposalKindSummary(proposal, translate)}</span>
                 </div>
                 <p className="line-clamp-2 text-sm wrap-anywhere text-foreground">
@@ -228,6 +235,7 @@ export function DaoProposalDetail({
     ...daoProposalQueryOptions(daoAccountId, proposalId ?? -1),
     enabled: proposalId !== null,
   });
+  const statusOf = useDisplayedStatus(daoAccountId, proposalId !== null);
   const allLink = (
     <Button
       variant="outline"
@@ -284,7 +292,7 @@ export function DaoProposalDetail({
       />
       <dl className="grid grid-cols-1 gap-4 border-y border-border py-4 sm:grid-cols-3">
         <Fact label={translate("daoProposals.status")}>
-          <StatusBadge status={proposal.status} translate={translate} />
+          <StatusBadge status={statusOf(proposal)} translate={translate} />
         </Fact>
         <Fact label={translate("daoProposals.proposer")}>
           <span className="break-all" data-testid="dao-proposals.proposer">
@@ -307,6 +315,18 @@ export function DaoProposalDetail({
 }
 
 /* ----------------------------------------------------------------- helpers */
+
+/**
+ * Shows an `InProgress` proposal past the DAO's proposal period as Expired.
+ * Until the policy and chain time load (or if they can't be read), the stored
+ * status is shown.
+ */
+function useDisplayedStatus(daoAccountId: string, enabled = true) {
+  const policy = useQuery({ ...daoPolicyQueryOptions(daoAccountId), enabled });
+  const chainTime = useQuery({ ...chainTimeQueryOptions(), enabled });
+  return (proposal: SputnikProposal) =>
+    displayedProposalStatus(proposal, policy.data, policy.data ? chainTime.data : null);
+}
 
 const STATUS_KEYS = {
   InProgress: "daoProposals.statusInProgress",

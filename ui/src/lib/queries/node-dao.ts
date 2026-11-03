@@ -1,12 +1,19 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { ApiClient } from "@/app";
-import { readDaoProposal, readDaoProposalPage } from "@/lib/sputnik-proposals";
+import {
+  readChainTimeNs,
+  readDaoProposal,
+  readDaoProposalPage,
+  readSputnikPolicy,
+} from "@/lib/sputnik-proposals";
 
 export const nodeDaoQueryKeys = {
   dao: (nodeId: string) => ["node-dao", nodeId] as const,
   proposals: (daoAccountId: string) => ["node-dao", "proposals", daoAccountId] as const,
   proposal: (daoAccountId: string, id: number) =>
     ["node-dao", "proposal", daoAccountId, id] as const,
+  policy: (daoAccountId: string) => ["node-dao", "policy", daoAccountId] as const,
+  chainTime: () => ["node-dao", "chain-time"] as const,
 };
 
 /** The DAO recorded as the community's owner, read live from City Node (public). */
@@ -34,6 +41,26 @@ export function daoProposalQueryOptions(daoAccountId: string, id: number) {
   return queryOptions({
     queryKey: nodeDaoQueryKeys.proposal(daoAccountId, id),
     queryFn: () => readDaoProposal(daoAccountId, id),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+/** The DAO's policy; throws when it can't be read, so the UI never treats that as "no permission". */
+export function daoPolicyQueryOptions(daoAccountId: string) {
+  return queryOptions({
+    queryKey: nodeDaoQueryKeys.policy(daoAccountId),
+    queryFn: () => readSputnikPolicy(daoAccountId),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/** NEAR's final block time in nanoseconds, the clock Sputnik checks proposal periods against. */
+export function chainTimeQueryOptions() {
+  return queryOptions({
+    queryKey: nodeDaoQueryKeys.chainTime(),
+    queryFn: readChainTimeNs,
     staleTime: 30_000,
     retry: false,
   });

@@ -538,6 +538,20 @@ export function isOpenProposal(
   return BigInt(proposal.submission_time) + BigInt(policy.proposal_period) >= chainNowNs;
 }
 
+/**
+ * The status to show for a proposal. Sputnik keeps an expired proposal stored
+ * as `InProgress` until someone finalizes it, so one past the policy's
+ * `proposal_period` is shown as `Expired`; every other status is shown as stored.
+ */
+export function displayedProposalStatus(
+  proposal: SputnikProposal,
+  policy: Pick<SputnikPolicy, "proposal_period"> | null | undefined,
+  chainNowNs: bigint | null | undefined,
+): string {
+  if (proposal.status !== "InProgress" || chainNowNs == null) return proposal.status;
+  return isOpenProposal(proposal, policy, chainNowNs) ? proposal.status : "Expired";
+}
+
 export function findPendingProposalForPlan(
   proposals: SputnikProposal[],
   plan: DaoPlan,

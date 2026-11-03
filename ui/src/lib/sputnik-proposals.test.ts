@@ -4,6 +4,7 @@ import {
   buildAddProposalArgs,
   canAccountApprove,
   canAccountPropose,
+  displayedProposalStatus,
   isOpenProposal,
   needsDelegationBalance,
   proposalCallsMethod,
@@ -158,6 +159,40 @@ describe("isOpenProposal", () => {
 
   it("keeps an in-progress proposal open when the period is unknown", () => {
     expect(isOpenProposal(proposal("InProgress", 2n * periodNs), null, chainNowNs)).toBe(true);
+  });
+});
+
+describe("displayedProposalStatus", () => {
+  const chainNowNs = 1_760_000_000_000n * 1_000_000n;
+  const periodNs = 604_800_000_000_000n;
+  const period = { proposal_period: periodNs.toString() };
+  const proposal = (status: string, ageNs: bigint) =>
+    proposalRecord({ status, submission_time: (chainNowNs - ageNs).toString() });
+
+  it("shows an in-progress proposal past its period as expired", () => {
+    expect(displayedProposalStatus(proposal("InProgress", periodNs + 1n), period, chainNowNs)).toBe(
+      "Expired",
+    );
+  });
+
+  it("keeps an in-progress proposal within its period open", () => {
+    expect(displayedProposalStatus(proposal("InProgress", periodNs), period, chainNowNs)).toBe(
+      "InProgress",
+    );
+  });
+
+  it("shows every other stored status as it is, even past the period", () => {
+    for (const status of ["Approved", "Rejected", "Removed", "Failed", "Moved"]) {
+      expect(displayedProposalStatus(proposal(status, 2n * periodNs), period, chainNowNs)).toBe(
+        status,
+      );
+    }
+  });
+
+  it("shows the stored status until the period and chain time are known", () => {
+    const old = proposal("InProgress", 2n * periodNs);
+    expect(displayedProposalStatus(old, null, chainNowNs)).toBe("InProgress");
+    expect(displayedProposalStatus(old, period, null)).toBe("InProgress");
   });
 });
 

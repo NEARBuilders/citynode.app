@@ -20,6 +20,8 @@ import { Route as DetailRoute } from "./$slug_/proposals/$proposalId";
 import { Route as ListRoute } from "./$slug_/proposals/index";
 
 const DAO = "lisbon.sputnik-dao.near";
+const NOW_NS = 1_760_000_000_000n * 1_000_000n;
+const WEEK_NS = 604_800_000_000_000n;
 const node = {
   id: "00000000-0000-4000-8000-000000000010",
   parentId: null,
@@ -42,6 +44,7 @@ const state: {
   failPagesBelow: number | null;
   failNext: number;
   apiCalls: string[];
+  expired: Set<number>;
 } = {
   dao: { daoAccountId: DAO, network: "mainnet" },
   last: 0,
@@ -50,6 +53,7 @@ const state: {
   failPagesBelow: null,
   failNext: 0,
   apiCalls: [],
+  expired: new Set(),
 };
 const clients: QueryClient[] = [];
 
@@ -65,6 +69,7 @@ afterEach(() => {
   state.failPagesBelow = null;
   state.failNext = 0;
   state.apiCalls = [];
+  state.expired.clear();
 });
 
 function proposal(id: number): SputnikProposal {
@@ -81,13 +86,19 @@ function proposal(id: number): SputnikProposal {
     status: id % 2 === 0 ? "Approved" : "InProgress",
     vote_counts: {},
     votes: { "a.near": "Approve", "b.near": "Approve", "c.near": "Reject" },
-    submission_time: "1760000000000000000",
+    submission_time: (state.expired.has(id) ? NOW_NS - WEEK_NS - 1n : NOW_NS - 1n).toString(),
   };
 }
 
 function mockBackends() {
   vi.stubGlobal("scrollTo", vi.fn());
+  vi.spyOn(Near.prototype, "rpc", "get").mockReturnValue({
+    getBlock: () => Promise.resolve({ header: { timestamp_nanosec: NOW_NS.toString() } }),
+  } as never);
   vi.spyOn(Near.prototype, "view").mockImplementation((_contractId, method, args) => {
+    if (method === "get_policy") {
+      return Promise.resolve({ roles: [], proposal_period: WEEK_NS.toString() });
+    }
     if (state.failNext > 0) {
       state.failNext -= 1;
       return Promise.reject(new Error("RPC unavailable"));
@@ -265,6 +276,18 @@ describe("public Node DAO proposal list", () => {
     expect(screen.getAllByTestId("dao-proposals.item")).toHaveLength(20);
   });
 
+  it("shows a proposal still stored as in progress past its period as expired", async () => {
+    state.last = 4;
+    state.expired.add(1);
+    await show("/n/lisbon/proposals");
+
+    const items = await screen.findAllByTestId("dao-proposals.item");
+    const expired = within(items[2] as HTMLElement);
+    expect(expired.getByText("Proposal #1")).toBeTruthy();
+    expect(await expired.findByText("Expired")).toBeTruthy();
+    expect(within(items[0] as HTMLElement).getByText("Open")).toBeTruthy();
+  });
+
   it("says when the DAO has no proposals yet", async () => {
     await show("/n/lisbon/proposals");
     expect(await screen.findByTestId("dao-proposals.empty")).toBeTruthy();
@@ -323,6 +346,16 @@ describe("public Node DAO proposal detail", () => {
     expect(within(detail).getByText("2 approve · 1 reject")).toBeTruthy();
     expect(within(detail).getByText("Proposal number 3")).toBeTruthy();
     expect(Near.prototype.view).toHaveBeenCalledWith(DAO, "get_proposal", { id: 3 });
+  });
+
+  it("shows an expired proposal as expired on its own page", async () => {
+    state.last = 5;
+    state.expired.add(3);
+    await show("/n/lisbon/proposals/3");
+
+    const detail = await screen.findByTestId("dao-proposals.detail");
+    expect(await within(detail).findByText("Expired")).toBeTruthy();
+    expect(within(detail).queryByText("Open")).toBeNull();
   });
 
   it("says a missing or removed proposal wasn't found", async () => {
