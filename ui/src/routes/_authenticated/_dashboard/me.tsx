@@ -28,10 +28,6 @@ export const Route = createFileRoute("/_authenticated/_dashboard/me")({
   component: MePage,
 });
 
-/**
- * The member's own page: who they are, with links to edit the profile the auth
- * plugin keeps in Settings, and the events they checked in at across communities.
- */
 export function MePage() {
   const translate = useAppTranslation();
   const { nearAccountId, avatarSrc, displayName, handle, showHandle, initials } = useIdentity();

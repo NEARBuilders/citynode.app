@@ -37,7 +37,6 @@ export function AttendanceRecord({
 }: {
   organizationId?: string | null;
   reconcile?: boolean;
-  /** Keep the section, with its loading and empty states, when showing every community. */
   alwaysShow?: boolean;
   testId: string;
 }) {
@@ -104,9 +103,11 @@ export function AttendanceRecord({
       ) : (
         <>
           {record.data.events.length === 0 ? (
-            <p className="text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
-              {translate("attendance.empty")}
-            </p>
+            record.data.unclassified.length === 0 && (
+              <p className="text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
+                {translate("attendance.empty")}
+              </p>
+            )
           ) : (
             <ItemGroup data-testid={`${testId}-events`}>
               {record.data.events.map((event) => (

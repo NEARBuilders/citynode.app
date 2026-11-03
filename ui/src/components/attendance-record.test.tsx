@@ -160,7 +160,7 @@ describe("AttendanceRecord", () => {
     expect(screen.getByTestId("attendance-unclassified").textContent).toContain(
       "don't count as event attendance",
     );
-    expect(screen.getByTestId("attendance-empty")).toBeTruthy();
+    expect(screen.queryByTestId("attendance-empty")).toBeNull();
   });
 
   it("names each community when showing every community, and hides when there is nothing", async () => {
