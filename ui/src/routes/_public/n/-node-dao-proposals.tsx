@@ -381,18 +381,26 @@ export function proposalKindSummary(proposal: SputnikProposal, translate: Transl
  * Proposal descriptions are plain text with Trezu's conventions: `<br>` for
  * line breaks, `* Title:` / `* Summary:` lines, and metadata after `$$$$`.
  */
-export function proposalText(description: string): string {
+function descriptionLines(description: string): string[] {
   return (description.split("$$$$")[0] ?? "")
     .replace(/<br\s*\/?>/gi, "\n")
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) => line.trim());
+}
+
+/** Trezu's `* Label:` line markers, which read as clutter outside Trezu. */
+const TREZU_LABEL = /^\*\s*(Title|Summary|Description|Notes):\s*/i;
+
+export function proposalText(description: string): string {
+  return descriptionLines(description)
+    .map((line) => line.replace(TREZU_LABEL, ""))
     .join("\n")
     .trim();
 }
 
 /** The `* Title:` line when there is one, otherwise the first line. */
 export function proposalTitle(description: string): string {
-  const lines = proposalText(description).split("\n").filter(Boolean);
+  const lines = descriptionLines(description).filter(Boolean);
   const title = lines.find((line) => /^\*\s*Title:/i.test(line));
   return (title ?? lines[0] ?? "").replace(/^\*\s*Title:\s*/i, "").trim();
 }

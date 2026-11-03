@@ -388,8 +388,8 @@ describe("public Node DAO proposal detail", () => {
 describe("proposal descriptions", () => {
   const trezu = "* Title: Vote abstain <br>* Summary: vote.dao.vote()$$$$meta";
 
-  it("turns Trezu line breaks into lines and drops metadata", () => {
-    expect(proposalText(trezu)).toBe("* Title: Vote abstain\n* Summary: vote.dao.vote()");
+  it("turns Trezu line breaks into lines and drops its labels and metadata", () => {
+    expect(proposalText(trezu)).toBe("Vote abstain\nvote.dao.vote()");
   });
 
   it("uses the Title line in the list, or the first line", () => {
