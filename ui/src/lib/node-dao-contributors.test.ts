@@ -17,7 +17,12 @@ const NEAR = 10n ** 24n;
 function policy({
   contributors = [] as string[],
   everyone = ["add_member_to_role:AddProposal"],
-  contributorPermissions = ["vote:AddProposal", "vote:VoteApprove", "vote:VoteReject"],
+  contributorPermissions = [
+    "vote:AddProposal",
+    "vote:VoteApprove",
+    "vote:VoteReject",
+    "vote:Finalize",
+  ],
   bond = "0" as string | undefined,
   withContributors = true,
 } = {}): SputnikPolicy {
@@ -31,7 +36,7 @@ function policy({
       ...(withContributors
         ? [
             {
-              name: "Contributors",
+              name: "Contributor",
               kind: { Group: contributors },
               permissions: contributorPermissions,
             },
@@ -59,12 +64,20 @@ function proposal(
   };
 }
 
-const request = (memberId = MEMBER, role = "Contributors", status = "InProgress") =>
+const request = (memberId = MEMBER, role = "Contributor", status = "InProgress") =>
   proposal({ id: 12, status, kind: { AddMemberToRole: { member_id: memberId, role } } });
 
 describe("contributorRole", () => {
-  it("finds the Contributors group by name", () => {
-    expect(contributorRole(policy())?.name).toBe("Contributors");
+  it("finds the Contributor group by its exact name", () => {
+    expect(contributorRole(policy())?.name).toBe("Contributor");
+  });
+
+  it("doesn't take a group that is only named like it", () => {
+    for (const name of ["Contributors", "contributor", "CONTRIBUTOR"]) {
+      expect(
+        contributorRole({ roles: [{ name, kind: { Group: [MEMBER] }, permissions: [] }] }),
+      ).toBeNull();
+    }
   });
 
   it("is null without a Contributor group or a readable policy", () => {
@@ -87,7 +100,7 @@ describe("contributorState", () => {
     const state = contributorState(policy({ bond: NEAR.toString() }), MEMBER, []);
     expect(state).toMatchObject({
       status: "can-request",
-      role: "Contributors",
+      role: "Contributor",
       request: { canPropose: true, bondYocto: NEAR },
     });
   });
@@ -95,7 +108,7 @@ describe("contributorState", () => {
   it("waits on the Node DAO once the member's request is open", () => {
     expect(contributorState(policy(), MEMBER, [request()])).toEqual({
       status: "requested",
-      role: "Contributors",
+      role: "Contributor",
       proposalId: 12,
     });
   });
@@ -104,7 +117,7 @@ describe("contributorState", () => {
     const others = [
       request("someone-else.near"),
       request(MEMBER, "Governance"),
-      request(MEMBER, "Contributors", "Rejected"),
+      request(MEMBER, "Contributor", "Rejected"),
     ];
     expect(contributorState(policy(), MEMBER, others).status).toBe("can-request");
   });
@@ -141,8 +154,8 @@ describe("contributorState", () => {
 
 describe("pendingContributorRequest", () => {
   it("returns the open request for this member and role", () => {
-    expect(pendingContributorRequest([request()], MEMBER, "Contributors")?.id).toBe(12);
-    expect(pendingContributorRequest([], MEMBER, "Contributors")).toBeNull();
+    expect(pendingContributorRequest([request()], MEMBER, "Contributor")?.id).toBe(12);
+    expect(pendingContributorRequest([], MEMBER, "Contributor")).toBeNull();
   });
 });
 
@@ -172,6 +185,42 @@ describe("pollVoteAccess", () => {
       submission_time: (NOW_NS - WEEK_NS - 1n).toString(),
     });
     expect(access(contributorPolicy, MEMBER, expired).status).toBe("hidden");
+  });
+
+  describe("closing an expired poll", () => {
+    const expired = proposal({
+      kind: "Vote",
+      status: "InProgress",
+      submission_time: (NOW_NS - WEEK_NS - 1n).toString(),
+    });
+    const bonded = { ...contributorPolicy, proposal_bond: (10n ** 23n).toString() };
+
+    it("lets a Contributor close it when the bond is positive", () => {
+      expect(access(bonded, MEMBER, expired)).toEqual({ status: "can-finalize" });
+      const voted = { ...expired, votes: { [MEMBER]: "Approve" as const } };
+      expect(access(bonded, MEMBER, voted)).toEqual({ status: "can-finalize" });
+    });
+
+    it("doesn't offer it with no bond to return, or without vote:Finalize", () => {
+      expect(access(contributorPolicy, MEMBER, expired).status).toBe("hidden");
+      const noFinalize = {
+        ...policy({
+          contributors: [MEMBER],
+          contributorPermissions: ["vote:AddProposal", "vote:VoteApprove", "vote:VoteReject"],
+        }),
+        proposal_period: WEEK_NS.toString(),
+        proposal_bond: (10n ** 23n).toString(),
+      };
+      expect(access(noFinalize, MEMBER, expired).status).toBe("hidden");
+      expect(access(bonded, "stranger.near", expired).status).toBe("hidden");
+    });
+
+    it("doesn't offer it on an open poll, a decided one, or before the chain time loads", () => {
+      expect(access(bonded, MEMBER, poll)).toEqual({ status: "can-vote" });
+      const decided = { ...expired, status: "Approved" };
+      expect(access(bonded, MEMBER, decided).status).toBe("hidden");
+      expect(access(bonded, MEMBER, expired, null).status).toBe("hidden");
+    });
   });
 
   it("hides voting until the chain time is known", () => {
@@ -220,13 +269,13 @@ describe("member proposal payloads", () => {
   it("files a Contributor request as AddMemberToRole", () => {
     expect(
       buildAddProposalArgs(
-        { kind: "add_member_to_role", memberId: MEMBER, role: "Contributors" },
+        { kind: "add_member_to_role", memberId: MEMBER, role: "Contributor" },
         "d",
       ),
     ).toEqual({
       proposal: {
         description: "d",
-        kind: { AddMemberToRole: { member_id: MEMBER, role: "Contributors" } },
+        kind: { AddMemberToRole: { member_id: MEMBER, role: "Contributor" } },
       },
     });
   });
@@ -236,8 +285,8 @@ describe("member proposal payloads", () => {
       "* Title: Picnic in May? <br>* Description: Line one<br>Line two",
     );
     expect(pollDescription("Only a title", "  ")).toBe("* Title: Only a title");
-    expect(contributorRequestDescription(MEMBER, "Example City")).toContain(
-      "* Title: Add member-one.near to Contributors",
+    expect(contributorRequestDescription(MEMBER, "Contributor", "Example City")).toContain(
+      "* Title: Add member-one.near to the Contributor group",
     );
   });
 });

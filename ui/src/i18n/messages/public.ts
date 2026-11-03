@@ -1217,9 +1217,9 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "无法从 NEAR 网络读取 {dao}。",
   ],
   "memberDao.notSetUp": [
-    "This Node DAO hasn't set up a Contributors group yet, so members can't propose here.",
-    "Esta Node DAO aún no tiene un grupo de Contributors, así que los miembros no pueden proponer aquí.",
-    "Cette Node DAO n'a pas encore de groupe Contributors : les membres ne peuvent pas proposer ici.",
+    "This Node DAO hasn't set up a Contributor group yet, so members can't propose here.",
+    "Esta Node DAO aún no tiene un grupo Contributor, así que los miembros no pueden proponer aquí.",
+    "Cette Node DAO n'a pas encore de groupe Contributor : les membres ne peuvent pas proposer ici.",
     "该 Node DAO 尚未设立 Contributor 组，成员暂时无法在此提案。",
   ],
   "memberDao.governanceOnly": [
@@ -1297,6 +1297,19 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Enviar encuesta",
     "Soumettre le sondage",
     "提交投票议题",
+  ],
+  "pollVote.finalize": ["Close poll", "Cerrar encuesta", "Clôturer le sondage", "关闭投票议题"],
+  "pollVote.closed": [
+    "Poll closed. The proposer's bond is on its way back.",
+    "Encuesta cerrada. La fianza vuelve a quien la propuso.",
+    "Sondage clôturé. La caution revient à la personne qui l'a proposé.",
+    "议题已关闭，保证金将退还给提案人。",
+  ],
+  "pollVote.finalizeHint": [
+    "Voting has ended. Closing the poll records the result and returns the proposer's bond.",
+    "La votación terminó. Al cerrar la encuesta se registra el resultado y se devuelve la fianza a quien la propuso.",
+    "Le vote est terminé. Clôturer le sondage enregistre le résultat et rend la caution à la personne qui l'a proposé.",
+    "投票已结束。关闭该议题会记录结果，并退还提案人的保证金。",
   ],
   "pollVote.votedApprove": [
     "You voted to approve.",

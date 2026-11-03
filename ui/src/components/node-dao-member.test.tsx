@@ -88,6 +88,7 @@ afterEach(() => {
   harness.policy = null;
   harness.open = [];
   harness.spendable = 0n;
+  harness.chainNowNs = 1_760_000_000_000n * 1_000_000n;
   harness.signing = { status: "idle", failure: null, result: null };
   harness.tasks = [];
   harness.submitProposalWithBond.mockClear();
@@ -110,9 +111,14 @@ function policy({
       ...(withContributors
         ? [
             {
-              name: "Contributors",
+              name: "Contributor",
               kind: { Group: contributors },
-              permissions: ["vote:AddProposal", "vote:VoteApprove", "vote:VoteReject"],
+              permissions: [
+                "vote:AddProposal",
+                "vote:VoteApprove",
+                "vote:VoteReject",
+                "vote:Finalize",
+              ],
             },
           ]
         : []),
@@ -149,7 +155,7 @@ describe("MemberDaoPanel", () => {
     harness.policy = policy({ withContributors: false });
     renderPanel();
     expect((await screen.findByTestId("member-dao.not-set-up")).textContent).toContain(
-      "hasn't set up a Contributors group",
+      "hasn't set up a Contributor group",
     );
   });
 
@@ -170,8 +176,8 @@ describe("MemberDaoPanel", () => {
     await waitFor(() => expect(harness.submitProposalWithBond).toHaveBeenCalledTimes(1));
     const [, dao, plan, description, bond] = harness.submitProposalWithBond.mock.calls[0];
     expect(dao).toBe(DAO);
-    expect(plan).toEqual({ kind: "add_member_to_role", memberId: MEMBER, role: "Contributors" });
-    expect(description).toContain("Add member-one.near to Contributors");
+    expect(plan).toEqual({ kind: "add_member_to_role", memberId: MEMBER, role: "Contributor" });
+    expect(description).toContain("Add member-one.near to the Contributor group");
     expect(bond).toBe(0n);
     expect(screen.queryByTestId("member-dao.bond")).toBeNull();
   });
@@ -211,7 +217,7 @@ describe("MemberDaoPanel", () => {
       {
         id: 31,
         status: "InProgress",
-        kind: { AddMemberToRole: { member_id: MEMBER, role: "Contributors" } },
+        kind: { AddMemberToRole: { member_id: MEMBER, role: "Contributor" } },
       },
     ];
     renderPanel();
@@ -299,6 +305,30 @@ describe("PollVote", () => {
     renderWithQuery(<PollVote daoAccountId={DAO} proposal={expired} />);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByTestId("poll-vote")).toBeNull();
+  });
+
+  it("lets a Contributor close an expired poll when the bond is positive", async () => {
+    harness.policy = {
+      ...policy({ contributors: [MEMBER], bond: (NEAR / 10n).toString() }),
+      proposal_period: WEEK_NS.toString(),
+    };
+    const expired = poll({ submission_time: (harness.chainNowNs - WEEK_NS - 1n).toString() });
+    renderWithQuery(<PollVote daoAccountId={DAO} proposal={expired} />);
+    fireEvent.click(await screen.findByTestId("poll-vote.finalize"));
+    await waitFor(() => expect(harness.voteOnProposal).toHaveBeenCalledTimes(1));
+    expect(harness.voteOnProposal.mock.calls[0]?.slice(1)).toEqual([DAO, expired, "Finalize"]);
+    expect(screen.queryByTestId("poll-vote.approve")).toBeNull();
+  });
+
+  it("doesn't send a vote when the poll expired while the page was open", async () => {
+    harness.policy = { ...policy({ contributors: [MEMBER] }), proposal_period: WEEK_NS.toString() };
+    const proposal = poll();
+    renderWithQuery(<PollVote daoAccountId={DAO} proposal={proposal} />);
+    const approve = await screen.findByTestId("poll-vote.approve");
+    harness.chainNowNs += WEEK_NS;
+    fireEvent.click(approve);
+    await waitFor(() => expect(screen.queryByTestId("poll-vote.approve")).toBeNull());
+    expect(harness.voteOnProposal).not.toHaveBeenCalled();
   });
 
   it("shows no vote buttons signed out", () => {
