@@ -129,11 +129,16 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
       fileEnv[secret] ??
       devUrl;
     if (!allowDevDb && resolved === devUrl) {
+      const inMemory = testEnv[secret]?.startsWith("pglite:");
       throw new Error(
         `refusing to run: ${secret} resolves to the dev database. ` +
           "Regression tests must stay isolated from dev databases. " +
-          "Restore the generated .env.test (run `pnpm run bos dev` to regenerate), " +
-          "or start the test databases with `pnpm run test:db:up`, " +
+          (inMemory
+            ? `.env.test sets ${secret} to an in-memory pglite database the seeds can't reach; ` +
+              "start the test databases with `pnpm run test:db:up` and export " +
+              "API_DATABASE_URL and AUTH_DATABASE_URL pointing at them, "
+            : "Restore the generated .env.test (run `pnpm run bos dev` to regenerate), " +
+              "or start the test databases with `pnpm run test:db:up`, ") +
           "or set REGRESSION_ALLOW_DEV_DB=1 to override deliberately.",
       );
     }

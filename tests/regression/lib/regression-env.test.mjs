@@ -110,6 +110,15 @@ void test("dev database rejection does not reveal credentials", () => {
   );
 });
 
+void test("in-memory pglite URLs with no test databases explain how to reach them", () => {
+  const repoRoot = fixture();
+  writeFileSync(join(repoRoot, ".env.test"), "API_DATABASE_URL=pglite::memory:\n");
+  assert.throws(
+    () => computeRegressionEnv({ repoRoot, env: {} }),
+    (error) => error.message.includes("in-memory pglite") && error.message.includes("test:db:up"),
+  );
+});
+
 void test("invalid modes fail before starting a stack", () => {
   assert.throws(() => regressionStackOptions({}, "invalid", {}), /unknown mode/);
 });
