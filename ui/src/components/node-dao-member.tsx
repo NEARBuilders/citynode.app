@@ -27,6 +27,7 @@ import {
   pollVoteAccess,
 } from "@/lib/node-dao-contributors";
 import {
+  chainTimeQueryOptions,
   daoOpenProposalsQueryOptions,
   daoPolicyQueryOptions,
   nodeDaoQueryKeys,
@@ -449,9 +450,10 @@ export function PollVote({
   const accountId = useNearAccount();
   const queryClient = useQueryClient();
   const policyQuery = useQuery({ ...daoPolicyQueryOptions(daoAccountId), enabled: !!accountId });
+  const chainTimeQuery = useQuery({ ...chainTimeQueryOptions(), enabled: !!accountId });
   const signing = useMemberSigning<unknown>(accountId);
   const [action, setAction] = useState<SputnikVoteAction | null>(null);
-  const access = pollVoteAccess(policyQuery.data, accountId, proposal);
+  const access = pollVoteAccess(policyQuery.data, accountId, proposal, chainTimeQuery.data);
 
   if (access.status === "hidden") return null;
   if (access.status === "voted") {

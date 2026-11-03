@@ -147,20 +147,43 @@ describe("pendingContributorRequest", () => {
 });
 
 describe("pollVoteAccess", () => {
-  const poll = proposal({ kind: "Vote" });
-  const contributorPolicy = policy({ contributors: [MEMBER] });
+  const WEEK_NS = 604_800_000_000_000n;
+  const NOW_NS = 1_760_000_000_000n * 1_000_000n;
+  const poll = proposal({ kind: "Vote", submission_time: (NOW_NS - 1n).toString() });
+  const contributorPolicy = {
+    ...policy({ contributors: [MEMBER] }),
+    proposal_period: WEEK_NS.toString(),
+  };
+  const access = (
+    p: SputnikPolicy | null,
+    accountId: string | null,
+    target: SputnikProposal,
+    nowNs: bigint | null = NOW_NS,
+  ) => pollVoteAccess(p, accountId, target, nowNs);
 
   it("lets a Contributor vote on an open poll", () => {
-    expect(pollVoteAccess(contributorPolicy, MEMBER, poll)).toEqual({ status: "can-vote" });
+    expect(access(contributorPolicy, MEMBER, poll)).toEqual({ status: "can-vote" });
+  });
+
+  it("hides voting on a poll past its period, though Sputnik still stores it as in progress", () => {
+    const expired = proposal({
+      kind: "Vote",
+      status: "InProgress",
+      submission_time: (NOW_NS - WEEK_NS - 1n).toString(),
+    });
+    expect(access(contributorPolicy, MEMBER, expired).status).toBe("hidden");
+  });
+
+  it("hides voting until the chain time is known", () => {
+    expect(access(contributorPolicy, MEMBER, poll, null).status).toBe("hidden");
   });
 
   it("hides voting from accounts that can't vote, signed-out readers, and closed polls", () => {
-    expect(pollVoteAccess(contributorPolicy, "stranger.near", poll).status).toBe("hidden");
-    expect(pollVoteAccess(contributorPolicy, null, poll).status).toBe("hidden");
-    expect(pollVoteAccess(null, MEMBER, poll).status).toBe("hidden");
+    expect(access(contributorPolicy, "stranger.near", poll).status).toBe("hidden");
+    expect(access(contributorPolicy, null, poll).status).toBe("hidden");
+    expect(access(null, MEMBER, poll).status).toBe("hidden");
     expect(
-      pollVoteAccess(contributorPolicy, MEMBER, proposal({ kind: "Vote", status: "Approved" }))
-        .status,
+      access(contributorPolicy, MEMBER, proposal({ kind: "Vote", status: "Approved" })).status,
     ).toBe("hidden");
   });
 
@@ -169,17 +192,17 @@ describe("pollVoteAccess", () => {
       contributors: [MEMBER],
       contributorPermissions: ["vote:AddProposal", "vote:VoteApprove"],
     });
-    expect(pollVoteAccess(approveOnly, MEMBER, poll).status).toBe("hidden");
+    expect(access(approveOnly, MEMBER, poll).status).toBe("hidden");
   });
 
   it("only offers votes on polls, not other kinds", () => {
     const call = proposal({ kind: { FunctionCall: { receiver_id: "x.near", actions: [] } } });
-    expect(pollVoteAccess(policy({ contributors: [MEMBER] }), MEMBER, call).status).toBe("hidden");
+    expect(access(policy({ contributors: [MEMBER] }), MEMBER, call).status).toBe("hidden");
   });
 
   it("shows the member's vote once cast", () => {
     const voted = proposal({ kind: "Vote", votes: { [MEMBER]: "Approve" } });
-    expect(pollVoteAccess(contributorPolicy, MEMBER, voted)).toEqual({
+    expect(access(contributorPolicy, MEMBER, voted)).toEqual({
       status: "voted",
       vote: "Approve",
     });
