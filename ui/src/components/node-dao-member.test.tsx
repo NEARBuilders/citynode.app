@@ -19,6 +19,7 @@ const harness = vi.hoisted(() => ({
   open: [] as unknown[],
   spendable: 0n as bigint | Error,
   chainNowNs: 1_760_000_000_000n * 1_000_000n,
+  chainTimeFails: false,
   signing: { status: "idle", failure: null, result: null } as MemberSigningState,
   tasks: [] as ((wallet: unknown) => Promise<unknown>)[],
   submitProposalWithBond: vi.fn(async (..._args: unknown[]) => ({})),
@@ -69,7 +70,10 @@ vi.mock("@/lib/sputnik-proposals", async (importOriginal) => {
       return harness.policy;
     },
     readOpenDaoProposals: async () => harness.open,
-    readChainTimeNs: async () => harness.chainNowNs,
+    readChainTimeNs: async () => {
+      if (harness.chainTimeFails) throw new Error("RPC unavailable");
+      return harness.chainNowNs;
+    },
     readSpendableYocto: async () => {
       if (harness.spendable instanceof Error) throw harness.spendable;
       return harness.spendable;
@@ -89,6 +93,7 @@ afterEach(() => {
   harness.open = [];
   harness.spendable = 0n;
   harness.chainNowNs = 1_760_000_000_000n * 1_000_000n;
+  harness.chainTimeFails = false;
   harness.signing = { status: "idle", failure: null, result: null };
   harness.tasks = [];
   harness.submitProposalWithBond.mockClear();
@@ -151,7 +156,7 @@ describe("MemberDaoPanel", () => {
     );
   });
 
-  it("says when the Node DAO has no Contributors group", async () => {
+  it("says when the Node DAO has no Contributor group", async () => {
     harness.policy = policy({ withContributors: false });
     renderPanel();
     expect((await screen.findByTestId("member-dao.not-set-up")).textContent).toContain(
@@ -188,7 +193,7 @@ describe("MemberDaoPanel", () => {
     renderPanel();
     expect((await screen.findByTestId("member-dao.bond")).textContent).toContain("1 NEAR bond");
     const insufficient = await screen.findByTestId("member-dao.insufficient");
-    expect(insufficient.textContent).toContain("needs 0.75 more NEAR");
+    expect(insufficient.textContent).toContain("needs 0.76 more NEAR");
     expect(insufficient.textContent).toContain(MEMBER);
     expect((screen.getByTestId("member-dao.become") as HTMLButtonElement).disabled).toBe(true);
   });
@@ -202,6 +207,15 @@ describe("MemberDaoPanel", () => {
     expect(screen.queryByTestId("member-dao.insufficient")).toBeNull();
     fireEvent.click(become);
     await waitFor(() => expect(harness.submitProposalWithBond.mock.calls[0]?.[4]).toBe(NEAR));
+  });
+
+  it("blocks a wallet that holds the bond but not the gas", async () => {
+    harness.policy = policy({ bond: NEAR.toString() });
+    harness.spendable = NEAR;
+    renderPanel();
+    const insufficient = await screen.findByTestId("member-dao.insufficient");
+    expect(insufficient.textContent).toContain("needs 0.01 more NEAR");
+    expect((screen.getByTestId("member-dao.become") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("never submits when the bond can't be read", async () => {
@@ -328,6 +342,17 @@ describe("PollVote", () => {
     harness.chainNowNs += WEEK_NS;
     fireEvent.click(approve);
     await waitFor(() => expect(screen.queryByTestId("poll-vote.approve")).toBeNull());
+    expect(harness.voteOnProposal).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed chain time read instead of doing nothing", async () => {
+    harness.policy = { ...policy({ contributors: [MEMBER] }), proposal_period: WEEK_NS.toString() };
+    renderWithQuery(<PollVote daoAccountId={DAO} proposal={poll()} />);
+    const approve = await screen.findByTestId("poll-vote.approve");
+    harness.chainTimeFails = true;
+    fireEvent.click(approve);
+    await waitFor(() => expect(harness.tasks).toHaveLength(1));
+    await expect(harness.tasks[0]?.({})).rejects.toThrow("RPC unavailable");
     expect(harness.voteOnProposal).not.toHaveBeenCalled();
   });
 

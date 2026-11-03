@@ -505,6 +505,14 @@ async function connectedAccount(wallet: SessionWallet): Promise<string> {
   return accountId;
 }
 
+const MEMBER_PROPOSAL_GAS = "100 Tgas";
+
+/**
+ * What NEAR holds back from the signer for `add_proposal`'s prepaid gas at the
+ * minimum gas price, on top of the bond: 100 Tgas × 100 Mgas-yocto = 0.01 NEAR.
+ */
+export const MEMBER_PROPOSAL_GAS_RESERVE_YOCTO = 10n ** 22n;
+
 /**
  * Files a proposal with exactly `bondYocto` attached, the bond read from the
  * policy the member was shown. Unlike `proposeAsSession` it never falls back to
@@ -525,7 +533,7 @@ export async function submitProposalWithBond(
       daoAccountId,
       "add_proposal",
       buildAddProposalArgs(plan, description) as unknown as Record<string, never>,
-      { gas: "100 Tgas", attachedDeposit: Amount.yocto(bondYocto) },
+      { gas: MEMBER_PROPOSAL_GAS, attachedDeposit: Amount.yocto(bondYocto) },
     )
     .send({ waitUntil: "EXECUTED" });
 }

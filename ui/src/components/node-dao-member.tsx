@@ -35,6 +35,7 @@ import {
 } from "@/lib/queries/node-dao";
 import {
   isOpenProposal,
+  MEMBER_PROPOSAL_GAS_RESERVE_YOCTO,
   type SputnikProposal,
   type SputnikVoteAction,
   submitProposalWithBond,
@@ -367,7 +368,8 @@ function useBondFunds(accountId: string, bondYocto: bigint | null): BondFunds {
   if (!needsFunds) return { enough: bondYocto !== null, status: "none", spendableYocto: null };
   if (query.isPending) return { enough: false, status: "loading", spendableYocto: null };
   if (query.isError) return { enough: false, status: "error", spendableYocto: null };
-  return { enough: query.data >= bondYocto, status: "ready", spendableYocto: query.data };
+  const needed = bondYocto + MEMBER_PROPOSAL_GAS_RESERVE_YOCTO;
+  return { enough: query.data >= needed, status: "ready", spendableYocto: query.data };
 }
 
 function BondNotice({
@@ -399,7 +401,9 @@ function BondNotice({
       ) : funds.status === "ready" && !funds.enough ? (
         <p role="alert" className="text-destructive" data-testid="member-dao.insufficient">
           {translate("memberDao.insufficient", {
-            amount: yoctoToNearInput(bondYocto - (funds.spendableYocto ?? 0n)),
+            amount: yoctoToNearInput(
+              bondYocto + MEMBER_PROPOSAL_GAS_RESERVE_YOCTO - (funds.spendableYocto ?? 0n),
+            ),
           })}{" "}
           <span className="font-mono break-all">{accountId}</span>
         </p>
@@ -477,13 +481,14 @@ export function PollVote({
   const vote = async (next: SputnikVoteAction) => {
     setAction(next);
     if (next !== "Finalize") {
-      // The page may have been open past the deadline: a vote on an expired
-      // poll can't change the result and locks the bond, so re-read the
-      // chain's time first. The fresh time also swaps the buttons.
-      const nowNs = await queryClient
-        .fetchQuery({ ...chainTimeQueryOptions(), staleTime: 0 })
-        .catch(() => null);
-      if (nowNs == null || !isOpenProposal(proposal, policyQuery.data, nowNs)) return;
+      let nowNs: bigint;
+      try {
+        nowNs = await queryClient.fetchQuery({ ...chainTimeQueryOptions(), staleTime: 0 });
+      } catch (error) {
+        await signing.submit(() => Promise.reject(error)).catch(() => {});
+        return;
+      }
+      if (!isOpenProposal(proposal, policyQuery.data, nowNs)) return;
     }
     await signing
       .submit((wallet) => voteOnProposal(wallet, daoAccountId, proposal, next))
