@@ -80,6 +80,25 @@ void test("ambient test settings reach the stack when no test file exists", () =
   assert.equal(stack.env.BETTER_AUTH_SECRET, env.BETTER_AUTH_SECRET);
 });
 
+void test("in-memory pglite URLs written by bos dev give way to the shared test databases", () => {
+  const repoRoot = fixture();
+  writeFileSync(
+    join(repoRoot, ".env.test"),
+    [
+      "API_DATABASE_URL=pglite::memory:",
+      "AUTH_DATABASE_URL=pglite::memory:",
+      "BETTER_AUTH_SECRET=test-secret",
+    ].join("\n"),
+  );
+  const env = {
+    API_DATABASE_URL: "postgres://test:test@127.0.0.1:5434/api_test",
+    AUTH_DATABASE_URL: "postgres://test:test@127.0.0.1:5435/auth_test",
+  };
+  const config = computeRegressionEnv({ repoRoot, env });
+  assert.equal(config.dbUrls.API_DATABASE_URL, env.API_DATABASE_URL);
+  assert.equal(config.dbUrls.AUTH_DATABASE_URL, env.AUTH_DATABASE_URL);
+});
+
 void test("dev database rejection does not reveal credentials", () => {
   const repoRoot = fixture();
   assert.throws(
