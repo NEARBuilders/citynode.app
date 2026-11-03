@@ -18,6 +18,7 @@ function fixture() {
       app: { api: { secrets: ["API_DATABASE_URL"] } },
       plugins: {
         auth: { development: "local:plugins/auth-fixture", secrets: ["AUTH_DATABASE_URL"] },
+        proposals: { secrets: ["PROPOSALS_DATABASE_URL"] },
       },
     }),
   );
@@ -87,6 +88,7 @@ void test("in-memory pglite URLs written by bos dev give way to the shared test 
     [
       "API_DATABASE_URL=pglite::memory:",
       "AUTH_DATABASE_URL=pglite::memory:",
+      "PROPOSALS_DATABASE_URL=pglite::memory:",
       "BETTER_AUTH_SECRET=test-secret",
     ].join("\n"),
   );
@@ -97,6 +99,7 @@ void test("in-memory pglite URLs written by bos dev give way to the shared test 
   const config = computeRegressionEnv({ repoRoot, env });
   assert.equal(config.dbUrls.API_DATABASE_URL, env.API_DATABASE_URL);
   assert.equal(config.dbUrls.AUTH_DATABASE_URL, env.AUTH_DATABASE_URL);
+  assert.equal(config.dbUrls.PROPOSALS_DATABASE_URL, env.API_DATABASE_URL);
 });
 
 void test("dev database rejection does not reveal credentials", () => {

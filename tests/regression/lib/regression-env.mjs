@@ -119,7 +119,15 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
   const dbUrls = {};
   for (const secret of databaseSecrets(config)) {
     const devUrl = fileEnv[secret] ?? defaultDevDatabaseUrl(secret, pgUser, pgPassword, pgHost);
-    const resolved = sharedDatabaseUrl(testEnv[secret]) ?? env[secret] ?? fileEnv[secret] ?? devUrl;
+    // Plugin databases share the API database unless one is set (the platform's
+    // two-database contract), so they follow the API test database.
+    const sharesApi = secret !== "API_DATABASE_URL" && secret !== "AUTH_DATABASE_URL";
+    const resolved =
+      sharedDatabaseUrl(testEnv[secret]) ??
+      env[secret] ??
+      (sharesApi ? dbUrls.API_DATABASE_URL : undefined) ??
+      fileEnv[secret] ??
+      devUrl;
     if (!allowDevDb && resolved === devUrl) {
       throw new Error(
         `refusing to run: ${secret} resolves to the dev database. ` +
