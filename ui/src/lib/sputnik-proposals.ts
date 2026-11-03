@@ -344,7 +344,7 @@ function readableRoles(policy: unknown): policy is SputnikPolicy {
   return Array.isArray(roles) && roles.every((role) => role && typeof role === "object");
 }
 
-function proposalBondYocto(policy: SputnikPolicy): bigint | null {
+export function proposalBondYocto(policy: SputnikPolicy): bigint | null {
   const bond = policy.proposal_bond;
   return typeof bond === "string" && /^\d+$/.test(bond) ? BigInt(bond) : null;
 }
@@ -530,7 +530,7 @@ export async function submitProposalWithBond(
     .send({ waitUntil: "EXECUTED" });
 }
 
-export type SputnikVoteAction = "VoteApprove" | "VoteReject";
+export type SputnikVoteAction = "VoteApprove" | "VoteReject" | "Finalize";
 
 /**
  * Votes on `proposal`. Sputnik's `act_proposal` takes the proposal's kind as

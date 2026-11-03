@@ -34,6 +34,7 @@ import {
   spendableYoctoQueryOptions,
 } from "@/lib/queries/node-dao";
 import {
+  isOpenProposal,
   type SputnikProposal,
   type SputnikVoteAction,
   submitProposalWithBond,
@@ -221,7 +222,7 @@ function ContributorRequest({
           wallet,
           daoAccountId,
           { kind: "add_member_to_role", memberId: accountId, role },
-          contributorRequestDescription(accountId, community),
+          contributorRequestDescription(accountId, role, community),
           bondYocto ?? 0n,
         ),
       )
@@ -455,6 +456,13 @@ export function PollVote({
   const [action, setAction] = useState<SputnikVoteAction | null>(null);
   const access = pollVoteAccess(policyQuery.data, accountId, proposal, chainTimeQuery.data);
 
+  if (action === "Finalize" && signing.state.status === "submitted") {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="poll-vote.closed">
+        {translate("pollVote.closed")}
+      </p>
+    );
+  }
   if (access.status === "hidden") return null;
   if (access.status === "voted") {
     return (
@@ -465,21 +473,53 @@ export function PollVote({
   }
 
   const busy = signing.state.status === "connecting" || signing.state.status === "signing";
-  const vote = (next: SputnikVoteAction) => {
+  const done = signing.state.status === "submitted";
+  const vote = async (next: SputnikVoteAction) => {
     setAction(next);
-    void signing
+    if (next !== "Finalize") {
+      // The page may have been open past the deadline: a vote on an expired
+      // poll can't change the result and locks the bond, so re-read the
+      // chain's time first. The fresh time also swaps the buttons.
+      const nowNs = await queryClient
+        .fetchQuery({ ...chainTimeQueryOptions(), staleTime: 0 })
+        .catch(() => null);
+      if (nowNs == null || !isOpenProposal(proposal, policyQuery.data, nowNs)) return;
+    }
+    await signing
       .submit((wallet) => voteOnProposal(wallet, daoAccountId, proposal, next))
       .then(() => queryClient.invalidateQueries({ queryKey: ["node-dao"] }))
       .catch(() => {});
   };
+
+  if (access.status === "can-finalize") {
+    return (
+      <div className="flex flex-col gap-2" data-testid="poll-vote.finalize-panel">
+        <p className="text-sm text-muted-foreground">{translate("pollVote.finalizeHint")}</p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="self-start"
+          disabled={busy || done}
+          onClick={() => void vote("Finalize")}
+          data-testid="poll-vote.finalize"
+        >
+          {translate("pollVote.finalize")}
+        </Button>
+        <MemberSigningStatus
+          state={signing.state}
+          onRetry={action ? () => void vote(action) : undefined}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2" data-testid="poll-vote">
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
-          disabled={busy || signing.state.status === "submitted"}
-          onClick={() => vote("VoteApprove")}
+          disabled={busy || done}
+          onClick={() => void vote("VoteApprove")}
           data-testid="poll-vote.approve"
         >
           {translate("common.approve")}
@@ -487,8 +527,8 @@ export function PollVote({
         <Button
           size="sm"
           variant="outline"
-          disabled={busy || signing.state.status === "submitted"}
-          onClick={() => vote("VoteReject")}
+          disabled={busy || done}
+          onClick={() => void vote("VoteReject")}
           data-testid="poll-vote.reject"
         >
           {translate("common.reject")}
@@ -496,7 +536,7 @@ export function PollVote({
       </div>
       <MemberSigningStatus
         state={signing.state}
-        onRetry={action ? () => vote(action) : undefined}
+        onRetry={action ? () => void vote(action) : undefined}
       />
     </div>
   );

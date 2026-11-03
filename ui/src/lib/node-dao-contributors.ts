@@ -10,6 +10,7 @@ import {
   canAccountAct,
   isOpenProposal,
   type ProposalPermission,
+  proposalBondYocto,
   proposalPermission,
   roleMembers,
   type SputnikPolicy,
@@ -17,8 +18,11 @@ import {
   type SputnikRole,
 } from "./sputnik-proposals";
 
-/** The Contributor group's name, as the policy recipe (#412) sets it up. */
-const CONTRIBUTOR_ROLE_NAME = /^contributors?$/i;
+/**
+ * The Contributor group's exact name, as the policy recipe (#412) sets it up in
+ * every Node DAO. Members' requests name it, and pending requests are found by it.
+ */
+export const CONTRIBUTOR_ROLE_NAME = "Contributor";
 
 /** The DAO's Contributor group, or null when its policy has none. */
 export function contributorRole(policy: SputnikPolicy | null | undefined): SputnikRole | null {
@@ -26,7 +30,7 @@ export function contributorRole(policy: SputnikPolicy | null | undefined): Sputn
   return (
     policy.roles.find(
       (role) =>
-        CONTRIBUTOR_ROLE_NAME.test(role.name) &&
+        role.name === CONTRIBUTOR_ROLE_NAME &&
         typeof role.kind === "object" &&
         Array.isArray(role.kind?.Group),
     ) ?? null
@@ -90,14 +94,18 @@ export function contributorState(
 export type PollVoteAccess =
   | { status: "hidden" }
   | { status: "voted"; vote: "Approve" | "Reject" | "Remove" }
-  | { status: "can-vote" };
+  | { status: "can-vote" }
+  /** Past its period and still stored as in progress: closing it returns the proposer's bond. */
+  | { status: "can-finalize" };
 
 /**
- * Whether `accountId` sees vote buttons on `proposal`: a poll still within the
- * policy's proposal period, and a policy that lets them both approve and
- * reject polls. Sputnik keeps an expired poll stored as `InProgress`, and a
- * vote on it can't change the result, so without the chain time no buttons
- * show. Signers vote in Trezu.
+ * What `accountId` can do on `proposal` from its page. On a poll still within
+ * the policy's proposal period, they see vote buttons when the policy lets them
+ * both approve and reject polls. Sputnik keeps an expired poll stored as
+ * `InProgress`, and a vote on it can't change the result, so an expired poll
+ * shows no vote buttons; with a positive bond, an account allowed to
+ * `vote:Finalize` can close it instead, which returns the proposer's bond
+ * (#413). Without the chain time, neither shows. Signers vote in Trezu.
  */
 export function pollVoteAccess(
   policy: SputnikPolicy | null | undefined,
@@ -107,9 +115,15 @@ export function pollVoteAccess(
 ): PollVoteAccess {
   if (!accountId || !isPollProposal(proposal)) return { status: "hidden" };
   const vote = proposal.votes?.[accountId];
-  if (vote) return { status: "voted", vote };
-  if (proposal.status !== "InProgress" || chainNowNs == null) return { status: "hidden" };
-  if (!isOpenProposal(proposal, policy, chainNowNs)) return { status: "hidden" };
+  const voted: PollVoteAccess = vote ? { status: "voted", vote } : { status: "hidden" };
+  if (proposal.status !== "InProgress" || chainNowNs == null) return voted;
+  if (!isOpenProposal(proposal, policy, chainNowNs)) {
+    const bond = policy ? proposalBondYocto(policy) : null;
+    const canFinalize =
+      bond !== null && bond > 0n && canAccountAct(policy, accountId, "vote", "Finalize");
+    return canFinalize ? { status: "can-finalize" } : voted;
+  }
+  if (vote) return voted;
   const canVote =
     canAccountAct(policy, accountId, "vote", "VoteApprove") &&
     canAccountAct(policy, accountId, "vote", "VoteReject");
@@ -128,6 +142,10 @@ export function pollDescription(title: string, details: string): string {
 }
 
 /** The description of a member's request to join the Contributor group. */
-export function contributorRequestDescription(accountId: string, community: string): string {
-  return `* Title: Add ${accountId} to Contributors <br>* Description: ${accountId} asked from City Node to become a Contributor in ${community}.`;
+export function contributorRequestDescription(
+  accountId: string,
+  role: string,
+  community: string,
+): string {
+  return `* Title: Add ${accountId} to the ${role} group <br>* Description: ${accountId} asked from City Node to join the ${role} group in ${community}.`;
 }
