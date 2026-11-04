@@ -586,21 +586,30 @@ export default createPlugin.withPlugins<PluginsClient>()({
         Effect.orElseSucceed(() => null),
       );
 
+    const listMemberPage = (
+      auth: MemberAuthClient,
+      organizationId: string,
+      page: { limit: number; offset: number },
+    ) =>
+      Effect.tryPromise({
+        try: () => auth.listMembers({ organizationId, ...page }),
+        catch: (error) =>
+          error instanceof ORPCError &&
+          ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
+            ? notACommunityMember()
+            : new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "Could not load the community's members",
+              }),
+      });
+
     const listAllMembers = (auth: MemberAuthClient, organizationId: string) =>
       Effect.gen(function* () {
         const members: Awaited<ReturnType<MemberAuthClient["listMembers"]>>["members"] = [];
         let total = 0;
         while (true) {
-          const page = yield* Effect.tryPromise({
-            try: () =>
-              auth.listMembers({ organizationId, limit: MEMBER_PAGE_SIZE, offset: members.length }),
-            catch: (error) =>
-              error instanceof ORPCError &&
-              ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
-                ? notACommunityMember()
-                : new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Could not load the community's members",
-                  }),
+          const page = yield* listMemberPage(auth, organizationId, {
+            limit: MEMBER_PAGE_SIZE,
+            offset: members.length,
           });
           total = page.total;
           members.push(...page.members);
@@ -944,8 +953,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
         yield* requireCommunityMember(auth, input.organizationId);
-        const { members, total } = yield* listAllMembers(auth, input.organizationId);
+        const offset = Number(input.cursor ?? 0);
+        const { members, total } = yield* listMemberPage(auth, input.organizationId, {
+          limit: input.limit,
+          offset,
+        });
         const current = members.filter((member) => member.organizationId === input.organizationId);
+        const scanned = offset + members.length;
         yield* services.memberDirectory.refreshPrimaryAccount(
           context.userId,
           yield* readOwnPrimaryAccount(auth),
@@ -966,6 +980,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               name: member.user?.name?.trim() || null,
               accountId: accounts.get(member.userId) ?? null,
             })),
+          nextCursor: members.length > 0 && scanned < total ? String(scanned) : null,
         };
       }),
 

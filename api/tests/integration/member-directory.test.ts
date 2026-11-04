@@ -252,21 +252,41 @@ describe("member directory", () => {
     expect(await accountOf("failer")).toBeNull();
   });
 
-  it("pages through the whole upstream member source before filtering", async () => {
+  it("returns one upstream page per request and a cursor to the next", async () => {
     const members = Array.from({ length: 250 }, (_, index) => ({
       userId: `bulk-${index}`,
       name: `Bulk ${index}`,
     }));
     const { orgId } = await community(members);
-    await (await memberClient("bulk-240")).setMemberDirectoryOptIn({ optedIn: true });
+    for (const userId of ["bulk-5", "bulk-240"]) {
+      await (await memberClient(userId)).setMemberDirectoryOptIn({ optedIn: true });
+    }
+    const viewer = await memberClient("bulk-0");
 
-    const directory = await (await memberClient("bulk-0")).getMemberDirectory({
+    const first = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(first.count).toBe(250);
+    expect(first.members.map((member) => member.userId)).toEqual(["bulk-5"]);
+    expect(first.nextCursor).toBe("100");
+
+    const second = await viewer.getMemberDirectory({
       organizationId: orgId,
+      cursor: first.nextCursor ?? undefined,
     });
+    expect(second.members).toEqual([]);
+    expect(second.nextCursor).toBe("200");
 
-    expect(directory.count).toBe(250);
-    expect(directory.members).toEqual([{ userId: "bulk-240", name: "Bulk 240", accountId: null }]);
-    expect(memberPages.map((page) => page.offset)).toEqual([0, 100, 200]);
+    const last = await viewer.getMemberDirectory({
+      organizationId: orgId,
+      limit: 50,
+      cursor: "200",
+    });
+    expect(last.members).toEqual([{ userId: "bulk-240", name: "Bulk 240", accountId: null }]);
+    expect(last.nextCursor).toBeNull();
+    expect(memberPages).toEqual([
+      { limit: 100, offset: 0 },
+      { limit: 100, offset: 100 },
+      { limit: 50, offset: 200 },
+    ]);
   });
 });
 

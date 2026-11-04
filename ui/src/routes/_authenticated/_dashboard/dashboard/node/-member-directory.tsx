@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef } from "react";
 import { useApiClient } from "@/app";
@@ -27,10 +27,13 @@ export function MemberDirectory({
   const switchId = useId();
   const hintId = useId();
   const optIn = useQuery(memberDirectoryOptInQueryOptions(apiClient));
-  const directory = useQuery(memberDirectoryQueryOptions(apiClient, organizationId));
+  const directory = useInfiniteQuery(memberDirectoryQueryOptions(apiClient, organizationId));
+  const loadFailed = directory.isError && !directory.isFetchNextPageError;
+  const firstPage = loadFailed ? undefined : directory.data?.pages[0];
+  const members = loadFailed ? [] : (directory.data?.pages.flatMap((page) => page.members) ?? []);
   const cachedCount = useQuery({
     ...nodeMemberCountQueryOptions(apiClient, nodeId),
-    enabled: directory.isError,
+    enabled: loadFailed,
   });
   const channel = useRef<BroadcastChannel | null>(null);
   const setOptIn = useMutation({
@@ -64,9 +67,9 @@ export function MemberDirectory({
         className="text-3xl font-semibold tabular-nums"
         data-testid="dashboard-node.member-count"
       >
-        {directory.data ? (
-          <span data-testid="dashboard-node.member-count-value">{directory.data.count}</span>
-        ) : directory.isError ? (
+        {firstPage ? (
+          <span data-testid="dashboard-node.member-count-value">{firstPage.count}</span>
+        ) : loadFailed ? (
           <MemberCountValue
             count={cachedCount.data?.count}
             observedAt={cachedCount.data?.observedAt}
@@ -120,17 +123,17 @@ export function MemberDirectory({
           {translate("members.optInFailed")}
         </p>
       )}
-      {directory.isError ? (
+      {loadFailed ? (
         <p className="text-sm text-muted-foreground" data-testid="dashboard-node.members-error">
           {translate("members.loadFailed")}
         </p>
-      ) : directory.data && directory.data.members.length === 0 ? (
+      ) : firstPage && members.length === 0 && !directory.hasNextPage ? (
         <p className="text-sm text-muted-foreground" data-testid="dashboard-node.members-empty">
           {translate("members.noneShared")}
         </p>
-      ) : directory.data ? (
+      ) : members.length > 0 ? (
         <ul className="flex min-w-0 flex-col gap-2" data-testid="dashboard-node.member-list">
-          {directory.data.members.map((member) => {
+          {members.map((member) => {
             const name = member.name ?? translate("members.unnamed");
             return (
               <li
@@ -156,6 +159,28 @@ export function MemberDirectory({
           })}
         </ul>
       ) : null}
+      {!loadFailed && directory.hasNextPage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={directory.isFetchingNextPage}
+            onClick={() => void directory.fetchNextPage()}
+            data-testid="dashboard-node.members-load-more"
+          >
+            {translate("common.loadMore")}
+          </Button>
+          {directory.isFetchNextPageError && (
+            <span
+              className="text-sm text-destructive"
+              role="alert"
+              data-testid="dashboard-node.members-load-more-error"
+            >
+              {translate("members.loadMoreFailed")}
+            </span>
+          )}
+        </div>
+      )}
     </section>
   );
 }

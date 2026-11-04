@@ -1864,6 +1864,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Impossible de charger la liste des membres.",
     "无法加载成员列表。",
   ],
+  "members.loadMoreFailed": [
+    "Couldn't load more members. Try again.",
+    "No se pudieron cargar más miembros. Inténtalo de nuevo.",
+    "Impossible de charger plus de membres. Réessayez.",
+    "无法加载更多成员，请重试。",
+  ],
   "members.noneShared": [
     "No members have shared their name yet.",
     "Ningún miembro ha compartido su nombre todavía.",

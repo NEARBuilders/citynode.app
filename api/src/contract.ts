@@ -280,6 +280,7 @@ export const MemberDirectorySchema = z.object({
   count: z.number().int().nonnegative(),
   observedAt: z.iso.datetime(),
   members: z.array(MemberDirectoryEntrySchema),
+  nextCursor: z.string().nullable(),
 });
 
 export const MemberCountSchema = z.object({
@@ -1013,9 +1014,15 @@ export const contract = oc.router({
       path: "/members/directory",
       summary: "List a community's member count and opted-in names",
       description:
-        "Members only — returns the upstream member count and the names of current members who opted in, without emails.",
+        "Members only — returns the upstream member count and, one page of members at a time, the names of current members who opted in, without emails.",
     })
-    .input(z.object({ organizationId: z.string().min(1) }))
+    .input(
+      z.object({
+        organizationId: z.string().min(1),
+        limit: z.number().int().min(1).max(100).default(100),
+        cursor: z.string().regex(/^\d+$/).optional(),
+      }),
+    )
     .output(MemberDirectorySchema)
     .errors({ UNAUTHORIZED, FORBIDDEN }),
 
