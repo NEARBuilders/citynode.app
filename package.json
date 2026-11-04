@@ -2,7 +2,7 @@
   "name": "citynode.app",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@12.16.1",
+  "packageManager": "pnpm@12.16.1+sha512.091d1dee7927575661b25dab3c2ae31cafc1c54d6b71ed6a6600cf0c1cb10434a447eae14015f1b23e2e6bedeed79df94a932e2164d2832280dce3fb32f656d1",
   "engines": {
     "node": ">=20.11"
   },
@@ -49,13 +49,13 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
-    "@effect/tsgo": "^0.45.0",
+    "@effect/tsgo": "^0.63.0",
     "@playwright/test": "^1.58.1",
     "@shadcn/lint": "^0.2.0",
     "@types/pg": "catalog:",
     "dotenv": "^17.3.1",
-    "oxlint": "1.82.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "tsx": "^4.21.0",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "catalog:",

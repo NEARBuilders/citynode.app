@@ -277,10 +277,10 @@ describe("prepareRegistryConfigWrite", () => {
   });
 
   it("targets the global registry namespace that bos:// resolution reads", async () => {
-    const { getRegistryNamespaceForNetwork } = await import("everything-dev/fastkv");
+    const { registryNamespaceForNetwork } = await import("everything-dev/registry");
     const { DEFAULT_REGISTRY_NAMESPACE } = await import("../services/fastkv");
 
-    expect(DEFAULT_REGISTRY_NAMESPACE).toBe(getRegistryNamespaceForNetwork("mainnet"));
+    expect(DEFAULT_REGISTRY_NAMESPACE).toBe(registryNamespaceForNetwork("mainnet"));
 
     const service = createRegistryMethods({ namespace: DEFAULT_REGISTRY_NAMESPACE });
 
@@ -290,6 +290,6 @@ describe("prepareRegistryConfigWrite", () => {
       config: { account: "testing123.sputnik-dao.near" },
     });
 
-    expect(result.contractId).toBe(getRegistryNamespaceForNetwork("mainnet"));
+    expect(result.contractId).toBe(registryNamespaceForNetwork("mainnet"));
   });
 });

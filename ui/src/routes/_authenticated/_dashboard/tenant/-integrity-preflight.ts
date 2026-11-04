@@ -2,8 +2,8 @@ import {
   type IntegrityCheckResult,
   type TenantConfigDraft,
   verifySsrIntegrity,
+  verifyUiDigest,
   verifyUiIntegrity,
-  verifyUiPin,
 } from "@/app";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
@@ -18,12 +18,12 @@ export async function runIntegrityPreflight(
   translate: AppTranslator = translateEnglishAppMessage,
 ): Promise<IntegrityPreflight> {
   const checks: { label: string; check: IntegrityCheckResult }[] = [];
-  if (value.uiProduction && value.uiManifest && value.uiPinIntegrity) {
+  if (value.uiProduction && value.uiManifest && value.uiDigestIntegrity) {
     checks.push({
       label: translate("bundle.pin"),
-      check: await verifyUiPin(value.uiProduction, {
+      check: await verifyUiDigest(value.uiProduction, {
         manifest: value.uiManifest,
-        integrity: value.uiPinIntegrity,
+        integrity: value.uiDigestIntegrity,
       }),
     });
   } else if (value.uiProduction && value.uiIntegrity) {
