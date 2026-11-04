@@ -19,6 +19,7 @@ const failingAccountReads = new Set<string>();
 const failingMemberOrgs = new Set<string>();
 const memberPages: Array<{ limit?: number; offset?: number }> = [];
 const roleLookups: string[] = [];
+const accountReads: string[] = [];
 const UPSTREAM_PAGE_LIMIT = 100;
 
 function callerId(context: unknown) {
@@ -29,6 +30,7 @@ const authStub = {
   client: (context: unknown) => ({
     nearListAccounts: async () => {
       const userId = callerId(context);
+      accountReads.push(userId);
       if (failingAccountReads.has(userId)) throw new Error("identity read failed");
       const accountId = accountsByUser.get(userId);
       return {
@@ -135,6 +137,7 @@ beforeEach(() => {
   failingMemberOrgs.clear();
   memberPages.length = 0;
   roleLookups.length = 0;
+  accountReads.length = 0;
 });
 
 describe("member directory opt-in", () => {
@@ -287,6 +290,56 @@ describe("member directory", () => {
       { limit: 100, offset: 100 },
       { limit: 50, offset: 200 },
     ]);
+  });
+});
+
+describe("member directory upstream cost", () => {
+  async function viewCost(size: number) {
+    const { orgId } = await community(
+      Array.from({ length: size }, (_, index) => ({ userId: `cost-${size}-${index}`, name: null })),
+    );
+    const viewerId = `cost-${size}-0`;
+    await (await memberClient(viewerId)).setMemberDirectoryOptIn({ optedIn: true });
+    const viewer = await memberClient(viewerId);
+    const first = await viewer.getMemberDirectory({ organizationId: orgId });
+    memberPages.length = 0;
+    roleLookups.length = 0;
+    accountReads.length = 0;
+    const again = await viewer.getMemberDirectory({ organizationId: orgId });
+    return {
+      count: again.count,
+      observedAt: [first.observedAt, again.observedAt],
+      calls: memberPages.length + roleLookups.length + accountReads.length,
+      pages: [...memberPages],
+    };
+  }
+
+  it("makes the same upstream calls at any community size and does not rewrite the count", async () => {
+    const small = await viewCost(1000);
+    const large = await viewCost(5000);
+    expect(small.count).toBe(1000);
+    expect(large.count).toBe(5000);
+    expect(small.calls).toBe(3);
+    expect(large.calls).toBe(3);
+    expect(large.pages).toEqual([{ limit: 100, offset: 0 }]);
+    expect(small.observedAt[1]).toBe(small.observedAt[0]);
+    expect(large.observedAt[1]).toBe(large.observedAt[0]);
+  });
+
+  it("rewrites the count when it changes", async () => {
+    const { orgId, nodeId } = await community([
+      { userId: "steady", name: null },
+      { userId: "joiner", name: null },
+    ]);
+    const viewer = await memberClient("steady");
+    await viewer.getMemberDirectory({ organizationId: orgId });
+    membersByOrg.set(orgId, [...(membersByOrg.get(orgId) ?? []), { userId: "late", name: null }]);
+    const changed = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(changed.count).toBe(3);
+    expect(await (await getPluginClient()).getNodeMemberCount({ nodeId })).toEqual({
+      count: 3,
+      observedAt: changed.observedAt,
+    });
   });
 });
 

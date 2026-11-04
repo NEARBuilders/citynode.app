@@ -586,6 +586,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
         Effect.orElseSucceed(() => null),
       );
 
+    const memberReadFailure = (message: string) => (error: unknown) =>
+      error instanceof ORPCError && ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
+        ? notACommunityMember()
+        : new ORPCError("INTERNAL_SERVER_ERROR", { message });
+
     const listMemberPage = (
       auth: MemberAuthClient,
       organizationId: string,
@@ -593,13 +598,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     ) =>
       Effect.tryPromise({
         try: () => auth.listMembers({ organizationId, ...page }),
-        catch: (error) =>
-          error instanceof ORPCError &&
-          ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
-            ? notACommunityMember()
-            : new ORPCError("INTERNAL_SERVER_ERROR", {
-                message: "Could not load the community's members",
-              }),
+        catch: memberReadFailure("Could not load the community's members"),
       });
 
     const listAllMembers = (auth: MemberAuthClient, organizationId: string) =>
@@ -622,13 +621,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       Effect.gen(function* () {
         const { role } = yield* Effect.tryPromise({
           try: () => auth.getActiveMemberRole({ organizationId }),
-          catch: (error) =>
-            error instanceof ORPCError &&
-            ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
-              ? notACommunityMember()
-              : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: "Could not verify community membership",
-                }),
+          catch: memberReadFailure("Could not verify community membership"),
         });
         if (!role) return yield* Effect.fail(notACommunityMember());
       });
@@ -960,10 +953,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
         });
         const current = members.filter((member) => member.organizationId === input.organizationId);
         const scanned = offset + members.length;
-        yield* services.memberDirectory.refreshPrimaryAccount(
-          context.userId,
-          yield* readOwnPrimaryAccount(auth),
-        );
+        if (
+          input.cursor === undefined &&
+          (yield* services.memberDirectory.isOptedIn(context.userId))
+        ) {
+          yield* services.memberDirectory.refreshPrimaryAccount(
+            context.userId,
+            yield* readOwnPrimaryAccount(auth),
+          );
+        }
         const observation = yield* services.memberDirectory.recordCount(
           input.organizationId,
           total,
