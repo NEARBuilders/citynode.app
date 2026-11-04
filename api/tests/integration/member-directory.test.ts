@@ -18,6 +18,7 @@ const accountsByUser = new Map<string, string | null>();
 const failingAccountReads = new Set<string>();
 const failingMemberOrgs = new Set<string>();
 const memberPages: Array<{ limit?: number; offset?: number }> = [];
+const roleLookups: string[] = [];
 const UPSTREAM_PAGE_LIMIT = 100;
 
 function callerId(context: unknown) {
@@ -54,6 +55,15 @@ const authStub = {
             ]
           : [],
       };
+    },
+    getActiveMemberRole: async (input: { organizationId?: string }) => {
+      const organizationId = input.organizationId ?? "";
+      roleLookups.push(organizationId);
+      const members = membersByOrg.get(organizationId) ?? [];
+      if (!members.some((member) => member.userId === callerId(context))) {
+        throw new ORPCError("FORBIDDEN", { message: "Not a member" });
+      }
+      return { role: callerId(context) === "owner" ? "owner" : "member" };
     },
     listMembers: async (input: { organizationId?: string; limit?: number; offset?: number }) => {
       const organizationId = input.organizationId ?? "";
@@ -124,6 +134,7 @@ beforeEach(() => {
   failingAccountReads.clear();
   failingMemberOrgs.clear();
   memberPages.length = 0;
+  roleLookups.length = 0;
 });
 
 describe("member directory opt-in", () => {
@@ -184,6 +195,8 @@ describe("member directory", () => {
     await expect(
       (await getPluginClient()).getMemberDirectory({ organizationId: orgId }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(roleLookups).toEqual([orgId]);
+    expect(memberPages).toEqual([]);
   });
 
   it("drops a member who opts out or leaves the community", async () => {

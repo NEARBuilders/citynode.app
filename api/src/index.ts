@@ -609,6 +609,21 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return { members, total };
       });
 
+    const requireCommunityMember = (auth: MemberAuthClient, organizationId: string) =>
+      Effect.gen(function* () {
+        const { role } = yield* Effect.tryPromise({
+          try: () => auth.getActiveMemberRole({ organizationId }),
+          catch: (error) =>
+            error instanceof ORPCError &&
+            ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
+              ? notACommunityMember()
+              : new ORPCError("INTERNAL_SERVER_ERROR", {
+                  message: "Could not verify community membership",
+                }),
+        });
+        if (!role) return yield* Effect.fail(notACommunityMember());
+      });
+
     const teamJoinConflict = (message: string) => new ORPCError("CONFLICT", { message });
 
     const loadTeamCommunity = (auth: MemberAuthClient, organizationId: string, userId: string) =>
@@ -928,11 +943,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
+        yield* requireCommunityMember(auth, input.organizationId);
         const { members, total } = yield* listAllMembers(auth, input.organizationId);
         const current = members.filter((member) => member.organizationId === input.organizationId);
-        if (!current.some((member) => member.userId === context.userId)) {
-          return yield* Effect.fail(notACommunityMember());
-        }
         yield* services.memberDirectory.refreshPrimaryAccount(
           context.userId,
           yield* readOwnPrimaryAccount(auth),
