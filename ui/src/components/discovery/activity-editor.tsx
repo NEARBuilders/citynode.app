@@ -46,6 +46,7 @@ import type { AppTranslator } from "@/i18n/catalogs";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { buildEventTimeline } from "@/lib/event-timeline";
 import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
+import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
 import { type Activity, activitiesQueryOptions } from "./activity-form";
 import { DiscoveryLoadError } from "./discovery-load-error";
 import { useOpenEventStation } from "./event-onboarding";
@@ -53,9 +54,7 @@ import { EventTimeline } from "./event-timeline";
 import { EventVisibilityBadge, ImportsWaiting, useVisibilityContext } from "./event-visibility";
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
-
-const postEventReportUrl =
-  "https://docs.google.com/forms/d/e/1FAIpQLSdGTdQ9znOJbObaeef7NHAzXc04OygTLIOu6Qv1dKRx8Fwxxw/viewform";
+import { ReportStatusBadge } from "./report-status-badge";
 
 export function ActivityEditor({
   nodeId,
@@ -76,6 +75,14 @@ export function ActivityEditor({
   const list = useQuery({ ...activitiesQueryOptions(api, nodeId), refetchInterval: 30_000 });
   const visibilityContext = useVisibilityContext(nodeId);
   const { now } = visibilityContext;
+  const canReport = canPost || canOnboard;
+  const reportStatuses = useQuery({
+    ...eventReportStatusesQueryOptions(api, nodeId),
+    enabled: canReport,
+  });
+  const reportedAt = new Map(
+    (reportStatuses.data ?? []).map((status) => [status.activityId, status.submittedAt]),
+  );
   const luma = useQuery({
     queryKey: ["discovery-luma-calendars", nodeId],
     queryFn: () => api.listDiscoveryLumaCalendars({ nodeId }),
@@ -176,18 +183,20 @@ export function ActivityEditor({
           {translate("common.edit")}
         </Button>
       )}
-      {eventVisibility(a, visibilityContext) === "ended" && (
+      {canReport && eventVisibility(a, visibilityContext) === "ended" && (
         <Button
           size="sm"
-          variant="outline"
+          variant={reportedAt.has(a.id) ? "ghost" : "outline"}
           data-testid={`activity-editor.submit-report-${a.id}`}
           nativeButton={false}
-          render={(props) => (
-            <a {...props} href={postEventReportUrl} target="_blank" rel="noopener noreferrer" />
-          )}
+          render={
+            <Link
+              to="/nodes/$nodeId/events/$activityId/report"
+              params={{ nodeId, activityId: a.id }}
+            />
+          }
         >
-          {translate("events.submitReport")}
-          <ArrowUpRightIcon />
+          {translate(reportedAt.has(a.id) ? "events.editReport" : "events.submitReport")}
         </Button>
       )}
       {canOnboard && a.kind === "event" && a.status !== "cancelled" && (
@@ -339,6 +348,13 @@ export function ActivityEditor({
                   badges={(a) => (
                     <>
                       <EventVisibilityBadge activity={a} context={visibilityContext} />
+                      {canReport && eventVisibility(a, visibilityContext) === "ended" && (
+                        <ReportStatusBadge
+                          activity={a}
+                          submittedAt={reportedAt.get(a.id)}
+                          now={now}
+                        />
+                      )}
                       {a.luma && <Badge variant="outline">Luma</Badge>}
                     </>
                   )}

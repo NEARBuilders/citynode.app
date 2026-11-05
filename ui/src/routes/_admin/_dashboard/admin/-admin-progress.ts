@@ -1,4 +1,5 @@
 import type { ApiClient } from "@/app";
+import { eventEndsAt, eventReportStatus } from "@/lib/event-reports";
 import type { AdminNodeListRow } from "@/lib/queries/nodes";
 import type { Proposal } from "@/lib/queries/proposals";
 import {
@@ -133,9 +134,56 @@ export type NeedsActionItem =
   | { kind: "relayer" }
   | { kind: "organizations"; count: number }
   | { kind: "staking"; nodeId: string; name: string }
-  | { kind: "stakingMany"; count: number };
+  | { kind: "stakingMany"; count: number }
+  | { kind: "reportsOverdue"; count: number }
+  | { kind: "quiet"; nodeId: string; name: string }
+  | { kind: "quietMany"; count: number };
 
-export const STAKING_ITEMS_LIMIT = 3;
+export const STAKING_ITEMS_LIMIT = 1;
+export const QUIET_ITEMS_LIMIT = 1;
+export const QUIET_AFTER_DAYS = 30;
+export const REPORT_OVERDUE_DAYS = 7;
+
+const DAY_MS = 24 * 3_600_000;
+
+type HealthEvent = {
+  nodeId: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  reportSubmittedAt: string | null;
+};
+
+export function eventHealth({
+  communities,
+  events,
+  now,
+}: {
+  communities: readonly { node: { id: string; name: string } }[];
+  events: readonly HealthEvent[];
+  now: number;
+}): { quiet: { nodeId: string; name: string }[]; overdueReports: number } {
+  const recentSince = now - QUIET_AFTER_DAYS * DAY_MS;
+  const active = new Set<string>();
+  let overdueReports = 0;
+  for (const event of events) {
+    const end = eventEndsAt(event);
+    if (!Number.isFinite(end)) continue;
+    if (end >= recentSince) active.add(event.nodeId);
+    if (
+      end >= recentSince &&
+      end + REPORT_OVERDUE_DAYS * DAY_MS < now &&
+      eventReportStatus(event, event.reportSubmittedAt, now).state === "missing"
+    ) {
+      overdueReports += 1;
+    }
+  }
+  return {
+    quiet: communities
+      .filter(({ node }) => !active.has(node.id))
+      .map(({ node }) => ({ nodeId: node.id, name: node.name })),
+    overdueReports,
+  };
+}
 export const APPLICATION_ITEMS_LIMIT = 5;
 
 export function deriveNeedsAction({
@@ -144,12 +192,16 @@ export function deriveNeedsAction({
   relayerNeedsFunding,
   organizationRequestCount,
   communities,
+  quietCommunities = [],
+  overdueReports = 0,
 }: {
   pendingReviewCount: number;
   proposals: readonly NeedsActionProposal[];
   relayerNeedsFunding: boolean;
   organizationRequestCount: number;
   communities: readonly { node: { id: string; name: string }; staking: StakingState }[];
+  quietCommunities?: readonly { nodeId: string; name: string }[];
+  overdueReports?: number;
 }): NeedsActionItem[] {
   const items: NeedsActionItem[] = [];
   for (const proposal of proposals) {
@@ -176,5 +228,33 @@ export function deriveNeedsAction({
       items.push({ kind: "staking", nodeId: node.id, name: node.name });
     }
   }
+  if (overdueReports > 0) items.push({ kind: "reportsOverdue", count: overdueReports });
+  if (quietCommunities.length > QUIET_ITEMS_LIMIT) {
+    items.push({ kind: "quietMany", count: quietCommunities.length });
+  } else {
+    for (const { nodeId, name } of quietCommunities) items.push({ kind: "quiet", nodeId, name });
+  }
   return items;
+}
+
+export function attendanceCoverage(
+  communities: readonly { tenant: { orgId: string | null } }[],
+  synced: readonly {
+    organizationId: string;
+    checkIns: { syncedAt: string | null; partial: boolean } | null;
+  }[],
+): { total: number; synced: number; partial: number } {
+  const byOrganization = new Map(synced.map((row) => [row.organizationId, row.checkIns]));
+  let syncedCount = 0;
+  let partial = 0;
+  const organizationIds = new Set(
+    communities.flatMap(({ tenant }) => (tenant.orgId ? [tenant.orgId] : [])),
+  );
+  for (const organizationId of organizationIds) {
+    const checkIns = byOrganization.get(organizationId);
+    if (!checkIns?.syncedAt) continue;
+    syncedCount += 1;
+    if (checkIns.partial) partial += 1;
+  }
+  return { total: organizationIds.size, synced: syncedCount, partial };
 }

@@ -36,6 +36,60 @@ export type DiscoveryProfile = z.infer<typeof profileSchema>;
 export type StoredDiscoveryProfile = DiscoveryProfile & {
   boundary?: z.infer<typeof boundarySchema> | null;
 };
+export const EVENT_REPORT_AUDIENCES = [
+  "general",
+  "developers",
+  "academic",
+  "smb",
+  "other",
+] as const;
+
+const reportText = z.string().trim().max(4000);
+const requiredReportText = reportText.min(1);
+const reportLinks = z.array(webUrl).max(20);
+
+export const eventReportSchema = z
+  .object({
+    format: z.enum(["irl", "online"]),
+    socialLinks: reportLinks.min(1),
+    focus: z.enum(["ai", "crypto"]),
+    audiences: z.array(z.enum(EVENT_REPORT_AUDIENCES)).min(1),
+    audienceOther: z.string().trim().max(200),
+    theme: requiredReportText,
+    attendees: z.number().int().nonnegative().max(100_000),
+    slideLinks: reportLinks,
+    kpis: z.tuple([requiredReportText.max(300), requiredReportText.max(300), reportText.max(300)]),
+    wentWell: requiredReportText,
+    improvements: requiredReportText,
+    talentAfter: requiredReportText,
+    talentDuring: requiredReportText,
+    materialsNeeded: reportText,
+    hadPartners: z.boolean(),
+    partners: reportText,
+    nextActions: requiredReportText,
+    insights: reportText,
+    mediaLinks: reportLinks,
+  })
+  .refine((report) => !report.audiences.includes("other") || report.audienceOther.length > 0, {
+    message: "Describe the other audience",
+    path: ["audienceOther"],
+  })
+  .refine((report) => !report.hadPartners || report.partners.length > 0, {
+    message: "Name the partners",
+    path: ["partners"],
+  });
+export type EventReport = z.infer<typeof eventReportSchema>;
+
+export const EVENT_REPORT_FORM_VERSION = 1;
+
+export const storedEventReportSchema = z.object({
+  activityId: z.uuid(),
+  formVersion: z.number().int().positive(),
+  report: eventReportSchema,
+  submittedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
 export const activitySchema = z.object({
   id: z.uuid(),
   ownerNodeId: z.uuid(),
@@ -245,6 +299,18 @@ export const discoveryContract = {
       }),
     )
     .output(z.object({ success: z.boolean() }))
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+  getEventReport: oc
+    .input(z.object({ activityId: z.uuid() }))
+    .output(storedEventReportSchema.nullable())
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+  saveEventReport: oc
+    .input(z.object({ activityId: z.uuid(), report: eventReportSchema }))
+    .output(storedEventReportSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  listEventReportStatuses: oc
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(z.array(z.object({ activityId: z.uuid(), submittedAt: z.iso.datetime() })))
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getDiscoveryHistory: oc
     .input(z.object({ nodeId: z.uuid() }))

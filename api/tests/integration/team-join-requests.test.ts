@@ -403,4 +403,31 @@ describe("closing requests that can no longer be approved", () => {
       (await as("member")).requestToJoinTeam({ organizationId, teamId: communityTeam }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
+
+  it("shows platform admins each community's team requests without membership", async () => {
+    const { organizationId, ops, communityTeam } = community();
+    await (await as("member")).requestToJoinTeam({ organizationId, teamId: ops });
+    const decided = await (await as("other")).requestToJoinTeam({
+      organizationId,
+      teamId: communityTeam,
+    });
+    await (await as("owner")).decideTeamJoinRequest({
+      requestId: decided.id,
+      decision: "approve",
+    });
+
+    const admin = await as("platform-admin", "admin");
+    const result = await admin.getCommunityTeamRequests({ organizationId });
+    expect(result.teams).toEqual([
+      expect.objectContaining({ teamName: "Community", teamAreas: ["events"], approved: 1 }),
+      expect.objectContaining({ teamName: "Operations", pending: 1, approved: 0 }),
+    ]);
+    expect(result.pending).toEqual([
+      expect.objectContaining({ teamName: "Operations", requesterName: "New Member" }),
+    ]);
+
+    await expect(
+      (await as("outsider")).getCommunityTeamRequests({ organizationId }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });

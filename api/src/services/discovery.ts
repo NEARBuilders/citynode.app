@@ -12,6 +12,7 @@ import {
   discoveryMeasurements,
   discoveryProfiles,
   discoveryReports,
+  eventReports,
   nodes,
   tenants,
 } from "../db/schema";
@@ -19,8 +20,10 @@ import type {
   DiscoveryActivity,
   DiscoveryMeasurement,
   DiscoveryProfile,
+  EventReport,
   StoredDiscoveryProfile,
 } from "../discovery-contract";
+import { EVENT_REPORT_FORM_VERSION } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
@@ -32,11 +35,31 @@ import {
   shouldGeocodeProfile,
 } from "./discovery-geocode";
 import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
-import { nodeKindOf } from "./nodes";
+import { listedNode, nodeKindOf } from "./nodes";
 
 const EVENTS_AREA: FeatureArea = "events";
 
 export type DiscoveryEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
+
+function storedReport(row: typeof eventReports.$inferSelect) {
+  return {
+    activityId: row.activityId,
+    formVersion: row.formVersion,
+    report: row.report,
+    submittedAt: row.submittedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function shownActivity(now: string) {
+  const data = discoveryActivities.data;
+  return and(
+    sql`${data}->>'status' = 'published'`,
+    sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
+    sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
+    sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
+  );
+}
 
 function canonicalActivityUrl(value: string) {
   const url = new URL(value);
@@ -127,6 +150,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           .where(
             and(
               eq(tenants.status, "active"),
+              listedNode,
               sql`${discoveryProfiles.data}->>'published' = 'true'`,
               ids ? inArray(nodes.id, ids) : undefined,
             ),
@@ -298,7 +322,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           .from(nodes)
           .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
           .leftJoin(discoveryProfiles, eq(discoveryProfiles.nodeId, nodes.id))
-          .where(and(eq(tenants.status, "active"), isNull(discoveryProfiles.nodeId))),
+          .where(and(eq(tenants.status, "active"), listedNode, isNull(discoveryProfiles.nodeId))),
       );
       const search = input.query?.toLowerCase();
       const basic = rows
@@ -793,16 +817,114 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               >`to_char(max(greatest((${data}->>'publishedAt')::timestamptz, case when ${startsAt} <= ${now}::timestamptz then ${startsAt} end)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
             })
             .from(discoveryActivities)
-            .where(
-              and(
-                sql`${data}->>'status' = 'published'`,
-                sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
-                sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
-                sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
-              ),
-            )
+            .where(shownActivity(now))
             .groupBy(discoveryActivities.ownerNodeId),
         );
+      }),
+    adminEvents: (context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* requireAdmin(context);
+        const now = new Date(yield* Clock.currentTimeMillis).toISOString();
+        const data = discoveryActivities.data;
+        const rows = yield* query(() =>
+          db
+            .select({
+              id: discoveryActivities.id,
+              data,
+              nodeId: nodes.id,
+              nodeName: nodes.name,
+              organizationId: tenants.orgId,
+              reportSubmittedAt: eventReports.submittedAt,
+            })
+            .from(discoveryActivities)
+            .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
+            .leftJoin(tenants, eq(tenants.id, nodes.tenantId))
+            .leftJoin(eventReports, eq(eventReports.activityId, discoveryActivities.id))
+            .where(and(shownActivity(now), sql`${data}->>'kind' = 'event'`))
+            .orderBy(desc(sql`(${data}->>'startsAt')::timestamptz`)),
+        );
+        return rows.map((row) => ({
+          id: row.id,
+          title: row.data.title,
+          url: row.data.url,
+          startsAt: row.data.startsAt ?? null,
+          endsAt: row.data.endsAt ?? null,
+          nodeId: row.nodeId,
+          nodeName: row.nodeName,
+          organizationId: row.organizationId ?? null,
+          reportSubmittedAt: row.reportSubmittedAt?.toISOString() ?? null,
+        }));
+      }),
+    eventReport: (activityId: string, context: AuthContext) =>
+      Effect.gen(function* () {
+        const activity = yield* activityById(activityId);
+        if (!activity || activity.kind !== "event") {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+        }
+        yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
+        const [row] = yield* query(() =>
+          db.select().from(eventReports).where(eq(eventReports.activityId, activityId)),
+        );
+        return row ? storedReport(row) : null;
+      }),
+    saveEventReport: (input: { activityId: string; report: EventReport }, context: AuthContext) =>
+      Effect.gen(function* () {
+        const activity = yield* activityById(input.activityId);
+        if (!activity || activity.kind !== "event") {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+        }
+        yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
+        const now = yield* Clock.currentTimeMillis;
+        const end = activity.endsAt ?? activity.startsAt;
+        if (activity.status === "cancelled" || !end || Date.parse(end) > now) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "Reports can only be submitted for events that have ended",
+            }),
+          );
+        }
+        const userId = context.userId!;
+        const at = new Date(now);
+        const [row] = yield* query(() =>
+          db
+            .insert(eventReports)
+            .values({
+              activityId: input.activityId,
+              nodeId: activity.ownerNodeId,
+              formVersion: EVENT_REPORT_FORM_VERSION,
+              report: input.report,
+              submittedBy: userId,
+              submittedAt: at,
+              updatedBy: userId,
+              updatedAt: at,
+            })
+            .onConflictDoUpdate({
+              target: eventReports.activityId,
+              set: {
+                formVersion: EVENT_REPORT_FORM_VERSION,
+                report: input.report,
+                updatedBy: userId,
+                updatedAt: at,
+              },
+            })
+            .returning(),
+        );
+        if (!row) return yield* Effect.fail(new ORPCError("INTERNAL_SERVER_ERROR"));
+        return storedReport(row);
+      }),
+    eventReportStatuses: (nodeId: string, context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* authorize(nodeId, context, EVENTS_AREA);
+        const rows = yield* query(() =>
+          db
+            .select({ activityId: eventReports.activityId, submittedAt: eventReports.submittedAt })
+            .from(eventReports)
+            .where(eq(eventReports.nodeId, nodeId)),
+        );
+        return rows.map((row) => ({
+          activityId: row.activityId,
+          submittedAt: row.submittedAt.toISOString(),
+        }));
       }),
     studio: (context: AuthContext) =>
       Effect.gen(function* () {

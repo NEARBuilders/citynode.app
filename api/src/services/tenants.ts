@@ -15,7 +15,7 @@ import {
   validators as validatorsTable,
 } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
-import { nodeKindOf } from "./nodes";
+import { listedNode, nodeKindOf } from "./nodes";
 
 export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
 
@@ -311,7 +311,7 @@ export const TenantsLive = Layer.effect(
                 ),
               )
               .leftJoin(nodesTable, eq(nodesTable.tenantId, tenantsTable.id))
-              .where(and(...conditions)),
+              .where(and(...conditions, listedNode)),
           );
 
           const seen = new Set<string>();

@@ -86,12 +86,6 @@ export const deploymentMessages = createMessageCatalogs(["en", "es", "fr", "zh"]
     "@{slug} · Demandée <date/>",
     "@{slug} · 申请时间 <date/>",
   ],
-  "orgApproval.requester": [
-    "Requester: {account}",
-    "Solicitante: {account}",
-    "Demandeur : {account}",
-    "申请人：{account}",
-  ],
   "orgApproval.reason": ["Rejection reason", "Motivo del rechazo", "Motif du rejet", "拒绝原因"],
   "orgApproval.reasonHint": [
     "Explain why this request cannot be approved",

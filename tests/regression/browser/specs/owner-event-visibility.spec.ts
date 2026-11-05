@@ -164,8 +164,8 @@ test.describe("owner event visibility", () => {
       timeout: 15000,
     });
     const report = page.getByTestId(`activity-editor.submit-report-${events.ended.id}`);
-    await expect(report).toHaveAttribute("href", /^https:\/\/docs\.google\.com\/forms\//);
-    await expect(report).toHaveAttribute("target", "_blank");
+    await expect(report).toHaveAttribute("href", new RegExp(`/events/${events.ended.id}/report$`));
+    await expect(page.getByTestId(`report-status-${events.ended.id}`)).toBeVisible();
     await expect(badge(events.endedImport.id)).toHaveAttribute("data-state", "hiddenImport");
     await expect(
       page.getByTestId(`activity-editor.submit-report-${events.endedImport.id}`),

@@ -28,26 +28,6 @@ vi.mock("@tanstack/react-router", () => ({
 
 afterEach(cleanup);
 
-describe("Home next steps for platform admins", () => {
-  it("launches a community through the application, then the proposals queue", () => {
-    const steps = getNextSteps({
-      isAnonymous: false,
-      hasPasskey: true,
-      hasNear: true,
-      membership: "none",
-      communityCount: 0,
-      community: null,
-      canManageCommunity: false,
-      canOrganizeEvents: false,
-      isAdmin: true,
-    });
-    render(<NextStepsList steps={steps} primary={false} />);
-
-    expect(screen.getByTestId("home-step-launch-node").getAttribute("href")).toBe("/apply");
-    expect(screen.getByTestId("home-step-admin").getAttribute("href")).toBe("/admin/proposals");
-  });
-});
-
 describe("Home next steps for team members", () => {
   const teams = [
     { id: "team-events", name: "Events", areas: ["events"] },

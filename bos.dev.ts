@@ -9,4 +9,10 @@ import type { AppDescriptor } from "everything-dev/descriptor";
  * Auth is the published @everything-dev/auth-plugin (server + UI) inherited
  * from the extends chain; no citynode-specific dev override is needed.
  */
-export default {} satisfies Partial<AppDescriptor>;
+export default {
+  api: {
+    variables: {
+      platformStationsAccount: "stations.citynode.testnet",
+    },
+  },
+} satisfies Partial<AppDescriptor>;

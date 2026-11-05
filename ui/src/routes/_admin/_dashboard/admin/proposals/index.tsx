@@ -2,9 +2,10 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
-import { PageHeader } from "@/components";
+import { PageHeader, SectionHeader } from "@/components";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { OrganizationRequests } from "../-organization-requests";
 import { createProposalColumns } from "./-proposal-columns";
 import { normalizeProposalReviewFilter, ProposalReviewFilters } from "./-proposal-filters";
 import { ProposalListState } from "./-proposal-list-state";
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/proposals/")({
       {
         title: pageTitle(
           translateAppMessage(
-            "meta.proposalsAdmin",
+            "meta.applicationsAdmin",
             undefined,
             resolveAppLocale(undefined, match.context.locale),
           ),
@@ -61,12 +62,18 @@ function AdminProposals() {
   return (
     <>
       <PageHeader
-        title={translate("common.proposals")}
-        description={translate("admin.proposal.description")}
+        title={translate("admin.applications.title")}
+        description={translate("admin.applications.description")}
         headerTestId="admin-proposals.heading"
       />
 
+      <OrganizationRequests />
+
       <section className="flex flex-col gap-6">
+        <SectionHeader
+          title={translate("admin.applications.communities")}
+          sectionTestId="admin-proposals.communities"
+        />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <ProposalReviewFilters
             value={activeFilter}

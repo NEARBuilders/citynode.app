@@ -55,7 +55,7 @@ async function waitForDatabases(dbUrls) {
     if (attempt === PROBE_RETRIES) {
       throw new Error(
         `test databases not reachable: ${missing.join(", ")}. ` +
-          "Start them with `pnpm run test:db:up` (docker compose postgres-*-test services).",
+          "Set each *_DATABASE_URL to a reachable postgres:// URL (or leave .env.test on the in-memory pglite default).",
       );
     }
     log(`waiting for test databases (${missing.join(", ")})...`);

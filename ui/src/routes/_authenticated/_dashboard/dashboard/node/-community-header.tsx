@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { useAppTranslation } from "@/i18n/runtime";
 import { sortCommunityNodes } from "@/lib/community-node";
+import { isPlatformNode } from "@/lib/node-kind";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import {
@@ -101,7 +102,8 @@ export function CommunityHeader({
   const workspace = useQuery(teamWorkspaceQueryOptions(api));
   const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
 
-  const siteUrl = node && gateway ? buildTenantUrl(node.slug, gateway) : null;
+  const siteUrl =
+    node && gateway && !isPlatformNode(node) ? buildTenantUrl(node.slug, gateway) : null;
 
   const switchTo = (targetId: string) => {
     if (active === "settings" && node?.tenantId) {

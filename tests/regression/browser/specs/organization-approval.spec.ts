@@ -106,17 +106,20 @@ for (const decision of ["approve", "reject"] as const) {
         const adminPage = await adminContext.newPage();
         await injectAdminCookies(adminPage);
         await adminPage.goto("/admin", { waitUntil: "domcontentloaded" });
-        await adminPage.getByTestId("admin.heading.organizations").click();
+        await adminPage.getByTestId("admin.heading.proposals").click();
         await expect(adminPage.getByTestId("admin-organizations.heading")).toBeVisible();
         const request = adminPage.getByTestId(`admin-org-request-${slug}`);
         await expect(request).toBeVisible();
         if (decision === "reject") {
-          await expect(request.getByTestId("admin-org-reject")).toBeDisabled();
+          await request.getByTestId("admin-org-reject").click();
+          await expect(request.getByTestId("admin-org-reject-confirm")).toBeDisabled();
           await request
             .getByTestId("admin-org-rejection-reason")
             .fill("Please explain the organization's purpose.");
+          await request.getByTestId("admin-org-reject-confirm").click();
+        } else {
+          await request.getByTestId("admin-org-approve").click();
         }
-        await request.getByTestId(`admin-org-${decision}`).click();
         await expect(request).toHaveCount(0);
       } finally {
         await adminContext.close();

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   APPLICATION_ITEMS_LIMIT,
+  attendanceCoverage,
   buildCommunityProgressRows,
   deriveNeedsAction,
+  eventHealth,
   type NeedsActionProposal,
   STAKING_ITEMS_LIMIT,
   stakingStates,
@@ -193,5 +195,102 @@ describe("deriveNeedsAction", () => {
         communities,
       }),
     ).toEqual([{ kind: "stakingMany", count: STAKING_ITEMS_LIMIT + 1 }]);
+  });
+});
+
+describe("eventHealth", () => {
+  const DAY = 24 * 3_600_000;
+  const now = Date.parse("2026-11-05T12:00:00.000Z");
+  const at = (days: number) => new Date(now + days * DAY).toISOString();
+  const communities = [
+    { node: { id: "lisbon", name: "Lisbon" } },
+    { node: { id: "nairobi", name: "Nairobi" } },
+    { node: { id: "medellin", name: "Medellín" } },
+  ];
+
+  it("finds communities with nothing upcoming and nothing in the last 30 days", () => {
+    const { quiet } = eventHealth({
+      communities,
+      now,
+      events: [
+        { nodeId: "lisbon", startsAt: at(5), endsAt: at(5), reportSubmittedAt: null },
+        { nodeId: "nairobi", startsAt: at(-10), endsAt: at(-10), reportSubmittedAt: at(-9) },
+        { nodeId: "medellin", startsAt: at(-45), endsAt: at(-45), reportSubmittedAt: null },
+      ],
+    });
+    expect(quiet).toEqual([{ nodeId: "medellin", name: "Medellín" }]);
+  });
+
+  it("counts reports missing more than a week after events from the last 30 days", () => {
+    const { overdueReports } = eventHealth({
+      communities,
+      now,
+      events: [
+        { nodeId: "lisbon", startsAt: at(-3), endsAt: at(-3), reportSubmittedAt: null },
+        { nodeId: "lisbon", startsAt: at(-10), endsAt: at(-10), reportSubmittedAt: null },
+        { nodeId: "nairobi", startsAt: at(-20), endsAt: at(-20), reportSubmittedAt: at(-1) },
+        { nodeId: "medellin", startsAt: at(-45), endsAt: at(-45), reportSubmittedAt: null },
+      ],
+    });
+    expect(overdueReports).toBe(1);
+  });
+});
+
+describe("community health in Needs action", () => {
+  const base = {
+    pendingReviewCount: 0,
+    proposals: [],
+    relayerNeedsFunding: false,
+    organizationRequestCount: 0,
+    communities: [],
+  };
+
+  it("lists one quiet community by name and folds several into one item", () => {
+    expect(deriveNeedsAction({ ...base, quietCommunities: [{ nodeId: "a", name: "A" }] })).toEqual([
+      { kind: "quiet", nodeId: "a", name: "A" },
+    ]);
+    expect(
+      deriveNeedsAction({
+        ...base,
+        quietCommunities: [
+          { nodeId: "a", name: "A" },
+          { nodeId: "b", name: "B" },
+        ],
+      }),
+    ).toEqual([{ kind: "quietMany", count: 2 }]);
+  });
+
+  it("adds one item for overdue reports", () => {
+    expect(deriveNeedsAction({ ...base, overdueReports: 3 })).toEqual([
+      { kind: "reportsOverdue", count: 3 },
+    ]);
+  });
+});
+
+describe("attendanceCoverage", () => {
+  it("counts the communities whose check-ins are synced, and those synced only partly", () => {
+    const communities = [
+      { tenant: { orgId: "org-a" } },
+      { tenant: { orgId: "org-b" } },
+      { tenant: { orgId: "org-c" } },
+      { tenant: { orgId: null } },
+    ];
+    expect(
+      attendanceCoverage(communities, [
+        {
+          organizationId: "org-a",
+          checkIns: { syncedAt: "2026-11-01T00:00:00.000Z", partial: false },
+        },
+        {
+          organizationId: "org-b",
+          checkIns: { syncedAt: "2026-11-01T00:00:00.000Z", partial: true },
+        },
+        { organizationId: "org-c", checkIns: { syncedAt: null, partial: false } },
+        {
+          organizationId: "org-gone",
+          checkIns: { syncedAt: "2026-11-01T00:00:00.000Z", partial: false },
+        },
+      ]),
+    ).toEqual({ total: 3, synced: 2, partial: 1 });
   });
 });

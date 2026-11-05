@@ -17,6 +17,7 @@ export default {
     variables: {
       domain: "citynode.app",
       gatewayDomains: "citynode.app,testnet.citynode.app",
+      platformStationsAccount: "stations.citynode.testnet",
     },
     // child-owned-end
     secrets: {

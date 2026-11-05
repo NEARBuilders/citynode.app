@@ -49,8 +49,8 @@ export function crumbsFor(
       create: "nav.newCommunity",
     },
     proposals: {
-      label: t("common.proposals"),
-      detail: t("nav.proposal"),
+      label: t("admin.applications.title"),
+      detail: t("admin.applications.detail"),
       edit: "nav.editProposal",
       create: "nav.newProposal",
     },
@@ -130,6 +130,8 @@ export function crumbsFor(
     }
     case "admin": {
       if (second === "organizations") return [ADMIN, page(ORGS.label)];
+      if (second === "stations") return [ADMIN, page(t("org.stations"))];
+      if (second === "events") return [ADMIN, page(t("events.title"))];
       const section = second ? ADMIN_SECTIONS[second] : undefined;
       if (!section) return [page(ADMIN.label)];
       if (!third) return [ADMIN, page(section.label)];

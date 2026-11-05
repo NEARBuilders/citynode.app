@@ -8,6 +8,7 @@ import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { EventsEditor } from "@/components/discovery/events-editor";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
+import { isPlatformNode } from "@/lib/node-kind";
 import { isOnboardingOrganizer } from "@/lib/onboarding-codes";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
@@ -76,7 +77,8 @@ function CommunityContent() {
   const { tab = "events", review } = Route.useSearch();
   const { auth } = Route.useRouteContext();
   const api = useApiClient();
-  const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
+  const node = useQuery(nodeByIdQueryOptions(api, nodeId)).data;
+  const tenantId = node?.tenantId;
   const tenant = useQuery(tenantByIdQueryOptions(api, tenantId ?? ""));
   const authContext = useQuery(
     communityAuthContextQueryOptions(api, auth.activeOrganizationId ?? null),
@@ -105,6 +107,7 @@ function CommunityContent() {
       ) : (
         <EventsEditor
           nodeId={nodeId}
+          showMapStatus={!isPlatformNode(node)}
           reviewImports={review === "imports"}
           tenantStatus={tenant.data?.status}
           canManage={canManage}

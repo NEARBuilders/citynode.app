@@ -314,3 +314,20 @@ export const teamJoinEndorsements = pgTable(
     oncePerEndorser: uniqueIndex("team_join_endorsements_once").on(t.requestId, t.endorserUserId),
   }),
 );
+
+export const eventReports = pgTable("event_reports", {
+  activityId: uuid("activity_id")
+    .primaryKey()
+    .references(() => discoveryActivities.id, { onDelete: "cascade" }),
+  nodeId: uuid("node_id")
+    .notNull()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  formVersion: integer("form_version").default(1).notNull(),
+  report: jsonb("report").$type<import("../discovery-contract").EventReport>().notNull(),
+  submittedBy: text("submitted_by").notNull(),
+  submittedAt: timestamp("submitted_at", { mode: "date", withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+});

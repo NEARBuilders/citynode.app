@@ -84,24 +84,14 @@ describe("home next steps", () => {
     expect(steps[0]?.title).toBe("Open My community");
   });
 
-  it("keeps the current steps for platform admins in a community", () => {
+  it("keeps platform admins' community steps, leaving platform work to the summary", () => {
     const steps = getNextSteps({ ...base, community: harbor, isAdmin: true });
-    expect(steps.map((step) => step.id)).toEqual([
-      "launch-node",
-      "admin",
-      "open-community",
-      "stake",
-    ]);
-    expect(steps[2]?.title).toBe("Open My community");
+    expect(steps.map((step) => step.id)).toEqual(["open-community", "stake"]);
+    expect(steps[0]?.title).toBe("Open My community");
   });
 
-  it("leads admins with launching a node and the review queue", () => {
-    expect(ids({ membership: "none", isAdmin: true })).toEqual([
-      "launch-node",
-      "admin",
-      "stake",
-      "explore",
-    ]);
+  it("doesn't offer platform admins Start a community", () => {
+    expect(ids({ membership: "none", isAdmin: true })).toEqual(["stake", "explore"]);
   });
 });
 

@@ -110,6 +110,9 @@ vi.mock("@/app", () => ({
 }));
 
 vi.mock("@/lib/use-near-account", () => ({ useNearAccount: () => null }));
+vi.mock("@/lib/use-relayer", () => ({
+  useRelayerInfoQuery: () => ({ data: null, isLoading: false, isError: false }),
+}));
 
 const clients: QueryClient[] = [];
 
@@ -308,16 +311,18 @@ describe("Home without a community", () => {
     const open = await screen.findByTestId("home-step-open-community");
     expect(open.textContent).toContain("Open Harbor");
     expect(stepIds()).toEqual(["open-community", "stake"]);
+    expect(screen.queryByTestId("home-platform-summary")).toBeNull();
   });
 
-  it("keeps a platform admin's steps without a Start a community step", async () => {
+  it("opens a platform admin's Home with the platform summary, not a launch step", async () => {
     harness.user = { ...member, role: "admin" };
     harness.activeOrganizationId = personal.id;
     harness.organizations = [personal];
     renderHome();
 
-    expect(await screen.findByTestId("home-step-launch-node")).toBeTruthy();
-    expect(stepIds()).toEqual(["launch-node", "admin", "stake", "explore"]);
+    expect(await screen.findByTestId("home-platform-summary")).toBeTruthy();
+    expect(await screen.findByTestId("home-step-stake")).toBeTruthy();
+    expect(stepIds()).toEqual(["stake", "explore"]);
   });
 
   it("offers a retry instead of a false Start a community when organizations fail", async () => {

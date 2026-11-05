@@ -94,11 +94,23 @@ export const metadataMessages = createMessageCatalogs(["en", "es", "fr", "zh"], 
     "Proposition · Administration",
     "提案 · 管理",
   ],
-  "meta.proposalsAdmin": [
-    "Proposals · Admin",
-    "Propuestas · Administración",
-    "Propositions · Administration",
-    "提案列表 · 管理",
+  "meta.applicationsAdmin": [
+    "Applications · Admin",
+    "Solicitudes · Administración",
+    "Demandes · Administration",
+    "申请 · 管理",
+  ],
+  "meta.eventsAdmin": [
+    "Events · Admin",
+    "Eventos · Administración",
+    "Événements · Administration",
+    "活动 · 管理",
+  ],
+  "meta.stationsAdmin": [
+    "Stations · Admin",
+    "Puntos de incorporación · Administración",
+    "Points d'inscription · Administration",
+    "加入站点 · 管理",
   ],
   "meta.relayerAdmin": [
     "Relayer · Admin",

@@ -1,6 +1,7 @@
 import {
   BankIcon,
   BuildingsIcon,
+  CalendarDotsIcon,
   ChartBarIcon,
   CoinsIcon,
   CompassIcon,
@@ -10,6 +11,7 @@ import {
   ListChecksIcon,
   NetworkIcon,
   PlusCircleIcon,
+  QrCodeIcon,
   RocketLaunchIcon,
   ScrollIcon,
   ShieldIcon,
@@ -76,10 +78,24 @@ export function createAdminChildren(t: AppTranslator): SidebarItem[] {
       roleRequired: "admin",
     },
     {
+      icon: CalendarDotsIcon,
+      label: t("events.title"),
+      slug: "admin-events",
+      to: "/admin/events",
+      roleRequired: "admin",
+    },
+    {
       icon: ScrollIcon,
-      label: t("common.proposals"),
+      label: t("admin.applications.title"),
       slug: "admin-proposals",
       to: "/admin/proposals",
+      roleRequired: "admin",
+    },
+    {
+      icon: QrCodeIcon,
+      label: t("org.stations"),
+      slug: "admin-stations",
+      to: "/admin/stations",
       roleRequired: "admin",
     },
     {

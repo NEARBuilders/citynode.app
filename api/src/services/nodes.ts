@@ -49,6 +49,7 @@ export interface NodeListFilter {
   kind?: NodeKind;
   parentId?: string | null;
   tenantId?: string;
+  includePlatform?: boolean;
 }
 
 export interface NodeListSummaryRecord {
@@ -97,6 +98,10 @@ export function nodeKindOf(metadata: unknown): string | null {
   const kind = (metadata as NodeMetadata | null | undefined)?.kind;
   return typeof kind === "string" ? kind : null;
 }
+
+export const PLATFORM_NODE_KIND = "platform";
+
+export const listedNode: SQL = sql`coalesce(${nodesTable.metadata}->>'kind', '') <> ${PLATFORM_NODE_KIND}`;
 
 function toNodeRecord(row: NodeRow): NodeRecord {
   const metadata = (row.metadata ?? {}) as NodeMetadata;
@@ -236,13 +241,14 @@ export const NodesLive = Layer.effect(
               conditions.push(eq(nodesTable.parentId, filter.parentId));
             }
           }
+          if (!filter?.includePlatform) {
+            conditions.push(listedNode);
+          }
           const rows = yield* query(() =>
-            conditions.length === 0
-              ? db.select().from(nodesTable)
-              : db
-                  .select()
-                  .from(nodesTable)
-                  .where(and(...conditions)),
+            db
+              .select()
+              .from(nodesTable)
+              .where(and(...conditions)),
           );
           return rows.map(toNodeRecord);
         }),
@@ -417,7 +423,10 @@ export const NodesLive = Layer.effect(
         }),
 
       listRootNodes: query(() =>
-        db.select().from(nodesTable).where(isNull(nodesTable.parentId)),
+        db
+          .select()
+          .from(nodesTable)
+          .where(and(isNull(nodesTable.parentId), listedNode)),
       ).pipe(Effect.map((rows) => rows.map(toNodeRecord))),
 
       listChildren: (parentId) =>
