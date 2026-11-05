@@ -299,7 +299,6 @@ export function canAccountPropose(
   return accountInRoles(proposerRoles(policy), accountId, delegationBalance);
 }
 
-/** Whether `accountId` may take `action` (`VoteApprove`, `VoteReject`, …) on proposals of `kind`. */
 export function canAccountAct(
   policy: unknown,
   accountId: string | null,
@@ -423,7 +422,6 @@ export type DaoPlan =
     }
   | { kind: "transfer"; receiverId: string; amountYocto: string };
 
-/** What a member files: a poll, or a request to join a role (decision A, #408). */
 export type MemberProposalPlan =
   | { kind: "vote" }
   | { kind: "add_member_to_role"; memberId: string; role: string };
@@ -505,19 +503,7 @@ async function connectedAccount(wallet: SessionWallet): Promise<string> {
   return accountId;
 }
 
-const MEMBER_PROPOSAL_GAS = "100 Tgas";
-
-/**
- * What NEAR holds back from the signer for `add_proposal`'s prepaid gas at the
- * minimum gas price, on top of the bond: 100 Tgas × 100 Mgas-yocto = 0.01 NEAR.
- */
-export const MEMBER_PROPOSAL_GAS_RESERVE_YOCTO = 10n ** 22n;
-
-/**
- * Files a proposal with exactly `bondYocto` attached, the bond read from the
- * policy the member was shown. Unlike `proposeAsSession` it never falls back to
- * a zero deposit when the bond can't be read.
- */
+// KEEP: unlike proposeAsSession, this never falls back to a zero deposit when the bond can't be read, so the member pays exactly the bond they were shown.
 export async function submitProposalWithBond(
   wallet: SessionWallet,
   daoAccountId: string,
@@ -533,17 +519,14 @@ export async function submitProposalWithBond(
       daoAccountId,
       "add_proposal",
       buildAddProposalArgs(plan, description) as unknown as Record<string, never>,
-      { gas: MEMBER_PROPOSAL_GAS, attachedDeposit: Amount.yocto(bondYocto) },
+      { gas: "100 Tgas", attachedDeposit: Amount.yocto(bondYocto) },
     )
     .send({ waitUntil: "EXECUTED" });
 }
 
 export type SputnikVoteAction = "VoteApprove" | "VoteReject" | "Finalize";
 
-/**
- * Votes on `proposal`. Sputnik's `act_proposal` takes the proposal's kind as
- * read, and refuses the vote if the stored kind differs.
- */
+// KEEP: Sputnik's act_proposal refuses the vote unless `proposal` is the kind exactly as stored.
 export async function voteOnProposal(
   wallet: SessionWallet,
   daoAccountId: string,
@@ -563,10 +546,6 @@ export async function voteOnProposal(
     .send({ waitUntil: "EXECUTED" });
 }
 
-/**
- * The NEAR an account can spend, in yoctoNEAR: its balance less what its
- * storage holds back. An account that doesn't exist on chain yet has none.
- */
 export async function readSpendableYocto(accountId: string): Promise<bigint> {
   try {
     const view = await getNear().rpc.getAccount(accountId);
