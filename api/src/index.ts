@@ -807,6 +807,21 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.discovery.activity(input.id);
       }),
+      getEventReport: builder.getEventReport.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.eventReport(input.activityId, context);
+      }),
+      saveEventReport: builder.saveEventReport.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.saveEventReport(input, context);
+      }),
+      listEventReportStatuses: builder.listEventReportStatuses.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.eventReportStatuses(input.nodeId, context);
+      }),
       createEventOnboardingCode: builder.createEventOnboardingCode.effect(function* ({
         input,
         context,
