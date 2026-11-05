@@ -16,7 +16,6 @@ export const nodeDaoQueryKeys = {
   chainTime: () => ["node-dao", "chain-time"] as const,
 };
 
-/** The DAO recorded as the community's owner, read live from City Node (public). */
 export function nodeDaoQueryOptions(apiClient: ApiClient, nodeId: string) {
   return queryOptions({
     queryKey: nodeDaoQueryKeys.dao(nodeId),
@@ -46,7 +45,6 @@ export function daoProposalQueryOptions(daoAccountId: string, id: number) {
   });
 }
 
-/** The DAO's policy; throws when it can't be read, so the UI never treats that as "no permission". */
 export function daoPolicyQueryOptions(daoAccountId: string) {
   return queryOptions({
     queryKey: nodeDaoQueryKeys.policy(daoAccountId),
@@ -56,7 +54,7 @@ export function daoPolicyQueryOptions(daoAccountId: string) {
   });
 }
 
-/** NEAR's final block time in nanoseconds, the clock Sputnik checks proposal periods against. */
+// KEEP: Sputnik checks proposal periods against block time, not the viewer's clock.
 export function chainTimeQueryOptions() {
   return queryOptions({
     queryKey: nodeDaoQueryKeys.chainTime(),

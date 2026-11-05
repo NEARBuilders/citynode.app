@@ -34,11 +34,6 @@ interface ResolvedNodeDao {
   daoAccountId: string;
 }
 
-/**
- * Resolves the community by slug and its Node DAO from City Node's public
- * tenant record, then renders `children`. Every step has its own state, and a
- * failure is retryable rather than shown as "no proposals".
- */
 export function NodeDaoGate({
   target,
   children,
@@ -318,14 +313,6 @@ export function DaoProposalDetail({
   );
 }
 
-/* ----------------------------------------------------------------- helpers */
-
-/**
- * Shows an `InProgress` proposal past the DAO's proposal period as Expired.
- * The policy and chain time are read only when `enabled` (some shown proposal
- * is stored as in progress). Until they load, or if they can't be read, the
- * stored status is shown.
- */
 function useDisplayedStatus(daoAccountId: string, enabled: boolean) {
   const policy = useQuery({ ...daoPolicyQueryOptions(daoAccountId), enabled });
   const chainTime = useQuery({ ...chainTimeQueryOptions(), enabled });
@@ -377,10 +364,6 @@ export function proposalKindSummary(proposal: SputnikProposal, translate: Transl
   return translate("daoProposals.kindOther", { kind: name ?? "—" });
 }
 
-/**
- * Proposal descriptions are plain text with Trezu's conventions: `<br>` for
- * line breaks, `* Title:` / `* Summary:` lines, and metadata after `$$$$`.
- */
 function descriptionLines(description: string): string[] {
   return (description.split("$$$$")[0] ?? "")
     .replace(/<br\s*\/?>/gi, "\n")
@@ -388,7 +371,6 @@ function descriptionLines(description: string): string[] {
     .map((line) => line.trim());
 }
 
-/** Trezu's `* Label:` line markers, which read as clutter outside Trezu. */
 const TREZU_LABEL = /^\*\s*(Title|Summary|Description|Notes):\s*/i;
 
 export function proposalText(description: string): string {
@@ -398,7 +380,6 @@ export function proposalText(description: string): string {
     .trim();
 }
 
-/** The `* Title:` line when there is one, otherwise the first line. */
 export function proposalTitle(description: string): string {
   const lines = descriptionLines(description).filter(Boolean);
   const title = lines.find((line) => /^\*\s*Title:/i.test(line));

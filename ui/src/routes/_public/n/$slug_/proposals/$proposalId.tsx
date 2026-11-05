@@ -36,7 +36,6 @@ function NodeDaoProposalPage() {
   );
 }
 
-/** A proposal ID is a non-negative integer; anything else is shown as not found. */
 function parseProposalId(value: string): number | null {
   return /^\d+$/.test(value) ? Number(value) : null;
 }

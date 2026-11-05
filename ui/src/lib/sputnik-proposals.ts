@@ -87,21 +87,12 @@ export async function readRecentDaoProposals(
 
 export interface DaoProposalPage {
   proposals: SputnikProposal[];
-  /** Pass as `before` to read the next, older page; null when this page reaches proposal 0. */
   nextBefore: number | null;
 }
 
-/** ID ranges one page may read past when every proposal in them was removed. */
 const MAX_EMPTY_RANGES = 5;
 
-/**
- * Reads one page of proposals by ID range, newest first: IDs in
- * `[before - pageSize, before)`, or the newest IDs when `before` is omitted.
- * Removed proposals leave gaps, so a page can hold fewer than `pageSize`; a
- * range with nothing left in it is skipped, up to MAX_EMPTY_RANGES, so a page
- * is only empty with a non-null `nextBefore` after a long run of removals.
- * Throws when the DAO can't be read.
- */
+// KEEP: removed proposals leave ID gaps, so a page can be short or, after a long run of removals, empty with a non-null nextBefore.
 export async function readDaoProposalPage(
   daoAccountId: string,
   { before, pageSize = 20 }: { before?: number; pageSize?: number } = {},
@@ -126,7 +117,6 @@ export async function readDaoProposalPage(
   return { proposals: [], nextBefore: end > 0 ? end : null };
 }
 
-/** Reads one proposal by ID; null when it never existed or was removed. Throws on RPC failure. */
 export async function readDaoProposal(
   daoAccountId: string,
   id: number,
@@ -538,11 +528,7 @@ export function isOpenProposal(
   return BigInt(proposal.submission_time) + BigInt(policy.proposal_period) >= chainNowNs;
 }
 
-/**
- * The status to show for a proposal. Sputnik keeps an expired proposal stored
- * as `InProgress` until someone finalizes it, so one past the policy's
- * `proposal_period` is shown as `Expired`; every other status is shown as stored.
- */
+// KEEP: Sputnik keeps an expired proposal stored as InProgress until someone finalizes it.
 export function displayedProposalStatus(
   proposal: SputnikProposal,
   policy: Pick<SputnikPolicy, "proposal_period"> | null | undefined,
