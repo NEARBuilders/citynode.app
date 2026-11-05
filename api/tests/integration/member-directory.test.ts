@@ -255,41 +255,63 @@ describe("member directory", () => {
     expect(await accountOf("failer")).toBeNull();
   });
 
-  it("returns one upstream page per request and a cursor to the next", async () => {
-    const members = Array.from({ length: 250 }, (_, index) => ({
+  it("keeps reading upstream pages until it has a name to show and returns a cursor to the rest", async () => {
+    const members = Array.from({ length: 350 }, (_, index) => ({
       userId: `bulk-${index}`,
       name: `Bulk ${index}`,
     }));
     const { orgId } = await community(members);
-    for (const userId of ["bulk-5", "bulk-240"]) {
+    for (const userId of ["bulk-205", "bulk-340"]) {
       await (await memberClient(userId)).setMemberDirectoryOptIn({ optedIn: true });
     }
     const viewer = await memberClient("bulk-0");
 
     const first = await viewer.getMemberDirectory({ organizationId: orgId });
-    expect(first.count).toBe(250);
-    expect(first.members.map((member) => member.userId)).toEqual(["bulk-5"]);
-    expect(first.nextCursor).toBe("100");
-
-    const second = await viewer.getMemberDirectory({
-      organizationId: orgId,
-      cursor: first.nextCursor ?? undefined,
-    });
-    expect(second.members).toEqual([]);
-    expect(second.nextCursor).toBe("200");
+    expect(first.count).toBe(350);
+    expect(first.members.map((member) => member.userId)).toEqual(["bulk-205"]);
+    expect(first.nextCursor).toBe("300");
 
     const last = await viewer.getMemberDirectory({
       organizationId: orgId,
       limit: 50,
-      cursor: "200",
+      cursor: first.nextCursor ?? undefined,
     });
-    expect(last.members).toEqual([{ userId: "bulk-240", name: "Bulk 240", accountId: null }]);
+    expect(last.members).toEqual([{ userId: "bulk-340", name: "Bulk 340", accountId: null }]);
     expect(last.nextCursor).toBeNull();
     expect(memberPages).toEqual([
       { limit: 100, offset: 0 },
       { limit: 100, offset: 100 },
-      { limit: 50, offset: 200 },
+      { limit: 100, offset: 200 },
+      { limit: 50, offset: 300 },
     ]);
+  });
+
+  it("stops after ten upstream pages in one request and returns a cursor", async () => {
+    const { orgId } = await community(
+      Array.from({ length: 1200 }, (_, index) => ({ userId: `cap-${index}`, name: null })),
+    );
+    await (await memberClient("cap-1150")).setMemberDirectoryOptIn({ optedIn: true });
+    const viewer = await memberClient("cap-0");
+
+    const first = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(first.members).toEqual([]);
+    expect(first.nextCursor).toBe("1000");
+    expect(memberPages).toHaveLength(10);
+
+    const next = await viewer.getMemberDirectory({ organizationId: orgId, cursor: "1000" });
+    expect(next.members.map((member) => member.userId)).toEqual(["cap-1150"]);
+    expect(next.nextCursor).toBeNull();
+  });
+
+  it("returns an empty directory without a cursor when nobody has opted in", async () => {
+    const { orgId } = await community(
+      Array.from({ length: 250 }, (_, index) => ({ userId: `none-${index}`, name: null })),
+    );
+    const viewer = await memberClient("none-0");
+    const directory = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(directory.members).toEqual([]);
+    expect(directory.nextCursor).toBeNull();
+    expect(memberPages).toHaveLength(3);
   });
 });
 

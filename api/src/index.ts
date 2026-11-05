@@ -91,6 +91,7 @@ class ApiServices extends Context.Service<
 const ONBOARDING_GRACE_MS = 48 * 3_600_000;
 
 const MEMBER_PAGE_SIZE = 100;
+const MEMBER_DIRECTORY_SCAN_PAGES = 10;
 
 const ACCOUNT_ID_REGEX =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
@@ -946,13 +947,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
         yield* requireCommunityMember(auth, input.organizationId);
-        const offset = Number(input.cursor ?? 0);
-        const { members, total } = yield* listMemberPage(auth, input.organizationId, {
-          limit: input.limit,
-          offset,
-        });
-        const current = members.filter((member) => member.organizationId === input.organizationId);
-        const scanned = offset + members.length;
         if (
           input.cursor === undefined &&
           (yield* services.memberDirectory.isOptedIn(context.userId))
@@ -962,23 +956,49 @@ export default createPlugin.withPlugins<PluginsClient>()({
             yield* readOwnPrimaryAccount(auth),
           );
         }
-        const observation = yield* services.memberDirectory.recordCount(
-          input.organizationId,
-          total,
-        );
-        const accounts = yield* services.memberDirectory.optedInAccounts(
-          current.map((member) => member.userId),
-        );
-        return {
-          ...observation,
-          members: current
+        const start = Number(input.cursor ?? 0);
+        let scanned = start;
+        let total = 0;
+        let pages = 0;
+        let shown: Array<{ userId: string; name: string | null; accountId: string | null }> = [];
+        while (true) {
+          const page = yield* listMemberPage(auth, input.organizationId, {
+            limit: input.limit,
+            offset: scanned,
+          });
+          total = page.total;
+          pages += 1;
+          scanned += page.members.length;
+          const current = page.members.filter(
+            (member) => member.organizationId === input.organizationId,
+          );
+          const accounts = yield* services.memberDirectory.optedInAccounts(
+            current.map((member) => member.userId),
+          );
+          shown = current
             .filter((member) => accounts.has(member.userId))
             .map((member) => ({
               userId: member.userId,
               name: member.user?.name?.trim() || null,
               accountId: accounts.get(member.userId) ?? null,
-            })),
-          nextCursor: members.length > 0 && scanned < total ? String(scanned) : null,
+            }));
+          if (
+            shown.length > 0 ||
+            page.members.length === 0 ||
+            scanned >= total ||
+            pages >= MEMBER_DIRECTORY_SCAN_PAGES
+          ) {
+            break;
+          }
+        }
+        const observation = yield* services.memberDirectory.recordCount(
+          input.organizationId,
+          total,
+        );
+        return {
+          ...observation,
+          members: shown,
+          nextCursor: scanned > start && scanned < total ? String(scanned) : null,
         };
       }),
 
