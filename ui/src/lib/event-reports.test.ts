@@ -92,6 +92,19 @@ describe("reportFromDraft", () => {
     });
   });
 
+  it("applies the server's limits on links and attendees", () => {
+    const tooMany = Array.from({ length: 21 }, (_, i) => `https://example.com/${i}`).join("\n");
+    expect(
+      reportFromDraft(
+        filled({ socialLinks: tooMany, slideLinks: "https:example.com", attendees: "100001" }),
+      ).errors,
+    ).toEqual({
+      socialLinks: "tooManyLinks",
+      slideLinks: "invalidLink",
+      attendees: "invalidNumber",
+    });
+  });
+
   it("round-trips a saved report back into the form", () => {
     const report = reportFromDraft(filled()).report;
     if (!report) throw new Error("expected a report");

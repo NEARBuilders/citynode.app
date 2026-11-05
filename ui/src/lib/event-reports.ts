@@ -153,7 +153,11 @@ export function draftFromReport(report: EventReport): ReportDraft {
   };
 }
 
-export type ReportFieldError = "required" | "invalidLink" | "invalidNumber";
+export type ReportFieldError = "required" | "invalidLink" | "invalidNumber" | "tooManyLinks";
+
+const REPORT_LINKS_MAX = 20;
+const REPORT_LINK_LENGTH_MAX = 2000;
+const REPORT_ATTENDEES_MAX = 100_000;
 
 function links(value: string) {
   return value
@@ -163,11 +167,9 @@ function links(value: string) {
 }
 
 function isWebLink(value: string) {
-  try {
-    return /^https?:$/.test(new URL(value).protocol);
-  } catch {
-    return false;
-  }
+  return (
+    value.length <= REPORT_LINK_LENGTH_MAX && /^https?:\/\//i.test(value) && URL.canParse(value)
+  );
 }
 
 // KEEP: mirrors eventReportSchema in api/src/discovery-contract.ts; the UI can't import the
@@ -190,6 +192,7 @@ export function reportFromDraft(
     if (question.kind === "links") {
       const values = parsedLinks[question.id];
       if (question.required && values.length === 0) errors[question.id] = "required";
+      else if (values.length > REPORT_LINKS_MAX) errors[question.id] = "tooManyLinks";
       else if (values.some((value) => !isWebLink(value))) errors[question.id] = "invalidLink";
     }
   }
@@ -201,7 +204,9 @@ export function reportFromDraft(
   }
   const attendees = Number(draft.attendees);
   if (!draft.attendees.trim()) errors.attendees = "required";
-  else if (!Number.isInteger(attendees) || attendees < 0) errors.attendees = "invalidNumber";
+  else if (!Number.isInteger(attendees) || attendees < 0 || attendees > REPORT_ATTENDEES_MAX) {
+    errors.attendees = "invalidNumber";
+  }
   if (!draft.kpis[0].trim()) errors.kpi1 = "required";
   if (!draft.kpis[1].trim()) errors.kpi2 = "required";
   if (draft.hadPartners === null) errors.hadPartners = "required";

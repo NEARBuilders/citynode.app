@@ -404,6 +404,7 @@ export const AdminEventsSchema = z.object({
       endsAt: z.string().nullable(),
       nodeId: z.string(),
       nodeName: z.string(),
+      publicPage: z.boolean(),
       organizationId: z.string().nullable(),
       reportSubmittedAt: z.iso.datetime().nullable(),
       checkIns: AttendanceSummarySchema.nullable(),

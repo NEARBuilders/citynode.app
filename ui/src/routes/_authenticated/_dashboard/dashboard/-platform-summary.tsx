@@ -19,7 +19,6 @@ import {
 import {
   NeedsActionRow,
   needsActionKey,
-  useCommunityProgress,
   usePlatformStatus,
 } from "@/routes/_admin/_dashboard/admin/-platform-status";
 
@@ -34,10 +33,9 @@ export function PlatformSummary() {
   const attendanceQuery = useQuery(platformAttendanceQueryOptions(apiClient, utcMonth(0)));
   const previousAttendanceQuery = useQuery(platformAttendanceQueryOptions(apiClient, utcMonth(-1)));
   const engagementQuery = useQuery(communityEngagementQueryOptions(apiClient));
-  const progress = useCommunityProgress();
   const coverage =
-    engagementQuery.data && !progress.isLoading
-      ? attendanceCoverage(progress.rows, engagementQuery.data.communities)
+    engagementQuery.data && !status.progress.isLoading
+      ? attendanceCoverage(status.progress.rows, engagementQuery.data.communities)
       : null;
   const visibleItems = status.items.slice(0, SUMMARY_ITEMS_LIMIT);
   const lastMonth = (count: number | undefined) =>

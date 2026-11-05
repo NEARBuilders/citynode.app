@@ -70,6 +70,7 @@ const ERROR_MESSAGES: Record<ReportFieldError, AppMessageId> = {
   required: "report.error.required",
   invalidLink: "report.error.invalidLink",
   invalidNumber: "report.error.invalidNumber",
+  tooManyLinks: "report.error.tooManyLinks",
 };
 
 function EventReportPage() {

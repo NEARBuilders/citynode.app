@@ -1254,7 +1254,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const tenantOrganizationId = tenant?.orgId ?? null;
           const tenantOrganization = tenantOrganizationId
             ? yield* callAuth(
-                () => auth.getFullOrganization({ organizationId: tenantOrganizationId }),
+                () => auth.getOrganizationForAdmin({ organizationId: tenantOrganizationId }),
                 "Could not read the platform organization",
               )
             : null;
@@ -1297,14 +1297,23 @@ export default createPlugin.withPlugins<PluginsClient>()({
           }
           const stationsTenant =
             tenant ??
-            (yield* services.tenants.createTenant({
-              name: input.name,
-              accountId: account,
-              orgId: organizationId,
-              status: "active",
-              ownerKind: "platform",
-              allowUiOverrides: false,
-            }));
+            (yield* services.tenants
+              .createTenant({
+                name: input.name,
+                accountId: account,
+                orgId: organizationId,
+                status: "active",
+                ownerKind: "platform",
+                allowUiOverrides: false,
+              })
+              .pipe(
+                Effect.tapError(() =>
+                  callAuth(
+                    () => auth.deleteOrganization({ organizationId }),
+                    "Could not remove the unused platform organization",
+                  ).pipe(Effect.ignore),
+                ),
+              ));
           yield* services.nodes.spawn({
             kind: PLATFORM_NODE_KIND,
             slug: input.slug,
