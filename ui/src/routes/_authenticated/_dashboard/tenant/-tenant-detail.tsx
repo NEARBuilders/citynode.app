@@ -29,7 +29,7 @@ import {
   CommunityHeader,
   communityAuthContextQueryOptions,
 } from "../dashboard/node/-community-header";
-import { useOrgMemberRole } from "../orgs/-organization-members";
+import { orgMembersQueryOptions } from "../orgs/-organization-members";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
 import { TenantDetails } from "./-tenant-details";
@@ -100,7 +100,7 @@ export function TenantDetailContent({
 
   const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
 
-  const { data: session } = useQuery({
+  const { data: session, isPending: sessionPending } = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
       const { data } = await auth.getSession();
@@ -109,7 +109,11 @@ export function TenantDetailContent({
     staleTime: 60 * 1000,
   });
 
-  const memberRole = useOrgMemberRole(tenant?.orgId, session?.user?.id);
+  const membersQuery = useQuery({
+    ...orgMembersQueryOptions(apiClient, tenant?.orgId ?? ""),
+    enabled: !!tenant?.orgId && !!session?.user?.id,
+  });
+  const memberRole = membersQuery.data?.find((member) => member.userId === session?.user?.id)?.role;
   const isPlatformAdmin = session?.user?.role === "admin";
   const isOwner = memberRole === "owner";
   const isAdmin = isCommunitySettingsRole(memberRole);
@@ -120,11 +124,13 @@ export function TenantDetailContent({
   });
   const sameActiveOrg = !!tenant?.orgId && tenant.orgId === activeOrganizationId;
   const waitingForTeamAccess =
-    !isAdmin &&
-    !isPlatformAdmin &&
-    !!tenant?.orgId &&
-    !!activeOrganizationId &&
-    authContext.isPending;
+    sessionPending ||
+    (!!tenant?.orgId && !!session?.user?.id && membersQuery.isPending) ||
+    (!isAdmin &&
+      !isPlatformAdmin &&
+      !!tenant?.orgId &&
+      !!activeOrganizationId &&
+      authContext.isPending);
   const canOperate =
     sameActiveOrg && canOperateNodes(authContext.data, { includePlatformAdmin: false });
   const canEditValidators = isAdmin || canOperate;
@@ -279,7 +285,8 @@ export function TenantDetailContent({
   const isPersonalOwner =
     (tenant?.ownerKind === "user" && tenant.ownerUserId === session?.user?.id) ||
     (!!tenant && !tenant.orgId && !!nearAccountId && tenant.accountId === nearAccountId);
-  if (!tenant || !gatewayId || (!isAdmin && !isPlatformAdmin && !isPersonalOwner && !canOperate)) {
+  const canManageSettings = isAdmin || isPlatformAdmin || isPersonalOwner;
+  if (!tenant || !gatewayId || (!canManageSettings && !canOperate)) {
     return <TenantUnavailable gatewayId={gatewayId} />;
   }
   return (
@@ -287,25 +294,27 @@ export function TenantDetailContent({
       {header}
       <div className="flex w-full max-w-5xl flex-col gap-10 sm:gap-12">
         {node && (isAdmin || isPlatformAdmin) && <TenantProfile nodeId={node.id} />}
-        <TenantDetails
-          tenant={tenant}
-          hostname={hostname}
-          orgSlug={orgSlug}
-          isOwner={isOwner}
-          editor={{
-            editing,
-            name,
-            isPending: updateMutation.isPending,
-            onEdit: () => {
-              setName(tenant.name);
-              setEditing(true);
-            },
-            onCancel: () => setEditing(false),
-            onSave: () => updateMutation.mutate(),
-            onNameChange: setName,
-          }}
-        />
-        {(isAdmin || isPlatformAdmin || isPersonalOwner) && (
+        {canManageSettings && (
+          <TenantDetails
+            tenant={tenant}
+            hostname={hostname}
+            orgSlug={orgSlug}
+            isOwner={isOwner}
+            editor={{
+              editing,
+              name,
+              isPending: updateMutation.isPending,
+              onEdit: () => {
+                setName(tenant.name);
+                setEditing(true);
+              },
+              onCancel: () => setEditing(false),
+              onSave: () => updateMutation.mutate(),
+              onNameChange: setName,
+            }}
+          />
+        )}
+        {canManageSettings && (
           <TenantLiveSite
             tenant={tenant}
             hostname={hostname}
@@ -339,18 +348,20 @@ export function TenantDetailContent({
           />
         )}
         <TenantNodeValidators tenantId={tenant.id} canManage={canEditValidators} />
-        <TenantDangerZone
-          tenant={tenant}
-          isOwner={isOwner}
-          isAdmin={isAdmin}
-          suspend={suspendMutation}
-          reactivate={reactivateMutation}
-          open={deleteOpen}
-          isPending={deleteMutation.isPending}
-          onOpen={() => setDeleteOpen(true)}
-          onOpenChange={setDeleteOpen}
-          onConfirm={() => deleteMutation.mutate()}
-        />
+        {canManageSettings && (
+          <TenantDangerZone
+            tenant={tenant}
+            isOwner={isOwner}
+            isAdmin={isAdmin}
+            suspend={suspendMutation}
+            reactivate={reactivateMutation}
+            open={deleteOpen}
+            isPending={deleteMutation.isPending}
+            onOpen={() => setDeleteOpen(true)}
+            onOpenChange={setDeleteOpen}
+            onConfirm={() => deleteMutation.mutate()}
+          />
+        )}
       </div>
     </PageContainer>
   );

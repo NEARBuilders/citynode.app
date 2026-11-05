@@ -561,15 +561,47 @@ describe("tenant detail mutations", () => {
       session: { activeOrganizationId: ORG_ID },
     });
 
-    expect(await screen.findByText("Original tenant")).toBeTruthy();
     const validators = await screen.findByTestId("tenant-node-validators");
     expect(validators.getAttribute("data-can-manage")).toBe("true");
+    expect(screen.queryByText("Original tenant")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByTestId("tenant-profile")).toBeNull();
     expect(screen.queryByTestId("tenant-published-config")).toBeNull();
     expect(screen.queryByTestId("tenant-live-site")).toBeNull();
     expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
+  });
+
+  it("keeps the settings skeleton up until team access finishes loading for operators", async () => {
+    const current = createHarness({ role: "member", teamAreas: ["node-operations"] });
+    let releaseContext: (value: unknown) => void = () => {};
+    const contextGate = new Promise((resolve) => {
+      releaseContext = resolve;
+    });
+    current.apiClient.auth.getContext.mockImplementation(async () => contextGate);
+
+    renderTenant(current, {
+      user: { id: USER_ID },
+      session: { activeOrganizationId: ORG_ID },
+    });
+
+    expect(screen.queryByText("Community not found")).toBeNull();
+    expect(screen.queryByTestId("tenant-node-validators")).toBeNull();
+
+    releaseContext({
+      user: { role: null },
+      organization: {
+        activeOrganizationId: ORG_ID,
+        member: { id: "m1", role: "member" },
+        teams: [{ id: "team-ops", name: "Operations", areas: ["node-operations"] }],
+        activeTeamId: "team-ops",
+      },
+    });
+
+    const validators = await screen.findByTestId("tenant-node-validators");
+    expect(validators.getAttribute("data-can-manage")).toBe("true");
+    expect(screen.queryByText("Community not found")).toBeNull();
   });
 
   it.each([
