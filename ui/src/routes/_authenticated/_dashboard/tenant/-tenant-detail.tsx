@@ -18,14 +18,17 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
-import { isCommunitySettingsRole } from "@/lib/team-workspace";
+import { canOperateNodes, isCommunitySettingsRole } from "@/lib/team-workspace";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
   resolveOrgSlug,
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
-import { CommunityHeader } from "../dashboard/node/-community-header";
+import {
+  CommunityHeader,
+  communityAuthContextQueryOptions,
+} from "../dashboard/node/-community-header";
 import { useOrgMemberRole } from "../orgs/-organization-members";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
@@ -110,6 +113,21 @@ export function TenantDetailContent({
   const isPlatformAdmin = session?.user?.role === "admin";
   const isOwner = memberRole === "owner";
   const isAdmin = isCommunitySettingsRole(memberRole);
+  const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
+  const authContext = useQuery({
+    ...communityAuthContextQueryOptions(apiClient, activeOrganizationId),
+    enabled: !!activeOrganizationId && !!tenant?.orgId,
+  });
+  const sameActiveOrg = !!tenant?.orgId && tenant.orgId === activeOrganizationId;
+  const waitingForTeamAccess =
+    !isAdmin &&
+    !isPlatformAdmin &&
+    !!tenant?.orgId &&
+    !!activeOrganizationId &&
+    authContext.isPending;
+  const canOperate =
+    sameActiveOrg && canOperateNodes(authContext.data, { includePlatformAdmin: false });
+  const canEditValidators = isAdmin || canOperate;
   const isDaoOwned = tenant?.ownerKind === "dao";
 
   const publishMode: TenantConfigPublishMode = isDaoOwned ? "dao" : "platform";
@@ -250,7 +268,7 @@ export function TenantDetailContent({
   const header = (
     <CommunityHeader headerTestId="tenant.heading" nodeId={node?.id} active="settings" />
   );
-  if (tenantLoading && gatewayId) {
+  if ((tenantLoading || waitingForTeamAccess) && gatewayId) {
     return (
       <PageContainer variant="wide">
         {header}
@@ -261,7 +279,7 @@ export function TenantDetailContent({
   const isPersonalOwner =
     (tenant?.ownerKind === "user" && tenant.ownerUserId === session?.user?.id) ||
     (!!tenant && !tenant.orgId && !!nearAccountId && tenant.accountId === nearAccountId);
-  if (!tenant || !gatewayId || (!isAdmin && !isPlatformAdmin && !isPersonalOwner)) {
+  if (!tenant || !gatewayId || (!isAdmin && !isPlatformAdmin && !isPersonalOwner && !canOperate)) {
     return <TenantUnavailable gatewayId={gatewayId} />;
   }
   return (
@@ -287,19 +305,21 @@ export function TenantDetailContent({
             onNameChange: setName,
           }}
         />
-        <TenantLiveSite
-          tenant={tenant}
-          hostname={hostname}
-          gatewayId={gatewayId}
-          republish={republishMutation}
-        >
-          {isDaoOwned && (
-            <div className="border-b border-border py-4 last:border-b-0">
-              <ConnectDao purpose="community-settings" variant="plain" />
-            </div>
-          )}
-          {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
-        </TenantLiveSite>
+        {(isAdmin || isPlatformAdmin || isPersonalOwner) && (
+          <TenantLiveSite
+            tenant={tenant}
+            hostname={hostname}
+            gatewayId={gatewayId}
+            republish={republishMutation}
+          >
+            {isDaoOwned && (
+              <div className="border-b border-border py-4 last:border-b-0">
+                <ConnectDao purpose="community-settings" variant="plain" />
+              </div>
+            )}
+            {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
+          </TenantLiveSite>
+        )}
         {(isAdmin || isPlatformAdmin) && (
           <TenantPublishedConfig
             tenant={tenant}
@@ -318,7 +338,7 @@ export function TenantDetailContent({
             }
           />
         )}
-        <TenantNodeValidators tenantId={tenant.id} canManage={isAdmin} />
+        <TenantNodeValidators tenantId={tenant.id} canManage={canEditValidators} />
         <TenantDangerZone
           tenant={tenant}
           isOwner={isOwner}

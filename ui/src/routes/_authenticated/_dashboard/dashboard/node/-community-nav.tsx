@@ -15,6 +15,7 @@ export function CommunityNav({
   tenantId,
   canManage,
   canOrganize = canManage,
+  canOperate = canManage,
   allowedAreas = null,
   replace = false,
   testIds = {},
@@ -24,6 +25,7 @@ export function CommunityNav({
   tenantId?: string | null;
   canManage?: boolean;
   canOrganize?: boolean;
+  canOperate?: boolean;
   allowedAreas?: readonly FeatureArea[] | null;
   replace?: boolean;
   testIds?: Partial<Record<CommunityNavSection, string>>;
@@ -72,7 +74,7 @@ export function CommunityNav({
       path: "/dashboard/node/proposals",
       link: <Link to="/dashboard/node/proposals" search={{ nodeId }} />,
     },
-    ...(canManage
+    ...(canManage || canOperate
       ? [
           {
             value: "bulletin" as const,
@@ -89,7 +91,7 @@ export function CommunityNav({
           },
         ]
       : []),
-    ...(tenantId && canManage
+    ...(tenantId && (canManage || canOperate)
       ? [
           {
             value: "settings" as const,

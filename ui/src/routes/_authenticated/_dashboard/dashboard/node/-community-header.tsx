@@ -17,6 +17,7 @@ import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import {
   canManageCommunity,
+  canOperateNodes,
   canOrganizeEvents,
   teamWorkspaceQueryOptions,
 } from "@/lib/team-workspace";
@@ -97,6 +98,7 @@ export function CommunityHeader({
   const orgRole = authContext.data?.organization?.member?.role;
   const canManage = !!auth?.isAdmin || canManageCommunity(authContext.data);
   const canOrganize = canManage || canOrganizeEvents(authContext.data);
+  const canOperate = canManage || canOperateNodes(authContext.data);
   const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
   const workspace = useQuery(teamWorkspaceQueryOptions(api));
   const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
@@ -226,6 +228,7 @@ export function CommunityHeader({
           tenantId={node?.tenantId}
           canManage={canManage}
           canOrganize={canOrganize}
+          canOperate={canOperate}
           allowedAreas={workspace.data?.allowedAreas ?? null}
           replace={replace}
           testIds={testIds}
