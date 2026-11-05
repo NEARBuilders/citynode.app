@@ -3,12 +3,14 @@
  * Local-only fixture for issue #484 (node-operations UI access).
  *
  * Usage:
- *   node --import tsx scripts/seed-node-ops-lab.mjs --as owner
- *   node --import tsx scripts/seed-node-ops-lab.mjs --as ops
- *   node --import tsx scripts/seed-node-ops-lab.mjs --as plain
+ *   node --import tsx scripts/seed-node-ops-lab.mjs --account you.near --as owner
+ *   node --import tsx scripts/seed-node-ops-lab.mjs --account you.near --as ops
+ *   node --import tsx scripts/seed-node-ops-lab.mjs --account you.near --as plain
  *
- * --as switches misbaahansari.near's Harbor Demo membership so the same
- * wallet can exercise owner, node-operations-only, and plain-member paths.
+ * Aborts unless AUTH_DATABASE_URL and API_DATABASE_URL point at localhost /
+ * 127.0.0.1 (or pass --allow-remote deliberately). --as switches that NEAR
+ * account's Harbor Demo membership so the same wallet can exercise owner,
+ * node-operations-only, and plain-member paths.
  */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -20,17 +22,30 @@ import * as authSchema from "../tests/regression/fixtures/auth/schema.ts";
 import { createAuthTestInstance } from "../tests/regression/lib/auth-test-instance.ts";
 import { readDotEnv } from "../tests/regression/lib/regression-env.mjs";
 
-const NEAR_ACCOUNT = "misbaahansari.near";
 const ORG_SLUG = "harbor-demo";
 const MODES = new Set(["owner", "ops", "plain"]);
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
-const modeArg = process.argv.find((arg) => arg.startsWith("--as="))?.slice(5);
-const modeFlag = process.argv.includes("--as")
-  ? process.argv[process.argv.indexOf("--as") + 1]
-  : modeArg;
-const mode = modeFlag ?? "owner";
+function flagValue(name) {
+  const eqArg = process.argv.find((arg) => arg.startsWith(`${name}=`));
+  if (eqArg) return eqArg.slice(name.length + 1);
+  const index = process.argv.indexOf(name);
+  if (index >= 0) return process.argv[index + 1];
+  return undefined;
+}
+
+const mode = flagValue("--as") ?? "owner";
+const nearAccount = flagValue("--account");
+const allowRemote = process.argv.includes("--allow-remote");
+
 if (!MODES.has(mode)) {
   console.error(`Unknown --as ${mode}. Use owner | ops | plain.`);
+  process.exit(1);
+}
+if (!nearAccount) {
+  console.error(
+    "Missing --account <near-account-id> (e.g. --account you.near). Refusing a hard-coded account.",
+  );
   process.exit(1);
 }
 
@@ -43,7 +58,7 @@ const pick = (key, fallback) => {
   if (fromFile && !fromFile.startsWith("pglite:")) return fromFile;
   return fallback;
 };
-// bos dev rewrites .env to pglite:; prefer process env or docker postgres.
+
 const authDatabaseUrl = pick(
   "AUTH_DATABASE_URL",
   "postgres://everythingdev:everythingdev@127.0.0.1:5433/auth_db",
@@ -57,8 +72,40 @@ if (!secret) {
   console.error("BETTER_AUTH_SECRET is required in .env");
   process.exit(1);
 }
+
+function assertLocalDatabaseUrl(label, url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`${label} is not a valid URL: ${url}`);
+  }
+  if (parsed.protocol === "pglite:") {
+    throw new Error(
+      `${label} is pglite (${url}). Point it at local docker Postgres for this script.`,
+    );
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (!LOCAL_HOSTS.has(host) && !allowRemote) {
+    throw new Error(
+      `${label} host "${parsed.hostname}" is not local. Refusing to mutate roles off localhost. Pass --allow-remote only if you intend this.`,
+    );
+  }
+}
+
+assertLocalDatabaseUrl("AUTH_DATABASE_URL", authDatabaseUrl);
+assertLocalDatabaseUrl("API_DATABASE_URL", apiDatabaseUrl);
+
 console.log(`auth db: ${authDatabaseUrl.replace(/:[^:@/]+@/, ":***@")}`);
 console.log(`api db:  ${apiDatabaseUrl.replace(/:[^:@/]+@/, ":***@")}`);
+console.log(`account: ${nearAccount}`);
+
+function sameAreaSet(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+  const a = [...left].sort();
+  const b = [...right].sort();
+  return a.every((area, index) => area === b[index]);
+}
 
 async function withApi(run) {
   const client = new pg.Client({ connectionString: apiDatabaseUrl });
@@ -136,7 +183,7 @@ async function ensureTeam(db, organizationId, name, areas) {
   const match = existing.find((team) => {
     try {
       const meta = JSON.parse(team.metadata ?? "{}");
-      return Array.isArray(meta.areas) && areas.every((area) => meta.areas.includes(area));
+      return sameAreaSet(meta.areas, areas);
     } catch {
       return false;
     }
@@ -190,16 +237,16 @@ async function main() {
     const nearRows = await db
       .select()
       .from(authSchema.nearAccount)
-      .where(eq(authSchema.nearAccount.accountId, NEAR_ACCOUNT));
+      .where(eq(authSchema.nearAccount.accountId, nearAccount));
     const near = nearRows[0];
-    if (!near) throw new Error(`${NEAR_ACCOUNT} has no near_account row — sign in once first`);
+    if (!near) throw new Error(`${nearAccount} has no near_account row — sign in once first`);
 
     const users = await db
       .select()
       .from(authSchema.user)
       .where(eq(authSchema.user.id, near.userId));
     const user = users[0];
-    if (!user) throw new Error(`user row missing for ${NEAR_ACCOUNT}`);
+    if (!user) throw new Error(`user row missing for ${nearAccount}`);
 
     // Platform admin only in owner mode. Ops/plain must stay role=user or the UI
     // treats them as canManageCommunity and skips the node-operations path.
@@ -259,10 +306,15 @@ async function main() {
     const community = await ensureTeam(db, organization.id, "Community", ["events"]);
     await ensureTeam(db, organization.id, "Treasury", ["finance", "stake"]);
 
+    if (operations.id === community.id) {
+      throw new Error(
+        "Operations and Community resolved to the same team; areas must be exact-set matches.",
+      );
+    }
+
     await setTeamMembership(db, operations.id, user.id, mode === "ops");
     await setTeamMembership(db, community.id, user.id, false);
 
-    // Point active sessions at Harbor Demo so wallet refresh lands in the right org.
     await db
       .update(authSchema.session)
       .set({
@@ -274,7 +326,6 @@ async function main() {
     const validator = await ensureValidator(harbor.node.id);
     const bulletin = await ensureBulletin(harbor.node.id);
 
-    // Extra cookie identities for quick Playwright / DevTools cookie swaps.
     const unique = randomUUID().slice(0, 8);
     const saveUser = async (label) =>
       test.saveUser(
@@ -313,13 +364,17 @@ async function main() {
 
     const summary = {
       mode,
-      nearAccount: NEAR_ACCOUNT,
+      nearAccount,
       userId: user.id,
       platformRole: mode === "owner" ? "admin" : "user",
       organization: { id: organization.id, slug: organization.slug, name: organization.name },
       orgRole,
       teams: {
-        operations: { id: operations.id, areas: ["node-operations"], member: mode === "ops" },
+        operations: {
+          id: operations.id,
+          areas: ["node-operations"],
+          member: mode === "ops",
+        },
         community: { id: community.id, areas: ["events"], member: false },
       },
       tenantId: harbor.tenant.id,
@@ -341,7 +396,7 @@ async function main() {
     fs.writeFileSync(path.join(outDir, "summary.json"), JSON.stringify(summary, null, 2));
     console.log(JSON.stringify(summary, null, 2));
     console.log(
-      `\nSwitched ${NEAR_ACCOUNT} to --as ${mode}. Sign out/in (or refresh) if the UI still shows the old role.`,
+      `\nSwitched ${nearAccount} to --as ${mode}. Sign out/in (or refresh) if the UI still shows the old role.`,
     );
   } finally {
     await close();
