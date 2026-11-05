@@ -7,12 +7,10 @@ import {
   GearIcon,
   TreeStructureIcon,
   UsersIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
-import { Trans } from "everything-dev/ui/i18n";
-import { type ComponentType, type ReactElement, type ReactNode, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useMemo, useState } from "react";
 import { getAccount, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, PageHeader, SectionHeader } from "@/components";
 import {
@@ -40,18 +38,10 @@ import {
   useAppTranslation,
 } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
-import { adminNodeListQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
+import { communityEngagementQueryOptions } from "@/lib/queries/engagement";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
-import { useRelayerInfoQuery } from "@/lib/use-relayer";
-import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
-import {
-  APPLICATION_ITEMS_LIMIT,
-  buildCommunityProgressRows,
-  deriveNeedsAction,
-  type NeedsActionItem,
-  type StakingState,
-} from "./-admin-progress";
+import type { StakingState } from "./-admin-progress";
 import {
   Disclosure,
   formatNearFigure,
@@ -72,12 +62,12 @@ import {
   useCommunityRewards,
 } from "./-community-rewards-ui";
 import {
-  awaitingReviewQueryOptions,
-  pendingProposalCountQueryOptions,
-  proposalTitle,
-  proposalTypeLabel,
-  stalledSetupsQueryOptions,
-} from "./proposals/-proposal-review";
+  NeedsActionRow,
+  needsActionKey,
+  type PlatformStatus,
+  usePlatformStatus,
+} from "./-platform-status";
+import { pendingProposalCountQueryOptions } from "./proposals/-proposal-review";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/")({
   loader: ({ context }) =>
@@ -103,21 +93,16 @@ function AdminOverview() {
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const { runtimeConfig } = Route.useRouteContext();
-  const apiClient = useApiClient();
-
-  const pendingQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
-  const awaitingQuery = useQuery(awaitingReviewQueryOptions(apiClient, APPLICATION_ITEMS_LIMIT));
-  const relayerQuery = useRelayerInfoQuery();
-  const progress = useCommunityProgress();
-
-  const setupsQuery = useQuery(stalledSetupsQueryOptions(apiClient));
-  const setups = (setupsQuery.data?.data ?? []).filter(communitySetupNeedsAttention);
-  const awaiting = awaitingQuery.data?.data ?? [];
-  const pendingTotal = pendingQuery.data?.meta.total;
-  const reviewTotal = awaitingQuery.data?.meta.total ?? 0;
-  const relayer = relayerQuery.data;
-  const relayerNeedsFunding = !!relayer?.accountId && relayer.enabled === false;
-  const relayerFailed = relayerQuery.isError && !relayer;
+  const status = usePlatformStatus();
+  const {
+    progress,
+    pendingQuery,
+    pendingTotal,
+    relayerQuery,
+    relayer,
+    relayerNeedsFunding,
+    relayerFailed,
+  } = status;
 
   return (
     <>
@@ -194,21 +179,7 @@ function AdminOverview() {
         </div>
       </section>
 
-      <NeedsAction
-        reviewTotal={reviewTotal}
-        proposals={[...setups, ...awaiting].map((proposal) => ({
-          id: proposal.id,
-          pluginId: proposal.pluginId,
-          entityId: proposal.entityId,
-          reviewStatus: proposal.reviewStatus,
-          title: proposalTitle(proposal, translate),
-          createdAt: proposal.createdAt,
-          setupNeedsAttention: communitySetupNeedsAttention(proposal),
-        }))}
-        relayerNeedsFunding={relayerNeedsFunding}
-        progress={progress}
-        sources={[setupsQuery, awaitingQuery, { ...relayerQuery, isError: relayerFailed }]}
-      />
+      <NeedsAction status={status} />
 
       <CommunityProgress progress={progress} />
 
@@ -217,55 +188,9 @@ function AdminOverview() {
   );
 }
 
-function useCommunityProgress() {
-  const apiClient = useApiClient();
-  const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
-  const nodesQuery = useQuery(adminNodeListQueryOptions(apiClient, "all", "all"));
-  const joinsQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(0)));
-  const eventsQuery = useQuery(communityEventStatsQueryOptions(apiClient));
-  const queries = [tenantsQuery, nodesQuery, joinsQuery, eventsQuery];
-  const rows = useMemo(
-    () =>
-      buildCommunityProgressRows(
-        tenantsQuery.data ?? [],
-        nodesQuery.data ?? [],
-        joinsQuery.data,
-        eventsQuery.data ?? [],
-      ),
-    [tenantsQuery.data, nodesQuery.data, joinsQuery.data, eventsQuery.data],
-  );
-  return {
-    rows,
-    isLoading: queries.some((query) => query.isLoading),
-    isError: queries.some((query) => query.isError),
-    retry: () => {
-      for (const query of queries) if (query.isError) void query.refetch();
-    },
-  };
-}
-
-function NeedsAction({
-  reviewTotal,
-  proposals,
-  relayerNeedsFunding,
-  progress,
-  sources,
-}: {
-  reviewTotal: number;
-  proposals: Parameters<typeof deriveNeedsAction>[0]["proposals"];
-  relayerNeedsFunding: boolean;
-  progress: ReturnType<typeof useCommunityProgress>;
-  sources: { isLoading: boolean; isError: boolean; refetch: () => unknown }[];
-}) {
+function NeedsAction({ status }: { status: PlatformStatus }) {
   const translate = useAppTranslation();
-  const items = deriveNeedsAction({
-    pendingReviewCount: reviewTotal,
-    proposals,
-    relayerNeedsFunding,
-    communities: progress.rows,
-  });
-  const loading = progress.isLoading || sources.some((source) => source.isLoading);
-  const failed = progress.isError || sources.some((source) => source.isError);
+  const { items, loading, failed, retry, reviewTotal } = status;
 
   return (
     <section className="flex flex-col gap-6">
@@ -289,10 +214,7 @@ function NeedsAction({
       {failed && (
         <LoadError
           message={translate("admin.action.failed")}
-          onRetry={() => {
-            for (const source of sources) if (source.isError) void source.refetch();
-            if (progress.isError) progress.retry();
-          }}
+          onRetry={retry}
           testId="admin-needs-action-error"
         />
       )}
@@ -318,110 +240,6 @@ function NeedsAction({
   );
 }
 
-function needsActionKey(item: NeedsActionItem) {
-  if (item.kind === "setup" || item.kind === "application") {
-    return `${item.kind}-${item.proposal.id}`;
-  }
-  if (item.kind === "staking") return `staking-${item.nodeId}`;
-  return item.kind;
-}
-
-function NeedsActionRow({ item }: { item: NeedsActionItem }) {
-  const translate = useAppTranslation();
-  const content: {
-    icon?: ComponentType<{ className?: string }>;
-    title: string;
-    description: ReactNode;
-    link: ReactElement;
-  } = (() => {
-    switch (item.kind) {
-      case "setup":
-        return {
-          title: translate("admin.action.setupNamed", { name: item.proposal.title }),
-          description: translate("admin.action.setupHint"),
-          link: (
-            <Link
-              to="/admin/proposals/$proposalId"
-              params={{ proposalId: item.proposal.id }}
-              search={{ pluginId: item.proposal.pluginId, entityId: item.proposal.entityId }}
-            />
-          ),
-        };
-      case "relayer":
-        return {
-          title: translate("admin.relayer.needsFunding"),
-          description: translate("admin.relayer.paused"),
-          link: <Link to="/admin/relayer" />,
-        };
-      case "application":
-        return {
-          icon: GavelIcon,
-          title: translate("admin.action.reviewNamed", { name: item.proposal.title }),
-          description: (
-            <Trans
-              id="admin.submittedTypeDate"
-              values={{ type: proposalTypeLabel(item.proposal.pluginId, translate) }}
-              components={{ date: <LocalDate value={item.proposal.createdAt} format="relative" /> }}
-            />
-          ),
-          link: (
-            <Link
-              to="/admin/proposals/$proposalId"
-              params={{ proposalId: item.proposal.id }}
-              search={{ pluginId: item.proposal.pluginId, entityId: item.proposal.entityId }}
-            />
-          ),
-        };
-      case "moreApplications":
-        return {
-          icon: GavelIcon,
-          title: translate("admin.action.moreApplications", { count: item.count }),
-          description: translate("admin.action.reviewHint"),
-          link: <Link to="/admin/proposals" search={{ status: "pending" }} />,
-        };
-      case "stakingMany":
-        return {
-          title: translate("admin.action.stakingCount", { count: item.count }),
-          description: translate("admin.action.stakingHint"),
-          link: <Link to="/admin/nodes" />,
-        };
-      case "staking":
-        return {
-          title: translate("admin.action.stakingNamed", { name: item.name }),
-          description: translate("admin.action.stakingHint"),
-          link: (
-            <Link
-              to="/admin/nodes/$nodeId"
-              params={{ nodeId: item.nodeId }}
-              search={{ tab: "validators" }}
-            />
-          ),
-        };
-    }
-  })();
-  return (
-    <Item
-      variant="outline"
-      size="sm"
-      render={content.link}
-      data-testid={`admin-needs-action-${needsActionKey(item)}`}
-    >
-      <ItemMedia variant="icon">
-        {content.icon ? <content.icon /> : <WarningCircleIcon className="text-brand-strong" />}
-      </ItemMedia>
-      <ItemContent className="min-w-0">
-        <ItemTitle className="max-w-full">
-          <span className="min-w-0 truncate">{content.title}</span>
-        </ItemTitle>
-        <ItemDescription>{content.description}</ItemDescription>
-      </ItemContent>
-      <ItemActions>
-        <CaretRightIcon className="size-4 text-muted-foreground" />
-      </ItemActions>
-    </Item>
-  );
-}
-
 const STAKING_LABELS: Record<
   StakingState,
   { label: AppMessageId; variant: "success" | "secondary" | "warning" }
@@ -432,9 +250,22 @@ const STAKING_LABELS: Record<
   none: { label: "admin.progress.stakingNone", variant: "warning" },
 };
 
-function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommunityProgress> }) {
+function CommunityProgress({ progress }: { progress: PlatformStatus["progress"] }) {
   const translate = useAppTranslation();
+  const apiClient = useApiClient();
   const { rows, isLoading, isError, retry } = progress;
+  const engagementQuery = useQuery(communityEngagementQueryOptions(apiClient));
+  const engagement = useMemo(
+    () =>
+      new Map((engagementQuery.data?.communities ?? []).map((row) => [row.organizationId, row])),
+    [engagementQuery.data],
+  );
+  const engagementCell = (value: ReactNode) =>
+    engagementQuery.isError
+      ? translate("admin.loadFailed")
+      : engagementQuery.isLoading
+        ? "…"
+        : value;
   const [showAll, setShowAll] = useState(false);
   const visibleRows = visibleCommunityJoinRows(rows, showAll);
   const rewards = useCommunityRewards(isLoading || isError ? [] : rows);
@@ -478,6 +309,12 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
                 <TableHead className="hidden text-right sm:table-cell">
                   {translate("admin.redemptions.newThisMonth")}
                 </TableHead>
+                <TableHead className="hidden text-right lg:table-cell">
+                  {translate("admin.progress.members")}
+                </TableHead>
+                <TableHead className="hidden text-right lg:table-cell">
+                  {translate("admin.progress.returning")}
+                </TableHead>
                 <TableHead className="text-right">{translate("admin.progress.events")}</TableHead>
                 <TableHead>{translate("common.staking")}</TableHead>
                 <TableHead>{translate("admin.progress.rewards")}</TableHead>
@@ -489,6 +326,7 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
             <TableBody>
               {visibleRows.map((row) => {
                 const staking = STAKING_LABELS[row.staking];
+                const community = row.tenant.orgId ? engagement.get(row.tenant.orgId) : undefined;
                 return (
                   <TableRow key={row.node.id} data-testid={`admin-progress-row-${row.node.id}`}>
                     <TableCell>
@@ -507,6 +345,25 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
                     </TableCell>
                     <TableCell className="hidden text-right tabular-nums sm:table-cell">
                       {row.joins?.newMembers ?? "—"}
+                    </TableCell>
+                    <TableCell
+                      className="hidden text-right tabular-nums lg:table-cell"
+                      data-testid="admin-progress-members"
+                    >
+                      {engagementCell(community?.memberCount?.count ?? "—")}
+                    </TableCell>
+                    <TableCell
+                      className="hidden text-right tabular-nums lg:table-cell"
+                      data-testid="admin-progress-returning"
+                    >
+                      {engagementCell(
+                        community?.checkIns
+                          ? translate("admin.progress.returningValue", {
+                              returning: community.checkIns.returning,
+                              people: community.checkIns.people,
+                            })
+                          : "—",
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       <span data-testid="admin-progress-events">
@@ -536,6 +393,16 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
               })}
             </TableBody>
           </Table>
+          <p className="text-xs text-muted-foreground">
+            {translate("admin.progress.engagementNote")}
+          </p>
+          {engagementQuery.isError && (
+            <LoadError
+              message={translate("admin.loadFailed")}
+              onRetry={() => void engagementQuery.refetch()}
+              testId="admin-progress-engagement-error"
+            />
+          )}
           {rows.length > COMMUNITY_JOINS_LIMIT && (
             <Button
               variant="ghost"

@@ -1,0 +1,254 @@
+import { CaretRightIcon, GavelIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
+import { type ComponentType, type ReactElement, type ReactNode, useMemo } from "react";
+import { useApiClient } from "@/app";
+import { LocalDate } from "@/components";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { useNow } from "@/hooks/use-client";
+import { useAppTranslation } from "@/i18n/runtime";
+import { adminEventsQueryOptions } from "@/lib/queries/engagement";
+import { adminNodeListQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
+import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
+import { tenantsQueryOptions } from "@/lib/queries/tenants";
+import { useRelayerInfoQuery } from "@/lib/use-relayer";
+import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
+import {
+  APPLICATION_ITEMS_LIMIT,
+  buildCommunityProgressRows,
+  deriveNeedsAction,
+  eventHealth,
+  type NeedsActionItem,
+} from "./-admin-progress";
+import {
+  awaitingReviewQueryOptions,
+  pendingProposalCountQueryOptions,
+  proposalTitle,
+  proposalTypeLabel,
+  stalledSetupsQueryOptions,
+} from "./proposals/-proposal-review";
+
+export function usePlatformStatus() {
+  const translate = useAppTranslation();
+  const apiClient = useApiClient();
+  const pendingQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
+  const awaitingQuery = useQuery(awaitingReviewQueryOptions(apiClient, APPLICATION_ITEMS_LIMIT));
+  const relayerQuery = useRelayerInfoQuery();
+  const setupsQuery = useQuery(stalledSetupsQueryOptions(apiClient));
+  const progress = useCommunityProgress();
+  const eventsQuery = useQuery(adminEventsQueryOptions(apiClient));
+  const now = useNow(60_000);
+  const health = eventHealth({
+    communities: progress.rows,
+    events: eventsQuery.data?.events ?? [],
+    now,
+  });
+
+  const setups = (setupsQuery.data?.data ?? []).filter(communitySetupNeedsAttention);
+  const awaiting = awaitingQuery.data?.data ?? [];
+  const reviewTotal = awaitingQuery.data?.meta.total ?? 0;
+  const relayer = relayerQuery.data;
+  const relayerNeedsFunding = !!relayer?.accountId && relayer.enabled === false;
+  const relayerFailed = relayerQuery.isError && !relayer;
+  const sources = [
+    setupsQuery,
+    awaitingQuery,
+    { ...relayerQuery, isError: relayerFailed },
+    eventsQuery,
+  ];
+
+  const items = deriveNeedsAction({
+    pendingReviewCount: reviewTotal,
+    proposals: [...setups, ...awaiting].map((proposal) => ({
+      id: proposal.id,
+      pluginId: proposal.pluginId,
+      entityId: proposal.entityId,
+      reviewStatus: proposal.reviewStatus,
+      title: proposalTitle(proposal, translate),
+      createdAt: proposal.createdAt,
+      setupNeedsAttention: communitySetupNeedsAttention(proposal),
+    })),
+    relayerNeedsFunding,
+    communities: progress.rows,
+    quietCommunities: eventsQuery.isSuccess ? health.quiet : [],
+    overdueReports: eventsQuery.isSuccess ? health.overdueReports : 0,
+  });
+
+  return {
+    items,
+    progress,
+    pendingQuery,
+    pendingTotal: pendingQuery.data?.meta.total,
+    reviewTotal,
+    relayerQuery,
+    relayer,
+    relayerNeedsFunding,
+    relayerFailed,
+    loading: progress.isLoading || sources.some((source) => source.isLoading),
+    failed: progress.isError || sources.some((source) => source.isError),
+    retry: () => {
+      for (const source of sources) if (source.isError) void source.refetch();
+      if (progress.isError) progress.retry();
+    },
+  };
+}
+
+export type PlatformStatus = ReturnType<typeof usePlatformStatus>;
+
+export function useCommunityProgress() {
+  const apiClient = useApiClient();
+  const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
+  const nodesQuery = useQuery(adminNodeListQueryOptions(apiClient, "all", "all"));
+  const joinsQuery = useQuery(onboardingJoinsQueryOptions(apiClient, utcMonth(0)));
+  const eventsQuery = useQuery(communityEventStatsQueryOptions(apiClient));
+  const queries = [tenantsQuery, nodesQuery, joinsQuery, eventsQuery];
+  const rows = useMemo(
+    () =>
+      buildCommunityProgressRows(
+        tenantsQuery.data ?? [],
+        nodesQuery.data ?? [],
+        joinsQuery.data,
+        eventsQuery.data ?? [],
+      ),
+    [tenantsQuery.data, nodesQuery.data, joinsQuery.data, eventsQuery.data],
+  );
+  return {
+    rows,
+    isLoading: queries.some((query) => query.isLoading),
+    isError: queries.some((query) => query.isError),
+    retry: () => {
+      for (const query of queries) if (query.isError) void query.refetch();
+    },
+  };
+}
+
+export function needsActionKey(item: NeedsActionItem) {
+  if (item.kind === "setup" || item.kind === "application") {
+    return `${item.kind}-${item.proposal.id}`;
+  }
+  if (item.kind === "staking") return `staking-${item.nodeId}`;
+  if (item.kind === "quiet") return `quiet-${item.nodeId}`;
+  return item.kind;
+}
+
+export function NeedsActionRow({ item }: { item: NeedsActionItem }) {
+  const translate = useAppTranslation();
+  const content: {
+    icon?: ComponentType<{ className?: string }>;
+    title: string;
+    description: ReactNode;
+    link: ReactElement;
+  } = (() => {
+    switch (item.kind) {
+      case "setup":
+        return {
+          title: translate("admin.action.setupNamed", { name: item.proposal.title }),
+          description: translate("admin.action.setupHint"),
+          link: (
+            <Link
+              to="/admin/proposals/$proposalId"
+              params={{ proposalId: item.proposal.id }}
+              search={{ pluginId: item.proposal.pluginId, entityId: item.proposal.entityId }}
+            />
+          ),
+        };
+      case "relayer":
+        return {
+          title: translate("admin.relayer.needsFunding"),
+          description: translate("admin.relayer.paused"),
+          link: <Link to="/admin/relayer" />,
+        };
+      case "application":
+        return {
+          icon: GavelIcon,
+          title: translate("admin.action.reviewNamed", { name: item.proposal.title }),
+          description: (
+            <Trans
+              id="admin.submittedTypeDate"
+              values={{ type: proposalTypeLabel(item.proposal.pluginId, translate) }}
+              components={{ date: <LocalDate value={item.proposal.createdAt} format="relative" /> }}
+            />
+          ),
+          link: (
+            <Link
+              to="/admin/proposals/$proposalId"
+              params={{ proposalId: item.proposal.id }}
+              search={{ pluginId: item.proposal.pluginId, entityId: item.proposal.entityId }}
+            />
+          ),
+        };
+      case "moreApplications":
+        return {
+          icon: GavelIcon,
+          title: translate("admin.action.moreApplications", { count: item.count }),
+          description: translate("admin.action.reviewHint"),
+          link: <Link to="/admin/proposals" search={{ status: "pending" }} />,
+        };
+      case "stakingMany":
+        return {
+          title: translate("admin.action.stakingCount", { count: item.count }),
+          description: translate("admin.action.stakingHint"),
+          link: <Link to="/admin/nodes" />,
+        };
+      case "reportsOverdue":
+        return {
+          title: translate("admin.action.reportsOverdue", { count: item.count }),
+          description: translate("admin.action.reportsOverdueHint"),
+          link: <Link to="/admin/events" search={{ report: "missing" }} />,
+        };
+      case "quietMany":
+        return {
+          title: translate("admin.action.quietCount", { count: item.count }),
+          description: translate("admin.action.quietHint"),
+          link: <Link to="/admin/events" />,
+        };
+      case "quiet":
+        return {
+          title: translate("admin.action.quietNamed", { name: item.name }),
+          description: translate("admin.action.quietHint"),
+          link: <Link to="/admin/nodes/$nodeId" params={{ nodeId: item.nodeId }} search={{}} />,
+        };
+      case "staking":
+        return {
+          title: translate("admin.action.stakingNamed", { name: item.name }),
+          description: translate("admin.action.stakingHint"),
+          link: (
+            <Link
+              to="/admin/nodes/$nodeId"
+              params={{ nodeId: item.nodeId }}
+              search={{ tab: "validators" }}
+            />
+          ),
+        };
+    }
+  })();
+  return (
+    <Item
+      variant="outline"
+      size="sm"
+      render={content.link}
+      data-testid={`admin-needs-action-${needsActionKey(item)}`}
+    >
+      <ItemMedia variant="icon">
+        {content.icon ? <content.icon /> : <WarningCircleIcon className="text-brand-strong" />}
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="max-w-full">
+          <span className="min-w-0 truncate">{content.title}</span>
+        </ItemTitle>
+        <ItemDescription>{content.description}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <CaretRightIcon className="size-4 text-muted-foreground" />
+      </ItemActions>
+    </Item>
+  );
+}

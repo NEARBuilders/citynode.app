@@ -35,7 +35,7 @@ import {
   shouldGeocodeProfile,
 } from "./discovery-geocode";
 import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
-import { nodeKindOf } from "./nodes";
+import { listedNode, nodeKindOf } from "./nodes";
 
 const EVENTS_AREA: FeatureArea = "events";
 
@@ -49,6 +49,16 @@ function storedReport(row: typeof eventReports.$inferSelect) {
     submittedAt: row.submittedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+function shownActivity(now: string) {
+  const data = discoveryActivities.data;
+  return and(
+    sql`${data}->>'status' = 'published'`,
+    sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
+    sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
+    sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
+  );
 }
 
 function canonicalActivityUrl(value: string) {
@@ -140,6 +150,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           .where(
             and(
               eq(tenants.status, "active"),
+              listedNode,
               sql`${discoveryProfiles.data}->>'published' = 'true'`,
               ids ? inArray(nodes.id, ids) : undefined,
             ),
@@ -311,7 +322,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           .from(nodes)
           .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
           .leftJoin(discoveryProfiles, eq(discoveryProfiles.nodeId, nodes.id))
-          .where(and(eq(tenants.status, "active"), isNull(discoveryProfiles.nodeId))),
+          .where(and(eq(tenants.status, "active"), listedNode, isNull(discoveryProfiles.nodeId))),
       );
       const search = input.query?.toLowerCase();
       const basic = rows
@@ -806,16 +817,43 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               >`to_char(max(greatest((${data}->>'publishedAt')::timestamptz, case when ${startsAt} <= ${now}::timestamptz then ${startsAt} end)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
             })
             .from(discoveryActivities)
-            .where(
-              and(
-                sql`${data}->>'status' = 'published'`,
-                sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
-                sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
-                sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
-              ),
-            )
+            .where(shownActivity(now))
             .groupBy(discoveryActivities.ownerNodeId),
         );
+      }),
+    adminEvents: (context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* requireAdmin(context);
+        const now = new Date(yield* Clock.currentTimeMillis).toISOString();
+        const data = discoveryActivities.data;
+        const rows = yield* query(() =>
+          db
+            .select({
+              id: discoveryActivities.id,
+              data,
+              nodeId: nodes.id,
+              nodeName: nodes.name,
+              organizationId: tenants.orgId,
+              reportSubmittedAt: eventReports.submittedAt,
+            })
+            .from(discoveryActivities)
+            .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
+            .leftJoin(tenants, eq(tenants.id, nodes.tenantId))
+            .leftJoin(eventReports, eq(eventReports.activityId, discoveryActivities.id))
+            .where(and(shownActivity(now), sql`${data}->>'kind' = 'event'`))
+            .orderBy(desc(sql`(${data}->>'startsAt')::timestamptz`)),
+        );
+        return rows.map((row) => ({
+          id: row.id,
+          title: row.data.title,
+          url: row.data.url,
+          startsAt: row.data.startsAt ?? null,
+          endsAt: row.data.endsAt ?? null,
+          nodeId: row.nodeId,
+          nodeName: row.nodeName,
+          organizationId: row.organizationId ?? null,
+          reportSubmittedAt: row.reportSubmittedAt?.toISOString() ?? null,
+        }));
       }),
     studio: (context: AuthContext) =>
       Effect.gen(function* () {

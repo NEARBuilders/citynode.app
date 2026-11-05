@@ -37,6 +37,7 @@ import {
   reportFromDraft,
 } from "@/lib/event-reports";
 import { pageTitle } from "@/lib/page-title";
+import { engagementQueryKeys } from "@/lib/queries/engagement";
 import {
   eventCheckInCountQueryOptions,
   eventReportQueryKeys,
@@ -204,7 +205,10 @@ function ReportForm({
       api.saveEventReport({ activityId, report }),
     onSuccess: async () => {
       toast.success(translate("report.saved"));
-      await queryClient.invalidateQueries({ queryKey: eventReportQueryKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: eventReportQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: engagementQueryKeys.events() }),
+      ]);
       await navigate({
         to: "/nodes/$nodeId/content",
         params: { nodeId },

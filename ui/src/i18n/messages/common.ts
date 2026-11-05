@@ -751,18 +751,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Les modifications de cette communauté sont signées par son DAO.",
     "社区的更改将由其 DAO 签名。",
   ],
-  "dashboard.adminQueue": [
-    "Review the admin queue",
-    "Revisar cola de administración",
-    "Examiner la file d'administration",
-    "查看管理员待办",
-  ],
-  "dashboard.adminQueueHint": [
-    "Pending proposals and tenants.",
-    "Propuestas y sitios pendientes.",
-    "Propositions et sites en attente.",
-    "待处理提案和站点。",
-  ],
   "dashboard.approved": ["Approved", "Aprobado", "Approuvé", "已批准"],
   "dashboard.awaitingReview": [
     "Awaiting review",
@@ -1834,18 +1822,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Solicita operar un City Node en tu zona. Te guiamos paso a paso.",
     "Proposez d’animer un City Node dans votre ville. Nous vous guidons à chaque étape.",
     "申请在你所在的地区运营 City Node，我们会一步步引导你。",
-  ],
-  "dashboard.launchNode": [
-    "Launch a new node",
-    "Lanzar un nuevo nodo",
-    "Lancer un nouveau nœud",
-    "启动新节点",
-  ],
-  "dashboard.launchNodeHint": [
-    "Apply for the community with its DAO, then approve it in Proposals.",
-    "Solicita la comunidad con su DAO y luego apruébala en Propuestas.",
-    "Demandez la communauté avec sa DAO, puis approuvez-la dans Propositions.",
-    "使用其 DAO 申请社区，然后在提案中批准。",
   ],
   "ownerActions.title": ["Run your node", "Gestiona tu nodo", "Gérer votre nœud", "运营你的节点"],
   "ownerActions.eventHint": [

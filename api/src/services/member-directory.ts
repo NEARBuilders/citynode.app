@@ -28,6 +28,7 @@ export interface MemberDirectoryService {
   optedInAccounts(userIds: string[]): MemberDirectoryEffect<Map<string, string | null>>;
   recordCount(organizationId: string, count: number): MemberDirectoryEffect<MemberCountObservation>;
   latestCount(organizationId: string): MemberDirectoryEffect<MemberCountObservation | null>;
+  latestCounts(): MemberDirectoryEffect<Map<string, MemberCountObservation>>;
 }
 
 export class MemberDirectoryTag extends Context.Service<
@@ -131,6 +132,16 @@ export const MemberDirectoryLive = Layer.effect(
             .where(eq(memberCountObservations.organizationId, organizationId))
             .limit(1);
           return row ? { count: row.count, observedAt: row.observedAt.toISOString() } : null;
+        }),
+      latestCounts: () =>
+        query(async () => {
+          const rows = await db.select().from(memberCountObservations);
+          return new Map(
+            rows.map((row) => [
+              row.organizationId,
+              { count: row.count, observedAt: row.observedAt.toISOString() },
+            ]),
+          );
         }),
     };
 

@@ -6,8 +6,6 @@ export type NextStepId =
   | "start-community"
   | "open-community"
   | "payouts"
-  | "launch-node"
-  | "admin"
   | "stake"
   | "explore";
 
@@ -43,21 +41,6 @@ export function getNextSteps(
       title: t("dashboard.saveAccount"),
       description: t("dashboard.passkeyHint"),
       actionLabel: t("common.addPasskey"),
-    });
-  }
-
-  if (state.isAdmin) {
-    steps.push({
-      id: "launch-node",
-      title: t("dashboard.launchNode"),
-      description: t("dashboard.launchNodeHint"),
-      actionLabel: t("dashboard.launchNode"),
-    });
-    steps.push({
-      id: "admin",
-      title: t("dashboard.adminQueue"),
-      description: t("dashboard.adminQueueHint"),
-      actionLabel: t("common.openAdmin"),
     });
   }
 

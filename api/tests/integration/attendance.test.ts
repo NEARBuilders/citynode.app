@@ -486,4 +486,132 @@ describe("confirming attendance from an organizer session", () => {
     expect(record.events[0]?.communityName).toBe("New name");
     expect(record.communities[0]?.communityName).toBe("New name");
   });
+
+  it("gives platform admins each community's synced check-ins and returning people", async () => {
+    const city = await community();
+    const first = await city.addEvent("First meetup", past(40));
+    const second = await city.addEvent("Second meetup", past(20));
+    addCode(city.org, first.id, "First meetup", [
+      ["engaged-a", past(39)],
+      ["engaged-b", past(39)],
+    ]);
+    addCode(city.org, second.id, "Second meetup", [["engaged-a", past(19)]]);
+    addCode(city.org, second.id, "Second meetup", [["engaged-a", past(18)]]);
+    addCode(city.org, null, "Referral", [["engaged-c", past(10)]]);
+    await (await city.organizer()).reconcileAttendance({ organizationId: city.org });
+
+    const admin = await getPluginClient(authedContext("platform-admin", "admin"));
+    const { communities } = await admin.getCommunityEngagement();
+    expect(communities.find((row) => row.organizationId === city.org)?.checkIns).toMatchObject({
+      people: 2,
+      returning: 1,
+      partial: false,
+    });
+
+    const unsynced = await community();
+    await unsynced.addEvent("Not synced", past(5));
+    expect(communities.some((row) => row.organizationId === unsynced.org)).toBe(false);
+
+    await expect(
+      (await getPluginClient(authedContext("plain-user"))).getCommunityEngagement(),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("counts each person once across communities per month, returning only after an earlier event", async () => {
+    const at = (day: string) => new Date(`${day}T18:00:00.000Z`);
+    const north = await community("North city");
+    const south = await community("South city");
+    const february = await north.addEvent("February meetup", at("2020-02-10"));
+    const march = await north.addEvent("March meetup", at("2020-03-05"));
+    const april = await north.addEvent("April meetup", at("2020-04-02"));
+    const southMarch = await south.addEvent("South March", at("2020-03-20"));
+    addCode(north.org, february.id, "February meetup", [["month-x", at("2020-02-10")]]);
+    addCode(north.org, march.id, "March meetup", [
+      ["month-x", at("2020-03-05")],
+      ["month-y", at("2020-03-05")],
+      ["month-w", at("2020-03-06")],
+    ]);
+    addCode(south.org, southMarch.id, "South March", [["month-y", at("2020-03-20")]]);
+    addCode(north.org, april.id, "April meetup", [["month-w", at("2020-04-02")]]);
+    await (await north.organizer()).reconcileAttendance({ organizationId: north.org });
+    await (await south.organizer()).reconcileAttendance({ organizationId: south.org });
+
+    const admin = await getPluginClient(authedContext("platform-admin", "admin"));
+    expect(await admin.getPlatformAttendance({ month: "2020-03" })).toEqual({
+      month: "2020-03",
+      people: 3,
+      returning: 2,
+    });
+    expect(await admin.getPlatformAttendance({ month: "2020-02" })).toMatchObject({
+      people: 1,
+      returning: 0,
+    });
+    await expect(
+      (await getPluginClient(authedContext("plain-user"))).getPlatformAttendance({
+        month: "2020-03",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("lists every community's events for platform admins with per-event check-ins", async () => {
+    const city = await community("Events city");
+    const first = await city.addEvent("Kickoff", past(30));
+    const second = await city.addEvent("Workshop", past(10));
+    const quiet = await city.addEvent("Quiet evening", past(5));
+    addCode(city.org, first.id, "Kickoff", [
+      ["events-a", past(29)],
+      ["events-b", past(29)],
+    ]);
+    addCode(city.org, second.id, "Workshop", [["events-a", past(9)]]);
+    await (await city.organizer()).reconcileAttendance({ organizationId: city.org });
+
+    const unsynced = await community("Unsynced city");
+    const unsyncedEvent = await unsynced.addEvent("Not synced yet", past(3));
+
+    const admin = await getPluginClient(authedContext("platform-admin", "admin"));
+    const saved = await admin.saveEventReport({
+      activityId: first.id,
+      report: {
+        format: "irl",
+        socialLinks: ["https://example.com/post"],
+        focus: "crypto",
+        audiences: ["developers"],
+        audienceOther: "",
+        theme: "Kickoff",
+        attendees: 2,
+        slideLinks: [],
+        kpis: ["2 people", "0 returning", ""],
+        wentWell: "Good",
+        improvements: "Better",
+        talentAfter: "Follow-up",
+        talentDuring: "Mentors",
+        materialsNeeded: "",
+        hadPartners: false,
+        partners: "",
+        nextActions: "Next",
+        insights: "",
+        mediaLinks: [],
+      },
+    });
+    const { events } = await admin.getAdminEvents();
+    const byId = new Map(events.map((event) => [event.id, event]));
+
+    expect(byId.get(first.id)).toMatchObject({
+      title: "Kickoff",
+      nodeName: "Events city",
+      organizationId: city.org,
+      checkIns: { people: 2, returning: 0, partial: false },
+      reportSubmittedAt: saved.submittedAt,
+    });
+    expect(byId.get(second.id)?.reportSubmittedAt).toBeNull();
+    expect(byId.get(second.id)?.checkIns).toMatchObject({ people: 1, returning: 1 });
+    expect(byId.get(quiet.id)?.checkIns).toMatchObject({ people: 0, returning: 0 });
+    expect(byId.get(unsyncedEvent.id)?.checkIns).toBeNull();
+    const order = events.map((event) => event.id);
+    expect(order.indexOf(quiet.id)).toBeLessThan(order.indexOf(first.id));
+
+    await expect(
+      (await getPluginClient(authedContext("plain-user"))).getAdminEvents(),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });

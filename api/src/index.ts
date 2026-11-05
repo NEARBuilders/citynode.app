@@ -18,6 +18,7 @@ import {
   releaseCommunityOrganization,
 } from "./lib/community-organizations";
 import { ContextSchema } from "./lib/context";
+import { createPlatformOrganization, isPlatformOrganization } from "./lib/platform-stations";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { AttendanceLive, type AttendanceService, AttendanceTag } from "./services/attendance";
 import { verifyDaoMembership } from "./services/dao";
@@ -32,7 +33,7 @@ import {
 import { resolveNetwork } from "./services/near-rpc";
 import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
-import { NodesLive, NodesTag } from "./services/nodes";
+import { NodesLive, NodesTag, nodeKindOf, PLATFORM_NODE_KIND } from "./services/nodes";
 import type { PlacesService } from "./services/places";
 import { PlacesLive, PlacesTag } from "./services/places";
 import {
@@ -91,6 +92,7 @@ class ApiServices extends Context.Service<
     attendance: AttendanceService;
     teamJoinRequests: TeamJoinRequestsService;
     stakingPools: StakingPoolsService;
+    platformStationsAccount: string | null;
   }
 >()("api/ApiServices") {}
 
@@ -106,6 +108,21 @@ suppressPgQueryQueueDeprecation();
 
 const HOSTNAME_REGEX =
   /^(?=.{1,253}$)(?=.{1,64}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.?$/;
+
+const guardNodeKind = (
+  current: string | null,
+  next: string | null | undefined,
+): NodeEffect<void> =>
+  next == null || (next === PLATFORM_NODE_KIND) === (current === PLATFORM_NODE_KIND)
+    ? Effect.void
+    : Effect.fail(
+        new ORPCError("BAD_REQUEST", {
+          message: "The platform node kind is reserved for platform stations",
+        }),
+      );
+
+const requestedNodeKind = (input: { kind?: string; metadata?: Record<string, unknown> }) =>
+  input.kind ?? (input.metadata ? nodeKindOf(input.metadata) : undefined);
 
 const validateAccountId = (accountId: string): NodeEffect<void> =>
   ACCOUNT_ID_REGEX.test(accountId)
@@ -383,6 +400,12 @@ const authorizeParentNode = (
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
     platformAccount: z.string().optional(),
+    platformStationsAccount: z
+      .string()
+      .default("")
+      .describe(
+        "NEAR account keying the hidden tenant behind platform stations; must not belong to any community",
+      ),
     gatewayDomains: z
       .string()
       .default("")
@@ -467,6 +490,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             mainnet: config.variables.mainnetStakingPoolWhitelist,
             testnet: config.variables.testnetStakingPoolWhitelist,
           }),
+          platformStationsAccount: config.variables.platformStationsAccount.trim() || null,
         }),
       );
     }),
@@ -588,6 +612,60 @@ export default createPlugin.withPlugins<PluginsClient>()({
       });
 
     type MemberAuthClient = Effect.Success<ReturnType<typeof memberAuthClient>>;
+
+    const callAuth = <T>(run: () => Promise<T>, message: string) =>
+      Effect.tryPromise({
+        try: run,
+        catch: (error) =>
+          error instanceof ORPCError ? error : new ORPCError("INTERNAL_SERVER_ERROR", { message }),
+      });
+
+    const readPlatformStations = (context: {
+      reqHeaders?: ConstructorParameters<typeof Headers>[0];
+      userId: string;
+      user?: AuthContext["user"];
+    }) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        const account = services.platformStationsAccount;
+        if (!account) return { account: null, organization: null };
+        const tenant = yield* services.tenants.resolveTenantByAccountId(account);
+        const organizationId = tenant?.orgId;
+        if (!tenant || !organizationId) return { account, organization: null };
+        const [node] = yield* services.nodes.list({
+          tenantId: tenant.id,
+          kind: PLATFORM_NODE_KIND,
+          includePlatform: true,
+        });
+        if (!node) return { account, organization: null };
+        const auth = yield* memberAuthClient(context);
+        const organization = yield* callAuth(
+          () => auth.getOrganizationForAdmin({ organizationId }),
+          "Could not read the platform organization",
+        );
+        if (!organization) return { account, organization: null };
+        const role = yield* callAuth(
+          () =>
+            auth.getActiveMemberRole({ organizationId }).then(
+              (result) => result.role,
+              (error: unknown) => {
+                if (error instanceof ORPCError && error.code === "FORBIDDEN") return null;
+                throw error;
+              },
+            ),
+          "Could not read your role in the platform organization",
+        );
+        return {
+          account,
+          organization: {
+            id: organization.id,
+            name: organization.name,
+            slug: organization.slug,
+            nodeId: node.id,
+            role,
+          },
+        };
+      });
 
     const notACommunityMember = () =>
       new ORPCError("FORBIDDEN", { message: "You are not a member of this community" });
@@ -1157,6 +1235,221 @@ export default createPlugin.withPlugins<PluginsClient>()({
         });
         return yield* services.attendance.history({ userId: context.userId, communities });
       }),
+
+      getPlatformAttendance: builder.getPlatformAttendance
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ input }) {
+          const services = yield* ApiServices;
+          const from = new Date(`${input.month}-01T00:00:00.000Z`);
+          const attendance = yield* services.attendance.platformAttendance({
+            from,
+            to: new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1)),
+          });
+          return { month: input.month, ...attendance };
+        }),
+
+      getCommunityEngagement: builder.getCommunityEngagement
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* () {
+          const services = yield* ApiServices;
+          const [counts, checkIns] = yield* Effect.all([
+            services.memberDirectory.latestCounts(),
+            services.attendance.engagement(),
+          ]);
+          const checkInsByOrganization = new Map(
+            checkIns.map(({ organizationId, ...rest }) => [organizationId, rest]),
+          );
+          const organizationIds = new Set([...counts.keys(), ...checkInsByOrganization.keys()]);
+          return {
+            communities: [...organizationIds].sort().map((organizationId) => ({
+              organizationId,
+              memberCount: counts.get(organizationId) ?? null,
+              checkIns: checkInsByOrganization.get(organizationId) ?? null,
+            })),
+          };
+        }),
+
+      getAdminEvents: builder.getAdminEvents
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ context }) {
+          const services = yield* ApiServices;
+          const [events, attendance] = yield* Effect.all([
+            services.discovery.adminEvents(context),
+            services.attendance.eventAttendance(),
+          ]);
+          const byEvent = new Map(
+            attendance.map(({ organizationId, eventId, ...rest }) => [
+              `${organizationId}:${eventId}`,
+              rest,
+            ]),
+          );
+          return {
+            events: events.map((event) => ({
+              ...event,
+              checkIns: event.organizationId
+                ? (byEvent.get(`${event.organizationId}:${event.id}`) ?? null)
+                : null,
+            })),
+          };
+        }),
+
+      getCommunityTeamRequests: builder.getCommunityTeamRequests
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ input }) {
+          const services = yield* ApiServices;
+          const requests = yield* services.teamJoinRequests.listAll(input.organizationId);
+          const teams = new Map<
+            string,
+            {
+              teamId: string;
+              teamName: string;
+              teamAreas: ReturnType<typeof recognizedAreas>;
+              pending: number;
+              approved: number;
+              lastRequestAt: string;
+            }
+          >();
+          for (const request of requests) {
+            const team = teams.get(request.teamId) ?? {
+              teamId: request.teamId,
+              teamName: request.teamName,
+              teamAreas: recognizedAreas(request.teamAreas),
+              pending: 0,
+              approved: 0,
+              lastRequestAt: request.createdAt.toISOString(),
+            };
+            if (request.status === "pending") team.pending += 1;
+            if (request.status === "approved") team.approved += 1;
+            team.teamName = request.teamName;
+            team.teamAreas = recognizedAreas(request.teamAreas);
+            team.lastRequestAt = request.createdAt.toISOString();
+            teams.set(request.teamId, team);
+          }
+          return {
+            teams: [...teams.values()].sort((a, b) => a.teamName.localeCompare(b.teamName)),
+            pending: requests
+              .filter((request) => request.status === "pending")
+              .map((request) => ({
+                id: request.id,
+                teamName: request.teamName,
+                requesterName: request.requesterName,
+                endorsementCount: request.endorserUserIds.length,
+                createdAt: request.createdAt.toISOString(),
+              })),
+          };
+        }),
+
+      getPlatformStations: builder.getPlatformStations
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ context }) {
+          return yield* readPlatformStations(context);
+        }),
+
+      setUpPlatformStations: builder.setUpPlatformStations
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          const account = services.platformStationsAccount;
+          if (!account) {
+            return yield* Effect.fail(
+              errors.BAD_REQUEST({
+                message: "Set platformStationsAccount before setting up platform stations",
+                data: {},
+              }),
+            );
+          }
+          yield* validateAccountId(account);
+          const auth = yield* memberAuthClient(context);
+          const tenant = yield* services.tenants.resolveTenantByAccountId(account);
+          const tenantOrganizationId = tenant?.orgId ?? null;
+          const tenantOrganization = tenantOrganizationId
+            ? yield* callAuth(
+                () => auth.getFullOrganization({ organizationId: tenantOrganizationId }),
+                "Could not read the platform organization",
+              )
+            : null;
+          if (tenant && (!tenantOrganization || !isPlatformOrganization(tenantOrganization))) {
+            return yield* Effect.fail(
+              errors.CONFLICT({
+                message: "The stations account already belongs to another tenant",
+              }),
+            );
+          }
+          if (tenant) {
+            const [node] = yield* services.nodes.list({
+              tenantId: tenant.id,
+              kind: PLATFORM_NODE_KIND,
+              includePlatform: true,
+            });
+            if (node) {
+              return yield* Effect.fail(
+                errors.CONFLICT({ message: "Platform stations are already set up" }),
+              );
+            }
+          }
+          if (yield* services.nodes.resolveBySlug(input.slug, null)) {
+            return yield* Effect.fail(
+              errors.CONFLICT({ message: "A node already uses that slug" }),
+            );
+          }
+          const previousActiveOrganizationId = context.organization?.activeOrganizationId ?? null;
+          const organizationId =
+            tenantOrganization?.id ??
+            (yield* callAuth(
+              () => createPlatformOrganization(auth, { name: input.name, slug: input.slug }),
+              "Could not create the platform organization",
+            )).id;
+          if (!tenantOrganization) {
+            yield* callAuth(
+              () => auth.setActiveOrganization({ organizationId: previousActiveOrganizationId }),
+              "Could not restore your active organization",
+            );
+          }
+          const stationsTenant =
+            tenant ??
+            (yield* services.tenants.createTenant({
+              name: input.name,
+              accountId: account,
+              orgId: organizationId,
+              status: "active",
+              ownerKind: "platform",
+              allowUiOverrides: false,
+            }));
+          yield* services.nodes.spawn({
+            kind: PLATFORM_NODE_KIND,
+            slug: input.slug,
+            name: input.name,
+            parentId: null,
+            tenantId: stationsTenant.id,
+          });
+          return yield* readPlatformStations(context);
+        }),
+
+      joinPlatformStations: builder.joinPlatformStations
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ context, errors }) {
+          const current = yield* readPlatformStations(context);
+          if (!current.organization) {
+            return yield* Effect.fail(
+              errors.NOT_FOUND({ message: "Platform stations are not set up", data: {} }),
+            );
+          }
+          if (current.organization.role) return current;
+          const auth = yield* memberAuthClient(context);
+          const organizationId = current.organization.id;
+          yield* callAuth(
+            () => auth.addMember({ userId: context.userId, role: "admin", organizationId }),
+            "Could not add you to the platform organization",
+          );
+          return yield* readPlatformStations(context);
+        }),
 
       getTeamJoinBoard: builder.getTeamJoinBoard.use(requireAuth).effect(function* ({
         input,
@@ -1792,18 +2085,22 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return { community, organization };
         }),
 
-      listNodes: builder.listNodes.effect(function* ({ input }) {
+      listNodes: builder.listNodes.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         return yield* services.nodes.list({
+          includePlatform:
+            context.user?.role === "admin" &&
+            (input.kind !== undefined || input.tenantId !== undefined),
           ...(input.kind !== undefined && { kind: input.kind }),
           ...(input.parentId !== undefined && { parentId: input.parentId }),
           ...(input.tenantId !== undefined && { tenantId: input.tenantId }),
         });
       }),
 
-      listNodeSummaries: builder.listNodeSummaries.effect(function* ({ input }) {
+      listNodeSummaries: builder.listNodeSummaries.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         return yield* services.nodes.listSummaries({
+          includePlatform: context.user?.role === "admin" && input.kind !== undefined,
           ...(input.scope === "roots" && { parentId: null }),
           ...(input.kind !== undefined && { kind: input.kind }),
         });
@@ -1819,6 +2116,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireOrganization)
         .use(requireNodeOperations)
         .effect(function* ({ input, context }) {
+          yield* guardNodeKind(null, requestedNodeKind(input));
           const services = yield* ApiServices;
           yield* requireTenantOwnedByOrg(services, input.tenantId, context);
           if (input.parentId) {
@@ -1839,6 +2137,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireOrganization)
         .use(requireNodeOperations)
         .effect(function* ({ input, context, errors }) {
+          yield* guardNodeKind(null, requestedNodeKind(input));
           const services = yield* ApiServices;
           if (!input.tenantId && context.user?.role !== "admin") {
             return yield* Effect.fail(
@@ -1874,6 +2173,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             adminBypassOrg: true,
             resource: "node",
           });
+          yield* guardNodeKind(node.kind, requestedNodeKind(input));
           if (input.parentId && input.parentId !== node.parentId) {
             yield* authorizeParentNode(services, input.parentId, context);
           }

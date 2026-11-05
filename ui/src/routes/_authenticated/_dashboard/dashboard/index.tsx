@@ -31,6 +31,7 @@ import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
 import { getNextSteps, getNodeSetupSteps } from "./-next-steps";
 import { NextStepsList } from "./-next-steps-list";
 import { NodeSetupChecklist } from "./-node-setup-checklist";
+import { PlatformSummary } from "./-platform-summary";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
@@ -194,6 +195,7 @@ function Home() {
       />
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
+          {isAdmin && <PlatformSummary />}
           {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
           {pending.length > 0 && (
             <section className="flex flex-col gap-6">

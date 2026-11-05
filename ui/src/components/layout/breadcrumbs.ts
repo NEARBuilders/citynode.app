@@ -132,6 +132,8 @@ export function crumbsFor(
       return [ORGS, page(context.orgName?.(second) ?? decodeURIComponent(second))];
     }
     case "admin": {
+      if (second === "stations") return [ADMIN, page(t("org.stations"))];
+      if (second === "events") return [ADMIN, page(t("events.title"))];
       const section = second ? ADMIN_SECTIONS[second] : undefined;
       if (!section) return [page(ADMIN.label)];
       if (!third) return [ADMIN, page(section.label)];
