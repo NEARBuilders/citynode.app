@@ -1,17 +1,20 @@
 import { Effect } from "effect";
 import {
   type DatabaseError,
+  detectDrift,
   type LoadedMigrations,
   loadMigrations as loadSharedMigrations,
   type Migration,
-  type MigrationDatabase,
-  type MigrationReport,
   type MigrationStorage,
   runMigrations,
 } from "everything-dev/db";
 
-export type { DriftReport, LoadedMigrations } from "everything-dev/db";
-export { detectDrift } from "everything-dev/db";
+type MigrationDatabase = Parameters<typeof runMigrations>[0];
+type MigrationReport = Effect.Success<ReturnType<typeof runMigrations>>;
+export type DriftReport = Effect.Success<ReturnType<typeof detectDrift>>;
+
+export type { LoadedMigrations };
+export { detectDrift };
 
 export const loadMigrations: Effect.Effect<LoadedMigrations, DatabaseError> = loadSharedMigrations({
   fromDir: import.meta.dirname,
