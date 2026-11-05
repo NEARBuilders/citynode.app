@@ -193,7 +193,7 @@ describe("MemberDaoPanel", () => {
     renderPanel();
     expect((await screen.findByTestId("member-dao.bond")).textContent).toContain("1 NEAR bond");
     const insufficient = await screen.findByTestId("member-dao.insufficient");
-    expect(insufficient.textContent).toContain("needs 0.76 more NEAR");
+    expect(insufficient.textContent).toContain("needs 0.75 more NEAR");
     expect(insufficient.textContent).toContain(MEMBER);
     expect((screen.getByTestId("member-dao.become") as HTMLButtonElement).disabled).toBe(true);
   });
@@ -209,13 +209,13 @@ describe("MemberDaoPanel", () => {
     await waitFor(() => expect(harness.submitProposalWithBond.mock.calls[0]?.[4]).toBe(NEAR));
   });
 
-  it("blocks a wallet that holds the bond but not the gas", async () => {
+  it("lets a wallet that holds exactly the bond submit", async () => {
     harness.policy = policy({ bond: NEAR.toString() });
     harness.spendable = NEAR;
     renderPanel();
-    const insufficient = await screen.findByTestId("member-dao.insufficient");
-    expect(insufficient.textContent).toContain("needs 0.01 more NEAR");
-    expect((screen.getByTestId("member-dao.become") as HTMLButtonElement).disabled).toBe(true);
+    const become = await screen.findByTestId("member-dao.become");
+    await waitFor(() => expect((become as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByTestId("member-dao.insufficient")).toBeNull();
   });
 
   it("never submits when the bond can't be read", async () => {
@@ -244,7 +244,7 @@ describe("MemberDaoPanel", () => {
     harness.policy = policy({ everyone: [] });
     renderPanel();
     expect((await screen.findByTestId("member-dao.governance-only")).textContent).toContain(
-      "Governance group adds Contributors",
+      "Governance group adds contributors",
     );
   });
 
