@@ -139,10 +139,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "需要你处理的事项，以及各社区本月的进展。",
   ],
   "admin.summary.returningHint": [
-    "of {count} checked in · {previous} last month",
-    "de {count} registrados · {previous} el mes pasado",
-    "sur {count} venus · {previous} le mois dernier",
-    "共 {count} 人签到 · 上月 {previous}",
+    "of {count} checked in",
+    "de {count} registrados",
+    "sur {count} venus",
+    "{count} 人签到",
   ],
   "admin.summary.coverage": [
     "Check-ins from {synced} of {total} communities. The others haven't synced attendance yet.",

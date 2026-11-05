@@ -78,12 +78,14 @@ export function PlatformSummary() {
           label={translate("admin.progress.returning")}
           value={attendanceQuery.data?.returning ?? "—"}
           hint={
-            attendanceQuery.data
-              ? translate("admin.summary.returningHint", {
-                  count: attendanceQuery.data.people,
-                  previous: previousAttendanceQuery.data?.returning ?? "—",
-                })
-              : undefined
+            attendanceQuery.data && (
+              <>
+                <span className="block">
+                  {translate("admin.summary.returningHint", { count: attendanceQuery.data.people })}
+                </span>
+                <span className="block">{lastMonth(previousAttendanceQuery.data?.returning)}</span>
+              </>
+            )
           }
           onRetry={attendanceQuery.isError ? () => void attendanceQuery.refetch() : undefined}
           testId="home-platform-returning"
