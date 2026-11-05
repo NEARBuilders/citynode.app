@@ -602,20 +602,24 @@ export default createPlugin.withPlugins<PluginsClient>()({
         catch: memberReadFailure("Could not load the community's members"),
       });
 
-    const listAllMembers = (auth: MemberAuthClient, organizationId: string) =>
+    const findMembers = (auth: MemberAuthClient, organizationId: string, wanted: Set<string>) =>
       Effect.gen(function* () {
-        const members: Awaited<ReturnType<MemberAuthClient["listMembers"]>>["members"] = [];
-        let total = 0;
-        while (true) {
+        const found = new Map<string, string | null>();
+        let offset = 0;
+        while (found.size < wanted.size) {
           const page = yield* listMemberPage(auth, organizationId, {
             limit: MEMBER_PAGE_SIZE,
-            offset: members.length,
+            offset,
           });
-          total = page.total;
-          members.push(...page.members);
-          if (page.members.length === 0 || members.length >= page.total) break;
+          offset += page.members.length;
+          for (const member of page.members) {
+            if (member.organizationId === organizationId && wanted.has(member.userId)) {
+              found.set(member.userId, member.user?.name ?? null);
+            }
+          }
+          if (page.members.length === 0 || offset >= page.total) break;
         }
-        return { members, total };
+        return found;
       });
 
     const requireCommunityMember = (auth: MemberAuthClient, organizationId: string) =>
@@ -625,17 +629,20 @@ export default createPlugin.withPlugins<PluginsClient>()({
           catch: memberReadFailure("Could not verify community membership"),
         });
         if (!role) return yield* Effect.fail(notACommunityMember());
+        return role;
       });
 
     const teamJoinConflict = (message: string) => new ORPCError("CONFLICT", { message });
 
-    const loadTeamCommunity = (auth: MemberAuthClient, organizationId: string, userId: string) =>
+    const loadTeamCommunity = (
+      auth: MemberAuthClient,
+      organizationId: string,
+      viewer: { userId: string; name: string | null },
+    ) =>
       Effect.gen(function* () {
         const services = yield* ApiServices;
-        const { members } = yield* listAllMembers(auth, organizationId);
-        const current = members.filter((member) => member.organizationId === organizationId);
-        const caller = current.find((member) => member.userId === userId);
-        if (!caller) return yield* Effect.fail(notACommunityMember());
+        const { userId } = viewer;
+        const role = yield* requireCommunityMember(auth, organizationId);
         const [teams, ownTeams] = yield* Effect.tryPromise({
           try: () =>
             Promise.all([
@@ -647,12 +654,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
               message: "Could not load the community's teams",
             }),
         });
+        const stored = yield* services.teamJoinRequests.list(organizationId, userId);
+        const requesters = new Set(
+          stored
+            .filter((request) => request.status === "pending" && request.requesterUserId !== userId)
+            .map((request) => request.requesterUserId),
+        );
+        const names = yield* findMembers(auth, organizationId, requesters);
+        names.set(userId, viewer.name);
         const community = {
-          memberIds: new Set(current.map((member) => member.userId)),
-          names: new Map(current.map((member) => [member.userId, member.user?.name ?? null])),
+          memberIds: new Set(names.keys()),
+          names,
           teams: new Map<string, UpstreamTeam>(teams.map((team) => [team.id, team])),
         };
-        const stored = yield* services.teamJoinRequests.list(organizationId, userId);
         const closures = stored.flatMap((request) => {
           if (request.status !== "pending") return [];
           const reason = closureReason(request, community);
@@ -667,7 +681,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...community,
           userId,
           organizationId,
-          canReview: isCommunitySettingsRole(caller.role),
+          canReview: isCommunitySettingsRole(role),
           ownTeamIds: new Set(ownTeams.map((team) => team.id)),
           requests,
         };
@@ -718,7 +732,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         const auth = yield* memberAuthClient(context);
-        const community = yield* loadTeamCommunity(auth, stored.organizationId, context.userId);
+        const community = yield* loadTeamCommunity(auth, stored.organizationId, {
+          userId: context.userId,
+          name: context.user?.name ?? null,
+        });
         const request = community.requests.find((candidate) => candidate.id === requestId);
         if (!request || !canSeeTeamRequest(community, request)) {
           return yield* Effect.fail(
@@ -1078,7 +1095,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         context,
       }) {
         const auth = yield* memberAuthClient(context);
-        const community = yield* loadTeamCommunity(auth, input.organizationId, context.userId);
+        const community = yield* loadTeamCommunity(auth, input.organizationId, {
+          userId: context.userId,
+          name: context.user?.name ?? null,
+        });
         const pendingByTeam = new Map(
           community.requests
             .filter(
@@ -1108,7 +1128,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
-        const community = yield* loadTeamCommunity(auth, input.organizationId, context.userId);
+        const community = yield* loadTeamCommunity(auth, input.organizationId, {
+          userId: context.userId,
+          name: context.user?.name ?? null,
+        });
         const team = community.teams.get(input.teamId);
         if (!isJoinableTeam(team)) {
           return yield* Effect.fail(

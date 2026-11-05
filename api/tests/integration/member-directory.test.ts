@@ -336,7 +336,7 @@ describe("member directory upstream cost", () => {
     };
   }
 
-  it("makes the same upstream calls at any community size and does not rewrite the count", async () => {
+  it("makes the same upstream calls at any size when a name is on the first page and does not rewrite the count", async () => {
     const small = await viewCost(1000);
     const large = await viewCost(5000);
     expect(small.count).toBe(1000);
@@ -346,6 +346,23 @@ describe("member directory upstream cost", () => {
     expect(large.pages).toEqual([{ limit: 100, offset: 0 }]);
     expect(small.observedAt[1]).toBe(small.observedAt[0]);
     expect(large.observedAt[1]).toBe(large.observedAt[0]);
+  });
+
+  it("reads at most ten member pages per view when nobody in the first thousand opted in", async () => {
+    const { orgId } = await community(
+      Array.from({ length: 5000 }, (_, index) => ({ userId: `quiet-${index}`, name: null })),
+    );
+    const viewer = await memberClient("quiet-0");
+    memberPages.length = 0;
+    roleLookups.length = 0;
+    accountReads.length = 0;
+    const page = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(page).toMatchObject({ members: [], nextCursor: "1000" });
+    expect(roleLookups.length).toBe(1);
+    expect(accountReads.length).toBe(0);
+    expect(memberPages).toEqual(
+      Array.from({ length: 10 }, (_, index) => ({ limit: 100, offset: index * 100 })),
+    );
   });
 
   it("rewrites the count when it changes", async () => {
