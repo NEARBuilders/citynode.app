@@ -642,6 +642,33 @@ describe("node overview member directory", () => {
     expect(cursors).toEqual([undefined, "100", "200"]);
   });
 
+  it("explains an empty first page and shows a member repeated across pages once", async () => {
+    stubChain();
+    const pages: Record<string, { members: unknown[]; nextCursor: string | null }> = {
+      start: { members: [], nextCursor: "100" },
+      "100": { members: [{ userId: "zoe", name: "Zoe", accountId: null }], nextCursor: "200" },
+      "200": { members: [{ userId: "zoe", name: "Zoe", accountId: null }], nextCursor: null },
+    };
+    harness.memberDirectory.directory = async ({ cursor }) => ({
+      count: 250,
+      observedAt,
+      ...pages[cursor ?? "start"],
+    });
+    renderOverview({ nearAccount: null });
+    expect(await screen.findByTestId("dashboard-node.members-none-yet")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-node.members-empty")).toBeNull();
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    const names = () =>
+      screen.getAllByTestId("dashboard-node.member").map((item) => item.textContent);
+    await waitFor(() => expect(names()).toEqual(["Zoe"]));
+    expect(screen.queryByTestId("dashboard-node.members-none-yet")).toBeNull();
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    await waitFor(() =>
+      expect(screen.queryByTestId("dashboard-node.members-load-more")).toBeNull(),
+    );
+    expect(names()).toEqual(["Zoe"]);
+  });
+
   it("wraps long names inside a 375px screen instead of overflowing", async () => {
     stubChain();
     directoryWith([{ userId: "long", name: longName, accountId: null }]);

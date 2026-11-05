@@ -30,7 +30,16 @@ export function MemberDirectory({
   const directory = useInfiniteQuery(memberDirectoryQueryOptions(apiClient, organizationId));
   const loadFailed = directory.isError && !directory.isFetchNextPageError;
   const firstPage = loadFailed ? undefined : directory.data?.pages[0];
-  const members = loadFailed ? [] : (directory.data?.pages.flatMap((page) => page.members) ?? []);
+  const members = loadFailed
+    ? []
+    : [
+        ...new Map(
+          (directory.data?.pages.flatMap((page) => page.members) ?? []).map((member) => [
+            member.userId,
+            member,
+          ]),
+        ).values(),
+      ];
   const cachedCount = useQuery({
     ...nodeMemberCountQueryOptions(apiClient, nodeId),
     enabled: loadFailed,
@@ -130,6 +139,10 @@ export function MemberDirectory({
       ) : firstPage && members.length === 0 && !directory.hasNextPage ? (
         <p className="text-sm text-muted-foreground" data-testid="dashboard-node.members-empty">
           {translate("members.noneShared")}
+        </p>
+      ) : firstPage && members.length === 0 ? (
+        <p className="text-sm text-muted-foreground" data-testid="dashboard-node.members-none-yet">
+          {translate("members.noneSharedYet")}
         </p>
       ) : members.length > 0 ? (
         <ul className="flex min-w-0 flex-col gap-2" data-testid="dashboard-node.member-list">
