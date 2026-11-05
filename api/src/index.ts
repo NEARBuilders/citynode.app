@@ -32,6 +32,12 @@ import {
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import {
+  type OnboardingLinkRecord,
+  OnboardingLinksLive,
+  type OnboardingLinksService,
+  OnboardingLinksTag,
+} from "./services/onboarding-links";
+import {
   makeStakingPools,
   StakingPoolCheckFailed,
   type StakingPoolsService,
@@ -84,6 +90,7 @@ class ApiServices extends Context.Service<
     memberDirectory: MemberDirectoryService;
     attendance: AttendanceService;
     teamJoinRequests: TeamJoinRequestsService;
+    onboardingLinks: OnboardingLinksService;
     stakingPools: StakingPoolsService;
   }
 >()("api/ApiServices") {}
@@ -188,6 +195,34 @@ const requireNodeOperationsAccess = (context: NodeAccessContext): NodeEffect<voi
   canUseTeamArea(context, "node-operations")
     ? Effect.void
     : Effect.fail(teamAreaForbidden(["node-operations"]));
+
+const requireOnboardingLinkOrganizer = (
+  context: NodeAccessContext,
+  organizationId: string,
+): NodeEffect<void> => {
+  if (context.organization?.activeOrganizationId !== organizationId) {
+    return Effect.fail(
+      new ORPCError("FORBIDDEN", {
+        message: "Switch to this organization to manage its onboarding links",
+        data: {},
+      }),
+    );
+  }
+  return canUseTeamArea(context, "events")
+    ? Effect.void
+    : Effect.fail(teamAreaForbidden(["events"]));
+};
+
+const toOnboardingLink = (link: OnboardingLinkRecord) => ({
+  id: link.id,
+  slug: link.slug,
+  name: link.name,
+  destination: link.destination,
+  enabled: link.enabled,
+  visitCount: link.visitCount,
+  lastVisitedAt: link.lastVisitedAt?.toISOString() ?? null,
+  createdAt: link.createdAt.toISOString(),
+});
 
 const resolveNodeForAccess = (
   services: { nodes: NodesService },
@@ -434,6 +469,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           MemberDirectoryLive,
           AttendanceLive,
           TeamJoinRequestsLive,
+          OnboardingLinksLive,
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
@@ -449,6 +485,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           memberDirectory: Context.get(services, MemberDirectoryTag),
           attendance: Context.get(services, AttendanceTag),
           teamJoinRequests: Context.get(services, TeamJoinRequestsTag),
+          onboardingLinks: Context.get(services, OnboardingLinksTag),
           stakingPools: makeStakingPools({
             mainnet: config.variables.mainnetStakingPoolWhitelist,
             testnet: config.variables.testnetStakingPoolWhitelist,
@@ -1025,6 +1062,65 @@ export default createPlugin.withPlugins<PluginsClient>()({
           };
         });
         return yield* services.attendance.history({ userId: context.userId, communities });
+      }),
+
+      listOnboardingLinks: builder.listOnboardingLinks.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        yield* requireOnboardingLinkOrganizer(context, input.organizationId);
+        const services = yield* ApiServices;
+        const links = yield* services.onboardingLinks.list(input.organizationId);
+        return links.map(toOnboardingLink);
+      }),
+
+      createOnboardingLink: builder.createOnboardingLink.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        yield* requireOnboardingLinkOrganizer(context, input.organizationId);
+        const services = yield* ApiServices;
+        const link = yield* services.onboardingLinks.create({
+          organizationId: input.organizationId,
+          name: input.name,
+          destination: input.destination,
+          createdByUserId: context.userId,
+        });
+        return toOnboardingLink(link);
+      }),
+
+      updateOnboardingLink: builder.updateOnboardingLink.use(requireAuth).effect(function* ({
+        input,
+        context,
+        errors,
+      }) {
+        yield* requireOnboardingLinkOrganizer(context, input.organizationId);
+        const services = yield* ApiServices;
+        const existing = yield* services.onboardingLinks.get(input.linkId);
+        if (!existing || existing.organizationId !== input.organizationId) {
+          return yield* Effect.fail(
+            errors.NOT_FOUND({ message: "Onboarding link not found", data: {} }),
+          );
+        }
+        const { linkId, organizationId: _organizationId, ...patch } = input;
+        const updated = yield* services.onboardingLinks.update(linkId, patch);
+        if (!updated) {
+          return yield* Effect.fail(
+            errors.NOT_FOUND({ message: "Onboarding link not found", data: {} }),
+          );
+        }
+        return toOnboardingLink(updated);
+      }),
+
+      openOnboardingLink: builder.openOnboardingLink.effect(function* ({ input, errors }) {
+        const services = yield* ApiServices;
+        const destination = yield* services.onboardingLinks.recordVisit(input.slug);
+        if (!destination) {
+          return yield* Effect.fail(
+            errors.NOT_FOUND({ message: "This link isn't active", data: {} }),
+          );
+        }
+        return { destination };
       }),
 
       getTeamJoinBoard: builder.getTeamJoinBoard.use(requireAuth).effect(function* ({

@@ -17,3 +17,7 @@ export function getGatewayOrigin(
 export function onboardingUrl(gatewayOrigin: string, code: string): string {
   return `${gatewayOrigin}/onboard?code=${encodeURIComponent(code)}`;
 }
+
+export function onboardingLinkUrl(gatewayOrigin: string, slug: string): string {
+  return `${gatewayOrigin}/go/${encodeURIComponent(slug)}`;
+}

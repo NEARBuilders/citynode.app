@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getGatewayOrigin, onboardingUrl } from "./gateway-origin";
+import { getGatewayOrigin, onboardingLinkUrl, onboardingUrl } from "./gateway-origin";
 
 describe("getGatewayOrigin", () => {
   it("points an organizer on a tenant domain at the gateway", () => {
@@ -25,6 +25,14 @@ describe("onboardingUrl", () => {
   it("builds the onboard link for a code on the gateway", () => {
     expect(onboardingUrl("https://citynode.app", "abc_DEF-123")).toBe(
       "https://citynode.app/onboard?code=abc_DEF-123",
+    );
+  });
+});
+
+describe("onboardingLinkUrl", () => {
+  it("builds the short link that counts a scan on the gateway", () => {
+    expect(onboardingLinkUrl("https://citynode.app", "ab23cd45")).toBe(
+      "https://citynode.app/go/ab23cd45",
     );
   });
 });

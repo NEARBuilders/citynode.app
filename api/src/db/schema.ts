@@ -314,3 +314,23 @@ export const teamJoinEndorsements = pgTable(
     oncePerEndorser: uniqueIndex("team_join_endorsements_once").on(t.requestId, t.endorserUserId),
   }),
 );
+
+export const onboardingLinks = pgTable(
+  "onboarding_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    destination: text("destination").notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    visitCount: integer("visit_count").default(0).notNull(),
+    lastVisitedAt: timestamp("last_visited_at", { mode: "date", withTimezone: true }),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    organizationIdx: index("onboarding_links_organization").on(t.organizationId),
+  }),
+);

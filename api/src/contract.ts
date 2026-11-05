@@ -348,6 +348,26 @@ export const JoinableTeamSchema = z.object({
   pendingRequestId: z.string().nullable(),
 });
 
+export const ONBOARDING_LINK_NAME_MAX = 80;
+export const ONBOARDING_LINK_DESTINATION_MAX = 2048;
+
+export const OnboardingLinkDestinationSchema = z
+  .string()
+  .trim()
+  .max(ONBOARDING_LINK_DESTINATION_MAX)
+  .pipe(z.url({ protocol: /^https?$/, hostname: z.regexes.domain }));
+
+export const OnboardingLinkSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  destination: z.string(),
+  enabled: z.boolean(),
+  visitCount: z.number().int().nonnegative(),
+  lastVisitedAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+});
+
 export const TeamJoinRequestSchema = z.object({
   id: z.string(),
   teamId: z.string(),
@@ -1102,6 +1122,65 @@ export const contract = oc.router({
     .input(z.object({ requestId: z.uuid(), decision: z.enum(["approve", "decline"]) }))
     .output(TeamJoinRequestSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONNECTION_ERROR, ...TEAM_JOIN_CONFLICT }),
+
+  listOnboardingLinks: oc
+    .route({
+      method: "GET",
+      path: "/onboarding-links",
+      summary: "List a community's onboarding links",
+      description: "Organizers of the caller's active organization only.",
+    })
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .output(z.array(OnboardingLinkSchema))
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  createOnboardingLink: oc
+    .route({
+      method: "POST",
+      path: "/onboarding-links",
+      summary: "Create an onboarding link with a QR code",
+      description:
+        "Organizers of the caller's active organization only. The link gets a short citynode.app address that counts visits and redirects to the destination.",
+    })
+    .input(
+      z.object({
+        organizationId: z.string().min(1),
+        name: z.string().trim().min(1).max(ONBOARDING_LINK_NAME_MAX),
+        destination: OnboardingLinkDestinationSchema,
+      }),
+    )
+    .output(OnboardingLinkSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
+
+  updateOnboardingLink: oc
+    .route({
+      method: "PATCH",
+      path: "/onboarding-links/{linkId}",
+      summary: "Rename, repoint, or turn an onboarding link on or off",
+      description: "Organizers of the link's organization, while it is their active one.",
+    })
+    .input(
+      z.object({
+        linkId: z.uuid(),
+        organizationId: z.string().min(1),
+        name: z.string().trim().min(1).max(ONBOARDING_LINK_NAME_MAX).optional(),
+        destination: OnboardingLinkDestinationSchema.optional(),
+        enabled: z.boolean().optional(),
+      }),
+    )
+    .output(OnboardingLinkSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  openOnboardingLink: oc
+    .route({
+      method: "POST",
+      path: "/onboarding-links/open/{slug}",
+      summary: "Count a visit to an onboarding link and return where it goes",
+      description: "Public. Turned-off and unknown links are NOT_FOUND and aren't counted.",
+    })
+    .input(z.object({ slug: z.string().min(1).max(32) }))
+    .output(z.object({ destination: z.string() }))
+    .errors({ NOT_FOUND }),
 });
 
 export type ContractType = typeof contract;

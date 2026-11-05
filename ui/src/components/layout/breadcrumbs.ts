@@ -87,6 +87,8 @@ export function crumbsFor(
   if (segments.length === 0) return [page(context.appName ?? "CityNode")];
 
   switch (first) {
+    case "go":
+      return [page(t("links.title"))];
     case "dashboard":
       if (second !== "node") return [page(HOME.label)];
       if (third === "proposals") {

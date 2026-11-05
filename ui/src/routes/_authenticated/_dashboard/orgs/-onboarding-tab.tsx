@@ -42,6 +42,7 @@ import { translateEnglishAppMessage, useAppLocale, useAppTranslation } from "@/i
 import { formatRemaining, onboardingCodeState } from "@/lib/onboarding-codes";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { OnboardingLinks } from "./-onboarding-links";
 
 type OnboardingCodeSummary = Awaited<ReturnType<ApiClient["auth"]["listOnboardingCodes"]>>[number];
 type OnboardingStatus = Awaited<ReturnType<ApiClient["auth"]["getOnboardingStatus"]>>;
@@ -396,6 +397,8 @@ export function OnboardingTab({
           className="py-10"
         />
       )}
+
+      <OnboardingLinks apiClient={apiClient} orgId={orgId} isActive={isActive} />
 
       <ConfirmDialog
         open={revoking !== null}
