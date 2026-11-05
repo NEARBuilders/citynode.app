@@ -404,7 +404,6 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Exécutez, modifiez et publiez avec un agent",
     "通过智能体运行、修改和发布",
   ],
-  "skill.sourceMeta": ["Source code", "Código fuente", "Code source", "源代码"],
   "skill.unavailable": [
     "Skill prompt unavailable",
     "Prompt de habilidad no disponible",

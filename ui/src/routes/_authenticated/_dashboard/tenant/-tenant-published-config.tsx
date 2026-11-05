@@ -327,7 +327,7 @@ export function TenantPublishedConfig({
         />
         <ConfigField
           id="tenant-published-config-repository"
-          label={translate("about.repository")}
+          label={translate("common.repository")}
           value={draft.repository}
           onChange={(value) => editDraft((prev) => ({ ...prev, repository: value }))}
           placeholder="https://github.com/…"

@@ -1,6 +1,6 @@
 # City Nodes skill
 
-Use this when you want an agent to run, edit, and publish the **City Nodes** app — a decentralized network of NEAR validator nodes organized by geography. City Nodes is an `everything.dev` app: it runs on the everything.dev runtime platform (Module Federation host + oRPC API + Better-Auth with NEAR SIWN) and is composed at runtime from `bos.config.json`.
+Use this when you want an agent to run, edit, and publish the **City Nodes** app — local communities on NEAR, each with its own Node DAO, events and validator. City Nodes is an `everything.dev` app: it runs on the everything.dev runtime platform (Module Federation host + oRPC API + Better-Auth with NEAR SIWN) and is composed at runtime from `bos.app.ts`.
 
 There are two ways to work with this app:
 
@@ -27,11 +27,11 @@ All API operations require authentication. Use an **API key**:
 
 1. Sign in with your NEAR wallet at the website (Sign-In-With-NEAR / SIWN).
 2. Navigate to **Settings → API Keys** at `/settings/api-keys`.
-3. Create a new key. The full secret (`edk_...`) is shown once — copy it immediately.
+3. Create a new key. The full secret (`api_...`) is shown once — copy it immediately.
 4. Pass the key on every request:
 
 ```
-x-api-key: edk_your_key_here
+x-api-key: api_your_key_here
 ```
 
 This header works for `/api/*` (REST), `/api/rpc/*` (oRPC RPC), and `/api/mcp` (MCP).
@@ -72,21 +72,21 @@ Auth plugin operations (session, NEAR SIWN, relay, API keys, organizations) are 
 
 ### What this repo is
 
-This repo is the **main City Nodes runtime** — it contains the full everything.dev platform (host, CLI, plugin framework in `packages/`) plus the City Nodes product surface (UI, API, plugins). It is not a generated child project.
+This repo is the **City Nodes runtime**, a child project of everything.dev. It contains the City Nodes product surface (UI, API, plugins); the host, CLI and plugin framework come from the published platform and the `everything-dev` and `every-plugin` packages.
 
-- Work across `host/`, `api/`, `ui/`, `plugins/`, and `packages/` as needed.
+- Work across `api/`, `ui/` and `plugins/` (`proposals`, `registry`) as needed. The host and the auth plugin come from the published everything.dev platform.
 - The host is kept generic. UI is meant to be combined and put together. API aggregates plugins and is a plugin itself.
 - **Remotes are not hosted APIs** — they are code bundles loaded via Module Federation at runtime. Everything runs in this runtime process, not on a remote server.
-- It is okay to update the runtime and runtime-owned code. This repository is the main runtime, actively being improved and simplified per `plans/beta-v2/`.
-- A generated child repo created by `bos init` works primarily in `ui/src/` and `bos.config.json`, inheriting the upstream host, auth, and API.
+- `bos.app.ts` extends the published everything.dev platform and overrides only what City Node changes. Most work lands in `ui/src/`, `api/src/` and `bos.app.ts`.
+- Files with a `FRAMEWORK-OWNED` header are reconciled from upstream on `bos upgrade`; read `AGENTS.md` before editing them.
 
 ### What this app is
 
-- **City Nodes** is a product, not a platform. The product surface: visitors browse a directory of geographic nodes (countries, states, cities), drill into a node's subdomain, and stake NEAR to that node's validator pool.
-- A **node** is a NEAR validator tied to a real place. Each node has its own subdomain (`chicago.citynode.app`), its own NEAR treasury account, and 0..N validator pools. Nodes form a geography tree (country → state → city); a node's **subtree** aggregates validators for staking.
+- **City Nodes** is a network of local communities on NEAR. The product explanation lives at `/docs` (the overview); this section covers only what an agent needs to change code. Domain terms are defined in `CONTEXT.md` at the repo root.
+- A **node** is a community tied to a place. Nodes form a tree through `parentId` (countries, states, cities; a city may also be top-level). Each node belongs to an organization (members and teams), has a Node DAO account, and can have its own subdomain (`chicago.citynode.app`).
 - A **validator** is the staking target: `account_id`, `protocol` (today: NEAR), `role` (`official` or `community`), and `is_default`. A node with no validators inherits from its parent chain.
 - The **platform tenant** (`v1.citynode.near`) serves `citynode.app` — the root directory. It has a tenant record but no node record; it is the deployment surface, not a place.
-- `bos.config.json` is the canonical runtime manifest. The host loads UI, API, and auth at runtime from URLs in the config.
+- `bos.app.ts` is the authored app descriptor; the published runtime config is canonicalized to JSON from it. The host loads UI, API, and auth at runtime from URLs in the published config.
 
 ### Read AGENTS.md first
 
@@ -101,18 +101,20 @@ After cloning, read **`AGENTS.md`** at the repo root. It contains:
 
 Public routes (no auth):
 
-- `/` — landing: "What are CityNodes?" hero + directory of root nodes + Apply button
-- `/about` — renders the repo `README.md` (the CityNodes product explainer) via a README-fetching loader
-- `/apply` — internal route that redirects externally to `https://citynode.app/apply`
+- `/` — landing: hero with Explore communities and Start a community, community stats, the directory of root communities, How it works, and links to `/apply` and `/docs`
+- `/docs` — docs overview: what a City Node is, joining, staking and rewards, starting a community (i18n messages)
+- `/docs/build` — builder hub linking the agent skill, `skill.md`, `llms.txt`, the API reference, MCP and the repository
+- `/about` — redirects to `/docs`
+- `/stake` — stake page: subtree validators with selector (official/community, `is_default` pre-selected)
+- `/login` — sign-in page from the auth plugin
 - `/skill` — renders this `skill.md`
 - `/skill.md`, `/llms.txt` — raw doc endpoints
 - `/$accountId` — NEAR account profile overview (public)
 
 Authed routes (behind `_authenticated`):
 
-- `/login` — NEAR wallet sign-in entry (SIWN)
 - `/dashboard` — authenticated landing
-- `/stake` — stake page: subtree validators with selector (official/community, `is_default` pre-selected)
+- `/apply` — application form for an organization to start a community
 - `/orgs` — Better-Auth organizations (node management orgs)
 - `/settings/*` — user settings (profile, auth methods, security, API keys)
 - `/admin/*` — admin surface: tenants, nodes, relayer, system (admin role only)
@@ -174,20 +176,21 @@ bos start --no-interactive   # production URLs
 ### Publish
 
 ```bash
-bos build               # build all packages (updates bos.config.json)
-bos publish             # publish config to the FastKV registry
-bos publish --deploy    # build/deploy all workspaces, then publish
-bos sync                # sync from upstream
+bos build      # build selected workspaces
+bos publish    # publish the current config to the FastKV registry (no build)
+bos deploy     # full train: preflight → build → upload bundles → publish config → runtime image → Railway
+bos upgrade    # upgrade framework packages and sync template files
 ```
 
-After `bos publish --deploy`, `bos.config.json` gets deployed URLs + integrity.
+Use `bos deploy` for a release. `bos publish` alone republishes the config without building.
 
 ### Regression tests
 
-The repo has a Go-based regression test suite under `tests/regression/`. These cover boot surface, auth flows, CORS, OpenAPI, security headers, tenant bindings, and plugin registry. Keep them solid.
+The regression suite under `tests/regression/` is Playwright browser specs (`tests/regression/browser/specs/`) plus Node unit tests for the harness (`tests/regression/lib/*.test.mjs`). The browser specs boot a real stack and cover sign-in and onboarding, organizer stations, admin, tenancy, community settings, stake scope and the docs pages. Keep them solid.
 
 ```bash
-cd tests/regression && go test ./http/ -v
+pnpm run test:regression:unit
+pnpm run test:regression:browser   # dev:ssr stack; needs Postgres test databases, see tests/README.md
 ```
 
 ### Good tasks for an agent
@@ -201,7 +204,8 @@ cd tests/regression && go test ./http/ -v
 ## Public entry points
 
 - `/`
-- `/about`
+- `/docs`
+- `/docs/build`
 - `/apply` (redirects to `https://citynode.app/apply`)
 - `/skill`
 - `/skill.md`
@@ -214,4 +218,4 @@ cd tests/regression && go test ./http/ -v
 
 ## Tone
 
-Prefer product-first explanations for visitors (what a City Node is, why stake), and runtime-first explanations for builders (how the host, UI, and API compose from `bos.config.json`). Keep NEAR and Module Federation context intact.
+Prefer product-first explanations for visitors (what a City Node is, why stake), and runtime-first explanations for builders (how the host, UI, and API compose from the published config). Keep NEAR and Module Federation context intact.

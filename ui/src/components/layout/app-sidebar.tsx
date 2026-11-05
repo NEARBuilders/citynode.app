@@ -21,7 +21,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAppTranslation } from "@/i18n/runtime";
-import { groupSidebarItems, isNavItemActive, navSlug, type SidebarItem } from "./nav-items";
+import {
+  groupSidebarItems,
+  isDocsPath,
+  isNavItemActive,
+  navSlug,
+  type SidebarItem,
+} from "./nav-items";
 import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
 import { SidebarTeamSwitcher } from "./sidebar-team-switcher";
 import { useClearStaleTeam } from "./use-clear-stale-team";
@@ -108,12 +114,12 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              isActive={pathname === "/about" || pathname === "/skill"}
-              tooltip={translate("footer.about")}
-              render={<Link to="/about" data-testid="sidebar-nav-about" />}
+              isActive={isDocsPath(pathname)}
+              tooltip={translate("about.title")}
+              render={<Link to="/docs" data-testid="sidebar-nav-about" />}
             >
               <InfoIcon />
-              <span>{translate("footer.about")}</span>
+              <span>{translate("about.title")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>

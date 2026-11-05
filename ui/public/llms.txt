@@ -1,10 +1,12 @@
 # City Nodes
 
-> Decentralized city nodes on NEAR — each city is a tenant with its own validator pool you can stake to.
+> Local communities on NEAR. Each one meets in person, has its own Node DAO and can run its own validator.
 
 ## Skills
 
 - [Skill](/skill.md): Agent-ready prompt for talking to, running, editing, and publishing this runtime.
+- [Docs](/docs): Overview of City Nodes for people.
+- [Builders](/docs/build): Hub linking the skill, API reference, MCP and source.
 
 ## API
 
