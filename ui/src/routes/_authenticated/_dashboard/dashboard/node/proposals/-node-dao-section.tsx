@@ -14,7 +14,6 @@ interface CommunityNode {
   parentId?: string | null;
 }
 
-/** The Node DAO part of the Proposals tab: the member panel, or why there isn't one. */
 export function NodeDaoSection({ node }: { node: CommunityNode }) {
   const translate = useAppTranslation();
   const apiClient = useApiClient();

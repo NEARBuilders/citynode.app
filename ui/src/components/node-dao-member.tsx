@@ -35,7 +35,6 @@ import {
 } from "@/lib/queries/node-dao";
 import {
   isOpenProposal,
-  MEMBER_PROPOSAL_GAS_RESERVE_YOCTO,
   type SputnikProposal,
   type SputnikVoteAction,
   submitProposalWithBond,
@@ -52,11 +51,6 @@ export interface MemberDaoPanelProps {
   community: { name: string; slug: string; parentId?: string };
 }
 
-/**
- * My community → Proposals, for the signed-in member: become a Contributor
- * (#477), then file polls (#413). Every state is read from the Node DAO's
- * policy and open proposals.
- */
 export function MemberDaoPanel({ daoAccountId, community }: MemberDaoPanelProps) {
   const translate = useAppTranslation();
   const accountId = useNearAccount();
@@ -356,7 +350,6 @@ function PollForm({
 }
 
 interface BondFunds {
-  /** True when there's no bond, or the wallet holds enough to pay it. */
   enough: boolean;
   status: "none" | "loading" | "error" | "ready";
   spendableYocto: bigint | null;
@@ -368,8 +361,7 @@ function useBondFunds(accountId: string, bondYocto: bigint | null): BondFunds {
   if (!needsFunds) return { enough: bondYocto !== null, status: "none", spendableYocto: null };
   if (query.isPending) return { enough: false, status: "loading", spendableYocto: null };
   if (query.isError) return { enough: false, status: "error", spendableYocto: null };
-  const needed = bondYocto + MEMBER_PROPOSAL_GAS_RESERVE_YOCTO;
-  return { enough: query.data >= needed, status: "ready", spendableYocto: query.data };
+  return { enough: query.data >= bondYocto, status: "ready", spendableYocto: query.data };
 }
 
 function BondNotice({
@@ -401,9 +393,7 @@ function BondNotice({
       ) : funds.status === "ready" && !funds.enough ? (
         <p role="alert" className="text-destructive" data-testid="member-dao.insufficient">
           {translate("memberDao.insufficient", {
-            amount: yoctoToNearInput(
-              bondYocto + MEMBER_PROPOSAL_GAS_RESERVE_YOCTO - (funds.spendableYocto ?? 0n),
-            ),
+            amount: yoctoToNearInput(bondYocto - (funds.spendableYocto ?? 0n)),
           })}{" "}
           <span className="font-mono break-all">{accountId}</span>
         </p>
@@ -440,10 +430,6 @@ function PanelNotice({
   );
 }
 
-/**
- * Approve and reject on an open poll, for a Contributor whose policy lets
- * them vote on polls. Hidden for everyone else; signers vote in Trezu.
- */
 export function PollVote({
   daoAccountId,
   proposal,
