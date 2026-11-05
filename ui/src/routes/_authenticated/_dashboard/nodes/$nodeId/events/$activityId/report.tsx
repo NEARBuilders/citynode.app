@@ -80,20 +80,22 @@ function EventReportPage() {
   const activities = useQuery(activitiesQueryOptions(api, nodeId));
   const activity = activities.data?.find((item) => item.id === activityId);
   const report = useQuery(eventReportQueryOptions(api, activityId));
-  const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
-  const organizationId = useQuery(tenantByIdQueryOptions(api, tenantId ?? "")).data?.orgId ?? null;
-  const checkIns = useQuery(
-    eventCheckInCountQueryOptions(
-      api,
-      organizationId && organizationId === auth.activeOrganizationId ? organizationId : null,
-      activityId,
-    ),
-  );
+  const node = useQuery(nodeByIdQueryOptions(api, nodeId));
+  const tenantId = node.data?.tenantId;
+  const tenant = useQuery(tenantByIdQueryOptions(api, tenantId ?? ""));
+  const organizationId =
+    tenant.data?.orgId && tenant.data.orgId === auth.activeOrganizationId
+      ? tenant.data.orgId
+      : null;
+  const checkIns = useQuery(eventCheckInCountQueryOptions(api, organizationId, activityId));
+  const waitingForCheckIns =
+    report.isSuccess &&
+    report.data === null &&
+    (node.isPending ||
+      (!!tenantId && tenant.isPending) ||
+      (!!organizationId && checkIns.data === undefined && !checkIns.isError));
 
-  const loading =
-    activities.isPending ||
-    report.isPending ||
-    (checkIns.isPending && checkIns.fetchStatus !== "idle");
+  const loading = activities.isPending || report.isPending || waitingForCheckIns;
   if (loading) {
     return (
       <ActivityFormPage
