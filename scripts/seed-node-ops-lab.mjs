@@ -222,6 +222,28 @@ async function setTeamMembership(db, teamId, userId, shouldBelong) {
   }
 }
 
+function teamAreas(team) {
+  try {
+    const meta = JSON.parse(team.metadata ?? "{}");
+    return Array.isArray(meta.areas) ? meta.areas : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Drop memberships on any org team that grants node-ops or events, except keepTeamId. */
+async function clearLabAreaMemberships(db, organizationId, userId, keepTeamId = null) {
+  const teams = await db.query.team.findMany({
+    where: eq(authSchema.team.organizationId, organizationId),
+  });
+  for (const team of teams) {
+    if (keepTeamId && team.id === keepTeamId) continue;
+    const areas = teamAreas(team);
+    if (!areas.includes("node-operations") && !areas.includes("events")) continue;
+    await setTeamMembership(db, team.id, userId, false);
+  }
+}
+
 async function main() {
   const harbor = await loadHarbor();
   const orgId = harbor.tenant.org_id;
@@ -312,6 +334,15 @@ async function main() {
       );
     }
 
+    // Exact-match ensureTeam can leave the user on a pre-existing combined
+    // team (e.g. areas ["node-operations","events"]). Clear those first so
+    // --as plain/owner never retain node-ops, and --as ops only keeps Operations.
+    await clearLabAreaMemberships(
+      db,
+      organization.id,
+      user.id,
+      mode === "ops" ? operations.id : null,
+    );
     await setTeamMembership(db, operations.id, user.id, mode === "ops");
     await setTeamMembership(db, community.id, user.id, false);
 

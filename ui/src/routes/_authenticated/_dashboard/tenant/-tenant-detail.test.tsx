@@ -58,7 +58,10 @@ type Binding = {
 
 type Harness = {
   apiClient: Record<string, (...args: never[]) => unknown> & {
-    auth: { listMembers: ReturnType<typeof vi.fn> };
+    auth: {
+      listMembers: ReturnType<typeof vi.fn>;
+      getContext: ReturnType<typeof vi.fn>;
+    };
   };
   auth: {
     getSession: ReturnType<typeof vi.fn>;
