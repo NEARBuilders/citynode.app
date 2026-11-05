@@ -120,7 +120,7 @@ Before narrowing an existing Everyone role, check the current `get_policy`: a si
 
 So settle pending proposals before changing the bond. Clear spam requests with `RemoveProposal` first: it deletes a request in one call and forfeits its bond ([proposals.rs:620-623][remove]), and `Admin`'s `add_member_to_role:*` already covers it for membership requests. Any one `Admin` can do that alone, as the current policy already allows. `VoteRemove` works too, but needs the full signer threshold on each request. Approve, reject or finalize the rest.
 
-**A positive bond means the member's Passkey Wallet must hold that NEAR**, plus gas, before they sign. A new wallet starts empty. The bond doesn't have to be 0. Node DAOs set up in Trezu have 0 today. A positive bond discourages spam requests (see [Becoming a contributor](#becoming-a-contributor)), but members pay it. With a positive bond, the proposal screen (#413) shows the amount and the wallet's address before the member signs, and City Node doesn't fund wallets.
+**A positive bond means the member's Passkey Wallet must hold that NEAR** before they sign. It doesn't need gas: the passkey executor sends the request from `helper.trezu.near`, which pays it. A new wallet starts empty, and #407 also checks funding a wallet before it's activated. The bond doesn't have to be 0. Node DAOs set up in Trezu have 0 today. A positive bond discourages spam requests (see [Becoming a contributor](#becoming-a-contributor)), but members pay it. With a positive bond, the proposal screen (#413) shows the amount and the wallet's address before the member signs, and City Node doesn't fund wallets.
 
 ## Submitting the change from Trezu
 
@@ -149,7 +149,12 @@ Example `add_proposal` arguments. The `Requestor`, `Approver` and `Admin` roles 
             {
               "name": "Requestor",
               "kind": { "Group": ["signer-one.near", "signer-two.near"] },
-              "permissions": ["call:AddProposal", "transfer:AddProposal"],
+              "permissions": [
+                "call:AddProposal",
+                "call:VoteRemove",
+                "transfer:AddProposal",
+                "transfer:VoteRemove"
+              ],
               "vote_policy": {}
             },
             {
@@ -158,11 +163,11 @@ Example `add_proposal` arguments. The `Requestor`, `Approver` and `Admin` roles 
               "permissions": [
                 "call:VoteApprove",
                 "call:VoteReject",
-                "call:VoteRemove",
+                "call:RemoveProposal",
                 "call:Finalize",
                 "transfer:VoteApprove",
                 "transfer:VoteReject",
-                "transfer:VoteRemove",
+                "transfer:RemoveProposal",
                 "transfer:Finalize"
               ],
               "vote_policy": {}
@@ -246,20 +251,20 @@ The proposer needs `AddProposal` for each of those labels.
 
 ## What City Node reads
 
-`ui/src/lib/sputnik-proposals.ts` (from #435) reads the result; nothing in City Node writes it.
+`ui/src/lib/sputnik-proposals.ts` (from #435) reads the result; nothing in City Node writes it. Functions are named without line numbers, since #474 and #478 move them.
 
-- `fetchSputnikPolicy(daoAccountId)` (`:164`) reads `get_policy` over public RPC, or returns `null`.
-- `proposalPermission(policy, accountId, kind, delegationBalance?)` (`:301-315`) evaluates that policy the way `can_execute_action` does for `AddProposal`. It matches Everyone, Group and token-weighted Member roles (`accountInRoles`, `:217-230`) and the four permission forms (`permits`, `:195-208`) for one `SputnikProposalKindLabel` (`:176-193`). It returns `{ canPropose, reason, bondYocto }`, where `reason` is `allowed`, `no-account`, `no-policy`, `no-permission` or `bond-unavailable`, and `bondYocto` is the exact deposit in yoctoNEAR.
-- A missing or unreadable policy, or a missing or malformed `proposal_bond`, never allows submission, and a malformed bond is never read as zero (`proposalBondYocto`, `:288-291`). Pass `delegationBalance` (`readDelegationBalance`, `:146`) only when the DAO has token-weighted Member roles.
-- `proposerRoles(policy, kind)` (`:239-245`) and `canAccountPropose` (`:247-254`) are the older helpers; `canAccountPropose` still checks `call` only.
+- `fetchSputnikPolicy(daoAccountId)` reads `get_policy` over public RPC, or returns `null`.
+- `proposalPermission(policy, accountId, kind, delegationBalance?)` evaluates that policy the way `can_execute_action` does for `AddProposal`. It matches Everyone, Group and token-weighted Member roles (`accountInRoles`) and the four permission forms (`permits`) for one `SputnikProposalKindLabel`. It returns `{ canPropose, reason, bondYocto }`, where `reason` is `allowed`, `no-account`, `no-policy`, `no-permission` or `bond-unavailable`, and `bondYocto` is the exact deposit in yoctoNEAR.
+- A missing or unreadable policy, or a missing or malformed `proposal_bond`, never allows submission, and a malformed bond is never read as zero (`proposalBondYocto`). Pass `delegationBalance` (`readDelegationBalance`) only when the DAO has token-weighted Member roles.
+- `proposerRoles(policy, kind)` and `canAccountPropose` are the older helpers; `canAccountPropose` still checks `call` only.
 
 For the Proposals tab:
 
 - **Can this member ask to become a contributor?** `proposalPermission(policy, walletAccountId, "add_member_to_role")` (#477).
 - **Is this member a contributor, and can they file a poll?** `proposalPermission(policy, walletAccountId, "vote")` (#413). Show the bond from `bondYocto`.
-- **Can they vote on a poll?** #412 now also asks the helper for `VoteApprove` and `VoteReject` on a kind. That read isn't on main yet.
+- **Can they vote on a poll?** `canAccountAct`, added by #478, checks `VoteApprove` and `VoteReject` on a kind. It isn't on main yet.
 
-Don't take the bond from `fetchProposalBond` (`:393-398`): it returns `"0"` when the read fails, and `proposeAsSession` (`:406-429`) attaches that value as the deposit.
+Don't take the bond from `fetchProposalBond`: it returns `"0"` when the read fails, and `proposeAsSession` attaches that value as the deposit.
 
 The tests in `ui/src/lib/sputnik-proposal-permission.test.ts` cover a group role, Everyone with and without `AddProposal`, each permission form, a permission for another kind, and zero, positive, missing and malformed bonds.
 
