@@ -42,6 +42,7 @@ import {
   fetchDaoProposals,
   findPendingProposalForPlan,
 } from "@/lib/sputnik-proposals";
+import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
 import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
@@ -145,6 +146,7 @@ function NodeOverview() {
     validators: summary?.stakingValidators.validators ?? [],
   });
   const showTeamStake = useCanSeeTeamStake(teamStake, { canManage, inFinanceTeam });
+  const payoutsRef = useScrollToHash<HTMLDivElement>("payouts");
   if (!selectedNode || !summary) return null;
 
   const pendingConfig = pendingConfigQuery.data ?? null;
@@ -394,7 +396,7 @@ function NodeOverview() {
       <CommunityChannels channels={channels} layout="page" testId="dashboard-node.channels" />
 
       {showTeamStake && (
-        <div id="payouts" className="scroll-mt-20">
+        <div id="payouts" ref={payoutsRef} className="scroll-mt-20">
           <TeamStakeCard
             target={teamStake}
             pending={daoQuery.isLoading}

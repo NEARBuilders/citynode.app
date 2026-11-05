@@ -27,6 +27,7 @@ export interface NextStepsState {
   community: { name: string; tenantId: string } | null;
   canManageCommunity: boolean;
   canOrganizeEvents: boolean;
+  inFinanceTeam: boolean;
   isAdmin: boolean;
 }
 
@@ -110,6 +111,17 @@ function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
       },
     ];
   }
+  const payouts: NextStep[] =
+    state.canManageCommunity || state.inFinanceTeam
+      ? [
+          {
+            id: "payouts",
+            title: t("ownerActions.payouts"),
+            description: t("ownerActions.payoutsHint"),
+            actionLabel: t("common.open"),
+          },
+        ]
+      : [];
   if (state.canManageCommunity || state.canOrganizeEvents || state.isAdmin) {
     return [
       {
@@ -118,16 +130,7 @@ function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
         description: t("dashboard.communityTasks", { name: state.community.name }),
         actionLabel: t("common.open"),
       },
-      ...(state.canManageCommunity
-        ? [
-            {
-              id: "payouts" as const,
-              title: t("ownerActions.payouts"),
-              description: t("ownerActions.payoutsHint"),
-              actionLabel: t("common.open"),
-            },
-          ]
-        : []),
+      ...payouts,
     ];
   }
   return [
@@ -137,6 +140,7 @@ function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
       description: t("dashboard.memberCommunityHint"),
       actionLabel: t("common.open"),
     },
+    ...payouts,
   ];
 }
 
