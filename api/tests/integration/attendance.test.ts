@@ -599,6 +599,7 @@ describe("confirming attendance from an organizer session", () => {
     expect(byId.get(first.id)).toMatchObject({
       title: "Kickoff",
       nodeName: "Events city",
+      publicPage: true,
       organizationId: city.org,
       checkIns: { people: 2, returning: 0, partial: false },
       reportSubmittedAt: saved.submittedAt,

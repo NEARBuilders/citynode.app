@@ -35,7 +35,7 @@ import {
   shouldGeocodeProfile,
 } from "./discovery-geocode";
 import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
-import { listedNode, nodeKindOf } from "./nodes";
+import { listedNode, nodeKindOf, PLATFORM_NODE_KIND } from "./nodes";
 
 const EVENTS_AREA: FeatureArea = "events";
 
@@ -833,6 +833,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               data,
               nodeId: nodes.id,
               nodeName: nodes.name,
+              nodeMetadata: nodes.metadata,
               organizationId: tenants.orgId,
               reportSubmittedAt: eventReports.submittedAt,
             })
@@ -851,6 +852,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           endsAt: row.data.endsAt ?? null,
           nodeId: row.nodeId,
           nodeName: row.nodeName,
+          publicPage: nodeKindOf(row.nodeMetadata) !== PLATFORM_NODE_KIND,
           organizationId: row.organizationId ?? null,
           reportSubmittedAt: row.reportSubmittedAt?.toISOString() ?? null,
         }));

@@ -228,14 +228,25 @@ function AdminEvents() {
                 {visible.map((event) => (
                   <TableRow key={event.id} data-testid={`admin-event-${event.id}`}>
                     <TableCell>
-                      <Link
-                        to="/activity/$activityId"
-                        params={{ activityId: event.id }}
-                        search={{ node: event.nodeId }}
-                        className="font-medium text-foreground hover:underline"
-                      >
-                        {event.title}
-                      </Link>
+                      {event.publicPage ? (
+                        <Link
+                          to="/activity/$activityId"
+                          params={{ activityId: event.id }}
+                          search={{ node: event.nodeId }}
+                          className="font-medium text-foreground hover:underline"
+                        >
+                          {event.title}
+                        </Link>
+                      ) : (
+                        <Link
+                          to="/nodes/$nodeId/content"
+                          params={{ nodeId: event.nodeId }}
+                          search={{ tab: "events" }}
+                          className="font-medium text-foreground hover:underline"
+                        >
+                          {event.title}
+                        </Link>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Link

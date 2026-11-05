@@ -86,6 +86,10 @@ const fakeAuth = (context: unknown) => ({
     stored(input.organizationId).members.push(member);
     return member;
   },
+  deleteOrganization: async ({ organizationId }: { organizationId: string }) => {
+    organizations.delete(organizationId);
+    return null;
+  },
   setActiveOrganization: async ({ organizationId }: { organizationId: string | null }) => {
     activeOrganizationCalls.push(organizationId);
     return null;
@@ -190,6 +194,33 @@ describe("platform stations", () => {
     ).toEqual([nodeId]);
   });
 
+  it("marks platform events in Admin Events as having no public page", async () => {
+    const admin = await getPluginClient(adminContext("admin-one"));
+    const { organization } = await admin.getPlatformStations();
+    const nodeId = organization?.nodeId ?? "";
+    const now = Date.now();
+    const event = await admin.saveDiscoveryActivity({
+      ownerNodeId: nodeId,
+      nodeIds: [nodeId],
+      kind: "event",
+      title: "Platform build night",
+      summary: "Stations at the door",
+      url: `https://example.com/events/${crypto.randomUUID()}`,
+      source: "Platform",
+      publishedAt: new Date(now).toISOString(),
+      startsAt: new Date(now - 5 * 3_600_000).toISOString(),
+      endsAt: new Date(now - 2 * 3_600_000).toISOString(),
+      timezone: "UTC",
+      venue: "Town Hall",
+      status: "published",
+    });
+    const { events } = await admin.getAdminEvents();
+    expect(events.find(({ id }) => id === event.id)).toMatchObject({
+      nodeId,
+      publicPage: false,
+    });
+  });
+
   it("reserves the platform kind for platform stations", async () => {
     const admin = await getPluginClient(orgContext("admin-one", "org-elsewhere", "owner", "admin"));
     await expect(
@@ -212,5 +243,22 @@ describe("platform stations", () => {
     await expect(
       admin.updateNode({ nodeId: organization?.nodeId ?? "", kind: "city" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("lets another platform admin finish a setup that stopped before the node was created", async () => {
+    const owner = await getPluginClient(adminContext("admin-one"));
+    const { organization } = await owner.getPlatformStations();
+    const organizationId = organization?.id ?? "";
+    const operator = await getPluginClient(
+      orgContext("admin-one", organizationId, "admin", "admin"),
+    );
+    await operator.deleteNode({ nodeId: organization?.nodeId ?? "" });
+    expect((await owner.getPlatformStations()).organization).toBeNull();
+
+    const other = await getPluginClient(adminContext("admin-three"));
+    const organizationCount = organizations.size;
+    const resumed = await other.setUpPlatformStations({ name: "City Nodes", slug: "city-nodes-3" });
+    expect(resumed.organization).toMatchObject({ id: organizationId, role: null });
+    expect(organizations.size).toBe(organizationCount);
   });
 });
