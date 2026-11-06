@@ -14,6 +14,7 @@ const ORG = "org-1";
 const harness = vi.hoisted(() => ({
   activities: [] as unknown[],
   report: null as unknown,
+  canEdit: true,
   node: Promise.resolve({ tenantId: "tenant-1" }) as Promise<unknown>,
   tenant: Promise.resolve({ orgId: "org-1" }) as Promise<unknown>,
   codes: Promise.resolve([]) as Promise<Array<{ usedCount: number }>>,
@@ -33,7 +34,7 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/app", () => ({
   useApiClient: () => ({
     listDiscoveryActivities: async () => harness.activities,
-    getEventReport: async () => harness.report,
+    getEventReport: async () => ({ report: harness.report, canEdit: harness.canEdit }),
     getNode: () => {
       harness.calls.node += 1;
       return harness.node;
@@ -82,7 +83,36 @@ const activity = {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  harness.canEdit = true;
 });
+
+const savedReport = {
+  activityId: ACTIVITY,
+  formVersion: 1,
+  submittedAt: "2026-10-16T00:00:00.000Z",
+  updatedAt: "2026-10-16T00:00:00.000Z",
+  report: {
+    format: "irl",
+    socialLinks: ["https://example.com/post"],
+    focus: "crypto",
+    audiences: ["general"],
+    audienceOther: "",
+    theme: "Launch notes",
+    attendees: 12,
+    slideLinks: [],
+    kpis: ["Twelve people", "Two new members", ""],
+    wentWell: "The room stayed for the demo.",
+    improvements: "Start on time.",
+    talentAfter: "Two people offered to host.",
+    talentDuring: "A member ran check-in.",
+    materialsNeeded: "",
+    hadPartners: false,
+    partners: "",
+    nextActions: "Publish the notes.",
+    insights: "",
+    mediaLinks: [],
+  },
+};
 
 describe("event report check-in prefill", () => {
   it("waits for check-ins before showing a new report", async () => {
@@ -127,33 +157,7 @@ describe("event report check-in prefill", () => {
 
   it("shows a saved report without waiting for check-ins", async () => {
     harness.activities = [activity];
-    harness.report = {
-      activityId: ACTIVITY,
-      formVersion: 1,
-      submittedAt: "2026-10-16T00:00:00.000Z",
-      updatedAt: "2026-10-16T00:00:00.000Z",
-      report: {
-        format: "irl",
-        socialLinks: ["https://example.com/post"],
-        focus: "crypto",
-        audiences: ["general"],
-        audienceOther: "",
-        theme: "Launch notes",
-        attendees: 12,
-        slideLinks: [],
-        kpis: ["Twelve people", "Two new members", ""],
-        wentWell: "The room stayed for the demo.",
-        improvements: "Start on time.",
-        talentAfter: "Two people offered to host.",
-        talentDuring: "A member ran check-in.",
-        materialsNeeded: "",
-        hadPartners: false,
-        partners: "",
-        nextActions: "Publish the notes.",
-        insights: "",
-        mediaLinks: [],
-      },
-    };
+    harness.report = savedReport;
     harness.node = new Promise(() => {});
     harness.tenant = new Promise(() => {});
     harness.codes = new Promise(() => {});
@@ -161,5 +165,20 @@ describe("event report check-in prefill", () => {
     renderPage();
 
     await waitFor(() => expect(attendees()).toBe("12"));
+  });
+
+  it("shows a platform admin the answers without the form", async () => {
+    harness.activities = [activity];
+    harness.report = savedReport;
+    harness.canEdit = false;
+    harness.node = new Promise(() => {});
+    harness.tenant = new Promise(() => {});
+    harness.codes = new Promise(() => {});
+
+    renderPage();
+
+    expect(await screen.findByTestId("report-answers")).toBeTruthy();
+    expect(screen.getByText("Launch notes")).toBeTruthy();
+    expect(screen.queryByTestId("report-attendees")).toBeNull();
   });
 });

@@ -28,6 +28,7 @@ import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import {
   draftFromReport,
+  type EventReport,
   emptyReportDraft,
   REPORT_AUDIENCES,
   REPORT_QUESTIONS,
@@ -91,7 +92,8 @@ function EventReportPage() {
   const checkIns = useQuery(eventCheckInCountQueryOptions(api, organizationId, activityId));
   const waitingForCheckIns =
     report.isSuccess &&
-    report.data === null &&
+    report.data.canEdit &&
+    report.data.report === null &&
     (node.isPending ||
       (!!tenantId && tenant.isPending) ||
       (!!organizationId && checkIns.data === undefined && !checkIns.isError));
@@ -144,7 +146,7 @@ function EventReportPage() {
     );
   }
 
-  const saved = report.data;
+  const { report: saved, canEdit } = report.data ?? { report: null, canEdit: false };
   return (
     <ActivityFormPage
       nodeId={nodeId}
@@ -171,14 +173,81 @@ function EventReportPage() {
       }
       headerTestId="report.heading"
     >
-      <ReportForm
-        key={saved?.updatedAt ?? "new"}
-        nodeId={nodeId}
-        activityId={activityId}
-        initial={saved ? draftFromReport(saved.report) : emptyReportDraft(checkIns.data ?? null)}
-        isEdit={!!saved}
-      />
+      {canEdit ? (
+        <ReportForm
+          key={saved?.updatedAt ?? "new"}
+          nodeId={nodeId}
+          activityId={activityId}
+          initial={saved ? draftFromReport(saved.report) : emptyReportDraft(checkIns.data ?? null)}
+          isEdit={!!saved}
+        />
+      ) : saved ? (
+        <ReportAnswers report={saved.report} />
+      ) : (
+        <EmptyState icon={CalendarDotsIcon} title={translate("report.notSubmitted")} />
+      )}
     </ActivityFormPage>
+  );
+}
+
+function ReportAnswers({ report }: { report: EventReport }) {
+  const translate = useAppTranslation();
+  const none = <span className="text-muted-foreground">—</span>;
+  const text = (value: string) => (value.trim() ? value : none);
+  const answer = (question: ReportQuestion): ReactNode => {
+    switch (question.kind) {
+      case "choice":
+        return translate(`report.option.${question.id}.${report[question.id]}` as AppMessageId);
+      case "audiences":
+        return [
+          ...report.audiences
+            .filter((audience) => audience !== "other")
+            .map((audience) => translate(`report.option.audiences.${audience}` as AppMessageId)),
+          ...(report.audiences.includes("other") ? [report.audienceOther] : []),
+        ].join(", ");
+      case "number":
+        return report.attendees;
+      case "kpis":
+        return (
+          <ul className="flex flex-col gap-1">
+            {report.kpis.filter(Boolean).map((kpi) => (
+              <li key={kpi}>{kpi}</li>
+            ))}
+          </ul>
+        );
+      case "partners":
+        return report.hadPartners
+          ? `${translate("report.option.partners.yes")} — ${report.partners}`
+          : translate("report.option.partners.no");
+      case "links":
+        return report[question.id].length > 0 ? (
+          <ul className="flex flex-col gap-1">
+            {report[question.id].map((link) => (
+              <li key={link} className="wrap-anywhere">
+                <a href={link} target="_blank" rel="noreferrer" className="underline">
+                  {link}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          none
+        );
+      case "longText":
+        return text(report[question.id]);
+    }
+  };
+  return (
+    <dl className="flex flex-col gap-6" data-testid="report-answers">
+      {REPORT_QUESTIONS.map((question) => (
+        <div key={question.id} className="flex flex-col gap-1">
+          <dt className="text-sm font-medium text-muted-foreground">
+            {translate(`report.q.${question.id}` as AppMessageId)}
+          </dt>
+          <dd className="whitespace-pre-wrap text-foreground">{answer(question)}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

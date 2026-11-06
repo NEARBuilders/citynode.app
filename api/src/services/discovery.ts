@@ -83,7 +83,12 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     return Effect.void;
   }
 
-  function nodeAccess(nodeId: string, context: AuthContext, area?: FeatureArea) {
+  function nodeAccess(
+    nodeId: string,
+    context: AuthContext,
+    area?: FeatureArea,
+    { platformAdminEdits = true }: { platformAdminEdits?: boolean } = {},
+  ) {
     return Effect.gen(function* () {
       if (!context.userId || !context.user) {
         return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
@@ -98,7 +103,9 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       if (!record) {
         return yield* Effect.fail(new ORPCError("NOT_FOUND"));
       }
-      if (context.user.role === "admin") return { record, level: "editor" as const, manager: true };
+      if (platformAdminEdits && context.user.role === "admin") {
+        return { record, level: "editor" as const, manager: true };
+      }
       const org = context.organization;
       const role = org?.member?.role ?? "";
       if (!record.tenant.orgId || org?.activeOrganizationId !== record.tenant.orgId || !role) {
@@ -109,6 +116,19 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         manager ||
         (!!area && resolveTeamAccess(context).teams.some((team) => team.areas.includes(area)));
       return { record, level: granted ? ("editor" as const) : ("member" as const), manager };
+    });
+  }
+
+  function reportAccess(nodeId: string, context: AuthContext) {
+    return Effect.gen(function* () {
+      const { level } = yield* nodeAccess(nodeId, context, EVENTS_AREA, {
+        platformAdminEdits: false,
+      });
+      const canEdit = level === "editor";
+      if (!canEdit && context.user?.role !== "admin") {
+        return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+      }
+      return { canEdit };
     });
   }
 
@@ -1238,11 +1258,11 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         if (!activity || activity.kind !== "event") {
           return yield* Effect.fail(new ORPCError("NOT_FOUND"));
         }
-        yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
+        const { canEdit } = yield* reportAccess(activity.ownerNodeId, context);
         const [row] = yield* query(() =>
           db.select().from(eventReports).where(eq(eventReports.activityId, activityId)),
         );
-        return row ? storedReport(row) : null;
+        return { report: row ? storedReport(row) : null, canEdit };
       }),
     saveEventReport: (input: { activityId: string; report: EventReport }, context: AuthContext) =>
       Effect.gen(function* () {
@@ -1250,7 +1270,8 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         if (!activity || activity.kind !== "event") {
           return yield* Effect.fail(new ORPCError("NOT_FOUND"));
         }
-        yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
+        const { canEdit } = yield* reportAccess(activity.ownerNodeId, context);
+        if (!canEdit) return yield* Effect.fail(new ORPCError("FORBIDDEN"));
         const now = yield* Clock.currentTimeMillis;
         const end = activity.endsAt ?? activity.startsAt;
         if (activity.status === "cancelled" || !end || Date.parse(end) > now) {
@@ -1291,7 +1312,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     eventReportStatuses: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* authorize(nodeId, context, EVENTS_AREA);
+        yield* reportAccess(nodeId, context);
         const rows = yield* query(() =>
           db
             .select({ activityId: eventReports.activityId, submittedAt: eventReports.submittedAt })

@@ -453,6 +453,12 @@ export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
     "Certaines réponses sont à corriger.",
     "部分回答需要修改。",
   ],
+  "report.notSubmitted": [
+    "No report yet",
+    "Aún no hay informe",
+    "Pas encore de rapport",
+    "尚未提交报告",
+  ],
   "report.error.required": ["Required", "Obligatorio", "Obligatoire", "必填"],
   "report.error.invalidLink": [
     "Use full links starting with https://",

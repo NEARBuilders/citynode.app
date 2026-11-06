@@ -349,7 +349,7 @@ export const discoveryContract = {
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getEventReport: oc
     .input(z.object({ activityId: z.uuid() }))
-    .output(storedEventReportSchema.nullable())
+    .output(z.object({ report: storedEventReportSchema.nullable(), canEdit: z.boolean() }))
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   saveEventReport: oc
     .input(z.object({ activityId: z.uuid(), report: eventReportSchema }))
