@@ -140,6 +140,7 @@ async function community(name = "Attendance city") {
   return {
     org,
     name,
+    editor,
     addEvent: (title: string, startsAt: Date) =>
       editor.saveDiscoveryActivity(eventInput(node.id, title, startsAt)),
     addPopUpEvent: (title: string, startsAt: Date) =>
@@ -554,7 +555,7 @@ describe("confirming attendance from an organizer session", () => {
     const unsyncedEvent = await unsynced.addEvent("Not synced yet", past(3));
 
     const admin = await getPluginClient(authedContext("platform-admin", "admin"));
-    const saved = await admin.saveEventReport({
+    const saved = await city.editor.saveEventReport({
       activityId: first.id,
       report: {
         format: "irl",

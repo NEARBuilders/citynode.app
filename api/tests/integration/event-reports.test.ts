@@ -101,7 +101,7 @@ const report = {
 };
 
 describe("event reports", () => {
-  it("lets organizers, owners and platform admins submit, edit and read reports", async () => {
+  it("lets organizers and owners submit and edit reports, and platform admins only read them", async () => {
     const { id, org, node, owner } = await community();
     const ended = await owner.saveDiscoveryActivity(
       eventInput(node.id, {
@@ -118,7 +118,10 @@ describe("event reports", () => {
       user: { id: "platform-admin", email: "admin@example.com", name: "Admin", role: "admin" },
     });
 
-    expect(await organizer.getEventReport({ activityId: ended.id })).toBeNull();
+    expect(await organizer.getEventReport({ activityId: ended.id })).toEqual({
+      report: null,
+      canEdit: true,
+    });
     const saved = await organizer.saveEventReport({ activityId: ended.id, report });
     expect(saved).toMatchObject({
       activityId: ended.id,
@@ -127,11 +130,14 @@ describe("event reports", () => {
     });
 
     expect(await owner.getEventReport({ activityId: ended.id })).toMatchObject({
-      report: { theme: "A hands-on build night" },
+      report: { report: { theme: "A hands-on build night" } },
+      canEdit: true,
     });
     expect(await admin.getEventReport({ activityId: ended.id })).toMatchObject({
-      report: { focus: "crypto" },
+      report: { report: { focus: "crypto" } },
+      canEdit: false,
     });
+    expect(await admin.listEventReportStatuses({ nodeId: node.id })).toHaveLength(1);
     expect(await organizer.listEventReportStatuses({ nodeId: node.id })).toEqual([
       { activityId: ended.id, submittedAt: saved.submittedAt },
     ]);
@@ -143,11 +149,9 @@ describe("event reports", () => {
     expect(edited.report.attendees).toBe(45);
     expect(edited.submittedAt).toBe(saved.submittedAt);
 
-    const corrected = await admin.saveEventReport({
-      activityId: ended.id,
-      report: { ...report, attendees: 44 },
-    });
-    expect(corrected.report.attendees).toBe(44);
+    await expect(
+      admin.saveEventReport({ activityId: ended.id, report: { ...report, attendees: 44 } }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     for (const refused of [member, outsider]) {
       await expect(refused.getEventReport({ activityId: ended.id })).rejects.toMatchObject({
