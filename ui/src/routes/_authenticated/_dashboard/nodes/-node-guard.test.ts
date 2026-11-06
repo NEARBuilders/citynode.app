@@ -10,6 +10,8 @@ vi.mock("@tanstack/react-router", () => ({
 
 const { Route: NodeRoute } = await import("./$nodeId");
 const { Route: ContentRoute } = await import("./$nodeId/content");
+const { Route: NewEventRoute } = await import("./$nodeId/events/new");
+const { Route: EditEventRoute } = await import("./$nodeId/events/$activityId/edit");
 
 type Guard = (args: unknown) => Promise<unknown> | unknown;
 
@@ -162,5 +164,48 @@ describe("community event routes", () => {
         },
       }),
     );
+  });
+
+  it("keeps event forms off node-operations members who cannot organize", () => {
+    const bulletin = {
+      redirect: {
+        to: "/nodes/$nodeId/content",
+        params: { nodeId: "node-1" },
+        search: { tab: "bulletin" },
+        replace: true,
+      },
+    };
+    const openForm = (beforeLoad: unknown, flags: Parameters<typeof openTab>[1]) =>
+      (beforeLoad as Guard)({
+        context: {
+          canManageCommunity: flags.canManageCommunity,
+          canOrganizeEvents: flags.canOrganizeEvents ?? flags.canManageCommunity,
+          canOperateNodes: flags.canOperateNodes ?? flags.canManageCommunity,
+        },
+        params: { nodeId: "node-1", activityId: "activity-1" },
+      });
+
+    for (const beforeLoad of [
+      NewEventRoute.options.beforeLoad,
+      EditEventRoute.options.beforeLoad,
+    ]) {
+      expect(() =>
+        openForm(beforeLoad, { canManageCommunity: false, canOrganizeEvents: true }),
+      ).not.toThrow();
+      expect(() =>
+        openForm(beforeLoad, {
+          canManageCommunity: false,
+          canOrganizeEvents: false,
+          canOperateNodes: true,
+        }),
+      ).toThrow(expect.objectContaining(bulletin));
+      expect(() =>
+        openForm(beforeLoad, {
+          canManageCommunity: false,
+          canOrganizeEvents: false,
+          canOperateNodes: false,
+        }),
+      ).toThrow(expect.objectContaining({ redirect: ownersOnly.redirect }));
+    }
   });
 });
