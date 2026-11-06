@@ -5,7 +5,6 @@ import {
   eventReportStatus,
   eventsMissingReports,
   type ReportDraft,
-  reportedWithinWeek,
   reportFromDraft,
 } from "./event-reports";
 
@@ -25,16 +24,9 @@ describe("eventReportStatus", () => {
     expect(eventReportStatus(event(-1), null, now)).toEqual({ state: "missing" });
   });
 
-  it("is submitted, and late only when more than a week after the end", () => {
-    const ended = event(-10);
-    const end = Date.parse(ended.endsAt);
-    expect(eventReportStatus(ended, new Date(end + 6 * DAY).toISOString(), now)).toEqual({
+  it("is submitted once a report exists", () => {
+    expect(eventReportStatus(event(-10), new Date(now).toISOString(), now)).toEqual({
       state: "submitted",
-      late: false,
-    });
-    expect(eventReportStatus(ended, new Date(end + 8 * DAY).toISOString(), now)).toEqual({
-      state: "submitted",
-      late: true,
     });
   });
 
@@ -145,23 +137,5 @@ describe("eventsMissingReports", () => {
         now,
       ).map((item) => item.id),
     ).toEqual(["missing"]);
-  });
-});
-
-describe("reportedWithinWeek", () => {
-  it("counts ended events reported within a week out of all ended events", () => {
-    const ended = event(-20);
-    const end = Date.parse(ended.endsAt);
-    expect(
-      reportedWithinWeek(
-        [
-          { ...ended, reportSubmittedAt: new Date(end + DAY).toISOString() },
-          { ...ended, reportSubmittedAt: new Date(end + 9 * DAY).toISOString() },
-          { ...ended, reportSubmittedAt: null },
-          { ...event(2), reportSubmittedAt: null },
-        ],
-        now,
-      ),
-    ).toEqual({ onTime: 1, due: 3 });
   });
 });
