@@ -22,6 +22,7 @@ import {
   ImportsWaiting,
   useVisibilityContext,
 } from "@/components/discovery/event-visibility";
+import { EventsToReport } from "@/components/discovery/events-to-report";
 import { TeamStakeCard, useCanSeeTeamStake } from "@/components/team-stake-card";
 import {
   Item,
@@ -35,6 +36,7 @@ import {
 import { useAppTranslation } from "@/i18n/runtime";
 import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
+import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
 import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
@@ -115,11 +117,16 @@ function NodeOverview() {
         daoNetwork: null,
       })),
   });
+  const canReport = !!(canManage || canOrganize);
   const activities = useQuery({
     queryKey: ["discovery-activities", nodeId],
     queryFn: () => apiClient.listDiscoveryActivities({ nodeId }),
     enabled: !!nodeId,
     retry: false,
+  });
+  const reportStatuses = useQuery({
+    ...eventReportStatusesQueryOptions(apiClient, nodeId),
+    enabled: canReport && !!nodeId,
   });
   const listing = useQuery(discoveryNodeQueryOptions(apiClient, nodeId));
   const visibilityContext = useVisibilityContext(nodeId);
@@ -316,6 +323,15 @@ function NodeOverview() {
           </ItemActions>
         </Item>
       )}
+
+      <EventsToReport
+        canReport={canReport}
+        ready={!canReport || reportStatuses.isSuccess}
+        nodeId={selectedNode.id}
+        now={now}
+        activities={activities.data ?? []}
+        statuses={reportStatuses.data ?? []}
+      />
 
       <section id="coming-up" className="flex scroll-mt-20 flex-col gap-6">
         <SectionHeader

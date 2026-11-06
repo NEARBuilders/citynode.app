@@ -22,6 +22,7 @@ const harness = vi.hoisted(() => ({
   getOnboardingRedemptions: (() => Promise.resolve(null)) as (input: unknown) => Promise<unknown>,
   attendanceCalls: [] as string[],
   activities: (() => Promise.resolve([])) as (input: { nodeId: string }) => Promise<unknown>,
+  reportStatuses: (() => Promise.resolve([])) as () => Promise<unknown>,
   listOnboardingCodes: (() => Promise.resolve([])) as (input: unknown) => Promise<unknown>,
   getOnboardingStatus: (() => Promise.resolve({ joined: [] })) as (
     input: unknown,
@@ -78,6 +79,7 @@ vi.mock("@/app", () => ({
       getOnboardingStatus: (input: unknown) => harness.getOnboardingStatus(input),
     },
     listDiscoveryActivities: (input: { nodeId: string }) => harness.activities(input),
+    listEventReportStatuses: () => harness.reportStatuses(),
     getDiscoveryNode: () => harness.listing(),
     getMemberDirectoryOptIn: async () =>
       harness.memberDirectory.readOptIn
@@ -147,6 +149,7 @@ afterEach(() => {
   harness.memberDirectory.readOptIn = null;
   harness.listing = () => Promise.resolve(null);
   harness.activities = () => Promise.resolve([]);
+  harness.reportStatuses = () => Promise.resolve([]);
   harness.listOnboardingCodes = () => Promise.resolve([]);
   harness.getOnboardingStatus = () => Promise.resolve({ joined: [] });
   harness.attendanceCalls.length = 0;
@@ -826,5 +829,43 @@ describe("node overview attendance", () => {
     renderOverview({ nearAccount: null, canOrganize: true });
     await screen.findByTestId("dashboard-node.attendance-event");
     expect(harness.attendanceCalls).toEqual(["reconcile:org-1", "read:org-1"]);
+  });
+});
+
+const endedEvent = (id: string, title: string) => ({
+  id,
+  title,
+  kind: "event",
+  status: "published",
+  publishedAt: "2020-01-01T00:00:00.000Z",
+  startsAt: "2020-01-01T16:00:00.000Z",
+  endsAt: "2020-01-01T18:00:00.000Z",
+  venue: "Town Hall",
+});
+
+describe("node overview events to report", () => {
+  it("hides the row from a plain member", async () => {
+    stubChain();
+    harness.activities = () => Promise.resolve([endedEvent("event-missing", "Report Night")]);
+    const client = renderOverview({ nearAccount: "member.near" });
+    await waitFor(() =>
+      expect(client.getQueryState(["discovery-activities", "node-1"])?.status).toBe("success"),
+    );
+    expect(screen.queryByTestId("dashboard-node.events-to-report")).toBeNull();
+    expect(screen.queryByText("Report Night")).toBeNull();
+  });
+
+  it("shows an organizer ended events until a report is submitted", async () => {
+    stubChain();
+    harness.activities = () =>
+      Promise.resolve([
+        endedEvent("event-missing", "Report Night"),
+        endedEvent("event-done", "Already Reported"),
+      ]);
+    harness.reportStatuses = () =>
+      Promise.resolve([{ activityId: "event-done", submittedAt: "2020-01-02T00:00:00.000Z" }]);
+    renderOverview({ nearAccount: null, canOrganize: true });
+    expect(await screen.findByTestId("dashboard-node.report-event-missing")).toBeTruthy();
+    expect(screen.queryByText("Already Reported")).toBeNull();
   });
 });
