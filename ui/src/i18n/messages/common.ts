@@ -1873,11 +1873,23 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Impossible de charger la liste des membres.",
     "无法加载成员列表。",
   ],
+  "members.loadMoreFailed": [
+    "Couldn't load more members. Try again.",
+    "No se pudieron cargar más miembros. Inténtalo de nuevo.",
+    "Impossible de charger plus de membres. Réessayez.",
+    "无法加载更多成员，请重试。",
+  ],
   "members.noneShared": [
     "No members have shared their name yet.",
     "Ningún miembro ha compartido su nombre todavía.",
     "Aucun membre n'a encore partagé son nom.",
     "还没有成员公开名字。",
+  ],
+  "members.noneSharedYet": [
+    "No shared names in the members checked so far. Load more to keep looking.",
+    "Aún no hay nombres compartidos entre los miembros revisados. Carga más para seguir buscando.",
+    "Aucun nom partagé parmi les membres vérifiés pour l'instant. Chargez-en plus pour continuer.",
+    "目前查看的成员中还没有公开名字。加载更多以继续查找。",
   ],
   "members.notAvailable": ["Not available", "No disponible", "Non disponible", "暂无数据"],
   "members.optInLoadFailed": [
