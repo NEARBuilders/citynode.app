@@ -69,6 +69,16 @@ export function canManageCommunity(context: AuthRequestContext | null | undefine
   );
 }
 
+export function isInFinanceTeam(
+  context: AuthRequestContext | null | undefined,
+  allowedAreas: readonly FeatureArea[] | null,
+): boolean {
+  return (
+    (context?.organization?.teams ?? []).some((team) => team.areas.includes("finance")) &&
+    isAreaInView(allowedAreas, "finance")
+  );
+}
+
 export function areasForPath(pathname: string): FeatureArea[] | null {
   const match = ROUTE_AREAS.find(
     ({ path }) => pathname === path || pathname.startsWith(`${path}/`),

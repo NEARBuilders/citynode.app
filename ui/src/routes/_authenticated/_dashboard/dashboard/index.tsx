@@ -19,7 +19,12 @@ import { communityOrganizationId, resolveCommunityMembership } from "@/lib/perso
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
-import { canManageCommunity, canOrganizeEvents } from "@/lib/team-workspace";
+import {
+  canManageCommunity,
+  canOrganizeEvents,
+  isInFinanceTeam,
+  resolveTeamWorkspace,
+} from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
@@ -154,6 +159,10 @@ function Home() {
       community,
       canManageCommunity: canManage,
       canOrganizeEvents: canOrganizeEvents(authContext.data),
+      inFinanceTeam: isInFinanceTeam(
+        authContext.data,
+        resolveTeamWorkspace(authContext.data).allowedAreas,
+      ),
       isAdmin,
     },
     translate,
