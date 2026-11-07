@@ -199,20 +199,6 @@ function NodeOverview() {
           </span>
         ))}
       </p>
-      <CommunityMapStatus
-        nodeId={selectedNode.id}
-        tenantStatus={tenant?.status}
-        testId="dashboard-node.map-status"
-        settingsLink={
-          canManage && tenant ? (
-            <Link
-              to="/tenant/$tenantId"
-              params={{ tenantId: tenant.id }}
-              search={{ nodeId: selectedNode.id }}
-            />
-          ) : undefined
-        }
-      />
       {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
       <div className="flex flex-col gap-6">
         <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
@@ -266,31 +252,20 @@ function NodeOverview() {
         )}
       </div>
 
-      {orgId && (
-        <div id="people" className="scroll-mt-20">
-          <MemberDirectory organizationId={orgId} nodeId={selectedNode.id} />
-        </div>
-      )}
-
-      {orgId && (
-        <AttendanceRecord
-          organizationId={orgId}
-          reconcile={!!canOrganize}
-          testId="dashboard-node.attendance"
-        />
-      )}
-
-      {orgId && (
-        <div id="teams" className="scroll-mt-20">
-          <TeamRequests organizationId={orgId} />
-        </div>
-      )}
-
       {canManage && (
-        <OwnerActions
+        <CommunityMapStatus
           nodeId={selectedNode.id}
-          tenantId={tenant?.id ?? null}
-          showPayouts={showTeamStake}
+          tenantStatus={tenant?.status}
+          testId="dashboard-node.map-status"
+          settingsLink={
+            tenant ? (
+              <Link
+                to="/tenant/$tenantId"
+                params={{ tenantId: tenant.id }}
+                search={{ nodeId: selectedNode.id }}
+              />
+            ) : undefined
+          }
         />
       )}
 
@@ -335,7 +310,19 @@ function NodeOverview() {
         statuses={reportStatuses.data ?? []}
       />
 
-      <section id="coming-up" className="flex scroll-mt-20 flex-col gap-6">
+      {canManage && (
+        <OwnerActions
+          nodeId={selectedNode.id}
+          tenantId={tenant?.id ?? null}
+          showPayouts={showTeamStake}
+        />
+      )}
+
+      <section
+        id="coming-up"
+        className="flex scroll-mt-20 flex-col gap-6"
+        data-testid="dashboard-node.coming-up"
+      >
         <SectionHeader
           title={translate("dashboard.comingUp")}
           action={
@@ -382,7 +369,14 @@ function NodeOverview() {
                 </ItemMedia>
                 <ItemContent className="min-w-0">
                   <ItemTitle className="flex-wrap">
-                    {event.title}
+                    <Link
+                      to="/activity/$activityId"
+                      params={{ activityId: event.id }}
+                      className="hover:underline"
+                      data-testid={`dashboard-node.event-${event.id}`}
+                    >
+                      {event.title}
+                    </Link>
                     <EventVisibilityBadge activity={event} context={visibilityContext} />
                   </ItemTitle>
                   <ItemDescription>
@@ -426,6 +420,26 @@ function NodeOverview() {
             validatorsTenantId={canManage ? tenant?.id : undefined}
             linkOrganizationId={canManage ? (orgId ?? undefined) : undefined}
           />
+        </div>
+      )}
+
+      {orgId && (
+        <div id="people" className="scroll-mt-20">
+          <MemberDirectory organizationId={orgId} nodeId={selectedNode.id} />
+        </div>
+      )}
+
+      {orgId && (
+        <AttendanceRecord
+          organizationId={orgId}
+          reconcile={!!canOrganize}
+          testId="dashboard-node.attendance"
+        />
+      )}
+
+      {orgId && (
+        <div id="teams" className="scroll-mt-20">
+          <TeamRequests organizationId={orgId} />
         </div>
       )}
 
