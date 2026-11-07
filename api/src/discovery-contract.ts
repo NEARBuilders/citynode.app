@@ -91,6 +91,30 @@ export const storedEventReportSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+export const communityBuildersSchema = z.object({
+  path: z.string(),
+  baseUrl: z.string(),
+  status: z.enum(["ok", "unavailable"]),
+  builders: z.object({
+    items: z.array(
+      z.object({ nearAccount: z.string(), name: z.string().nullable(), url: z.string() }),
+    ),
+    total: z.number().int().nonnegative(),
+    url: z.string(),
+  }),
+  projects: z.object({
+    items: z.array(
+      z.object({
+        title: z.string(),
+        description: z.string().nullable(),
+        logoUrl: z.string().nullable(),
+        url: z.string(),
+      }),
+    ),
+    total: z.number().int().nonnegative(),
+    url: z.string(),
+  }),
+});
 export const activitySchema = z.object({
   id: z.uuid(),
   ownerNodeId: z.uuid(),
@@ -347,6 +371,9 @@ export const discoveryContract = {
     )
     .output(z.array(discoveryNodeSchema)),
   getDiscoveryNode: oc.input(z.object({ nodeId: z.uuid() })).output(discoveryNodeSchema.nullable()),
+  getCommunityBuilders: oc
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(communityBuildersSchema.nullable()),
   getDiscoveryProfile: oc
     .input(z.object({ nodeId: z.uuid() }))
     .output(profileSchema.nullable())
