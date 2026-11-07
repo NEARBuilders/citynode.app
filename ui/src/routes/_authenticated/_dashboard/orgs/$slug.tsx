@@ -181,13 +181,6 @@ function OrganizationDetail() {
   ).length;
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
-  const teamBoard = useQuery({
-    ...teamJoinBoardQueryOptions(apiClient, orgId),
-    enabled: !!orgId && org?.status === "active" && canManageMembers,
-  });
-  const waitingTeamRequests = (teamBoard.data?.requests ?? []).filter(
-    (request) => request.canDecide,
-  ).length;
   const communitySettings = useOpenCommunitySettings();
   const openSettings =
     settingsTenantId && communitySettings.needsSwitch(orgId)
@@ -199,6 +192,13 @@ function OrganizationDetail() {
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
   const isPersonal = org ? isPersonalOrganization(org, session?.user?.id) : false;
+  const teamBoard = useQuery({
+    ...teamJoinBoardQueryOptions(apiClient, orgId),
+    enabled: !!orgId && org?.status === "active" && canManageMembers && !isPersonal,
+  });
+  const waitingTeamRequests = (teamBoard.data?.requests ?? []).filter(
+    (request) => request.canDecide,
+  ).length;
   const { cancelInvitationMutation, inviteMutation, resendInvitationMutation } =
     useOrganizationInvitationActions(apiClient, orgId);
   const { createApiKeyMutation, deleteApiKeyMutation } = useOrganizationApiKeyActions(
