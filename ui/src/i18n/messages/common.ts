@@ -675,6 +675,18 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "{name} : événements, stations, propositions.",
     "{name}：活动、站点和提案。",
   ],
+  "dashboard.eventsToReport": [
+    "Events to report on",
+    "Eventos por informar",
+    "Événements à rapporter",
+    "待提交报告的活动",
+  ],
+  "dashboard.eventsToReportHint": [
+    "These events have ended and still need a report.",
+    "Estos eventos ya terminaron y aún necesitan un informe.",
+    "Ces événements sont terminés et n'ont pas encore de rapport.",
+    "这些活动已结束，仍需要提交报告。",
+  ],
   "dashboard.configWaitingHint": [
     "A community config change (e.g. a custom UI bundle) is waiting for DAO approval.",
     "Un cambio de configuración de comunidad, como una interfaz personalizada, espera aprobación del DAO.",

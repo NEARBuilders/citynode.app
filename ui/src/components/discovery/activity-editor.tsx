@@ -54,9 +54,6 @@ import { EventVisibilityBadge, ImportsWaiting, useVisibilityContext } from "./ev
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
 
-const postEventReportUrl =
-  "https://docs.google.com/forms/d/e/1FAIpQLSdGTdQ9znOJbObaeef7NHAzXc04OygTLIOu6Qv1dKRx8Fwxxw/viewform";
-
 export function ActivityEditor({
   nodeId,
   reviewImports = false,
@@ -182,12 +179,14 @@ export function ActivityEditor({
           variant="outline"
           data-testid={`activity-editor.submit-report-${a.id}`}
           nativeButton={false}
-          render={(props) => (
-            <a {...props} href={postEventReportUrl} target="_blank" rel="noopener noreferrer" />
-          )}
+          render={
+            <Link
+              to="/nodes/$nodeId/events/$activityId/report"
+              params={{ nodeId, activityId: a.id }}
+            />
+          }
         >
           {translate("events.submitReport")}
-          <ArrowUpRightIcon />
         </Button>
       )}
       {canOnboard && a.kind === "event" && a.status !== "cancelled" && (
