@@ -26,6 +26,8 @@ const harness = vi.hoisted(() => ({
   authContext: null as unknown,
   attendance: { events: [], unclassified: [], communities: [] } as Record<string, unknown>,
   attendanceReads: [] as string[],
+  teamRequests: [] as Record<string, unknown>[],
+  dismissed: [] as string[],
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -79,6 +81,17 @@ const api = {
   }),
   getNode: async () => null,
   getDiscoveryNode: async () => null,
+  getTeamJoinBoard: async () => ({
+    canReview: false,
+    teams: [],
+    requests: harness.teamRequests.filter(
+      (request) => !harness.dismissed.includes(String(request.id)),
+    ),
+  }),
+  dismissTeamJoinRequest: async ({ requestId }: { requestId: string }) => {
+    harness.dismissed.push(requestId);
+    return { id: requestId };
+  },
   getMyAttendance: async (input: { organizationId?: string }) => {
     harness.attendanceReads.push(input.organizationId ?? "all");
     return harness.attendance;
@@ -126,6 +139,8 @@ afterEach(() => {
   harness.authContext = null;
   harness.attendance = { events: [], unclassified: [], communities: [] };
   harness.attendanceReads.length = 0;
+  harness.teamRequests = [];
+  harness.dismissed.length = 0;
 });
 
 function Switcher() {
@@ -427,5 +442,102 @@ describe("My community without a valid active community", () => {
       search: {},
     });
     expect(result.tenant?.orgId).toBe(harbor.id);
+  });
+});
+
+function teamRequest(overrides: Record<string, unknown>) {
+  return {
+    id: "request-1",
+    teamId: "team-events",
+    teamName: "Events Team",
+    teamAreas: ["events"],
+    requesterName: "Someone",
+    isMine: false,
+    status: "pending",
+    closedReason: null,
+    endorsementCount: 0,
+    endorsedByMe: false,
+    canEndorse: false,
+    canDecide: false,
+    createdAt: "2026-11-01T10:00:00.000Z",
+    decidedAt: null,
+    dismissedAt: null,
+    ...overrides,
+  };
+}
+
+function inCommunity(role: "owner" | "admin" | "member") {
+  harness.user = member;
+  harness.activeOrganizationId = "org-1";
+  harness.organizations = [{ id: "org-1", name: "Example Community", slug: "example" }];
+  harness.nodes = [node("node-a", "Berlin")];
+  harness.authContext = { organization: { member: { role }, teams: [] } };
+}
+
+describe("Home for people who decide team requests", () => {
+  it.each(["owner", "admin"] as const)("leads an %s with the waiting requests", async (role) => {
+    inCommunity(role);
+    harness.teamRequests = [
+      teamRequest({ id: "request-1", canDecide: true }),
+      teamRequest({ id: "request-2", canDecide: true }),
+      teamRequest({ id: "request-3", status: "closed" }),
+    ];
+    renderHome();
+
+    const step = await screen.findByTestId("home-step-team-requests");
+    expect(step.textContent).toContain("2 team requests waiting");
+    expect(step.textContent).toContain("Example Community");
+    expect(step.querySelector("a")?.getAttribute("href")).toBe("/dashboard/node");
+    expect(stepIds()[0]).toBe("team-requests");
+  });
+
+  it("shows a plain member no reviewer step for requests they can only see", async () => {
+    inCommunity("member");
+    harness.teamRequests = [teamRequest({ canEndorse: true })];
+    renderHome();
+
+    await screen.findByTestId("home-step-open-community");
+    expect(screen.queryByTestId("home-step-team-requests")).toBeNull();
+  });
+});
+
+describe("Home for a member whose team request was decided", () => {
+  it("points an approved member at the newly available area until they dismiss it", async () => {
+    inCommunity("member");
+    harness.teamRequests = [
+      teamRequest({ id: "request-approved", isMine: true, status: "approved" }),
+    ];
+    renderHome();
+
+    const update = await screen.findByTestId("home-team-update-request-approved");
+    expect(update.textContent).toContain("You joined Events Team");
+    expect(screen.getByTestId("home-team-update-open-request-approved").getAttribute("href")).toBe(
+      "/nodes/$nodeId/content",
+    );
+
+    fireEvent.click(screen.getByTestId("home-team-update-dismiss-request-approved"));
+    await waitFor(() => expect(screen.queryByTestId("home-team-updates")).toBeNull());
+    expect(harness.dismissed).toEqual(["request-approved"]);
+  });
+
+  it("tells a declined member without a link, and skips dismissed or pending requests", async () => {
+    inCommunity("member");
+    harness.teamRequests = [
+      teamRequest({ id: "request-declined", isMine: true, status: "declined" }),
+      teamRequest({
+        id: "request-seen",
+        isMine: true,
+        status: "declined",
+        dismissedAt: "2026-11-02T10:00:00.000Z",
+      }),
+      teamRequest({ id: "request-pending", isMine: true }),
+    ];
+    renderHome();
+
+    const update = await screen.findByTestId("home-team-update-request-declined");
+    expect(update.textContent).toContain("Your request to join Events Team was declined");
+    expect(screen.queryByTestId("home-team-update-open-request-declined")).toBeNull();
+    expect(screen.queryByTestId("home-team-update-request-seen")).toBeNull();
+    expect(screen.queryByTestId("home-team-update-request-pending")).toBeNull();
   });
 });

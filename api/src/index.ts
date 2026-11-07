@@ -717,12 +717,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
         canDecide: pending && community.canReview,
         createdAt: request.createdAt.toISOString(),
         decidedAt: request.decidedAt?.toISOString() ?? null,
+        dismissedAt: request.dismissedAt?.toISOString() ?? null,
       };
     };
 
     const canSeeTeamRequest = (community: TeamCommunity, request: TeamJoinRequestRecord) => {
       if (request.requesterUserId === community.userId) {
-        return request.status !== "withdrawn" && request.status !== "approved";
+        if (request.status === "approved") return request.dismissedAt === null;
+        return request.status !== "withdrawn";
       }
       if (request.status === "pending") {
         return community.canReview || community.ownTeamIds.has(request.teamId);
@@ -1274,6 +1276,26 @@ export default createPlugin.withPlugins<PluginsClient>()({
         );
         if (!settled) {
           return yield* Effect.fail(teamJoinConflict("This team request is no longer pending"));
+        }
+        return yield* refreshTeamRequest(community, request.id);
+      }),
+
+      dismissTeamJoinRequest: builder.dismissTeamJoinRequest.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const { community, request } = yield* loadTeamRequest(context, input.requestId);
+        if (request.requesterUserId !== context.userId) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", { message: "Only the requester can dismiss it" }),
+          );
+        }
+        if (request.status !== "approved" && request.status !== "declined") {
+          return yield* Effect.fail(teamJoinConflict("This team request hasn't been decided"));
+        }
+        if (!(yield* services.teamJoinRequests.dismiss(request.id, context.userId))) {
+          return yield* Effect.fail(teamJoinConflict("This team request was already dismissed"));
         }
         return yield* refreshTeamRequest(community, request.id);
       }),

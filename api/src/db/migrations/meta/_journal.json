@@ -57,6 +57,13 @@
       "when": 1793206062784,
       "tag": "0007_team-join-requests",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794024846156,
+      "tag": "0008_team-request-dismissal",
+      "breakpoints": true
     }
   ]
 }
