@@ -1,6 +1,7 @@
 import { useLocation } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
+// TODO(everything-dev#820): drop once the router scrolls to hash targets that mount late.
 export function useScrollToHash<T extends HTMLElement = HTMLElement>(id: string) {
   const hash = useLocation({ select: (location) => location.hash });
   const [target, setTarget] = useState<T | null>(null);
