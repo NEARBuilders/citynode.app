@@ -13,6 +13,7 @@ export type ImportEventCandidate = {
   url: string;
   startsAt: string | null;
   endsAt: string | null;
+  timezone: string | null;
 };
 
 export type ImportReportRow = {
@@ -204,31 +205,53 @@ function parseFormat(value: string): EventReport["format"] | null {
 
 function parseFocus(value: string): EventReport["focus"] | null {
   const normalized = normalizeText(value);
-  if (normalized.includes("ai") || normalized.includes("artificial")) return "ai";
-  if (normalized.includes("crypto") || normalized.includes("web3") || normalized.includes("near")) {
-    return "crypto";
-  }
+  const hasAi = /\bai\b/.test(normalized) || normalized.includes("artificial");
+  const hasCrypto =
+    normalized.includes("crypto") ||
+    normalized.includes("web3") ||
+    normalized.includes("blockchain") ||
+    /\bnear\b/.test(normalized);
+  if (hasAi && hasCrypto) return null;
+  if (hasAi) return "ai";
+  if (hasCrypto) return "crypto";
   return null;
 }
 
-function parseAudiences(value: string): EventReport["audiences"] {
+function parseAudiences(value: string): {
+  audiences: EventReport["audiences"];
+  audienceOther: string;
+} {
   const parts = value
     .split(/[,;/|]+/)
-    .map((part) => normalizeText(part))
+    .map((part) => part.trim())
     .filter(Boolean);
   const audiences: EventReport["audiences"] = [];
+  const otherParts: string[] = [];
   for (const part of parts) {
-    if (part.includes("general") || part.includes("public")) audiences.push("general");
-    else if (part.includes("develop")) audiences.push("developers");
-    else if (part.includes("academic") || part.includes("universit") || part.includes("student")) {
+    const normalized = normalizeText(part);
+    if (normalized.includes("general") || normalized.includes("public")) audiences.push("general");
+    else if (normalized.includes("develop")) audiences.push("developers");
+    else if (
+      normalized.includes("academic") ||
+      normalized.includes("universit") ||
+      normalized.includes("student")
+    ) {
       audiences.push("academic");
-    } else if (part.includes("smb") || part.includes("sme") || part.includes("business")) {
+    } else if (
+      normalized.includes("smb") ||
+      normalized.includes("sme") ||
+      normalized.includes("business")
+    ) {
       audiences.push("smb");
-    } else if (part.includes("other")) audiences.push("other");
+    } else if (normalized.includes("other")) audiences.push("other");
+    else otherParts.push(part);
   }
-  return [...new Set(audiences)].filter((audience) =>
+  const unique = [...new Set(audiences)].filter((audience) =>
     (EVENT_REPORT_AUDIENCES as readonly string[]).includes(audience),
   ) as EventReport["audiences"];
+  if (otherParts.length === 0) return { audiences: unique, audienceOther: "" };
+  if (!unique.includes("other")) unique.push("other");
+  return { audiences: unique, audienceOther: otherParts.join(", ") };
 }
 
 function parseKpis(row: Record<string, string>): [string, string, string] {
@@ -256,7 +279,8 @@ function parseDay(value: string): string | null {
     if (!month || !day || !year) return null;
     return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
-  const parsed = Date.parse(trimmed);
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+  const parsed = Date.parse(`${trimmed} UTC`);
   if (!Number.isFinite(parsed)) return null;
   return new Date(parsed).toISOString().slice(0, 10);
 }
@@ -265,7 +289,18 @@ function eventDay(event: ImportEventCandidate): string | null {
   const raw = event.startsAt ?? event.endsAt;
   if (!raw) return null;
   const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : null;
+  if (!Number.isFinite(parsed)) return null;
+  const timeZone = event.timezone || "UTC";
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(parsed));
+  } catch {
+    return new Date(parsed).toISOString().slice(0, 10);
+  }
 }
 
 function normalizeUrl(value: string): string | null {
@@ -340,7 +375,8 @@ export function reportFromImportRow(
   const format = parseFormat(cell(row, "format"));
   const focus = parseFocus(cell(row, "focus"));
   const hadPartners = parseBoolean(cell(row, "hadPartners"));
-  const attendees = Number(cell(row, "attendees").replace(/,/g, ""));
+  const rawAttendees = cell(row, "attendees").replace(/,/g, "");
+  const attendees = rawAttendees ? Number(rawAttendees) : Number.NaN;
   if (!format) return { reason: "format was missing or unrecognized" };
   if (!focus) return { reason: "focus was missing or unrecognized" };
   if (hadPartners === null) return { reason: "partners yes/no was missing or unrecognized" };
@@ -348,13 +384,14 @@ export function reportFromImportRow(
     return { reason: "attendee count was missing or invalid" };
   }
 
-  const audiences = parseAudiences(cell(row, "audiences"));
+  const parsedAudiences = parseAudiences(cell(row, "audiences"));
+  const audienceOther = cell(row, "audienceOther") || parsedAudiences.audienceOther;
   const draft = {
     format,
     socialLinks: splitLinks(cell(row, "socialLinks")),
     focus,
-    audiences,
-    audienceOther: cell(row, "audienceOther"),
+    audiences: parsedAudiences.audiences,
+    audienceOther,
     theme: cell(row, "theme"),
     attendees: Math.trunc(attendees),
     slideLinks: splitLinks(cell(row, "slideLinks")),

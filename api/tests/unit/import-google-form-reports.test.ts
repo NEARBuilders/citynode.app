@@ -8,6 +8,27 @@ import {
   reportFromImportRow,
 } from "../../src/lib/import-google-form-reports";
 
+function reportRow(overrides: Record<string, string> = {}) {
+  return {
+    "IRL or online": "In person",
+    "Links to social posts": "https://x.com/harbor/status/1",
+    "Was the event AI or crypto focused?": "Crypto",
+    "Who was the target audience?": "Developers",
+    "Describe the core theme, activation and flow of the event": "Launch night for builders",
+    "How many attendees?": "42",
+    "KPI 1": "40 builders",
+    "KPI 2": "12 wallets",
+    "KPI 3": "",
+    "What went well?": "Great energy",
+    "What could have been done better? Ideas for next time": "Start on time",
+    "How can we better support local talent after the event?": "Office hours",
+    "How can we better support talent during the event?": "Mentors",
+    "Did local partners support this event?": "No",
+    "What are your next action items?": "Plan the next meetup",
+    ...overrides,
+  };
+}
+
 const event = {
   id: "11111111-1111-4111-8111-111111111111",
   nodeId: "22222222-2222-4222-8222-222222222222",
@@ -16,6 +37,7 @@ const event = {
   url: "https://luma.com/harbor-launch",
   startsAt: "2026-09-01T18:00:00.000Z",
   endsAt: "2026-09-01T21:00:00.000Z",
+  timezone: "UTC",
 };
 
 const reportCells = {
@@ -74,6 +96,28 @@ describe("matchImportEvent", () => {
         [event],
       ),
     ).toEqual({ event });
+  });
+
+  it("matches community dates in the event timezone, not UTC", () => {
+    expect(
+      matchImportEvent(
+        {
+          Community: "Harbor Demo",
+          "Event name": "Harbor Launch Night",
+          "Event date": "09/01/2026",
+        },
+        [
+          {
+            ...event,
+            startsAt: "2026-09-02T00:00:00.000Z",
+            endsAt: "2026-09-02T03:00:00.000Z",
+            timezone: "America/New_York",
+          },
+        ],
+      ),
+    ).toEqual({
+      event: expect.objectContaining({ timezone: "America/New_York" }),
+    });
   });
 
   it("lists unclear rows instead of guessing", () => {
@@ -186,5 +230,30 @@ describe("planGoogleFormImport", () => {
     });
     expect(duplicateInSameCsv.matched).toHaveLength(1);
     expect(duplicateInSameCsv.skippedExisting).toBe(1);
+  });
+});
+
+describe("reportFromImportRow", () => {
+  it("lists blank attendee counts instead of importing 0", () => {
+    expect(reportFromImportRow(reportRow({ "How many attendees?": "" }))).toEqual({
+      reason: "attendee count was missing or invalid",
+    });
+  });
+
+  it("does not treat blockchain answers as AI focus", () => {
+    expect(
+      reportFromImportRow(reportRow({ "Was the event AI or crypto focused?": "Blockchain" })),
+    ).toMatchObject({ report: { focus: "crypto" } });
+    expect(
+      reportFromImportRow(reportRow({ "Was the event AI or crypto focused?": "AI and crypto" })),
+    ).toEqual({ reason: "focus was missing or unrecognized" });
+  });
+
+  it("keeps unrecognized audiences as other instead of dropping them", () => {
+    expect(
+      reportFromImportRow(reportRow({ "Who was the target audience?": "Developers, Founders" })),
+    ).toMatchObject({
+      report: { audiences: ["developers", "other"], audienceOther: "Founders" },
+    });
   });
 });
