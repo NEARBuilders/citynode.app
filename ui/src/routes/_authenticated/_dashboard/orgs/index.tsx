@@ -1,5 +1,5 @@
 import { BankIcon, EnvelopeSimpleIcon, RocketLaunchIcon, WalletIcon } from "@phosphor-icons/react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
 import { toast } from "sonner";
@@ -29,7 +29,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { pageTitle } from "@/lib/page-title";
 import { visibleOrganizations } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
-import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
+import { tenantByOrgQueryOptions, tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
 import { orgMembersQueryKey } from "./-organization-query-keys";
 import { useInvitationActions } from "./-use-invitation-actions";
@@ -85,6 +85,7 @@ function OrganizationsList() {
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const organizationsQuery = useQuery(organizationsQueryOptions(apiClient));
   const { data: organizations, isLoading } = organizationsQuery;
@@ -148,6 +149,12 @@ function OrganizationsList() {
   const user = session?.user;
   const activeOrgId = session?.session?.activeOrganizationId;
   const switchOrgMutation = useSwitchOrganization();
+  const openIfCommunity = async (organizationId: string) => {
+    const isCommunity =
+      tenantOrgIds.has(organizationId) ||
+      !!(await queryClient.fetchQuery(tenantByOrgQueryOptions(apiClient, organizationId)));
+    if (isCommunity) await router.navigate({ to: "/dashboard/node" });
+  };
   const invitationBusy = acceptMutation.isPending || rejectMutation.isPending;
   const hasInvitations = pendingInvitations.length > 0;
 
@@ -350,8 +357,13 @@ function OrganizationsList() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => switchOrgMutation.mutate(org.id)}
+                            onClick={() =>
+                              switchOrgMutation.mutate(org.id, {
+                                onSuccess: () => void openIfCommunity(org.id),
+                              })
+                            }
                             disabled={switchOrgMutation.isPending}
+                            data-testid={`orgs-make-active-${org.slug}`}
                           >
                             {translate("org.makeActive")}
                           </Button>
