@@ -120,7 +120,7 @@ function normalizeText(value: string): string {
 }
 
 function cell(row: Record<string, string>, key: FieldKey): string {
-  const aliases = FIELD_ALIASES[key];
+  const aliases: readonly string[] = FIELD_ALIASES[key];
   for (const [header, value] of Object.entries(row)) {
     if (aliases.includes(normalizeHeader(header))) return value.trim();
   }
@@ -250,7 +250,9 @@ function parseDay(value: string): string | null {
   if (match) {
     const month = Number(match[1]);
     const day = Number(match[2]);
-    const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+    const yearPart = match[3];
+    if (!yearPart) return null;
+    const year = Number(yearPart.length === 2 ? `20${yearPart}` : yearPart);
     if (!month || !day || !year) return null;
     return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
