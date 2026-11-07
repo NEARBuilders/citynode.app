@@ -293,6 +293,7 @@ function AdminEvents() {
                             <ReportStatusBadge
                               activity={event}
                               submittedAt={event.reportSubmittedAt}
+                              source={event.reportSource}
                               now={now}
                             />
                           </Link>

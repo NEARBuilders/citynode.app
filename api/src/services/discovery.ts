@@ -46,6 +46,7 @@ function storedReport(row: typeof eventReports.$inferSelect) {
     activityId: row.activityId,
     formVersion: row.formVersion,
     report: row.report,
+    source: row.source,
     submittedAt: row.submittedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -856,6 +857,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               nodeMetadata: nodes.metadata,
               organizationId: tenants.orgId,
               reportSubmittedAt: eventReports.submittedAt,
+              reportSource: eventReports.source,
             })
             .from(discoveryActivities)
             .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
@@ -875,6 +877,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           publicPage: nodeKindOf(row.nodeMetadata) !== PLATFORM_NODE_KIND,
           organizationId: row.organizationId ?? null,
           reportSubmittedAt: row.reportSubmittedAt?.toISOString() ?? null,
+          reportSource: row.reportSource ?? null,
         }));
       }),
     eventReport: (activityId: string, context: AuthContext) =>
@@ -916,6 +919,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               nodeId: activity.ownerNodeId,
               formVersion: EVENT_REPORT_FORM_VERSION,
               report: input.report,
+              source: "app",
               submittedBy: userId,
               submittedAt: at,
               updatedBy: userId,
@@ -940,13 +944,18 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         yield* reportAccess(nodeId, context);
         const rows = yield* query(() =>
           db
-            .select({ activityId: eventReports.activityId, submittedAt: eventReports.submittedAt })
+            .select({
+              activityId: eventReports.activityId,
+              submittedAt: eventReports.submittedAt,
+              source: eventReports.source,
+            })
             .from(eventReports)
             .where(eq(eventReports.nodeId, nodeId)),
         );
         return rows.map((row) => ({
           activityId: row.activityId,
           submittedAt: row.submittedAt.toISOString(),
+          source: row.source,
         }));
       }),
     studio: (context: AuthContext) =>

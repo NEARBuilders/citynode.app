@@ -8,7 +8,7 @@ import {
   UNAUTHORIZED,
 } from "every-plugin/errors";
 import { z } from "zod";
-import { discoveryContract } from "./discovery-contract";
+import { discoveryContract, EVENT_REPORT_SOURCES } from "./discovery-contract";
 
 const ErrorTestKindSchema = z.enum([
   "unauthorized",
@@ -407,6 +407,7 @@ export const AdminEventsSchema = z.object({
       publicPage: z.boolean(),
       organizationId: z.string().nullable(),
       reportSubmittedAt: z.iso.datetime().nullable(),
+      reportSource: z.enum(EVENT_REPORT_SOURCES).nullable(),
       checkIns: AttendanceSummarySchema.nullable(),
     }),
   ),
