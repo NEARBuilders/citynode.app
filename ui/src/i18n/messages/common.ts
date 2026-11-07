@@ -1266,6 +1266,14 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "label.voteAbstain": ["Abstain", "Abstenerse", "Abstention", "弃权"],
   "label.voteAgainst": ["Against", "En contra", "Contre", "反对"],
   "label.voteFor": ["For", "A favor", "Pour", "赞成"],
+  "me.description": [
+    "Your profile and the events you checked in at, across every community.",
+    "Tu perfil y los eventos en los que te registraste, en todas tus comunidades.",
+    "Votre profil et les événements auxquels vous vous êtes enregistré, dans toutes vos communautés.",
+    "你的资料，以及你在所有社区签到过的活动。",
+  ],
+  "me.editProfile": ["Edit profile", "Editar perfil", "Modifier le profil", "编辑资料"],
+  "me.publicProfile": ["Public profile", "Perfil público", "Profil public", "公开资料"],
   "measurement.copyLink": ["Copied a link", "Copió un enlace", "Copie d’un lien", "复制链接"],
   "measurement.openCommunity": [
     "Opened a community",
@@ -1291,6 +1299,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ouverture d’Explorer",
     "打开探索页面",
   ],
+  "nav.activity": ["Your activity", "Tu actividad", "Votre activité", "你的动态"],
   "nav.admin": ["Admin", "Administración", "Administration", "管理"],
   "nav.apiKeys": ["API keys", "Claves API", "Clés API", "API 密钥"],
   "nav.community": ["Community", "Comunidad", "Communauté", "社区"],
@@ -1864,11 +1873,23 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Impossible de charger la liste des membres.",
     "无法加载成员列表。",
   ],
+  "members.loadMoreFailed": [
+    "Couldn't load more members. Try again.",
+    "No se pudieron cargar más miembros. Inténtalo de nuevo.",
+    "Impossible de charger plus de membres. Réessayez.",
+    "无法加载更多成员，请重试。",
+  ],
   "members.noneShared": [
     "No members have shared their name yet.",
     "Ningún miembro ha compartido su nombre todavía.",
     "Aucun membre n'a encore partagé son nom.",
     "还没有成员公开名字。",
+  ],
+  "members.noneSharedYet": [
+    "No shared names in the members checked so far. Load more to keep looking.",
+    "Aún no hay nombres compartidos entre los miembros revisados. Carga más para seguir buscando.",
+    "Aucun nom partagé parmi les membres vérifiés pour l'instant. Chargez-en plus pour continuer.",
+    "目前查看的成员中还没有公开名字。加载更多以继续查找。",
   ],
   "members.notAvailable": ["Not available", "No disponible", "Non disponible", "暂无数据"],
   "members.optInLoadFailed": [

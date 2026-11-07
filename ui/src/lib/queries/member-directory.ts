@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { ApiClient } from "@/app";
 
 export const memberDirectoryQueryKeys = {
@@ -19,9 +19,15 @@ export function memberDirectoryOptInQueryOptions(apiClient: ApiClient) {
 }
 
 export function memberDirectoryQueryOptions(apiClient: ApiClient, organizationId: string) {
-  return queryOptions({
+  return infiniteQueryOptions({
     queryKey: memberDirectoryQueryKeys.organization(organizationId),
-    queryFn: () => apiClient.getMemberDirectory({ organizationId }),
+    queryFn: ({ pageParam }) =>
+      apiClient.getMemberDirectory({
+        organizationId,
+        ...(pageParam !== undefined && { cursor: pageParam }),
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 60_000,
     refetchOnMount: "always",
     retry: false,

@@ -29,6 +29,8 @@ import {
   type MemberDirectoryService,
   MemberDirectoryTag,
 } from "./services/member-directory";
+import { resolveNetwork } from "./services/near-rpc";
+import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import {
@@ -81,6 +83,7 @@ class ApiServices extends Context.Service<
     validators: ValidatorsService;
     discovery: DiscoveryService;
     storage: StorageService;
+    nearbuilders: ReturnType<typeof createNearbuilders>;
     memberDirectory: MemberDirectoryService;
     attendance: AttendanceService;
     teamJoinRequests: TeamJoinRequestsService;
@@ -91,6 +94,7 @@ class ApiServices extends Context.Service<
 const ONBOARDING_GRACE_MS = 48 * 3_600_000;
 
 const MEMBER_PAGE_SIZE = 100;
+const MEMBER_DIRECTORY_SCAN_PAGES = 10;
 
 const ACCOUNT_ID_REGEX =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
@@ -390,6 +394,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .string()
       .default("")
       .describe("Repository URL included in the Nominatim User-Agent"),
+    nearbuildersUrl: z
+      .url({ protocol: /^https?$/ })
+      .default("https://nearbuilders.org")
+      .describe("NEAR Builders base URL for community builders and projects"),
     mainnetStakingPoolWhitelist: z
       .string()
       .default("lockup-whitelist.near")
@@ -446,6 +454,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           validators: Context.get(services, ValidatorsTag),
           discovery: Context.get(services, DiscoveryTag),
           storage: Context.get(services, StorageTag),
+          nearbuilders: createNearbuilders(config.variables.nearbuildersUrl),
           memberDirectory: Context.get(services, MemberDirectoryTag),
           attendance: Context.get(services, AttendanceTag),
           teamJoinRequests: Context.get(services, TeamJoinRequestsTag),
@@ -586,38 +595,62 @@ export default createPlugin.withPlugins<PluginsClient>()({
         Effect.orElseSucceed(() => null),
       );
 
-    const listAllMembers = (auth: MemberAuthClient, organizationId: string) =>
+    const memberReadFailure = (message: string) => (error: unknown) =>
+      error instanceof ORPCError && ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
+        ? notACommunityMember()
+        : new ORPCError("INTERNAL_SERVER_ERROR", { message });
+
+    const listMemberPage = (
+      auth: MemberAuthClient,
+      organizationId: string,
+      page: { limit: number; offset: number },
+    ) =>
+      Effect.tryPromise({
+        try: () => auth.listMembers({ organizationId, ...page }),
+        catch: memberReadFailure("Could not load the community's members"),
+      });
+
+    const findMembers = (auth: MemberAuthClient, organizationId: string, wanted: Set<string>) =>
       Effect.gen(function* () {
-        const members: Awaited<ReturnType<MemberAuthClient["listMembers"]>>["members"] = [];
-        let total = 0;
-        while (true) {
-          const page = yield* Effect.tryPromise({
-            try: () =>
-              auth.listMembers({ organizationId, limit: MEMBER_PAGE_SIZE, offset: members.length }),
-            catch: (error) =>
-              error instanceof ORPCError &&
-              ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
-                ? notACommunityMember()
-                : new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Could not load the community's members",
-                  }),
+        const found = new Map<string, string | null>();
+        let offset = 0;
+        while (found.size < wanted.size) {
+          const page = yield* listMemberPage(auth, organizationId, {
+            limit: MEMBER_PAGE_SIZE,
+            offset,
           });
-          total = page.total;
-          members.push(...page.members);
-          if (page.members.length === 0 || members.length >= page.total) break;
+          offset += page.members.length;
+          for (const member of page.members) {
+            if (member.organizationId === organizationId && wanted.has(member.userId)) {
+              found.set(member.userId, member.user?.name ?? null);
+            }
+          }
+          if (page.members.length === 0 || offset >= page.total) break;
         }
-        return { members, total };
+        return found;
+      });
+
+    const requireCommunityMember = (auth: MemberAuthClient, organizationId: string) =>
+      Effect.gen(function* () {
+        const { role } = yield* Effect.tryPromise({
+          try: () => auth.getActiveMemberRole({ organizationId }),
+          catch: memberReadFailure("Could not verify community membership"),
+        });
+        if (!role) return yield* Effect.fail(notACommunityMember());
+        return role;
       });
 
     const teamJoinConflict = (message: string) => new ORPCError("CONFLICT", { message });
 
-    const loadTeamCommunity = (auth: MemberAuthClient, organizationId: string, userId: string) =>
+    const loadTeamCommunity = (
+      auth: MemberAuthClient,
+      organizationId: string,
+      viewer: { userId: string; name: string | null },
+    ) =>
       Effect.gen(function* () {
         const services = yield* ApiServices;
-        const { members } = yield* listAllMembers(auth, organizationId);
-        const current = members.filter((member) => member.organizationId === organizationId);
-        const caller = current.find((member) => member.userId === userId);
-        if (!caller) return yield* Effect.fail(notACommunityMember());
+        const { userId } = viewer;
+        const role = yield* requireCommunityMember(auth, organizationId);
         const [teams, ownTeams] = yield* Effect.tryPromise({
           try: () =>
             Promise.all([
@@ -629,12 +662,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
               message: "Could not load the community's teams",
             }),
         });
+        const stored = yield* services.teamJoinRequests.list(organizationId, userId);
+        const requesters = new Set(
+          stored
+            .filter((request) => request.status === "pending" && request.requesterUserId !== userId)
+            .map((request) => request.requesterUserId),
+        );
+        const names = yield* findMembers(auth, organizationId, requesters);
+        names.set(userId, viewer.name);
         const community = {
-          memberIds: new Set(current.map((member) => member.userId)),
-          names: new Map(current.map((member) => [member.userId, member.user?.name ?? null])),
+          memberIds: new Set(names.keys()),
+          names,
           teams: new Map<string, UpstreamTeam>(teams.map((team) => [team.id, team])),
         };
-        const stored = yield* services.teamJoinRequests.list(organizationId, userId);
         const closures = stored.flatMap((request) => {
           if (request.status !== "pending") return [];
           const reason = closureReason(request, community);
@@ -649,7 +689,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...community,
           userId,
           organizationId,
-          canReview: isCommunitySettingsRole(caller.role),
+          canReview: isCommunitySettingsRole(role),
           ownTeamIds: new Set(ownTeams.map((team) => team.id)),
           requests,
         };
@@ -700,7 +740,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         const auth = yield* memberAuthClient(context);
-        const community = yield* loadTeamCommunity(auth, stored.organizationId, context.userId);
+        const community = yield* loadTeamCommunity(auth, stored.organizationId, {
+          userId: context.userId,
+          name: context.user?.name ?? null,
+        });
         const request = community.requests.find((candidate) => candidate.id === requestId);
         if (!request || !canSeeTeamRequest(community, request)) {
           return yield* Effect.fail(
@@ -890,6 +933,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.discovery.get(input.nodeId);
       }),
+      getCommunityBuilders: builder.getCommunityBuilders.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const path = yield* communityPath(input.nodeId, (id) => services.nodes.getById(id));
+        if (!path) return null;
+        return yield* Effect.promise(() => services.nearbuilders.forPath(path));
+      }),
       getDiscoveryProfile: builder.getDiscoveryProfile.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         return yield* services.discovery.profile(input.nodeId, context);
@@ -928,31 +977,59 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
-        const { members, total } = yield* listAllMembers(auth, input.organizationId);
-        const current = members.filter((member) => member.organizationId === input.organizationId);
-        if (!current.some((member) => member.userId === context.userId)) {
-          return yield* Effect.fail(notACommunityMember());
+        yield* requireCommunityMember(auth, input.organizationId);
+        if (
+          input.cursor === undefined &&
+          (yield* services.memberDirectory.isOptedIn(context.userId))
+        ) {
+          yield* services.memberDirectory.refreshPrimaryAccount(
+            context.userId,
+            yield* readOwnPrimaryAccount(auth),
+          );
         }
-        yield* services.memberDirectory.refreshPrimaryAccount(
-          context.userId,
-          yield* readOwnPrimaryAccount(auth),
-        );
-        const observation = yield* services.memberDirectory.recordCount(
-          input.organizationId,
-          total,
-        );
-        const accounts = yield* services.memberDirectory.optedInAccounts(
-          current.map((member) => member.userId),
-        );
-        return {
-          ...observation,
-          members: current
+        const start = Number(input.cursor ?? 0);
+        let scanned = start;
+        let total = 0;
+        let pages = 0;
+        let shown: Array<{ userId: string; name: string | null; accountId: string | null }> = [];
+        while (true) {
+          const page = yield* listMemberPage(auth, input.organizationId, {
+            limit: input.limit,
+            offset: scanned,
+          });
+          total = page.total;
+          pages += 1;
+          scanned += page.members.length;
+          const current = page.members.filter(
+            (member) => member.organizationId === input.organizationId,
+          );
+          const accounts = yield* services.memberDirectory.optedInAccounts(
+            current.map((member) => member.userId),
+          );
+          shown = current
             .filter((member) => accounts.has(member.userId))
             .map((member) => ({
               userId: member.userId,
               name: member.user?.name?.trim() || null,
               accountId: accounts.get(member.userId) ?? null,
-            })),
+            }));
+          if (
+            shown.length > 0 ||
+            page.members.length === 0 ||
+            scanned >= total ||
+            pages >= MEMBER_DIRECTORY_SCAN_PAGES
+          ) {
+            break;
+          }
+        }
+        const observation = yield* services.memberDirectory.recordCount(
+          input.organizationId,
+          total,
+        );
+        return {
+          ...observation,
+          members: shown,
+          nextCursor: scanned > start && scanned < total ? String(scanned) : null,
         };
       }),
 
@@ -964,6 +1041,38 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
         if (!tenant?.orgId) return unavailable;
         return (yield* services.memberDirectory.latestCount(tenant.orgId)) ?? unavailable;
+      }),
+
+      getNodeDao: builder.getNodeDao.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const none = { daoAccountId: null, network: null };
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (!node?.tenantId) return none;
+        const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
+        if (!tenant || tenant.ownerKind !== "dao") return none;
+        return { daoAccountId: tenant.accountId, network: resolveNetwork(tenant.accountId) };
+      }),
+
+      getOnboardCommunity: builder.getOnboardCommunity.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const notFound = () =>
+          new ORPCError("NOT_FOUND", { message: "No City Node for this organization" });
+        const tenant = yield* services.tenants.resolveTenantByOrgId(input.organizationId);
+        if (!tenant || tenant.status !== "active") return yield* Effect.fail(notFound());
+        const [node] = (yield* services.nodes.list({ tenantId: tenant.id })).sort(
+          (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+        );
+        if (!node) return yield* Effect.fail(notFound());
+        const listing = yield* services.discovery
+          .get(node.id)
+          .pipe(Effect.orElseSucceed(() => null));
+        return {
+          name: node.name,
+          href: `/n/${encodeURIComponent(node.slug)}${
+            node.parentId ? `?parentId=${encodeURIComponent(node.parentId)}` : ""
+          }`,
+          channels: (listing?.channels ?? []).map(({ label, url }) => ({ label, url })),
+        };
       }),
 
       reconcileAttendance: builder.reconcileAttendance.use(requireAuth).effect(function* ({
@@ -1032,7 +1141,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         context,
       }) {
         const auth = yield* memberAuthClient(context);
-        const community = yield* loadTeamCommunity(auth, input.organizationId, context.userId);
+        const community = yield* loadTeamCommunity(auth, input.organizationId, {
+          userId: context.userId,
+          name: context.user?.name ?? null,
+        });
         const pendingByTeam = new Map(
           community.requests
             .filter(
@@ -1062,7 +1174,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         const auth = yield* memberAuthClient(context);
-        const community = yield* loadTeamCommunity(auth, input.organizationId, context.userId);
+        const community = yield* loadTeamCommunity(auth, input.organizationId, {
+          userId: context.userId,
+          name: context.user?.name ?? null,
+        });
         const team = community.teams.get(input.teamId);
         if (!isJoinableTeam(team)) {
           return yield* Effect.fail(

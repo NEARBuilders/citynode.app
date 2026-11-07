@@ -29,6 +29,7 @@ export default App({
       platformAccount: "v1.citynode.near",
       domain: "citynode.app",
       gatewayDomains: "citynode.app,testnet.citynode.app",
+      nearbuildersUrl: "https://nearbuilders.org",
       mainnetStakingPoolWhitelist: "lockup-whitelist.near",
       testnetStakingPoolWhitelist: "whitelist.f863973.m0",
     },
@@ -44,6 +45,13 @@ export default App({
   auth: {
     variables: {
       organizationMembershipLimit: 1000,
+      // Joined screen after an onboarding code (everything-dev #662): "Visit
+      // {community}" plus its channels. The default next/home/explore links fit.
+      onboard: {
+        community: {
+          url: "/api/communities/by-organization/{organizationId}",
+        },
+      },
       deviceLink: {
         clientId: "citynode-web",
       },
