@@ -23,6 +23,14 @@ const USER_ID = "user-tenant-1";
 vi.mock("../dashboard/node/-community-header", () => ({
   CommunityHeader: () => <div data-testid="community-header" />,
   ensureCommunityHeaderData: vi.fn(async () => undefined),
+  communityAuthContextQueryOptions: (
+    api: { auth: { getContext: () => Promise<unknown> } },
+    organizationId: string | null,
+  ) => ({
+    queryKey: ["home-auth-context", organizationId ?? ""],
+    queryFn: () => api.auth.getContext().catch(() => null),
+    staleTime: 30 * 1000,
+  }),
 }));
 
 vi.mock("./-tenant-profile", () => ({
