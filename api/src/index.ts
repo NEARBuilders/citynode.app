@@ -1290,7 +1290,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
         const ownerTenants = yield* services.tenants.listTenantsByOwnerUserId(context.user.id);
         const orgId = context.organization?.activeOrganizationId;
-        if (!orgId || !isCommunitySettingsRole(context.organization?.member?.role)) {
+        if (
+          !orgId ||
+          (!isCommunitySettingsRole(context.organization?.member?.role) &&
+            !canUseTeamArea(context, "node-operations"))
+        ) {
           return ownerTenants;
         }
         const orgTenants = yield* services.tenants.listTenantsByOrgIds([orgId]);
