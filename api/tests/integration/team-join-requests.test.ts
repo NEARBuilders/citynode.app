@@ -12,6 +12,7 @@ type StubOrg = {
 
 const orgs = new Map<string, StubOrg>();
 const addCalls: Array<{ caller: string; teamId: string; userId: string }> = [];
+const memberPages: Array<{ limit?: number; offset?: number }> = [];
 let failAdd = false;
 
 function callerId(context: unknown) {
@@ -26,7 +27,11 @@ function orgFor(organizationId: string | undefined, caller: string) {
 
 const authStub = {
   client: (context: unknown) => ({
+    getActiveMemberRole: async ({ organizationId }: { organizationId?: string }) => ({
+      role: orgFor(organizationId, callerId(context)).members.get(callerId(context))?.role ?? null,
+    }),
     listMembers: async (input: { organizationId?: string; limit?: number; offset?: number }) => {
+      memberPages.push({ limit: input.limit, offset: input.offset });
       const organizationId = input.organizationId ?? "";
       const org = orgFor(organizationId, callerId(context));
       const members = [...org.members.entries()];
@@ -82,8 +87,11 @@ const authStub = {
 };
 
 function as(userId: string, role?: string) {
+  const context = authedContext(userId, role);
+  const name = [...orgs.values()].find((org) => org.members.has(userId))?.members.get(userId)?.name;
   return getPluginClient({
-    ...authedContext(userId, role),
+    ...context,
+    user: { ...(context.user as object), name: name ?? null },
     reqHeaders: { cookie: `better-auth.session_token=${userId}` },
   });
 }
@@ -402,5 +410,31 @@ describe("closing requests that can no longer be approved", () => {
     await expect(
       (await as("member")).requestToJoinTeam({ organizationId, teamId: communityTeam }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("team board upstream cost", () => {
+  it("reads no member pages when there are no pending requests from others", async () => {
+    const { organizationId, org } = community();
+    for (let index = 0; index < 5_000; index++) {
+      org.members.set(`bulk-${index}`, { name: `Bulk ${index}`, role: "member" });
+    }
+    memberPages.length = 0;
+    await (await as("owner")).getTeamJoinBoard({ organizationId });
+    expect(memberPages).toEqual([]);
+  });
+
+  it("stops reading member pages once every pending requester is found", async () => {
+    const { organizationId, org, ops } = community();
+    for (let index = 0; index < 5_000; index++) {
+      org.members.set(`bulk-${index}`, { name: `Bulk ${index}`, role: "member" });
+    }
+    await (await as("member")).requestToJoinTeam({ organizationId, teamId: ops });
+    memberPages.length = 0;
+    const board = await (await as("owner")).getTeamJoinBoard({ organizationId });
+    expect(memberPages).toEqual([{ limit: 100, offset: 0 }]);
+    expect(board.requests).toEqual([
+      expect.objectContaining({ status: "pending", requesterName: "New Member" }),
+    ]);
   });
 });
