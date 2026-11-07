@@ -18,6 +18,7 @@ import { pageTitle } from "@/lib/page-title";
 import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
+import { teamJoinBoardQueryOptions } from "@/lib/queries/team-join-requests";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import {
   canManageCommunity,
@@ -36,6 +37,7 @@ import { OwnerOverview, OwnerSetupLine } from "./-owner-overview";
 import { PlatformOverview } from "./-platform-overview";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
 import { communityAuthContextQueryOptions } from "./node/-community-header";
+import { decidedTeamRequests, TeamRequestUpdates } from "./-team-request-updates";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
   validateSearch: (
@@ -145,6 +147,15 @@ function Home() {
     enabled: !!ownerCommunity && canManage,
   });
 
+  const teamBoard = useQuery({
+    ...teamJoinBoardQueryOptions(apiClient, communityOrgId),
+    enabled: !!communityOrgId && !!tenant.data,
+  });
+  const teamUpdates = decidedTeamRequests(teamBoard.data?.requests);
+  const teamRequestsWaiting = ownerCommunity
+    ? 0
+    : (teamBoard.data?.requests ?? []).filter((request) => request.canDecide).length;
+
   const bulletin = node?.metadata?.bulletin;
 
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
@@ -169,6 +180,7 @@ function Home() {
         resolveTeamWorkspace(authContext.data).allowedAreas,
       ),
       isAdmin,
+      teamRequestsWaiting,
     },
     translate,
   );
@@ -253,9 +265,14 @@ function Home() {
                     </ItemActions>
                   </Item>
                 )}
+                <TeamRequestUpdates
+                  organizationId={communityOrgId}
+                  nodeId={node?.id ?? null}
+                  requests={teamUpdates}
+                />
                 <NextStepsList
                   steps={listedSteps}
-                  primary={!ownerCommunity && pending.length === 0}
+                  primary={!ownerCommunity && pending.length === 0 && teamUpdates.length === 0}
                 />
               </>
             )}

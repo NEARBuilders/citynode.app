@@ -1,9 +1,18 @@
 // @vitest-environment jsdom
+
+import { Link } from "@tanstack/react-router";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Tabs } from "@/components";
 import { render } from "@/i18n/test-render";
 import { TeamsTab, type TeamsTabTeam } from "./-teams-tab";
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, hash, ...props }: { to: string; hash?: string; children?: ReactNode }) => (
+    <a href={hash ? `${to}#${hash}` : to} {...props} />
+  ),
+}));
 
 const orgMembers = [
   { id: "m-owner", userId: "u-owner", role: "owner", user: { name: "Olive Owner" } },
@@ -50,6 +59,24 @@ async function openTeamMenu() {
 afterEach(cleanup);
 
 describe("TeamsTab", () => {
+  it("links owners and admins to the team requests waiting on them", () => {
+    renderTab({
+      waitingRequests: {
+        count: 3,
+        link: <Link to="/dashboard/node" hash="teams" />,
+      },
+    });
+
+    const link = screen.getByTestId("teams-tab-waiting-requests");
+    expect(link.textContent).toContain("3 requests waiting");
+    expect(link.getAttribute("href")).toBe("/dashboard/node#teams");
+  });
+
+  it("shows no waiting link when nothing is waiting on the viewer", () => {
+    renderTab({ canManage: false });
+    expect(screen.queryByTestId("teams-tab-waiting-requests")).toBeNull();
+  });
+
   it("shows management controls only to organization owners and admins", () => {
     renderTab({ canManage: false });
 

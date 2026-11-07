@@ -14,6 +14,7 @@ import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { FEATURE_AREA_MESSAGES } from "@/lib/feature-areas";
 import { teamJoinBoardQueryOptions, teamJoinQueryKeys } from "@/lib/queries/team-join-requests";
+import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 
 type TeamJoinBoard = Awaited<ReturnType<ApiClient["getTeamJoinBoard"]>>;
 type TeamJoinRequest = TeamJoinBoard["requests"][number];
@@ -43,6 +44,7 @@ export function TeamRequests({ organizationId }: { organizationId: string }) {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const board = useQuery(teamJoinBoardQueryOptions(apiClient, organizationId));
+  const scrollTarget = useScrollToHash<HTMLElement>("teams");
   const act = useMutation({
     mutationFn: (action: TeamAction) => {
       switch (action.kind) {
@@ -84,7 +86,11 @@ export function TeamRequests({ organizationId }: { organizationId: string }) {
   );
 
   return (
-    <section className="flex min-w-0 flex-col gap-6" data-testid="dashboard-node.teams">
+    <section
+      ref={board.isPending ? undefined : scrollTarget}
+      className="flex min-w-0 flex-col gap-6"
+      data-testid="dashboard-node.teams"
+    >
       <SectionHeader
         title={translate("teamRequests.title")}
         description={translate("teamRequests.description")}

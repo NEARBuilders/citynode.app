@@ -14,7 +14,13 @@ const api = vi.hoisted(() => ({
   decideTeamJoinRequest: vi.fn(),
 }));
 
+const location = vi.hoisted(() => ({ hash: "" }));
+
 vi.mock("@/app", () => ({ useApiClient: () => api }));
+vi.mock("@tanstack/react-router", () => ({
+  useLocation: ({ select }: { select: (value: { hash: string }) => string }) =>
+    select({ hash: location.hash }),
+}));
 
 const ops = { id: "team-ops", name: "Operations", areas: ["node-operations"] };
 const community = { id: "team-community", name: "Community", areas: ["events", "finance"] };
@@ -35,6 +41,7 @@ function request(overrides: Record<string, unknown> = {}) {
     canDecide: false,
     createdAt: "2026-10-28T10:00:00.000Z",
     decidedAt: null,
+    dismissedAt: null,
     ...overrides,
   };
 }
@@ -52,6 +59,7 @@ function renderTeams() {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  location.hash = "";
 });
 
 describe("Teams on Overview", () => {
@@ -221,5 +229,29 @@ describe("Teams on Overview", () => {
     fail = false;
     fireEvent.click(screen.getByTestId("dashboard-node.teams-retry"));
     await screen.findByTestId("dashboard-node.teams-empty");
+  });
+
+  it("puts the Teams section in view once it loads when the link targets teams", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    location.hash = "teams";
+    let resolveBoard: (board: unknown) => void = () => {};
+    api.getTeamJoinBoard.mockReturnValue(
+      new Promise((resolve) => {
+        resolveBoard = resolve;
+      }),
+    );
+    renderTeams();
+
+    await screen.findByTestId("dashboard-node.teams-loading");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    resolveBoard({
+      canReview: true,
+      teams: [{ ...ops, isMember: false, pendingRequestId: null }],
+      requests: [request({ canDecide: true })],
+    });
+    await screen.findByTestId("dashboard-node.team-request-request-1");
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("dashboard-node.teams"));
   });
 });
