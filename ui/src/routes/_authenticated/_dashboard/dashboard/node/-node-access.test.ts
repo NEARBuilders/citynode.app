@@ -91,4 +91,18 @@ describe("resolveCommunityTools", () => {
 
     expect(tools(ctx).canOrganize).toBe(false);
   });
+
+  it("does not grant finance tools without a member role", () => {
+    const ctx = {
+      user: { role: null },
+      organization: {
+        activeOrganizationId: "org-1",
+        member: null,
+        teams: [finance],
+        activeTeamId: null,
+      },
+    } as unknown as AuthRequestContext;
+
+    expect(tools(ctx).inFinanceTeam).toBe(false);
+  });
 });

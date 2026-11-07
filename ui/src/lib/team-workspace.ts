@@ -73,10 +73,7 @@ export function isInFinanceTeam(
   context: AuthRequestContext | null | undefined,
   allowedAreas: readonly FeatureArea[] | null,
 ): boolean {
-  return (
-    (context?.organization?.teams ?? []).some((team) => team.areas.includes("finance")) &&
-    isAreaInView(allowedAreas, "finance")
-  );
+  return hasTeamArea(context, "finance") && isAreaInView(allowedAreas, "finance");
 }
 
 export function areasForPath(pathname: string): FeatureArea[] | null {
