@@ -287,6 +287,11 @@ export const MemberCountSchema = z.object({
   observedAt: z.iso.datetime().nullable(),
 });
 
+export const NodeDaoSchema = z.object({
+  daoAccountId: z.string().nullable(),
+  network: z.enum(["mainnet", "testnet"]).nullable(),
+});
+
 export const AttendanceRecordSchema = z.object({
   events: z.array(
     z.object({
@@ -1028,6 +1033,17 @@ export const contract = oc.router({
     })
     .input(z.object({ nodeId: z.string() }))
     .output(MemberCountSchema),
+
+  getNodeDao: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/dao",
+      summary: "Get the Node DAO that owns a community",
+      description:
+        "Public — the Sputnik DAO recorded as the community's tenant owner, read live, with its network. Null when a person or the platform owns the community.",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(NodeDaoSchema),
 
   getMyAttendance: oc
     .route({

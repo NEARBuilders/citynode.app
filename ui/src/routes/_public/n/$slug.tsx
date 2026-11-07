@@ -24,6 +24,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import { nodeMemberCountQueryOptions } from "@/lib/queries/member-directory";
+import { nodeDaoQueryOptions } from "@/lib/queries/node-dao";
 import {
   childNodesQueryOptions,
   nodeBySlugQueryOptions,
@@ -106,6 +107,11 @@ function NodePage() {
 
   const { data: memberCount } = useQuery({
     ...nodeMemberCountQueryOptions(apiClient, nodeId ?? ""),
+    enabled: !!nodeId,
+  });
+
+  const { data: nodeDao } = useQuery({
+    ...nodeDaoQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
   });
 
@@ -213,6 +219,22 @@ function NodePage() {
               >
                 {translate("community.visit")}
                 <ArrowUpRightIcon />
+              </Button>
+            )}
+            {nodeDao?.daoAccountId && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/n/$slug/proposals"
+                    params={{ slug: node.slug }}
+                    search={{ parentId }}
+                    data-testid="node-page.proposals"
+                  />
+                }
+              >
+                {translate("daoProposals.title")}
               </Button>
             )}
             <ProposeHomepageCta tenantId={node.tenantId} />
