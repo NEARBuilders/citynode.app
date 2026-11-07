@@ -88,7 +88,7 @@ export function TeamRequests({ organizationId }: { organizationId: string }) {
   return (
     <section
       ref={board.isPending ? undefined : scrollTarget}
-      className="flex min-w-0 flex-col gap-6"
+      className="flex min-w-0 scroll-mt-20 flex-col gap-6"
       data-testid="dashboard-node.teams"
     >
       <SectionHeader
