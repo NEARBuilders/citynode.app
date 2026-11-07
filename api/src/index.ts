@@ -29,6 +29,8 @@ import {
   type MemberDirectoryService,
   MemberDirectoryTag,
 } from "./services/member-directory";
+import { resolveNetwork } from "./services/near-rpc";
+import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import {
@@ -81,6 +83,7 @@ class ApiServices extends Context.Service<
     validators: ValidatorsService;
     discovery: DiscoveryService;
     storage: StorageService;
+    nearbuilders: ReturnType<typeof createNearbuilders>;
     memberDirectory: MemberDirectoryService;
     attendance: AttendanceService;
     teamJoinRequests: TeamJoinRequestsService;
@@ -390,6 +393,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .string()
       .default("")
       .describe("Repository URL included in the Nominatim User-Agent"),
+    nearbuildersUrl: z
+      .url({ protocol: /^https?$/ })
+      .default("https://nearbuilders.org")
+      .describe("NEAR Builders base URL for community builders and projects"),
     mainnetStakingPoolWhitelist: z
       .string()
       .default("lockup-whitelist.near")
@@ -446,6 +453,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           validators: Context.get(services, ValidatorsTag),
           discovery: Context.get(services, DiscoveryTag),
           storage: Context.get(services, StorageTag),
+          nearbuilders: createNearbuilders(config.variables.nearbuildersUrl),
           memberDirectory: Context.get(services, MemberDirectoryTag),
           attendance: Context.get(services, AttendanceTag),
           teamJoinRequests: Context.get(services, TeamJoinRequestsTag),
@@ -890,6 +898,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.discovery.get(input.nodeId);
       }),
+      getCommunityBuilders: builder.getCommunityBuilders.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const path = yield* communityPath(input.nodeId, (id) => services.nodes.getById(id));
+        if (!path) return null;
+        return yield* Effect.promise(() => services.nearbuilders.forPath(path));
+      }),
       getDiscoveryProfile: builder.getDiscoveryProfile.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         return yield* services.discovery.profile(input.nodeId, context);
@@ -964,6 +978,38 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
         if (!tenant?.orgId) return unavailable;
         return (yield* services.memberDirectory.latestCount(tenant.orgId)) ?? unavailable;
+      }),
+
+      getNodeDao: builder.getNodeDao.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const none = { daoAccountId: null, network: null };
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (!node?.tenantId) return none;
+        const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
+        if (!tenant || tenant.ownerKind !== "dao") return none;
+        return { daoAccountId: tenant.accountId, network: resolveNetwork(tenant.accountId) };
+      }),
+
+      getOnboardCommunity: builder.getOnboardCommunity.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const notFound = () =>
+          new ORPCError("NOT_FOUND", { message: "No City Node for this organization" });
+        const tenant = yield* services.tenants.resolveTenantByOrgId(input.organizationId);
+        if (!tenant || tenant.status !== "active") return yield* Effect.fail(notFound());
+        const [node] = (yield* services.nodes.list({ tenantId: tenant.id })).sort(
+          (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+        );
+        if (!node) return yield* Effect.fail(notFound());
+        const listing = yield* services.discovery
+          .get(node.id)
+          .pipe(Effect.orElseSucceed(() => null));
+        return {
+          name: node.name,
+          href: `/n/${encodeURIComponent(node.slug)}${
+            node.parentId ? `?parentId=${encodeURIComponent(node.parentId)}` : ""
+          }`,
+          channels: (listing?.channels ?? []).map(({ label, url }) => ({ label, url })),
+        };
       }),
 
       reconcileAttendance: builder.reconcileAttendance.use(requireAuth).effect(function* ({

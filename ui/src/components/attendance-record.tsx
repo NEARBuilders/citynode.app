@@ -32,10 +32,12 @@ const REASON_MESSAGES = {
 export function AttendanceRecord({
   organizationId = null,
   reconcile = false,
+  alwaysShow = false,
   testId,
 }: {
   organizationId?: string | null;
   reconcile?: boolean;
+  alwaysShow?: boolean;
   testId: string;
 }) {
   const translate = useAppTranslation();
@@ -55,11 +57,12 @@ export function AttendanceRecord({
     void queryClient.invalidateQueries({ queryKey: attendanceQueryKeys.records() });
   }, [queryClient, reconciledAt]);
   const everyCommunity = !organizationId;
+  const hideWhenEmpty = everyCommunity && !alwaysShow;
 
   if (record.error instanceof ORPCError && record.error.code === "FORBIDDEN") return null;
-  if (everyCommunity && record.isPending) return null;
+  if (hideWhenEmpty && record.isPending) return null;
   if (
-    everyCommunity &&
+    hideWhenEmpty &&
     record.data &&
     record.data.communities.length === 0 &&
     record.data.events.length === 0 &&
@@ -100,9 +103,11 @@ export function AttendanceRecord({
       ) : (
         <>
           {record.data.events.length === 0 ? (
-            <p className="text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
-              {translate("attendance.empty")}
-            </p>
+            record.data.unclassified.length === 0 && (
+              <p className="text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
+                {translate("attendance.empty")}
+              </p>
+            )
           ) : (
             <ItemGroup data-testid={`${testId}-events`}>
               {record.data.events.map((event) => (

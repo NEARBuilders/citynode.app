@@ -287,6 +287,17 @@ export const MemberCountSchema = z.object({
   observedAt: z.iso.datetime().nullable(),
 });
 
+export const NodeDaoSchema = z.object({
+  daoAccountId: z.string().nullable(),
+  network: z.enum(["mainnet", "testnet"]).nullable(),
+});
+
+export const OnboardCommunitySchema = z.object({
+  name: z.string().min(1),
+  href: z.string(),
+  channels: z.array(z.object({ label: z.string().min(1), url: z.string() })),
+});
+
 export const AttendanceRecordSchema = z.object({
   events: z.array(
     z.object({
@@ -1028,6 +1039,29 @@ export const contract = oc.router({
     })
     .input(z.object({ nodeId: z.string() }))
     .output(MemberCountSchema),
+
+  getNodeDao: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/dao",
+      summary: "Get the Node DAO that owns a community",
+      description:
+        "Public — the Sputnik DAO recorded as the community's tenant owner, read live, with its network. Null when a person or the platform owns the community.",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(NodeDaoSchema),
+
+  getOnboardCommunity: oc
+    .route({
+      method: "GET",
+      path: "/communities/by-organization/{organizationId}",
+      summary: "Get the community page and channels for an organization",
+      description:
+        "Public — for the auth plugin's joined screen: the community's City Node name, its page and its published discovery channels. Not found when the organization isn't an active community or has no City Node.",
+    })
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .output(OnboardCommunitySchema)
+    .errors({ NOT_FOUND }),
 
   getMyAttendance: oc
     .route({
