@@ -267,9 +267,7 @@ describe("breadcrumbs", () => {
       { label: "Administración", to: "/admin" },
       { label: "Organizaciones" },
     ]);
-    expect(crumbsFor("/onboarding/station/abc", {}, translate)).toEqual([
-      { label: "Punto de incorporación" },
-    ]);
+    expect(crumbsFor("/onboarding/station/abc", {}, translate)).toEqual([{ label: "Estación" }]);
     expect(crumbsFor("/admin/tenants", {}, translate)).toEqual([
       { label: "Administración", to: "/admin" },
       { label: "Dominios" },

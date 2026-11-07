@@ -76,7 +76,7 @@ describe("home next steps", () => {
     const steps = getNextSteps({ ...base, community: harbor, canManageCommunity: true });
     expect(steps.map((step) => step.id)).toEqual(["open-community", "payouts", "stake"]);
     expect(steps[0]?.title).toBe("Open My community");
-    expect(steps[0]?.description).toBe("Harbor City: events, onboarding, proposals.");
+    expect(steps[0]?.description).toBe("Harbor City: events, stations, proposals.");
   });
 
   it("gives Finance members the payouts step", () => {
