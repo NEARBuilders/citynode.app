@@ -824,12 +824,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Propositions de la DAO du nœud",
     "节点 DAO 提案",
   ],
-  "dashboard.daoProposalsUnavailable": [
-    "Members can't submit proposals to this community's Node DAO here yet. It will need your wallet to be activated for signing, and the DAO's proposal policy to let members propose.",
-    "Los miembros aún no pueden enviar propuestas a la DAO del nodo de esta comunidad desde aquí. Hará falta activar tu billetera para firmar y que la política de propuestas de la DAO permita proponer a los miembros.",
-    "Les membres ne peuvent pas encore soumettre de propositions à la DAO du nœud de cette communauté ici. Il faudra activer votre portefeuille pour signer, et que la politique de propositions de la DAO autorise les membres à proposer.",
-    "成员暂时还不能在此向该社区的节点 DAO 提交提案。这需要先激活你的钱包以进行签名，并且 DAO 的提案规则允许成员提案。",
-  ],
   "dashboard.newMembersLastMonth": [
     "New members last month",
     "Nuevos miembros el mes pasado",

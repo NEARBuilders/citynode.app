@@ -13,7 +13,13 @@ import {
   MemberSigningError,
   type MemberWalletExecutor,
 } from "./member-wallet";
-import { type DaoPlan, proposeAsSession } from "./sputnik-proposals";
+import {
+  type DaoPlan,
+  proposeAsSession,
+  readSpendableYocto,
+  submitProposalWithBond,
+  voteOnProposal,
+} from "./sputnik-proposals";
 
 vi.mock("@/app", () => ({ getCspNonce: () => undefined }));
 
@@ -370,5 +376,76 @@ describe("member signing controller", () => {
     controller.reset();
     await expect(controller.submit(task)).resolves.toBe("hash");
     expect(task).toHaveBeenCalledTimes(2);
+  });
+});
+
+const serialize = (value: unknown) =>
+  JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
+
+describe("member proposals and votes", () => {
+  it("files a poll with exactly the bond the member was shown, never re-reading it", async () => {
+    const view = mockBond("999");
+    const { executor, sent } = stubExecutor();
+    const wallet = createMemberSessionWallet({ sessionAccountId: MEMBER, executor });
+
+    await submitProposalWithBond(
+      wallet,
+      DAO,
+      { kind: "vote" },
+      "* Title: Picnic?",
+      5n * 10n ** 23n,
+    );
+
+    expect(view).not.toHaveBeenCalled();
+    expect(sent[0]?.signerId).toBe(MEMBER);
+    expect(sent[0]?.receiverId).toBe(DAO);
+    const action = serialize(sent[0]?.actions[0]);
+    expect(action).toContain("add_proposal");
+    expect(action).toContain("500000000000000000000000");
+  });
+
+  it("votes with the proposal's kind as read", async () => {
+    const { executor, sent } = stubExecutor();
+    const wallet = createMemberSessionWallet({ sessionAccountId: MEMBER, executor });
+
+    await voteOnProposal(wallet, DAO, { id: 9, kind: "Vote" as never }, "VoteReject");
+
+    expect(sent[0]?.receiverId).toBe(DAO);
+    const action = serialize(sent[0]?.actions[0]);
+    expect(action).toContain("act_proposal");
+    const args = (sent[0]?.actions[0] as { functionCall?: { args?: Uint8Array } }).functionCall
+      ?.args;
+    expect(JSON.parse(new TextDecoder().decode(args))).toEqual({
+      id: 9,
+      action: "VoteReject",
+      proposal: "Vote",
+    });
+  });
+});
+
+describe("readSpendableYocto", () => {
+  function mockAccount(view: unknown) {
+    return vi.spyOn(Near.prototype, "rpc", "get").mockReturnValue({
+      getAccount: async () => {
+        if (view instanceof Error) throw view;
+        return view;
+      },
+    } as never);
+  }
+
+  it("subtracts what storage holds back", async () => {
+    mockAccount({ amount: (10n ** 24n).toString(), locked: "0", storage_usage: 1000 });
+    expect(await readSpendableYocto(MEMBER)).toBe(10n ** 24n - 1000n * 10n ** 19n);
+  });
+
+  it("reads an account that doesn't exist yet as empty", async () => {
+    const { AccountDoesNotExistError } = await import("near-kit");
+    mockAccount(new AccountDoesNotExistError(MEMBER));
+    expect(await readSpendableYocto(MEMBER)).toBe(0n);
+  });
+
+  it("throws on other RPC failures", async () => {
+    mockAccount(new NetworkError("down"));
+    await expect(readSpendableYocto(MEMBER)).rejects.toThrow();
   });
 });
