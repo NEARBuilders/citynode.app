@@ -39,6 +39,7 @@ describe("Home next steps for platform admins", () => {
       community: null,
       canManageCommunity: false,
       canOrganizeEvents: false,
+      inFinanceTeam: false,
       isAdmin: true,
     });
     render(<NextStepsList steps={steps} primary={false} />);
@@ -79,6 +80,7 @@ describe("Home next steps for team members", () => {
       community: { name: "Harbor", tenantId: "tenant-1" },
       canManageCommunity: false,
       canOrganizeEvents: false,
+      inFinanceTeam: false,
       isAdmin: false,
     });
     render(<NextStepsList steps={steps} primary={false} />);
@@ -105,6 +107,7 @@ describe("Home next steps for a plain member", () => {
       community: { name: "Harbor", tenantId: "tenant-1" },
       canManageCommunity: false,
       canOrganizeEvents: false,
+      inFinanceTeam: false,
       isAdmin: false,
     });
     render(<NextStepsList steps={steps} primary />);

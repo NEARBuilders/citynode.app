@@ -39,6 +39,7 @@ export const stakePoolQueryKeys = {
     [...stakePoolQueryKeys.pool(accountId, network), "status"] as const,
   approval: (accountId: string, network: string) =>
     [...stakePoolQueryKeys.pool(accountId, network), "approval"] as const,
+  validatorSet: (network: string) => [...stakePoolQueryKeys.all, "validator-set", network] as const,
 };
 
 export function stakingPoolApprovalQueryOptions(
@@ -122,7 +123,11 @@ export function resolveTeamStakeTarget(input: {
   };
 }
 
-function canReadPool({ accountId, network = "mainnet", protocol = "near" }: PoolOptions) {
+export function canReadPool({
+  accountId,
+  network = "mainnet",
+  protocol = "near",
+}: Pick<PoolOptions, "accountId" | "network" | "protocol">) {
   return !!accountId && protocol === "near" && (network === "mainnet" || network === "testnet");
 }
 
@@ -187,43 +192,73 @@ export interface StakePoolStatus {
   validatorSet: "current" | "next" | "none";
 }
 
+interface ValidatorSet {
+  current: readonly string[];
+  next: readonly string[];
+}
+
+async function readValidatorSet(
+  authClient: AuthClient,
+  network: Network = "mainnet",
+): Promise<ValidatorSet> {
+  const set = validatorSetSchema.parse(
+    await authClient.near.getNearClient(network).rpc.call("validators", [null]),
+  );
+  const ids = (list: z.infer<typeof validatorListSchema>) =>
+    list.map((validator) => validator.account_id);
+  return { current: ids(set.current_validators), next: ids(set.next_validators) };
+}
+
+function validatorSetQueryOptions(authClient: AuthClient, network: Network = "mainnet") {
+  return queryOptions({
+    queryKey: stakePoolQueryKeys.validatorSet(network),
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: () => readValidatorSet(authClient, network),
+  });
+}
+
 export async function readStakePoolStatus({
   accountId,
   authClient,
   network = "mainnet",
-}: PoolOptions): Promise<StakePoolStatus> {
+  validatorSet,
+}: PoolOptions & {
+  validatorSet?: ValidatorSet | Promise<ValidatorSet>;
+}): Promise<StakePoolStatus> {
   const near = authClient.near.getNearClient(network);
-  const [owner, fee, paused, validators] = await Promise.all([
+  const [owner, fee, paused, set] = await Promise.all([
     near.view(accountId, "get_owner_id", {}),
     near.view(accountId, "get_reward_fee_fraction", {}),
     near.view(accountId, "is_staking_paused", {}),
-    near.rpc.call("validators", [null]),
+    validatorSet ?? readValidatorSet(authClient, network),
   ]);
   const { numerator, denominator } = feeSchema.parse(fee);
-  const set = validatorSetSchema.parse(validators);
-  const inSet = (list: z.infer<typeof validatorListSchema>) =>
-    list.some((validator) => validator.account_id === accountId);
   return {
     ownerId: z.string().min(1).parse(owner),
     feeNumerator: numerator,
     feeDenominator: denominator,
     stakingPaused: z.boolean().parse(paused),
-    validatorSet: inSet(set.current_validators)
+    validatorSet: set.current.includes(accountId)
       ? "current"
-      : inSet(set.next_validators)
+      : set.next.includes(accountId)
         ? "next"
         : "none",
   };
 }
 
-export function stakePoolStatusQueryOptions(options: PoolOptions) {
-  const { accountId, network = "mainnet" } = options;
+export function stakePoolStatusQueryOptions(options: PoolOptions & { queryClient: QueryClient }) {
+  const { accountId, authClient, queryClient, network = "mainnet" } = options;
   return queryOptions({
     queryKey: stakePoolQueryKeys.status(accountId, network),
     enabled: canReadPool(options),
     staleTime: 5 * 60_000,
     retry: false,
-    queryFn: () => readStakePoolStatus(options),
+    queryFn: () =>
+      readStakePoolStatus({
+        ...options,
+        validatorSet: queryClient.fetchQuery(validatorSetQueryOptions(authClient, network)),
+      }),
   });
 }
 

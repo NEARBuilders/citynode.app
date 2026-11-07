@@ -16,6 +16,7 @@ const DAO = "example.sputnik-dao.near";
 const POOL = "example.poolv1.near";
 
 const harness = vi.hoisted(() => ({
+  hash: "",
   nearAccount: null as string | null,
   routeContext: {} as Record<string, unknown>,
   listing: (() => Promise.resolve(null)) as () => Promise<unknown>,
@@ -67,6 +68,8 @@ vi.mock("@tanstack/react-router", () => ({
     </a>
   ),
   redirect: (options: unknown) => ({ redirect: options }),
+  useLocation: ({ select }: { select: (location: { hash: string }) => string }) =>
+    select({ hash: harness.hash }),
 }));
 
 vi.mock("@/app", () => ({
@@ -141,6 +144,7 @@ const clients: QueryClient[] = [];
 
 afterEach(() => {
   cleanup();
+  harness.hash = "";
   harness.memberDirectory.optedIn = false;
   harness.memberDirectory.directory = () =>
     Promise.resolve({ count: 0, observedAt: "", members: [], nextCursor: null });
@@ -265,6 +269,17 @@ describe("node overview team stake visibility", () => {
     renderOverview({ nearAccount: "member.near", inFinanceTeam: true });
     await screen.findByTestId("dashboard-node.team-stake");
     expect(await screen.findByText("2.5 NEAR")).toBeTruthy();
+  });
+
+  it("scrolls to the team stake once it appears when the link targets payouts", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    harness.hash = "payouts";
+    stubChain();
+    renderOverview({ nearAccount: "member.near", inFinanceTeam: true });
+    await screen.findByTestId("dashboard-node.team-stake");
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById("payouts"));
   });
 
   it("shows the team stake to an account the DAO policy lets propose", async () => {

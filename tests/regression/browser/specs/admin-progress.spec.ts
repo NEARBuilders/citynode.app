@@ -84,6 +84,8 @@ test.describe("admin progress and needs action", () => {
       timeout: 15000,
     });
     await expect(row.getByTestId("admin-progress-staking")).toHaveText("No validator");
+    await expect(row.getByTestId("admin-progress-rewards")).toHaveText("No DAO");
+    await expect(page.getByTestId("admin.stat.can-claim")).toBeVisible();
 
     await row.getByTestId("admin-progress-link").click();
     await page.waitForURL(new RegExp(`/admin/nodes/${node.id}`), { waitUntil: "commit" });

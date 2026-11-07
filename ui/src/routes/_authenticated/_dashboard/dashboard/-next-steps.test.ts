@@ -15,6 +15,7 @@ const base: NextStepsState = {
   community: null,
   canManageCommunity: false,
   canOrganizeEvents: false,
+  inFinanceTeam: false,
   isAdmin: false,
 };
 
@@ -76,6 +77,26 @@ describe("home next steps", () => {
     expect(steps.map((step) => step.id)).toEqual(["open-community", "payouts", "stake"]);
     expect(steps[0]?.title).toBe("Open My community");
     expect(steps[0]?.description).toBe("Harbor City: events, onboarding, proposals.");
+  });
+
+  it("gives Finance members the payouts step", () => {
+    expect(ids({ community: harbor, inFinanceTeam: true })).toEqual([
+      "open-community",
+      "payouts",
+      "stake",
+    ]);
+    expect(ids({ community: harbor, inFinanceTeam: true, canOrganizeEvents: true })).toEqual([
+      "open-community",
+      "payouts",
+      "stake",
+    ]);
+  });
+
+  it("leaves payouts out for organizers who are not on the Finance team", () => {
+    expect(ids({ community: harbor, canOrganizeEvents: true })).toEqual([
+      "open-community",
+      "stake",
+    ]);
   });
 
   it("keeps the organizer steps for events-team organizers", () => {

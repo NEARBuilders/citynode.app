@@ -68,6 +68,11 @@ import {
   visibleCommunityJoinRows,
 } from "./-community-joins";
 import {
+  CommunityRewardsBadge,
+  CommunityRewardsStat,
+  useCommunityRewards,
+} from "./-community-rewards-ui";
+import {
   awaitingReviewQueryOptions,
   pendingProposalCountQueryOptions,
   proposalTitle,
@@ -464,6 +469,7 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
   const { rows, isLoading, isError, retry } = progress;
   const [showAll, setShowAll] = useState(false);
   const visibleRows = visibleCommunityJoinRows(rows, showAll);
+  const rewards = useCommunityRewards(isLoading || isError ? [] : rows);
 
   return (
     <section className="flex flex-col gap-6">
@@ -472,6 +478,11 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
         description={translate("admin.progress.description")}
         sectionTestId="admin.section.progress"
       />
+      {!isLoading && !isError && rows.length > 0 && (
+        <StatGrid>
+          <CommunityRewardsStat summary={rewards.summary} onRetry={rewards.retryUnreadable} />
+        </StatGrid>
+      )}
       {isLoading ? (
         <ListSkeleton rows={4} />
       ) : isError ? (
@@ -501,6 +512,7 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
                 </TableHead>
                 <TableHead className="text-right">{translate("admin.progress.events")}</TableHead>
                 <TableHead>{translate("common.staking")}</TableHead>
+                <TableHead>{translate("admin.progress.rewards")}</TableHead>
                 <TableHead className="hidden md:table-cell">
                   {translate("admin.progress.lastActivity")}
                 </TableHead>
@@ -540,6 +552,9 @@ function CommunityProgress({ progress }: { progress: ReturnType<typeof useCommun
                       <Badge variant={staking.variant} data-testid="admin-progress-staking">
                         {translate(staking.label)}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <CommunityRewardsBadge read={rewards.byNode.get(row.node.id)} />
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground md:table-cell">
                       {row.lastActivityAt ? (
