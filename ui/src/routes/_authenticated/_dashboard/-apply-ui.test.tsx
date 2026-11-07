@@ -741,6 +741,89 @@ describe("apply route submission", () => {
     expect(await screen.findByTestId("apply.slug")).toBeTruthy();
   });
 
+  it("keeps the plain application form when the active organization is the personal workspace", async () => {
+    harness.apiClient?.auth.listOrganizations.mockResolvedValue([
+      { id: "org-1", name: "Personal", slug: "user-1", status: "active", metadata: null },
+    ]);
+    await renderApply();
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    expect(await screen.findByTestId("apply.slug")).toBeTruthy();
+    expect(screen.queryByText("Choose an organization")).toBeNull();
+    await fillValidApplication();
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).not.toHaveProperty(
+      "orgId",
+    );
+    expect(harness.apiClient?.auth.listMembers).not.toHaveBeenCalled();
+  });
+
+  function pendingApplication() {
+    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
+      data: [
+        {
+          id: "existing-1",
+          reviewStatus: "pending",
+          applyStatus: "not_started",
+          rejectionReason: null,
+          applySteps: {},
+          applyTimedOut: false,
+          appliedAt: null,
+          createdAt: "2026-10-01T00:00:00.000Z",
+          payload: { name: "Springfield", slug: "springfield" },
+        },
+      ],
+    });
+    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: false });
+  }
+
+  async function applyAgain() {
+    await renderApply();
+    fireEvent.click(await screen.findByTestId("apply.new"));
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    fireEvent.change(screen.getByLabelText("Why you want to run it"), {
+      target: { value: "Serve the local community." },
+    });
+  }
+
+  it("accepts the applicant's own organization address after Apply again", async () => {
+    pendingApplication();
+    await applyAgain();
+    expect(((await screen.findByTestId("apply.slug")) as HTMLInputElement).value).toBe("citynode");
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    expect(screen.getByTestId("apply.slug-status").textContent).not.toContain(
+      "An organization already uses this address",
+    );
+    expect(harness.apiClient?.auth.checkSlug).not.toHaveBeenCalled();
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
+      slug: "citynode",
+      orgId: "org-1",
+    });
+  });
+
+  it("does not send the selected organization when Apply again uses a different address", async () => {
+    pendingApplication();
+    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: true });
+    await applyAgain();
+    fireEvent.change(await screen.findByTestId("apply.slug"), { target: { value: "chicago" } });
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
+    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
+    const payload = harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload;
+    expect(payload).toMatchObject({ slug: "chicago" });
+    expect(payload).not.toHaveProperty("orgId");
+    expect(harness.apiClient?.auth.checkSlug).toHaveBeenCalledWith({ slug: "chicago" });
+  });
+
   it("starts with the NEAR account when there is no active organization", async () => {
     harness.routeContext = {
       auth: { activeOrganizationId: null },

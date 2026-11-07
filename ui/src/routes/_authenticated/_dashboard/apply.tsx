@@ -139,7 +139,11 @@ function ApplyPage() {
       if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
         throw new AppActionError("apply.error.dao");
       }
-      const orgId = retainedOrgId(values.slug) ?? linkedOrganization?.id ?? null;
+      const orgId =
+        retainedOrgId(values.slug) ??
+        (linkedOrganization && values.slug === linkedOrganization.slug
+          ? linkedOrganization.id
+          : null);
       return proposeNodeApplication(apiClient, values, {
         ...(orgId ? { orgId } : {}),
         daoAccountId: daoConnection.daoAccountId,
@@ -169,7 +173,11 @@ function ApplyPage() {
     ? (organizations ?? []).find((organization) => organization.slug === orgSlugParam)
     : undefined;
   const activeOrg = activeOrgId
-    ? (organizations ?? []).find((organization) => organization.id === activeOrgId)
+    ? (organizations ?? []).find(
+        (organization) =>
+          organization.id === activeOrgId &&
+          !isPersonalOrganization(organization, session?.user?.id),
+      )
     : undefined;
   const candidateOrg = requestedOrg ?? activeOrg;
   const candidateOrgEligible =
@@ -197,6 +205,8 @@ function ApplyPage() {
     : undefined;
   const organizationEditMode = !!linkedOrganization && !revising;
   const organizationPrompt = !!candidateOrg && !organizationEditMode && !revising;
+  const slugIsLinkedOrganization =
+    !!linkedOrganization && formValues.slug === linkedOrganization.slug;
   useEffect(() => {
     if (!organizationEditMode || !linkedOrganization) return;
     if (form.getFieldValue("slug") !== linkedOrganization.slug) {
@@ -233,10 +243,10 @@ function ApplyPage() {
   const { data: organizationSlug, isFetching: organizationSlugLoading } = useQuery({
     queryKey: ["apply-organization-slug", formValues.slug],
     queryFn: () => apiClient.auth.checkSlug({ slug: formValues.slug }),
-    enabled: freeFormApplication && !!formValues.slug && !legacyOrgId,
+    enabled: freeFormApplication && !!formValues.slug && !legacyOrgId && !slugIsLinkedOrganization,
   });
   const organizationSlugAvailable =
-    !!legacyOrgId || (!!linkedOrganization && !revising) || organizationSlug?.status === true;
+    !!legacyOrgId || slugIsLinkedOrganization || organizationSlug?.status === true;
 
   const canSubmit = canSubmitNodeApplication({
     values: formValues,
@@ -392,9 +402,7 @@ function ApplyPage() {
                   preflight={preflight}
                   preflightLoading={preflightLoading || organizationSlugLoading}
                   organizationSlugAvailable={
-                    legacyOrgId || (!revising && linkedOrganization)
-                      ? true
-                      : organizationSlug?.status
+                    legacyOrgId || slugIsLinkedOrganization ? true : organizationSlug?.status
                   }
                   linkedOrganizationSlug={
                     !revising && linkedOrganization ? linkedOrganization.slug : undefined
