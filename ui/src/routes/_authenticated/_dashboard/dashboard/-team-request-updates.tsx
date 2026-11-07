@@ -1,6 +1,7 @@
 import { CheckCircleIcon, XCircleIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button } from "@/components";
 import {
@@ -16,6 +17,7 @@ import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { FeatureArea } from "@/lib/feature-areas";
 import { teamJoinQueryKeys } from "@/lib/queries/team-join-requests";
+import { teamWorkspaceQueryKey } from "@/lib/team-workspace";
 
 type TeamJoinRequest = Awaited<ReturnType<ApiClient["getTeamJoinBoard"]>>["requests"][number];
 
@@ -54,6 +56,15 @@ export function TeamRequestUpdates({
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: teamJoinQueryKeys.organization(organizationId) }),
   });
+  const approvedIds = requests
+    .filter((request) => request.status === "approved")
+    .map((request) => request.id)
+    .join();
+  useEffect(() => {
+    if (!approvedIds) return;
+    void queryClient.invalidateQueries({ queryKey: ["home-auth-context"] });
+    void queryClient.invalidateQueries({ queryKey: teamWorkspaceQueryKey });
+  }, [approvedIds, queryClient]);
   if (requests.length === 0) return null;
 
   return (
