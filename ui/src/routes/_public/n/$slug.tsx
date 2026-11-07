@@ -30,6 +30,7 @@ import {
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
 import { socialMeta } from "@/lib/social-meta";
+import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
 export const Route = createFileRoute("/_public/n/$slug")({
@@ -300,6 +301,8 @@ function NodePage() {
         sourceNodeId={staking?.sourceNodeId ?? node.id}
         apiClient={apiClient}
       />
+
+      <NearbuildersSection nodeId={node.id} nodeName={node.name} />
     </PageContainer>
   );
 }

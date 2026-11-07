@@ -64,7 +64,22 @@ afterEach(() => {
   listings.clear();
 });
 
-function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
+function communityBuilders(path: string, overrides: Record<string, unknown> = {}) {
+  return {
+    path,
+    baseUrl: "https://nearbuilders.example",
+    status: "ok",
+    builders: { items: [], total: 0, url: "https://nearbuilders.example/builders" },
+    projects: { items: [], total: 0, url: "https://nearbuilders.example/projects" },
+    ...overrides,
+  };
+}
+
+function mockApi(
+  nodes = [parent, child],
+  ownPoolNodeId?: string,
+  nearbuilders: (nodeId: string) => unknown = () => null,
+) {
   vi.stubGlobal("scrollTo", vi.fn());
   vi.spyOn(Near.prototype, "view").mockImplementation((_contractId, method) => {
     const values: Record<string, unknown> = {
@@ -115,6 +130,8 @@ function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
           if (listing === "fail") return Response.json({ json: null }, { status: 500 });
           return Response.json({ json: listing ?? null });
         }
+        case "getCommunityBuilders":
+          return Response.json({ json: nearbuilders(args.nodeId) });
         case "getNode":
           return Response.json({ json: nodes.find((entry) => entry.id === args.nodeId) ?? null });
         case "getSubtree":
@@ -341,6 +358,75 @@ it("offers a way back to Explore when the community does not exist", async () =>
   await showNode("/n/atlantis");
   expect(await screen.findByRole("heading", { name: "Community not found" })).toBeTruthy();
   expect(screen.getByTestId("node-page.back-to-explore").getAttribute("href")).toBe("/explore");
+});
+
+it("lists builders and projects tagged with a nested community, linking to nearbuilders.org", async () => {
+  mockApi([parent, child], child.id, (nodeId) =>
+    nodeId === child.id
+      ? communityBuilders("illinois/chicago", {
+          builders: {
+            items: [
+              {
+                nearAccount: "ada.testnet",
+                name: "Ada Example",
+                url: "https://nearbuilders.example/builders/ada.testnet",
+              },
+            ],
+            total: 9,
+            url: "https://nearbuilders.example/builders",
+          },
+          projects: {
+            items: [
+              {
+                title: "Lakeside Tools",
+                description: "Tools for the lake.",
+                logoUrl: null,
+                url: "https://nearbuilders.example/projects/project/lakeside-tools",
+              },
+            ],
+            total: 1,
+            url: "https://nearbuilders.example/projects",
+          },
+        })
+      : null,
+  );
+  await showNode("/n/chicago");
+  expect(await screen.findByRole("heading", { name: "Builders and projects" })).toBeTruthy();
+  const builderLink = await screen.findByRole("link", { name: /Ada Example ada\.testnet/ });
+  expect(builderLink.getAttribute("href")).toBe(
+    "https://nearbuilders.example/builders/ada.testnet",
+  );
+  const projectLink = screen.getByRole("link", { name: /Lakeside Tools Tools for the lake\./ });
+  expect(projectLink.getAttribute("href")).toBe(
+    "https://nearbuilders.example/projects/project/lakeside-tools",
+  );
+  const seeAll = screen.getAllByRole("link", { name: "See all on NEAR Builders" });
+  expect(seeAll.map((link) => link.getAttribute("href"))).toEqual([
+    "https://nearbuilders.example/builders",
+  ]);
+});
+
+it("shows an empty state with a link to join NEAR Builders", async () => {
+  mockApi([parent, child], undefined, () => communityBuilders("illinois"));
+  await showNode("/n/illinois");
+  expect(
+    await screen.findByText("No builders or projects are tagged with this community yet."),
+  ).toBeTruthy();
+  expect(screen.getByTestId("node-page.nearbuilders-join").getAttribute("href")).toBe(
+    "https://nearbuilders.example/join",
+  );
+});
+
+it("keeps the community page working when nearbuilders.org is unavailable", async () => {
+  mockApi([parent, child], undefined, () =>
+    communityBuilders("illinois", { status: "unavailable" }),
+  );
+  await showNode("/n/illinois");
+  expect(
+    await screen.findByText("Couldn’t load builders and projects from NEAR Builders right now."),
+  ).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Illinois", level: 1 })).toBeTruthy();
+  expect(screen.queryByTestId("node-page.nearbuilders-join")).toBeNull();
 });
 
 it("shows the community's last observed member count with its observation time", async () => {

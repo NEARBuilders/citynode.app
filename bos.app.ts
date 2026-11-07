@@ -29,6 +29,7 @@ export default App({
       platformAccount: "v1.citynode.near",
       domain: "citynode.app",
       gatewayDomains: "citynode.app,testnet.citynode.app",
+      nearbuildersUrl: "https://nearbuilders.org",
       mainnetStakingPoolWhitelist: "lockup-whitelist.near",
       testnetStakingPoolWhitelist: "whitelist.f863973.m0",
     },
