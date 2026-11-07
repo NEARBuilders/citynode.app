@@ -1,9 +1,11 @@
 import type { ORPCError } from "@orpc/server";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import { memberCountObservations, memberDirectoryOptIns } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
+
+const MEMBER_COUNT_REFRESH_MS = 60 * 60 * 1000;
 
 export type MemberDirectoryEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
@@ -94,14 +96,32 @@ export const MemberDirectoryLive = Layer.effect(
       recordCount: (organizationId, count) =>
         query(async () => {
           const observedAt = new Date();
-          await db
+          const [written] = await db
             .insert(memberCountObservations)
             .values({ organizationId, count, observedAt })
             .onConflictDoUpdate({
               target: memberCountObservations.organizationId,
               set: { count, observedAt },
-            });
-          return { count, observedAt: observedAt.toISOString() };
+              setWhere: or(
+                ne(memberCountObservations.count, count),
+                lt(
+                  memberCountObservations.observedAt,
+                  new Date(observedAt.getTime() - MEMBER_COUNT_REFRESH_MS),
+                ),
+              ),
+            })
+            .returning();
+          const [row] = written
+            ? [written]
+            : await db
+                .select()
+                .from(memberCountObservations)
+                .where(eq(memberCountObservations.organizationId, organizationId))
+                .limit(1);
+          return {
+            count: row?.count ?? count,
+            observedAt: (row?.observedAt ?? observedAt).toISOString(),
+          };
         }),
       latestCount: (organizationId) =>
         query(async () => {

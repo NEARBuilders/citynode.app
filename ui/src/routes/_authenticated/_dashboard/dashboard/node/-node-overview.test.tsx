@@ -29,8 +29,10 @@ const harness = vi.hoisted(() => ({
   ) => Promise<unknown>,
   memberDirectory: {
     optedIn: false,
-    directory: (() => Promise.resolve({ count: 0, observedAt: "", members: [] })) as (input: {
+    directory: (() =>
+      Promise.resolve({ count: 0, observedAt: "", members: [], nextCursor: null })) as (input: {
       organizationId: string;
+      cursor?: string;
     }) => Promise<unknown>,
     nodeCount: (() => Promise.resolve({ count: null, observedAt: null })) as (input: {
       nodeId: string;
@@ -91,7 +93,7 @@ vi.mock("@/app", () => ({
       harness.memberDirectory.optedIn = optedIn;
       return { optedIn };
     },
-    getMemberDirectory: (input: { organizationId: string }) =>
+    getMemberDirectory: (input: { organizationId: string; cursor?: string }) =>
       harness.memberDirectory.directory(input),
     getNodeMemberCount: (input: { nodeId: string }) => harness.memberDirectory.nodeCount(input),
     getTeamJoinBoard: async () => ({ canReview: false, teams: [], requests: [] }),
@@ -145,7 +147,7 @@ afterEach(() => {
   harness.hash = "";
   harness.memberDirectory.optedIn = false;
   harness.memberDirectory.directory = () =>
-    Promise.resolve({ count: 0, observedAt: "", members: [] });
+    Promise.resolve({ count: 0, observedAt: "", members: [], nextCursor: null });
   harness.memberDirectory.nodeCount = () => Promise.resolve({ count: null, observedAt: null });
   harness.memberDirectory.setOptIn = null;
   harness.memberDirectory.readOptIn = null;
@@ -591,6 +593,7 @@ describe("node overview member directory", () => {
         members: harness.memberDirectory.optedIn
           ? [...members, { userId: "self", name: "Me Myself", accountId: "me.near" }]
           : members,
+        nextCursor: null,
       };
     };
     return requested;
@@ -624,6 +627,61 @@ describe("node overview member directory", () => {
     expect(screen.queryByRole("link", { name: "Bob" })).toBeNull();
     expect(screen.queryByText(/@/)).toBeNull();
     expect(requested).toEqual(["org-1"]);
+  });
+
+  it("loads more members a page at a time until the directory ends", async () => {
+    stubChain();
+    const cursors: Array<string | undefined> = [];
+    const pages: Record<string, { members: unknown[]; nextCursor: string | null }> = {
+      start: { members: [{ userId: "alice", name: "Alice", accountId: null }], nextCursor: "100" },
+      "100": { members: [], nextCursor: "200" },
+      "200": { members: [{ userId: "zoe", name: "Zoe", accountId: null }], nextCursor: null },
+    };
+    harness.memberDirectory.directory = async ({ cursor }) => {
+      cursors.push(cursor);
+      return { count: 250, observedAt, ...pages[cursor ?? "start"] };
+    };
+    renderOverview({ nearAccount: null });
+    expect((await screen.findByTestId("dashboard-node.member-count-value")).textContent).toBe(
+      "250",
+    );
+    const names = () =>
+      screen.getAllByTestId("dashboard-node.member").map((item) => item.textContent);
+    expect(names()).toEqual(["Alice"]);
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    await waitFor(() => expect(cursors).toEqual([undefined, "100"]));
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    await waitFor(() => expect(names()).toEqual(["Alice", "Zoe"]));
+    expect(screen.queryByTestId("dashboard-node.members-load-more")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.members-empty")).toBeNull();
+    expect(cursors).toEqual([undefined, "100", "200"]);
+  });
+
+  it("explains an empty first page and shows a member repeated across pages once", async () => {
+    stubChain();
+    const pages: Record<string, { members: unknown[]; nextCursor: string | null }> = {
+      start: { members: [], nextCursor: "100" },
+      "100": { members: [{ userId: "zoe", name: "Zoe", accountId: null }], nextCursor: "200" },
+      "200": { members: [{ userId: "zoe", name: "Zoe", accountId: null }], nextCursor: null },
+    };
+    harness.memberDirectory.directory = async ({ cursor }) => ({
+      count: 250,
+      observedAt,
+      ...pages[cursor ?? "start"],
+    });
+    renderOverview({ nearAccount: null });
+    expect(await screen.findByTestId("dashboard-node.members-none-yet")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-node.members-empty")).toBeNull();
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    const names = () =>
+      screen.getAllByTestId("dashboard-node.member").map((item) => item.textContent);
+    await waitFor(() => expect(names()).toEqual(["Zoe"]));
+    expect(screen.queryByTestId("dashboard-node.members-none-yet")).toBeNull();
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    await waitFor(() =>
+      expect(screen.queryByTestId("dashboard-node.members-load-more")).toBeNull(),
+    );
+    expect(names()).toEqual(["Zoe"]);
   });
 
   it("wraps long names inside a 375px screen instead of overflowing", async () => {

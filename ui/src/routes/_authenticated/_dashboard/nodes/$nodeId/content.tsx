@@ -22,18 +22,51 @@ type ContentTab = "events" | "onboarding" | "bulletin";
 type ContentSearch = { tab?: ContentTab; review?: "imports" };
 
 const TABS: readonly ContentTab[] = ["events", "onboarding", "bulletin"];
+const ownersOnly = { to: "/dashboard", search: { restricted: "owners" } } as const;
+
+function defaultContentTab(canOrganize: boolean, canOperate: boolean): ContentTab {
+  if (canOrganize) return "events";
+  if (canOperate) return "bulletin";
+  return "events";
+}
 
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
   validateSearch: (search: Record<string, unknown>): ContentSearch => ({
     ...(TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {}),
     ...(search.review === "imports" ? { review: "imports" as const } : {}),
   }),
-  beforeLoad: ({ context, search }) => {
-    if (search.tab === "bulletin" && !context.canManageCommunity) {
-      throw redirect({ to: "/dashboard", search: { restricted: "owners" } });
+  beforeLoad: ({ context, params, search }) => {
+    const canManage = context.canManageCommunity;
+    const canOrganize = context.canOrganizeEvents ?? canManage;
+    const canOperate = context.canOperateNodes ?? canManage;
+    const tab = search.tab ?? defaultContentTab(canOrganize, canOperate);
+
+    if ((tab === "events" || tab === "onboarding") && !canOrganize) {
+      if (canOperate) {
+        throw redirect({
+          to: "/nodes/$nodeId/content",
+          params,
+          search: { tab: "bulletin" },
+          replace: true,
+        });
+      }
+      throw redirect(ownersOnly);
+    }
+    if (tab === "bulletin" && !canManage && !canOperate) {
+      throw redirect(ownersOnly);
+    }
+    if (!search.tab && tab !== "events") {
+      throw redirect({
+        to: "/nodes/$nodeId/content",
+        params,
+        search: { tab },
+        replace: true,
+      });
     }
   },
-  loaderDeps: ({ search }) => ({ tab: search.tab ?? "events" }),
+  loaderDeps: ({ search }) => ({
+    tab: search.tab ?? "events",
+  }),
   loader: async ({ context, params, deps }) => {
     const { queryClient, apiClient } = context;
     await Promise.all([
@@ -73,8 +106,14 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
 
 function CommunityContent() {
   const { nodeId } = Route.useParams();
-  const { tab = "events", review } = Route.useSearch();
-  const { auth } = Route.useRouteContext();
+  const { tab: searchTab, review } = Route.useSearch();
+  const {
+    auth,
+    canManageCommunity,
+    canOrganizeEvents: canOrganize = canManageCommunity,
+    canOperateNodes: canOperate = canManageCommunity,
+  } = Route.useRouteContext();
+  const tab = searchTab ?? defaultContentTab(canOrganize, canOperate);
   const api = useApiClient();
   const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
   const tenant = useQuery(tenantByIdQueryOptions(api, tenantId ?? ""));

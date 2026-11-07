@@ -18,15 +18,18 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
-import { isCommunitySettingsRole } from "@/lib/team-workspace";
+import { canOperateNodes, isCommunitySettingsRole } from "@/lib/team-workspace";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
   resolveOrgSlug,
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
-import { CommunityHeader } from "../dashboard/node/-community-header";
-import { useOrgMemberRole } from "../orgs/-organization-members";
+import {
+  CommunityHeader,
+  communityAuthContextQueryOptions,
+} from "../dashboard/node/-community-header";
+import { orgMembersQueryOptions } from "../orgs/-organization-members";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
 import { TenantDetails } from "./-tenant-details";
@@ -97,7 +100,7 @@ export function TenantDetailContent({
 
   const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
 
-  const { data: session } = useQuery({
+  const { data: session, isPending: sessionPending } = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
       const { data } = await auth.getSession();
@@ -106,10 +109,31 @@ export function TenantDetailContent({
     staleTime: 60 * 1000,
   });
 
-  const memberRole = useOrgMemberRole(tenant?.orgId, session?.user?.id);
+  const membersQuery = useQuery({
+    ...orgMembersQueryOptions(apiClient, tenant?.orgId ?? ""),
+    enabled: !!tenant?.orgId && !!session?.user?.id,
+  });
+  const memberRole = membersQuery.data?.find((member) => member.userId === session?.user?.id)?.role;
   const isPlatformAdmin = session?.user?.role === "admin";
   const isOwner = memberRole === "owner";
   const isAdmin = isCommunitySettingsRole(memberRole);
+  const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
+  const authContext = useQuery({
+    ...communityAuthContextQueryOptions(apiClient, activeOrganizationId),
+    enabled: !!activeOrganizationId && !!tenant?.orgId,
+  });
+  const sameActiveOrg = !!tenant?.orgId && tenant.orgId === activeOrganizationId;
+  const waitingForTeamAccess =
+    sessionPending ||
+    (!!tenant?.orgId && !!session?.user?.id && membersQuery.isPending) ||
+    (!isAdmin &&
+      !isPlatformAdmin &&
+      !!tenant?.orgId &&
+      !!activeOrganizationId &&
+      authContext.isPending);
+  const canOperate =
+    sameActiveOrg && canOperateNodes(authContext.data, { includePlatformAdmin: false });
+  const canEditValidators = isAdmin || canOperate;
   const isDaoOwned = tenant?.ownerKind === "dao";
 
   const publishMode: TenantConfigPublishMode = isDaoOwned ? "dao" : "platform";
@@ -250,7 +274,7 @@ export function TenantDetailContent({
   const header = (
     <CommunityHeader headerTestId="tenant.heading" nodeId={node?.id} active="settings" />
   );
-  if (tenantLoading && gatewayId) {
+  if ((tenantLoading || waitingForTeamAccess) && gatewayId) {
     return (
       <PageContainer variant="wide">
         {header}
@@ -261,7 +285,8 @@ export function TenantDetailContent({
   const isPersonalOwner =
     (tenant?.ownerKind === "user" && tenant.ownerUserId === session?.user?.id) ||
     (!!tenant && !tenant.orgId && !!nearAccountId && tenant.accountId === nearAccountId);
-  if (!tenant || !gatewayId || (!isAdmin && !isPlatformAdmin && !isPersonalOwner)) {
+  const canManageSettings = isAdmin || isPlatformAdmin || isPersonalOwner;
+  if (!tenant || !gatewayId || (!canManageSettings && !canOperate)) {
     return <TenantUnavailable gatewayId={gatewayId} />;
   }
   return (
@@ -269,37 +294,41 @@ export function TenantDetailContent({
       {header}
       <div className="flex w-full max-w-5xl flex-col gap-10 sm:gap-12">
         {node && (isAdmin || isPlatformAdmin) && <TenantProfile nodeId={node.id} />}
-        <TenantDetails
-          tenant={tenant}
-          hostname={hostname}
-          orgSlug={orgSlug}
-          isOwner={isOwner}
-          editor={{
-            editing,
-            name,
-            isPending: updateMutation.isPending,
-            onEdit: () => {
-              setName(tenant.name);
-              setEditing(true);
-            },
-            onCancel: () => setEditing(false),
-            onSave: () => updateMutation.mutate(),
-            onNameChange: setName,
-          }}
-        />
-        <TenantLiveSite
-          tenant={tenant}
-          hostname={hostname}
-          gatewayId={gatewayId}
-          republish={republishMutation}
-        >
-          {isDaoOwned && (
-            <div className="border-b border-border py-4 last:border-b-0">
-              <ConnectDao purpose="community-settings" variant="plain" />
-            </div>
-          )}
-          {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
-        </TenantLiveSite>
+        {canManageSettings && (
+          <TenantDetails
+            tenant={tenant}
+            hostname={hostname}
+            orgSlug={orgSlug}
+            isOwner={isOwner}
+            editor={{
+              editing,
+              name,
+              isPending: updateMutation.isPending,
+              onEdit: () => {
+                setName(tenant.name);
+                setEditing(true);
+              },
+              onCancel: () => setEditing(false),
+              onSave: () => updateMutation.mutate(),
+              onNameChange: setName,
+            }}
+          />
+        )}
+        {canManageSettings && (
+          <TenantLiveSite
+            tenant={tenant}
+            hostname={hostname}
+            gatewayId={gatewayId}
+            republish={republishMutation}
+          >
+            {isDaoOwned && (
+              <div className="border-b border-border py-4 last:border-b-0">
+                <ConnectDao purpose="community-settings" variant="plain" />
+              </div>
+            )}
+            {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
+          </TenantLiveSite>
+        )}
         {(isAdmin || isPlatformAdmin) && (
           <TenantPublishedConfig
             tenant={tenant}
@@ -318,19 +347,21 @@ export function TenantDetailContent({
             }
           />
         )}
-        <TenantNodeValidators tenantId={tenant.id} canManage={isAdmin} />
-        <TenantDangerZone
-          tenant={tenant}
-          isOwner={isOwner}
-          isAdmin={isAdmin}
-          suspend={suspendMutation}
-          reactivate={reactivateMutation}
-          open={deleteOpen}
-          isPending={deleteMutation.isPending}
-          onOpen={() => setDeleteOpen(true)}
-          onOpenChange={setDeleteOpen}
-          onConfirm={() => deleteMutation.mutate()}
-        />
+        <TenantNodeValidators tenantId={tenant.id} canManage={canEditValidators} />
+        {canManageSettings && (
+          <TenantDangerZone
+            tenant={tenant}
+            isOwner={isOwner}
+            isAdmin={isAdmin}
+            suspend={suspendMutation}
+            reactivate={reactivateMutation}
+            open={deleteOpen}
+            isPending={deleteMutation.isPending}
+            onOpen={() => setDeleteOpen(true)}
+            onOpenChange={setDeleteOpen}
+            onConfirm={() => deleteMutation.mutate()}
+          />
+        )}
       </div>
     </PageContainer>
   );
