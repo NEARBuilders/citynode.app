@@ -1,25 +1,36 @@
 import { describe, expect, it } from "vitest";
 import { getNodeEmptyStateContent } from "./-node-empty-state";
 
+const destinations = (content: ReturnType<typeof getNodeEmptyStateContent>) =>
+  content.actions.map((action) => action.to);
+
 describe("My community empty state", () => {
   it.each([
-    { reason: "no-org", canCreateNode: true },
-    { reason: "no-tenant", canCreateNode: true },
-    { reason: "no-node", canCreateNode: true },
-    { reason: "no-org", canCreateNode: false },
-    { reason: "no-tenant", canCreateNode: false },
-    { reason: "no-node", canCreateNode: false },
-  ] as const)("sends $reason (admin: $canCreateNode) to the application", (scenario) => {
-    expect(getNodeEmptyStateContent(scenario.reason, scenario.canCreateNode).actionTo).toBe(
-      "/apply",
-    );
+    "no-org",
+    "no-tenant",
+    "no-node",
+  ] as const)("offers Explore before Start a community to members (%s)", (reason) => {
+    const content = getNodeEmptyStateContent(reason, false);
+    expect(destinations(content)).toEqual(["/explore", "/apply"]);
+    expect(content.actions.map((action) => action.primary)).toEqual([true, false]);
+    expect(content.actions.map((action) => action.label)).toEqual([
+      "Explore communities",
+      "Start a community",
+    ]);
+  });
+
+  it.each([
+    "no-org",
+    "no-tenant",
+    "no-node",
+  ] as const)("sends admins (%s) to create the community", (reason) => {
+    expect(destinations(getNodeEmptyStateContent(reason, true))).toEqual(["/apply"]);
   });
 
   it("does not mention an organization to viewers who have none selected", () => {
     expect(getNodeEmptyStateContent("no-org", false)).toMatchObject({
       title: "No community yet",
-      description: "Apply to run a City Node for your area. We'll walk you through each step.",
-      actionLabel: "Start a community",
+      description: "Find a community near you on Explore, or apply to start one for your area.",
     });
     expect(getNodeEmptyStateContent("no-org", true).title).toBe("No community yet");
   });
@@ -30,19 +41,11 @@ describe("My community empty state", () => {
     );
   });
 
-  it("offers members Start a community without proposing it for their organization", () => {
-    expect(getNodeEmptyStateContent("no-node", false)).toMatchObject({
-      description: "Apply to run a City Node for your area. We'll walk you through each step.",
-      actionLabel: "Start a community",
-    });
-  });
-
   it("asks a member with communities to choose one instead of starting a new one", () => {
     expect(getNodeEmptyStateContent("choose", false, undefined, 2)).toEqual({
       title: "Choose a community",
       description: "You belong to 2 communities. Pick the one to open.",
-      actionLabel: "Choose",
-      actionTo: "/orgs",
+      actions: [{ label: "Choose", to: "/orgs", primary: true }],
     });
   });
 });
