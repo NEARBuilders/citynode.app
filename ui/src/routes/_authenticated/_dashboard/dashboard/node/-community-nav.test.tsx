@@ -82,7 +82,6 @@ describe("CommunityNav", () => {
   it.each([
     ["stake"],
     ["finance"],
-    ["node-operations"],
   ] as const)("keeps Overview and Proposals for an active %s team", (area) => {
     render(
       <CommunityNav
@@ -96,5 +95,21 @@ describe("CommunityNav", () => {
     );
 
     expect(shownTabs()).toEqual(["overview", "proposals"]);
+  });
+
+  it("gives a node-operations member Bulletin and Settings without Events or Onboarding", () => {
+    render(
+      <CommunityNav
+        active="overview"
+        nodeId="node-1"
+        tenantId="tenant-1"
+        canManage={false}
+        canOrganize={false}
+        canOperate
+        allowedAreas={["node-operations"]}
+      />,
+    );
+
+    expect(shownTabs()).toEqual(["overview", "proposals", "bulletin", "settings"]);
   });
 });

@@ -5,6 +5,7 @@ import type { AuthRequestContext } from "@/lib/auth";
 import {
   areasForPath,
   canManageCommunity,
+  canOperateNodes,
   canOrganizeEvents,
   hasFeatureArea,
   isAreaInView,
@@ -300,6 +301,18 @@ describe("community permissions", () => {
     expect(canOrganizeEvents(null)).toBe(false);
   });
 
+  it("lets members of a node-operations team operate nodes whether or not the team is active", () => {
+    expect(canOperateNodes(context({ teams: [ops] }))).toBe(true);
+    expect(canOperateNodes(context({ teams: [ops], activeTeamId: ops.id }))).toBe(true);
+    expect(canOperateNodes(context({ orgRole: "owner", teams: [] }))).toBe(true);
+  });
+
+  it("does not let members without the node-operations area operate nodes", () => {
+    expect(canOperateNodes(context({ teams: [events] }))).toBe(false);
+    expect(canOperateNodes(context({ teams: [] }))).toBe(false);
+    expect(canOperateNodes(null)).toBe(false);
+  });
+
   it("can omit the platform-admin bypass when Overview tools ask for membership", () => {
     const adminOnly = {
       user: { role: "admin" },
@@ -312,6 +325,8 @@ describe("community permissions", () => {
     } as unknown as AuthRequestContext;
     expect(canOrganizeEvents(adminOnly)).toBe(true);
     expect(canOrganizeEvents(adminOnly, { includePlatformAdmin: false })).toBe(false);
+    expect(canOperateNodes(adminOnly)).toBe(true);
+    expect(canOperateNodes(adminOnly, { includePlatformAdmin: false })).toBe(false);
   });
 });
 

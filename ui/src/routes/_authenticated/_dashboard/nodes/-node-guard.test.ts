@@ -10,11 +10,14 @@ vi.mock("@tanstack/react-router", () => ({
 
 const { Route: NodeRoute } = await import("./$nodeId");
 const { Route: ContentRoute } = await import("./$nodeId/content");
+const { Route: NewEventRoute } = await import("./$nodeId/events/new");
+const { Route: EditEventRoute } = await import("./$nodeId/events/$activityId/edit");
 
 type Guard = (args: unknown) => Promise<unknown> | unknown;
 
 const events = { id: "team-events", name: "Community", areas: ["events"] };
 const finance = { id: "team-fin", name: "Treasury", areas: ["finance"] };
+const ops = { id: "team-ops", name: "Operations", areas: ["node-operations"] };
 
 function authContext(orgRole: string, teams: Array<typeof events>) {
   return {
@@ -39,10 +42,23 @@ function enterNode(context: AuthRequestContext | null, userRole: string | null =
   });
 }
 
-function openTab(tab: string, canManageCommunity: boolean) {
+function openTab(
+  tab: string | undefined,
+  flags: {
+    canManageCommunity: boolean;
+    canOrganizeEvents?: boolean;
+    canOperateNodes?: boolean;
+  },
+  params = { nodeId: "node-1" },
+) {
   return (ContentRoute.options.beforeLoad as Guard)({
-    context: { canManageCommunity },
-    search: { tab },
+    context: {
+      canManageCommunity: flags.canManageCommunity,
+      canOrganizeEvents: flags.canOrganizeEvents ?? flags.canManageCommunity,
+      canOperateNodes: flags.canOperateNodes ?? flags.canManageCommunity,
+    },
+    params,
+    search: tab ? { tab } : {},
   });
 }
 
@@ -52,31 +68,144 @@ describe("community event routes", () => {
   it("let owners, admins and platform admins in as managers", async () => {
     await expect(enterNode(authContext("owner", []))).resolves.toEqual({
       canManageCommunity: true,
+      canOrganizeEvents: true,
+      canOperateNodes: true,
     });
     await expect(enterNode(authContext("admin", []))).resolves.toEqual({
       canManageCommunity: true,
+      canOrganizeEvents: true,
+      canOperateNodes: true,
     });
-    await expect(enterNode(null, "admin")).resolves.toEqual({ canManageCommunity: true });
+    await expect(enterNode(null, "admin")).resolves.toEqual({
+      canManageCommunity: true,
+      canOrganizeEvents: true,
+      canOperateNodes: true,
+    });
   });
 
   it("let an events-team organizer in without manager rights", async () => {
     await expect(enterNode(authContext("member", [events]))).resolves.toEqual({
       canManageCommunity: false,
+      canOrganizeEvents: true,
+      canOperateNodes: false,
     });
   });
 
-  it("send members without the events area back with an owners-only notice", async () => {
+  it("let a node-operations member in without manager or events rights", async () => {
+    await expect(enterNode(authContext("member", [ops]))).resolves.toEqual({
+      canManageCommunity: false,
+      canOrganizeEvents: false,
+      canOperateNodes: true,
+    });
+  });
+
+  it("send members without events or node-operations back with an owners-only notice", async () => {
     await expect(enterNode(authContext("member", []))).rejects.toEqual(ownersOnly);
     await expect(enterNode(authContext("member", [finance]))).rejects.toEqual(ownersOnly);
     await expect(enterNode(null)).rejects.toEqual(ownersOnly);
   });
 
-  it("open Events and Onboarding to organizers but keep the bulletin with managers", () => {
-    expect(() => openTab("events", false)).not.toThrow();
-    expect(() => openTab("onboarding", false)).not.toThrow();
-    expect(() => openTab("bulletin", true)).not.toThrow();
-    expect(() => openTab("bulletin", false)).toThrow(
-      expect.objectContaining({ redirect: ownersOnly.redirect }),
+  it("open Events and Onboarding to organizers and the bulletin to managers or operators", () => {
+    expect(() =>
+      openTab("events", { canManageCommunity: false, canOrganizeEvents: true }),
+    ).not.toThrow();
+    expect(() =>
+      openTab("onboarding", { canManageCommunity: false, canOrganizeEvents: true }),
+    ).not.toThrow();
+    expect(() =>
+      openTab("bulletin", { canManageCommunity: true, canOrganizeEvents: true }),
+    ).not.toThrow();
+    expect(() =>
+      openTab("bulletin", {
+        canManageCommunity: false,
+        canOrganizeEvents: false,
+        canOperateNodes: true,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      openTab("bulletin", {
+        canManageCommunity: false,
+        canOrganizeEvents: false,
+        canOperateNodes: false,
+      }),
+    ).toThrow(expect.objectContaining({ redirect: ownersOnly.redirect }));
+  });
+
+  it("sends a node-operations member without events to the bulletin tab", () => {
+    expect(() =>
+      openTab(undefined, {
+        canManageCommunity: false,
+        canOrganizeEvents: false,
+        canOperateNodes: true,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        redirect: {
+          to: "/nodes/$nodeId/content",
+          params: { nodeId: "node-1" },
+          search: { tab: "bulletin" },
+          replace: true,
+        },
+      }),
     );
+    expect(() =>
+      openTab("events", {
+        canManageCommunity: false,
+        canOrganizeEvents: false,
+        canOperateNodes: true,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        redirect: {
+          to: "/nodes/$nodeId/content",
+          params: { nodeId: "node-1" },
+          search: { tab: "bulletin" },
+          replace: true,
+        },
+      }),
+    );
+  });
+
+  it("keeps event forms off node-operations members who cannot organize", () => {
+    const bulletin = {
+      redirect: {
+        to: "/nodes/$nodeId/content",
+        params: { nodeId: "node-1" },
+        search: { tab: "bulletin" },
+        replace: true,
+      },
+    };
+    const openForm = (beforeLoad: unknown, flags: Parameters<typeof openTab>[1]) =>
+      (beforeLoad as Guard)({
+        context: {
+          canManageCommunity: flags.canManageCommunity,
+          canOrganizeEvents: flags.canOrganizeEvents ?? flags.canManageCommunity,
+          canOperateNodes: flags.canOperateNodes ?? flags.canManageCommunity,
+        },
+        params: { nodeId: "node-1", activityId: "activity-1" },
+      });
+
+    for (const beforeLoad of [
+      NewEventRoute.options.beforeLoad,
+      EditEventRoute.options.beforeLoad,
+    ]) {
+      expect(() =>
+        openForm(beforeLoad, { canManageCommunity: false, canOrganizeEvents: true }),
+      ).not.toThrow();
+      expect(() =>
+        openForm(beforeLoad, {
+          canManageCommunity: false,
+          canOrganizeEvents: false,
+          canOperateNodes: true,
+        }),
+      ).toThrow(expect.objectContaining(bulletin));
+      expect(() =>
+        openForm(beforeLoad, {
+          canManageCommunity: false,
+          canOrganizeEvents: false,
+          canOperateNodes: false,
+        }),
+      ).toThrow(expect.objectContaining({ redirect: ownersOnly.redirect }));
+    }
   });
 });

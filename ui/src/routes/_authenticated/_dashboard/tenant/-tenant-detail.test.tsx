@@ -58,7 +58,10 @@ type Binding = {
 
 type Harness = {
   apiClient: Record<string, (...args: never[]) => unknown> & {
-    auth: { listMembers: ReturnType<typeof vi.fn> };
+    auth: {
+      listMembers: ReturnType<typeof vi.fn>;
+      getContext: ReturnType<typeof vi.fn>;
+    };
   };
   auth: {
     getSession: ReturnType<typeof vi.fn>;
@@ -127,10 +130,20 @@ vi.mock("sonner", () => ({
 
 vi.mock("../dashboard/node/-community-header", () => ({
   CommunityHeader: () => <div data-testid="community-header" />,
+  communityAuthContextQueryOptions: (
+    api: { auth: { getContext: () => Promise<unknown> } },
+    organizationId: string | null,
+  ) => ({
+    queryKey: ["home-auth-context", organizationId ?? ""],
+    queryFn: () => api.auth.getContext().catch(() => null),
+    staleTime: 30 * 1000,
+  }),
 }));
 
 vi.mock("./-node-validators", () => ({
-  TenantNodeValidators: () => <div data-testid="tenant-node-validators" />,
+  TenantNodeValidators: ({ canManage }: { canManage: boolean }) => (
+    <div data-testid="tenant-node-validators" data-can-manage={String(canManage)} />
+  ),
 }));
 
 vi.mock("./-tenant-profile", () => ({
@@ -147,6 +160,10 @@ vi.mock("./-tenant-published-config", () => ({
       )}
     </div>
   ),
+}));
+
+vi.mock("./-tenant-live-site", () => ({
+  TenantLiveSite: () => <div data-testid="tenant-live-site" />,
 }));
 
 function makeTenant(status: TenantStatus = "active", name = "Original tenant"): Tenant {
@@ -199,11 +216,13 @@ function createHarness({
   status = "active",
   publishError,
   updateError,
+  teamAreas = [],
 }: {
   role?: MemberRole;
   status?: TenantStatus;
   publishError?: Error;
   updateError?: Error;
+  teamAreas?: string[];
 } = {}): Harness {
   const events: string[] = [];
   const server = {
@@ -250,6 +269,15 @@ function createHarness({
   const apiClient = {
     auth: {
       listMembers: vi.fn(async () => ({ members: [{ userId: USER_ID, role }] })),
+      getContext: vi.fn(async () => ({
+        user: { role: null },
+        organization: {
+          activeOrganizationId: ORG_ID,
+          member: { id: "m1", role },
+          teams: teamAreas.length ? [{ id: "team-ops", name: "Operations", areas: teamAreas }] : [],
+          activeTeamId: teamAreas.length ? "team-ops" : null,
+        },
+      })),
     },
     listTenants: vi.fn(async () => {
       events.push("listTenants");
@@ -510,9 +538,12 @@ describe("tenant detail mutations", () => {
     expect(screen.getByDisplayValue("Unavailable update")).toBeTruthy();
   });
 
-  it("does not expose community settings to a member even when tenant data is cached", async () => {
+  it("does not expose community settings to a plain member even when tenant data is cached", async () => {
     const current = createHarness({ role: "member" });
-    renderTenant(current);
+    renderTenant(current, {
+      user: { id: USER_ID },
+      session: { activeOrganizationId: ORG_ID },
+    });
 
     await screen.findByText("Community not found");
     expect(screen.queryByText("Original tenant")).toBeNull();
@@ -523,6 +554,57 @@ describe("tenant detail mutations", () => {
     expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
     expect(screen.queryByTestId("tenant-profile")).toBeNull();
     expect(screen.queryByTestId("tenant-published-config")).toBeNull();
+    expect(screen.queryByTestId("tenant-node-validators")).toBeNull();
+  });
+
+  it("lets a node-operations member edit validators without owner-only settings", async () => {
+    const current = createHarness({ role: "member", teamAreas: ["node-operations"] });
+    renderTenant(current, {
+      user: { id: USER_ID },
+      session: { activeOrganizationId: ORG_ID },
+    });
+
+    const validators = await screen.findByTestId("tenant-node-validators");
+    expect(validators.getAttribute("data-can-manage")).toBe("true");
+    expect(screen.queryByText("Original tenant")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
+    expect(screen.queryByTestId("tenant-profile")).toBeNull();
+    expect(screen.queryByTestId("tenant-published-config")).toBeNull();
+    expect(screen.queryByTestId("tenant-live-site")).toBeNull();
+    expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
+  });
+
+  it("keeps the settings skeleton up until team access finishes loading for operators", async () => {
+    const current = createHarness({ role: "member", teamAreas: ["node-operations"] });
+    let releaseContext: (value: unknown) => void = () => {};
+    const contextGate = new Promise((resolve) => {
+      releaseContext = resolve;
+    });
+    current.apiClient.auth.getContext.mockImplementation(async () => contextGate);
+
+    renderTenant(current, {
+      user: { id: USER_ID },
+      session: { activeOrganizationId: ORG_ID },
+    });
+
+    expect(screen.queryByText("Community not found")).toBeNull();
+    expect(screen.queryByTestId("tenant-node-validators")).toBeNull();
+
+    releaseContext({
+      user: { role: null },
+      organization: {
+        activeOrganizationId: ORG_ID,
+        member: { id: "m1", role: "member" },
+        teams: [{ id: "team-ops", name: "Operations", areas: ["node-operations"] }],
+        activeTeamId: "team-ops",
+      },
+    });
+
+    const validators = await screen.findByTestId("tenant-node-validators");
+    expect(validators.getAttribute("data-can-manage")).toBe("true");
+    expect(screen.queryByText("Community not found")).toBeNull();
   });
 
   it.each([
@@ -536,6 +618,9 @@ describe("tenant detail mutations", () => {
 
     const editor = await screen.findByTestId("tenant-published-config");
     expect(editor.getAttribute("data-needs-active-org")).toBe("false");
+    expect(
+      (await screen.findByTestId("tenant-node-validators")).getAttribute("data-can-manage"),
+    ).toBe("true");
   });
 
   it("asks an owner to make the community's organization active before publishing", async () => {

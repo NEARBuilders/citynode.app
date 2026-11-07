@@ -6,10 +6,14 @@ import {
 } from "@/components/discovery/activity-form";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { requireEventOrganizer } from "../../-require-event-organizer";
 
 type NewActivitySearch = { kind?: "social" };
 
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/events/new")({
+  beforeLoad: ({ context, params }) => {
+    requireEventOrganizer({ context, params });
+  },
   validateSearch: (search: Record<string, unknown>): NewActivitySearch =>
     search.kind === "social" ? { kind: "social" } : {},
   head: ({ match }) => ({
