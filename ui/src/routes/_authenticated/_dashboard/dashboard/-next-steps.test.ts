@@ -31,11 +31,9 @@ describe("home next steps", () => {
     );
   });
 
-  it("sends someone without a community straight to starting one", () => {
-    expect(ids({ membership: "none" })).toEqual(["start-community", "stake", "explore"]);
-    expect(ids({ membership: "none", isAnonymous: true, hasPasskey: true })[0]).toBe(
-      "start-community",
-    );
+  it("suggests Explore before Start a community to someone without a community", () => {
+    expect(ids({ membership: "none" })).toEqual(["explore", "start-community", "stake"]);
+    expect(ids({ membership: "none", isAnonymous: true, hasPasskey: true })[0]).toBe("explore");
   });
 
   it("asks to choose a community, not an organization", () => {
@@ -53,8 +51,16 @@ describe("home next steps", () => {
     expect(ids({ membership: "open", community: harbor })).toEqual(["open-community", "stake"]);
   });
 
-  it("offers Start a community when the active organization has no community", () => {
-    expect(ids({})).toEqual(["start-community", "stake", "explore"]);
+  it("suggests Explore before Start a community when the active organization has no community", () => {
+    expect(ids({})).toEqual(["explore", "start-community", "stake"]);
+  });
+
+  it("keeps Explore after Stake for a member who still has to choose a community", () => {
+    expect(ids({ membership: "choose", communityCount: 2 })).toEqual([
+      "choose-org",
+      "stake",
+      "explore",
+    ]);
   });
 
   it("opens a plain member's community first, naming only what members can open", () => {
