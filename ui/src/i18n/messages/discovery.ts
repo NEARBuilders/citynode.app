@@ -633,6 +633,12 @@ export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
   "report.option.partners.no": ["No", "No", "Non", "否"],
   "report.status.missing": ["Report missing", "Falta el informe", "Rapport manquant", "缺少报告"],
   "report.status.submitted": ["Report in", "Informe enviado", "Rapport envoyé", "已提交报告"],
+  "report.status.imported": [
+    "Imported report",
+    "Informe importado",
+    "Rapport importé",
+    "已导入报告",
+  ],
   "report.status.late": [
     "Report in late",
     "Informe enviado tarde",

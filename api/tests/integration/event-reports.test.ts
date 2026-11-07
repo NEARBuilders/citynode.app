@@ -139,8 +139,9 @@ describe("event reports", () => {
     });
     expect(await admin.listEventReportStatuses({ nodeId: node.id })).toHaveLength(1);
     expect(await organizer.listEventReportStatuses({ nodeId: node.id })).toEqual([
-      { activityId: ended.id, submittedAt: saved.submittedAt },
+      { activityId: ended.id, submittedAt: saved.submittedAt, source: "app" },
     ]);
+    expect(saved.source).toBe("app");
 
     const edited = await owner.saveEventReport({
       activityId: ended.id,

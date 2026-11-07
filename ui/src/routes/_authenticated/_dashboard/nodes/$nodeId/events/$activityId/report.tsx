@@ -160,6 +160,12 @@ function EventReportPage() {
           {saved && (
             <>
               {" · "}
+              {saved.source === "import" && (
+                <>
+                  {translate("report.status.imported")}
+                  {" · "}
+                </>
+              )}
               <Trans
                 id="report.lastUpdated"
                 components={{ date: <LocalDate value={saved.updatedAt} format="relative" /> }}
