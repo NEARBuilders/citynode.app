@@ -375,6 +375,7 @@ export const TeamJoinRequestSchema = z.object({
   canDecide: z.boolean(),
   createdAt: z.iso.datetime(),
   decidedAt: z.iso.datetime().nullable(),
+  dismissedAt: z.iso.datetime().nullable(),
 });
 
 export const TeamJoinBoardSchema = z.object({
@@ -1143,6 +1144,18 @@ export const contract = oc.router({
     .input(z.object({ requestId: z.uuid(), decision: z.enum(["approve", "decline"]) }))
     .output(TeamJoinRequestSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONNECTION_ERROR, ...TEAM_JOIN_CONFLICT }),
+
+  dismissTeamJoinRequest: oc
+    .route({
+      method: "POST",
+      path: "/members/teams/requests/{requestId}/dismiss",
+      summary: "Dismiss the decision on your own team request",
+      description:
+        "Requester only. Hides an approved or declined request from Home on every device; approved requests also leave the requester's list.",
+    })
+    .input(z.object({ requestId: z.uuid() }))
+    .output(TeamJoinRequestSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...TEAM_JOIN_CONFLICT }),
 });
 
 export type ContractType = typeof contract;

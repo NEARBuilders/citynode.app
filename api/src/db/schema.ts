@@ -290,6 +290,7 @@ export const teamJoinRequests = pgTable(
     decidedByUserId: text("decided_by_user_id"),
     decidedAt: timestamp("decided_at", { mode: "date", withTimezone: true }),
     closedReason: teamJoinRequestClosedReason("closed_reason"),
+    dismissedAt: timestamp("dismissed_at", { mode: "date", withTimezone: true }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },

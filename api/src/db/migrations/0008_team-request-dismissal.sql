@@ -1,0 +1,1 @@
+ALTER TABLE "team_join_requests" ADD COLUMN "dismissed_at" timestamp with time zone;

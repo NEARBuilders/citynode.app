@@ -16,6 +16,7 @@ const DAO = "example.sputnik-dao.near";
 const POOL = "example.poolv1.near";
 
 const harness = vi.hoisted(() => ({
+  hash: "",
   nearAccount: null as string | null,
   routeContext: {} as Record<string, unknown>,
   listing: (() => Promise.resolve(null)) as () => Promise<unknown>,
@@ -67,6 +68,8 @@ vi.mock("@tanstack/react-router", () => ({
     </a>
   ),
   redirect: (options: unknown) => ({ redirect: options }),
+  useLocation: ({ select }: { select: (location: { hash: string }) => string }) =>
+    select({ hash: harness.hash }),
 }));
 
 vi.mock("@/app", () => ({
@@ -141,6 +144,7 @@ const clients: QueryClient[] = [];
 
 afterEach(() => {
   cleanup();
+  harness.hash = "";
   harness.memberDirectory.optedIn = false;
   harness.memberDirectory.directory = () =>
     Promise.resolve({ count: 0, observedAt: "", members: [], nextCursor: null });
