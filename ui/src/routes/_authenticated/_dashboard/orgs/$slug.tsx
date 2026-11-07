@@ -29,6 +29,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { pageTitle } from "@/lib/page-title";
 import { isPersonalOrganization } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
+import { teamJoinBoardQueryOptions } from "@/lib/queries/team-join-requests";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isCommunitySettingsRole } from "@/lib/team-workspace";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../tenant/-published-config-section";
@@ -180,6 +181,13 @@ function OrganizationDetail() {
   ).length;
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
+  const teamBoard = useQuery({
+    ...teamJoinBoardQueryOptions(apiClient, orgId),
+    enabled: !!orgId && org?.status === "active" && canManageMembers,
+  });
+  const waitingTeamRequests = (teamBoard.data?.requests ?? []).filter(
+    (request) => request.canDecide,
+  ).length;
   const communitySettings = useOpenCommunitySettings();
   const openSettings =
     settingsTenantId && communitySettings.needsSwitch(orgId)
@@ -429,6 +437,29 @@ function OrganizationDetail() {
                 onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
                 orgMembers={members}
                 teams={teamsState.teams}
+                waitingRequests={
+                  waitingTeamRequests > 0
+                    ? {
+                        count: waitingTeamRequests,
+                        link: (
+                          <Link
+                            to="/dashboard/node"
+                            hash="teams"
+                            onClick={(event) => {
+                              if (isActive) return;
+                              event.preventDefault();
+                              void switchOrg
+                                .mutateAsync(orgId)
+                                .then(() =>
+                                  router.navigate({ to: "/dashboard/node", hash: "teams" }),
+                                )
+                                .catch(() => undefined);
+                            }}
+                          />
+                        ),
+                      }
+                    : undefined
+                }
               />
               <ConfirmDialog
                 open={pendingTeamDeleteId !== null}

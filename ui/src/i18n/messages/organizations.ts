@@ -635,6 +635,18 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "无法更新团队申请，请重试。",
   ],
   "teamRequests.approve": ["Approve", "Aprobar", "Approuver", "批准"],
+  "teamRequests.approvedHint": [
+    "You're on the team now, with new places to work in your community.",
+    "Ya estás en el equipo, con nuevos espacios para trabajar en tu comunidad.",
+    "Vous faites maintenant partie de l'équipe, avec de nouveaux espaces dans votre communauté.",
+    "你现在已加入该团队，可以在社区中使用新的功能。",
+  ],
+  "teamRequests.approvedTitle": [
+    "You joined {team}",
+    "Te uniste a {team}",
+    "Vous avez rejoint {team}",
+    "你已加入 {team}",
+  ],
   "teamRequests.ask": ["Ask to join", "Pedir unirse", "Demander à rejoindre", "申请加入"],
   "teamRequests.asked": ["Request sent", "Solicitud enviada", "Demande envoyée", "已发送申请"],
   "teamRequests.closedRequesterLeft": [
@@ -656,12 +668,25 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "该团队不再接受申请",
   ],
   "teamRequests.decline": ["Decline", "Rechazar", "Refuser", "拒绝"],
+  "teamRequests.declinedHint": [
+    "An owner or admin declined it. You can ask again from My community.",
+    "Un propietario o administrador la rechazó. Puedes volver a pedirlo desde Mi comunidad.",
+    "Un propriétaire ou administrateur l'a refusée. Vous pouvez redemander depuis Ma communauté.",
+    "所有者或管理员拒绝了该申请。你可以在“我的社区”中再次申请。",
+  ],
+  "teamRequests.declinedTitle": [
+    "Your request to join {team} was declined",
+    "Se rechazó tu solicitud para unirte a {team}",
+    "Votre demande pour rejoindre {team} a été refusée",
+    "你加入 {team} 的申请被拒绝",
+  ],
   "teamRequests.description": [
     "Ask to help with a team. Owners and admins approve; team members can endorse.",
     "Pide ayudar en un equipo. Los propietarios y administradores aprueban; los miembros del equipo pueden respaldar.",
     "Demandez à aider une équipe. Les propriétaires et administrateurs approuvent ; les membres de l'équipe peuvent appuyer.",
     "申请参与团队。所有者和管理员负责批准，团队成员可以表示支持。",
   ],
+  "teamRequests.dismiss": ["Dismiss", "Descartar", "Masquer", "忽略"],
   "teamRequests.endorse": ["Endorse", "Respaldar", "Appuyer", "支持"],
   "teamRequests.endorsed": ["Endorsed", "Respaldado", "Appuyé", "已支持"],
   "teamRequests.endorsements": [
@@ -669,6 +694,18 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "{count, plural, one {# respaldo} other {# respaldos}}",
     "{count, plural, one {# appui} other {# appuis}}",
     "{count, plural, other {# 个支持}}",
+  ],
+  "teamRequests.homeHint": [
+    "Decide who joins which team in {name}.",
+    "Decide quién se une a cada equipo en {name}.",
+    "Décidez qui rejoint quelle équipe dans {name}.",
+    "决定谁加入 {name} 的哪个团队。",
+  ],
+  "teamRequests.homeTitle": [
+    "{count, plural, one {# team request waiting} other {# team requests waiting}}",
+    "{count, plural, one {# solicitud de equipo en espera} other {# solicitudes de equipo en espera}}",
+    "{count, plural, one {# demande d'équipe en attente} other {# demandes d'équipe en attente}}",
+    "{count, plural, other {# 个团队申请待处理}}",
   ],
   "teamRequests.loadFailed": [
     "Couldn't load teams",
@@ -713,5 +750,23 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
   "teamRequests.statusPending": ["Waiting", "En espera", "En attente", "等待中"],
   "teamRequests.statusWithdrawn": ["Withdrawn", "Retirada", "Retirée", "已撤回"],
   "teamRequests.title": ["Teams", "Equipos", "Équipes", "团队"],
+  "teamRequests.waiting": [
+    "{count, plural, one {# request waiting} other {# requests waiting}}",
+    "{count, plural, one {# solicitud en espera} other {# solicitudes en espera}}",
+    "{count, plural, one {# demande en attente} other {# demandes en attente}}",
+    "{count, plural, other {# 个申请待处理}}",
+  ],
+  "teamRequests.waitingHint": [
+    "People asked to join teams. Decide on My community.",
+    "Hay personas que pidieron unirse a equipos. Decide en Mi comunidad.",
+    "Des personnes ont demandé à rejoindre des équipes. Décidez dans Ma communauté.",
+    "有人申请加入团队，请在“我的社区”中处理。",
+  ],
+  "teamRequests.whatYouCanDo": [
+    "What you can do now",
+    "Qué puedes hacer ahora",
+    "Ce que vous pouvez faire",
+    "你现在可以做什么",
+  ],
   "teamRequests.withdraw": ["Withdraw", "Retirar", "Retirer", "撤回"],
 });
