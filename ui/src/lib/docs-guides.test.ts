@@ -7,31 +7,32 @@ import { collidingGuideSlugs, listGuides, parseGuideFilename, resolveGuide } fro
 const shippedGuidesDir = join(dirname(fileURLToPath(import.meta.url)), "../content/docs");
 
 const fixtureFiles = {
-  "./run-a-community.md": "# Run a community\n\nHow a DAO runs a city node.",
-  "./run-a-community.es.md": "# Dirigir una comunidad\n\nCómo un DAO dirige un city node.",
-  "./claim-rewards.md": "# Claim rewards\n\nWithdraw staking rewards after a vote.",
+  "./run-a-community.txt": "# Run a community\n\nHow a DAO runs a city node.",
+  "./run-a-community.es.txt": "# Dirigir una comunidad\n\nCómo un DAO dirige un city node.",
+  "./claim-rewards.txt": "# Claim rewards\n\nWithdraw staking rewards after a vote.",
 };
 
 describe("parseGuideFilename", () => {
   it("reads the slug from the filename and optional locale suffix", () => {
-    expect(parseGuideFilename("run-a-community.md")).toEqual({
+    expect(parseGuideFilename("run-a-community.txt")).toEqual({
       slug: "run-a-community",
       locale: "en",
     });
-    expect(parseGuideFilename("../content/docs/run-a-community.es.md")).toEqual({
+    expect(parseGuideFilename("../content/docs/run-a-community.es.txt")).toEqual({
       slug: "run-a-community",
       locale: "es",
     });
-    expect(parseGuideFilename("run-a-community.zh.md")).toEqual({
+    expect(parseGuideFilename("run-a-community.zh.txt")).toEqual({
       slug: "run-a-community",
       locale: "zh",
     });
   });
 
   it("ignores files that are not lowercase slugs", () => {
-    expect(parseGuideFilename("Run-a-community.md")).toBeNull();
-    expect(parseGuideFilename("run_a_community.md")).toBeNull();
-    expect(parseGuideFilename("run-a-community.de.md")).toBeNull();
+    expect(parseGuideFilename("Run-a-community.txt")).toBeNull();
+    expect(parseGuideFilename("run_a_community.txt")).toBeNull();
+    expect(parseGuideFilename("run-a-community.de.txt")).toBeNull();
+    expect(parseGuideFilename("run-a-community.md")).toBeNull();
   });
 });
 
@@ -79,13 +80,13 @@ describe("resolveGuide", () => {
   });
 
   it("does not resolve a reserved docs route as a guide", () => {
-    expect(resolveGuide("build", "en", { "./build.md": "# Builders\n\nNope." })).toBeNull();
+    expect(resolveGuide("build", "en", { "./build.txt": "# Builders\n\nNope." })).toBeNull();
   });
 
   it("takes the title from the first heading at any level", () => {
     expect(
       resolveGuide("run-a-community", "en", {
-        "./run-a-community.md": "## Run a community\n\nHow a DAO runs a city node.",
+        "./run-a-community.txt": "## Run a community\n\nHow a DAO runs a city node.",
       })?.title,
     ).toBe("Run a community");
   });
@@ -93,16 +94,16 @@ describe("resolveGuide", () => {
 
 describe("shipped guide files", () => {
   it("does not ship placeholder guides", () => {
-    const shipped = readdirSync(shippedGuidesDir).filter((name) => name.endsWith(".md"));
+    const shipped = readdirSync(shippedGuidesDir).filter((name) => name.endsWith(".txt"));
     expect(shipped).toEqual([]);
   });
 
   it("fails when a guide filename collides with /docs/build", () => {
-    expect(collidingGuideSlugs(["build.md", "build.es.md"])).toEqual(["build"]);
+    expect(collidingGuideSlugs(["build.txt", "build.es.txt"])).toEqual(["build"]);
   });
 
   it("lists every shipped English guide from the bundled catalog", () => {
-    const shipped = readdirSync(shippedGuidesDir).filter((name) => name.endsWith(".md"));
+    const shipped = readdirSync(shippedGuidesDir).filter((name) => name.endsWith(".txt"));
     const expected = [
       ...new Set(
         shipped.flatMap((name) => {

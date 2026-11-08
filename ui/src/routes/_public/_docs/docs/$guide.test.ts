@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { guidePageHead, loadGuide } from "./$guide";
 
 const fixtureFiles = {
-  "./run-a-community.md": "# Run a community\n\nHow a DAO runs a city node.",
+  "./run-a-community.txt": "# Run a community\n\nHow a DAO runs a city node.",
 };
 
 describe("docs guide route", () => {

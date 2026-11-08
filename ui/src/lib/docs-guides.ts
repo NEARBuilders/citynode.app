@@ -23,7 +23,7 @@ function asGuideFiles(files: Record<string, unknown>): Record<string, string> {
 function loadBundledGuideFiles(): Record<string, string> {
   try {
     return asGuideFiles(
-      import.meta.glob("../content/docs/*.md", {
+      import.meta.glob("../content/docs/*.txt", {
         eager: true,
         query: "?raw",
         import: "default",
@@ -46,7 +46,7 @@ const reservedSlugs = new Set<string>(RESERVED_GUIDE_SLUGS);
 
 export function parseGuideFilename(filename: string): { slug: string; locale: AppLocale } | null {
   const base = filename.split(/[/\\]/).pop() ?? "";
-  const match = /^([a-z0-9]+(?:-[a-z0-9]+)*)(?:\.([a-z]+))?\.md$/.exec(base);
+  const match = /^([a-z0-9]+(?:-[a-z0-9]+)*)(?:\.([a-z]+))?\.txt$/.exec(base);
   if (!match) return null;
   const locale = match[2];
   if (locale && !localeSet.has(locale)) return null;
@@ -98,7 +98,7 @@ function filesBySlug(files: Record<string, string>) {
     if (!parsed || typeof markdown !== "string") continue;
     const locales = grouped.get(parsed.slug) ?? {};
     if (parsed.locale === DEFAULT_APP_LOCALE) {
-      if (!locales.en || !path.endsWith(".en.md")) locales.en = markdown;
+      if (!locales.en || !path.endsWith(".en.txt")) locales.en = markdown;
     } else {
       locales[parsed.locale] = markdown;
     }
