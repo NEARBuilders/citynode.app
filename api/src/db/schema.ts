@@ -194,6 +194,23 @@ export const discoveryMeasurements = pgTable(
   }),
 );
 
+export const eventReports = pgTable("event_reports", {
+  activityId: uuid("activity_id")
+    .primaryKey()
+    .references(() => discoveryActivities.id, { onDelete: "cascade" }),
+  nodeId: uuid("node_id")
+    .notNull()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  formVersion: integer("form_version").default(1).notNull(),
+  report: jsonb("report").$type<import("../discovery-contract").EventReport>().notNull(),
+  submittedBy: text("submitted_by").notNull(),
+  submittedAt: timestamp("submitted_at", { mode: "date", withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+});
+
 export const discoveryLumaConnections = pgTable("discovery_luma_connections", {
   nodeId: uuid("node_id")
     .primaryKey()

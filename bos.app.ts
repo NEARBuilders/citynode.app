@@ -10,7 +10,7 @@ export default App({
     "CityNodes are local communities that each run a NEAR validator. Find yours, join its events, and stake to keep it online.",
   // The base runtime this app extends — inherit the platform, override only what you change.
   extends: "bos://dev.everything.near/everything.dev",
-  platform: "2.0.0-rc.27",
+  release: "2.0.0-rc.39",
   // The NEAR account this app publishes under.
   account: "v1.citynode.near",
   // The gateway: FastKV lookup key and public ingress for this runtime.
@@ -29,6 +29,7 @@ export default App({
       platformAccount: "v1.citynode.near",
       domain: "citynode.app",
       gatewayDomains: "citynode.app,testnet.citynode.app",
+      nearbuildersUrl: "https://nearbuilders.org",
       mainnetStakingPoolWhitelist: "lockup-whitelist.near",
       testnetStakingPoolWhitelist: "whitelist.f863973.m0",
     },
@@ -44,6 +45,13 @@ export default App({
   auth: {
     variables: {
       organizationMembershipLimit: 1000,
+      // Joined screen after an onboarding code (everything-dev #662): "Visit
+      // {community}" plus its channels. The default next/home/explore links fit.
+      onboard: {
+        community: {
+          url: "/api/communities/by-organization/{organizationId}",
+        },
+      },
       deviceLink: {
         clientId: "citynode-web",
       },

@@ -1,4 +1,10 @@
-import { GearIcon, SignOutIcon, UserCircleIcon, UserIcon } from "@phosphor-icons/react";
+import {
+  CalendarCheckIcon,
+  GearIcon,
+  SignOutIcon,
+  UserCircleIcon,
+  UserIcon,
+} from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import type { Organization } from "@/app";
 import { pluginPath } from "@/app";
@@ -62,6 +68,10 @@ export function UserNavMenuContent({
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
+        <DropdownMenuItem render={<Link to="/me" />} data-testid="account.activity-menuitem">
+          <CalendarCheckIcon />
+          {translate("nav.activity")}
+        </DropdownMenuItem>
         {nearAccountId && (
           <DropdownMenuItem
             render={<Link to="/$accountId" params={{ accountId: nearAccountId }} />}

@@ -86,6 +86,16 @@ function databaseSecrets(config) {
   }
   return secrets;
 }
+/**
+ * `bos dev` (rc.29+) rewrites .env.test with `pglite::memory:` URLs. An
+ * in-memory database lives inside one process, so the stack and Playwright's
+ * seeds can't share it; regression runs skip those and use the Postgres test
+ * databases from the environment instead.
+ */
+function sharedDatabaseUrl(url) {
+  return url && !url.startsWith("pglite:") ? url : undefined;
+}
+
 function defaultDevDatabaseUrl(secret, pgUser, pgPassword, pgHost) {
   const isAuth = secret === "AUTH_DATABASE_URL";
   const port = isAuth ? 5433 : 5432;
@@ -109,13 +119,26 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
   const dbUrls = {};
   for (const secret of databaseSecrets(config)) {
     const devUrl = fileEnv[secret] ?? defaultDevDatabaseUrl(secret, pgUser, pgPassword, pgHost);
-    const resolved = testEnv[secret] ?? env[secret] ?? fileEnv[secret] ?? devUrl;
+    // Plugin databases share the API database unless one is set (the platform's
+    // two-database contract), so they follow the API test database.
+    const sharesApi = secret !== "API_DATABASE_URL" && secret !== "AUTH_DATABASE_URL";
+    const resolved =
+      sharedDatabaseUrl(testEnv[secret]) ??
+      env[secret] ??
+      (sharesApi ? dbUrls.API_DATABASE_URL : undefined) ??
+      fileEnv[secret] ??
+      devUrl;
     if (!allowDevDb && resolved === devUrl) {
+      const inMemory = testEnv[secret]?.startsWith("pglite:");
       throw new Error(
         `refusing to run: ${secret} resolves to the dev database. ` +
           "Regression tests must stay isolated from dev databases. " +
-          "Restore the generated .env.test (run `pnpm run bos dev` to regenerate), " +
-          "or start the test databases with `pnpm run test:db:up`, " +
+          (inMemory
+            ? `.env.test sets ${secret} to an in-memory pglite database the seeds can't reach; ` +
+              "start the test databases with `pnpm run test:db:up` and export " +
+              "API_DATABASE_URL and AUTH_DATABASE_URL pointing at them, "
+            : "Restore the generated .env.test (run `pnpm run bos dev` to regenerate), " +
+              "or start the test databases with `pnpm run test:db:up`, ") +
           "or set REGRESSION_ALLOW_DEV_DB=1 to override deliberately.",
       );
     }

@@ -69,6 +69,13 @@ export function canManageCommunity(context: AuthRequestContext | null | undefine
   );
 }
 
+export function isInFinanceTeam(
+  context: AuthRequestContext | null | undefined,
+  allowedAreas: readonly FeatureArea[] | null,
+): boolean {
+  return hasTeamArea(context, "finance") && isAreaInView(allowedAreas, "finance");
+}
+
 export function areasForPath(pathname: string): FeatureArea[] | null {
   const match = ROUTE_AREAS.find(
     ({ path }) => pathname === path || pathname.startsWith(`${path}/`),
@@ -118,6 +125,11 @@ export async function requireTeamArea({
   }
 }
 
+function hasTeamArea(context: AuthRequestContext | null | undefined, area: FeatureArea): boolean {
+  if (!context?.organization?.member?.role) return false;
+  return (context.organization.teams ?? []).some((team) => team.areas.includes(area));
+}
+
 export function canOrganizeEvents(
   context: AuthRequestContext | null | undefined,
   { includePlatformAdmin = true }: { includePlatformAdmin?: boolean } = {},
@@ -129,6 +141,19 @@ export function canOrganizeEvents(
   ) {
     return true;
   }
-  if (!context?.organization?.member?.role) return false;
-  return (context.organization.teams ?? []).some((team) => team.areas.includes("events"));
+  return hasTeamArea(context, "events");
+}
+
+export function canOperateNodes(
+  context: AuthRequestContext | null | undefined,
+  { includePlatformAdmin = true }: { includePlatformAdmin?: boolean } = {},
+): boolean {
+  if (
+    includePlatformAdmin
+      ? canManageCommunity(context)
+      : isCommunitySettingsRole(context?.organization?.member?.role)
+  ) {
+    return true;
+  }
+  return hasTeamArea(context, "node-operations");
 }

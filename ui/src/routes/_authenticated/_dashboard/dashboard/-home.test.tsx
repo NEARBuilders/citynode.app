@@ -310,6 +310,36 @@ describe("Home without a community", () => {
     expect(stepIds()).toEqual(["open-community", "stake"]);
   });
 
+  it("gives a Finance team member the payouts step", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = harbor.id;
+    harness.organizations = [personal, harbor];
+    harness.tenants = { [harbor.id]: "Harbor" };
+    harness.authContext = {
+      organization: {
+        member: { role: "member" },
+        teams: [{ id: "team-finance", name: "Finance", areas: ["finance"] }],
+        activeTeamId: null,
+      },
+    };
+    renderHome();
+
+    expect(await screen.findByTestId("home-step-payouts")).toBeTruthy();
+    expect(stepIds()).toEqual(["open-community", "payouts", "stake"]);
+  });
+
+  it("leaves the payouts step out for a plain member", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = harbor.id;
+    harness.organizations = [personal, harbor];
+    harness.tenants = { [harbor.id]: "Harbor" };
+    harness.authContext = { organization: { member: { role: "member" }, teams: [] } };
+    renderHome();
+
+    expect(await screen.findByTestId("home-step-open-community")).toBeTruthy();
+    expect(stepIds()).toEqual(["open-community", "stake"]);
+  });
+
   it("keeps a platform admin's steps without a Start a community step", async () => {
     harness.user = { ...member, role: "admin" };
     harness.activeOrganizationId = personal.id;

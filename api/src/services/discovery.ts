@@ -12,6 +12,7 @@ import {
   discoveryMeasurements,
   discoveryProfiles,
   discoveryReports,
+  eventReports,
   nodes,
   tenants,
 } from "../db/schema";
@@ -19,8 +20,10 @@ import type {
   DiscoveryActivity,
   DiscoveryMeasurement,
   DiscoveryProfile,
+  EventReport,
   StoredDiscoveryProfile,
 } from "../discovery-contract";
+import { EVENT_REPORT_FORM_VERSION } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
@@ -37,6 +40,16 @@ import { nodeKindOf } from "./nodes";
 const EVENTS_AREA: FeatureArea = "events";
 
 export type DiscoveryEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
+
+function storedReport(row: typeof eventReports.$inferSelect) {
+  return {
+    activityId: row.activityId,
+    formVersion: row.formVersion,
+    report: row.report,
+    submittedAt: row.submittedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
 
 function canonicalActivityUrl(value: string) {
   const url = new URL(value);
@@ -1178,6 +1191,77 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           }),
         );
         return next;
+      }),
+    eventReport: (activityId: string, context: AuthContext) =>
+      Effect.gen(function* () {
+        const activity = yield* activityById(activityId);
+        if (!activity || activity.kind !== "event") {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+        }
+        yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
+        const [row] = yield* query(() =>
+          db.select().from(eventReports).where(eq(eventReports.activityId, activityId)),
+        );
+        return row ? storedReport(row) : null;
+      }),
+    saveEventReport: (input: { activityId: string; report: EventReport }, context: AuthContext) =>
+      Effect.gen(function* () {
+        const activity = yield* activityById(input.activityId);
+        if (!activity || activity.kind !== "event") {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+        }
+        yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
+        const now = yield* Clock.currentTimeMillis;
+        const end = activity.endsAt ?? activity.startsAt;
+        if (activity.status === "cancelled" || !end || Date.parse(end) > now) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "Reports can only be submitted for events that have ended",
+            }),
+          );
+        }
+        const userId = context.userId!;
+        const at = new Date(now);
+        const [row] = yield* query(() =>
+          db
+            .insert(eventReports)
+            .values({
+              activityId: input.activityId,
+              nodeId: activity.ownerNodeId,
+              formVersion: EVENT_REPORT_FORM_VERSION,
+              report: input.report,
+              submittedBy: userId,
+              submittedAt: at,
+              updatedBy: userId,
+              updatedAt: at,
+            })
+            .onConflictDoUpdate({
+              target: eventReports.activityId,
+              set: {
+                formVersion: EVENT_REPORT_FORM_VERSION,
+                report: input.report,
+                updatedBy: userId,
+                updatedAt: at,
+              },
+            })
+            .returning(),
+        );
+        if (!row) return yield* Effect.fail(new ORPCError("INTERNAL_SERVER_ERROR"));
+        return storedReport(row);
+      }),
+    eventReportStatuses: (nodeId: string, context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* authorize(nodeId, context, EVENTS_AREA);
+        const rows = yield* query(() =>
+          db
+            .select({ activityId: eventReports.activityId, submittedAt: eventReports.submittedAt })
+            .from(eventReports)
+            .where(eq(eventReports.nodeId, nodeId)),
+        );
+        return rows.map((row) => ({
+          activityId: row.activityId,
+          submittedAt: row.submittedAt.toISOString(),
+        }));
       }),
   };
 }

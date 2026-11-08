@@ -14,10 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { requireEventOrganizer } from "../../../-require-event-organizer";
 
 export const Route = createFileRoute(
   "/_authenticated/_dashboard/nodes/$nodeId/events/$activityId/edit",
 )({
+  beforeLoad: ({ context, params }) => {
+    requireEventOrganizer({ context, params });
+  },
   head: ({ match }) => ({
     meta: [
       {

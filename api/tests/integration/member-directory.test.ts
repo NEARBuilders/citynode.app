@@ -18,6 +18,8 @@ const accountsByUser = new Map<string, string | null>();
 const failingAccountReads = new Set<string>();
 const failingMemberOrgs = new Set<string>();
 const memberPages: Array<{ limit?: number; offset?: number }> = [];
+const roleLookups: string[] = [];
+const accountReads: string[] = [];
 const UPSTREAM_PAGE_LIMIT = 100;
 
 function callerId(context: unknown) {
@@ -28,6 +30,7 @@ const authStub = {
   client: (context: unknown) => ({
     nearListAccounts: async () => {
       const userId = callerId(context);
+      accountReads.push(userId);
       if (failingAccountReads.has(userId)) throw new Error("identity read failed");
       const accountId = accountsByUser.get(userId);
       return {
@@ -54,6 +57,15 @@ const authStub = {
             ]
           : [],
       };
+    },
+    getActiveMemberRole: async (input: { organizationId?: string }) => {
+      const organizationId = input.organizationId ?? "";
+      roleLookups.push(organizationId);
+      const members = membersByOrg.get(organizationId) ?? [];
+      if (!members.some((member) => member.userId === callerId(context))) {
+        throw new ORPCError("FORBIDDEN", { message: "Not a member" });
+      }
+      return { role: callerId(context) === "owner" ? "owner" : "member" };
     },
     listMembers: async (input: { organizationId?: string; limit?: number; offset?: number }) => {
       const organizationId = input.organizationId ?? "";
@@ -124,6 +136,8 @@ beforeEach(() => {
   failingAccountReads.clear();
   failingMemberOrgs.clear();
   memberPages.length = 0;
+  roleLookups.length = 0;
+  accountReads.length = 0;
 });
 
 describe("member directory opt-in", () => {
@@ -184,6 +198,8 @@ describe("member directory", () => {
     await expect(
       (await getPluginClient()).getMemberDirectory({ organizationId: orgId }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(roleLookups).toEqual([orgId]);
+    expect(memberPages).toEqual([]);
   });
 
   it("drops a member who opts out or leaves the community", async () => {
@@ -239,21 +255,130 @@ describe("member directory", () => {
     expect(await accountOf("failer")).toBeNull();
   });
 
-  it("pages through the whole upstream member source before filtering", async () => {
-    const members = Array.from({ length: 250 }, (_, index) => ({
+  it("keeps reading upstream pages until it has a name to show and returns a cursor to the rest", async () => {
+    const members = Array.from({ length: 350 }, (_, index) => ({
       userId: `bulk-${index}`,
       name: `Bulk ${index}`,
     }));
     const { orgId } = await community(members);
-    await (await memberClient("bulk-240")).setMemberDirectoryOptIn({ optedIn: true });
+    for (const userId of ["bulk-205", "bulk-340"]) {
+      await (await memberClient(userId)).setMemberDirectoryOptIn({ optedIn: true });
+    }
+    const viewer = await memberClient("bulk-0");
 
-    const directory = await (await memberClient("bulk-0")).getMemberDirectory({
+    const first = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(first.count).toBe(350);
+    expect(first.members.map((member) => member.userId)).toEqual(["bulk-205"]);
+    expect(first.nextCursor).toBe("300");
+
+    const last = await viewer.getMemberDirectory({
       organizationId: orgId,
+      limit: 50,
+      cursor: first.nextCursor ?? undefined,
     });
+    expect(last.members).toEqual([{ userId: "bulk-340", name: "Bulk 340", accountId: null }]);
+    expect(last.nextCursor).toBeNull();
+    expect(memberPages).toEqual([
+      { limit: 100, offset: 0 },
+      { limit: 100, offset: 100 },
+      { limit: 100, offset: 200 },
+      { limit: 50, offset: 300 },
+    ]);
+  });
 
-    expect(directory.count).toBe(250);
-    expect(directory.members).toEqual([{ userId: "bulk-240", name: "Bulk 240", accountId: null }]);
-    expect(memberPages.map((page) => page.offset)).toEqual([0, 100, 200]);
+  it("stops after ten upstream pages in one request and returns a cursor", async () => {
+    const { orgId } = await community(
+      Array.from({ length: 1200 }, (_, index) => ({ userId: `cap-${index}`, name: null })),
+    );
+    await (await memberClient("cap-1150")).setMemberDirectoryOptIn({ optedIn: true });
+    const viewer = await memberClient("cap-0");
+
+    const first = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(first.members).toEqual([]);
+    expect(first.nextCursor).toBe("1000");
+    expect(memberPages).toHaveLength(10);
+
+    const next = await viewer.getMemberDirectory({ organizationId: orgId, cursor: "1000" });
+    expect(next.members.map((member) => member.userId)).toEqual(["cap-1150"]);
+    expect(next.nextCursor).toBeNull();
+  });
+
+  it("returns an empty directory without a cursor when nobody has opted in", async () => {
+    const { orgId } = await community(
+      Array.from({ length: 250 }, (_, index) => ({ userId: `none-${index}`, name: null })),
+    );
+    const viewer = await memberClient("none-0");
+    const directory = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(directory.members).toEqual([]);
+    expect(directory.nextCursor).toBeNull();
+    expect(memberPages).toHaveLength(3);
+  });
+});
+
+describe("member directory upstream cost", () => {
+  async function viewCost(size: number) {
+    const { orgId } = await community(
+      Array.from({ length: size }, (_, index) => ({ userId: `cost-${size}-${index}`, name: null })),
+    );
+    const viewerId = `cost-${size}-0`;
+    await (await memberClient(viewerId)).setMemberDirectoryOptIn({ optedIn: true });
+    const viewer = await memberClient(viewerId);
+    const first = await viewer.getMemberDirectory({ organizationId: orgId });
+    memberPages.length = 0;
+    roleLookups.length = 0;
+    accountReads.length = 0;
+    const again = await viewer.getMemberDirectory({ organizationId: orgId });
+    return {
+      count: again.count,
+      observedAt: [first.observedAt, again.observedAt],
+      calls: memberPages.length + roleLookups.length + accountReads.length,
+      pages: [...memberPages],
+    };
+  }
+
+  it("makes the same upstream calls at any size when a name is on the first page and does not rewrite the count", async () => {
+    const small = await viewCost(1000);
+    const large = await viewCost(5000);
+    expect(small.count).toBe(1000);
+    expect(large.count).toBe(5000);
+    expect(small.calls).toBe(3);
+    expect(large.calls).toBe(3);
+    expect(large.pages).toEqual([{ limit: 100, offset: 0 }]);
+    expect(small.observedAt[1]).toBe(small.observedAt[0]);
+    expect(large.observedAt[1]).toBe(large.observedAt[0]);
+  });
+
+  it("reads at most ten member pages per view when nobody in the first thousand opted in", async () => {
+    const { orgId } = await community(
+      Array.from({ length: 5000 }, (_, index) => ({ userId: `quiet-${index}`, name: null })),
+    );
+    const viewer = await memberClient("quiet-0");
+    memberPages.length = 0;
+    roleLookups.length = 0;
+    accountReads.length = 0;
+    const page = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(page).toMatchObject({ members: [], nextCursor: "1000" });
+    expect(roleLookups.length).toBe(1);
+    expect(accountReads.length).toBe(0);
+    expect(memberPages).toEqual(
+      Array.from({ length: 10 }, (_, index) => ({ limit: 100, offset: index * 100 })),
+    );
+  });
+
+  it("rewrites the count when it changes", async () => {
+    const { orgId, nodeId } = await community([
+      { userId: "steady", name: null },
+      { userId: "joiner", name: null },
+    ]);
+    const viewer = await memberClient("steady");
+    await viewer.getMemberDirectory({ organizationId: orgId });
+    membersByOrg.set(orgId, [...(membersByOrg.get(orgId) ?? []), { userId: "late", name: null }]);
+    const changed = await viewer.getMemberDirectory({ organizationId: orgId });
+    expect(changed.count).toBe(3);
+    expect(await (await getPluginClient()).getNodeMemberCount({ nodeId })).toEqual({
+      count: 3,
+      observedAt: changed.observedAt,
+    });
   });
 });
 

@@ -601,6 +601,7 @@ function useTeamPoolReads(
     stakePoolStatusQueryOptions({
       accountId: target?.poolAccountId ?? "",
       authClient,
+      queryClient,
       network: target?.network,
       protocol: target?.protocol,
     }),
@@ -954,7 +955,7 @@ function poolExplorerUrl(accountId: string, network: string) {
   return `https://${network === "testnet" ? "testnet." : ""}nearblocks.io/address/${encodeURIComponent(accountId)}`;
 }
 
-function poolStateMessage(state: TeamPoolState, translate: AppTranslator, locale: string) {
+export function poolStateMessage(state: TeamPoolState, translate: AppTranslator, locale: string) {
   const runBy = (ownerId: string | null) =>
     ownerId ? ` ${translate("stake.poolRunBy", { owner: ownerId })}` : "";
   switch (state.kind) {
