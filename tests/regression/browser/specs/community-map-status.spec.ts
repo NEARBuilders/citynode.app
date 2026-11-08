@@ -164,11 +164,8 @@ test.describe("community map status", () => {
     await useCookieHeader(memberContext, memberCookie);
     const memberPage = await memberContext.newPage();
     await openOverview(memberPage, hidden.orgId, hidden.nodeId);
-    await expect(memberPage.getByTestId("dashboard-node.map-status")).toHaveAttribute(
-      "data-state",
-      "hidden",
-      { timeout: 15000 },
-    );
+    await expect(memberPage.getByTestId("dashboard-node.heading")).toBeVisible({ timeout: 15000 });
+    await expect(memberPage.getByTestId("dashboard-node.map-status")).toHaveCount(0);
     await expect(memberPage.getByTestId("dashboard-node.map-status-action")).toHaveCount(0);
     await memberContext.close();
 
