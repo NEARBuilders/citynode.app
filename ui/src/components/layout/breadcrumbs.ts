@@ -1,5 +1,6 @@
 import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
+import { resolveGuide } from "@/lib/docs-guides";
 import type { RemotePath } from "@/lib/runtime-map.gen";
 
 /** Sub-sections the auth plugin publishes under /settings (generated inventory). */
@@ -155,8 +156,11 @@ export function crumbsFor(
       const section = second ? SETTINGS_SECTIONS[second as RemoteSettingsSection] : undefined;
       return section ? [SETTINGS, page(section)] : [page(SETTINGS.label)];
     }
-    case "docs":
-      return second === "build" ? [DOCS, page(t("docs.nav.builders"))] : [page(DOCS.label)];
+    case "docs": {
+      if (!second) return [page(DOCS.label)];
+      if (second === "build") return [DOCS, page(t("docs.nav.builders"))];
+      return [DOCS, page(resolveGuide(second)?.title ?? humanize(second))];
+    }
     case "skill":
       return [DOCS, { label: t("docs.nav.builders"), to: "/docs/build" }, page(t("docs.skill"))];
     case "login":

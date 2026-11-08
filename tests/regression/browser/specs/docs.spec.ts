@@ -41,6 +41,23 @@ test.describe("docs", () => {
     await expect(page.getByTestId("docs.nav-skill")).toHaveAttribute("aria-current", "page");
   });
 
+  test("with no guides, the Guides group stays hidden on desktop and at 375px", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/docs", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    await expect(page.getByTestId("docs.heading")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("docs.nav-menu")).toBeVisible();
+    await expect(page.getByTestId("docs.nav-group-guides")).toHaveCount(0);
+    await expect(page.getByTestId("docs.guides")).toHaveCount(0);
+
+    await page.getByTestId("docs.nav-menu").click();
+    await expect(page.getByRole("menuitem", { name: "Overview" })).toBeVisible();
+    await expect(page.getByText("Guides", { exact: true })).toHaveCount(0);
+  });
+
   test("signed-in members reach the docs from the sidebar About item", async ({ page }) => {
     await injectCookies(page);
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });

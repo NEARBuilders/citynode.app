@@ -247,6 +247,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "docs.nav.build": ["Build", "Desarrollar", "Développer", "开发"],
   "docs.nav.builders": ["Builders", "Desarrolladores", "Développeurs", "开发者"],
+  "docs.nav.guides": ["Guides", "Guías", "Guides", "指南"],
   "docs.nav.label": ["Docs", "Documentación", "Documentation", "文档"],
   "docs.nav.overview": ["Overview", "Resumen", "Vue d'ensemble", "概览"],
   "docs.nav.start": ["Get started", "Primeros pasos", "Premiers pas", "入门"],

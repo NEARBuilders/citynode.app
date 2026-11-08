@@ -254,6 +254,7 @@ describe("docs pages", () => {
       ["Agent skill", undefined],
     ]);
     expect(crumbsFor("/docs").map((crumb) => crumb.label)).toEqual(["Docs"]);
+    expect(crumbsFor("/docs/build").map((crumb) => crumb.label)).toEqual(["Docs", "Builders"]);
   });
 });
 
