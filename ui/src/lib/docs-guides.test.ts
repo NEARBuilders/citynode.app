@@ -93,17 +93,18 @@ describe("resolveGuide", () => {
 });
 
 describe("shipped guide files", () => {
-  it("does not ship placeholder guides", () => {
-    const shipped = readdirSync(shippedGuidesDir).filter((name) => name.endsWith(".txt"));
-    expect(shipped).toEqual([]);
-  });
+  const shipped = readdirSync(shippedGuidesDir);
 
   it("fails when a guide filename collides with /docs/build", () => {
     expect(collidingGuideSlugs(["build.txt", "build.es.txt"])).toEqual(["build"]);
+    expect(collidingGuideSlugs(shipped)).toEqual([]);
+  });
+
+  it("fails when a leftover markdown file would be skipped by the bundler", () => {
+    expect(shipped.filter((name) => name.endsWith(".md"))).toEqual([]);
   });
 
   it("lists every shipped English guide from the bundled catalog", () => {
-    const shipped = readdirSync(shippedGuidesDir).filter((name) => name.endsWith(".txt"));
     const expected = [
       ...new Set(
         shipped.flatMap((name) => {
