@@ -1,5 +1,6 @@
 import { BookOpenIcon } from "@phosphor-icons/react";
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import type { ClientRuntimeConfig } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
 import { Markdown } from "@/components/markdown";
 import { resolveAppLocale, useAppTranslation } from "@/i18n/runtime";
@@ -13,27 +14,35 @@ export function loadGuide(slug: string, locale?: string | null, files?: Record<s
   return guide;
 }
 
+export function guidePageHead(
+  guide: { slug: string; title: string; description: string },
+  runtimeConfig?: Partial<ClientRuntimeConfig> | null,
+) {
+  const title = pageTitle(guide.title, runtimeConfig);
+  return {
+    meta: [
+      { title },
+      { name: "description", content: guide.description },
+      ...socialMeta({
+        title,
+        description: guide.description,
+        path: `/docs/${guide.slug}`,
+        runtimeConfig,
+      }),
+    ],
+  };
+}
+
 export const Route = createFileRoute("/_public/_docs/docs/$guide")({
   loader: ({ params, context }) => {
     const guide = loadGuide(params.guide, context.locale);
     return { guide, runtimeConfig: context.runtimeConfig };
   },
-  head: ({ loaderData, match, params }) => {
-    const title = pageTitle(loaderData?.guide.title ?? params.guide, loaderData?.runtimeConfig);
-    const description = loaderData?.guide.description ?? "";
-    return {
-      meta: [
-        { title },
-        { name: "description", content: description },
-        ...socialMeta({
-          title,
-          description,
-          path: `/docs/${params.guide}`,
-          runtimeConfig: loaderData?.runtimeConfig ?? match.context.runtimeConfig,
-        }),
-      ],
-    };
-  },
+  head: ({ loaderData, match, params }) =>
+    guidePageHead(
+      loaderData?.guide ?? { slug: params.guide, title: params.guide, description: "" },
+      loaderData?.runtimeConfig ?? match.context.runtimeConfig,
+    ),
   component: GuidePage,
 });
 

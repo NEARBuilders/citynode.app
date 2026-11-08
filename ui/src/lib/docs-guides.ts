@@ -65,7 +65,7 @@ export function collidingGuideSlugs(filenames: string[]): string[] {
 }
 
 function titleFromMarkdown(markdown: string, fallback: string): string {
-  const match = /^\s*#\s+(.+)$/m.exec(markdown);
+  const match = /^\s*#{1,6}\s+(.+)$/m.exec(markdown);
   const title = match?.[1]?.trim();
   return title || fallback;
 }
@@ -81,7 +81,7 @@ function descriptionFromMarkdown(markdown: string, fallback: string): string {
 }
 
 function stripLeadingHeading(markdown: string): string {
-  return markdown.replace(/^\s*#\s+[^\n]+\n*/, "").trimStart();
+  return markdown.replace(/^\s*#{1,6}\s+[^\n]+\n*/, "").trimStart();
 }
 
 function humanizeSlug(slug: string): string {

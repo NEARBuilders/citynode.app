@@ -81,6 +81,14 @@ describe("resolveGuide", () => {
   it("does not resolve a reserved docs route as a guide", () => {
     expect(resolveGuide("build", "en", { "./build.md": "# Builders\n\nNope." })).toBeNull();
   });
+
+  it("takes the title from the first heading at any level", () => {
+    expect(
+      resolveGuide("run-a-community", "en", {
+        "./run-a-community.md": "## Run a community\n\nHow a DAO runs a city node.",
+      })?.title,
+    ).toBe("Run a community");
+  });
 });
 
 describe("shipped guide files", () => {
@@ -91,5 +99,18 @@ describe("shipped guide files", () => {
 
   it("fails when a guide filename collides with /docs/build", () => {
     expect(collidingGuideSlugs(["build.md", "build.es.md"])).toEqual(["build"]);
+  });
+
+  it("lists every shipped English guide from the bundled catalog", () => {
+    const shipped = readdirSync(shippedGuidesDir).filter((name) => name.endsWith(".md"));
+    const expected = [
+      ...new Set(
+        shipped.flatMap((name) => {
+          const parsed = parseGuideFilename(name);
+          return parsed?.locale === "en" ? [parsed.slug] : [];
+        }),
+      ),
+    ].sort();
+    expect(listGuides("en").map((guide) => guide.slug)).toEqual(expected);
   });
 });
