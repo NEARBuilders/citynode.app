@@ -169,12 +169,19 @@ export function DocsMobileNav() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="outline" className="w-full justify-between" />}
+        render={
+          <Button
+            variant="outline"
+            className="h-auto min-h-11 w-full min-w-0 shrink justify-between whitespace-normal"
+          />
+        }
         aria-label={translate("docs.nav.label")}
         data-testid="docs.nav-menu"
       >
-        {current ? current.label : translate("common.docs")}
-        <CaretDownIcon />
+        <span className="min-w-0 flex-1 text-left wrap-anywhere">
+          {current ? current.label : translate("common.docs")}
+        </span>
+        <CaretDownIcon className="shrink-0" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         {groups.map((group) => (
@@ -184,9 +191,10 @@ export function DocsMobileNav() {
               item.kind === "guide" ? (
                 <DropdownMenuItem
                   key={item.path}
+                  className="whitespace-normal"
                   render={<Link to={item.to} params={item.params} />}
                 >
-                  {item.label}
+                  <span className="wrap-anywhere">{item.label}</span>
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem key={item.path} render={<Link to={item.to} />}>

@@ -20,13 +20,26 @@ function asGuideFiles(files: Record<string, unknown>): Record<string, string> {
   );
 }
 
-const bundledGuideFiles = asGuideFiles(
-  import.meta.glob("../content/docs/*.md", {
-    eager: true,
-    query: "?raw",
-    import: "default",
-  }),
-);
+function loadBundledGuideFiles(): Record<string, string> {
+  try {
+    return asGuideFiles(
+      import.meta.glob("../content/docs/*.md", {
+        eager: true,
+        query: "?raw",
+        import: "default",
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+let bundledGuideFiles: Record<string, string> | undefined;
+
+function getBundledGuideFiles(): Record<string, string> {
+  bundledGuideFiles ??= loadBundledGuideFiles();
+  return bundledGuideFiles;
+}
 
 const localeSet = new Set<string>(APP_LOCALES);
 const reservedSlugs = new Set<string>(RESERVED_GUIDE_SLUGS);
@@ -121,7 +134,7 @@ function guidesFromFiles(
 export function resolveGuide(
   slug: string,
   locale: AppLocale = DEFAULT_APP_LOCALE,
-  files: Record<string, string> = bundledGuideFiles,
+  files: Record<string, string> = getBundledGuideFiles(),
 ): GuideDocument | null {
   if (reservedSlugs.has(slug)) return null;
   const locales = filesBySlug(files).get(slug);
@@ -132,7 +145,7 @@ export function resolveGuide(
 
 export function listGuides(
   locale: AppLocale = DEFAULT_APP_LOCALE,
-  files: Record<string, string> = bundledGuideFiles,
+  files: Record<string, string> = getBundledGuideFiles(),
 ): GuideSummary[] {
   return guidesFromFiles(files, locale);
 }
