@@ -293,9 +293,7 @@ describe("breadcrumbs", () => {
       { label: "Administración", to: "/admin" },
       { label: "Organizaciones" },
     ]);
-    expect(crumbsFor("/onboarding/station/abc", {}, translate)).toEqual([
-      { label: "Punto de incorporación" },
-    ]);
+    expect(crumbsFor("/onboarding/station/abc", {}, translate)).toEqual([{ label: "Estación" }]);
     expect(crumbsFor("/admin/tenants", {}, translate)).toEqual([
       { label: "Administración", to: "/admin" },
       { label: "Dominios" },
@@ -305,6 +303,7 @@ describe("breadcrumbs", () => {
   it("names pages instead of echoing path segments", () => {
     expect(labels("/dashboard")).toEqual(["Home"]);
     expect(labels("/discover")).toEqual(["Directory"]);
+    expect(labels("/me")).toEqual(["Your activity"]);
     expect(labels("/dashboard/node/proposals")).toEqual(["My community", "Proposals"]);
     expect(labels("/nodes/abc/content")).toEqual(["My community", "Events"]);
     expect(

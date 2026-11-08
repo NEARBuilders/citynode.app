@@ -16,20 +16,24 @@ const DAO = "example.sputnik-dao.near";
 const POOL = "example.poolv1.near";
 
 const harness = vi.hoisted(() => ({
+  hash: "",
   nearAccount: null as string | null,
   routeContext: {} as Record<string, unknown>,
   listing: (() => Promise.resolve(null)) as () => Promise<unknown>,
   getOnboardingRedemptions: (() => Promise.resolve(null)) as (input: unknown) => Promise<unknown>,
   attendanceCalls: [] as string[],
   activities: (() => Promise.resolve([])) as (input: { nodeId: string }) => Promise<unknown>,
+  reportStatuses: (() => Promise.resolve([])) as () => Promise<unknown>,
   listOnboardingCodes: (() => Promise.resolve([])) as (input: unknown) => Promise<unknown>,
   getOnboardingStatus: (() => Promise.resolve({ joined: [] })) as (
     input: unknown,
   ) => Promise<unknown>,
   memberDirectory: {
     optedIn: false,
-    directory: (() => Promise.resolve({ count: 0, observedAt: "", members: [] })) as (input: {
+    directory: (() =>
+      Promise.resolve({ count: 0, observedAt: "", members: [], nextCursor: null })) as (input: {
       organizationId: string;
+      cursor?: string;
     }) => Promise<unknown>,
     nodeCount: (() => Promise.resolve({ count: null, observedAt: null })) as (input: {
       nodeId: string;
@@ -65,6 +69,8 @@ vi.mock("@tanstack/react-router", () => ({
     </a>
   ),
   redirect: (options: unknown) => ({ redirect: options }),
+  useLocation: ({ select }: { select: (location: { hash: string }) => string }) =>
+    select({ hash: harness.hash }),
 }));
 
 vi.mock("@/app", () => ({
@@ -78,6 +84,7 @@ vi.mock("@/app", () => ({
       getOnboardingStatus: (input: unknown) => harness.getOnboardingStatus(input),
     },
     listDiscoveryActivities: (input: { nodeId: string }) => harness.activities(input),
+    listEventReportStatuses: () => harness.reportStatuses(),
     getDiscoveryNode: () => harness.listing(),
     getMemberDirectoryOptIn: async () =>
       harness.memberDirectory.readOptIn
@@ -88,7 +95,7 @@ vi.mock("@/app", () => ({
       harness.memberDirectory.optedIn = optedIn;
       return { optedIn };
     },
-    getMemberDirectory: (input: { organizationId: string }) =>
+    getMemberDirectory: (input: { organizationId: string; cursor?: string }) =>
       harness.memberDirectory.directory(input),
     getNodeMemberCount: (input: { nodeId: string }) => harness.memberDirectory.nodeCount(input),
     getTeamJoinBoard: async () => ({ canReview: false, teams: [], requests: [] }),
@@ -139,14 +146,16 @@ const clients: QueryClient[] = [];
 
 afterEach(() => {
   cleanup();
+  harness.hash = "";
   harness.memberDirectory.optedIn = false;
   harness.memberDirectory.directory = () =>
-    Promise.resolve({ count: 0, observedAt: "", members: [] });
+    Promise.resolve({ count: 0, observedAt: "", members: [], nextCursor: null });
   harness.memberDirectory.nodeCount = () => Promise.resolve({ count: null, observedAt: null });
   harness.memberDirectory.setOptIn = null;
   harness.memberDirectory.readOptIn = null;
   harness.listing = () => Promise.resolve(null);
   harness.activities = () => Promise.resolve([]);
+  harness.reportStatuses = () => Promise.resolve([]);
   harness.listOnboardingCodes = () => Promise.resolve([]);
   harness.getOnboardingStatus = () => Promise.resolve({ joined: [] });
   harness.attendanceCalls.length = 0;
@@ -263,6 +272,17 @@ describe("node overview team stake visibility", () => {
     renderOverview({ nearAccount: "member.near", inFinanceTeam: true });
     await screen.findByTestId("dashboard-node.team-stake");
     expect(await screen.findByText("2.5 NEAR")).toBeTruthy();
+  });
+
+  it("scrolls to the team stake once it appears when the link targets payouts", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    harness.hash = "payouts";
+    stubChain();
+    renderOverview({ nearAccount: "member.near", inFinanceTeam: true });
+    await screen.findByTestId("dashboard-node.team-stake");
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById("payouts"));
   });
 
   it("shows the team stake to an account the DAO policy lets propose", async () => {
@@ -576,6 +596,7 @@ describe("node overview member directory", () => {
         members: harness.memberDirectory.optedIn
           ? [...members, { userId: "self", name: "Me Myself", accountId: "me.near" }]
           : members,
+        nextCursor: null,
       };
     };
     return requested;
@@ -609,6 +630,61 @@ describe("node overview member directory", () => {
     expect(screen.queryByRole("link", { name: "Bob" })).toBeNull();
     expect(screen.queryByText(/@/)).toBeNull();
     expect(requested).toEqual(["org-1"]);
+  });
+
+  it("loads more members a page at a time until the directory ends", async () => {
+    stubChain();
+    const cursors: Array<string | undefined> = [];
+    const pages: Record<string, { members: unknown[]; nextCursor: string | null }> = {
+      start: { members: [{ userId: "alice", name: "Alice", accountId: null }], nextCursor: "100" },
+      "100": { members: [], nextCursor: "200" },
+      "200": { members: [{ userId: "zoe", name: "Zoe", accountId: null }], nextCursor: null },
+    };
+    harness.memberDirectory.directory = async ({ cursor }) => {
+      cursors.push(cursor);
+      return { count: 250, observedAt, ...pages[cursor ?? "start"] };
+    };
+    renderOverview({ nearAccount: null });
+    expect((await screen.findByTestId("dashboard-node.member-count-value")).textContent).toBe(
+      "250",
+    );
+    const names = () =>
+      screen.getAllByTestId("dashboard-node.member").map((item) => item.textContent);
+    expect(names()).toEqual(["Alice"]);
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    await waitFor(() => expect(cursors).toEqual([undefined, "100"]));
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    await waitFor(() => expect(names()).toEqual(["Alice", "Zoe"]));
+    expect(screen.queryByTestId("dashboard-node.members-load-more")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.members-empty")).toBeNull();
+    expect(cursors).toEqual([undefined, "100", "200"]);
+  });
+
+  it("explains an empty first page and shows a member repeated across pages once", async () => {
+    stubChain();
+    const pages: Record<string, { members: unknown[]; nextCursor: string | null }> = {
+      start: { members: [], nextCursor: "100" },
+      "100": { members: [{ userId: "zoe", name: "Zoe", accountId: null }], nextCursor: "200" },
+      "200": { members: [{ userId: "zoe", name: "Zoe", accountId: null }], nextCursor: null },
+    };
+    harness.memberDirectory.directory = async ({ cursor }) => ({
+      count: 250,
+      observedAt,
+      ...pages[cursor ?? "start"],
+    });
+    renderOverview({ nearAccount: null });
+    expect(await screen.findByTestId("dashboard-node.members-none-yet")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-node.members-empty")).toBeNull();
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    const names = () =>
+      screen.getAllByTestId("dashboard-node.member").map((item) => item.textContent);
+    await waitFor(() => expect(names()).toEqual(["Zoe"]));
+    expect(screen.queryByTestId("dashboard-node.members-none-yet")).toBeNull();
+    await act(async () => fireEvent.click(screen.getByTestId("dashboard-node.members-load-more")));
+    await waitFor(() =>
+      expect(screen.queryByTestId("dashboard-node.members-load-more")).toBeNull(),
+    );
+    expect(names()).toEqual(["Zoe"]);
   });
 
   it("wraps long names inside a 375px screen instead of overflowing", async () => {
@@ -826,5 +902,43 @@ describe("node overview attendance", () => {
     renderOverview({ nearAccount: null, canOrganize: true });
     await screen.findByTestId("dashboard-node.attendance-event");
     expect(harness.attendanceCalls).toEqual(["reconcile:org-1", "read:org-1"]);
+  });
+});
+
+const endedEvent = (id: string, title: string) => ({
+  id,
+  title,
+  kind: "event",
+  status: "published",
+  publishedAt: "2020-01-01T00:00:00.000Z",
+  startsAt: "2020-01-01T16:00:00.000Z",
+  endsAt: "2020-01-01T18:00:00.000Z",
+  venue: "Town Hall",
+});
+
+describe("node overview events to report", () => {
+  it("hides the row from a plain member", async () => {
+    stubChain();
+    harness.activities = () => Promise.resolve([endedEvent("event-missing", "Report Night")]);
+    const client = renderOverview({ nearAccount: "member.near" });
+    await waitFor(() =>
+      expect(client.getQueryState(["discovery-activities", "node-1"])?.status).toBe("success"),
+    );
+    expect(screen.queryByTestId("dashboard-node.events-to-report")).toBeNull();
+    expect(screen.queryByText("Report Night")).toBeNull();
+  });
+
+  it("shows an organizer ended events until a report is submitted", async () => {
+    stubChain();
+    harness.activities = () =>
+      Promise.resolve([
+        endedEvent("event-missing", "Report Night"),
+        endedEvent("event-done", "Already Reported"),
+      ]);
+    harness.reportStatuses = () =>
+      Promise.resolve([{ activityId: "event-done", submittedAt: "2020-01-02T00:00:00.000Z" }]);
+    renderOverview({ nearAccount: null, canOrganize: true });
+    expect(await screen.findByTestId("dashboard-node.report-event-missing")).toBeTruthy();
+    expect(screen.queryByText("Already Reported")).toBeNull();
   });
 });

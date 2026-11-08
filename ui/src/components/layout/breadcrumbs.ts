@@ -123,6 +123,8 @@ export function crumbsFor(
       return [page(t("dashboard.startCommunity"))];
     case "discover":
       return [page(t("nav.directory"))];
+    case "me":
+      return [page(t("nav.activity"))];
     case "orgs": {
       if (!second) return [page(ORGS.label)];
       if (second === "new") return [ORGS, page(t("nav.newOrganization"))];

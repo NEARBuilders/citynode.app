@@ -16,6 +16,7 @@ import {
   stakePoolAccountQueryOptions,
   stakePoolQueryKeys,
   stakePoolStatsQueryOptions,
+  stakePoolStatusQueryOptions,
   stakePoolTopHoldersQueryOptions,
 } from "./stake-pool";
 
@@ -427,6 +428,32 @@ describe("readStakePoolStatus", () => {
     await expect(
       readStakePoolStatus({ accountId: pool, authClient: fakeAuthClient() }),
     ).rejects.toThrow();
+  });
+});
+
+describe("stakePoolStatusQueryOptions", () => {
+  it("reads the validator set once for every pool on the network", async () => {
+    vi.spyOn(Near.prototype, "view").mockImplementation(async (contractId, method) =>
+      method === "get_owner_id"
+        ? `owner-of-${contractId}`
+        : method === "get_reward_fee_fraction"
+          ? { numerator: 1, denominator: 10 }
+          : false,
+    );
+    const call = vi.fn(async () => ({
+      current_validators: [{ account_id: "a.poolv1.near" }],
+      next_validators: [{ account_id: "b.poolv1.near" }],
+    }));
+    vi.spyOn(Near.prototype, "rpc", "get").mockReturnValue({ call } as never);
+    const queryClient = new QueryClient();
+    const authClient = fakeAuthClient();
+    const statuses = await Promise.all(
+      ["a.poolv1.near", "b.poolv1.near", "c.poolv1.near"].map((accountId) =>
+        queryClient.fetchQuery(stakePoolStatusQueryOptions({ accountId, authClient, queryClient })),
+      ),
+    );
+    expect(statuses.map((status) => status.validatorSet)).toEqual(["current", "next", "none"]);
+    expect(call).toHaveBeenCalledTimes(1);
   });
 });
 

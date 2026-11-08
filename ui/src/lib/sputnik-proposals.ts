@@ -85,6 +85,52 @@ export async function readRecentDaoProposals(
   return [...(proposals ?? [])].sort((a, b) => b.id - a.id);
 }
 
+export interface DaoProposalPage {
+  proposals: SputnikProposal[];
+  nextBefore: number | null;
+}
+
+const MAX_EMPTY_RANGES = 5;
+
+// KEEP: removed proposals leave ID gaps, so a page can be short or, after a long run of removals, empty with a non-null nextBefore.
+export async function readDaoProposalPage(
+  daoAccountId: string,
+  { before, pageSize = 20 }: { before?: number; pageSize?: number } = {},
+): Promise<DaoProposalPage> {
+  let end =
+    before ?? Number((await getNear().view<number>(daoAccountId, "get_last_proposal_id", {})) ?? 0);
+  for (let range = 0; end > 0 && range < MAX_EMPTY_RANGES; range++) {
+    const fromIndex = Math.max(0, end - pageSize);
+    const proposals =
+      (await getNear().view<SputnikProposal[]>(daoAccountId, "get_proposals", {
+        from_index: fromIndex,
+        limit: end - fromIndex,
+      })) ?? [];
+    end = fromIndex;
+    if (proposals.length > 0) {
+      return {
+        proposals: [...proposals].sort((a, b) => b.id - a.id),
+        nextBefore: end > 0 ? end : null,
+      };
+    }
+  }
+  return { proposals: [], nextBefore: end > 0 ? end : null };
+}
+
+export async function readDaoProposal(
+  daoAccountId: string,
+  id: number,
+): Promise<SputnikProposal | null> {
+  try {
+    return (await getNear().view<SputnikProposal>(daoAccountId, "get_proposal", { id })) ?? null;
+  } catch (error) {
+    if (String(error instanceof Error ? error.message : error).includes("ERR_NO_PROPOSAL")) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /** Reads the most recent proposals, newest first. */
 export async function fetchDaoProposals(
   daoAccountId: string,
@@ -480,6 +526,16 @@ export function isOpenProposal(
   if (proposal.status !== "InProgress" && proposal.status !== "Failed") return false;
   if (!policy?.proposal_period) return true;
   return BigInt(proposal.submission_time) + BigInt(policy.proposal_period) >= chainNowNs;
+}
+
+// KEEP: Sputnik keeps an expired proposal stored as InProgress until someone finalizes it.
+export function displayedProposalStatus(
+  proposal: SputnikProposal,
+  policy: Pick<SputnikPolicy, "proposal_period"> | null | undefined,
+  chainNowNs: bigint | null | undefined,
+): string {
+  if (proposal.status !== "InProgress" || chainNowNs == null) return proposal.status;
+  return isOpenProposal(proposal, policy, chainNowNs) ? proposal.status : "Expired";
 }
 
 export function findPendingProposalForPlan(

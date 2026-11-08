@@ -63,6 +63,27 @@ describe("app message catalogs", () => {
     expect(appCatalogs.zh["members.notAvailable"]).toBe("暂无数据");
   });
 
+  it("agrees station labels with the feminine station noun in Spanish and French", () => {
+    const stationLabels = [
+      "station.keepOpen",
+      "station.revoked",
+      "station.expired",
+      "station.usedUp",
+    ] as const;
+    expect(stationLabels.map((id) => appCatalogs.es[id])).toEqual([
+      "Mantener abierta",
+      "Revocada",
+      "Caducada",
+      "agotada",
+    ]);
+    expect(stationLabels.map((id) => appCatalogs.fr[id])).toEqual([
+      "Garder ouverte",
+      "Révoquée",
+      "Expirée",
+      "épuisée",
+    ]);
+  });
+
   it("loads translated landing headings", () => {
     expect(appCatalogs.es["landing.title"]).toBe("Tu ciudad, en la red.");
     expect(appCatalogs.fr["landing.title"]).toBe("Votre ville, sur le réseau.");

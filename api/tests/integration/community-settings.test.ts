@@ -38,6 +38,34 @@ describe("community settings authorization", () => {
         client.createBinding({ tenantId: tenant.id, hostname: "forbidden.citynode.app" }),
       ).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
+    const nodeOpsClient = (activeOrgId: string) => {
+      const base = orgContext(`node-ops-${activeOrgId}`, activeOrgId, "member") as Record<
+        string,
+        unknown
+      >;
+      const team = {
+        id: `team-node-ops-${activeOrgId}`,
+        name: "Node Ops",
+        areas: ["node-operations"],
+      };
+      return getPluginClient({
+        ...base,
+        organization: {
+          ...(base.organization as Record<string, unknown>),
+          teams: [team],
+          activeTeamId: team.id,
+        },
+      });
+    };
+    const nodeOps = await nodeOpsClient(orgId);
+    expect(await nodeOps.listTenants()).toContainEqual(expect.objectContaining({ id: tenant.id }));
+    await expect(
+      nodeOps.listTenantBindingsForTenant({ tenantId: tenant.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const otherOrgNodeOps = await nodeOpsClient("other-org");
+    expect(await otherOrgNodeOps.listTenants()).not.toContainEqual(
+      expect.objectContaining({ id: tenant.id }),
+    );
     for (const context of [
       orgContext("owner", orgId, "owner"),
       orgContext("admin", orgId, "admin"),

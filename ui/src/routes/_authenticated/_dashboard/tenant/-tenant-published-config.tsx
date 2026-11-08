@@ -5,8 +5,7 @@ import {
   ShieldCheckIcon,
 } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "@tanstack/react-router";
-import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   buildDraftFromResolvedConfig,
@@ -35,6 +34,7 @@ import {
   type TenantConfigPublishMode,
 } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
+import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { ConfigField } from "./-config-field";
 import { CustomUiBundleFields } from "./-custom-ui-bundle-fields";
 import { runIntegrityPreflight } from "./-integrity-preflight";
@@ -65,12 +65,7 @@ export function TenantPublishedConfig({
   const connection = useDaoConnection();
   const nearAccountId = useNearAccount();
   const activeNetwork = auth.useActiveNetwork();
-  const sectionRef = useRef<HTMLElement>(null);
-  const hash = useLocation({ select: (location) => location.hash });
-
-  useEffect(() => {
-    if (hash === PUBLISHED_CONFIG_SECTION_ID) sectionRef.current?.scrollIntoView();
-  }, [hash]);
+  const sectionRef = useScrollToHash(PUBLISHED_CONFIG_SECTION_ID);
 
   const tenantAccount = tenant.accountId;
   const daoOwned = tenant.ownerKind === "dao";

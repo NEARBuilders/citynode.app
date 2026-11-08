@@ -24,12 +24,14 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import { nodeMemberCountQueryOptions } from "@/lib/queries/member-directory";
+import { nodeDaoQueryOptions } from "@/lib/queries/node-dao";
 import {
   childNodesQueryOptions,
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
 import { socialMeta } from "@/lib/social-meta";
+import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
 export const Route = createFileRoute("/_public/n/$slug")({
@@ -105,6 +107,11 @@ function NodePage() {
 
   const { data: memberCount } = useQuery({
     ...nodeMemberCountQueryOptions(apiClient, nodeId ?? ""),
+    enabled: !!nodeId,
+  });
+
+  const { data: nodeDao } = useQuery({
+    ...nodeDaoQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
   });
 
@@ -214,6 +221,22 @@ function NodePage() {
                 <ArrowUpRightIcon />
               </Button>
             )}
+            {nodeDao?.daoAccountId && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/n/$slug/proposals"
+                    params={{ slug: node.slug }}
+                    search={{ parentId }}
+                    data-testid="node-page.proposals"
+                  />
+                }
+              >
+                {translate("daoProposals.title")}
+              </Button>
+            )}
             <ProposeHomepageCta tenantId={node.tenantId} />
           </div>
         </div>
@@ -300,6 +323,8 @@ function NodePage() {
         sourceNodeId={staking?.sourceNodeId ?? node.id}
         apiClient={apiClient}
       />
+
+      <NearbuildersSection nodeId={node.id} nodeName={node.name} />
     </PageContainer>
   );
 }

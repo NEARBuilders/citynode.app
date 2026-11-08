@@ -1,5 +1,5 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
-import { buildRegistryConfigUrl } from "everything-dev/fastkv";
+import { latestUrlFor, runtimeRefOf } from "everything-dev/registry";
 import type { ReactNode } from "react";
 import { Button, SectionHeader } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
@@ -36,7 +36,10 @@ export function TenantLiveSite({
         : translate("tenant.republishWallet")
       : null;
   const bosUrl = `bos://${tenant.accountId}/${gatewayId}`;
-  const fastKvUrl = buildRegistryConfigUrl(tenant.accountId, gatewayId);
+  const fastKvUrl = latestUrlFor({
+    kind: "runtimeConfig",
+    ref: runtimeRefOf({ accountId: tenant.accountId, gatewayId }),
+  });
 
   return (
     <section className="flex flex-col gap-2">
