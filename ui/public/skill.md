@@ -206,7 +206,6 @@ pnpm run test:regression:browser   # dev:ssr stack; needs Postgres test database
 - `/`
 - `/docs`
 - `/docs/build`
-- `/apply` (redirects to `https://citynode.app/apply`)
 - `/skill`
 - `/skill.md`
 - `/llms.txt`
