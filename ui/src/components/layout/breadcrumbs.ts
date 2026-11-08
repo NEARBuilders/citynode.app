@@ -13,6 +13,7 @@ export interface Crumb {
 export interface CrumbContext {
   appName?: string;
   orgName?: (slug: string) => string | undefined;
+  guideTitle?: (slug: string) => string | undefined;
   detailName?: string;
   tab?: string;
 }
@@ -157,8 +158,11 @@ export function crumbsFor(
       const section = second ? SETTINGS_SECTIONS[second as RemoteSettingsSection] : undefined;
       return section ? [SETTINGS, page(section)] : [page(SETTINGS.label)];
     }
-    case "docs":
-      return second === "build" ? [DOCS, page(t("docs.nav.builders"))] : [page(DOCS.label)];
+    case "docs": {
+      if (!second) return [page(DOCS.label)];
+      if (second === "build") return [DOCS, page(t("docs.nav.builders"))];
+      return [DOCS, page(context.guideTitle?.(second) ?? humanize(second))];
+    }
     case "skill":
       return [DOCS, { label: t("docs.nav.builders"), to: "/docs/build" }, page(t("docs.skill"))];
     case "login":

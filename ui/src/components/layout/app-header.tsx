@@ -13,7 +13,8 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { useAppTranslation } from "@/i18n/runtime";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { resolveGuide } from "@/lib/docs-guides";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { crumbsFor } from "./breadcrumbs";
 import { ThemeToggle } from "./theme-toggle";
@@ -28,6 +29,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ runtimeConfig, actions }: AppHeaderProps) {
   const translate = useAppTranslation();
+  const { locale } = useAppLocale();
   const apiClient = useApiClient();
   const { user, organizations } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
@@ -51,6 +53,8 @@ export function AppHeader({ runtimeConfig, actions }: AppHeaderProps) {
       detailName: adminNodeId ? adminNode?.summary.node.name : undefined,
       appName: getAppName(runtimeConfig),
       orgName: (slug) => organizations.find((org) => org.slug === slug)?.name,
+      guideTitle: (slug) =>
+        pathname.startsWith("/docs/") ? resolveGuide(slug, locale)?.title : undefined,
     },
     translate,
   );

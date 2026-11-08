@@ -254,6 +254,12 @@ describe("docs pages", () => {
       ["Agent skill", undefined],
     ]);
     expect(crumbsFor("/docs").map((crumb) => crumb.label)).toEqual(["Docs"]);
+    expect(crumbsFor("/docs/build").map((crumb) => crumb.label)).toEqual(["Docs", "Builders"]);
+    expect(
+      crumbsFor("/docs/run-a-community", {
+        guideTitle: (slug) => (slug === "run-a-community" ? "Dirigir una comunidad" : undefined),
+      }).map((crumb) => crumb.label),
+    ).toEqual(["Docs", "Dirigir una comunidad"]);
   });
 });
 

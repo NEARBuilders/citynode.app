@@ -15,7 +15,13 @@ import type { ComponentType } from "react";
 import { getAppName } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
 import type { AppMessageId } from "@/i18n/catalogs";
-import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import {
+  resolveAppLocale,
+  translateAppMessage,
+  useAppLocale,
+  useAppTranslation,
+} from "@/i18n/runtime";
+import { listGuides } from "@/lib/docs-guides";
 import { pageTitle } from "@/lib/page-title";
 
 export const Route = createFileRoute("/_public/_docs/docs/")({
@@ -128,6 +134,8 @@ const PATHS: {
 
 function DocsOverview() {
   const translate = useAppTranslation();
+  const { locale } = useAppLocale();
+  const guides = listGuides(locale);
   const { runtimeConfig } = Route.useLoaderData();
   const appName = getAppName(runtimeConfig);
 
@@ -169,6 +177,33 @@ function DocsOverview() {
           </section>
         ))}
       </div>
+
+      {guides.length > 0 ? (
+        <section className="flex flex-col gap-3" data-testid="docs.guides">
+          <h2 className="text-xl font-semibold text-foreground">{translate("docs.nav.guides")}</h2>
+          <ul className="flex flex-col gap-2">
+            {guides.map((guide) => (
+              <li key={guide.slug}>
+                <Button
+                  variant="link"
+                  className="h-auto p-0"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to="/docs/$guide"
+                      params={{ guide: guide.slug }}
+                      data-testid={`docs.guide-${guide.slug}`}
+                    />
+                  }
+                >
+                  {guide.title}
+                  <ArrowRightIcon />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-4" data-testid="about.paths">
         <h2 className="text-xl font-semibold text-foreground">{translate("about.paths.title")}</h2>
