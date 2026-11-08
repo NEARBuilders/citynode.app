@@ -57,7 +57,7 @@ vi.mock("@tanstack/react-router", () => ({
   }: {
     children?: ReactNode;
     to?: string;
-    params?: { accountId?: string; activityId?: string };
+    params?: { accountId?: string; activityId?: string; nodeId?: string };
     hash?: string;
     "data-testid"?: string;
   }) => {
@@ -66,7 +66,9 @@ vi.mock("@tanstack/react-router", () => ({
         ? `/${params?.accountId}`
         : to === "/activity/$activityId"
           ? `/activity/${params?.activityId}`
-          : `/dashboard${hash ? `#${hash}` : ""}`;
+          : to === "/nodes/$nodeId/events/$activityId/edit"
+            ? `/nodes/${params?.nodeId}/events/${params?.activityId}/edit`
+            : `/dashboard${hash ? `#${hash}` : ""}`;
     return (
       <a href={href} data-testid={testId}>
         {children}
@@ -962,13 +964,46 @@ describe("node overview member layout", () => {
     expect(notice.textContent).toContain("Visitors can't find your community");
   });
 
-  it("opens each upcoming event on its activity page", async () => {
+  it("opens a live upcoming event on its activity page", async () => {
+    stubChain();
+    harness.listing = () => Promise.resolve(listing);
+    harness.activities = async () => [upcomingEvent];
+    renderOverview({ nearAccount: null });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId(`dashboard-node.event-${upcomingEvent.id}`).getAttribute("href"),
+      ).toBe(`/activity/${upcomingEvent.id}`),
+    );
+    expect(screen.getByTestId(`dashboard-node.event-${upcomingEvent.id}`).textContent).toBe(
+      "Launch Night",
+    );
+  });
+
+  it("does not send a member to a public page that would 404", async () => {
     stubChain();
     harness.activities = async () => [upcomingEvent];
     renderOverview({ nearAccount: null });
+    const title = await screen.findByTestId(`dashboard-node.event-${upcomingEvent.id}`);
+    expect(title.textContent).toBe("Launch Night");
+    expect(title.getAttribute("href")).toBeNull();
+  });
+
+  it("opens a draft upcoming event on the edit page for an organizer", async () => {
+    stubChain();
+    harness.activities = async () => [{ ...upcomingEvent, status: "draft" }];
+    renderOverview({ nearAccount: "owner.near", canManage: true });
     const link = await screen.findByTestId(`dashboard-node.event-${upcomingEvent.id}`);
     expect(link.textContent).toBe("Launch Night");
-    expect(link.getAttribute("href")).toBe(`/activity/${upcomingEvent.id}`);
+    expect(link.getAttribute("href")).toBe(`/nodes/node-1/events/${upcomingEvent.id}/edit`);
+  });
+
+  it("opens a published event on the edit page when the community is off the map", async () => {
+    stubChain();
+    harness.activities = async () => [upcomingEvent];
+    renderOverview({ nearAccount: "owner.near", canManage: true });
+    const link = await screen.findByTestId(`dashboard-node.event-${upcomingEvent.id}`);
+    expect(link.textContent).toBe("Launch Night");
+    expect(link.getAttribute("href")).toBe(`/nodes/node-1/events/${upcomingEvent.id}/edit`);
   });
 
   it("puts coming up, updates and channels above members for a plain member", async () => {

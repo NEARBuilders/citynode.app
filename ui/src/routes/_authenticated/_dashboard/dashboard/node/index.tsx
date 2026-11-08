@@ -34,7 +34,12 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
-import { eventVisibility, isWaitingImport } from "@/lib/event-visibility";
+import {
+  type EventTitleLink,
+  eventTitleLink,
+  eventVisibility,
+  isWaitingImport,
+} from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
 import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
 import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
@@ -62,6 +67,43 @@ function Stat({ label, value, testId }: { label: string; value: string; testId: 
       <dd className="text-3xl font-semibold tabular-nums">{value}</dd>
     </div>
   );
+}
+
+function UpcomingEventTitle({
+  event,
+  nodeId,
+  link,
+}: {
+  event: { id: string; title: string };
+  nodeId: string;
+  link: EventTitleLink;
+}) {
+  const testId = `dashboard-node.event-${event.id}`;
+  if (link === "activity") {
+    return (
+      <Link
+        to="/activity/$activityId"
+        params={{ activityId: event.id }}
+        className="hover:underline"
+        data-testid={testId}
+      >
+        {event.title}
+      </Link>
+    );
+  }
+  if (link === "edit") {
+    return (
+      <Link
+        to="/nodes/$nodeId/events/$activityId/edit"
+        params={{ nodeId, activityId: event.id }}
+        className="hover:underline"
+        data-testid={testId}
+      >
+        {event.title}
+      </Link>
+    );
+  }
+  return <span data-testid={testId}>{event.title}</span>;
 }
 
 const REDEMPTION_STATS = [
@@ -369,14 +411,14 @@ function NodeOverview() {
                 </ItemMedia>
                 <ItemContent className="min-w-0">
                   <ItemTitle className="flex-wrap">
-                    <Link
-                      to="/activity/$activityId"
-                      params={{ activityId: event.id }}
-                      className="hover:underline"
-                      data-testid={`dashboard-node.event-${event.id}`}
-                    >
-                      {event.title}
-                    </Link>
+                    <UpcomingEventTitle
+                      event={event}
+                      nodeId={selectedNode.id}
+                      link={eventTitleLink(
+                        eventVisibility(event, visibilityContext),
+                        canManage || canOrganize,
+                      )}
+                    />
                     <EventVisibilityBadge activity={event} context={visibilityContext} />
                   </ItemTitle>
                   <ItemDescription>
