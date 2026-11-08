@@ -9,7 +9,6 @@ export type GuideSummary = {
 
 export type GuideDocument = GuideSummary & {
   description: string;
-  markdown: string;
   body: string;
 };
 
@@ -102,7 +101,6 @@ function documentFromMarkdown(slug: string, markdown: string): GuideDocument {
     slug,
     title,
     description: descriptionFromMarkdown(markdown, title),
-    markdown,
     body: stripLeadingHeading(markdown),
   };
 }

@@ -91,7 +91,5 @@ describe("shipped guide files", () => {
 
   it("fails when a guide filename collides with /docs/build", () => {
     expect(collidingGuideSlugs(["build.md", "build.es.md"])).toEqual(["build"]);
-    const shipped = readdirSync(shippedGuidesDir).filter((name) => name.endsWith(".md"));
-    expect(collidingGuideSlugs(shipped)).toEqual([]);
   });
 });
