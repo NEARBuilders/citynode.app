@@ -79,7 +79,7 @@ export function crumbsFor(
   const ORGS: Crumb = { label: t("nav.organizations"), to: "/orgs" };
   const ADMIN: Crumb = { label: t("nav.admin"), to: "/admin" };
   const SETTINGS: Crumb = { label: t("nav.settings"), to: "/settings" };
-  const DOCS: Crumb = { label: t("nav.docs"), to: "/about" };
+  const DOCS: Crumb = { label: t("nav.docs"), to: "/docs" };
 
   const segments = pathname.split("/").filter(Boolean);
   const [first, second, third, fourth, fifth] = segments;
@@ -157,10 +157,10 @@ export function crumbsFor(
       const section = second ? SETTINGS_SECTIONS[second as RemoteSettingsSection] : undefined;
       return section ? [SETTINGS, page(section)] : [page(SETTINGS.label)];
     }
-    case "about":
-      return [page(DOCS.label)];
+    case "docs":
+      return second === "build" ? [DOCS, page(t("docs.nav.builders"))] : [page(DOCS.label)];
     case "skill":
-      return [DOCS, page(t("about.skill"))];
+      return [DOCS, { label: t("docs.nav.builders"), to: "/docs/build" }, page(t("docs.skill"))];
     case "login":
       return [page(t("nav.signIn"))];
     case "onboard":

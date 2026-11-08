@@ -48,11 +48,8 @@ export function PublicShellFooter() {
         data-testid="public-footer"
         className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
       >
-        <Link to="/about" className="hover:text-foreground">
-          {t("footer.about")}
-        </Link>
-        <Link to="/skill" className="hover:text-foreground">
-          {t("footer.skill")}
+        <Link to="/docs" className="hover:text-foreground">
+          {t("nav.docs")}
         </Link>
         <a
           href="https://nearbuilders.org"

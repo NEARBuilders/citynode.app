@@ -1,12 +1,18 @@
 import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const metadataMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
-  "meta.about": ["About", "Acerca de", "À propos", "关于"],
-  "meta.aboutDescription": [
-    "What CityNode is and how to build on it.",
-    "Qué es CityNode y cómo desarrollar con él.",
-    "Ce qu’est CityNode et comment y développer.",
-    "了解 CityNode 及其开发方式。",
+  "meta.docs": ["Docs", "Documentación", "Documentation", "文档"],
+  "meta.docsDescription": [
+    "What CityNode is, how to join a community, and how staking works.",
+    "Qué es CityNode, cómo unirte a una comunidad y cómo funciona la delegación.",
+    "Ce qu’est CityNode, comment rejoindre une communauté et comment fonctionne le staking.",
+    "了解 CityNode、如何加入社区以及质押如何运作。",
+  ],
+  "meta.docsBuildDescription": [
+    "Agent skill, API reference and source code for building on CityNode.",
+    "Habilidad del agente, referencia de la API y código fuente para desarrollar sobre CityNode.",
+    "Compétence de l’agent, référence de l’API et code source pour développer sur CityNode.",
+    "在 CityNode 上开发所需的助手技能、API 参考和源代码。",
   ],
   "meta.applyDescription": [
     "Apply to start a CityNode community.",

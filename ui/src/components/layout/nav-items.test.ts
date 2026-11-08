@@ -7,6 +7,7 @@ import {
   filterSidebarByRole,
   filterSidebarByRoutes,
   groupSidebarItems,
+  isDocsPath,
   isNavItemActive,
   type ManifestRoute,
   NAV_ITEMS,
@@ -234,6 +235,25 @@ describe("active state", () => {
     expect(isNavItemActive(events, "/nodes/n1/content", {})).toBe(true);
     expect(isNavItemActive(onboarding, "/nodes/n1/content", {})).toBe(false);
     expect(isNavItemActive(onboarding, "/nodes/n1/content", { tab: "onboarding" })).toBe(true);
+  });
+});
+
+describe("docs pages", () => {
+  it("treats the overview, builder pages and the agent skill as docs", () => {
+    expect(isDocsPath("/docs")).toBe(true);
+    expect(isDocsPath("/docs/build")).toBe(true);
+    expect(isDocsPath("/skill")).toBe(true);
+    expect(isDocsPath("/docsearch")).toBe(false);
+    expect(isDocsPath("/skill.md")).toBe(false);
+  });
+
+  it("chains the agent skill under Docs and Builders", () => {
+    expect(crumbsFor("/skill").map((crumb) => [crumb.label, crumb.to])).toEqual([
+      ["Docs", "/docs"],
+      ["Builders", "/docs/build"],
+      ["Agent skill", undefined],
+    ]);
+    expect(crumbsFor("/docs").map((crumb) => crumb.label)).toEqual(["Docs"]);
   });
 });
 

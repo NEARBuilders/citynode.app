@@ -9,13 +9,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAppTranslation } from "@/i18n/runtime";
+import { isDocsPath } from "./nav-items";
 import { ThemeToggle } from "./theme-toggle";
 import { UserNav } from "./user-nav";
 
 const PUBLIC_LINKS = [
   { message: "nav.explore", to: "/explore", icon: CompassIcon, slug: "explore" },
   { message: "nav.stake", to: "/stake", icon: CoinsIcon, slug: "stake" },
-  { message: "nav.docs", to: "/about", icon: BookOpenIcon, slug: "docs" },
+  { message: "nav.docs", to: "/docs", icon: BookOpenIcon, slug: "docs" },
 ] as const;
 
 interface PublicHeaderProps {
@@ -24,7 +25,7 @@ interface PublicHeaderProps {
 }
 
 function isActive(pathname: string, to: string) {
-  if (to === "/about") return pathname === "/about" || pathname === "/skill";
+  if (to === "/docs") return isDocsPath(pathname);
   if (to === "/explore") return pathname === "/explore" || pathname.startsWith("/n/");
   return pathname === to || pathname.startsWith(`${to}/`);
 }

@@ -67,11 +67,11 @@ function AdminSystem() {
       />
 
       <section className="flex flex-col gap-6">
-        <SectionHeader title={translate("about.runtime")} sectionTestId="admin.heading.runtime" />
+        <SectionHeader title={translate("common.runtime")} sectionTestId="admin.heading.runtime" />
         <div className="flex flex-col">
           <InfoRow label={translate("common.account")} value={runtime?.accountId ?? account} mono />
           <InfoRow label={translate("common.name")} value={appName} />
-          <InfoRow label={translate("about.gateway")} value={runtime?.gatewayId} mono />
+          <InfoRow label={translate("common.gateway")} value={runtime?.gatewayId} mono />
           <InfoRow label={translate("admin.system.basePath")} value={runtimeBasePath ?? "/"} mono />
         </div>
       </section>
@@ -85,7 +85,7 @@ function AdminSystem() {
           <InfoRow label={translate("admin.system.environment")} value={env ?? "—"} mono />
           <InfoRow label={translate("common.network")} value={networkId ?? "—"} mono />
           <InfoRow label={translate("admin.system.host")} value={hostUrl ?? "—"} mono />
-          <InfoRow label={translate("about.repository")} value={repository} mono />
+          <InfoRow label={translate("common.repository")} value={repository} mono />
         </div>
       </section>
 

@@ -202,6 +202,10 @@ export function buildNavItems(
 
 export const NAV_ITEMS: SidebarItem[] = buildNavItems({ canCurate: true });
 
+export function isDocsPath(pathname: string) {
+  return pathname === "/docs" || pathname.startsWith("/docs/") || pathname === "/skill";
+}
+
 export function navSlug(item: Pick<SidebarItem, "slug" | "label">) {
   return item.slug ?? item.label.toLowerCase().replace(/\s+/g, "-");
 }

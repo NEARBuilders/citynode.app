@@ -1,5 +1,4 @@
 import {
-  ArrowLeftIcon,
   ArrowUpRightIcon,
   CheckIcon,
   CopyIcon,
@@ -7,7 +6,7 @@ import {
   SparkleIcon,
   TerminalIcon,
 } from "@phosphor-icons/react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getAppName } from "@/app";
@@ -23,7 +22,7 @@ const INTENT_COMMAND = "npx @tanstack/intent@latest load everything-dev";
 
 const INTENT_REGISTRY_URL = "https://tanstack.com/intent/registry/everything-dev";
 
-export const Route = createFileRoute("/_public/skill")({
+export const Route = createFileRoute("/_public/_docs/skill")({
   loader: async ({ context }) => {
     const runtimeConfig = context.runtimeConfig;
 
@@ -48,7 +47,7 @@ export const Route = createFileRoute("/_public/skill")({
       {
         title: pageTitle(
           translateAppMessage(
-            "about.skill",
+            "docs.skill",
             undefined,
             resolveAppLocale(undefined, match.context.locale),
           ),
@@ -93,21 +92,11 @@ function SkillPage() {
 
   return (
     <PageContainer variant="default">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-mb-6 self-start"
-        nativeButton={false}
-        render={<Link to="/about" data-testid="skill.back" />}
-      >
-        <ArrowLeftIcon />
-        {translate("about.title")}
-      </Button>
       <PageHeader
         headerTestId="skill.heading"
         icon={SparkleIcon}
-        label={translate("common.docs")}
-        title={translate("about.skill")}
+        label={translate("docs.nav.build")}
+        title={translate("docs.skill")}
         description={translate("skill.descriptionNamed", { name: appName ?? "" })}
         actions={
           <>

@@ -1,6 +1,5 @@
 import {
   ArrowRightIcon,
-  ArrowUpRightIcon,
   CoinsIcon,
   MagnifyingGlassIcon,
   MapPinAreaIcon,
@@ -223,17 +222,10 @@ function LandingPage() {
           <Button
             variant="ghost"
             nativeButton={false}
-            render={(props) => (
-              <a
-                {...props}
-                href="https://www.near.org/blog/legion-city-nodes"
-                target="_blank"
-                rel="noopener noreferrer"
-              />
-            )}
+            render={<Link to="/docs" preload="intent" data-testid="landing-docs" />}
           >
             {t("landing.cta.about")}
-            <ArrowUpRightIcon />
+            <ArrowRightIcon />
           </Button>
         </div>
       </section>
