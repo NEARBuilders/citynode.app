@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -13,6 +14,39 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+export type PlaceBoundary =
+  | { type: "Polygon"; coordinates: number[][][] }
+  | { type: "MultiPolygon"; coordinates: number[][][][] };
+
+export const places = pgTable(
+  "places",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    parentId: uuid("parent_id").references((): AnyPgColumn => places.id),
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    boundary: jsonb("boundary").$type<PlaceBoundary>(),
+    label: text("label"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    parentIdx: index("places_parent_idx").on(t.parentId),
+  }),
+);
+
+export const placeAliasKind = pgEnum("place_alias_kind", ["geonames", "iso", "legacy"]);
+
+export const placeAliases = pgTable("place_aliases", {
+  value: text("value").primaryKey(),
+  kind: placeAliasKind("kind").notNull(),
+  placeId: uuid("place_id")
+    .notNull()
+    .references(() => places.id, { onDelete: "cascade" }),
+});
 
 export const tenantStatus = pgEnum("tenant_status", [
   "active",
@@ -54,6 +88,10 @@ export const nodes = pgTable(
     name: text("name").notNull(),
     parentId: uuid("parent_id").references((): AnyPgColumn => nodes.id, { onDelete: "set null" }),
     tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+    placeId: uuid("place_id").references((): AnyPgColumn => places.id),
+    orgId: text("org_id"),
+    activatedAt: timestamp("activated_at", { mode: "date", withTimezone: true }),
+    activatedBy: text("activated_by"),
     metadata: jsonb("metadata").$type<NodeMetadata>().default({}).notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
@@ -65,6 +103,7 @@ export const nodes = pgTable(
     rootSlugIdx: uniqueIndex("nodes_root_slug_idx").on(table.slug).where(sql`parent_id IS NULL`),
     parentIdx: index("nodes_parent_idx").on(table.parentId),
     tenantIdx: index("nodes_tenant_idx").on(table.tenantId),
+    placeIdx: uniqueIndex("nodes_place_idx").on(table.placeId).where(sql`place_id IS NOT NULL`),
   }),
 );
 
