@@ -1773,6 +1773,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               releaseCommunityOrganization(auth, {
                 organizationId: recordedOrgId,
                 proposalId: proposal.id,
+                reviewerUserId: context.userId ?? context.user?.id ?? "",
               }),
             catch: (error) =>
               error instanceof ORPCError

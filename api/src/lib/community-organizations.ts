@@ -413,39 +413,70 @@ export async function provisionCommunityOrganization(
   };
 }
 
+type ReleaseOutcome = {
+  released: boolean;
+  keptReason: "not_found" | "in_use" | "existing" | null;
+};
+
+async function ensureOwnerMembership(
+  auth: AuthClient,
+  organizationId: string,
+  reviewerUserId: string,
+) {
+  const { members } = await auth.listMembers({ organizationId });
+  const reviewer = members.find((member) => member.userId === reviewerUserId);
+  if (reviewer?.role.split(",").some((role) => role.trim() === "owner")) return;
+  if (reviewer) await auth.leaveOrganization({ organizationId });
+  await auth.addMember({ userId: reviewerUserId, role: "owner", organizationId });
+}
+
 export async function releaseCommunityOrganization(
   auth: AuthClient,
-  input: { organizationId: string; proposalId: string },
-): Promise<{ released: boolean; keptReason: "not_found" | "in_use" | "existing" | null }> {
-  const organization = await fetchOrganization(auth, input.organizationId);
-  if (!organization || organization.metadata?.communityProposalId !== input.proposalId) {
+  input: { organizationId: string; proposalId: string; reviewerUserId: string },
+): Promise<ReleaseOutcome> {
+  const summary = await auth.getOrganizationForAdmin({ organizationId: input.organizationId });
+  if (!summary || summary.metadata?.communityProposalId !== input.proposalId) {
     return { released: false, keptReason: "not_found" };
   }
-  if (organization.metadata?.communityLinkedOrg === "true") {
+  if (summary.metadata?.communityLinkedOrg === "true") {
     return { released: false, keptReason: "existing" };
   }
+  const { organization, joined } = await openOrganization(
+    auth,
+    summary,
+    input.reviewerUserId,
+    "owner",
+  );
+  const keep = async (keptReason: "in_use"): Promise<ReleaseOutcome> => {
+    if (joined) {
+      await auth.leaveOrganization({ organizationId: organization.id }).catch(() => undefined);
+    }
+    return { released: false, keptReason };
+  };
   const provisioned = new Set(
     [
       organization.requestedBy,
       organization.metadata?.communityApplicantId,
       organization.metadata?.communityReviewerId,
       ...joinedReviewerIds(organization.metadata ?? {}),
+      ...(joined ? [input.reviewerUserId] : []),
     ].filter((id): id is string => typeof id === "string"),
   );
   if (organization.members.some((member) => !provisioned.has(member.userId))) {
-    return { released: false, keptReason: "in_use" };
+    return keep("in_use");
   }
   const applicantAccountId = organization.metadata?.communityApplicantAccountId;
   const otherInvitations = (organization.invitations ?? []).filter(
     (invitation) => !applicantAccountId || invitation.nearAccountId !== applicantAccountId,
   );
   if (otherInvitations.length > 0) {
-    return { released: false, keptReason: "in_use" };
+    return keep("in_use");
   }
   const codes = await auth.listOnboardingCodes({ organizationId: organization.id });
   if (codes.length > 0) {
-    return { released: false, keptReason: "in_use" };
+    return keep("in_use");
   }
+  await ensureOwnerMembership(auth, organization.id, input.reviewerUserId);
   await auth.deleteOrganization({ organizationId: organization.id });
   return { released: true, keptReason: null };
 }

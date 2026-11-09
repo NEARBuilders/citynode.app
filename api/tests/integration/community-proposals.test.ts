@@ -453,8 +453,20 @@ describe("approved community proposal provisioning", () => {
               memberOrganization(sessionId, input.organizationId);
               return inviteMember(sessionId ?? "", input);
             },
-            listOnboardingCodes: async () => [],
-            deleteOrganization: (input: { organizationId: string }) => deleteOrganization(input),
+            listOnboardingCodes: async ({ organizationId }: { organizationId: string }) => {
+              memberOrganization(sessionId, organizationId);
+              return [];
+            },
+            deleteOrganization: async (input: { organizationId: string }) => {
+              const organization = memberOrganization(sessionId, input.organizationId);
+              const caller = organization.members.find((member) => member.userId === sessionId);
+              if (caller?.role !== "owner") {
+                throw new ORPCError("FORBIDDEN", {
+                  message: "You are not allowed to delete this organization",
+                });
+              }
+              return deleteOrganization(input);
+            },
           };
         },
         router: {},
@@ -1187,6 +1199,62 @@ describe("approved community proposal provisioning", () => {
       organization: { released: true, keptReason: null },
     });
     expect(deleteOrganization).toHaveBeenCalledWith({ organizationId: "org-medan" });
+  });
+
+  it("lets an admin who is not in the organization remove a failed setup", async () => {
+    proposals.set("palu", savedProposal("prop-palu", "palu"));
+    const first = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    await first.applyCommunityProposal({
+      proposalId: "prop-palu",
+      entityId: "palu",
+      hostname: "palu.citynode.app",
+    });
+    const failed: Record<string, unknown> | undefined = proposals.get("palu");
+    if (failed) failed.applyStatus = "failed";
+    const outsider = await getPluginClient(authedContext("outside-reviewer", "admin"));
+    deleteOrganization.mockClear();
+    expect(
+      await outsider.releaseCommunityProposal({
+        proposalId: "prop-palu",
+        entityId: "palu",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).toEqual({
+      community: { released: true, keptReason: null },
+      organization: { released: true, keptReason: null },
+    });
+    expect(deleteOrganization).toHaveBeenCalledWith({ organizationId: "org-palu" });
+    expect(organizations.has("org-palu")).toBe(false);
+  });
+
+  it("keeps an organization that is in use and leaves it again", async () => {
+    proposals.set("ambon", savedProposal("prop-ambon", "ambon"));
+    const first = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    await first.applyCommunityProposal({
+      proposalId: "prop-ambon",
+      entityId: "ambon",
+      hostname: "ambon.citynode.app",
+    });
+    const organization = organizations.get("org-ambon")!;
+    organization.members.push({
+      id: "member-ambon-extra",
+      userId: "user-extra",
+      organizationId: "org-ambon",
+      role: "member",
+    });
+    const failed: Record<string, unknown> | undefined = proposals.get("ambon");
+    if (failed) failed.applyStatus = "failed";
+    const outsider = await getPluginClient(authedContext("outside-reviewer", "admin"));
+    deleteOrganization.mockClear();
+    expect(
+      await outsider.releaseCommunityProposal({
+        proposalId: "prop-ambon",
+        entityId: "ambon",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).toMatchObject({ organization: { released: false, keptReason: "in_use" } });
+    expect(deleteOrganization).not.toHaveBeenCalled();
+    expect(organization.members.map((member) => member.userId)).not.toContain("outside-reviewer");
   });
 
   it("records a new organization before approving it", async () => {
