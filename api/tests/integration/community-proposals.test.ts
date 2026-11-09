@@ -124,6 +124,28 @@ function fakeOrgOutput(organization: FakeOrganization) {
 
 const notFound = (message: string) => new ORPCError("NOT_FOUND", { message });
 
+function fakeSummary(organization: FakeOrganization) {
+  return {
+    id: organization.id,
+    name: organization.name,
+    slug: organization.slug,
+    logo: null,
+    status: organization.status,
+    requestedBy: organization.requestedBy,
+    rejectionReason: null,
+    metadata: { ...organization.metadata },
+  };
+}
+
+function memberOrganization(sessionId: string | null, organizationId?: string) {
+  const organization = organizations.get(organizationId ?? "");
+  if (!organization) throw notFound("Organization not found");
+  if (!organization.members.some((member) => member.userId === sessionId)) {
+    throw new ORPCError("FORBIDDEN", { message: "User is not a member of the organization" });
+  }
+  return organization;
+}
+
 const createOrganization = vi.fn(
   async ({
     name,
@@ -146,7 +168,16 @@ const createOrganization = vi.fn(
       status: "pending",
       requestedBy,
       metadata: metadata ? { ...metadata } : {},
-      members: [],
+      members: requestedBy
+        ? [
+            {
+              id: `member-${++memberCounter}`,
+              userId: requestedBy,
+              organizationId: `org-${slug}`,
+              role: "owner",
+            },
+          ]
+        : [],
       invitations: [],
       teams: [],
     };
@@ -245,6 +276,11 @@ describe("approved community proposal provisioning", () => {
       auth: {
         client: (context?: { user?: { id?: string; role?: string | null } }) => {
           const sessionId = context?.user?.id ?? null;
+          const requireAdmin = () => {
+            if (context?.user?.role !== "admin") {
+              throw new ORPCError("FORBIDDEN", { message: "Admin access required" });
+            }
+          };
           return {
             getFullOrganization: async (input: {
               organizationId?: string;
@@ -252,7 +288,25 @@ describe("approved community proposal provisioning", () => {
             }) => {
               const organization = findOrganization(input.organizationId, input.organizationSlug);
               if (!organization) throw notFound("Organization not found");
-              return fakeOrgOutput(organization);
+              return fakeOrgOutput(memberOrganization(sessionId, organization.id));
+            },
+            getOrganizationForAdmin: async ({ organizationId }: { organizationId: string }) => {
+              requireAdmin();
+              const organization = organizations.get(organizationId);
+              return organization ? fakeSummary(organization) : null;
+            },
+            listOrganizationRequests: async () => {
+              requireAdmin();
+              return [...organizations.values()]
+                .filter((organization) => organization.status === "pending")
+                .map((organization) => ({ ...fakeSummary(organization), createdAt: fakeNow() }));
+            },
+            leaveOrganization: async ({ organizationId }: { organizationId: string }) => {
+              const organization = memberOrganization(sessionId, organizationId);
+              organization.members = organization.members.filter(
+                (member) => member.userId !== sessionId,
+              );
+              return { success: true };
             },
             checkSlug: async ({ slug }: { slug: string }) => ({
               status: !findOrganization(undefined, slug),
@@ -269,10 +323,27 @@ describe("approved community proposal provisioning", () => {
               organizationId: string;
               decision: "approve" | "reject";
             }) => {
+              requireAdmin();
               const organization = organizations.get(organizationId);
-              if (!organization) throw notFound("Organization not found");
+              if (!organization || organization.status !== "pending") {
+                throw new ORPCError("BAD_REQUEST", {
+                  message: "Organization is no longer pending or does not exist",
+                });
+              }
               organization.status = decision === "approve" ? "active" : "rejected";
-              return fakeOrgOutput(organization);
+              const requester = organization.requestedBy;
+              if (decision === "approve" && requester) {
+                const member = organization.members.find((item) => item.userId === requester);
+                if (member) member.role = "owner";
+                else
+                  organization.members.push({
+                    id: `member-${++memberCounter}`,
+                    userId: requester,
+                    organizationId,
+                    role: "owner",
+                  });
+              }
+              return fakeSummary(organization);
             },
             updateOrganization: async ({
               data,
@@ -281,8 +352,7 @@ describe("approved community proposal provisioning", () => {
               data: { metadata?: Record<string, unknown> };
               organizationId?: string;
             }) => {
-              const organization = organizations.get(organizationId ?? "");
-              if (!organization) throw notFound("Organization not found");
+              const organization = memberOrganization(sessionId, organizationId);
               if (data.metadata !== undefined) {
                 organization.metadata = { ...data.metadata };
               }
@@ -299,6 +369,16 @@ describe("approved community proposal provisioning", () => {
             }) => {
               const organization = organizations.get(organizationId);
               if (!organization) throw notFound("Organization not found");
+              if (organization.status !== "active") {
+                throw new ORPCError("FORBIDDEN", {
+                  message: "Organization approval is required",
+                });
+              }
+              if (organization.members.some((item) => item.userId === userId)) {
+                throw new ORPCError("BAD_REQUEST", {
+                  message: "User is already a member of this organization",
+                });
+              }
               const member: FakeMember = {
                 id: `member-${++memberCounter}`,
                 userId,
@@ -317,15 +397,14 @@ describe("approved community proposal provisioning", () => {
               role: string;
               organizationId?: string;
             }) => {
-              const organization = organizations.get(organizationId ?? "");
-              const member = organization?.members.find((item) => item.id === memberId);
-              if (!organization || !member) throw notFound("Member not found");
+              const organization = memberOrganization(sessionId, organizationId);
+              const member = organization.members.find((item) => item.id === memberId);
+              if (!member) throw notFound("Member not found");
               member.role = role;
               return { ...member, createdAt: fakeNow(), user: null };
             },
             listMembers: async ({ organizationId }: { organizationId?: string }) => {
-              const organization = organizations.get(organizationId ?? "");
-              if (!organization) throw notFound("Organization not found");
+              const organization = memberOrganization(sessionId, organizationId);
               const members = organization.members.map((member) => ({
                 ...member,
                 createdAt: fakeNow(),
@@ -334,8 +413,7 @@ describe("approved community proposal provisioning", () => {
               return { members, total: members.length };
             },
             listTeams: async ({ organizationId }: { organizationId?: string }) => {
-              const organization = organizations.get(organizationId ?? "");
-              if (!organization) throw notFound("Organization not found");
+              const organization = memberOrganization(sessionId, organizationId);
               return organization.teams.map((team) => ({
                 ...team,
                 createdAt: fakeNow(),
@@ -351,24 +429,28 @@ describe("approved community proposal provisioning", () => {
               areas?: string[];
               organizationId?: string;
             }) => {
+              const organization = memberOrganization(sessionId, organizationId);
               const team: FakeTeam = {
                 id: `team-${++teamCounter}`,
                 name,
-                organizationId: organizationId ?? "",
+                organizationId: organization.id,
                 areas: areas ?? [],
               };
-              organizations.get(organizationId ?? "")?.teams.push(team);
+              organization.teams.push(team);
               return { ...team, createdAt: fakeNow(), updatedAt: fakeNow() };
             },
             listInvitations: async ({ organizationId }: { organizationId?: string }) => [
-              ...(organizations.get(organizationId ?? "")?.invitations ?? []),
+              ...memberOrganization(sessionId, organizationId).invitations,
             ],
-            inviteMember: (input: {
+            inviteMember: async (input: {
               nearAccountId?: string;
               nearNetwork?: "mainnet" | "testnet";
               role: string;
               organizationId?: string;
-            }) => inviteMember(sessionId ?? "", input),
+            }) => {
+              memberOrganization(sessionId, input.organizationId);
+              return inviteMember(sessionId ?? "", input);
+            },
             listOnboardingCodes: async () => [],
             deleteOrganization: (input: { organizationId: string }) => deleteOrganization(input),
           };
@@ -552,9 +634,10 @@ describe("approved community proposal provisioning", () => {
     ).toBe(false);
 
     const resumed = await admin.applyCommunityProposal(input);
-    expect(recordApplyStep.mock.calls.map(([call]) => call.step)).toEqual([
-      "organization",
-      "community",
+    expect(recordApplyStep.mock.calls.map(([call]) => [call.step, call.status])).toEqual([
+      ["organization", "started"],
+      ["organization", "completed"],
+      ["community", "completed"],
     ]);
     expect(await admin.getNode({ nodeId: resumed.nodeId })).toMatchObject({ slug: "denver" });
   });
@@ -773,7 +856,7 @@ describe("approved community proposal provisioning", () => {
       id: "own-oak-park",
       name: "Oak Park Collective",
       slug: "oak-park",
-      status: "active",
+      status: "pending",
       requestedBy: "user-organizer",
       metadata: {},
       members: [
@@ -846,7 +929,7 @@ describe("approved community proposal provisioning", () => {
       id: "taken-bound",
       name: "Bound Collective",
       slug: "bound-slug",
-      status: "active",
+      status: "pending",
       requestedBy: "user-organizer",
       metadata: { communityProposalId: "prop-other" },
       members: [
@@ -864,7 +947,7 @@ describe("approved community proposal provisioning", () => {
       id: "taken-owned",
       name: "Stranger Collective",
       slug: "owned-slug",
-      status: "active",
+      status: "pending",
       requestedBy: "user-stranger",
       metadata: {},
       members: [
@@ -911,7 +994,166 @@ describe("approved community proposal provisioning", () => {
       (await admin.listTenants()).some((item) => item.accountId === "owned-slug.sputnik-dao.near"),
     ).toBe(false);
     expect(organizations.get("taken-bound")?.metadata.communityProposalId).toBe("prop-other");
+    for (const id of ["taken-bound", "taken-owned"]) {
+      const untouched = organizations.get(id)!;
+      expect(untouched.status).toBe("pending");
+      expect(untouched.members.map((member) => member.userId)).not.toContain("platform-reviewer");
+    }
   });
+
+  it("binds the applicant's own active organization when the reviewer is not a member of it", async () => {
+    organizations.set("own-jakarta", {
+      id: "own-jakarta",
+      name: "Jakarta",
+      slug: "jakarta",
+      status: "active",
+      requestedBy: "user-applicant",
+      metadata: {},
+      members: [
+        {
+          id: "member-jakarta-owner",
+          userId: "user-applicant",
+          organizationId: "own-jakarta",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    proposals.set("jakarta", savedProposal("prop-jakarta", "jakarta", { orgId: "own-jakarta" }));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = {
+      proposalId: "prop-jakarta",
+      entityId: "jakarta",
+      hostname: "jakarta.citynode.app",
+    };
+    const applied = await admin.applyCommunityProposal(input);
+    const organization = organizations.get("own-jakarta")!;
+    expect(organization.metadata).toMatchObject({
+      communityProposalId: "prop-jakarta",
+      communityApplicantId: "user-applicant",
+      communityReviewerId: "platform-reviewer",
+    });
+    expect(
+      Object.fromEntries(organization.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
+    expect(organization.teams).toHaveLength(3);
+    expect(proposals.get("jakarta")?.applySteps).toMatchObject({
+      organization: { status: "completed", resourceId: "own-jakarta" },
+    });
+    const node = await admin.getNode({ nodeId: applied.nodeId });
+    const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
+    expect(tenant?.orgId).toBe("own-jakarta");
+  });
+
+  it("refuses a legacy organization the applicant does not own without leaving the reviewer in it", async () => {
+    organizations.set("stranger-surabaya", {
+      id: "stranger-surabaya",
+      name: "Surabaya",
+      slug: "surabaya",
+      status: "active",
+      requestedBy: "user-stranger",
+      metadata: {},
+      members: [
+        {
+          id: "member-surabaya-owner",
+          userId: "user-stranger",
+          organizationId: "stranger-surabaya",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    proposals.set(
+      "surabaya",
+      savedProposal("prop-surabaya", "surabaya", { orgId: "stranger-surabaya" }),
+    );
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    await expect(
+      admin.applyCommunityProposal({
+        proposalId: "prop-surabaya",
+        entityId: "surabaya",
+        hostname: "surabaya.citynode.app",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "The applicant does not own the existing organization",
+    });
+    expect(organizations.get("stranger-surabaya")!.members.map((member) => member.userId)).toEqual([
+      "user-stranger",
+    ]);
+  });
+
+  it("lets another admin resume a setup the first admin started", async () => {
+    proposals.set("medan", savedProposal("prop-medan", "medan"));
+    const first = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const input = { proposalId: "prop-medan", entityId: "medan", hostname: "medan.citynode.app" };
+    recordApplyStep.mockImplementation(async (step: RecordedStep) => {
+      if (step.step === "community") throw new Error("proposals unavailable");
+      return recordApplyStepDefault(step);
+    });
+    try {
+      await expect(first.applyCommunityProposal(input)).rejects.toBeTruthy();
+    } finally {
+      recordApplyStep.mockImplementation(recordApplyStepDefault);
+    }
+    expect(proposals.get("medan")?.applySteps).toMatchObject({
+      organization: { status: "completed", resourceId: "org-medan" },
+    });
+
+    const second = await getPluginClient(authedContext("second-reviewer", "admin"));
+    const resumed = await second.applyCommunityProposal(input);
+    const organization = organizations.get("org-medan")!;
+    expect(
+      Object.fromEntries(organization.members.map((member) => [member.userId, member.role])),
+    ).toEqual({
+      "user-applicant": "owner",
+      "platform-reviewer": "admin",
+      "second-reviewer": "admin",
+    });
+    expect(await second.getNode({ nodeId: resumed.nodeId })).toMatchObject({ slug: "medan" });
+    expect(
+      (await second.listTenants()).filter((item) => item.accountId === "medan.sputnik-dao.near"),
+    ).toHaveLength(1);
+  });
+
+  it("explains a slug held by an organization the reviewer cannot reach", async () => {
+    organizations.set("hidden-bandung", {
+      id: "hidden-bandung",
+      name: "Bandung Builders",
+      slug: "bandung",
+      status: "active",
+      requestedBy: "user-stranger",
+      metadata: {},
+      members: [
+        {
+          id: "member-bandung-owner",
+          userId: "user-stranger",
+          organizationId: "hidden-bandung",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    proposals.set("bandung", savedProposal("prop-bandung", "bandung"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    createOrganization.mockClear();
+    await expect(
+      admin.applyCommunityProposal({
+        proposalId: "prop-bandung",
+        entityId: "bandung",
+        hostname: "bandung.citynode.app",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringMatching(/not a member/),
+    });
+    expect(createOrganization).not.toHaveBeenCalled();
+    expect(organizations.get("hidden-bandung")!.members).toHaveLength(1);
+  });
+
   it("makes the reviewer owner and invites the applicant when the application saved no applicant user", async () => {
     proposals.set(
       "brooklyn",
