@@ -93,7 +93,7 @@ describe("the joined screen's community for an organization", () => {
       publicClient.getOnboardCommunity({ organizationId: `missing-${crypto.randomUUID()}` }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    await provisioner.updateTenant({ tenantId: tenant.id, status: "suspended" });
+    await provisioner.suspendTenant({ tenantId: tenant.id });
     await expect(publicClient.getOnboardCommunity({ organizationId: org })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });

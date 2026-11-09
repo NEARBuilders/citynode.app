@@ -1,6 +1,7 @@
 import type { ApiClient } from "@/app";
 import { AppActionError } from "@/i18n/error-message";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
+import { type ProposalPhaseInput, rejectionReleasesSetup } from "@/lib/proposal-phase";
 import type { Proposal } from "@/lib/queries/proposals";
 import type { DaoTenantPublishInput } from "@/lib/tenant-deploy";
 import { parseNodeProposalPayload } from "@/routes/_authenticated/_dashboard/-node-application";
@@ -238,13 +239,11 @@ export async function rejectProposal({
   reason,
 }: {
   apiClient: ApiClient;
-  proposal: ProposalApplicationInput & Pick<Proposal, "id" | "reviewStatus" | "applyStatus">;
+  proposal: ProposalApplicationInput & Pick<Proposal, "id"> & ProposalPhaseInput;
   reason: string;
 }) {
   const released =
-    proposal.pluginId === "node" &&
-    proposal.reviewStatus === "approved" &&
-    proposal.applyStatus === "failed"
+    proposal.pluginId === "node" && rejectionReleasesSetup(proposal)
       ? await apiClient.releaseCommunityProposal({
           proposalId: proposal.id,
           entityId: proposal.entityId,

@@ -86,7 +86,7 @@ describe("trezu session binding to the SIWN account", () => {
     render(<Probe authAccountId="efiz.near" />);
 
     await waitFor(() => {
-      expect(useDaoConnectionStore.getState()).toMatchObject({
+      expect(useDaoConnectionStore.getState().connection).toMatchObject({
         status: "connected",
         daoAccountId: "dao.sputnik.near",
       });
@@ -103,8 +103,24 @@ describe("trezu session binding to the SIWN account", () => {
     render(<Probe authAccountId="efiz.near" />);
 
     await waitFor(() => expect(harness.disconnect).toHaveBeenCalledOnce());
-    expect(useDaoConnectionStore.getState().status).toBe("idle");
+    expect(useDaoConnectionStore.getState().connection.status).toBe("idle");
     expect(localStorage.getItem(AUTH_ACCOUNT_KEY)).toBeNull();
+  });
+
+  it("restores once per auth account, not on every render", async () => {
+    localStorage.setItem(AUTH_ACCOUNT_KEY, "efiz.near");
+    harness.getConnectedWallet.mockResolvedValue({
+      accounts: [{ accountId: "dao.sputnik.near" }],
+    });
+
+    const view = render(<Probe authAccountId="efiz.near" />);
+    view.rerender(<Probe authAccountId="efiz.near" />);
+    view.rerender(<Probe authAccountId="efiz.near" />);
+
+    await waitFor(() =>
+      expect(useDaoConnectionStore.getState().connection.status).toBe("connected"),
+    );
+    expect(harness.getConnectedWallet).toHaveBeenCalledOnce();
   });
 
   it("disconnects when signed out", async () => {
@@ -116,7 +132,7 @@ describe("trezu session binding to the SIWN account", () => {
     render(<Probe authAccountId={null} />);
 
     await waitFor(() => expect(harness.disconnect).toHaveBeenCalledOnce());
-    expect(useDaoConnectionStore.getState().status).toBe("idle");
+    expect(useDaoConnectionStore.getState().connection.status).toBe("idle");
   });
 
   it("disconnects legacy sessions without a binding", async () => {
@@ -127,7 +143,7 @@ describe("trezu session binding to the SIWN account", () => {
     render(<Probe authAccountId="efiz.near" />);
 
     await waitFor(() => expect(harness.disconnect).toHaveBeenCalledOnce());
-    expect(useDaoConnectionStore.getState().status).toBe("idle");
+    expect(useDaoConnectionStore.getState().connection.status).toBe("idle");
   });
 
   it("leaves the store idle when no trezu session exists", async () => {
@@ -137,7 +153,7 @@ describe("trezu session binding to the SIWN account", () => {
 
     await waitFor(() => expect(harness.getConnectedWallet).toHaveBeenCalled());
     expect(harness.disconnect).not.toHaveBeenCalled();
-    expect(useDaoConnectionStore.getState().status).toBe("idle");
+    expect(useDaoConnectionStore.getState().connection.status).toBe("idle");
   });
 
   it("binds the auth account on connect and always targets the trezu wallet", async () => {
@@ -150,7 +166,7 @@ describe("trezu session binding to the SIWN account", () => {
     expect(accountId).toBe("dao.sputnik.near");
     expect(harness.connect).toHaveBeenCalledWith({ walletId: "trezu-wallet" });
     expect(localStorage.getItem(AUTH_ACCOUNT_KEY)).toBe("efiz.near");
-    expect(useDaoConnectionStore.getState()).toMatchObject({
+    expect(useDaoConnectionStore.getState().connection).toMatchObject({
       status: "connected",
       daoAccountId: "dao.sputnik.near",
     });
@@ -163,7 +179,7 @@ describe("trezu session binding to the SIWN account", () => {
 
     expect(harness.disconnect).toHaveBeenCalledOnce();
     expect(localStorage.getItem(AUTH_ACCOUNT_KEY)).toBeNull();
-    expect(useDaoConnectionStore.getState().status).toBe("idle");
+    expect(useDaoConnectionStore.getState().connection.status).toBe("idle");
   });
 });
 

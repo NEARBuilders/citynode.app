@@ -1,4 +1,4 @@
-import type { ApplyStatus, ReviewStatus } from "./dashboard/node/proposals/-proposal-summary";
+import type { ApplyStatus, ReviewStatus } from "@/lib/proposal-phase";
 
 export const applyStepIds = ["near", "dao", "details"] as const;
 

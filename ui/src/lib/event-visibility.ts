@@ -29,10 +29,10 @@ export function eventVisibility(
   { communityPublic, now }: VisibilityContext,
 ): EventVisibility | null {
   if (activity.luma?.available === false) return "removed";
+  if (activity.status === "cancelled") return "cancelled";
   if (activity.luma && (activity.luma.hidden === true || activity.status === "draft"))
     return "hiddenImport";
   if (activity.status === "draft") return "draft";
-  if (activity.status === "cancelled") return "cancelled";
   if (hasEnded(activity, now)) return "ended";
   if (communityPublic === null) return null;
   if (!communityPublic) return "published";

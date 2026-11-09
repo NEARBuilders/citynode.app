@@ -450,6 +450,25 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Remet le site en ligne.",
     "使站点重新上线。",
   ],
+  "tenant.restore": ["Restore", "Restaurar", "Restaurer", "恢复"],
+  "tenant.restoreCommunity": [
+    "Restore community",
+    "Restaurar comunidad",
+    "Restaurer la communauté",
+    "恢复社区",
+  ],
+  "tenant.restored": [
+    "Community restored",
+    "Comunidad restaurada",
+    "Communauté restaurée",
+    "社区已还原",
+  ],
+  "tenant.restoreHint": [
+    "Cancels the deletion and brings the site back online.",
+    "Cancela la eliminación y vuelve a activar el sitio.",
+    "Annule la suppression et remet le site en ligne.",
+    "取消删除并使站点重新上线。",
+  ],
   "tenant.readingOwner": [
     "reading owner_id() on-chain",
     "leyendo owner_id() en cadena",

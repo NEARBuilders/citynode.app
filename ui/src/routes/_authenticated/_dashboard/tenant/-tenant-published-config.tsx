@@ -33,6 +33,7 @@ import {
   publishTenantConfigForMode,
   type TenantConfigPublishMode,
 } from "@/lib/tenant-deploy";
+import { tenantConfigStatus } from "@/lib/tenant-status";
 import { useNearAccount } from "@/lib/use-near-account";
 import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { ConfigField } from "./-config-field";
@@ -111,8 +112,7 @@ export function TenantPublishedConfig({
 
   const tenantUrl = hostname ? buildTenantUrl(hostname, gatewayId) : null;
   const editable = tenant.status === "active";
-  const daoConnected =
-    connection.status === "connected" && connection.daoAccountId === tenantAccount;
+  const daoConnected = connection.daoAccountId === tenantAccount;
   const path: PublishPath = daoOwned ? (daoConnected ? "dao" : "member") : "platform";
   const ownsWallet =
     nearAccountId === tenantAccount && activeNetwork === networkForAccount(tenantAccount);
@@ -137,6 +137,7 @@ export function TenantPublishedConfig({
         description: value.description,
         ...(value.repository ? { repository: value.repository } : {}),
         ...(app ? { app } : {}),
+        status: tenantConfigStatus(tenant.status),
       };
       if (path === "member") {
         return proposeTenantConfigAsMember(apiClient, auth.near, {
@@ -177,9 +178,9 @@ export function TenantPublishedConfig({
             : translate("tenant.configPublished"),
         );
       }
-      setEdited(false);
       await invalidateTenantQueries(queryClient);
       await queryClient.invalidateQueries({ queryKey: ["node-config"] });
+      setEdited(false);
     },
     onError: (error: Error) =>
       toast.error(
@@ -311,14 +312,14 @@ export function TenantPublishedConfig({
           label={translate("common.title")}
           value={draft.title}
           onChange={(value) => editDraft((prev) => ({ ...prev, title: value }))}
-          disabled={!editable}
+          disabled={!editable || proposeMutation.isPending}
         />
         <ConfigField
           id="tenant-published-config-description"
           label={translate("common.description")}
           value={draft.description}
           onChange={(value) => editDraft((prev) => ({ ...prev, description: value }))}
-          disabled={!editable}
+          disabled={!editable || proposeMutation.isPending}
         />
         <ConfigField
           id="tenant-published-config-repository"
@@ -327,7 +328,7 @@ export function TenantPublishedConfig({
           onChange={(value) => editDraft((prev) => ({ ...prev, repository: value }))}
           placeholder="https://github.com/…"
           mono
-          disabled={!editable}
+          disabled={!editable || proposeMutation.isPending}
         />
       </FieldGroup>
 
@@ -355,7 +356,7 @@ export function TenantPublishedConfig({
             draft={draft}
             setDraft={editDraft}
             allowSsr={tenant.allowSsr}
-            disabled={!editable}
+            disabled={!editable || proposeMutation.isPending}
             gatewayId={gatewayId}
             collapsed={!bundleOpen}
             onComputingChange={setComputing}

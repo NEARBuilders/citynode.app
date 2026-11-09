@@ -91,6 +91,9 @@ const pendingProposal = {
 };
 
 function mockChain(options: { policy: unknown; proposals?: unknown[] }) {
+  vi.spyOn(Near.prototype, "rpc", "get").mockReturnValue({
+    getBlock: () => Promise.resolve({ header: { timestamp_nanosec: "1" } }),
+  } as never);
   vi.spyOn(Near.prototype, "view").mockImplementation((async (
     _contract: string,
     method: string,
@@ -195,6 +198,7 @@ describe("TenantPublishedConfig", () => {
         hostname: "chicago.citynode.app",
         title: "Chicago Builders",
         description: "Chicago builders",
+        status: "active",
       },
     );
     expect(harness.publishTenantConfigForMode).not.toHaveBeenCalled();
@@ -245,6 +249,7 @@ describe("TenantPublishedConfig", () => {
         hostname: "chicago.citynode.app",
         title: "Chicago Builders",
         description: "Chicago builders",
+        status: "active",
         mode: "platform",
       },
     );

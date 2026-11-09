@@ -64,28 +64,26 @@ export interface ParsedDaoMembership {
   policy: NearPolicy | null;
 }
 
-export interface DaoConnectionState {
-  status: "idle" | "connecting" | "connected" | "error";
-  daoAccountId: string | null;
-  error: string | null;
-  set(partial: Partial<DaoConnectionState>): void;
+export type DaoConnection =
+  | { status: "idle" }
+  | { status: "connecting" }
+  | { status: "connected"; daoAccountId: string }
+  | { status: "error"; error: string };
+
+interface DaoConnectionStore {
+  connection: DaoConnection;
+  connecting(): void;
+  connected(daoAccountId: string): void;
+  failed(error: string): void;
   reset(): void;
 }
 
-const initialState: Omit<DaoConnectionState, "set" | "reset"> = {
-  status: "idle",
-  daoAccountId: null,
-  error: null,
-};
-
-export const useDaoConnectionStore = create<DaoConnectionState>((set) => ({
-  ...initialState,
-  set(partial) {
-    set(partial);
-  },
-  reset() {
-    set({ ...initialState });
-  },
+export const useDaoConnectionStore = create<DaoConnectionStore>((set) => ({
+  connection: { status: "idle" },
+  connecting: () => set({ connection: { status: "connecting" } }),
+  connected: (daoAccountId) => set({ connection: { status: "connected", daoAccountId } }),
+  failed: (error) => set({ connection: { status: "error", error } }),
+  reset: () => set({ connection: { status: "idle" } }),
 }));
 
 export interface ConnectDaoOptions {
@@ -95,7 +93,7 @@ export interface ConnectDaoOptions {
 
 export async function connectDaoAccount(options: ConnectDaoOptions = {}): Promise<string> {
   const store = useDaoConnectionStore.getState();
-  store.set({ status: "connecting", error: null });
+  store.connecting();
   try {
     const connector = getConnector();
     const wallet = await connector.connect({
@@ -107,10 +105,10 @@ export async function connectDaoAccount(options: ConnectDaoOptions = {}): Promis
       throw new Error("Trezu wallet returned no accounts");
     }
     await writeSessionAuthAccount(options.authAccountId ?? null);
-    store.set({ status: "connected", daoAccountId: first, error: null });
+    store.connected(first);
     return first;
   } catch (err) {
-    store.set({ status: "error", error: describeDaoError(err, "your DAO"), daoAccountId: null });
+    store.failed(describeDaoError(err, "your DAO"));
     throw err;
   }
 }
@@ -130,15 +128,11 @@ export async function verifyDaoAccount(want: string): Promise<boolean> {
     const result = await connector.getConnectedWallet();
     const accounts = result?.accounts ?? [];
     if (accounts.some((account) => account.accountId === want)) {
-      useDaoConnectionStore.getState().set({
-        status: "connected",
-        daoAccountId: want,
-        error: null,
-      });
+      useDaoConnectionStore.getState().connected(want);
       return true;
     }
   } catch {}
-  if (useDaoConnectionStore.getState().daoAccountId) {
+  if (useDaoConnectionStore.getState().connection.status === "connected") {
     useDaoConnectionStore.getState().reset();
   }
   return false;
@@ -219,8 +213,6 @@ export async function fetchDaoMembership(
 }
 
 export function useDaoAutoRestore(authAccountId: string | null): void {
-  const set = (partial: Partial<DaoConnectionState>) =>
-    useDaoConnectionStore.getState().set(partial);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -230,17 +222,18 @@ export function useDaoAutoRestore(authAccountId: string | null): void {
         const accountId = result?.accounts?.[0]?.accountId;
         if (cancelled || !accountId) return;
         const boundAccount = await readSessionAuthAccount();
+        if (cancelled) return;
         if (authAccountId === null || boundAccount === null || boundAccount !== authAccountId) {
           await disconnectDaoAccount();
           return;
         }
-        set({ status: "connected", daoAccountId: accountId, error: null });
+        useDaoConnectionStore.getState().connected(accountId);
       } catch {}
     })();
     return () => {
       cancelled = true;
     };
-  }, [authAccountId, set]);
+  }, [authAccountId]);
 }
 
 export interface SignAsDaoSpec {
@@ -294,7 +287,7 @@ function parseDepositInput(raw: string | undefined): `${bigint} yocto` {
 }
 
 export interface UseDaoConnectionResult {
-  status: DaoConnectionState["status"];
+  status: DaoConnection["status"];
   daoAccountId: string | null;
   error: string | null;
   connect(options?: ConnectDaoOptions): Promise<string>;
@@ -302,13 +295,11 @@ export interface UseDaoConnectionResult {
 }
 
 export function useDaoConnection(): UseDaoConnectionResult {
-  const status = useDaoConnectionStore((s) => s.status);
-  const daoAccountId = useDaoConnectionStore((s) => s.daoAccountId);
-  const error = useDaoConnectionStore((s) => s.error);
+  const connection = useDaoConnectionStore((s) => s.connection);
   return {
-    status,
-    daoAccountId,
-    error,
+    status: connection.status,
+    daoAccountId: connection.status === "connected" ? connection.daoAccountId : null,
+    error: connection.status === "error" ? connection.error : null,
     async connect(options) {
       return connectDaoAccount(options);
     },

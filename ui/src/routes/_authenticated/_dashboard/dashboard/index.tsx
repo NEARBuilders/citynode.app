@@ -14,6 +14,7 @@ import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item"
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { selectCommunityNode } from "@/lib/community-node";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
+import { isOpenInvitation } from "@/lib/invitation-status";
 import { pageTitle } from "@/lib/page-title";
 import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
@@ -140,7 +141,7 @@ function Home() {
 
   const bulletin = node?.metadata?.bulletin;
 
-  const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
+  const pending = (invitations.data ?? []).filter((invitation) => isOpenInvitation(invitation));
   const isAdmin = user?.role === "admin";
   const community = tenant.data ? { name: tenant.data.name, tenantId: tenant.data.id } : null;
   const loading =

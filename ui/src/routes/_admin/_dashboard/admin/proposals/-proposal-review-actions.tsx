@@ -26,7 +26,7 @@ interface ProposalReviewActionsProps {
   daoIsVerified: boolean;
   rejectionReason: string;
   isReviewing: boolean;
-  onDaoVerified: (value: { daoAccountId: string }) => void;
+  onDaoVerifiedChange: (daoAccountId: string | null) => void;
   onRejectionReasonChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
   onApprove: () => void;
   onReject: () => void;
@@ -42,7 +42,7 @@ export function ProposalReviewActions({
   daoIsVerified,
   rejectionReason,
   isReviewing,
-  onDaoVerified,
+  onDaoVerifiedChange,
   onRejectionReasonChange,
   onApprove,
   onReject,
@@ -70,7 +70,7 @@ export function ProposalReviewActions({
           purpose="proposal-review"
           variant="plain"
           expectedDaoAccountId={proposalDaoAccountId}
-          onVerified={onDaoVerified}
+          onVerifiedChange={onDaoVerifiedChange}
         />
       )}
 

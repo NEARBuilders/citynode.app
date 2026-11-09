@@ -1398,6 +1398,13 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Elle ne figure pas parmi les propositions de {name}.",
     "此提案不属于{name}。",
   ],
+  "proposal.phase.removalFailed": [
+    "Removal failed",
+    "Error al retirar",
+    "Échec du retrait",
+    "移除失败",
+  ],
+  "proposal.phase.removing": ["Removing", "Retirando", "Retrait en cours", "正在移除"],
   "proposal.partiallyApplied": [
     "The proposal was approved, but couldn't be fully applied. Check its details before trying again.",
     "La propuesta se aprobó, pero no pudo aplicarse por completo. Revisa sus detalles antes de volver a intentarlo.",

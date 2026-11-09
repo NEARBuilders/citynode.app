@@ -31,13 +31,13 @@ export function BulletinEditor({ nodeId }: { nodeId: string }) {
     mutationFn: () =>
       api.setNodeBulletin({ nodeId, bulletin: bulletin.trim() ? bulletin.trim() : null }),
     onSuccess: async () => {
-      setDirty(false);
       toast.success(
         bulletin.trim()
           ? translate("community.bulletinPublished")
           : translate("community.bulletinCleared"),
       );
       await invalidateNodeQueries(queryClient);
+      setDirty(false);
     },
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
@@ -73,6 +73,7 @@ export function BulletinEditor({ nodeId }: { nodeId: string }) {
           maxLength={BULLETIN_MAX_LENGTH}
           rows={5}
           placeholder={translate("bulletin.example")}
+          disabled={save.isPending}
           onChange={(event) => {
             setDirty(true);
             setBulletin(event.target.value);

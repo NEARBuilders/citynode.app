@@ -150,6 +150,21 @@ describe("Tenant + Node + Binding wizard flow", () => {
       const deletedTenant = await ownerClient.deleteTenant({ tenantId: tenantB.id });
       expect(deletedTenant.status).toBe("pending_deletion");
       expect(deletedTenant.deletedAt).toBeTruthy();
+
+      await expect(adminClient.restoreTenant({ tenantId: tenantB.id })).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      });
+      await expect(adminClient.reactivateTenant({ tenantId: tenantB.id })).rejects.toMatchObject({
+        code: "CONFLICT",
+      });
+      await expect(
+        ownerClient.updateTenant({ tenantId: tenantB.id, status: "active" } as never),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      const restored = await ownerClient.restoreTenant({ tenantId: tenantB.id });
+      expect(restored).toMatchObject({ status: "active", deletedAt: null });
+      await expect(ownerClient.restoreTenant({ tenantId: tenantB.id })).rejects.toMatchObject({
+        code: "CONFLICT",
+      });
     });
   });
 

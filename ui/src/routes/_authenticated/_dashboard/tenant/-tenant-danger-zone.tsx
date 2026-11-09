@@ -10,6 +10,7 @@ export function TenantDangerZone({
   isAdmin,
   suspend,
   reactivate,
+  restore,
   open,
   isPending,
   onOpen,
@@ -21,6 +22,7 @@ export function TenantDangerZone({
   isAdmin: boolean;
   suspend: TenantAction;
   reactivate: TenantAction;
+  restore: TenantAction;
   open: boolean;
   isPending: boolean;
   onOpen: () => void;
@@ -32,10 +34,11 @@ export function TenantDangerZone({
   const canSuspend = isAdmin && tenant.status === "active";
   const canReactivate = isAdmin && tenant.status === "suspended";
   const canDelete = isOwner && tenant.status === "active";
+  const canRestore = isOwner && tenant.status === "pending_deletion";
 
   return (
     <>
-      {(canSuspend || canReactivate || canDelete) && (
+      {(canSuspend || canReactivate || canDelete || canRestore) && (
         <section className="flex flex-col gap-2" data-testid="tenant.danger-zone">
           <SectionHeader title={translate("common.danger")} />
           <div className="flex flex-col rounded-2xl border border-destructive/30 px-4">
@@ -67,6 +70,23 @@ export function TenantDangerZone({
                     disabled={reactivate.isPending}
                   >
                     {translate("tenant.reactivate")}
+                  </Button>
+                }
+              />
+            )}
+            {canRestore && (
+              <SettingsRow
+                label={translate("tenant.restoreCommunity")}
+                description={translate("tenant.restoreHint")}
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => restore.mutate()}
+                    disabled={restore.isPending}
+                    data-testid="tenant.restore"
+                  >
+                    {translate("tenant.restore")}
                   </Button>
                 }
               />

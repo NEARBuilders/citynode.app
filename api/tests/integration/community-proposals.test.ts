@@ -428,6 +428,10 @@ describe("approved community proposal provisioning", () => {
     });
     expect(first.applicantInvited).toBe(false);
     expect(organization.invitations).toEqual([]);
+    const publicClient = await getPluginClient();
+    expect((await publicClient.listTenantBindings()).map((binding) => binding.hostname)).toContain(
+      "chicago.citynode.app",
+    );
     const second = await admin.applyCommunityProposal(input);
     expect(second.nodeId).toBe(first.nodeId);
     expect(

@@ -20,15 +20,6 @@ import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { presentationLabel } from "@/lib/presentation-label";
 
-export type StatusTone = "success" | "warning" | "destructive" | "secondary" | "outline";
-
-export function tenantStatusTone(status: string): StatusTone {
-  if (status === "active") return "success";
-  if (status === "suspended") return "destructive";
-  if (status === "pending" || status === "pending_deletion") return "warning";
-  return "outline";
-}
-
 export function humanize(value: string, t: AppTranslator = translateEnglishAppMessage) {
   return presentationLabel(value, t);
 }

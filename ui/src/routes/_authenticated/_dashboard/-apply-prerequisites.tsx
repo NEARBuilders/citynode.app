@@ -25,11 +25,11 @@ export function ApplyNearStep() {
 
 export function ApplyDaoStep({
   verified,
-  onDaoVerified,
+  onDaoVerifiedChange,
   onContinue,
 }: {
   verified: boolean;
-  onDaoVerified: (value: { daoAccountId: string }) => void;
+  onDaoVerifiedChange: (daoAccountId: string | null) => void;
   onContinue: () => void;
 }) {
   const t = useAppTranslation();
@@ -54,7 +54,7 @@ export function ApplyDaoStep({
         </p>
       </div>
       <div className="w-full">
-        <ConnectDao onVerified={onDaoVerified} purpose="apply" variant="plain" />
+        <ConnectDao onVerifiedChange={onDaoVerifiedChange} purpose="apply" variant="plain" />
       </div>
       {verified && (
         <Button

@@ -34,7 +34,8 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
-import { humanize, ListSkeleton, tenantStatusTone } from "../-admin-ui";
+import { tenantStatusTone } from "@/lib/tenant-status";
+import { humanize, ListSkeleton } from "../-admin-ui";
 import { filterTenants, type Tenant } from "./-tenant-records";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/")({

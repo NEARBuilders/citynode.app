@@ -1,31 +1,14 @@
 import { CheckCircleIcon, WarningCircleIcon, XCircleIcon } from "@phosphor-icons/react";
-import { Badge, InfoRow, LocalDate } from "@/components";
+import { InfoRow, LocalDate } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { Proposal } from "@/lib/queries/proposals";
 import { Disclosure, humanize, RawJson, RawJsonDisclosure } from "../-admin-ui";
 import { NodeProposalRequest } from "./-node-proposal-details";
 import { ProposalStatusCell } from "./-proposal-columns";
-import { proposalSetupStatus } from "./-proposal-review";
 
 export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
   const translate = useAppTranslation();
-  const showApply =
-    proposal.reviewStatus === "approved" &&
-    !proposalSetupStatus(proposal, translate) &&
-    proposal.applyStatus !== "not_started";
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <ProposalStatusCell proposal={proposal} t={translate} />
-      {showApply && (
-        <Badge
-          variant={proposal.applyStatus === "applied" ? "success" : "outline"}
-          data-testid="admin-proposal-apply-status"
-        >
-          {humanize(proposal.applyStatus, translate)}
-        </Badge>
-      )}
-    </span>
-  );
+  return <ProposalStatusCell proposal={proposal} t={translate} />;
 }
 
 export function ProposalRequest({ proposal }: { proposal: Proposal }) {

@@ -188,6 +188,25 @@ describe("relayer funding flow", () => {
     expect(screen.getByRole("button", { name: "Fund relayer" })).toHaveProperty("disabled", false);
   });
 
+  it("stays pending while the wallet prompt is open and reports a failed connection", async () => {
+    const current = createHarness();
+    const prompt = deferred<boolean>();
+    current.auth.near.ensureConnected.mockImplementation(() => prompt.promise);
+    renderRelayer(current);
+
+    await screen.findByText("relayer.near");
+    fireEvent.click(await screen.findByRole("button", { name: "Fund relayer" }));
+    expect(await screen.findByRole("button", { name: "Sending…" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    prompt.reject(new Error("wallet unavailable"));
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledOnce());
+    expect(screen.getByRole("button", { name: "Fund relayer" })).toHaveProperty("disabled", false);
+    expect(current.transfer).not.toHaveBeenCalled();
+  });
+
   it("reports a rejected send and clears the pending state", async () => {
     const current = createHarness();
     const pendingSend = deferred<{ transaction: { hash: string } }>();

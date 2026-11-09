@@ -1,7 +1,6 @@
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
-export type ReviewStatus = "pending" | "approved" | "rejected" | "removed";
-export type ApplyStatus = "not_started" | "applying" | "applied" | "failed";
+import type { ReviewStatus } from "@/lib/proposal-phase";
 
 export function proposalTitle(
   payload: unknown,
@@ -23,28 +22,6 @@ export function proposalTitle(
     }
   }
   return fallback;
-}
-
-export function reviewStatusBadge(
-  status: ReviewStatus,
-  t: AppTranslator = translateEnglishAppMessage,
-) {
-  if (status === "pending")
-    return { label: t("dashboard.awaitingReview"), variant: "warning" as const };
-  if (status === "approved") return { label: t("dashboard.approved"), variant: "success" as const };
-  if (status === "rejected")
-    return { label: t("dashboard.rejected"), variant: "destructive" as const };
-  return { label: t("dashboard.removed"), variant: "outline" as const };
-}
-
-export function applyStatusLabel(
-  status: ApplyStatus,
-  t: AppTranslator = translateEnglishAppMessage,
-): string | null {
-  if (status === "applying") return t("label.applying");
-  if (status === "applied") return t("tenant.live");
-  if (status === "failed") return t("label.applyFailed");
-  return null;
 }
 
 export function sortProposals<T extends { reviewStatus: ReviewStatus; createdAt: string }>(

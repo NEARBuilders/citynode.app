@@ -29,8 +29,8 @@ export function LinkTreasury({ organizationId }: { organizationId: string }) {
       <p className="text-sm text-muted-foreground">{translate("treasury.linkHint")}</p>
       <ConnectDao
         purpose="community-settings"
-        onVerified={({ daoAccountId }) => {
-          if (linked.current === daoAccountId) return;
+        onVerifiedChange={(daoAccountId) => {
+          if (!daoAccountId || linked.current === daoAccountId) return;
           linked.current = daoAccountId;
           link.mutate(daoAccountId);
         }}

@@ -72,8 +72,21 @@ export const ProposalReviewHistoryEntrySchema = ProposalAuditEntrySchema.extend(
   proposal: ProposalSchema,
 });
 
+export const ProposalEventActionSchema = z.enum([
+  "proposed",
+  "approved",
+  "rejected",
+  "reopened",
+  "remove_started",
+  "applied",
+  "apply_failed",
+  "apply_step_recorded",
+  "removed",
+  "remove_failed",
+]);
+
 export const ProposalEventSchema = z.object({
-  action: z.string(),
+  action: ProposalEventActionSchema,
   pluginId: z.string(),
   entityId: z.string(),
   reviewStatus: ReviewStatus,

@@ -15,6 +15,7 @@ import {
   Skeleton,
 } from "@/components";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { invitationStatus } from "@/lib/invitation-status";
 import { pageTitle } from "@/lib/page-title";
 import { presentationLabel } from "@/lib/presentation-label";
 import { useInvitationActions } from "./-use-invitation-actions";
@@ -113,7 +114,8 @@ function AcceptInvitation() {
     invitation.organizationName ??
     invitation.organizationSlug ??
     translate("dashboard.orgFallback");
-  const isPending = invitation.status === "pending";
+  const status = invitationStatus(invitation);
+  const isPending = status === "pending";
 
   return (
     <PageContainer variant="narrow">
@@ -160,7 +162,7 @@ function AcceptInvitation() {
         ) : (
           <Badge variant="outline">
             {translate("invitation.statusNamed", {
-              status: presentationLabel(invitation.status, translate),
+              status: presentationLabel(status, translate),
             })}
           </Badge>
         )}

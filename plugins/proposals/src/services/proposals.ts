@@ -9,8 +9,18 @@ import { proposalAuditLog, proposalSubmissions, proposals } from "../db/schema";
 type ReviewStatus = "pending" | "approved" | "rejected" | "removed";
 type ApplyStatus = "not_started" | "applying" | "applied" | "failed";
 type RemoveStatus = "not_started" | "removing" | "removed" | "failed";
-type ResubmissionPolicy = "rejected-only" | "rejected-or-removed";
+type ResubmissionPolicy = "rejected-only" | "rejected-or-removed" | "unapproved";
 type ApplyStep = z.infer<typeof ApplyStepSchema>;
+type ResubmissionState = { reviewStatus: ReviewStatus; removeStatus: RemoveStatus | null };
+
+const RESUBMITTABLE: Record<ResubmissionPolicy, (row: ResubmissionState) => boolean> = {
+  "rejected-only": (row) => row.reviewStatus === "rejected",
+  "rejected-or-removed": (row) =>
+    row.reviewStatus === "rejected" ||
+    row.reviewStatus === "removed" ||
+    row.removeStatus === "removed",
+  unapproved: (row) => row.reviewStatus === "pending" || RESUBMITTABLE["rejected-or-removed"](row),
+};
 const SYSTEM_ACTOR = "system";
 const SYSTEM_ACTOR_LABEL = "System";
 const LIFECYCLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -167,8 +177,7 @@ export class ProposalService extends Context.Service<
       idempotencyKey?: string;
       actorId: string;
       actor?: { name?: string; email?: string };
-      resubmissionPolicy?: ResubmissionPolicy;
-      requireSameActor?: boolean;
+      resubmissionPolicy: ResubmissionPolicy;
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
     approve: (input: {
       pluginId: string;
@@ -324,14 +333,15 @@ export const ProposalServiceLive = Layer.effect(
           const proposalId = existing?.id ?? generateId("prop");
           const now = nextTimestamp(existing?.updatedAt);
 
-          if (existing && input.requireSameActor) {
-            if (existing.createdBy !== input.actorId) {
-              return yield* Effect.fail(
-                new ORPCError("FORBIDDEN", {
-                  message: "This community application belongs to another applicant",
-                }),
-              );
-            }
+          if (existing && existing.createdBy !== input.actorId) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: "This proposal belongs to another applicant",
+              }),
+            );
+          }
+
+          if (existing && input.pluginId === "node") {
             const previous = parseJson(existing.payload);
             const previousOrgId =
               previous && typeof previous === "object" && "orgId" in previous
@@ -361,28 +371,7 @@ export const ProposalServiceLive = Layer.effect(
             );
           }
 
-          if (
-            existing &&
-            input.resubmissionPolicy === "rejected-only" &&
-            existing.reviewStatus !== "rejected"
-          ) {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: resubmissionError(
-                  existing.reviewStatus as ReviewStatus,
-                  (existing.removeStatus as RemoveStatus) ?? "not_started",
-                ),
-              }),
-            );
-          }
-
-          if (
-            existing &&
-            input.resubmissionPolicy === "rejected-or-removed" &&
-            existing.reviewStatus !== "rejected" &&
-            existing.reviewStatus !== "removed" &&
-            existing.removeStatus !== "removed"
-          ) {
+          if (existing && !RESUBMITTABLE[input.resubmissionPolicy](existing as ResubmissionState)) {
             return yield* Effect.fail(
               new ORPCError("BAD_REQUEST", {
                 message: resubmissionError(

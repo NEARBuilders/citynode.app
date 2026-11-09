@@ -103,7 +103,7 @@ describe("proposal review UI seams", () => {
   it("keeps the DAO gate visible and asks for a reason before rejecting", () => {
     const onApprove = vi.fn();
     const onReject = vi.fn();
-    const onDaoVerified = vi.fn();
+    const onDaoVerifiedChange = vi.fn();
     const onRejectionReasonChange = vi.fn();
     const props = {
       isPending: true,
@@ -111,7 +111,7 @@ describe("proposal review UI seams", () => {
       proposalDaoAccountId: "dao.sputnik-dao.near",
       daoIsVerified: true,
       isReviewing: false,
-      onDaoVerified,
+      onDaoVerifiedChange,
       onRejectionReasonChange,
       onApprove,
       onReject,
@@ -132,7 +132,7 @@ describe("proposal review UI seams", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reject proposal" }));
 
     expect(onReject).toHaveBeenCalledOnce();
-    expect(onDaoVerified).not.toHaveBeenCalled();
+    expect(onDaoVerifiedChange).not.toHaveBeenCalledWith(expect.any(String));
   });
 
   it("allows admin approval without a connected DAO", () => {
@@ -145,7 +145,7 @@ describe("proposal review UI seams", () => {
         daoIsVerified={false}
         rejectionReason=""
         isReviewing={false}
-        onDaoVerified={vi.fn()}
+        onDaoVerifiedChange={vi.fn()}
         onRejectionReasonChange={vi.fn()}
         onApprove={onApprove}
         onReject={vi.fn()}
@@ -171,7 +171,7 @@ describe("proposal review UI seams", () => {
         daoIsVerified={false}
         rejectionReason=""
         isReviewing={false}
-        onDaoVerified={vi.fn()}
+        onDaoVerifiedChange={vi.fn()}
         onRejectionReasonChange={vi.fn()}
         onApprove={onApprove}
         onReject={vi.fn()}
@@ -198,7 +198,7 @@ describe("proposal review UI seams", () => {
         daoIsVerified
         rejectionReason=""
         isReviewing={false}
-        onDaoVerified={vi.fn()}
+        onDaoVerifiedChange={vi.fn()}
         onRejectionReasonChange={vi.fn()}
         onApprove={onApprove}
         onReject={vi.fn()}
@@ -266,6 +266,7 @@ describe("proposal review UI seams", () => {
         proposal={{
           reviewStatus: "approved",
           applyStatus: "failed",
+          removeStatus: "not_started",
           applyTimedOut: false,
           appliedAt: null,
           applySteps: {

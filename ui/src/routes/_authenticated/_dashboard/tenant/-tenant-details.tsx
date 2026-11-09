@@ -4,14 +4,9 @@ import { Trans } from "everything-dev/ui/i18n";
 import { Badge, Button, Input, LocalDate, SectionHeader } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
 import { presentationLabel } from "@/lib/presentation-label";
+import { tenantStatusTone } from "@/lib/tenant-status";
 import { SettingsRow } from "./-settings-row";
 import type { TenantRecord } from "./-tenant-types";
-
-const STATUS_BADGE = {
-  active: "success",
-  suspended: "warning",
-  pending_deletion: "destructive",
-} as const;
 
 export function TenantDetails({
   tenant,
@@ -82,10 +77,7 @@ export function TenantDetails({
         </SettingsRow>
         <SettingsRow label={translate("common.status")}>
           <span className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant={STATUS_BADGE[tenant.status as keyof typeof STATUS_BADGE] ?? "secondary"}
-              data-testid="tenant.status"
-            >
+            <Badge variant={tenantStatusTone(tenant.status)} data-testid="tenant.status">
               {presentationLabel(tenant.status, translate)}
             </Badge>
             <Badge variant="outline">

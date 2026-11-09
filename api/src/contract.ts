@@ -9,6 +9,7 @@ import {
 } from "every-plugin/errors";
 import { z } from "zod";
 import { discoveryContract } from "./discovery-contract";
+import { TENANT_OWNER_KINDS, TENANT_STATUSES } from "./lib/tenant-states";
 
 const ErrorTestKindSchema = z.enum([
   "unauthorized",
@@ -19,7 +20,8 @@ const ErrorTestKindSchema = z.enum([
   "internal",
 ]);
 
-export const TenantStatusSchema = z.enum(["active", "pending", "suspended", "pending_deletion"]);
+export const TenantStatusSchema = z.enum(TENANT_STATUSES);
+export const TenantOwnerKindSchema = z.enum(TENANT_OWNER_KINDS);
 
 export const GeoNodeKindSchema = z.enum(["country", "state", "city"]);
 
@@ -118,7 +120,7 @@ export const TenantSchema = z.object({
   ownerUserId: z.string().nullable(),
   name: z.string(),
   status: TenantStatusSchema,
-  ownerKind: z.string(),
+  ownerKind: TenantOwnerKindSchema,
   allowUiOverrides: z.boolean(),
   allowBackendOverrides: z.boolean(),
   allowSsr: z.boolean(),
@@ -154,9 +156,9 @@ export const TenantAppSchema = z.object({
   accountId: z.string().describe("NEAR account that owns the tenant runtime"),
   name: z.string(),
   status: TenantStatusSchema,
-  ownerKind: z
-    .string()
-    .describe("'dao' for DAO-owned tenants, 'user' for personal spawns, 'platform' otherwise"),
+  ownerKind: TenantOwnerKindSchema.describe(
+    "'dao' for DAO-owned tenants, 'user' for personal spawns, 'platform' otherwise",
+  ),
   hostname: z
     .string()
     .nullable()
@@ -383,6 +385,10 @@ export const TeamJoinBoardSchema = z.object({
   requests: z.array(TeamJoinRequestSchema),
 });
 
+const TENANT_TRANSITION_CONFLICT = {
+  CONFLICT: { status: 409, message: "This community's status doesn't allow that change" },
+} as const;
+
 const TEAM_JOIN_CONFLICT = {
   CONFLICT: { status: 409, message: "This team request can't change any more" },
 } as const;
@@ -477,17 +483,23 @@ export const contract = oc.router({
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   updateTenant: oc
-    .route({ method: "PATCH", path: "/tenants/{tenantId}" })
+    .route({
+      method: "PATCH",
+      path: "/tenants/{tenantId}",
+      description:
+        "Updates name, account and override settings. Status changes go through the suspend, reactivate, delete and restore routes.",
+    })
     .input(
-      z.object({
-        tenantId: z.string(),
-        name: z.string().optional(),
-        accountId: z.string().optional(),
-        status: TenantStatusSchema.optional(),
-        allowUiOverrides: z.boolean().optional(),
-        allowBackendOverrides: z.boolean().optional(),
-        allowSsr: z.boolean().optional(),
-      }),
+      z
+        .object({
+          tenantId: z.string(),
+          name: z.string().optional(),
+          accountId: z.string().optional(),
+          allowUiOverrides: z.boolean().optional(),
+          allowBackendOverrides: z.boolean().optional(),
+          allowSsr: z.boolean().optional(),
+        })
+        .strict(),
     )
     .output(TenantSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
@@ -496,19 +508,30 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/tenants/{tenantId}/delete" })
     .input(z.object({ tenantId: z.string() }))
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...TENANT_TRANSITION_CONFLICT }),
+
+  restoreTenant: oc
+    .route({
+      method: "POST",
+      path: "/tenants/{tenantId}/restore",
+      summary: "Restore a community queued for deletion",
+      description: "Owner only — moves a pending-deletion community back to active.",
+    })
+    .input(z.object({ tenantId: z.string() }))
+    .output(TenantSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...TENANT_TRANSITION_CONFLICT }),
 
   suspendTenant: oc
     .route({ method: "POST", path: "/tenants/{tenantId}/suspend" })
     .input(z.object({ tenantId: z.string() }))
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...TENANT_TRANSITION_CONFLICT }),
 
   reactivateTenant: oc
     .route({ method: "POST", path: "/tenants/{tenantId}/reactivate" })
     .input(z.object({ tenantId: z.string() }))
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...TENANT_TRANSITION_CONFLICT }),
 
   resolveTenant: oc
     .route({ method: "GET", path: "/tenants/account/{accountId}" })

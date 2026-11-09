@@ -61,6 +61,34 @@ function canonicalActivityUrl(value: string) {
   return url.toString();
 }
 
+function syncedLumaStatus(previous: DiscoveryActivity | undefined): DiscoveryActivity["status"] {
+  if (previous?.status === "cancelled") return "cancelled";
+  return (previous?.luma?.hidden ?? true) ? "draft" : "published";
+}
+
+type PublicAudience = "listed" | "viewable" | "hidden";
+
+function publicAudience(activity: DiscoveryActivity, now: number): PublicAudience {
+  if (
+    activity.status === "draft" ||
+    activity.luma?.available === false ||
+    (activity.luma?.hidden === true && activity.status !== "cancelled") ||
+    Date.parse(activity.publishedAt) > now
+  )
+    return "hidden";
+  return activity.status === "published" ? "listed" : "viewable";
+}
+
+function listedActivitySql(now: string) {
+  const data = discoveryActivities.data;
+  return and(
+    sql`${data}->>'status' = 'published'`,
+    sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
+    sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
+    sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
+  );
+}
+
 function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService) {
   const luma = createLumaCalendars(lumaKeys);
 
@@ -170,10 +198,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       const activity = yield* activityById(id);
       if (
         !activity ||
-        activity.status === "draft" ||
-        activity.luma?.available === false ||
-        activity.luma?.hidden === true ||
-        Date.parse(activity.publishedAt) > (yield* Clock.currentTimeMillis) ||
+        publicAudience(activity, yield* Clock.currentTimeMillis) === "hidden" ||
         !(yield* eligibleProfile(activity.ownerNodeId))
       ) {
         return null;
@@ -207,9 +232,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             and(
               eq(tenants.status, "active"),
               sql`${discoveryProfiles.data}->>'published' = 'true'`,
-              sql`${discoveryActivities.data}->>'status' = 'published'`,
-              sql`${discoveryActivities.data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
-              sql`(${discoveryActivities.data}->>'publishedAt')::timestamptz <= ${new Date(Date.now()).toISOString()}`,
+              listedActivitySql(new Date(Date.now()).toISOString()),
               input.nodeId
                 ? sql`${discoveryActivities.data}->'nodeIds' ? ${input.nodeId}`
                 : undefined,
@@ -403,7 +426,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           const data = {
             ...input,
             luma: previous?.luma
-              ? { ...previous.luma, hidden: input.status !== "published" }
+              ? { ...previous.luma, hidden: input.status === "draft" }
               : undefined,
             id: input.id ?? crypto.randomUUID(),
             nodeIds: [...new Set(input.nodeIds)],
@@ -467,6 +490,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           if (seen.has(event.id)) continue;
           seen.add(event.id);
           const previous = importedById.get(event.id);
+          const status = syncedLumaStatus(previous?.data);
           const data: DiscoveryActivity = {
             id: previous?.id ?? crypto.randomUUID(),
             ownerNodeId: input.nodeId,
@@ -485,13 +509,13 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
                 ? event.geo_address_json?.full_address || event.geo_address_json?.city_state
                 : null
               )?.slice(0, 240) || "See Luma for location details",
-            status: (previous?.data.luma?.hidden ?? true) ? "draft" : "published",
+            status,
             luma: {
               calendarId: input.calendarId,
               eventId: event.id,
               syncedAt,
               available: true,
-              hidden: previous?.data.luma?.hidden ?? true,
+              hidden: status === "draft",
             },
           };
           const [duplicate] = await tx
@@ -530,7 +554,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             .set({
               data: {
                 ...row.data,
-                status: "draft",
+                status: row.data.status === "cancelled" ? "cancelled" : "draft",
                 luma: { ...row.data.luma, syncedAt, available: false },
               },
             })
@@ -728,7 +752,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             if (
               !activity ||
               activity.kind !== "event" ||
-              activity.status !== "published" ||
+              publicAudience(activity, now) !== "listed" ||
               !activity.nodeIds.includes(node.nodeId)
             )
               return { accepted: false };
@@ -806,14 +830,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               >`to_char(max(greatest((${data}->>'publishedAt')::timestamptz, case when ${startsAt} <= ${now}::timestamptz then ${startsAt} end)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
             })
             .from(discoveryActivities)
-            .where(
-              and(
-                sql`${data}->>'status' = 'published'`,
-                sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
-                sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
-                sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
-              ),
-            )
+            .where(listedActivitySql(now))
             .groupBy(discoveryActivities.ownerNodeId),
         );
       }),
@@ -930,6 +947,13 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         }
         yield* query(() =>
           db.transaction(async (tx) => {
+            const claimed = await tx
+              .update(discoveryReports)
+              .set({ resolved: true, note: input.note })
+              .where(and(eq(discoveryReports.id, report.id), eq(discoveryReports.resolved, false)))
+              .returning({ id: discoveryReports.id });
+            if (!claimed.length)
+              throw new ORPCError("CONFLICT", { message: "This report was already resolved" });
             if (input.action === "unpublish") {
               let ownerNodeId: string;
               if (report.kind === "profile") {
@@ -969,10 +993,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
                 action: "moderation: unpublish",
               });
             }
-            await tx
-              .update(discoveryReports)
-              .set({ resolved: true, note: input.note })
-              .where(eq(discoveryReports.id, report.id));
           }),
         );
         return { success: true };
@@ -1051,7 +1071,10 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         if (manager) return activities;
         if (level === "editor") return activities.filter((activity) => activity.kind === "event");
         return activities.filter(
-          (activity) => activity.status !== "draft" && !activity.luma?.hidden,
+          (activity) =>
+            activity.status !== "draft" &&
+            activity.luma?.available !== false &&
+            (activity.status === "cancelled" || !activity.luma?.hidden),
         );
       }),
     eventOrganization: (eventId: string) =>

@@ -40,12 +40,12 @@ import {
   useAppTranslation,
 } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
+import { proposalPhase, setupNeedsAttention } from "@/lib/proposal-phase";
 import { adminNodeListQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { organizationRequestsQueryOptions } from "@/lib/queries/organizations";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
-import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
 import {
   APPLICATION_ITEMS_LIMIT,
   buildCommunityProgressRows,
@@ -113,7 +113,9 @@ function AdminOverview() {
   const progress = useCommunityProgress();
 
   const setupsQuery = useQuery(stalledSetupsQueryOptions(apiClient));
-  const setups = (setupsQuery.data?.data ?? []).filter(communitySetupNeedsAttention);
+  const setups = (setupsQuery.data?.data ?? []).filter((proposal) =>
+    setupNeedsAttention(proposalPhase(proposal)),
+  );
   const awaiting = awaitingQuery.data?.data ?? [];
   const pendingTotal = pendingQuery.data?.meta.total;
   const reviewTotal = awaitingQuery.data?.meta.total ?? 0;
@@ -220,7 +222,7 @@ function AdminOverview() {
           reviewStatus: proposal.reviewStatus,
           title: proposalTitle(proposal, translate),
           createdAt: proposal.createdAt,
-          setupNeedsAttention: communitySetupNeedsAttention(proposal),
+          setupNeedsAttention: setupNeedsAttention(proposalPhase(proposal)),
         }))}
         relayerNeedsFunding={relayerNeedsFunding}
         organizationRequestCount={requestCount ?? 0}

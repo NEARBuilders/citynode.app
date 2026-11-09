@@ -83,11 +83,12 @@ vi.mock("@/app", async () => {
 });
 
 vi.mock("@/components/connect-dao", () => ({
-  ConnectDao: ({ onVerified }: { onVerified?: (value: { daoAccountId: string }) => void }) => (
-    <Button
-      type="button"
-      onClick={() => onVerified?.({ daoAccountId: harness.daoAccountIdForVerification })}
-    >
+  ConnectDao: ({
+    onVerifiedChange,
+  }: {
+    onVerifiedChange?: (daoAccountId: string | null) => void;
+  }) => (
+    <Button type="button" onClick={() => onVerifiedChange?.(harness.daoAccountIdForVerification)}>
       verify DAO
     </Button>
   ),
@@ -313,22 +314,28 @@ describe("apply route submission", () => {
     expect(screen.queryByText("No country (standalone city)")).toBeNull();
   });
 
+  const waitingVote = {
+    publication: { status: "waiting", resourceId: "4", recordedAt: "2026-09-10T00:05:00.000Z" },
+  };
   it.each([
-    ["pending", "not_started", "Awaiting review"],
-    ["approved", "applying", "Applying"],
-    ["rejected", "not_started", "Rejected"],
-    ["approved", "failed", "Apply failed"],
-    ["removed", "not_started", "Removed"],
-  ])("shows %s/%s application status after reload", async (reviewStatus, applyStatus, expected) => {
+    ["pending", "not_started", "Awaiting review", {}, false],
+    ["approved", "applying", "Applying", {}, false],
+    ["approved", "applying", "Setup stalled", {}, true],
+    ["approved", "failed", "Waiting for DAO vote", waitingVote, false],
+    ["rejected", "not_started", "Rejected", {}, false],
+    ["approved", "failed", "Setup failed", {}, false],
+    ["removed", "not_started", "Removed", {}, false],
+  ])("shows %s/%s application status after reload as %s", async (reviewStatus, applyStatus, expected, applySteps, applyTimedOut) => {
     harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
       data: [
         {
           id: "existing-1",
           reviewStatus,
           applyStatus,
+          removeStatus: reviewStatus === "removed" ? "removed" : "not_started",
           rejectionReason: reviewStatus === "rejected" ? "More detail needed" : null,
-          applySteps: {},
-          applyTimedOut: false,
+          applySteps,
+          applyTimedOut,
           appliedAt: null,
           payload: { name: "Chicago" },
         },

@@ -324,7 +324,12 @@ export const discoveryContract = {
       }),
     )
     .output(z.object({ success: z.boolean() }))
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      NOT_FOUND,
+      CONFLICT: { status: 409, message: "This report was already resolved" },
+    }),
   getDiscoveryHistory: oc
     .input(z.object({ nodeId: z.uuid() }))
     .output(

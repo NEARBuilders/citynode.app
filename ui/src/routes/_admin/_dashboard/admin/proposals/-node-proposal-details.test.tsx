@@ -95,7 +95,7 @@ describe("application request summary", () => {
 });
 
 describe("application status badges", () => {
-  it("shows whether an approved application was applied", () => {
+  it("shows the setup phase next to the decision once an application is approved", () => {
     render(
       <ProposalStatusBadges
         proposal={{
@@ -106,10 +106,10 @@ describe("application status badges", () => {
       />,
     );
     expect(screen.getByTestId("admin-proposal-status").textContent).toBe("Approved");
-    expect(screen.getByTestId("admin-proposal-apply-status").textContent).toBe("Applied");
+    expect(screen.getByTestId("admin-proposal-phase").textContent).toBe("Live");
   });
 
-  it("leaves the apply badge off when a setup status already explains it", () => {
+  it("names a failed setup in one phase badge", () => {
     render(
       <ProposalStatusBadges
         proposal={{
@@ -119,7 +119,8 @@ describe("application status badges", () => {
         }}
       />,
     );
-    expect(screen.getByTestId("admin-proposal-setup-status")).toBeTruthy();
-    expect(screen.queryByTestId("admin-proposal-apply-status")).toBeNull();
+    expect(screen.getAllByTestId("admin-proposal-phase").map((badge) => badge.textContent)).toEqual(
+      ["Setup failed"],
+    );
   });
 });

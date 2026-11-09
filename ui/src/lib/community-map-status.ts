@@ -1,8 +1,4 @@
-import type { ApiClient } from "@/app";
-
-export type TenantStatus = Awaited<ReturnType<ApiClient["resolveTenantByOrgId"]>>["status"];
-
-export type InactiveTenantStatus = Exclude<TenantStatus, "active">;
+import type { InactiveTenantStatus, TenantStatus } from "./tenant-status";
 
 export type MapStatus =
   | { state: "inactive"; tenantStatus: InactiveTenantStatus }

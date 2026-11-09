@@ -1,3 +1,5 @@
+import { organizationApproval } from "./organization-approval";
+
 type OrganizationLike = {
   id: string;
   slug: string;
@@ -29,7 +31,7 @@ export function visibleOrganizations<T extends OrganizationLike>(
 }
 
 function isOpenable(organization: OrganizationLike) {
-  return !organization.status || organization.status === "active";
+  return organizationApproval(organization) === "active";
 }
 
 export function resolveCommunityMembership<T extends OrganizationLike>({

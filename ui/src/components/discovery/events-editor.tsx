@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { useApiClient } from "@/app";
-import type { TenantStatus } from "@/lib/community-map-status";
+import type { TenantStatus } from "@/lib/tenant-status";
 import { ActivityEditor } from "./activity-editor";
 import { CommunityMapStatus } from "./community-map-status";
 import { discoveryProfileQueryOptions } from "./profile-editor";

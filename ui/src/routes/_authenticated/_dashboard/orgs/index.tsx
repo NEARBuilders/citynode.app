@@ -26,6 +26,8 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { isOpenInvitation } from "@/lib/invitation-status";
+import { organizationApproval } from "@/lib/organization-approval";
 import { pageTitle } from "@/lib/page-title";
 import { visibleOrganizations } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
@@ -124,7 +126,7 @@ function OrganizationsList() {
     })),
   });
 
-  const pendingInvitations = userInvitations.filter((i) => i.status === "pending");
+  const pendingInvitations = userInvitations.filter((i) => isOpenInvitation(i));
 
   const { acceptMutation, rejectMutation } = useInvitationActions({
     apiClient,
@@ -266,6 +268,7 @@ function OrganizationsList() {
               const members = memberQueries[index]?.data;
               const myRole = members?.find((member) => member.userId === user?.id)?.role;
               const isActive = org.id === activeOrgId;
+              const approval = organizationApproval(org);
               return (
                 <Card key={org.id} data-testid={`orgs-card-${org.slug}`}>
                   <CardContent className="flex h-full flex-col gap-5 p-5">
@@ -286,12 +289,12 @@ function OrganizationsList() {
                     </Link>
                     <div className="flex flex-wrap gap-1.5">
                       {myRole && <Badge variant="secondary">{roleLabel(myRole, translate)}</Badge>}
-                      {org.status === "pending" && (
+                      {approval === "pending" && (
                         <Badge variant="warning" data-testid="orgs-pending">
                           {translate("orgApproval.pending")}
                         </Badge>
                       )}
-                      {org.status === "rejected" && (
+                      {approval === "rejected" && (
                         <Badge variant="destructive" data-testid="orgs-rejected">
                           {translate("label.rejected")}
                         </Badge>
@@ -301,7 +304,7 @@ function OrganizationsList() {
                         <Badge variant="outline">{translate("common.community")}</Badge>
                       )}
                     </div>
-                    {org.status === "rejected" && (
+                    {approval === "rejected" && (
                       <p
                         className="text-sm text-muted-foreground"
                         data-testid="orgs-rejection-reason"
@@ -314,7 +317,7 @@ function OrganizationsList() {
                         {members ? translate("org.memberCount", { count: members.length }) : " "}
                       </span>
                       <div className="flex items-center gap-2">
-                        {org.status === "active" &&
+                        {approval === "active" &&
                           myRole === "owner" &&
                           !tenantOrgIds.has(org.id) && (
                             <Button
@@ -328,7 +331,7 @@ function OrganizationsList() {
                               {translate("dashboard.startCommunity")}
                             </Button>
                           )}
-                        {org.status !== "active" ? (
+                        {approval !== "active" ? (
                           <Button
                             variant="ghost"
                             size="sm"

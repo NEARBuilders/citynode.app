@@ -1,7 +1,4 @@
-/**
- * Pure helpers for parsing sputnik-dao v2 policy responses and producing
- * the registry config payload the tenant wizard publishes.
- */
+import type { TenantConfigStatus } from "./tenant-status";
 
 export interface NearPolicyRoleGroup {
   kind: { Group: string[] };
@@ -54,7 +51,7 @@ export interface TenantPublishConfigInput {
   description?: string;
   repository?: string;
   app?: { ui: TenantUiOverride };
-  status?: "active" | "suspended" | "pending_deletion";
+  status?: TenantConfigStatus;
 }
 
 export interface TenantPublishConfig {
@@ -65,7 +62,7 @@ export interface TenantPublishConfig {
   description: string;
   repository?: string;
   app?: { ui: TenantUiOverride };
-  status?: "active" | "suspended" | "pending_deletion";
+  status?: TenantConfigStatus;
 }
 
 export function buildTenantPublishConfig(input: TenantPublishConfigInput): TenantPublishConfig {

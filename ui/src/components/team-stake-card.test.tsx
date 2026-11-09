@@ -435,6 +435,27 @@ describe("TeamStakeCard", () => {
     expect(amount.value).toBe("1.5");
   });
 
+  it("keeps a typed amount when the balance refreshes while the dialog is open", async () => {
+    const view = stubChain(teamAccount(), []);
+    const { client } = renderCard();
+    const unstake = await screen.findByTestId("dashboard-node.team-stake-unstake");
+    await waitFor(() => expect((unstake as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(unstake);
+    const amount = (await screen.findByTestId(
+      "dashboard-node.team-stake-unstake-amount",
+    )) as HTMLInputElement;
+    fireEvent.change(amount, { target: { value: "0.25" } });
+
+    view.mockRestore();
+    stubChain(teamAccount({ staked: 4n * NEAR }), []);
+    await act(() => client.refetchQueries());
+    await settle();
+
+    expect(amount.value).toBe("0.25");
+    fireEvent.click(screen.getByText("Max"));
+    expect(amount.value).toBe("3");
+  });
+
   it("fills the full withdrawable amount, by default and on Max", async () => {
     stubChain(teamAccount({ unstaked: (3n * NEAR) / 2n }), []);
     renderCard();

@@ -6,12 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemMedia } from "@/components/ui/item";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
-import {
-  communityMapStatus,
-  type InactiveTenantStatus,
-  type MapStatus,
-  type TenantStatus,
-} from "@/lib/community-map-status";
+import { communityMapStatus, type MapStatus } from "@/lib/community-map-status";
+import type { InactiveTenantStatus, TenantStatus } from "@/lib/tenant-status";
 import { discoveryNodeQueryOptions } from "./event-visibility";
 
 type NoticeKey = InactiveTenantStatus | "hidden" | "noPin";

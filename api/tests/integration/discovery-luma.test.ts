@@ -148,6 +148,22 @@ it("imports Luma events hidden and lets org admins show or hide them across sync
   await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-fixture" });
   expect(await publicClient.getDiscoveryActivity({ id: first!.id })).toBeNull();
   await editor.setDiscoveryLumaVisibility({ nodeId: node.id, activityId: first!.id, show: true });
+  await editor.saveDiscoveryActivity({ ...refreshed[0]!, status: "cancelled" });
+  await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-fixture" });
+  expect(
+    (await editor.listDiscoveryActivities({ nodeId: node.id })).find((a) => a.id === first!.id),
+  ).toMatchObject({ status: "cancelled" });
+  visibility = "private";
+  await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-fixture" });
+  visibility = "public";
+  await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-fixture" });
+  expect(
+    (await editor.listDiscoveryActivities({ nodeId: node.id })).find((a) => a.id === first!.id),
+  ).toMatchObject({ status: "cancelled", luma: { available: true } });
+  expect(await publicClient.getDiscoveryActivity({ id: first!.id })).toMatchObject({
+    status: "cancelled",
+  });
+  await editor.saveDiscoveryActivity({ ...refreshed[0]!, status: "published" });
   await expect(
     editor.saveDiscoveryActivity({ ...refreshed[0]!, title: "Local override" }),
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });

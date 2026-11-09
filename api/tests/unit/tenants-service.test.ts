@@ -188,6 +188,49 @@ describe("TenantsService", () => {
     expect(deleted?.deletedAt).toEqual(expect.any(String));
   });
 
+  it("refuses transitions the current status doesn't allow", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) => svc.createTenant(baseInput));
+
+    const reactivateActive = await squashServiceError(layer, (svc) =>
+      svc.reactivateTenant(created.id),
+    );
+    expect((reactivateActive as ORPCError<string, unknown>).code).toBe("CONFLICT");
+
+    await runService(layer, (svc) => svc.softDeleteTenant(created.id));
+    for (const transition of ["reactivateTenant", "suspendTenant", "softDeleteTenant"] as const) {
+      const error = await squashServiceError(layer, (svc) => svc[transition](created.id));
+      expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
+    }
+  });
+
+  it("only deletes an active tenant, so a restore never lifts a suspension", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) => svc.createTenant(baseInput));
+    await runService(layer, (svc) => svc.suspendTenant(created.id));
+    const error = await squashServiceError(layer, (svc) => svc.softDeleteTenant(created.id));
+    expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
+  });
+
+  it("restores a tenant queued for deletion and clears deletedAt", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) => svc.createTenant(baseInput));
+    await runService(layer, (svc) => svc.softDeleteTenant(created.id));
+    const restored = await runService(layer, (svc) => svc.restoreTenant(created.id));
+    expect(restored).toMatchObject({ status: "active", deletedAt: null });
+    const again = await squashServiceError(layer, (svc) => svc.restoreTenant(created.id));
+    expect((again as ORPCError<string, unknown>).code).toBe("CONFLICT");
+  });
+
+  it("activates a tenant created as pending", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) =>
+      svc.createTenant({ ...baseInput, status: "pending" }),
+    );
+    const activated = await runService(layer, (svc) => svc.reactivateTenant(created.id));
+    expect(activated?.status).toBe("active");
+  });
+
   it("returns null for status transitions on a missing tenant", async () => {
     const layer = freshLayer();
     expect(await runService(layer, (svc) => svc.suspendTenant(MISSING_ID))).toBeNull();

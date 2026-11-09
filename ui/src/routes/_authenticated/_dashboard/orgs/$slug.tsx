@@ -26,6 +26,8 @@ import { useSwitchOrganization } from "@/components/layout/use-switch-organizati
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
 import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { isOpenInvitation } from "@/lib/invitation-status";
+import { organizationApproval } from "@/lib/organization-approval";
 import { pageTitle } from "@/lib/page-title";
 import { isPersonalOrganization } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
@@ -130,17 +132,18 @@ function OrganizationDetail() {
     organizationsQueryOptions(apiClient),
   );
   const org = organizations.find((organization) => organization.slug === orgSlug);
+  const approval = org ? organizationApproval(org) : null;
   const orgId = org?.id ?? "";
   const activeOrgId = session?.session?.activeOrganizationId;
   const isActive = orgId === activeOrgId;
   const membersQuery = useQuery({
     ...orgMembersQueryOptions(apiClient, orgId),
-    enabled: !!orgId && org?.status === "active",
+    enabled: !!orgId && approval === "active",
   });
   const members = membersQuery.data ?? [];
   const roleQuery = useQuery({
     ...orgActiveRoleQueryOptions(apiClient, orgId),
-    enabled: !!orgId && org?.status === "active",
+    enabled: !!orgId && approval === "active",
   });
   const myRole = roleQuery.data;
   const canManageMembers = isCommunitySettingsRole(myRole);
@@ -150,7 +153,7 @@ function OrganizationDetail() {
       queryFn: async (): Promise<InvitationItem[]> => {
         return apiClient.auth.listInvitations({ organizationId: orgId });
       },
-      enabled: !!orgId && org?.status === "active" && canManageMembers,
+      enabled: !!orgId && approval === "active" && canManageMembers,
     }).data ?? [];
   const apiKeys =
     useQuery({
@@ -162,21 +165,21 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.apiKeys ?? []) as OrganizationApiKey[];
       },
-      enabled: !!orgId && org?.status === "active" && canManageMembers,
+      enabled: !!orgId && approval === "active" && canManageMembers,
     }).data ?? [];
   const canViewSettings = canManageMembers || session?.user?.role === "admin";
   const isOwner = myRole === "owner";
   const tenantQuery = useQuery({
     ...tenantByOrgQueryOptions(apiClient, orgId),
-    enabled: !!orgId && org?.status === "active" && canViewSettings,
+    enabled: !!orgId && approval === "active" && canViewSettings,
   });
   const settingsTenantId = canViewSettings ? tenantQuery.data?.id : undefined;
   const workspace = useTeamWorkspace(isActive).data;
   const canOrganize =
     canManageMembers ||
     (isActive && (workspace?.teams ?? []).some((team) => team.areas.includes("events")));
-  const pendingInvitationsCount = invitations.filter(
-    (invitation) => invitation.status === "pending",
+  const pendingInvitationsCount = invitations.filter((invitation) =>
+    isOpenInvitation(invitation),
   ).length;
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
@@ -224,8 +227,8 @@ function OrganizationDetail() {
   };
   const teamsState = useOrganizationTeams(
     orgId,
-    activeTab === "teams" && org?.status === "active",
-    canManageMembers && org?.status === "active",
+    activeTab === "teams" && approval === "active",
+    canManageMembers && approval === "active",
   );
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
@@ -262,7 +265,7 @@ function OrganizationDetail() {
     );
   }
 
-  if (org?.status !== "active") {
+  if (approval !== "active") {
     return (
       <PageContainer variant="narrow">
         <PageHeader
@@ -272,12 +275,12 @@ function OrganizationDetail() {
         />
         <div className="flex flex-col gap-4" data-testid="orgs-request-status">
           <h2 className="text-lg font-medium">
-            {org?.status === "pending"
+            {approval === "pending"
               ? translate("orgApproval.pending")
               : translate("orgApproval.rejected")}
           </h2>
           <p className="text-sm text-muted-foreground" data-testid="orgs-request-reason">
-            {org?.status === "pending" ? translate("orgApproval.pendingHint") : org.rejectionReason}
+            {approval === "pending" ? translate("orgApproval.pendingHint") : org.rejectionReason}
           </p>
           <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
             {translate("org.back")}
@@ -332,7 +335,7 @@ function OrganizationDetail() {
         org={org}
         settingsTenantId={settingsTenantId}
         startCommunitySlug={
-          org.status === "active" && isOwner && !isPersonal && !settingsTenantId
+          approval === "active" && isOwner && !isPersonal && !settingsTenantId
             ? org.slug
             : undefined
         }

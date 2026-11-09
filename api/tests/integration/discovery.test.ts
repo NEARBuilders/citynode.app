@@ -64,7 +64,7 @@ describe("discovery publishing", () => {
     await editor.saveDiscoveryProfile({ ...input, published: false });
     expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toBeNull();
     await editor.saveDiscoveryProfile(input);
-    await provisioner.updateTenant({ tenantId: tenant.id, status: "suspended" });
+    await provisioner.suspendTenant({ tenantId: tenant.id });
     expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toBeNull();
     expect(await publicClient.listDiscovery({})).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ nodeId: node.id })]),
@@ -102,7 +102,7 @@ it("lists active communities without a profile as basic entries only", async () 
     expect.objectContaining({ published: true, location: "Karachi" }),
   ]);
   const other = await fixture();
-  await other.provisioner.updateTenant({ tenantId: other.tenant.id, status: "suspended" });
+  await other.provisioner.suspendTenant({ tenantId: other.tenant.id });
   expect((await publicClient.listDiscovery({})).some((r) => r.nodeId === other.node.id)).toBe(
     false,
   );
@@ -560,6 +560,11 @@ it("limits curation grants, expires features and privately moderates visitor rep
   expect(await editor.getDiscoveryHistory({ nodeId: node.id })).toEqual(
     expect.arrayContaining([expect.objectContaining({ action: "moderation: unpublish" })]),
   );
+  await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile });
+  await expect(
+    admin.moderateDiscoveryReport({ reportId: report.id, action: "unpublish", note: "Again" }),
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).not.toBeNull();
   await admin.setDiscoveryCurator({ userId: "growth-editor", enabled: false });
   await expect(growth.getDiscoveryStudio()).rejects.toMatchObject({ code: "FORBIDDEN" });
 });

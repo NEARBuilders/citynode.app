@@ -17,7 +17,7 @@ type ProposalEvents = {
 
 type ProposalContext = AuthContext & {
   allowPrivateSubmission?: boolean;
-  resubmissionPolicy?: "rejected-only" | "rejected-or-removed";
+  resubmissionPolicy?: "rejected-only" | "rejected-or-removed" | "unapproved";
 };
 
 const ProposalContextSchema = z.custom<ProposalContext>();
@@ -117,7 +117,7 @@ export default createPlugin({
         return scoped.data.length > 0;
       });
 
-    const publishProposalEvent = (action: string, proposal: any) =>
+    const publishProposalEvent = (action: ProposalEvent["action"], proposal: any) =>
       Effect.gen(function* () {
         const publisher = yield* ProposalPublisher;
         const timestamp = DateTime.formatIso(yield* DateTime.now);
@@ -202,8 +202,9 @@ export default createPlugin({
           actorId,
           actor: context.user ?? undefined,
           resubmissionPolicy:
-            input.pluginId === "node" ? "rejected-only" : context.resubmissionPolicy,
-          requireSameActor: input.pluginId === "node",
+            input.pluginId === "node"
+              ? "rejected-only"
+              : (context.resubmissionPolicy ?? "unapproved"),
         });
         yield* publishProposalEvent("proposed", result);
         return { data: result };
@@ -262,7 +263,7 @@ export default createPlugin({
           actorId: context.userId!,
           actor: context.user ?? undefined,
         });
-        yield* publishProposalEvent("removed", result);
+        yield* publishProposalEvent("remove_started", result);
         return { data: result };
       }),
 

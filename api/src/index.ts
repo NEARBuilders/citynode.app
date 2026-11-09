@@ -1266,6 +1266,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         yield* requirePendingTeamRequest(request);
+        const settled = yield* services.teamJoinRequests.settle(
+          request.id,
+          input.decision === "approve" ? "approved" : "declined",
+          context.userId,
+        );
+        if (!settled) {
+          return yield* Effect.fail(teamJoinConflict("This team request is no longer pending"));
+        }
         if (input.decision === "approve") {
           yield* Effect.tryPromise({
             try: () =>
@@ -1280,15 +1288,18 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 : new ORPCError("CONNECTION_ERROR", {
                     message: "Couldn't add them to the team. Try again.",
                   }),
-          });
-        }
-        const settled = yield* services.teamJoinRequests.settle(
-          request.id,
-          input.decision === "approve" ? "approved" : "declined",
-          context.userId,
-        );
-        if (!settled) {
-          return yield* Effect.fail(teamJoinConflict("This team request is no longer pending"));
+          }).pipe(
+            Effect.tapError(() =>
+              services.teamJoinRequests.unsettle(request.id, context.userId).pipe(
+                Effect.catch((error) =>
+                  Effect.logError("Team request stayed approved after a failed add", {
+                    requestId: request.id,
+                    error,
+                  }),
+                ),
+              ),
+            ),
+          );
         }
         return yield* refreshTeamRequest(community, request.id);
       }),
@@ -1396,7 +1407,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return yield* services.tenants.updateTenant(tenant.id, {
             name: input.name,
             accountId: input.accountId,
-            status: input.status,
             allowUiOverrides: input.allowUiOverrides,
             allowBackendOverrides: input.allowBackendOverrides,
             allowSsr: input.allowSsr,
@@ -1421,9 +1431,27 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return result;
         }),
 
+      restoreTenant: builder.restoreTenant
+        .use(requireAuth)
+        .use(requireOrgRole("owner"))
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          yield* authorizedTenant(services, input, context);
+          const result = yield* services.tenants.restoreTenant(input.tenantId);
+          if (!result) {
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Tenant not found",
+                data: { resource: "tenant", resourceId: input.tenantId },
+              }),
+            );
+          }
+          return result;
+        }),
+
       suspendTenant: builder.suspendTenant
         .use(requireAuth)
-        .use(requireOrgRole("admin"))
+        .use(requireOrgRole("owner", "admin"))
         .effect(function* ({ input, context, errors }) {
           const services = yield* ApiServices;
           yield* authorizedTenant(services, input, context);
@@ -1441,7 +1469,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       reactivateTenant: builder.reactivateTenant
         .use(requireAuth)
-        .use(requireOrgRole("admin"))
+        .use(requireOrgRole("owner", "admin"))
         .effect(function* ({ input, context, errors }) {
           const services = yield* ApiServices;
           yield* authorizedTenant(services, input, context);

@@ -20,6 +20,7 @@ import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
 import { canOperateNodes, isCommunitySettingsRole } from "@/lib/team-workspace";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
+import { tenantConfigStatus } from "@/lib/tenant-status";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
   resolveOrgSlug,
@@ -141,6 +142,11 @@ export function TenantDetailContent({
   const hostname = resolvePrimaryHostname(bindings);
   const orgSlug = resolveOrgSlug(organizations, tenant?.orgId);
 
+  async function rejectLifecycleChange(error: Error) {
+    toast.error(appErrorMessage(error, translate));
+    await invalidatePersistedTenantQueries(queryClient);
+  }
+
   async function finishPersistedChange(message: string, publicationError: Error | null) {
     const refreshError = await invalidatePersistedTenantQueries(queryClient);
     if (publicationError) {
@@ -167,7 +173,7 @@ export function TenantDetailContent({
               baseAccount: parentAccount,
               hostname,
               title: updated.name,
-              status: updated.status === "active" ? "active" : undefined,
+              status: tenantConfigStatus(updated.status),
               mode: publishMode,
             }),
           )
@@ -191,7 +197,7 @@ export function TenantDetailContent({
           baseAccount: parentAccount,
           hostname,
           title: updated.name,
-          status: "suspended",
+          status: tenantConfigStatus(updated.status),
           mode: publishMode,
         }),
       );
@@ -199,6 +205,7 @@ export function TenantDetailContent({
     onSuccess: async ({ publicationError }) => {
       await finishPersistedChange(translate("tenant.suspended"), publicationError);
     },
+    onError: rejectLifecycleChange,
   });
 
   const reactivateMutation = useMutation({
@@ -212,7 +219,7 @@ export function TenantDetailContent({
           baseAccount: parentAccount,
           hostname,
           title: updated.name,
-          status: "active",
+          status: tenantConfigStatus(updated.status),
           mode: publishMode,
         }),
       );
@@ -220,6 +227,29 @@ export function TenantDetailContent({
     onSuccess: async ({ publicationError }) => {
       await finishPersistedChange(translate("tenant.reactivated"), publicationError);
     },
+    onError: rejectLifecycleChange,
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      const gid = assertGateway();
+      const updated = await apiClient.restoreTenant({ tenantId });
+      return publishPersistedTenantChange(updated, () =>
+        publishTenantConfigForMode(apiClient, auth, {
+          accountId: updated.accountId,
+          gatewayId: gid,
+          baseAccount: parentAccount,
+          hostname,
+          title: updated.name,
+          status: tenantConfigStatus(updated.status),
+          mode: publishMode,
+        }),
+      );
+    },
+    onSuccess: async ({ publicationError }) => {
+      await finishPersistedChange(translate("tenant.restored"), publicationError);
+    },
+    onError: rejectLifecycleChange,
   });
 
   const republishMutation = useMutation({
@@ -231,10 +261,7 @@ export function TenantDetailContent({
         baseAccount: parentAccount,
         hostname,
         title: tenant?.name ?? "",
-        status:
-          tenant?.status === "suspended" || tenant?.status === "pending_deletion"
-            ? tenant?.status
-            : undefined,
+        status: tenant ? tenantConfigStatus(tenant.status) : undefined,
         mode: publishMode,
       });
     },
@@ -253,7 +280,7 @@ export function TenantDetailContent({
           baseAccount: parentAccount,
           hostname,
           title: updated.name,
-          status: "pending_deletion",
+          status: tenantConfigStatus(updated.status),
           mode: publishMode,
         }),
       );
@@ -267,7 +294,7 @@ export function TenantDetailContent({
       setDeleteOpen(false);
       await router.navigate({ to: "/" });
     },
-    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
+    onError: rejectLifecycleChange,
   });
 
   const node = selectTenantNode(nodes, nodeId);
@@ -355,6 +382,7 @@ export function TenantDetailContent({
             isAdmin={isAdmin}
             suspend={suspendMutation}
             reactivate={reactivateMutation}
+            restore={restoreMutation}
             open={deleteOpen}
             isPending={deleteMutation.isPending}
             onOpen={() => setDeleteOpen(true)}

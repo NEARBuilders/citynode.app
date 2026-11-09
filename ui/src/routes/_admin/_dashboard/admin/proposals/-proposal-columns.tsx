@@ -3,15 +3,15 @@ import { Badge, Button, LocalDate } from "@/components";
 import type { DataTableColumnDef } from "@/components/data-table";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
+import {
+  phaseFollowsDecision,
+  proposalNeedsAction,
+  proposalPhase,
+  proposalPhaseBadge,
+} from "@/lib/proposal-phase";
 import type { Proposal } from "@/lib/queries/proposals";
 import { humanize } from "../-admin-ui";
-import {
-  proposalNeedsAction,
-  proposalReviewStatusVariant,
-  proposalSetupStatus,
-  proposalTitle,
-  proposalTypeLabel,
-} from "./-proposal-review";
+import { proposalReviewStatusVariant, proposalTitle, proposalTypeLabel } from "./-proposal-review";
 
 export function ProposalLink({ proposal, className }: { proposal: Proposal; className?: string }) {
   const translate = useAppTranslation();
@@ -28,7 +28,8 @@ export function ProposalLink({ proposal, className }: { proposal: Proposal; clas
 }
 
 export function ProposalStatusCell({ proposal, t }: { proposal: Proposal; t: AppTranslator }) {
-  const setup = proposalSetupStatus(proposal, t);
+  const phase = proposalPhase(proposal);
+  const badge = phaseFollowsDecision(phase) ? proposalPhaseBadge(phase, t) : null;
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <Badge
@@ -37,9 +38,9 @@ export function ProposalStatusCell({ proposal, t }: { proposal: Proposal; t: App
       >
         {humanize(proposal.reviewStatus, t)}
       </Badge>
-      {setup && (
-        <Badge variant={setup.variant} data-testid="admin-proposal-setup-status">
-          {setup.label}
+      {badge && (
+        <Badge variant={badge.variant} data-testid="admin-proposal-phase">
+          {badge.label}
         </Badge>
       )}
     </span>
@@ -102,7 +103,7 @@ export function createProposalColumns(
       header: "",
       cell: ({ row }) => (
         <Button
-          variant={proposalNeedsAction(row.original) ? "outline" : "ghost"}
+          variant={proposalNeedsAction(proposalPhase(row.original)) ? "outline" : "ghost"}
           size="sm"
           nativeButton={false}
           render={
@@ -115,7 +116,7 @@ export function createProposalColumns(
         >
           {row.original.reviewStatus === "pending"
             ? t("common.review")
-            : proposalNeedsAction(row.original)
+            : proposalNeedsAction(proposalPhase(row.original))
               ? t("admin.proposal.resume")
               : t("common.view")}
         </Button>

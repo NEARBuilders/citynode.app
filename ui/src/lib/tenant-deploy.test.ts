@@ -2,6 +2,7 @@ import { Near } from "near-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient, useAuthClient } from "@/app";
 import {
+  findOpenTenantConfigProposal,
   proposeTenantConfigAsMember,
   publishDaoTenantConfig,
   publishTenantConfigForMode,
@@ -473,5 +474,60 @@ describe("proposeTenantConfigAsMember", () => {
     ).rejects.toThrow("Connect your NEAR wallet first");
 
     expect(t.view).not.toHaveBeenCalled();
+  });
+});
+
+describe("findOpenTenantConfigProposal", () => {
+  const nowNs = 1_760_000_000_000n * 1_000_000n;
+  const hourNs = 3_600_000_000_000n;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function configProposal(id: number, ageHours: bigint) {
+    return {
+      id,
+      proposer: "alice.near",
+      description: "Set homepage",
+      kind: {
+        FunctionCall: {
+          receiver_id: "dev.everything.near",
+          actions: [{ method_name: "__fastdata_kv", args: "e30=", deposit: "0", gas: "1" }],
+        },
+      },
+      status: "InProgress",
+      vote_counts: {},
+      votes: {},
+      submission_time: (nowNs - ageHours * hourNs).toString(),
+    };
+  }
+
+  function stubDao(proposals: ReturnType<typeof configProposal>[]) {
+    vi.spyOn(Near.prototype, "rpc", "get").mockReturnValue({
+      getBlock: () => Promise.resolve({ header: { timestamp_nanosec: nowNs.toString() } }),
+    } as never);
+    vi.spyOn(Near.prototype, "view").mockImplementation((async (
+      _contract: string,
+      method: string,
+      args: { from_index: number; limit: number },
+    ) => {
+      if (method === "get_policy")
+        return { roles: [], proposal_period: (168n * hourNs).toString() };
+      if (method === "get_last_proposal_id") return proposals.length;
+      return proposals.slice(args.from_index, args.from_index + args.limit);
+    }) as never);
+  }
+
+  it("ignores a config proposal stored as InProgress after its voting period ended", async () => {
+    stubDao([configProposal(0, 200n)]);
+    await expect(findOpenTenantConfigProposal("chicago.sputnik-dao.near")).resolves.toBeNull();
+  });
+
+  it("finds a config proposal still inside its voting period", async () => {
+    stubDao([configProposal(0, 200n), configProposal(1, 1n)]);
+    await expect(findOpenTenantConfigProposal("chicago.sputnik-dao.near")).resolves.toMatchObject({
+      id: 1,
+    });
   });
 });

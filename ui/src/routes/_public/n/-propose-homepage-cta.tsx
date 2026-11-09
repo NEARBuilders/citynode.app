@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { Button } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
+import { organizationApproval } from "@/lib/organization-approval";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isCommunitySettingsRole } from "@/lib/team-workspace";
@@ -27,14 +28,18 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
   const tenants = useQueries({
     queries: organizations.map((org) => ({
       ...tenantByOrgQueryOptions(apiClient, org.id),
-      enabled: enabled && org.status === "active",
+      enabled: enabled && organizationApproval(org) === "active",
     })),
   });
 
   const owningOrg = enabled
     ? organizations.find((org, index) => {
         const tenant = tenants[index]?.data;
-        return org.status === "active" && tenant?.id === tenantId && tenant.ownerKind === "dao";
+        return (
+          organizationApproval(org) === "active" &&
+          tenant?.id === tenantId &&
+          tenant.ownerKind === "dao"
+        );
       })
     : undefined;
 

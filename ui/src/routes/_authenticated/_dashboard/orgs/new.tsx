@@ -125,12 +125,12 @@ function NewOrganization() {
     };
   }, [slugTaken, formValues.name, slugValue, form, apiClient]);
 
-  const slugStatus = slugChecking
+  const slugStatus: "idle" | "checking" | "available" | "taken" = slugChecking
     ? "checking"
     : slugTaken
-      ? translate("org.handleTaken")
+      ? "taken"
       : slugValue
-        ? translate("org.handleAvailable")
+        ? "available"
         : "idle";
 
   return (

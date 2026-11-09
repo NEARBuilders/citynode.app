@@ -14,6 +14,7 @@ const orgs = new Map<string, StubOrg>();
 const addCalls: Array<{ caller: string; teamId: string; userId: string }> = [];
 const memberPages: Array<{ limit?: number; offset?: number }> = [];
 let failAdd = false;
+let holdAdd: Promise<void> | null = null;
 
 function callerId(context: unknown) {
   return (context as { userId?: string }).userId ?? "";
@@ -66,6 +67,7 @@ const authStub = {
       const caller = callerId(context);
       const org = orgFor(input.organizationId, caller);
       addCalls.push({ caller, teamId: input.teamId, userId: input.userId });
+      if (holdAdd) await holdAdd;
       if (failAdd) throw new Error("upstream down");
       const role = org.members.get(caller)?.role;
       if (role !== "owner" && role !== "admin") {
@@ -135,6 +137,7 @@ afterAll(async () => {
 beforeEach(() => {
   addCalls.length = 0;
   failAdd = false;
+  holdAdd = null;
 });
 
 describe("team join board", () => {
@@ -311,6 +314,31 @@ describe("deciding requests", () => {
     ).rejects.toMatchObject({ code: "CONNECTION_ERROR" });
     const board = await (await as("owner")).getTeamJoinBoard({ organizationId });
     expect(board.requests.find((entry) => entry.id === request.id)?.status).toBe("pending");
+  });
+
+  it("refuses a withdrawal while an approval is adding the member upstream", async () => {
+    const { organizationId, ops } = community();
+    const member = await as("member");
+    const request = await member.requestToJoinTeam({ organizationId, teamId: ops });
+    let release!: () => void;
+    holdAdd = new Promise((resolve) => {
+      release = resolve;
+    });
+    const approving = (await as("owner")).decideTeamJoinRequest({
+      requestId: request.id,
+      decision: "approve",
+    });
+    try {
+      await expect.poll(() => addCalls.length).toBe(1);
+      await expect(member.withdrawTeamJoinRequest({ requestId: request.id })).rejects.toMatchObject(
+        {
+          code: expect.stringMatching(/CONFLICT|NOT_FOUND/),
+        },
+      );
+    } finally {
+      release();
+    }
+    expect((await approving).status).toBe("approved");
   });
 
   it("lets owners decline, and refuses plain members, team members and platform admins", async () => {

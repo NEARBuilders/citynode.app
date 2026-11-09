@@ -2,7 +2,7 @@ import { RocketLaunchIcon } from "@phosphor-icons/react";
 import { useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getGatewayId, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { EmptyState, PageContainer, PageHeader } from "@/components";
@@ -12,8 +12,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { AppActionError, appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { useDaoConnection } from "@/lib/dao-connect";
+import { organizationApproval } from "@/lib/organization-approval";
 import { pageTitle } from "@/lib/page-title";
 import { isPersonalOrganization } from "@/lib/personal-organization";
+import { proposalPhase } from "@/lib/proposal-phase";
 import {
   childNodesQueryOptions,
   nodeByIdQueryOptions,
@@ -93,10 +95,6 @@ function ApplyPage() {
   const [revising, setRevising] = useState(false);
   const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
   const [reopenedStep, setReopenedStep] = useState<ApplyStepId | null>(null);
-  const handleDaoVerified = useCallback(
-    ({ daoAccountId }: { daoAccountId: string }) => setVerifiedDaoAccountId(daoAccountId),
-    [],
-  );
   const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
   const { data: session, isPending: sessionPending } = useQuery(sessionQueryOptions(authClient));
   const { data: organizations, isPending: organizationsPending } = useQuery(
@@ -182,7 +180,7 @@ function ApplyPage() {
   const candidateOrg = requestedOrg ?? activeOrg;
   const candidateOrgEligible =
     !!candidateOrg &&
-    candidateOrg.status === "active" &&
+    organizationApproval(candidateOrg) === "active" &&
     !candidateOrg.metadata?.communityProposalId &&
     !isPersonalOrganization(candidateOrg, session?.user?.id);
   const { data: orgMembers, isFetching: orgMembersLoading } = useQuery({
@@ -225,11 +223,6 @@ function ApplyPage() {
   const rootNodes = (queriedRootNodes ?? initialRootNodes).filter(
     (node) => node.kind === "country",
   );
-  useEffect(() => {
-    if (verifiedDaoAccountId && verifiedDaoAccountId !== daoConnection.daoAccountId) {
-      setVerifiedDaoAccountId(null);
-    }
-  }, [daoConnection.daoAccountId, verifiedDaoAccountId]);
 
   const { data: stateNodes = [], isLoading: statesLoading } = useQuery({
     ...childNodesQueryOptions(apiClient, rootParentId),
@@ -293,8 +286,7 @@ function ApplyPage() {
         name={
           typeof existingPayload?.name === "string" ? existingPayload.name : formValues.name.trim()
         }
-        reviewStatus={existingApplication?.reviewStatus ?? "pending"}
-        applyStatus={existingApplication?.applyStatus ?? "not_started"}
+        phase={existingApplication ? proposalPhase(existingApplication) : "in-review"}
         rejectionReason={existingApplication?.rejectionReason ?? null}
         progress={existingApplication}
         daoAccountId={
@@ -363,7 +355,7 @@ function ApplyPage() {
         >
           <ApplyDaoStep
             verified={daoVerified}
-            onDaoVerified={handleDaoVerified}
+            onDaoVerifiedChange={setVerifiedDaoAccountId}
             onContinue={() => setReopenedStep(null)}
           />
         </ApplyStep>

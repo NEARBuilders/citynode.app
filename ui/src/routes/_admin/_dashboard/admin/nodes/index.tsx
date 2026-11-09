@@ -31,7 +31,8 @@ import {
   type AdminNodeListScope,
   adminNodeListQueryOptions,
 } from "@/lib/queries/nodes";
-import { humanize, ListSkeleton, tenantStatusTone } from "../-admin-ui";
+import { tenantStatusTone } from "@/lib/tenant-status";
+import { humanize, ListSkeleton } from "../-admin-ui";
 import { filterNodeRows } from "./-node-management";
 
 type AdminNodeSearch = {

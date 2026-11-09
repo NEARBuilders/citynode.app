@@ -317,6 +317,11 @@ function createHarness({
       server.nodes = [makeNode("reactivated-node")];
       return server.tenant;
     }),
+    restoreTenant: vi.fn(async () => {
+      events.push("restoreTenant");
+      server.tenant = { ...server.tenant, status: "active", updatedAt: "2026-01-05T00:00:00.000Z" };
+      return server.tenant;
+    }),
     deleteTenant: vi.fn(async () => {
       events.push("deleteTenant");
       server.tenant = {
@@ -452,6 +457,20 @@ describe("tenant detail mutations", () => {
     ]);
   });
 
+  it("reports a refused suspension instead of failing silently", async () => {
+    const current = createHarness();
+    vi.mocked(current.apiClient.suspendTenant).mockRejectedValueOnce(
+      new Error("This community is pending deletion and can't be suspended"),
+    );
+    renderTenant(current);
+
+    await screen.findByText("Original tenant");
+    await confirmSuspend();
+
+    await waitFor(() => expect(current.toast.error).toHaveBeenCalledOnce());
+    expect(current.publish).not.toHaveBeenCalled();
+  });
+
   it("refreshes persisted state and reports a partial success when suspension publication fails", async () => {
     const current = createHarness({ publishError: new Error("publisher unavailable") });
     const { queryClient } = renderTenant(current);
@@ -503,6 +522,31 @@ describe("tenant detail mutations", () => {
     expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
       status: "pending_deletion",
     });
+  });
+
+  it("lets an owner restore a community queued for deletion and republishes it as active", async () => {
+    const current = createHarness({ status: "pending_deletion" });
+    const { queryClient } = renderTenant(current);
+
+    await screen.findByText("Original tenant");
+    fireEvent.click(await screen.findByTestId("tenant.restore"));
+
+    await waitFor(() => expect(current.apiClient.restoreTenant).toHaveBeenCalledOnce());
+    await waitFor(() => expect(current.toast.success).toHaveBeenCalledWith("Community restored"));
+    expect(current.publish).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ status: "active" }),
+    );
+    expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
+      status: "active",
+    });
+  });
+
+  it("offers restore only to owners", async () => {
+    renderTenant(createHarness({ status: "pending_deletion", role: "admin" }));
+    await screen.findByText("Original tenant");
+    expect(screen.queryByTestId("tenant.restore")).toBeNull();
   });
 
   it("asks for confirmation before suspending", async () => {

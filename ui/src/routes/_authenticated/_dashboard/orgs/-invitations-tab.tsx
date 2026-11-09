@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ConfirmDialog, EmptyState, SectionHeader, TabsContent } from "@/components";
 import { ItemGroup, ItemSeparator } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
+import { isOpenInvitation } from "@/lib/invitation-status";
 import { InvitationRow, type InvitationRowInvitation } from "./-invitation-row";
 import { InviteMemberForm, type InviteMemberValues } from "./-invite-member-form";
 
@@ -31,7 +32,7 @@ export function InvitationsTab({
 }) {
   const translate = useAppTranslation();
   const [cancelling, setCancelling] = useState<InvitationRowInvitation | null>(null);
-  const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
+  const pendingInvitations = invitations.filter((invitation) => isOpenInvitation(invitation));
   const teamNames = new Map(teams.map((team) => [team.id, team.name]));
   const canInvite = canManageMembers && !isPersonal;
 

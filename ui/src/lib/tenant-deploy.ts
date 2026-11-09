@@ -15,9 +15,11 @@ import {
   fetchSputnikPolicy,
   findPendingProposalForPlan,
   proposeAsSession,
-  readRecentDaoProposals,
+  readOpenDaoProposals,
   type SessionWallet,
+  type SputnikPolicy,
 } from "./sputnik-proposals";
+import type { TenantConfigStatus } from "./tenant-status";
 
 const CONFIG_GAS = "300000000000000";
 
@@ -54,8 +56,11 @@ export async function publishDaoTenantConfig(
   });
 }
 
-export async function findOpenTenantConfigProposal(daoAccountId: string) {
-  return findPendingProposalForPlan(await readRecentDaoProposals(daoAccountId), CONFIG_WRITE_PLAN);
+export async function findOpenTenantConfigProposal(daoAccountId: string, policy?: SputnikPolicy) {
+  return findPendingProposalForPlan(
+    await readOpenDaoProposals(daoAccountId, policy),
+    CONFIG_WRITE_PLAN,
+  );
 }
 
 export type TenantConfigPublishMode = "platform" | "dao";
@@ -69,7 +74,7 @@ export interface TenantConfigPublishInput {
   description?: string;
   repository?: string;
   app?: { ui: TenantUiOverride };
-  status?: "active" | "suspended" | "pending_deletion";
+  status?: TenantConfigStatus;
   mode: TenantConfigPublishMode;
 }
 

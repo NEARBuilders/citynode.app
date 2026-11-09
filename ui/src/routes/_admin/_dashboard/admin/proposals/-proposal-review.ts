@@ -3,10 +3,6 @@ import type { ApiClient } from "@/app";
 import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
-import {
-  communitySetupNeedsAttention,
-  pendingPublicationProposalId,
-} from "@/routes/_authenticated/_dashboard/-application-progress";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 
 export { proposalReviewQueryKeys } from "@/lib/queries/proposals";
@@ -38,40 +34,6 @@ export function proposalReviewStatusVariant(
   if (status === "pending") return "warning" as const;
   if (status === "removed") return "outline" as const;
   return "success" as const;
-}
-
-type SetupStatusInput = Parameters<typeof pendingPublicationProposalId>[0] &
-  Parameters<typeof communitySetupNeedsAttention>[0];
-
-export function proposalSetupStatus(
-  proposal: SetupStatusInput,
-  t: AppTranslator = translateEnglishAppMessage,
-) {
-  if (proposal.reviewStatus !== "approved") return null;
-  if (pendingPublicationProposalId(proposal) && proposal.applyStatus !== "applied") {
-    return { label: t("admin.proposal.awaitingDaoVote"), variant: "warning" as const };
-  }
-  if (proposal.applyStatus === "failed") {
-    return { label: t("admin.proposal.setupFailed"), variant: "destructive" as const };
-  }
-  if (communitySetupNeedsAttention(proposal)) {
-    return { label: t("admin.proposal.setupStalled"), variant: "destructive" as const };
-  }
-  return null;
-}
-
-export function proposalNeedsAction(proposal: SetupStatusInput) {
-  return proposal.reviewStatus === "pending" || communitySetupNeedsAttention(proposal);
-}
-
-/** A stalled setup is still applying, and the server refuses to reject it until it fails. */
-export function proposalCanBeRejected(
-  proposal: Pick<SetupStatusInput, "reviewStatus" | "applyStatus">,
-) {
-  return (
-    proposal.reviewStatus === "pending" ||
-    (proposal.reviewStatus === "approved" && proposal.applyStatus === "failed")
-  );
 }
 
 interface ProposalIdentity {

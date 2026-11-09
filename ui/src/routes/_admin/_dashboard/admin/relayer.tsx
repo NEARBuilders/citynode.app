@@ -58,18 +58,14 @@ function AdminRelayerPage() {
       toast.error(translate("admin.relayer.invalidAmount"));
       return;
     }
-    const connected = await auth.near.ensureConnected();
-    if (!connected) {
-      toast.error(translate("wallet.connectFirst"));
-      return;
-    }
-    const signer = auth.near.getAccountId();
-    if (!signer) {
-      toast.error(translate("wallet.connectFirst"));
-      return;
-    }
     setSending(true);
     try {
+      const connected = await auth.near.ensureConnected();
+      const signer = connected ? auth.near.getAccountId() : null;
+      if (!signer) {
+        toast.error(translate("wallet.connectFirst"));
+        return;
+      }
       const result = await auth.near
         .getNearClient()
         .transaction(signer)
@@ -104,12 +100,15 @@ function AdminRelayerPage() {
   };
 
   const handleConnect = async () => {
-    const connected = await auth.near.ensureConnected();
-    if (connected) {
-      toast.success(translate("admin.walletConnected"));
-      refresh();
-    } else {
-      toast.error(translate("admin.walletDeclined"));
+    try {
+      if (await auth.near.ensureConnected()) {
+        toast.success(translate("admin.walletConnected"));
+        refresh();
+      } else {
+        toast.error(translate("admin.walletDeclined"));
+      }
+    } catch (err) {
+      toast.error(appErrorMessage(err, translate));
     }
   };
 

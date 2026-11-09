@@ -29,14 +29,10 @@ import {
 } from "@/components/ui/item";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
+import { proposalPhase, proposalPhaseBadge } from "@/lib/proposal-phase";
 import { DaoProposalsNote } from "./-dao-proposals-note";
 import { NODE_PLUGIN_ID, nodeProposalsQueryOptions } from "./-node-proposals-query";
-import {
-  applyStatusLabel,
-  proposalTitle,
-  reviewStatusBadge,
-  sortProposals,
-} from "./-proposal-summary";
+import { proposalTitle, sortProposals } from "./-proposal-summary";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/proposals/")({
   component: NodeProposals,
@@ -127,9 +123,9 @@ function NodeProposals() {
       ) : (
         <ItemGroup data-testid="dashboard-node.proposals">
           {proposals.map((proposal) => {
-            const badge = reviewStatusBadge(proposal.reviewStatus, translate);
-            const applied = applyStatusLabel(proposal.applyStatus, translate);
-            const reviewable = canReview && proposal.reviewStatus === "pending";
+            const phase = proposalPhase(proposal);
+            const badge = proposalPhaseBadge(phase, translate);
+            const reviewable = canReview && phase === "in-review";
             const isPrimary = reviewable && !primaryUsed;
             if (isPrimary) primaryUsed = true;
             return (
@@ -150,7 +146,6 @@ function NodeProposals() {
                   </ItemTitle>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={badge.variant}>{badge.label}</Badge>
-                    {applied && <Badge variant="outline">{applied}</Badge>}
                   </div>
                   <ItemDescription>
                     {translate("common.submitted")}

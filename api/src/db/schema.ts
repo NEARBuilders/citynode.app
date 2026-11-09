@@ -13,13 +13,9 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { TENANT_STATUSES, type TenantOwnerKind } from "../lib/tenant-states";
 
-export const tenantStatus = pgEnum("tenant_status", [
-  "active",
-  "pending",
-  "suspended",
-  "pending_deletion",
-]);
+export const tenantStatus = pgEnum("tenant_status", TENANT_STATUSES);
 
 export const validatorRole = pgEnum("validator_role", ["official", "community"]);
 
@@ -37,7 +33,7 @@ export const tenants = pgTable("tenants", {
   ownerUserId: text("owner_user_id"),
   name: text("name").notNull(),
   status: tenantStatus("status").default("active").notNull(),
-  ownerKind: text("owner_kind").default("platform").notNull(),
+  ownerKind: text("owner_kind").$type<TenantOwnerKind>().default("platform").notNull(),
   allowUiOverrides: boolean("allow_ui_overrides").default(true).notNull(),
   allowBackendOverrides: boolean("allow_backend_overrides").default(false).notNull(),
   allowSsr: boolean("allow_ssr").default(false).notNull(),

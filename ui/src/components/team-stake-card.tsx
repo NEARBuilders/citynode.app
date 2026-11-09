@@ -1027,11 +1027,12 @@ function PoolActionDialog({
 
   const max = maxBalanceOf(action, accountView ?? undefined);
   const fill = yoctoToNearInput(action === "unstake" ? maxMinusOneNear(max) : max);
-  const [amount, setAmount] = useState("");
+  const [typed, setTyped] = useState<string | null>(null);
+  const amount = typed ?? fill;
   const parsed = parseUnstakeAmount(amount, max);
   useEffect(() => {
-    if (open) setAmount(fill);
-  }, [open, fill]);
+    if (open) setTyped(null);
+  }, [open]);
   const propose = useMutation({
     mutationFn: async () => {
       if (!parsed)
@@ -1061,10 +1062,10 @@ function PoolActionDialog({
               data-testid="dashboard-node.team-stake-unstake-amount"
               inputMode="decimal"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => setTyped(event.target.value)}
             />
             <InputGroupAddon align="inline-end">
-              <InputGroupButton onClick={() => setAmount(fill)}>
+              <InputGroupButton onClick={() => setTyped(null)}>
                 {translate("stake.max")}
               </InputGroupButton>
             </InputGroupAddon>

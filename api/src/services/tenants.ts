@@ -10,16 +10,24 @@ import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
   nodes as nodesTable,
-  type tenantStatus,
   tenants as tenantsTable,
   validators as validatorsTable,
 } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
+import type { TenantOwnerKind, TenantStatus } from "../lib/tenant-states";
 import { nodeKindOf } from "./nodes";
 
-export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
+const TENANT_TRANSITIONS = {
+  delete: { from: ["active"], to: "pending_deletion", label: "deleted" },
+  suspend: { from: ["active"], to: "suspended", label: "suspended" },
+  reactivate: { from: ["suspended", "pending"], to: "active", label: "reactivated" },
+  restore: { from: ["pending_deletion"], to: "active", label: "restored" },
+} as const satisfies Record<
+  string,
+  { from: readonly TenantStatus[]; to: TenantStatus; label: string }
+>;
 
-export type TenantOwnerKind = "platform" | "dao" | "user";
+type TenantTransition = keyof typeof TENANT_TRANSITIONS;
 
 export type TenantEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
@@ -141,13 +149,14 @@ export interface TenantsService {
     input: Partial<
       Pick<
         TenantInput,
-        "name" | "accountId" | "status" | "allowUiOverrides" | "allowBackendOverrides" | "allowSsr"
+        "name" | "accountId" | "allowUiOverrides" | "allowBackendOverrides" | "allowSsr"
       >
     >,
   ): TenantEffect<TenantRecord>;
   softDeleteTenant(id: string): TenantEffect<TenantRecord | null>;
   suspendTenant(id: string): TenantEffect<TenantRecord | null>;
   reactivateTenant(id: string): TenantEffect<TenantRecord | null>;
+  restoreTenant(id: string): TenantEffect<TenantRecord | null>;
   resolveTenantByAccountId(accountId: string): TenantEffect<TenantRecord | null>;
   resolveTenantById(id: string): TenantEffect<TenantRecord | null>;
   resolveTenantByOrgId(orgId: string): TenantEffect<TenantRecord | null>;
@@ -207,7 +216,7 @@ function toTenantRecord(row: TenantRow): TenantRecord {
     ownerUserId: row.ownerUserId,
     name: row.name,
     status: row.status,
-    ownerKind: (row.ownerKind ?? "platform") as TenantOwnerKind,
+    ownerKind: row.ownerKind,
     allowUiOverrides: row.allowUiOverrides,
     allowBackendOverrides: row.allowBackendOverrides,
     allowSsr: row.allowSsr,
@@ -253,11 +262,42 @@ export const TenantsLive = Layer.effect(
     const config = yield* Effect.serviceOption(TenantsConfigTag);
     const gatewayDomains = config._tag === "Some" ? config.value.gatewayDomains : [];
 
-    const isGatewayZoneHostname = (hostname: string) =>
-      gatewayDomains.some((domain) => hostname.endsWith(`.${domain}`));
+    const verifiesWithoutDns = (hostname: string) =>
+      !hostname.includes(".") || gatewayDomains.some((domain) => hostname.endsWith(`.${domain}`));
 
     const query = <T>(run: () => Promise<T>): TenantEffect<T> =>
       Effect.tryPromise({ try: run, catch: toOrpcError });
+
+    const transitionTenant = (id: string, transition: TenantTransition) =>
+      Effect.gen(function* () {
+        const { from, to, label } = TENANT_TRANSITIONS[transition];
+        const now = new Date();
+        const [row] = yield* query(() =>
+          db
+            .update(tenantsTable)
+            .set({
+              status: to,
+              deletedAt: to === "pending_deletion" ? now : null,
+              updatedAt: now,
+            })
+            .where(and(eq(tenantsTable.id, id), inArray(tenantsTable.status, [...from])))
+            .returning(),
+        );
+        if (row) return toTenantRecord(row);
+        const [current] = yield* query(() =>
+          db
+            .select({ status: tenantsTable.status })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, id)),
+        );
+        if (!current) return null;
+        return yield* Effect.fail(
+          new ORPCError("CONFLICT", {
+            message: `This community is ${current.status.replace("_", " ")} and can't be ${label}`,
+            data: { status: current.status, transition },
+          }),
+        );
+      });
 
     const service: TenantsService = {
       listAllTenants: query(() => db.select().from(tenantsTable)).pipe(
@@ -323,7 +363,7 @@ export const TenantsLive = Layer.effect(
               accountId: row.accountId,
               name: row.name,
               status: row.status,
-              ownerKind: (row.ownerKind ?? "platform") as TenantOwnerKind,
+              ownerKind: row.ownerKind,
               hostname: row.hostname ?? null,
               node:
                 row.nodeId && row.nodeSlug && row.nodeName
@@ -388,8 +428,7 @@ export const TenantsLive = Layer.effect(
             );
           }
 
-          const autoVerified =
-            !input.hostname.includes(".") || isGatewayZoneHostname(input.hostname);
+          const autoVerified = verifiesWithoutDns(input.hostname);
           const verifiedAt = autoVerified ? yield* DateTime.nowAsDate : null;
           const rows = yield* Effect.tryPromise({
             try: () =>
@@ -446,7 +485,7 @@ export const TenantsLive = Layer.effect(
             );
           }
           if (binding.isVerified) return toBindingRecord(binding);
-          if (binding.hostname.includes(".")) {
+          if (!verifiesWithoutDns(binding.hostname)) {
             const records = yield* query(() => resolveTxt(binding.hostname).catch(() => []));
             const expected = `everything-verify=${binding.verificationToken}`;
             if (!records.some((record) => record.join("") === expected)) {
@@ -654,7 +693,7 @@ export const TenantsLive = Layer.effect(
               throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Tenant creation failed" });
             }
 
-            const autoVerified = isGatewayZoneHostname(input.hostname);
+            const autoVerified = verifiesWithoutDns(input.hostname);
             const [binding] = await tx
               .insert(domainBindingsTable)
               .values({
@@ -823,14 +862,15 @@ export const TenantsLive = Layer.effect(
                   });
                 }
 
+                const autoVerified = verifiesWithoutDns(input.hostname);
                 const [binding] = await tx
                   .insert(domainBindingsTable)
                   .values({
                     tenantId: tenant.id,
                     hostname: input.hostname,
                     isPrimary: true,
-                    isVerified: !input.hostname.includes("."),
-                    verifiedAt: input.hostname.includes(".") ? null : new Date(),
+                    isVerified: autoVerified,
+                    verifiedAt: autoVerified ? new Date() : null,
                     verificationToken: generateVerificationToken(),
                   })
                   .returning({ id: domainBindingsTable.id });
@@ -878,41 +918,10 @@ export const TenantsLive = Layer.effect(
           return toTenantRecord(row);
         }),
 
-      softDeleteTenant: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .update(tenantsTable)
-              .set({ status: "pending_deletion", deletedAt: new Date(), updatedAt: new Date() })
-              .where(eq(tenantsTable.id, id))
-              .returning(),
-          );
-          return row ? toTenantRecord(row) : null;
-        }),
-
-      suspendTenant: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .update(tenantsTable)
-              .set({ status: "suspended", updatedAt: new Date() })
-              .where(eq(tenantsTable.id, id))
-              .returning(),
-          );
-          return row ? toTenantRecord(row) : null;
-        }),
-
-      reactivateTenant: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .update(tenantsTable)
-              .set({ status: "active", updatedAt: new Date() })
-              .where(eq(tenantsTable.id, id))
-              .returning(),
-          );
-          return row ? toTenantRecord(row) : null;
-        }),
+      softDeleteTenant: (id) => transitionTenant(id, "delete"),
+      suspendTenant: (id) => transitionTenant(id, "suspend"),
+      reactivateTenant: (id) => transitionTenant(id, "reactivate"),
+      restoreTenant: (id) => transitionTenant(id, "restore"),
 
       resolveTenantByAccountId: (accountId) =>
         Effect.gen(function* () {

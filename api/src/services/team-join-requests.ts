@@ -39,6 +39,7 @@ export interface TeamJoinRequestsService {
     status: Exclude<TeamJoinRequestStatus, "pending" | "closed">,
     decidedByUserId: string,
   ): TeamJoinRequestEffect<boolean>;
+  unsettle(requestId: string, decidedByUserId: string): TeamJoinRequestEffect<void>;
   close(
     closures: ReadonlyArray<{ id: string; reason: TeamJoinClosedReason }>,
   ): TeamJoinRequestEffect<void>;
@@ -139,6 +140,24 @@ export const TeamJoinRequestsLive = Layer.effect(
             .where(and(eq(teamJoinRequests.id, requestId), eq(teamJoinRequests.status, "pending")))
             .returning({ id: teamJoinRequests.id });
           return rows.length > 0;
+        }),
+      unsettle: (requestId, decidedByUserId) =>
+        query(async () => {
+          await db
+            .update(teamJoinRequests)
+            .set({
+              status: "pending",
+              decidedByUserId: null,
+              decidedAt: null,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(teamJoinRequests.id, requestId),
+                eq(teamJoinRequests.status, "approved"),
+                eq(teamJoinRequests.decidedByUserId, decidedByUserId),
+              ),
+            );
         }),
       close: (closures) =>
         query(async () => {

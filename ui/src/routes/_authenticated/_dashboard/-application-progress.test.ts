@@ -7,6 +7,7 @@ function progress(input: Partial<Parameters<typeof communityApplicationProgress>
   return communityApplicationProgress({
     reviewStatus: "approved",
     applyStatus: "applying",
+    removeStatus: "not_started",
     applySteps: {},
     applyTimedOut: false,
     appliedAt: null,

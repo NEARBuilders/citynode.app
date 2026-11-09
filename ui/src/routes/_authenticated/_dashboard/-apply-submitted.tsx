@@ -4,20 +4,14 @@ import { cn } from "cn";
 import { PageContainer } from "@/components";
 import { Button } from "@/components/ui/button";
 import { useAppTranslation } from "@/i18n/runtime";
+import { type ProposalPhase, proposalPhaseBadge, proposalPhaseOutcome } from "@/lib/proposal-phase";
 import type { ApplicationProgressInput } from "./-application-progress";
 import { ApplicationProgressList } from "./-application-progress-list";
-import {
-  type ApplyStatus,
-  applyStatusLabel,
-  type ReviewStatus,
-  reviewStatusBadge,
-} from "./dashboard/node/proposals/-proposal-summary";
 
 export function ApplySubmitted({
   proposalId,
   name,
-  reviewStatus,
-  applyStatus,
+  phase,
   rejectionReason,
   progress,
   daoAccountId,
@@ -26,8 +20,7 @@ export function ApplySubmitted({
 }: {
   proposalId: string;
   name?: string;
-  reviewStatus: ReviewStatus;
-  applyStatus: ApplyStatus;
+  phase: ProposalPhase;
   rejectionReason: string | null;
   progress?: ApplicationProgressInput;
   daoAccountId?: string | null;
@@ -35,12 +28,11 @@ export function ApplySubmitted({
   onApplyAgain?: () => void;
 }) {
   const t = useAppTranslation();
-  const status =
-    applyStatus === "failed"
-      ? t("label.applyFailed")
-      : (applyStatusLabel(applyStatus, t) ?? reviewStatusBadge(reviewStatus, t).label);
-  const failed = reviewStatus === "rejected" || applyStatus === "failed";
-  const pending = reviewStatus === "pending";
+  const status = proposalPhaseBadge(phase, t);
+  const outcome = proposalPhaseOutcome(phase);
+  const failed = outcome === "failed";
+  const pending = outcome === "waiting";
+  const inReview = phase === "in-review";
   return (
     <PageContainer variant="narrow">
       <div
@@ -65,17 +57,15 @@ export function ApplySubmitted({
         </span>
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold text-foreground">{t("apply.status.title")}</h1>
-          {reviewStatus === "pending" && (
+          {inReview && (
             <p className="text-base text-muted-foreground">
               {name ? t("apply.submitted.named", { name }) : t("apply.submitted.yours")}
             </p>
           )}
-          {reviewStatus !== "pending" && name && (
-            <p className="text-base text-muted-foreground">{name}</p>
-          )}
+          {!inReview && name && <p className="text-base text-muted-foreground">{name}</p>}
           <p className="font-mono text-xs break-all text-muted-foreground">{proposalId}</p>
           <p data-testid="apply.current-status" className="font-semibold text-foreground">
-            {status}
+            {status.label}
           </p>
           {rejectionReason && <p className="text-sm text-muted-foreground">{rejectionReason}</p>}
         </div>

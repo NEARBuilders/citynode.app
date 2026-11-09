@@ -26,7 +26,7 @@ export function TenantLiveSite({
   const daoConnection = useDaoConnection();
   const nearAccountId = useNearAccount();
   const hasSigningWallet = isDaoOwned
-    ? daoConnection.status === "connected" && daoConnection.daoAccountId === tenant.accountId
+    ? daoConnection.daoAccountId === tenant.accountId
     : !!nearAccountId;
   const blockedReason = !hostname
     ? translate("tenant.republishAddress")

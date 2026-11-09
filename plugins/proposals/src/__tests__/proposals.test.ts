@@ -407,6 +407,42 @@ describe.sequential("Proposals plugin", () => {
     });
   });
 
+  it("lets only the author edit a pending proposal and never resets an approved one without a policy", async () => {
+    const policyless = (userId: string) =>
+      loaded.createClient({
+        userId,
+        near: testNear(`${userId}.near`),
+        user: testUser(userId, "member"),
+      });
+    const input = {
+      pluginId: "builders",
+      entityId: "policyless-builder.near",
+      payload: { name: "Original" },
+    };
+
+    await policyless("carol").propose(input);
+    const edited = await policyless("carol").propose({ ...input, payload: { name: "Edited" } });
+    expect(edited.data).toMatchObject({ reviewStatus: "pending", payload: { name: "Edited" } });
+    await expect(
+      policyless("mallory").propose({ ...input, payload: { name: "Hijacked" } }),
+    ).rejects.toThrow("This proposal belongs to another applicant");
+
+    const approved = await adminClient().approve({
+      pluginId: input.pluginId,
+      entityId: input.entityId,
+      expectedUpdatedAt: edited.data.updatedAt,
+    });
+    await adminClient().markApplied({
+      pluginId: input.pluginId,
+      entityId: input.entityId,
+      expectedUpdatedAt: approved.data.updatedAt,
+      appliedResourceId: input.entityId,
+    });
+    await expect(
+      policyless("carol").propose({ ...input, payload: { name: "Reset" } }),
+    ).rejects.toThrow("This proposal is already approved");
+  });
+
   it("lets admins reopen rejected proposals and records the action", async () => {
     const input = {
       pluginId: "events",

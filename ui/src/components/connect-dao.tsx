@@ -1,5 +1,5 @@
 import { UsersThreeIcon } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,17 +31,18 @@ export type ConnectDaoPurpose =
   | "community-settings";
 
 interface ConnectDaoProps {
-  onVerified?: (info: { daoAccountId: string }) => void;
+  onVerifiedChange?: (daoAccountId: string | null) => void;
   expectedDaoAccountId?: string | null;
   purpose?: ConnectDaoPurpose;
   variant?: "card" | "plain";
 }
 
 type VerificationState =
+  | { kind: "unchecked" }
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "ok" }
-  | { kind: "dao-ok" }
+  | { kind: "ok"; daoAccountId: string }
+  | { kind: "dao-ok"; daoAccountId: string }
   | { kind: "not-member" }
   | { kind: "not-sputnik" }
   | { kind: "wrong-account"; expectedAccountId: string }
@@ -67,7 +68,7 @@ async function handleDisconnect() {
 }
 
 export function ConnectDao({
-  onVerified,
+  onVerifiedChange,
   expectedDaoAccountId,
   purpose,
   variant = "card",
@@ -76,16 +77,12 @@ export function ConnectDao({
   const primaryAccountId = useNearAccount();
   useDaoAutoRestore(primaryAccountId);
   const connection = useDaoConnection();
-  const [verification, setVerification] = useState<VerificationState>({ kind: "idle" });
+  const [verification, setVerification] = useState<VerificationState>({ kind: "unchecked" });
 
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      if (
-        connection.status !== "connected" ||
-        !connection.daoAccountId ||
-        (purpose !== "proposal-review" && !primaryAccountId)
-      ) {
+      if (!connection.daoAccountId || (purpose !== "proposal-review" && !primaryAccountId)) {
         setVerification({ kind: "idle" });
         return;
       }
@@ -102,8 +99,7 @@ export function ConnectDao({
             setVerification({ kind: "not-sputnik" });
             return;
           }
-          setVerification({ kind: "dao-ok" });
-          onVerified?.({ daoAccountId: connection.daoAccountId });
+          setVerification({ kind: "dao-ok", daoAccountId: connection.daoAccountId });
           return;
         }
         if (!primaryAccountId) return;
@@ -117,8 +113,7 @@ export function ConnectDao({
           setVerification({ kind: "not-member" });
           return;
         }
-        setVerification({ kind: "ok" });
-        onVerified?.({ daoAccountId: connection.daoAccountId });
+        setVerification({ kind: "ok", daoAccountId: connection.daoAccountId });
       } catch (err) {
         if (cancelled) return;
         setVerification({
@@ -131,16 +126,24 @@ export function ConnectDao({
     return () => {
       cancelled = true;
     };
-  }, [
-    connection.status,
-    connection.daoAccountId,
-    expectedDaoAccountId,
-    primaryAccountId,
-    purpose,
-    onVerified,
-  ]);
+  }, [connection.status, connection.daoAccountId, expectedDaoAccountId, primaryAccountId, purpose]);
 
-  const connected = connection.status === "connected" && !!connection.daoAccountId;
+  const verifiedDaoAccountId =
+    verification.kind === "unchecked" || verification.kind === "loading"
+      ? undefined
+      : (verification.kind === "ok" || verification.kind === "dao-ok") &&
+          verification.daoAccountId === connection.daoAccountId
+        ? verification.daoAccountId
+        : null;
+  const onVerifiedChangeRef = useRef(onVerifiedChange);
+  useEffect(() => {
+    onVerifiedChangeRef.current = onVerifiedChange;
+  });
+  useEffect(() => {
+    if (verifiedDaoAccountId !== undefined) onVerifiedChangeRef.current?.(verifiedDaoAccountId);
+  }, [verifiedDaoAccountId]);
+
+  const connected = !!connection.daoAccountId;
   const connecting = connection.status === "connecting";
 
   return (
@@ -216,7 +219,7 @@ function VerificationLine({
   purpose?: ConnectDaoPurpose;
 }) {
   const t = useAppTranslation();
-  if (state.kind === "idle") return null;
+  if (state.kind === "unchecked" || state.kind === "idle") return null;
   if (state.kind === "loading") {
     return (
       <div

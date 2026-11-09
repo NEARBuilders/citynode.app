@@ -1,13 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import {
   approvalThreshold,
-  CONFIG_WRITE_PLAN,
-  fetchDaoProposals,
   fetchSputnikPolicy,
-  findPendingProposalForPlan,
   type SputnikPolicy,
   type SputnikProposal,
 } from "@/lib/sputnik-proposals";
+import { findOpenTenantConfigProposal } from "@/lib/tenant-deploy";
 import { TENANT_CONFIG_REFETCH_MS } from "./-use-published-config";
 
 export interface PendingConfigProposal {
@@ -16,25 +14,30 @@ export interface PendingConfigProposal {
   policy: SputnikPolicy | null | undefined;
 }
 
+export function pendingConfigProposalQueryOptions(daoAccountId: string) {
+  return queryOptions({
+    queryKey: ["node-config", "pending-config-proposal", daoAccountId],
+    queryFn: async () => {
+      const policy = await fetchSputnikPolicy(daoAccountId);
+      const proposal = policy
+        ? await findOpenTenantConfigProposal(daoAccountId, policy).catch(() => null)
+        : null;
+      return { policy, proposal };
+    },
+    enabled: !!daoAccountId,
+    refetchInterval: TENANT_CONFIG_REFETCH_MS,
+  });
+}
+
 export function usePendingConfigProposal(
   daoAccountId: string,
   enabled: boolean,
 ): PendingConfigProposal {
-  const { data: daoProposals = [] } = useQuery({
-    queryKey: ["node-config", "dao-proposals", daoAccountId],
-    queryFn: () => fetchDaoProposals(daoAccountId),
+  const { data } = useQuery({
+    ...pendingConfigProposalQueryOptions(daoAccountId),
     enabled: enabled && !!daoAccountId,
-    refetchInterval: TENANT_CONFIG_REFETCH_MS,
   });
-  const { data: policy } = useQuery({
-    queryKey: ["node-config", "dao-policy", daoAccountId],
-    queryFn: () => fetchSputnikPolicy(daoAccountId),
-    enabled: enabled && !!daoAccountId,
-    refetchInterval: TENANT_CONFIG_REFETCH_MS,
-  });
-
-  const proposal = enabled ? findPendingProposalForPlan(daoProposals, CONFIG_WRITE_PLAN) : null;
-  const threshold = approvalThreshold(policy, proposal);
-
-  return { proposal, threshold, policy };
+  const proposal = enabled ? (data?.proposal ?? null) : null;
+  const policy = data?.policy;
+  return { proposal, threshold: approvalThreshold(policy, proposal), policy };
 }

@@ -1,5 +1,6 @@
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import type { ApiClient } from "@/app";
+import type { NodeSiteStatus } from "@/lib/tenant-status";
 
 const NODE_STALE_TIME = 30 * 1000;
 
@@ -11,7 +12,7 @@ export type AdminNodeListKind = string;
 export interface AdminNodeListRow {
   node: NodeRecord;
   parent: NodeRecord | undefined;
-  status: string;
+  status: NodeSiteStatus;
   childrenCount: number;
   validatorCount: number;
 }

@@ -39,13 +39,9 @@ import { presentationLabel } from "@/lib/presentation-label";
 import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
 import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
-import {
-  CONFIG_WRITE_PLAN,
-  fetchDaoProposals,
-  findPendingProposalForPlan,
-} from "@/lib/sputnik-proposals";
 import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
+import { pendingConfigProposalQueryOptions } from "../../tenant/-use-pending-config-proposal";
 import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
 import { ReturningMembers } from "./-returning-members";
@@ -138,13 +134,9 @@ function NodeOverview() {
   });
   const daoOwned = !!tenant && tenant.ownerKind === "dao";
   const pendingConfigQuery = useQuery({
-    queryKey: ["dashboard-node", "pending-config-proposal", tenant?.accountId],
-    queryFn: async () => {
-      const proposals = await fetchDaoProposals(tenant?.accountId ?? "");
-      return findPendingProposalForPlan(proposals, CONFIG_WRITE_PLAN);
-    },
+    ...pendingConfigProposalQueryOptions(tenant?.accountId ?? ""),
     enabled: daoOwned && canManage && !!tenant?.accountId,
-    refetchInterval: 15_000,
+    select: (data) => data.proposal,
   });
   const teamStake = resolveTeamStakeTarget({
     daoAccountId: daoQuery.data?.daoAccountId,
