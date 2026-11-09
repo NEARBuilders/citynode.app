@@ -10,11 +10,12 @@ import type { SputnikPolicy, SputnikProposal } from "@/lib/sputnik-proposals";
 import { MemberDaoPanel, PollVote } from "./node-dao-member";
 
 const DAO = "lisbon.sputnik-dao.near";
-const MEMBER = "member-one.near";
+const MEMBER = `0s${"a1".repeat(20)}`;
+const METEOR_MEMBER = "member-one.near";
 const NEAR = 10n ** 24n;
 
 const harness = vi.hoisted(() => ({
-  account: "member-one.near" as string | null,
+  account: `0s${"a1".repeat(20)}` as string | null,
   policy: null as unknown,
   open: [] as unknown[],
   spendable: 0n as bigint | Error,
@@ -156,6 +157,18 @@ describe("MemberDaoPanel", () => {
     );
   });
 
+  it("offers no actions to a member signed in with a non-passkey wallet", async () => {
+    harness.account = METEOR_MEMBER;
+    harness.policy = policy({ contributors: [METEOR_MEMBER] });
+    renderPanel();
+    expect((await screen.findByTestId("member-dao.not-passkey")).textContent).toContain(
+      "different NEAR wallet",
+    );
+    expect(screen.queryByTestId("member-dao.become")).toBeNull();
+    expect(screen.queryByTestId("member-dao.poll-form")).toBeNull();
+    expect(harness.submitProposalWithBond).not.toHaveBeenCalled();
+  });
+
   it("says when the Node DAO has no Contributor group", async () => {
     harness.policy = policy({ withContributors: false });
     renderPanel();
@@ -182,7 +195,7 @@ describe("MemberDaoPanel", () => {
     const [, dao, plan, description, bond] = harness.submitProposalWithBond.mock.calls[0];
     expect(dao).toBe(DAO);
     expect(plan).toEqual({ kind: "add_member_to_role", memberId: MEMBER, role: "Contributor" });
-    expect(description).toContain("Add member-one.near to the Contributor group");
+    expect(description).toContain(`Add ${MEMBER} to the Contributor group`);
     expect(bond).toBe(0n);
     expect(screen.queryByTestId("member-dao.bond")).toBeNull();
   });
@@ -354,6 +367,24 @@ describe("PollVote", () => {
     await waitFor(() => expect(harness.tasks).toHaveLength(1));
     await expect(harness.tasks[0]?.({})).rejects.toThrow("RPC unavailable");
     expect(harness.voteOnProposal).not.toHaveBeenCalled();
+  });
+
+  it("shows no vote buttons to a Contributor signed in with a non-passkey wallet", async () => {
+    harness.account = METEOR_MEMBER;
+    harness.policy = {
+      ...policy({ contributors: [METEOR_MEMBER], bond: (NEAR / 10n).toString() }),
+      proposal_period: WEEK_NS.toString(),
+    };
+    renderWithQuery(<PollVote daoAccountId={DAO} proposal={poll()} />);
+    renderWithQuery(
+      <PollVote
+        daoAccountId={DAO}
+        proposal={poll({ submission_time: (harness.chainNowNs - WEEK_NS - 1n).toString() })}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByTestId("poll-vote")).toBeNull();
+    expect(screen.queryByTestId("poll-vote.finalize-panel")).toBeNull();
   });
 
   it("shows no vote buttons signed out", () => {

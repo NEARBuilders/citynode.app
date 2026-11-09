@@ -10,6 +10,7 @@ import {
   classifyMemberSigningError,
   createMemberSessionWallet,
   createMemberSigningController,
+  isPasskeyWalletAccount,
   MemberSigningError,
   type MemberWalletExecutor,
 } from "./member-wallet";
@@ -447,5 +448,15 @@ describe("readSpendableYocto", () => {
   it("throws on other RPC failures", async () => {
     mockAccount(new NetworkError("down"));
     await expect(readSpendableYocto(MEMBER)).rejects.toThrow();
+  });
+});
+
+describe("isPasskeyWalletAccount", () => {
+  it("accepts only passkey wallet account ids", () => {
+    expect(isPasskeyWalletAccount(`0s${"0f".repeat(20)}`)).toBe(true);
+    expect(isPasskeyWalletAccount("member-one.near")).toBe(false);
+    expect(isPasskeyWalletAccount("a".repeat(64))).toBe(false);
+    expect(isPasskeyWalletAccount(`0s${"0F".repeat(20)}`)).toBe(false);
+    expect(isPasskeyWalletAccount(null)).toBe(false);
   });
 });
