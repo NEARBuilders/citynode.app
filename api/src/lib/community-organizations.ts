@@ -22,6 +22,9 @@ const isConflict = (error: unknown): boolean =>
 const isForbidden = (error: unknown): boolean =>
   error instanceof ORPCError && error.code === "FORBIDDEN";
 
+const isSlugTaken = (error: unknown): boolean =>
+  isConflict(error) || (error instanceof Error && /already (exists|taken)/i.test(error.message));
+
 async function fetchOrganization(
   auth: AuthClient,
   organizationId?: string,
@@ -299,9 +302,6 @@ export async function provisionCommunityOrganization(
 
   const slugStatus = await auth.checkSlug({ slug: input.slug });
   const existing = slugStatus.status ? null : await locateSlugOrganization(auth, input);
-  if (!slugStatus.status && !existing) {
-    throw conflict(SLUG_UNREACHABLE);
-  }
   if (existing && existing.metadata?.communityProposalId !== input.proposalId) {
     const organization = await bindCommunityOrganization(auth, existing, input, true);
     return {
@@ -316,6 +316,9 @@ export async function provisionCommunityOrganization(
     (await createCommunityOrganization(auth, {
       ...input,
       metadata: applicantMetadata({ ...input, proposerUserId }),
+    }).catch((error: unknown) => {
+      if (!slugStatus.status && isSlugTaken(error)) throw conflict(SLUG_UNREACHABLE);
+      throw error;
     }));
   if (summary.status === "rejected") {
     throw conflict("The community organization request was rejected");

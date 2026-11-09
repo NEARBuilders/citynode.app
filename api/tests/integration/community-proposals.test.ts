@@ -146,6 +146,10 @@ function memberOrganization(sessionId: string | null, organizationId?: string) {
   return organization;
 }
 
+const checkSlug = vi.fn(async ({ slug }: { slug: string }) => ({
+  status: !findOrganization(undefined, slug),
+}));
+
 const createOrganization = vi.fn(
   async ({
     name,
@@ -308,9 +312,7 @@ describe("approved community proposal provisioning", () => {
               );
               return { success: true };
             },
-            checkSlug: async ({ slug }: { slug: string }) => ({
-              status: !findOrganization(undefined, slug),
-            }),
+            checkSlug: (input: { slug: string }) => checkSlug(input),
             createOrganization: (input: {
               name: string;
               slug: string;
@@ -1139,7 +1141,6 @@ describe("approved community proposal provisioning", () => {
     });
     proposals.set("bandung", savedProposal("prop-bandung", "bandung"));
     const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
-    createOrganization.mockClear();
     await expect(
       admin.applyCommunityProposal({
         proposalId: "prop-bandung",
@@ -1150,8 +1151,23 @@ describe("approved community proposal provisioning", () => {
       code: "CONFLICT",
       message: expect.stringMatching(/not a member/),
     });
-    expect(createOrganization).not.toHaveBeenCalled();
     expect(organizations.get("hidden-bandung")!.members).toHaveLength(1);
+    expect(
+      (await admin.listTenants()).some((item) => item.accountId === "bandung.sputnik-dao.near"),
+    ).toBe(false);
+  });
+
+  it("still creates the organization when the slug check wrongly reports the slug as taken", async () => {
+    proposals.set("bogor", savedProposal("prop-bogor", "bogor"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    checkSlug.mockResolvedValueOnce({ status: false });
+    const applied = await admin.applyCommunityProposal({
+      proposalId: "prop-bogor",
+      entityId: "bogor",
+      hostname: "bogor.citynode.app",
+    });
+    expect(organizations.get("org-bogor")?.metadata.communityProposalId).toBe("prop-bogor");
+    expect(await admin.getNode({ nodeId: applied.nodeId })).toMatchObject({ slug: "bogor" });
   });
 
   it("makes the reviewer owner and invites the applicant when the application saved no applicant user", async () => {
