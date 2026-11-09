@@ -1209,6 +1209,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Votre portefeuille n'est pas encore configuré. Rejoignez la communauté avec son QR code ou une invitation pour en obtenir un, puis revenez ici.",
     "你的钱包尚未设置。请通过社区的二维码或邀请加入以获取钱包，然后再回到这里。",
   ],
+  "memberDao.notPasskey": [
+    "Polls and contributor requests are signed with the passkey wallet you get when you join with your community's QR code or invite. You're signed in with a different NEAR wallet, so they aren't available here yet.",
+    "Las encuestas y las solicitudes para ser colaborador se firman con la billetera de passkey que obtienes al unirte con el código QR o la invitación de tu comunidad. Iniciaste sesión con otra billetera NEAR, así que aún no están disponibles aquí.",
+    "Les sondages et les demandes pour devenir contributeur sont signés avec le portefeuille passkey que vous obtenez en rejoignant la communauté avec son QR code ou une invitation. Vous êtes connecté avec un autre portefeuille NEAR, ils ne sont donc pas encore disponibles ici.",
+    "投票和成为贡献者的申请需要使用通过社区二维码或邀请加入时获得的通行密钥钱包签名。你当前使用的是其他 NEAR 钱包登录，因此这里暂时无法使用这些功能。",
+  ],
   "memberDao.loadError": [
     "Couldn't read {dao} from the NEAR network.",
     "No se pudo leer {dao} desde la red NEAR.",

@@ -17,6 +17,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppTranslation } from "@/i18n/runtime";
+import { isPasskeyWalletAccount } from "@/lib/member-wallet";
 import {
   type ContributorState,
   contributorRequestDescription,
@@ -54,10 +55,11 @@ export interface MemberDaoPanelProps {
 export function MemberDaoPanel({ daoAccountId, community }: MemberDaoPanelProps) {
   const translate = useAppTranslation();
   const accountId = useNearAccount();
-  const policyQuery = useQuery(daoPolicyQueryOptions(daoAccountId));
+  const canSign = isPasskeyWalletAccount(accountId);
+  const policyQuery = useQuery({ ...daoPolicyQueryOptions(daoAccountId), enabled: canSign });
   const openQuery = useQuery({
     ...daoOpenProposalsQueryOptions(daoAccountId),
-    enabled: !!accountId,
+    enabled: canSign,
   });
 
   const header = (
@@ -83,6 +85,12 @@ export function MemberDaoPanel({ daoAccountId, community }: MemberDaoPanelProps)
     body = (
       <PanelNotice icon={WarningIcon} testId="member-dao.no-wallet">
         {translate("memberDao.noWallet")}
+      </PanelNotice>
+    );
+  } else if (!canSign) {
+    body = (
+      <PanelNotice icon={WarningIcon} testId="member-dao.not-passkey">
+        {translate("memberDao.notPasskey")}
       </PanelNotice>
     );
   } else if (policyQuery.isPending || openQuery.isPending) {
@@ -439,9 +447,10 @@ export function PollVote({
 }) {
   const translate = useAppTranslation();
   const accountId = useNearAccount();
+  const canSign = isPasskeyWalletAccount(accountId);
   const queryClient = useQueryClient();
-  const policyQuery = useQuery({ ...daoPolicyQueryOptions(daoAccountId), enabled: !!accountId });
-  const chainTimeQuery = useQuery({ ...chainTimeQueryOptions(), enabled: !!accountId });
+  const policyQuery = useQuery({ ...daoPolicyQueryOptions(daoAccountId), enabled: canSign });
+  const chainTimeQuery = useQuery({ ...chainTimeQueryOptions(), enabled: canSign });
   const signing = useMemberSigning<unknown>(accountId);
   const [action, setAction] = useState<SputnikVoteAction | null>(null);
   const access = pollVoteAccess(policyQuery.data, accountId, proposal, chainTimeQuery.data);
@@ -461,6 +470,7 @@ export function PollVote({
       </p>
     );
   }
+  if (!canSign) return null;
 
   const busy = signing.state.status === "connecting" || signing.state.status === "signing";
   const done = signing.state.status === "submitted";
