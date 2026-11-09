@@ -130,6 +130,7 @@ describe("event report check-in prefill", () => {
     harness.report = {
       activityId: ACTIVITY,
       formVersion: 1,
+      source: "app",
       submittedAt: "2026-10-16T00:00:00.000Z",
       updatedAt: "2026-10-16T00:00:00.000Z",
       report: {

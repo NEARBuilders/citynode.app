@@ -46,6 +46,7 @@ function storedReport(row: typeof eventReports.$inferSelect) {
     activityId: row.activityId,
     formVersion: row.formVersion,
     report: row.report,
+    source: row.source,
     submittedAt: row.submittedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -1230,6 +1231,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               nodeId: activity.ownerNodeId,
               formVersion: EVENT_REPORT_FORM_VERSION,
               report: input.report,
+              source: "app",
               submittedBy: userId,
               submittedAt: at,
               updatedBy: userId,
@@ -1254,13 +1256,18 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         yield* authorize(nodeId, context, EVENTS_AREA);
         const rows = yield* query(() =>
           db
-            .select({ activityId: eventReports.activityId, submittedAt: eventReports.submittedAt })
+            .select({
+              activityId: eventReports.activityId,
+              submittedAt: eventReports.submittedAt,
+              source: eventReports.source,
+            })
             .from(eventReports)
             .where(eq(eventReports.nodeId, nodeId)),
         );
         return rows.map((row) => ({
           activityId: row.activityId,
           submittedAt: row.submittedAt.toISOString(),
+          source: row.source,
         }));
       }),
   };

@@ -83,10 +83,14 @@ export type EventReport = z.infer<typeof eventReportSchema>;
 
 export const EVENT_REPORT_FORM_VERSION = 1;
 
+export const EVENT_REPORT_SOURCES = ["app", "import"] as const;
+export type EventReportSource = (typeof EVENT_REPORT_SOURCES)[number];
+
 export const storedEventReportSchema = z.object({
   activityId: z.uuid(),
   formVersion: z.number().int().positive(),
   report: eventReportSchema,
+  source: z.enum(EVENT_REPORT_SOURCES),
   submittedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -357,7 +361,15 @@ export const discoveryContract = {
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
   listEventReportStatuses: oc
     .input(z.object({ nodeId: z.uuid() }))
-    .output(z.array(z.object({ activityId: z.uuid(), submittedAt: z.iso.datetime() })))
+    .output(
+      z.array(
+        z.object({
+          activityId: z.uuid(),
+          submittedAt: z.iso.datetime(),
+          source: z.enum(EVENT_REPORT_SOURCES),
+        }),
+      ),
+    )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getDiscoveryActivity: oc.input(z.object({ id: z.uuid() })).output(activitySchema.nullable()),
   listDiscovery: oc
