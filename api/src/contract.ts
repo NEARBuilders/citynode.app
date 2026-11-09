@@ -203,6 +203,38 @@ export const NodeSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const PlaceSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  name: z.string(),
+  parentId: z.uuid().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  label: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const PlaceCommunitySchema = z.object({
+  nodeId: z.uuid(),
+  activatedAt: z.string().nullable(),
+  memberCount: z.number().int().nullable(),
+});
+
+export const PlaceResolutionSchema = z.object({
+  place: PlaceSchema,
+  aliases: z.array(z.string()),
+  community: PlaceCommunitySchema.nullable(),
+});
+
+export const PlaceBoundarySchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("Polygon"), coordinates: z.array(z.array(z.array(z.number()))) }),
+  z.object({
+    type: z.literal("MultiPolygon"),
+    coordinates: z.array(z.array(z.array(z.array(z.number())))),
+  }),
+]);
+
 export type Node = z.infer<typeof NodeSchema>;
 
 export const SubtreeValidatorSchema = z.object({
@@ -858,6 +890,45 @@ export const contract = oc.router({
       }),
     )
     .output(NodeSchema.nullable()),
+
+  resolvePlace: oc
+    .route({
+      method: "GET",
+      path: "/places/resolve",
+      summary: "Resolve a canonical place by slug or alias (GeoNames ID, ISO code)",
+      description:
+        "Public, session-free read over the place catalog. The response includes the community bound to the place (null when the place has not been activated) with its member count. Boundary geometry is excluded and served on demand.",
+    })
+    .input(z.object({ place: z.string().min(1) }))
+    .output(PlaceResolutionSchema.nullable()),
+
+  listRootPlaces: oc
+    .route({ method: "GET", path: "/places/roots", summary: "List catalog places with no parent" })
+    .input(z.object({}))
+    .output(z.array(PlaceSchema)),
+
+  getPlace: oc
+    .route({ method: "GET", path: "/places/{placeId}", summary: "Get one catalog place" })
+    .input(z.object({ placeId: z.uuid() }))
+    .output(PlaceSchema.nullable()),
+
+  listPlaceChildren: oc
+    .route({
+      method: "GET",
+      path: "/places/{placeId}/children",
+      summary: "List direct children of a catalog place",
+    })
+    .input(z.object({ placeId: z.uuid() }))
+    .output(z.array(PlaceSchema)),
+
+  getPlaceBoundary: oc
+    .route({
+      method: "GET",
+      path: "/places/{placeId}/boundary",
+      summary: "Get the place's boundary geometry on demand",
+    })
+    .input(z.object({ placeId: z.uuid() }))
+    .output(PlaceBoundarySchema.nullable()),
 
   listValidators: oc
     .route({

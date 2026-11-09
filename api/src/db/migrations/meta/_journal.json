@@ -64,6 +64,20 @@
       "when": 1793956514323,
       "tag": "0008_event-reports",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794265257364,
+      "tag": "0009_windy_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794265815863,
+      "tag": "0010_flawless_slipstream",
+      "breakpoints": true
     }
   ]
 }
