@@ -858,7 +858,7 @@ describe("approved community proposal provisioning", () => {
       id: "own-oak-park",
       name: "Oak Park Collective",
       slug: "oak-park",
-      status: "pending",
+      status: "active",
       requestedBy: "user-organizer",
       metadata: {},
       members: [
@@ -867,6 +867,12 @@ describe("approved community proposal provisioning", () => {
           userId: "user-organizer",
           organizationId: "own-oak-park",
           role: "owner",
+        },
+        {
+          id: "member-oak-reviewer",
+          userId: "platform-reviewer",
+          organizationId: "own-oak-park",
+          role: "admin",
         },
       ],
       invitations: [],
@@ -931,7 +937,7 @@ describe("approved community proposal provisioning", () => {
       id: "taken-bound",
       name: "Bound Collective",
       slug: "bound-slug",
-      status: "pending",
+      status: "active",
       requestedBy: "user-organizer",
       metadata: { communityProposalId: "prop-other" },
       members: [
@@ -941,6 +947,12 @@ describe("approved community proposal provisioning", () => {
           organizationId: "taken-bound",
           role: "owner",
         },
+        {
+          id: "member-bound-reviewer",
+          userId: "platform-reviewer",
+          organizationId: "taken-bound",
+          role: "admin",
+        },
       ],
       invitations: [],
       teams: [],
@@ -949,7 +961,7 @@ describe("approved community proposal provisioning", () => {
       id: "taken-owned",
       name: "Stranger Collective",
       slug: "owned-slug",
-      status: "pending",
+      status: "active",
       requestedBy: "user-stranger",
       metadata: {},
       members: [
@@ -958,6 +970,12 @@ describe("approved community proposal provisioning", () => {
           userId: "user-stranger",
           organizationId: "taken-owned",
           role: "owner",
+        },
+        {
+          id: "member-owned-reviewer",
+          userId: "platform-reviewer",
+          organizationId: "taken-owned",
+          role: "admin",
         },
       ],
       invitations: [],
@@ -996,11 +1014,46 @@ describe("approved community proposal provisioning", () => {
       (await admin.listTenants()).some((item) => item.accountId === "owned-slug.sputnik-dao.near"),
     ).toBe(false);
     expect(organizations.get("taken-bound")?.metadata.communityProposalId).toBe("prop-other");
-    for (const id of ["taken-bound", "taken-owned"]) {
-      const untouched = organizations.get(id)!;
-      expect(untouched.status).toBe("pending");
-      expect(untouched.members.map((member) => member.userId)).not.toContain("platform-reviewer");
+    expect(organizations.get("taken-owned")?.metadata).toEqual({});
+  });
+
+  it("never approves or joins a stranger's pending organization request at the community slug", async () => {
+    organizations.set("stranger-cirebon", {
+      id: "stranger-cirebon",
+      name: "Cirebon Club",
+      slug: "cirebon",
+      status: "pending",
+      requestedBy: "user-stranger",
+      metadata: {},
+      members: [
+        {
+          id: "member-cirebon-owner",
+          userId: "user-stranger",
+          organizationId: "stranger-cirebon",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    for (const options of [{ applicantUserId: null }, {}]) {
+      proposals.set("cirebon", savedProposal("prop-cirebon", "cirebon", options));
+      await expect(
+        admin.applyCommunityProposal({
+          proposalId: "prop-cirebon",
+          entityId: "cirebon",
+          hostname: "cirebon.citynode.app",
+        }),
+      ).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringMatching(/not a member/) });
     }
+    const request = organizations.get("stranger-cirebon")!;
+    expect(request.status).toBe("pending");
+    expect(request.metadata).toEqual({});
+    expect(request.members.map((member) => member.userId)).toEqual(["user-stranger"]);
+    expect(
+      (await admin.listTenants()).some((item) => item.accountId === "cirebon.sputnik-dao.near"),
+    ).toBe(false);
   });
 
   it("binds the applicant's own active organization when the reviewer is not a member of it", async () => {

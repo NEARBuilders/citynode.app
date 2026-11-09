@@ -92,7 +92,12 @@ async function openOrganization(
 
 async function locateSlugOrganization(
   auth: AuthClient,
-  input: { slug: string; recordedOrganizationId?: string },
+  input: {
+    slug: string;
+    proposalId: string;
+    proposerUserId?: string;
+    recordedOrganizationId?: string;
+  },
 ): Promise<OrganizationSummary | null> {
   if (input.recordedOrganizationId) {
     const recorded = await auth.getOrganizationForAdmin({
@@ -103,7 +108,14 @@ async function locateSlugOrganization(
   const visible = await readOrganization(auth, undefined, input.slug);
   if (visible) return visible;
   const requests = await auth.listOrganizationRequests();
-  return requests.find((request) => request.slug === input.slug) ?? null;
+  return (
+    requests.find(
+      (request) =>
+        request.slug === input.slug &&
+        ((!!input.proposerUserId && request.requestedBy === input.proposerUserId) ||
+          request.metadata?.communityProposalId === input.proposalId),
+    ) ?? null
+  );
 }
 
 async function createCommunityOrganization(
