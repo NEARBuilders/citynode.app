@@ -1656,16 +1656,21 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
+        const writeStep = (
+          step: CommunitySetupStep,
+          status: "started" | "completed",
+          resourceId: string,
+        ) =>
+          proposalsClient.recordApplyStep({
+            pluginId: "node",
+            entityId: proposal.entityId,
+            step,
+            status,
+            resourceId,
+          });
         const recordStep = (step: CommunitySetupStep, resourceId: string) =>
           Effect.tryPromise({
-            try: () =>
-              proposalsClient.recordApplyStep({
-                pluginId: "node",
-                entityId: proposal.entityId,
-                step,
-                status: "completed",
-                resourceId,
-              }),
+            try: () => writeStep(step, "completed", resourceId),
             catch: (error) =>
               error instanceof ORPCError
                 ? error
@@ -1698,6 +1703,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
               applicantAccountId: proposal.createdBy,
               reviewerUserId: context.userId ?? context.user?.id ?? "",
               ...(payload.orgId && payload.applicantUserId ? { legacyOrgId: payload.orgId } : {}),
+              ...(proposal.applySteps.organization?.resourceId
+                ? { recordedOrganizationId: proposal.applySteps.organization.resourceId }
+                : {}),
+              onOrganization: (organizationId) =>
+                writeStep("organization", "started", organizationId),
             }),
           catch: (error) =>
             error instanceof ORPCError
@@ -1763,6 +1773,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               releaseCommunityOrganization(auth, {
                 organizationId: recordedOrgId,
                 proposalId: proposal.id,
+                reviewerUserId: context.userId ?? context.user?.id ?? "",
               }),
             catch: (error) =>
               error instanceof ORPCError
