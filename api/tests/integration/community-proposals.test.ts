@@ -1114,10 +1114,50 @@ describe("approved community proposal provisioning", () => {
       "platform-reviewer": "admin",
       "second-reviewer": "admin",
     });
+    expect(organization.metadata.communityReviewerIds).toBe("second-reviewer");
     expect(await second.getNode({ nodeId: resumed.nodeId })).toMatchObject({ slug: "medan" });
     expect(
       (await second.listTenants()).filter((item) => item.accountId === "medan.sputnik-dao.near"),
     ).toHaveLength(1);
+
+    const failed: Record<string, unknown> | undefined = proposals.get("medan");
+    if (failed) failed.applyStatus = "failed";
+    deleteOrganization.mockClear();
+    expect(
+      await second.releaseCommunityProposal({
+        proposalId: "prop-medan",
+        entityId: "medan",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).toEqual({
+      community: { released: true, keptReason: null },
+      organization: { released: true, keptReason: null },
+    });
+    expect(deleteOrganization).toHaveBeenCalledWith({ organizationId: "org-medan" });
+  });
+
+  it("records a new organization before approving it", async () => {
+    proposals.set("depok", savedProposal("prop-depok", "depok"));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    recordApplyStep.mockImplementation(async (step: RecordedStep) => {
+      await recordApplyStepDefault(step);
+      if (step.step === "organization" && step.status === "started") {
+        expect(organizations.get(step.resourceId ?? "")?.status).toBe("pending");
+      }
+      return {};
+    });
+    try {
+      await admin.applyCommunityProposal({
+        proposalId: "prop-depok",
+        entityId: "depok",
+        hostname: "depok.citynode.app",
+      });
+    } finally {
+      recordApplyStep.mockImplementation(recordApplyStepDefault);
+    }
+    expect(proposals.get("depok")?.applySteps).toMatchObject({
+      organization: { status: "completed", resourceId: "org-depok" },
+    });
   });
 
   it("explains a slug held by an organization the reviewer cannot reach", async () => {

@@ -64,6 +64,11 @@ type OrganizationSummary = Pick<
 >;
 type ReviewerRole = "owner" | "admin";
 
+function joinedReviewerIds(metadata: Record<string, unknown>) {
+  const stored = metadata.communityReviewerIds;
+  return typeof stored === "string" ? stored.split(",").filter(Boolean) : [];
+}
+
 async function openOrganization(
   auth: AuthClient,
   summary: OrganizationSummary,
@@ -323,8 +328,9 @@ export async function provisionCommunityOrganization(
   if (summary.status === "rejected") {
     throw conflict("The community organization request was rejected");
   }
+  await input.onOrganization?.(summary.id);
   const linked = summary.metadata?.communityLinkedOrg === "true";
-  const { organization } = await openOrganization(
+  const { organization, joined } = await openOrganization(
     auth,
     summary,
     input.reviewerUserId,
@@ -333,7 +339,20 @@ export async function provisionCommunityOrganization(
   if (organization.status === "pending") {
     await auth.reviewOrganization({ organizationId: organization.id, decision: "approve" });
   }
-  await input.onOrganization?.(organization.id);
+  if (joined) {
+    const metadata = organization.metadata ?? {};
+    await auth.updateOrganization({
+      data: {
+        metadata: {
+          ...metadata,
+          communityReviewerIds: [
+            ...new Set([...joinedReviewerIds(metadata), input.reviewerUserId]),
+          ].join(","),
+        },
+      },
+      organizationId: organization.id,
+    });
+  }
   if (!proposerUserId && linked) {
     const { members } = await auth.listMembers({ organizationId: organization.id });
     if (!members.some((member) => member.userId === input.reviewerUserId)) {
@@ -398,6 +417,7 @@ export async function releaseCommunityOrganization(
       organization.requestedBy,
       organization.metadata?.communityApplicantId,
       organization.metadata?.communityReviewerId,
+      ...joinedReviewerIds(organization.metadata ?? {}),
     ].filter((id): id is string => typeof id === "string"),
   );
   if (organization.members.some((member) => !provisioned.has(member.userId))) {
