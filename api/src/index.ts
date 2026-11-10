@@ -2017,7 +2017,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.places.boundaries(input.placeIds);
       }),
-
       activateCommunity: builder.activateCommunity.use(requireAuth).effect(function* ({
         input,
         context,
