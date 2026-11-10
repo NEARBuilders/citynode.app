@@ -169,7 +169,7 @@ const createOrganization = vi.fn(
       id: `org-${slug}`,
       name,
       slug,
-      status: "pending",
+      status: "active",
       requestedBy,
       metadata: metadata ? { ...metadata } : {},
       members: requestedBy
@@ -299,12 +299,6 @@ describe("approved community proposal provisioning", () => {
               const organization = organizations.get(organizationId);
               return organization ? fakeSummary(organization) : null;
             },
-            listOrganizationRequests: async () => {
-              requireAdmin();
-              return [...organizations.values()]
-                .filter((organization) => organization.status === "pending")
-                .map((organization) => ({ ...fakeSummary(organization), createdAt: fakeNow() }));
-            },
             leaveOrganization: async ({ organizationId }: { organizationId: string }) => {
               const organization = memberOrganization(sessionId, organizationId);
               organization.members = organization.members.filter(
@@ -318,35 +312,6 @@ describe("approved community proposal provisioning", () => {
               slug: string;
               metadata?: Record<string, unknown>;
             }) => createOrganization({ ...input, requestedBy: sessionId }),
-            reviewOrganization: async ({
-              organizationId,
-              decision,
-            }: {
-              organizationId: string;
-              decision: "approve" | "reject";
-            }) => {
-              requireAdmin();
-              const organization = organizations.get(organizationId);
-              if (!organization || organization.status !== "pending") {
-                throw new ORPCError("BAD_REQUEST", {
-                  message: "Organization is no longer pending or does not exist",
-                });
-              }
-              organization.status = decision === "approve" ? "active" : "rejected";
-              const requester = organization.requestedBy;
-              if (decision === "approve" && requester) {
-                const member = organization.members.find((item) => item.userId === requester);
-                if (member) member.role = "owner";
-                else
-                  organization.members.push({
-                    id: `member-${++memberCounter}`,
-                    userId: requester,
-                    organizationId,
-                    role: "owner",
-                  });
-              }
-              return fakeSummary(organization);
-            },
             updateOrganization: async ({
               data,
               organizationId,
@@ -568,10 +533,17 @@ describe("approved community proposal provisioning", () => {
       id: "legacy-org",
       name: "Boston Collective",
       slug: "boston-collective",
-      status: "pending",
+      status: "active",
       requestedBy: "user-applicant",
       metadata: { seeded: true },
-      members: [],
+      members: [
+        {
+          id: "member-legacy-applicant",
+          userId: "user-applicant",
+          organizationId: "legacy-org",
+          role: "owner",
+        },
+      ],
       invitations: [],
       teams: [],
     });
@@ -826,10 +798,23 @@ describe("approved community proposal provisioning", () => {
       id: "own-rosendale",
       name: "Rosendale Collective",
       slug: "rosendale",
-      status: "pending",
+      status: "active",
       requestedBy: "user-applicant",
       metadata: { seeded: true },
-      members: [],
+      members: [
+        {
+          id: "member-rosendale-applicant",
+          userId: "user-applicant",
+          organizationId: "own-rosendale",
+          role: "owner",
+        },
+        {
+          id: "member-rosendale-reviewer",
+          userId: "platform-reviewer",
+          organizationId: "own-rosendale",
+          role: "admin",
+        },
+      ],
       invitations: [],
       teams: [],
     });
@@ -1257,13 +1242,13 @@ describe("approved community proposal provisioning", () => {
     expect(organization.members.map((member) => member.userId)).not.toContain("outside-reviewer");
   });
 
-  it("records a new organization before approving it", async () => {
+  it("records the organization before the rest of provisioning", async () => {
     proposals.set("depok", savedProposal("prop-depok", "depok"));
     const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
     recordApplyStep.mockImplementation(async (step: RecordedStep) => {
       await recordApplyStepDefault(step);
       if (step.step === "organization" && step.status === "started") {
-        expect(organizations.get(step.resourceId ?? "")?.status).toBe("pending");
+        expect(organizations.get(step.resourceId ?? "")?.status).toBe("active");
       }
       return {};
     });
