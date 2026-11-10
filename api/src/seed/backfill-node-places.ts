@@ -6,7 +6,12 @@ import {
   placeAliases as placeAliasesTable,
   places as placesTable,
 } from "../db/schema";
-import type { PlaceUpsertRow } from "./places-catalog";
+import {
+  type AliasUpsertRow,
+  type PlaceUpsertRow,
+  seedPlacesInto,
+  slugify,
+} from "./places-catalog";
 
 export interface BackfillGeo {
   latitude: number | null;
@@ -30,6 +35,7 @@ export interface ExistingPlace {
   name: string;
   parentId: string | null;
   boundary: PlaceBoundary | null;
+  label: string | null;
 }
 
 export interface BackfillInputs {
@@ -37,6 +43,9 @@ export interface BackfillInputs {
   places: ExistingPlace[];
   aliases: Array<{ value: string; placeId: string }>;
   geoByNodeId: Record<string, BackfillGeo>;
+  // Nodes whose place link was established on an earlier run. The unlinked
+  // list below can't see them, but their children still need a parent place.
+  linkedPlaceSlugByNodeId?: Record<string, string>;
 }
 
 export interface NodeLink {
@@ -50,15 +59,6 @@ export interface NodeLink {
 export interface BackfillPlan {
   curated: PlaceUpsertRow[];
   nodeLinks: NodeLink[];
-}
-
-function slugify(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 function labelFor(kind: string | null): string | null {
@@ -107,13 +107,58 @@ export function buildBackfillPlan(inputs: BackfillInputs): BackfillPlan {
   const depthById = new Map(
     inputs.places.map((place) => [place.id, placeDepth(place.id, byId)] as const),
   );
+  const linkedPlaceSlugByNodeId = inputs.linkedPlaceSlugByNodeId ?? {};
 
   const curated: PlaceUpsertRow[] = [];
+  const curatedBySlug = new Map<string, PlaceUpsertRow>();
+  // Every place slug this plan links a node to. Two nodes on one place would
+  // trip the unique nodes.place_id index mid-run, so matches only claim free
+  // places and everything else falls back to a curated row.
+  const claimedSlugs = new Set<string>();
   const plans = new Map<string, { placeSlug: string; curatedRow: PlaceUpsertRow | null }>();
 
-  const resolveNode = (
+  const resolveParentPlaceSlug = (node: BackfillNode): string | null => {
+    if (!node.parentId) return null;
+    const linked = linkedPlaceSlugByNodeId[node.parentId];
+    if (linked) return linked;
+    const parentNode = inputs.nodes.find((candidate) => candidate.id === node.parentId);
+    return parentNode ? resolveNode(parentNode).placeSlug : null;
+  };
+
+  const curatedFor = (
     node: BackfillNode,
-  ): { placeSlug: string; curatedRow: PlaceUpsertRow | null } => {
+    geo: BackfillGeo | null,
+  ): { placeSlug: string; curatedRow: PlaceUpsertRow } => {
+    const parentPlaceSlug = resolveParentPlaceSlug(node);
+    let slug = node.slug;
+    if (curatedBySlug.has(slug) || claimedSlugs.has(slug) || bySlug.has(slug)) {
+      // Same-slug nodes under different parents (or a catalog slug already
+      // using the name) disambiguate by tree position; the node's own slug
+      // survives as a legacy alias, so resolution is unaffected.
+      slug = parentPlaceSlug ? `${parentPlaceSlug}-${node.slug}` : slug;
+    }
+    if (curatedBySlug.has(slug) || claimedSlugs.has(slug) || bySlug.has(slug)) {
+      slug = `${slug}-${node.id.slice(0, 8)}`;
+    }
+    const curatedRow: PlaceUpsertRow = {
+      slug,
+      name: node.name,
+      label: labelFor(node.label),
+      latitude: geo?.latitude ?? null,
+      longitude: geo?.longitude ?? null,
+      boundary: geo?.boundary ?? null,
+      parentSlug: parentPlaceSlug,
+    };
+    curatedBySlug.set(slug, curatedRow);
+    claimedSlugs.add(slug);
+    curated.push(curatedRow);
+    return { placeSlug: slug, curatedRow };
+  };
+
+  function resolveNode(node: BackfillNode): {
+    placeSlug: string;
+    curatedRow: PlaceUpsertRow | null;
+  } {
     const cached = plans.get(node.id);
     if (cached) return cached;
 
@@ -122,75 +167,57 @@ export function buildBackfillPlan(inputs: BackfillInputs): BackfillPlan {
 
     const exact = bySlug.get(node.slug);
     if (exact) {
+      claimedSlugs.add(exact.slug);
       result = { placeSlug: exact.slug, curatedRow: null };
     } else {
       const aliasPlaceId = inputs.aliases.find((alias) => alias.value === node.slug)?.placeId;
       const aliasPlace = aliasPlaceId ? byId.get(aliasPlaceId) : undefined;
       if (aliasPlace) {
+        claimedSlugs.add(aliasPlace.slug);
         result = { placeSlug: aliasPlace.slug, curatedRow: null };
       } else {
         const nameSlug = slugify(node.name);
         const byName = bySlug.get(nameSlug);
         if (byName) {
+          claimedSlugs.add(byName.slug);
           result = { placeSlug: byName.slug, curatedRow: null };
-        } else if (geo?.latitude != null && geo.longitude != null) {
-          const candidates = inputs.places.filter(
-            (place) =>
-              place.boundary && pointInBoundary(geo.longitude!, geo.latitude!, place.boundary),
-          );
+        } else {
+          // Geo containment only links when the containing place's level fits
+          // the node's kind — a city inside India is not India. Level-fitting
+          // places already claimed by another node are skipped too: one node
+          // per place, the rest curate underneath their tree parent.
+          const wantedLabel = labelFor(node.label);
+          const geoMatch =
+            geo?.latitude != null && geo.longitude != null && wantedLabel
+              ? inputs.places.filter(
+                  (place) =>
+                    place.label === wantedLabel &&
+                    place.boundary &&
+                    pointInBoundary(geo.longitude!, geo.latitude!, place.boundary) &&
+                    !claimedSlugs.has(place.slug),
+                )
+              : [];
           const deepest =
-            candidates.length > 0
-              ? candidates.reduce((best, candidate) =>
+            geoMatch.length > 0
+              ? geoMatch.reduce((best, candidate) =>
                   (depthById.get(candidate.id) ?? 0) > (depthById.get(best.id) ?? 0)
                     ? candidate
                     : best,
                 )
               : undefined;
-          result = deepest
-            ? { placeSlug: deepest.slug, curatedRow: null }
-            : {
-                placeSlug: node.slug,
-                curatedRow: {
-                  slug: node.slug,
-                  name: node.name,
-                  label: labelFor(node.label),
-                  latitude: geo.latitude,
-                  longitude: geo.longitude,
-                  boundary: geo.boundary,
-                  parentSlug: null,
-                },
-              };
-        } else {
-          result = {
-            placeSlug: node.slug,
-            curatedRow: {
-              slug: node.slug,
-              name: node.name,
-              label: labelFor(node.label),
-              latitude: geo?.latitude ?? null,
-              longitude: geo?.longitude ?? null,
-              boundary: geo?.boundary ?? null,
-              parentSlug: null,
-            },
-          };
+          if (deepest) {
+            claimedSlugs.add(deepest.slug);
+            result = { placeSlug: deepest.slug, curatedRow: null };
+          } else {
+            result = curatedFor(node, geo);
+          }
         }
       }
     }
 
-    if (result.curatedRow && node.parentId) {
-      const parentNode = inputs.nodes.find((candidate) => candidate.id === node.parentId);
-      if (parentNode) {
-        const parentPlan = resolveNode(parentNode);
-        result.curatedRow.parentSlug = parentPlan.placeSlug;
-      }
-    }
-
     plans.set(node.id, result);
-    if (result.curatedRow && !curated.some((row) => row.slug === result.curatedRow!.slug)) {
-      curated.push(result.curatedRow);
-    }
     return result;
-  };
+  }
 
   for (const node of inputs.nodes) resolveNode(node);
 
@@ -207,62 +234,30 @@ export function buildBackfillPlan(inputs: BackfillInputs): BackfillPlan {
     };
   });
 
+  const duplicate = nodeLinks.find(
+    (link, index) => nodeLinks.findIndex((other) => other.placeSlug === link.placeSlug) !== index,
+  );
+  if (duplicate) {
+    // Plan-level guarantee: the node-link update below would trip the unique
+    // nodes.place_id index halfway through the run otherwise.
+    throw new Error(
+      `[backfill-node-places] plan links two nodes to place "${duplicate.placeSlug}" — refusing to apply`,
+    );
+  }
+
   return { curated, nodeLinks };
 }
 
 export async function applyBackfill(db: Database, plan: BackfillPlan): Promise<void> {
-  for (const place of plan.curated) {
-    await db
-      .insert(placesTable)
-      .values(place)
-      .onConflictDoUpdate({
-        target: placesTable.slug,
-        set: {
-          name: sql`excluded.name`,
-          latitude: sql`excluded.latitude`,
-          longitude: sql`excluded.longitude`,
-          boundary: sql`excluded.boundary`,
-          label: sql`excluded.label`,
-          updatedAt: sql`CASE
-            WHEN excluded.name IS DISTINCT FROM places.name
-              OR excluded.latitude IS DISTINCT FROM places.latitude
-              OR excluded.longitude IS DISTINCT FROM places.longitude
-              OR excluded.boundary IS DISTINCT FROM places.boundary
-              OR excluded.label IS DISTINCT FROM places.label
-            THEN now() ELSE places.updated_at END`,
-        },
-      });
-  }
+  const aliases: AliasUpsertRow[] = plan.nodeLinks
+    .filter((link) => link.legacyAlias !== null)
+    .map((link) => ({
+      value: link.legacyAlias!,
+      kind: "legacy" as const,
+      slug: link.placeSlug,
+    }));
 
-  const parented = plan.curated.filter((row) => row.parentSlug !== null);
-  for (const place of parented) {
-    await db.execute(sql`
-      UPDATE places
-      SET parent_id = parent.id,
-        updated_at = CASE
-          WHEN places.parent_id IS DISTINCT FROM parent.id THEN now() ELSE places.updated_at END
-      FROM (VALUES (${place.slug}, ${place.parentSlug})) AS seed_parent(slug, parent_slug)
-      INNER JOIN places parent ON parent.slug = seed_parent.parent_slug
-      WHERE places.slug = seed_parent.slug
-    `);
-  }
-
-  const legacyAliases = plan.nodeLinks.filter((link) => link.legacyAlias !== null);
-  for (const link of legacyAliases) {
-    const [place] = await db
-      .select({ id: placesTable.id })
-      .from(placesTable)
-      .where(eq(placesTable.slug, link.placeSlug))
-      .limit(1);
-    if (!place) continue;
-    await db
-      .insert(placeAliasesTable)
-      .values({ value: link.legacyAlias!, kind: "legacy", placeId: place.id })
-      .onConflictDoUpdate({
-        target: placeAliasesTable.value,
-        set: { placeId: sql`excluded.place_id`, kind: sql`excluded.kind` },
-      });
-  }
+  await seedPlacesInto(db, { places: plan.curated, aliases });
 
   for (const link of plan.nodeLinks) {
     const [place] = await db

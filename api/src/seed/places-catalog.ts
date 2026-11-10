@@ -49,6 +49,8 @@ export interface PlacesCatalog {
   aliases: AliasUpsertRow[];
 }
 
+export { slugify } from "../lib/slug";
+
 function roundCoordinates(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => roundCoordinates(item));

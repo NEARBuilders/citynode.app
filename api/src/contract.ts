@@ -941,7 +941,6 @@ export const contract = oc.router({
     })
     .input(z.object({ placeIds: z.array(z.uuid()).min(1).max(500) }))
     .output(z.array(z.object({ placeId: z.uuid(), boundary: PlaceBoundarySchema.nullable() }))),
-
   activateCommunity: oc
     .route({
       method: "POST",
