@@ -29,8 +29,8 @@ const SOURCES = [
     url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson",
   },
   {
-    file: "ne_50m_admin_1_states_provinces.geojson",
-    url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces.geojson",
+    file: "ne_10m_admin_1_states_provinces.geojson",
+    url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson",
   },
 ];
 

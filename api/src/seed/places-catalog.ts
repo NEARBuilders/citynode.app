@@ -1,3 +1,4 @@
+import { simplify } from "@turf/simplify";
 import { sql } from "drizzle-orm";
 import type { Database } from "../db";
 import {
@@ -5,6 +6,12 @@ import {
   placeAliases as placeAliasesTable,
   places as placesTable,
 } from "../db/schema";
+
+// KEEP: display-grade geometry — 0.02° (~2km) keeps the 10m Natural Earth
+// source small enough for the JSONB boundary column and on-demand map fetches
+// while preserving coastline character; the pin comes from centroid/labels,
+// not from this.
+const SEED_SIMPLIFY_TOLERANCE_DEGREES = 0.02;
 
 export interface Supranational {
   slug: string;
@@ -62,7 +69,13 @@ function toBoundary(geometry: unknown): PlaceBoundary | null {
   if (!g || !Array.isArray(g.coordinates) || (g.type !== "Polygon" && g.type !== "MultiPolygon")) {
     return null;
   }
-  const coordinates = roundCoordinates(g.coordinates);
+  const simplified = simplify(
+    { type: "Feature", properties: {}, geometry: g } as Parameters<typeof simplify>[0],
+    { tolerance: SEED_SIMPLIFY_TOLERANCE_DEGREES, highQuality: false },
+  );
+  const simplifiedCoordinates = (simplified as { geometry?: { coordinates?: unknown } }).geometry
+    ?.coordinates;
+  const coordinates = roundCoordinates(simplifiedCoordinates ?? g.coordinates);
   return g.type === "Polygon"
     ? { type: "Polygon", coordinates: coordinates as number[][][] }
     : { type: "MultiPolygon", coordinates: coordinates as number[][][][] };
@@ -74,10 +87,22 @@ interface CountryRow {
   name: string;
   geonameid: string;
   boundary: PlaceBoundary | null;
+  labelX: number | null;
+  labelY: number | null;
 }
 
-function parseCountries(countryInfo: string, admin0Geojson: string): CountryRow[] {
+interface ParsedCountries {
+  rows: CountryRow[];
+  boundariesByIso: Map<string, PlaceBoundary>;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function parseCountries(countryInfo: string, admin0Geojson: string): ParsedCountries {
   const boundariesByIso = new Map<string, PlaceBoundary>();
+  const labelsByIso = new Map<string, { labelX: number | null; labelY: number | null }>();
   const collection = JSON.parse(admin0Geojson) as {
     features?: Array<{
       properties?: Record<string, unknown>;
@@ -92,6 +117,10 @@ function parseCountries(countryInfo: string, admin0Geojson: string): CountryRow[
     if (!iso2) continue;
     const boundary = toBoundary(feature.geometry);
     if (boundary) boundariesByIso.set(iso2, boundary);
+    labelsByIso.set(iso2, {
+      labelX: numberOrNull(props.LABEL_X ?? props.label_x),
+      labelY: numberOrNull(props.LABEL_Y ?? props.label_y),
+    });
   }
 
   const rows: CountryRow[] = [];
@@ -103,19 +132,23 @@ function parseCountries(countryInfo: string, admin0Geojson: string): CountryRow[
     const name = columns[4]?.trim();
     const geonameid = columns[16]?.trim();
     if (!iso2 || !iso3 || !name || !geonameid) continue;
+    const labels = labelsByIso.get(iso2) ?? { labelX: null, labelY: null };
     rows.push({
       iso2,
       iso3,
       name,
       geonameid,
       boundary: boundariesByIso.get(iso2) ?? null,
+      labelX: labels.labelX,
+      labelY: labels.labelY,
     });
   }
-  return rows;
+  return { rows, boundariesByIso };
 }
 
 interface Admin1Row {
   countryCode: string;
+  code: string;
   name: string;
   geonameid: string;
 }
@@ -131,75 +164,215 @@ function parseAdmin1(admin1Codes: string): Admin1Row[] {
     if (!code || !name || !geonameid) continue;
     const countryCode = code.split(".")[0]?.trim().toUpperCase();
     if (!countryCode) continue;
-    rows.push({ countryCode, name, geonameid });
+    rows.push({ countryCode, code, name, geonameid });
   }
   return rows;
 }
 
-interface Admin1Boundary {
-  key: string;
+interface Admin1Match {
   boundary: PlaceBoundary;
+  labelX: number | null;
+  labelY: number | null;
 }
 
-function parseAdmin1Boundaries(admin1Geojson: string): Admin1Boundary[] {
+interface Admin1Boundaries {
+  byGeonameid: Map<number, Admin1Match>;
+  byCode: Map<string, Admin1Match>;
+  bySlug: Map<string, Admin1Match>;
+}
+
+const ADMIN_SUFFIXES = [
+  "province",
+  "state",
+  "governorate",
+  "region",
+  "county",
+  "district",
+  "wilaya",
+  "oblast",
+  "emirate",
+  "parish",
+  "department",
+  "prefecture",
+  "municipality",
+  "division",
+  "canton",
+];
+
+function nameKeys(name: string): string[] {
+  const base = slugify(name);
+  if (!base) return [];
+  const keys = [base];
+  for (const suffix of ADMIN_SUFFIXES) {
+    if (base.endsWith(`-${suffix}`)) {
+      const stripped = base.slice(0, -(suffix.length + 1));
+      if (stripped) keys.push(stripped);
+    }
+  }
+  return keys;
+}
+
+// The 10m Natural Earth file names subdivisions in transliterated local forms
+// ("Dubayy"), so geonames' English names alone match poorly. Match on the
+// geonames id the file carries (gn_id), then geonames/ISO admin codes, then
+// name slugs with admin-suffix variants stripped.
+function parseAdmin1Boundaries(admin1Geojson: string): Admin1Boundaries {
   const collection = JSON.parse(admin1Geojson) as {
     features?: Array<{
       properties?: Record<string, unknown>;
       geometry?: unknown;
     }>;
   };
-  const rows: Admin1Boundary[] = [];
+  const byGeonameid = new Map<number, Admin1Match>();
+  const byCode = new Map<string, Admin1Match>();
+  const bySlug = new Map<string, Admin1Match>();
+  const put = (map: Map<string, Admin1Match>, key: string, match: Admin1Match) => {
+    if (key && !map.has(key)) map.set(key, match);
+  };
+
   for (const feature of collection.features ?? []) {
     const props = feature.properties ?? {};
     const iso2 = [props.iso_a2, props.ISO_A2, props.iso_a2_eh]
       .filter((value) => typeof value === "string" && value.length === 2 && value !== "-99")
       .map((value) => (value as string).toUpperCase())[0];
-    const name = typeof props.gn_name === "string" ? props.gn_name : props.name;
-    if (!iso2 || typeof name !== "string") continue;
+    if (!iso2) continue;
     const boundary = toBoundary(feature.geometry);
     if (!boundary) continue;
-    rows.push({ key: `${iso2}:${slugify(name)}`, boundary });
+    const match: Admin1Match = {
+      boundary,
+      labelX: numberOrNull(props.longitude),
+      labelY: numberOrNull(props.latitude),
+    };
+
+    const gnId = numberOrNull(props.gn_id);
+    if (gnId !== null && !byGeonameid.has(gnId)) byGeonameid.set(gnId, match);
+
+    const gnA1 = props.gn_a1_code;
+    if (typeof gnA1 === "string" && gnA1) put(byCode, gnA1.toUpperCase(), match);
+    const iso31662 = props.iso_3166_2;
+    if (typeof iso31662 === "string" && iso31662 !== "-99" && iso31662) {
+      put(byCode, iso31662.replace("-", ".").toUpperCase(), match);
+    }
+
+    const nameCandidates = [props.gn_name, props.name, props.name_ascii, props.name_local];
+    const alt = props.name_alt;
+    if (typeof alt === "string") nameCandidates.push(...alt.split("|"));
+    if (typeof props.abbrev === "string") nameCandidates.push(props.abbrev);
+    for (const candidate of nameCandidates) {
+      if (typeof candidate !== "string") continue;
+      for (const key of nameKeys(candidate)) put(bySlug, `${iso2}:${key}`, match);
+    }
   }
-  return rows;
+
+  return { byGeonameid, byCode, bySlug };
 }
 
-function bboxCenter(boundary: PlaceBoundary): { latitude: number; longitude: number } {
-  let minLng = Number.POSITIVE_INFINITY;
-  let maxLng = Number.NEGATIVE_INFINITY;
-  let minLat = Number.POSITIVE_INFINITY;
-  let maxLat = Number.NEGATIVE_INFINITY;
-  let sawPair = false;
-  const walk = (level: unknown): void => {
-    if (!Array.isArray(level)) return;
-    if (typeof level[0] === "number" && typeof level[1] === "number") {
-      const [lng, lat] = level as [number, number];
-      minLng = Math.min(minLng, lng);
-      maxLng = Math.max(maxLng, lng);
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-      sawPair = true;
-      return;
-    }
-    for (const item of level) walk(item);
-  };
-  walk(boundary.coordinates);
-  if (!sawPair) {
-    minLat = 0;
-    maxLat = 0;
-    minLng = 0;
-    maxLng = 0;
+interface Pin {
+  latitude: number;
+  longitude: number;
+}
+
+function roundPin(x: number, y: number): Pin {
+  return { latitude: Number(y.toFixed(4)), longitude: Number(x.toFixed(4)) };
+}
+
+function pointAt(ring: number[][], index: number): [number, number] | null {
+  const point = ring[index];
+  const lng = point?.[0];
+  const lat = point?.[1];
+  return lng === undefined || lat === undefined ? null : [lng, lat];
+}
+
+function ringAreaAndCentroid(ring: number[][]): { area: number; x: number; y: number } {
+  const last = ring.length - 1;
+  const first = pointAt(ring, 0);
+  const finalPoint = last >= 0 ? pointAt(ring, last) : null;
+  const isClosed =
+    first !== null &&
+    finalPoint !== null &&
+    first[0] === finalPoint[0] &&
+    first[1] === finalPoint[1];
+  const points = isClosed ? last : ring.length;
+  let twiceArea = 0;
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < points; i++) {
+    const start = pointAt(ring, i);
+    const end = pointAt(ring, (i + 1) % points);
+    if (!start || !end) continue;
+    const cross = start[0] * end[1] - end[0] * start[1];
+    twiceArea += cross;
+    x += (start[0] + end[0]) * cross;
+    y += (start[1] + end[1]) * cross;
   }
-  return {
-    latitude: Number(((minLat + maxLat) / 2).toFixed(4)),
-    longitude: Number(((minLng + maxLng) / 2).toFixed(4)),
-  };
+  const area = twiceArea / 2;
+  if (twiceArea === 0) {
+    let sumX = 0;
+    let sumY = 0;
+    for (let i = 0; i < points; i++) {
+      const point = pointAt(ring, i);
+      if (!point) continue;
+      sumX += point[0];
+      sumY += point[1];
+    }
+    return { area, x: sumX / points, y: sumY / points };
+  }
+  return { area, x: x / (3 * twiceArea), y: y / (3 * twiceArea) };
+}
+
+// Exterior ring minus holes, orientation-independent (GeoJSON fixes ring roles
+// by index, not winding).
+function polygonCentroid(polygon: number[][][]): { x: number; y: number; area: number } | null {
+  const exterior = polygon[0];
+  if (!exterior) return null;
+  const holes = polygon.slice(1);
+  const outer = ringAreaAndCentroid(exterior);
+  const outerArea = Math.abs(outer.area);
+  if (outerArea === 0) return null;
+  let area = outerArea;
+  let cx = outer.x * outerArea;
+  let cy = outer.y * outerArea;
+  for (const hole of holes) {
+    const holeRing = ringAreaAndCentroid(hole);
+    const holeArea = Math.abs(holeRing.area);
+    area -= holeArea;
+    cx -= holeRing.x * holeArea;
+    cy -= holeRing.y * holeArea;
+  }
+  if (area <= 0) return null;
+  return { x: cx / area, y: cy / area, area };
+}
+
+// Area centroid of the largest polygon. Safe across the antimeridian because
+// Natural Earth splits its polygons at ±180 — no single ring wraps.
+function largestPolygonCentroid(boundary: PlaceBoundary): Pin | null {
+  const polygons = boundary.type === "Polygon" ? [boundary.coordinates] : boundary.coordinates;
+  let best: { x: number; y: number; area: number } | null = null;
+  for (const polygon of polygons) {
+    const centroid = polygonCentroid(polygon);
+    if (!centroid) continue;
+    if (!best || centroid.area > best.area) best = centroid;
+  }
+  return best ? roundPin(best.x, best.y) : null;
+}
+
+// Natural Earth ships LABEL_X/LABEL_Y placement pins on admin-0 features;
+// they are the only correct pin for antimeridian-spanning countries (Russia's
+// bbox midpoint lands in the Norwegian Sea). Subdivisions have no label props,
+// so they fall through to the centroid.
+function derivePin(boundary: PlaceBoundary | null, labelX: number | null, labelY: number | null) {
+  if (labelX !== null && labelY !== null) return roundPin(labelX, labelY);
+  if (boundary) return largestPolygonCentroid(boundary);
+  return null;
 }
 
 export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
-  const countries = parseCountries(sources.countryInfo, sources.admin0Geojson);
+  const { rows: countries, boundariesByIso } = parseCountries(
+    sources.countryInfo,
+    sources.admin0Geojson,
+  );
   const admin1 = parseAdmin1(sources.admin1Codes);
   const admin1Boundaries = parseAdmin1Boundaries(sources.admin1Geojson);
-  const boundariesByAdmin1 = new Map(admin1Boundaries.map((row) => [row.key, row.boundary]));
 
   const memberByIso = new Map<string, Supranational>();
   for (const supranational of sources.supranationals) {
@@ -212,13 +385,25 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
   const aliases: AliasUpsertRow[] = [];
 
   for (const supranational of sources.supranationals) {
+    // The union's boundary is the concatenation of its member states'
+    // (already-simplified) polygons. No dissolve is needed for display —
+    // country polygons don't overlap — and re-seeding keeps it in sync
+    // with whatever Natural Earth geometry the members carry.
+    const memberPolygons = supranational.memberIso2.flatMap((iso2) => {
+      const boundary = boundariesByIso.get(iso2.toUpperCase());
+      if (!boundary) return [];
+      return boundary.type === "Polygon" ? [boundary.coordinates] : boundary.coordinates;
+    });
+    const boundary: PlaceBoundary | null =
+      memberPolygons.length > 0 ? { type: "MultiPolygon", coordinates: memberPolygons } : null;
+    const pin = boundary ? largestPolygonCentroid(boundary) : null;
     places.push({
       slug: supranational.slug,
       name: supranational.name,
       label: "supranational",
-      latitude: null,
-      longitude: null,
-      boundary: null,
+      latitude: pin?.latitude ?? null,
+      longitude: pin?.longitude ?? null,
+      boundary,
       parentSlug: null,
     });
   }
@@ -228,7 +413,7 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
     const slug = slugify(country.name);
     countrySlugByIso.set(country.iso2, slug);
     const supranational = memberByIso.get(country.iso2);
-    const pin = country.boundary ? bboxCenter(country.boundary) : null;
+    const pin = derivePin(country.boundary, country.labelX, country.labelY);
     places.push({
       slug,
       name: country.name,
@@ -247,15 +432,23 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
     const countrySlug = countrySlugByIso.get(row.countryCode);
     if (!countrySlug) continue;
     const slug = `${row.countryCode.toLowerCase()}-${slugify(row.name)}`;
-    const boundary = boundariesByAdmin1.get(`${row.countryCode}:${slugify(row.name)}`);
-    const pin = boundary ? bboxCenter(boundary) : null;
+    const geonameid = Number(row.geonameid);
+    const match =
+      (Number.isFinite(geonameid) && geonameid > 0
+        ? admin1Boundaries.byGeonameid.get(geonameid)
+        : undefined) ??
+      admin1Boundaries.byCode.get(row.code.toUpperCase()) ??
+      nameKeys(row.name)
+        .map((key) => admin1Boundaries.bySlug.get(`${row.countryCode}:${key}`))
+        .find(Boolean);
+    const pin = match ? derivePin(match.boundary, match.labelX, match.labelY) : null;
     places.push({
       slug,
       name: row.name,
       label: "subdivision",
       latitude: pin?.latitude ?? null,
       longitude: pin?.longitude ?? null,
-      boundary: boundary ?? null,
+      boundary: match?.boundary ?? null,
       parentSlug: countrySlug,
     });
     aliases.push({ value: row.geonameid, kind: "geonames", slug });
