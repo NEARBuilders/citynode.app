@@ -116,13 +116,22 @@ describe("NodesService", () => {
         const updated = yield* nodes.update(node.id, { name: "Nigeria (renamed)" });
         expect(updated.name).toBe("Nigeria (renamed)");
         expect(updated.placeId).toBe(node.placeId);
-
-        const passedParentId = yield* nodes.update(node.id, {
-          parentId: "00000000-0000-0000-0000-000000000000",
-        });
-        expect(passedParentId.parentId).toBeNull();
       }),
     );
+  });
+
+  it("fails with NOT_FOUND when moving to a missing parent", async () => {
+    const layer = freshLayer();
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
+    const node = await runService(layer, ({ nodes }) =>
+      nodes.spawn({ kind: "city", slug: "movable", name: "Movable", parentId: null, tenantId }),
+    );
+
+    const error = await squashServiceError(layer, ({ nodes }) =>
+      nodes.update(node.id, { parentId: MISSING_ID }),
+    );
+    expect(error).toBeInstanceOf(ORPCError);
+    expect((error as ORPCError<string, unknown>).code).toBe("NOT_FOUND");
   });
 
   it("creates and resolves a node by id", async () => {
