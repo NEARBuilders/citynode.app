@@ -301,14 +301,6 @@ function OrganizationsList() {
                         <Badge variant="outline">{translate("common.community")}</Badge>
                       )}
                     </div>
-                    {org.status === "rejected" && (
-                      <p
-                        className="text-sm text-muted-foreground"
-                        data-testid="orgs-rejection-reason"
-                      >
-                        {org.rejectionReason}
-                      </p>
-                    )}
                     <div className="mt-auto flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">
                         {members ? translate("org.memberCount", { count: members.length }) : " "}

@@ -131,7 +131,6 @@ export type NeedsActionItem =
   | { kind: "moreApplications"; count: number }
   | { kind: "setup"; proposal: NeedsActionProposal }
   | { kind: "relayer" }
-  | { kind: "organizations"; count: number }
   | { kind: "staking"; nodeId: string; name: string }
   | { kind: "stakingMany"; count: number };
 
@@ -142,13 +141,11 @@ export function deriveNeedsAction({
   pendingReviewCount,
   proposals,
   relayerNeedsFunding,
-  organizationRequestCount,
   communities,
 }: {
   pendingReviewCount: number;
   proposals: readonly NeedsActionProposal[];
   relayerNeedsFunding: boolean;
-  organizationRequestCount: number;
   communities: readonly { node: { id: string; name: string }; staking: StakingState }[];
 }): NeedsActionItem[] {
   const items: NeedsActionItem[] = [];
@@ -165,9 +162,6 @@ export function deriveNeedsAction({
     items.push({ kind: "moreApplications", count: pendingReviewCount - applications.length });
   }
   if (relayerNeedsFunding) items.push({ kind: "relayer" });
-  if (organizationRequestCount > 0) {
-    items.push({ kind: "organizations", count: organizationRequestCount });
-  }
   const unstaked = communities.filter(({ staking }) => staking === "none");
   if (unstaked.length > STAKING_ITEMS_LIMIT) {
     items.push({ kind: "stakingMany", count: unstaked.length });
