@@ -1,5 +1,11 @@
+import { rmSync } from "node:fs";
 import { Effect } from "effect";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { createDatabaseDriver } from "@/db/index";
+import { loadMigrations, migrate } from "@/db/migrate";
+import { places as placesTable } from "@/db/schema";
+import pluginDevConfig from "../../plugin.dev";
 import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
@@ -9,7 +15,43 @@ vi.mock("@/services/dao", () => ({
   parsePolicyGroupMembers: vi.fn(() => []),
   isExplicitDaoMember: vi.fn(() => true),
 }));
-afterAll(teardown);
+
+// The adoption + placeSlug contract needs real catalog rows, so this file runs
+// the plugin against a private temp database seeded in beforeAll (same
+// pattern as places-join.test.ts).
+const databaseDir = await vi.hoisted(async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "discovery-place-link-"));
+  process.env.API_TEST_DATABASE_URL = `pglite:${dir}`;
+  process.env.API_DATABASE_URL = `pglite:${dir}`;
+  return dir;
+});
+
+let indiaPlaceId = "";
+
+beforeAll(async () => {
+  const slug = pluginMigrationSlug(pluginDevConfig.pluginId);
+  const schemaName = `plugin_${slug}`;
+  const driver = await createDatabaseDriver(`pglite:${databaseDir}`, schemaName);
+  try {
+    const { migrations } = await Effect.runPromise(loadMigrations);
+    await Effect.runPromise(migrate(driver.db, migrations, getMigrationStorage(slug), schemaName));
+    const [place] = await driver.db
+      .insert(placesTable)
+      .values({ slug: "india", name: "India", label: "country" })
+      .returning({ id: placesTable.id });
+    indiaPlaceId = place!.id;
+  } finally {
+    await driver.close();
+  }
+}, 30_000);
+
+afterAll(async () => {
+  await teardown();
+  rmSync(databaseDir, { recursive: true, force: true });
+});
 
 async function fixture() {
   const id = crypto.randomUUID();
@@ -293,6 +335,45 @@ it("places a country community from its region without fetching geometry", async
     longitude: null,
   });
   expect(cleared).toMatchObject({ latitude: null, longitude: null });
+  vi.unstubAllGlobals();
+});
+
+it("links a country community to its catalog place and exposes the slug", async () => {
+  const realFetch = globalThis.fetch;
+  const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (!url.includes("nominatim.openstreetmap.org")) return realFetch(input, init);
+    return Response.json([{ lat: "22.35", lon: "78.66", addresstype: "country" }]);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  const { tenant, provisioner, editor, publicClient } = await fixture();
+  const country = await provisioner.createNode({
+    name: "Linked Country",
+    slug: `linked-country-${tenant.id}`,
+    kind: "country",
+    tenantId: tenant.id,
+  });
+  const saved = await editor.saveDiscoveryProfile({
+    nodeId: country.id,
+    ...profile,
+    location: "",
+    region: "India",
+    latitude: null,
+    longitude: null,
+  });
+  expect(saved).toMatchObject({ latitude: 22.35, longitude: 78.66 });
+
+  const detail = await publicClient.getDiscoveryNode({ nodeId: country.id });
+  expect(detail?.placeId).toBe(indiaPlaceId);
+  expect(detail?.placeSlug).toBe("india");
+
+  const listed = await publicClient.listDiscovery({ query: country.name });
+  expect(listed.map((entry) => entry.placeSlug)).toContain("india");
+
+  await expect(publicClient.listPlaceBoundaries({ placeIds: [indiaPlaceId] })).resolves.toEqual([
+    { placeId: indiaPlaceId, boundary: null },
+  ]);
   vi.unstubAllGlobals();
 });
 

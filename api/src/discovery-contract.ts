@@ -165,6 +165,7 @@ export const activityInput = activitySchema
   });
 export const discoveryNodeSchema = profileSchema.safeExtend({
   placeId: z.uuid().nullable(),
+  placeSlug: z.string().nullable(),
   featured: z.string().nullable(),
   active: z.boolean(),
   activityReason: z.string(),

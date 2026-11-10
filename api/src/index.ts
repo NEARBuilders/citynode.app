@@ -11,7 +11,7 @@ import {
   type EventOnboardingCodeSchema,
   NodeProposalPayloadSchema,
 } from "./contract";
-import { DatabaseLive, DatabaseTag } from "./db/layer";
+import { DatabaseLive } from "./db/layer";
 import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import {

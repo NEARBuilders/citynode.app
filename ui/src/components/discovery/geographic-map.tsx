@@ -191,8 +191,10 @@ export function GeographicMap({
                 weight: 1,
               }).addTo(regions);
               area.getElement()?.setAttribute("aria-hidden", "true");
-              if (offset === 0)
+              if (offset === 0) {
                 area.getElement()?.setAttribute("data-testid", `discovery-map-area-${node.nodeId}`);
+                area.bindTooltip(node.name, { direction: "top", sticky: true });
+              }
               area.on("click", () => select.current(node.nodeId));
               return area;
             }),

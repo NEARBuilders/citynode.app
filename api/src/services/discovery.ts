@@ -15,6 +15,7 @@ import {
   eventReports,
   nodes,
   placeAliases as placeAliasesTable,
+  places,
   places as placesTable,
   tenants,
 } from "../db/schema";
@@ -164,10 +165,15 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       if (ids?.length === 0) return [];
       return yield* query(() =>
         db
-          .select({ profile: discoveryProfiles.data, node: nodes })
+          .select({
+            profile: discoveryProfiles.data,
+            node: nodes,
+            placeSlug: places.slug,
+          })
           .from(discoveryProfiles)
           .innerJoin(nodes, eq(discoveryProfiles.nodeId, nodes.id))
           .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+          .leftJoin(places, eq(places.id, nodes.placeId))
           .where(
             and(
               eq(tenants.status, "active"),
@@ -285,7 +291,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
                 .includes(input.query.toLowerCase())) &&
             (!input.region || profile.region === input.region),
         )
-        .map(({ profile, node }) => {
+        .map(({ profile, node, placeSlug }) => {
           const content = byNode.get(node.id) ?? [];
           const events = content
             .filter((a) => a.kind === "event" && Date.parse(a.endsAt!) >= now)
@@ -320,6 +326,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             slug: node.slug,
             parentId: node.parentId,
             placeId: node.placeId,
+            placeSlug: placeSlug ?? null,
             kind: nodeKindOf(node.metadata),
           };
         })
@@ -339,16 +346,17 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       if (input.region || input.active || input.upcoming) return listed;
       const rows = yield* query(() =>
         db
-          .select({ node: nodes })
+          .select({ node: nodes, placeSlug: places.slug })
           .from(nodes)
           .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+          .leftJoin(places, eq(places.id, nodes.placeId))
           .leftJoin(discoveryProfiles, eq(discoveryProfiles.nodeId, nodes.id))
           .where(and(eq(tenants.status, "active"), isNull(discoveryProfiles.nodeId))),
       );
       const search = input.query?.toLowerCase();
       const basic = rows
         .filter(({ node }) => !search || node.name.toLowerCase().includes(search))
-        .map(({ node }) => ({
+        .map(({ node, placeSlug }) => ({
           nodeId: node.id,
           summary: "",
           location: "",
@@ -357,6 +365,8 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           longitude: null,
           channels: [],
           published: false,
+          placeId: node.placeId,
+          placeSlug: placeSlug ?? null,
           featured: null,
           active: false,
           upcoming: false,
@@ -366,7 +376,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           name: node.name,
           slug: node.slug,
           parentId: node.parentId,
-          placeId: node.placeId,
           kind: nodeKindOf(node.metadata),
         }));
       return [...listed, ...basic].sort(
