@@ -64,39 +64,38 @@ export interface VerifyDaoMembershipResult {
   policy: DaoPolicy | null;
 }
 
-export const verifyDaoMembership = ({
+export const verifyDaoMembership = Effect.fn("verifyDaoMembership")(function* ({
   daoAccountId,
   memberAccountId,
   network,
-}: VerifyDaoMembershipInput): Effect.Effect<
+}: VerifyDaoMembershipInput): Effect.fn.Return<
   VerifyDaoMembershipResult,
   ORPCError<string, unknown>
-> =>
-  Effect.gen(function* () {
-    if (!memberAccountId) {
-      return { isSputnikContract: false, isMember: false, policy: null };
-    }
+> {
+  if (!memberAccountId) {
+    return { isSputnikContract: false, isMember: false, policy: null };
+  }
 
-    const resolvedNetwork = resolveNetwork(daoAccountId, network);
-    const policy = yield* Effect.tryPromise({
-      try: () =>
-        viewFunction<unknown>({
-          accountId: daoAccountId,
-          methodName: "get_policy",
-          network: resolvedNetwork,
-        }),
-      catch: (error) => daoPolicyError(error, daoAccountId, resolvedNetwork),
-    });
-
-    if (!policy || typeof policy !== "object" || !Array.isArray((policy as DaoPolicy).roles)) {
-      return yield* Effect.fail(
-        notSputnikError(daoAccountId, resolvedNetwork, "get_policy returned no roles"),
-      );
-    }
-
-    const isMember = isExplicitDaoMember(policy, memberAccountId);
-    return { isSputnikContract: true, isMember, policy: policy as DaoPolicy };
+  const resolvedNetwork = resolveNetwork(daoAccountId, network);
+  const policy = yield* Effect.tryPromise({
+    try: () =>
+      viewFunction<unknown>({
+        accountId: daoAccountId,
+        methodName: "get_policy",
+        network: resolvedNetwork,
+      }),
+    catch: (error) => daoPolicyError(error, daoAccountId, resolvedNetwork),
   });
+
+  if (!policy || typeof policy !== "object" || !Array.isArray((policy as DaoPolicy).roles)) {
+    return yield* Effect.fail(
+      notSputnikError(daoAccountId, resolvedNetwork, "get_policy returned no roles"),
+    );
+  }
+
+  const isMember = isExplicitDaoMember(policy, memberAccountId);
+  return { isSputnikContract: true, isMember, policy: policy as DaoPolicy };
+});
 
 function notSputnikError(daoAccountId: string, network: NearNetworkId, cause: string) {
   return new ORPCError("BAD_REQUEST", {

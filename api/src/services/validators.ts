@@ -217,41 +217,38 @@ export const ValidatorsLive = Layer.effect(
           }),
         ),
 
-      list: (filter) =>
-        Effect.gen(function* () {
-          const conditions: SQL[] = [];
-          if (filter?.nodeId !== undefined) {
-            conditions.push(eq(validatorsTable.nodeId, filter.nodeId));
-          }
-          if (filter?.role !== undefined) {
-            conditions.push(eq(validatorsTable.role, filter.role));
-          }
-          const rows = yield* query(() =>
-            conditions.length === 0
-              ? db.select().from(validatorsTable)
-              : db
-                  .select()
-                  .from(validatorsTable)
-                  .where(and(...conditions)),
-          );
-          return rows.map(toRecord);
-        }),
+      list: Effect.fn("ValidatorsService.list")(function* (filter) {
+        const conditions: SQL[] = [];
+        if (filter?.nodeId !== undefined) {
+          conditions.push(eq(validatorsTable.nodeId, filter.nodeId));
+        }
+        if (filter?.role !== undefined) {
+          conditions.push(eq(validatorsTable.role, filter.role));
+        }
+        const rows = yield* query(() =>
+          conditions.length === 0
+            ? db.select().from(validatorsTable)
+            : db
+                .select()
+                .from(validatorsTable)
+                .where(and(...conditions)),
+        );
+        return rows.map(toRecord);
+      }),
 
-      listByNode: (nodeId) =>
-        Effect.gen(function* () {
-          const rows = yield* query(() =>
-            db.select().from(validatorsTable).where(eq(validatorsTable.nodeId, nodeId)),
-          );
-          return rows.map(toRecord);
-        }),
+      listByNode: Effect.fn("ValidatorsService.listByNode")(function* (nodeId) {
+        const rows = yield* query(() =>
+          db.select().from(validatorsTable).where(eq(validatorsTable.nodeId, nodeId)),
+        );
+        return rows.map(toRecord);
+      }),
 
-      getById: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db.select().from(validatorsTable).where(eq(validatorsTable.id, id)).limit(1),
-          );
-          return row ? toRecord(row) : null;
-        }),
+      getById: Effect.fn("ValidatorsService.getById")(function* (id) {
+        const [row] = yield* query(() =>
+          db.select().from(validatorsTable).where(eq(validatorsTable.id, id)).limit(1),
+        );
+        return row ? toRecord(row) : null;
+      }),
 
       update: (id, input) =>
         query(() =>
@@ -301,16 +298,15 @@ export const ValidatorsLive = Layer.effect(
           }),
         ),
 
-      delete: (id) =>
-        Effect.gen(function* () {
-          const rows = yield* query(() =>
-            db
-              .delete(validatorsTable)
-              .where(eq(validatorsTable.id, id))
-              .returning({ deletedId: validatorsTable.id }),
-          );
-          return rows.length > 0;
-        }),
+      delete: Effect.fn("ValidatorsService.delete")(function* (id) {
+        const rows = yield* query(() =>
+          db
+            .delete(validatorsTable)
+            .where(eq(validatorsTable.id, id))
+            .returning({ deletedId: validatorsTable.id }),
+        );
+        return rows.length > 0;
+      }),
 
       setDefault: (nodeId, validatorId) =>
         query(() =>
@@ -349,75 +345,73 @@ export const ValidatorsLive = Layer.effect(
           }),
         ),
 
-      resolveForStaking: (nodeId) =>
-        Effect.gen(function* () {
-          const node = yield* query(() =>
-            db
-              .select({ id: nodesTable.id })
-              .from(nodesTable)
-              .where(eq(nodesTable.id, nodeId))
-              .limit(1),
+      resolveForStaking: Effect.fn("ValidatorsService.resolveForStaking")(function* (nodeId) {
+        const node = yield* query(() =>
+          db
+            .select({ id: nodesTable.id })
+            .from(nodesTable)
+            .where(eq(nodesTable.id, nodeId))
+            .limit(1),
+        );
+        if (node.length === 0) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", {
+              message: "Node not found",
+              data: { resource: "node", resourceId: nodeId },
+            }),
           );
-          if (node.length === 0) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", {
-                message: "Node not found",
-                data: { resource: "node", resourceId: nodeId },
-              }),
-            );
-          }
+        }
 
-          const descendantIds = yield* query(() => readIds(db, descendantIdsQuery(nodeId)));
-          const ownValidators = yield* query(() =>
-            db.select().from(validatorsTable).where(inArray(validatorsTable.nodeId, descendantIds)),
-          );
+        const descendantIds = yield* query(() => readIds(db, descendantIdsQuery(nodeId)));
+        const ownValidators = yield* query(() =>
+          db.select().from(validatorsTable).where(inArray(validatorsTable.nodeId, descendantIds)),
+        );
 
-          if (ownValidators.length > 0) {
-            const ordered = [...ownValidators].sort((a, b) => {
-              if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
-              const depthA = descendantIds.indexOf(a.nodeId);
-              const depthB = descendantIds.indexOf(b.nodeId);
-              return depthA - depthB;
-            });
-            const sourceNodeId =
-              ordered.find((v) => v.nodeId === nodeId)?.nodeId ?? ordered[0]?.nodeId ?? nodeId;
-            return { validators: ordered.map(toRecord), sourceNodeId };
-          }
-
-          const ancestorIds = yield* query(() => readIds(db, ancestorIdsQuery(nodeId)));
-          const ancestorDepthById = new Map<string, number>();
-          for (const [idx, id] of ancestorIds.entries()) {
-            ancestorDepthById.set(id, idx);
-          }
-
-          const ancestorValidators = yield* query(() =>
-            db.select().from(validatorsTable).where(inArray(validatorsTable.nodeId, ancestorIds)),
-          );
-
-          if (ancestorValidators.length === 0) {
-            return { validators: [], sourceNodeId: nodeId };
-          }
-
-          const orderedAncestors = [...ancestorValidators].sort((a, b) => {
-            const depthA = ancestorDepthById.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER;
-            const depthB = ancestorDepthById.get(b.nodeId) ?? Number.MAX_SAFE_INTEGER;
+        if (ownValidators.length > 0) {
+          const ordered = [...ownValidators].sort((a, b) => {
+            if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+            const depthA = descendantIds.indexOf(a.nodeId);
+            const depthB = descendantIds.indexOf(b.nodeId);
             return depthA - depthB;
           });
-          const sourceNodeId = orderedAncestors[0]?.nodeId ?? nodeId;
-          return { validators: orderedAncestors.map(toRecord), sourceNodeId };
-        }),
+          const sourceNodeId =
+            ordered.find((v) => v.nodeId === nodeId)?.nodeId ?? ordered[0]?.nodeId ?? nodeId;
+          return { validators: ordered.map(toRecord), sourceNodeId };
+        }
 
-      resolveByAccountId: (accountId) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .select()
-              .from(validatorsTable)
-              .where(eq(validatorsTable.accountId, accountId))
-              .limit(1),
-          );
-          return row ? toRecord(row) : null;
-        }),
+        const ancestorIds = yield* query(() => readIds(db, ancestorIdsQuery(nodeId)));
+        const ancestorDepthById = new Map<string, number>();
+        for (const [idx, id] of ancestorIds.entries()) {
+          ancestorDepthById.set(id, idx);
+        }
+
+        const ancestorValidators = yield* query(() =>
+          db.select().from(validatorsTable).where(inArray(validatorsTable.nodeId, ancestorIds)),
+        );
+
+        if (ancestorValidators.length === 0) {
+          return { validators: [], sourceNodeId: nodeId };
+        }
+
+        const orderedAncestors = [...ancestorValidators].sort((a, b) => {
+          const depthA = ancestorDepthById.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER;
+          const depthB = ancestorDepthById.get(b.nodeId) ?? Number.MAX_SAFE_INTEGER;
+          return depthA - depthB;
+        });
+        const sourceNodeId = orderedAncestors[0]?.nodeId ?? nodeId;
+        return { validators: orderedAncestors.map(toRecord), sourceNodeId };
+      }),
+
+      resolveByAccountId: Effect.fn("ValidatorsService.resolveByAccountId")(function* (accountId) {
+        const [row] = yield* query(() =>
+          db
+            .select()
+            .from(validatorsTable)
+            .where(eq(validatorsTable.accountId, accountId))
+            .limit(1),
+        );
+        return row ? toRecord(row) : null;
+      }),
 
       stakeableNodeIds: (nodeIds) =>
         nodeIds.length === 0

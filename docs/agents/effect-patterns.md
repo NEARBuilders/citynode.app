@@ -11,15 +11,52 @@ Effect 4 uses `Context.Service<Self, Shape>()("id")` class tags. `Context.Tag` a
 `Effect.Service` are removed. Methods returning effects have `R = never`; a service
 interface must never leak requirements.
 
-This repo's plugins (auth, proposals) use two shapes for the Live layer — both fine,
-pick per service and stay consistent within a plugin:
+This repo uses three shapes for the Live layer — all fine, pick per service and stay
+consistent within a package:
 
 - **Static layer** (docs exemplar below): `static readonly layer = Layer.effect(Tag, ...)` on the class.
 - **Module-level Live + plain factory** (auth plugin): `export const XServiceLive = Layer.effect(X, Effect.gen(...))`
   with a `buildXService({ dep })` plain function returning `X.of({...})` — the factory is the
   test-harness seam (tests assemble the service directly over test doubles); `X.of` makes the
-  class shape the single type-enforcement point. Structured methods use
-  `Effect.fn("XService.method")` for spans.
+  class shape the single type-enforcement point.
+- **Interface + tag + module-level Live** (`api/src/services/*`, proposals plugin): an
+  `XService` interface, an `XTag` class over it, and `export const XLive = Layer.effect(XTag, Effect.gen(...))`
+  returning a `const service: XService = {...}` object literal.
+
+In every shape, each method is an `Effect.fn("XService.method")` so the span and stack
+trace carry the method name. Parameter types flow from the service interface, so the
+generator needs no annotations:
+
+```ts
+export interface NodesService {
+  getById(id: string): NodeEffect<NodeRecord | null>;
+}
+
+export class NodesTag extends Context.Service<NodesTag, NodesService>()("api/Nodes") {}
+
+export const NodesLive = Layer.effect(
+  NodesTag,
+  Effect.gen(function* () {
+    const db = yield* DatabaseTag;
+
+    const service: NodesService = {
+      getById: Effect.fn("NodesService.getById")(function* (id) {
+        const [row] = yield* query(() =>
+          db.select().from(nodesTable).where(eq(nodesTable.id, id)).limit(1),
+        );
+        return row ? toNodeRecord(row) : null;
+      }),
+    };
+
+    return service;
+  }),
+);
+```
+
+Internal helpers that build effects inside the layer follow the same rule
+(`const authorize = Effect.fn("DiscoveryService.authorize")(function* (...) {...})`).
+Values that are effects rather than functions (a property like `listRootNodes: NodeEffect<...>`,
+or `Effect.suspend(...)`) stay plain effects.
 
 ```ts
 import { Context, Effect, Layer } from "effect";
