@@ -21,7 +21,6 @@ const databaseDir = await vi.hoisted(async () => {
 const orgsBySlug = new Map<string, { id: string; name: string; slug: string }>();
 const codesBySlug = new Map<string, string>();
 const membersByOrg = new Map<string, Set<string>>();
-const redemptionCalls: Array<{ userId: string; code: string; threw: string | null }> = [];
 
 function authStubFor(context: unknown) {
   const userId = (context as { userId?: string }).userId ?? "anonymous";
@@ -73,17 +72,14 @@ function authStubFor(context: unknown) {
         const orgSlug = entry?.[0];
         const org = orgSlug ? orgsBySlug.get(`org-${orgSlug}`) : undefined;
         if (!org) {
-          redemptionCalls.push({ userId, code: input.code, threw: "org not found" });
           throw new Error("onboarding code not found");
         }
         const set = membersByOrg.get(org.id) ?? new Set<string>();
         if (set.has(userId)) {
-          redemptionCalls.push({ userId, code: input.code, threw: "already member" });
           throw new Error(`user ${userId} is already a member of this organization`);
         }
         set.add(userId);
         membersByOrg.set(org.id, set);
-        redemptionCalls.push({ userId, code: input.code, threw: null });
         return {
           organizationId: org.id,
           organizationName: org.name,
@@ -160,15 +156,7 @@ describe("places activation + join flow", () => {
     });
 
     const again = await joiner.joinCommunity({ placeId: nigeriaPlaceId });
-    expect(
-      again.alreadyMember,
-      "DUMP " +
-        JSON.stringify({
-          redemptionCalls,
-          members: [...membersByOrg.entries()].map(([org, set]) => [org, [...set]]),
-          codes: [...codesBySlug.entries()],
-        }),
-    ).toBe(true);
+    expect(again.alreadyMember).toBe(true);
   });
 
   it("re-activating an activated place is idempotent", async () => {
