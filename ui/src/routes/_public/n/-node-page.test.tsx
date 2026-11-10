@@ -523,6 +523,15 @@ it("leaves out the updates section when the listing has none", async () => {
   expect(screen.queryByText("Latest updates")).toBeNull();
 });
 
+it("tells signed-out visitors that checking in at an event joins the community", async () => {
+  mockApi();
+  listings.set(child.id, listing(child.id, []));
+  await showNode("/n/chicago");
+  const line = await screen.findByTestId("node-page.join-at-event");
+  expect(line.textContent).toBe("Check in at an event to join Chicago.");
+  expect(screen.getByTestId("node-page.events").contains(line)).toBe(true);
+});
+
 it("still shows the community when its public listing can't be read", async () => {
   mockApi();
   listings.set(child.id, "fail");
