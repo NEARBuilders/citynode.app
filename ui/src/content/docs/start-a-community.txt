@@ -1,0 +1,45 @@
+# Set up DAO governance
+
+Work with the platform team to agree approval thresholds and Governance and Finance signers for your existing DAO.
+
+## Why this setup
+
+Two approvals for policy changes reduce reliance on one signer; payment thresholds must match available approvers. In the [current plan][community-model], this setup supports an [application to become official][official-application], separately from community activation and joining.
+
+## Agree the roles
+
+These are the program's targets for this rollout. Agree each DAO's roster and any temporary Finance exceptions with the platform team.
+
+- **Governance:** at least two accounts controlled by distinct platform signers, plus at most one community seat. The platform team supplies its accounts. Target two approvals for policy changes; a third platform signer is recommended to cover absences.
+- **Finance ([Financial in Trezu][role-titles]):** agree payment approvers and a threshold they can support. With three or more available signers, require at least two approvals.
+- **Requestor:** agree who can request payments, including whether platform admins retain payment roles.
+
+## Before making changes
+
+Resolve existing pending policy changes before starting. Have the platform team review the current policy, custom vote rules and available approvers. Agree how to handle affected open payments before changes, and check beforehand how each planned membership change affects required approvals.
+
+- Add needed signers before removing approvers or raising a requirement the roster cannot support. Keep existing signer groups populated.
+- Keep a higher number of required Governance approvals until the agreed membership change has passed.
+- Work through one request at a time. Refresh Trezu's policy data and open a new form for each request. Before approval, have the platform team compare its full policy with the current policy and confirm only agreed changes.
+- Wait for each request to pass and verify the result before filing the next. Filing does not cast an approval vote; vote separately for your approval to count ([proposals.rs:578-588][proposal-file]).
+
+## Phase 1: increase approval thresholds
+
+In **Settings → Voting**, select one role tab at a time. For Governance and Finance roles with three or more available signers, raise an approval threshold below two to at least two. Defer increases needing additional signers to phase 2.
+
+## Phase 2: reconfigure Governance and Finance
+
+In **Members**, apply the agreed rosters, including Requestor changes only where the payment roles have been agreed.
+
+Once Governance membership is settled, set its policy-change approval requirement to two. Complete agreed Finance increases supported by the new roster; retain unresolved exceptions.
+
+## Verify the result
+
+Have the platform team verify the rosters and approval requirements, including defaults for other proposal types. Confirm that action permissions, the bond, proposal duration and unrelated settings are unchanged. Record temporary Finance exceptions and outstanding decisions.
+
+Contributor access and member proposals remain follow-up work.
+
+[role-titles]: https://github.com/NEAR-DevHub/trezu/blob/a6aaaf6742099069634a25fb20c4287a2852dd62/nt-fe/messages/en.json#L2011-L2021
+[proposal-file]: https://github.com/near-daos/sputnik-dao-contract/blob/5434a59dec23ee0c49df8c8c4350c208a7e75b0b/sputnikdao2/src/proposals.rs#L578-L588
+[community-model]: https://github.com/NEARBuilders/citynode.app/issues/528
+[official-application]: https://github.com/NEARBuilders/citynode.app/issues/520

@@ -10,13 +10,26 @@ test.describe("docs", () => {
 
     await expect(page.getByTestId("docs.heading")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("docs.nav-overview")).toHaveAttribute("aria-current", "page");
-    await expect(page.getByTestId("docs.nav-group-guides")).toHaveCount(0);
-    await expect(page.getByTestId("docs.guides")).toHaveCount(0);
+    await expect(page.getByTestId("docs.nav-start-a-community")).toBeVisible();
+    await expect(page.getByTestId("docs.guides")).toBeVisible();
+    await expect(page.getByTestId("docs.guide-start-a-community")).toHaveAttribute(
+      "href",
+      "/docs/start-a-community",
+    );
     await expect(page.getByTestId("docs.nav-builders")).not.toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("public-nav-docs")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("about.path-learn")).toBeVisible();
     await expect(page.getByTestId("about.path-build")).toBeVisible();
     await expect(page.getByTestId("about.path-grow")).toBeVisible();
+    await page.getByTestId("docs.guide-start-a-community").click();
+    await expect(page).toHaveURL(/\/docs\/start-a-community$/);
+    await expect(
+      page.getByTestId("docs.guide-heading").getByRole("heading", { level: 1 }),
+    ).toHaveText("Set up DAO governance");
+    await expect(page.getByTestId("docs.nav-start-a-community")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expectNoHydrationFailure(errors);
   });
 
@@ -43,20 +56,25 @@ test.describe("docs", () => {
     await expect(page.getByTestId("docs.nav-skill")).toHaveAttribute("aria-current", "page");
   });
 
-  test("at 375px the docs menu is used and still hides Guides when none exist", async ({
-    page,
-  }) => {
+  test("at 375px the docs menu opens the governance guide", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/docs", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
     await expect(page.getByTestId("docs.heading")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("docs.nav-menu")).toBeVisible();
-    await expect(page.getByTestId("docs.nav-group-guides")).toHaveCount(0);
-    await expect(page.getByTestId("docs.guides")).toHaveCount(0);
+    await expect(page.getByTestId("docs.guides")).toBeVisible();
 
     await page.getByTestId("docs.nav-menu").click();
-    await expect(page.getByTestId("docs.nav-group-guides")).toHaveCount(0);
+    await page
+      .getByRole("menu")
+      .getByRole("menuitem", { name: "Set up DAO governance", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/docs\/start-a-community$/);
+    await expect(
+      page.getByTestId("docs.guide-heading").getByRole("heading", { level: 1 }),
+    ).toHaveText("Set up DAO governance");
+    await expect(page.getByTestId("docs.nav-menu")).toContainText("Set up DAO governance");
   });
 
   test("signed-in members reach the docs from the sidebar About item", async ({ page }) => {
