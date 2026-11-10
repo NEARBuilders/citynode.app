@@ -50,7 +50,9 @@ export default defineConfig({
     reuseExistingServer: false,
     // The pnpm-based image build + container boot outgrew the bun-era 2m
     // budget; 5m keeps headroom (an early exit still fails the webServer).
-    timeout: 300_000,
+    // Runners with slow docker initdb have blown 5m (postgres initdb alone
+    // observed at 7m), so budget 10m — an early stack exit still fails fast.
+    timeout: 600_000,
     stdout: "pipe",
     stderr: "pipe",
     env: webServerEnv,
