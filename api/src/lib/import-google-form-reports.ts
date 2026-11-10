@@ -469,7 +469,16 @@ function parseSheetsTimestamp(value: string): Date | null {
     const ampm = us[7]?.toUpperCase();
     if (ampm === "PM" && hour < 12) hour += 12;
     if (ampm === "AM" && hour === 12) hour = 0;
-    return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() + 1 !== month ||
+      parsed.getUTCDate() !== day
+    ) {
+      return null;
+    }
+    return parsed;
   }
   const parsed = Date.parse(trimmed);
   return Number.isFinite(parsed) ? new Date(parsed) : null;

@@ -291,10 +291,26 @@ describe("resolveSubmittedBy", () => {
 });
 
 describe("submittedAtFromRow", () => {
+  const fallback = new Date("2026-10-01T00:00:00.000Z");
+
   it("parses Sheets timestamps as UTC rather than the machine timezone", () => {
-    expect(
-      submittedAtFromRow({ Timestamp: "9/2/2026 12:00:00" }, new Date("2026-10-01T00:00:00.000Z")),
-    ).toEqual(new Date("2026-09-02T12:00:00.000Z"));
+    expect(submittedAtFromRow({ Timestamp: "9/2/2026 12:00:00" }, fallback)).toEqual(
+      new Date("2026-09-02T12:00:00.000Z"),
+    );
+  });
+
+  it("reads month/day timestamps that a day-first locale would swap", () => {
+    expect(submittedAtFromRow({ Timestamp: "10/13/2026 14:00:00" }, fallback)).toEqual(
+      new Date("2026-10-13T14:00:00.000Z"),
+    );
+  });
+
+  it("falls back when a day-first timestamp invents a month", () => {
+    expect(submittedAtFromRow({ Timestamp: "13/10/2026 14:00:00" }, fallback)).toEqual(fallback);
+  });
+
+  it("falls back when the calendar day does not exist", () => {
+    expect(submittedAtFromRow({ Timestamp: "2/30/2026 14:00:00" }, fallback)).toEqual(fallback);
   });
 });
 
