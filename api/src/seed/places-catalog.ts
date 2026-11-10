@@ -48,7 +48,7 @@ export interface PlacesCatalog {
   aliases: AliasUpsertRow[];
 }
 
-function slugify(value: string): string {
+export function slugify(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

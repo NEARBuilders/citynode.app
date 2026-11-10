@@ -55,6 +55,7 @@ function place(fixture: Partial<ExistingPlace> & { id: string; slug: string }): 
     name: fixture.slug,
     parentId: null,
     boundary: null,
+    label: null,
     ...fixture,
   };
 }
@@ -123,12 +124,12 @@ describe("buildBackfillPlan", () => {
     });
   });
 
-  it("matches by discovery geo containment, preferring the deepest place", () => {
+  it("matches by discovery geo containment when the place level fits the node kind", () => {
     const plan = buildBackfillPlan({
       ...baseInputs,
       nodes: [
         node({ id: "cis-node", slug: "cis-node", name: "CIS Node" }),
-        node({ id: "village", slug: "village", name: "Somewhere Village" }),
+        node({ id: "village", slug: "village", name: "Somewhere Village", label: "state" }),
       ],
       places: [
         place({ id: "p-cis", slug: "cis", name: "Commonwealth of Independent States" }),
@@ -138,6 +139,7 @@ describe("buildBackfillPlan", () => {
           slug: "ru-moscow",
           name: "Moscow",
           parentId: "p-russia",
+          label: "subdivision",
           boundary: {
             type: "Polygon",
             coordinates: [
@@ -163,6 +165,148 @@ describe("buildBackfillPlan", () => {
     expect(links.get("village")).toBe("ru-moscow");
     expect(links.get("cis-node")).toBe("cis-node");
     expect(plan.curated.find((p) => p.slug === "cis-node")).toMatchObject({ parentSlug: null });
+  });
+
+  it("does not geo-link a city node onto a state or country place", () => {
+    const plan = buildBackfillPlan({
+      ...baseInputs,
+      nodes: [
+        node({ id: "n1", slug: "india", name: "India", label: "country" }),
+        node({
+          id: "n2",
+          slug: "mumbai-node",
+          name: "Mumbai Node",
+          label: "city",
+          parentId: "n1",
+        }),
+      ],
+      places: [
+        place({
+          id: "p-india",
+          slug: "india",
+          name: "India",
+          label: "country",
+          boundary: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [68, 8],
+                [97, 8],
+                [97, 35],
+                [68, 35],
+                [68, 8],
+              ],
+            ],
+          },
+        }),
+      ],
+      geoByNodeId: {
+        n1: { latitude: 22.35, longitude: 78.66, boundary: null },
+        n2: { latitude: 19.07, longitude: 72.87, boundary: null },
+      },
+    });
+
+    const links = new Map(plan.nodeLinks.map((link) => [link.nodeId, link.placeSlug] as const));
+    // The country node adopts india by slug; the city node curates its own
+    // place underneath instead of inheriting the country outline.
+    expect(links.get("n1")).toBe("india");
+    expect(links.get("n2")).toBe("mumbai-node");
+    const cityCurated = plan.curated.find((p) => p.slug === "mumbai-node");
+    expect(cityCurated).toMatchObject({ label: "city", parentSlug: "india" });
+    expect(new Set(plan.nodeLinks.map((link) => link.placeSlug)).size).toBe(plan.nodeLinks.length);
+  });
+
+  it("skips a place another node already claimed and curates underneath it", () => {
+    const moscowBoundary = {
+      type: "Polygon" as const,
+      coordinates: [
+        [
+          [37.3, 55.4],
+          [37.9, 55.4],
+          [37.9, 56.0],
+          [37.3, 56.0],
+          [37.3, 55.4],
+        ],
+      ],
+    };
+    const plan = buildBackfillPlan({
+      ...baseInputs,
+      nodes: [
+        node({ id: "state-a", slug: "ru-moscow", name: "Moscow", label: "state" }),
+        node({ id: "state-b", slug: "moscow-oblast", name: "Moscow Oblast", label: "state" }),
+      ],
+      places: [
+        place({
+          id: "p-moscow",
+          slug: "ru-moscow",
+          name: "Moscow",
+          label: "subdivision",
+          boundary: moscowBoundary,
+        }),
+      ],
+      geoByNodeId: {
+        "state-a": { latitude: 55.75, longitude: 37.6, boundary: null },
+        "state-b": { latitude: 55.6, longitude: 37.5, boundary: null },
+      },
+    });
+
+    const links = new Map(plan.nodeLinks.map((link) => [link.nodeId, link.placeSlug] as const));
+    // First node adopts ru-moscow; the second curates its own place instead of
+    // double-linking the same place.
+    expect(links.get("state-a")).toBe("ru-moscow");
+    expect(links.get("state-b")).toBe("moscow-oblast");
+    expect(plan.curated.find((p) => p.slug === "moscow-oblast")).toMatchObject({
+      parentSlug: null,
+    });
+    expect(new Set(plan.nodeLinks.map((link) => link.placeSlug)).size).toBe(plan.nodeLinks.length);
+  });
+
+  it("disambiguates curated slugs when two nodes share a slug under different parents", () => {
+    const plan = buildBackfillPlan({
+      ...baseInputs,
+      nodes: [
+        node({ id: "parent-a", slug: "north", name: "North", label: "state" }),
+        node({
+          id: "child-a",
+          slug: "springfield",
+          name: "Springfield",
+          label: "city",
+          parentId: "parent-a",
+        }),
+        node({ id: "parent-b", slug: "south", name: "South", label: "state" }),
+        node({
+          id: "child-b",
+          slug: "springfield",
+          name: "Springfield",
+          label: "city",
+          parentId: "parent-b",
+        }),
+      ],
+    });
+
+    const slugs = plan.curated.map((p) => p.slug).sort();
+    expect(new Set(slugs).size).toBe(slugs.length);
+    const childA = plan.nodeLinks.find((link) => link.nodeId === "child-a");
+    const childB = plan.nodeLinks.find((link) => link.nodeId === "child-b");
+    expect(childA?.placeSlug).not.toBe(childB?.placeSlug);
+  });
+
+  it("parents a curated child onto a place linked on an earlier run", () => {
+    const plan = buildBackfillPlan({
+      ...baseInputs,
+      nodes: [
+        node({
+          id: "child",
+          slug: "legacy-city",
+          name: "Legacy City",
+          label: "city",
+          parentId: "linked-parent-node",
+        }),
+      ],
+      linkedPlaceSlugByNodeId: { "linked-parent-node": "india" },
+    });
+
+    expect(plan.curated[0]?.parentSlug).toBe("india");
   });
 
   it("chains curated parents through the parent node's planned place", () => {
@@ -309,6 +453,7 @@ describe("applyBackfill", () => {
                 name: placesTable.name,
                 parentId: placesTable.parentId,
                 boundary: placesTable.boundary,
+                label: placesTable.label,
               })
               .from(placesTable),
           ),
