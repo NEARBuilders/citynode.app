@@ -2,6 +2,7 @@ import "@orpc/openapi/extensions/route";
 import { oc } from "@orpc/contract";
 import {
   BAD_REQUEST,
+  CONFLICT,
   CONNECTION_ERROR,
   FORBIDDEN,
   NOT_FOUND,
@@ -940,6 +941,46 @@ export const contract = oc.router({
     })
     .input(z.object({ placeIds: z.array(z.uuid()).min(1).max(500) }))
     .output(z.array(z.object({ placeId: z.uuid(), boundary: PlaceBoundarySchema.nullable() }))),
+
+  activateCommunity: oc
+    .route({
+      method: "POST",
+      path: "/places/activate",
+      summary: "Activate a place into a community",
+      description:
+        "Session required. Idempotent: creates the community's organization and joins the activator as its first member, or returns the existing community untouched. No approval, no DAO proof, no site, no publication — governance arrives later when the community's Official Application is accepted.",
+    })
+    .input(z.object({ place: z.string().min(1) }))
+    .output(
+      z.object({
+        nodeId: z.uuid(),
+        placeId: z.uuid(),
+        slug: z.string(),
+        organizationId: z.string(),
+        joinCode: z.string(),
+        alreadyActivated: z.boolean(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, NOT_FOUND, CONFLICT }),
+
+  joinCommunity: oc
+    .route({
+      method: "POST",
+      path: "/places/{placeId}/join",
+      summary: "Join the community of a place",
+      description:
+        "Session required. Redeems the community's standing join code on behalf of the caller. Returns alreadyMember when the caller already belongs.",
+    })
+    .input(z.object({ placeId: z.uuid() }))
+    .output(
+      z.object({
+        organizationId: z.string(),
+        nodeId: z.uuid(),
+        slug: z.string(),
+        alreadyMember: z.boolean(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, NOT_FOUND, CONFLICT }),
 
   listValidators: oc
     .route({

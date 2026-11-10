@@ -11,7 +11,8 @@ import {
   type EventOnboardingCodeSchema,
   NodeProposalPayloadSchema,
 } from "./contract";
-import { DatabaseLive } from "./db/layer";
+import { DatabaseLive, DatabaseTag } from "./db/layer";
+import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import {
   provisionCommunityOrganization,
@@ -451,24 +452,22 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       yield* Effect.log("[API] Services Initialized");
 
-      return Layer.mergeAll(
-        Layer.succeed(ApiServices, {
-          tenants: Context.get(services, TenantsTag),
-          nodes: Context.get(services, NodesTag),
-          places: Context.get(services, PlacesTag),
-          validators: Context.get(services, ValidatorsTag),
-          discovery: Context.get(services, DiscoveryTag),
-          storage: Context.get(services, StorageTag),
-          nearbuilders: createNearbuilders(config.variables.nearbuildersUrl),
-          memberDirectory: Context.get(services, MemberDirectoryTag),
-          attendance: Context.get(services, AttendanceTag),
-          teamJoinRequests: Context.get(services, TeamJoinRequestsTag),
-          stakingPools: makeStakingPools({
-            mainnet: config.variables.mainnetStakingPoolWhitelist,
-            testnet: config.variables.testnetStakingPoolWhitelist,
-          }),
+      return Layer.succeed(ApiServices, {
+        tenants: Context.get(services, TenantsTag),
+        nodes: Context.get(services, NodesTag),
+        places: Context.get(services, PlacesTag),
+        validators: Context.get(services, ValidatorsTag),
+        discovery: Context.get(services, DiscoveryTag),
+        storage: Context.get(services, StorageTag),
+        nearbuilders: createNearbuilders(config.variables.nearbuildersUrl),
+        memberDirectory: Context.get(services, MemberDirectoryTag),
+        attendance: Context.get(services, AttendanceTag),
+        teamJoinRequests: Context.get(services, TeamJoinRequestsTag),
+        stakingPools: makeStakingPools({
+          mainnet: config.variables.mainnetStakingPoolWhitelist,
+          testnet: config.variables.testnetStakingPoolWhitelist,
         }),
-      );
+      });
     }),
 
   createRouter: (builder, plugins) => {
@@ -2017,6 +2016,122 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listPlaceBoundaries: builder.listPlaceBoundaries.effect(function* ({ input }) {
         const services = yield* ApiServices;
         return yield* services.places.boundaries(input.placeIds);
+      }),
+
+      activateCommunity: builder.activateCommunity.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const authPlugin = plugins.auth;
+        if (!authPlugin) {
+          return yield* Effect.fail(
+            new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
+          );
+        }
+        const userId = context.userId ?? context.user?.id;
+        if (!userId) {
+          return yield* Effect.fail(
+            new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
+          );
+        }
+        const auth = authPlugin.client({
+          userId,
+          user: context.user,
+        });
+        return yield* Effect.tryPromise({
+          try: () =>
+            activateCommunity({ places: services.places, nodes: services.nodes }, auth, {
+              place: input.place,
+              userId,
+            }),
+          catch: (error) =>
+            error instanceof ORPCError
+              ? error
+              : new ORPCError("INTERNAL_SERVER_ERROR", {
+                  message: error instanceof Error ? error.message : "Activation failed",
+                }),
+        });
+      }),
+
+      joinCommunity: builder.joinCommunity.use(requireAuth).effect(function* ({
+        input,
+        context,
+        errors,
+      }) {
+        const services = yield* ApiServices;
+        const node = yield* services.nodes.getByPlace(input.placeId);
+        if (!node) {
+          return yield* Effect.fail(
+            errors.NOT_FOUND({
+              message: "This place has no community yet",
+              data: { resource: "place", resourceId: input.placeId },
+            }),
+          );
+        }
+        const joinCodeId = (node.metadata as { joinCodeId?: string } | null)?.joinCodeId;
+        if (!joinCodeId) {
+          return yield* Effect.fail(
+            errors.CONFLICT({
+              message: "This community is missing its join code",
+              data: {},
+            }),
+          );
+        }
+        const authPlugin = plugins.auth;
+        if (!authPlugin) {
+          return yield* Effect.fail(
+            new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
+          );
+        }
+        const userId = context.userId ?? context.user?.id;
+        if (!userId) {
+          return yield* Effect.fail(
+            new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
+          );
+        }
+        const auth = yield* memberAuthClient(context);
+        const joinOutcome = yield* Effect.tryPromise({
+          try: async () => {
+            try {
+              const redeemed = await auth.redeemOnboardingCode({ code: joinCodeId });
+              return {
+                joined: true as const,
+                alreadyMember: false,
+                organizationId: redeemed.organizationId as string,
+              };
+            } catch (cause) {
+              const message = cause instanceof Error ? cause.message : String(cause);
+              if (/already/i.test(message)) {
+                return {
+                  joined: true as const,
+                  alreadyMember: true,
+                  organizationId: node.orgId ?? "",
+                };
+              }
+              throw cause;
+            }
+          },
+          catch: (cause) =>
+            new ORPCError("CONFLICT", {
+              message: "Could not join this community",
+              data: { cause: cause instanceof Error ? cause.message : String(cause) },
+            }),
+        });
+        if (joinOutcome.alreadyMember) {
+          return {
+            organizationId: joinOutcome.organizationId,
+            nodeId: node.id,
+            slug: node.slug,
+            alreadyMember: true,
+          };
+        }
+        return {
+          organizationId: joinOutcome.organizationId,
+          nodeId: node.id,
+          slug: node.slug,
+          alreadyMember: false,
+        };
       }),
 
       listValidators: builder.listValidators.effect(function* ({ input }) {
