@@ -23,7 +23,7 @@ export interface SeedSources {
 export interface PlaceUpsertRow {
   slug: string;
   name: string;
-  label: string;
+  label: string | null;
   latitude: number | null;
   longitude: number | null;
   boundary: PlaceBoundary | null;
