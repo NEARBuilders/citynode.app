@@ -27,6 +27,7 @@ interface Ctx {
   nodeId: string;
   countryId: string;
   aliasValue: string;
+  nodePlace: () => Promise<string | null>;
 }
 
 function run<A>(body: (ctx: Ctx) => Promise<A>): Promise<A> {
