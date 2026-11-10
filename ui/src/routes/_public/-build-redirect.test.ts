@@ -1,33 +1,36 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { memberBuildUrl, nearBuildersBuildUrl } from "./-build-destination";
 
-vi.mock("@tanstack/react-router", () => ({
-  createFileRoute: () => (options: Record<string, unknown>) => ({ options }),
-  redirect: (options: unknown) => ({ redirect: options }),
-}));
-
-const { Route: BuildRoute } = await import("./build");
-
-type Guard = (args: unknown) => unknown;
-
-function thrownBy(context: unknown) {
-  try {
-    (BuildRoute.options.beforeLoad as Guard)({ context });
-  } catch (error) {
-    return error;
-  }
-  return undefined;
-}
-
-describe("/build", () => {
-  it("sends signed-out visitors to NEAR Builders without a referral code", () => {
-    expect(thrownBy({ session: null })).toEqual({
-      redirect: { href: "https://nearbuilders.org/build", reloadDocument: true, replace: true },
-    });
+describe("nearBuildersBuildUrl", () => {
+  it("adds the referral code as ref", () => {
+    expect(nearBuildersBuildUrl("abc123")).toBe("https://nearbuilders.org/build?ref=abc123");
   });
 
-  it("sends signed-in members to the same place until a referral parameter is agreed", () => {
-    expect(thrownBy({ session: { user: { id: "user-1" } } })).toEqual({
-      redirect: { href: "https://nearbuilders.org/build", reloadDocument: true, replace: true },
-    });
+  it("encodes the code", () => {
+    expect(nearBuildersBuildUrl("a b&c")).toBe("https://nearbuilders.org/build?ref=a+b%26c");
+  });
+
+  it("leaves the code off when there is none", () => {
+    expect(nearBuildersBuildUrl(null)).toBe("https://nearbuilders.org/build");
+    expect(nearBuildersBuildUrl("  ")).toBe("https://nearbuilders.org/build");
+  });
+});
+
+describe("memberBuildUrl", () => {
+  it("uses the member's own referral code", async () => {
+    const lookup = async () => ({ data: { code: "abc123" }, error: null });
+    await expect(memberBuildUrl(lookup)).resolves.toBe("https://nearbuilders.org/build?ref=abc123");
+  });
+
+  it("goes without a code when the lookup returns an error", async () => {
+    const lookup = async () => ({ data: null, error: { status: 401 } });
+    await expect(memberBuildUrl(lookup)).resolves.toBe("https://nearbuilders.org/build");
+  });
+
+  it("goes without a code when the lookup throws", async () => {
+    const lookup = async () => {
+      throw new Error("network");
+    };
+    await expect(memberBuildUrl(lookup)).resolves.toBe("https://nearbuilders.org/build");
   });
 });
