@@ -39,6 +39,12 @@ const summary = await Effect.runPromise(
     const nodeRows = yield* Effect.tryPromise(() =>
       db.select().from(nodesTable).where(isNull(nodesTable.placeId)),
     );
+    const linkedRows = yield* Effect.tryPromise(() =>
+      db
+        .select({ id: nodesTable.id, placeSlug: placesTable.slug })
+        .from(nodesTable)
+        .innerJoin(placesTable, eq(placesTable.id, nodesTable.placeId)),
+    );
     const tenantRows = yield* Effect.tryPromise(() => db.select().from(tenantsTable));
     const placeRows = yield* Effect.tryPromise(() =>
       db
@@ -48,6 +54,7 @@ const summary = await Effect.runPromise(
           name: placesTable.name,
           parentId: placesTable.parentId,
           boundary: placesTable.boundary,
+          label: placesTable.label,
         })
         .from(placesTable),
     );
@@ -84,7 +91,17 @@ const summary = await Effect.runPromise(
         row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     }));
 
-    const inputs: BackfillInputs = { nodes, places: placeRows, aliases: aliasRows, geoByNodeId };
+    const linkedPlaceSlugByNodeId = Object.fromEntries(
+      linkedRows.map((row) => [row.id, row.placeSlug] as const),
+    );
+
+    const inputs: BackfillInputs = {
+      nodes,
+      places: placeRows,
+      aliases: aliasRows,
+      geoByNodeId,
+      linkedPlaceSlugByNodeId,
+    };
     const plan = buildBackfillPlan(inputs);
     yield* Effect.tryPromise(() => applyBackfill(db, plan));
 
