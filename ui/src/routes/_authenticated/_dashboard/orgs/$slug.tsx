@@ -276,9 +276,11 @@ function OrganizationDetail() {
               ? translate("orgApproval.pending")
               : translate("orgApproval.rejected")}
           </h2>
-          <p className="text-sm text-muted-foreground" data-testid="orgs-request-reason">
-            {org?.status === "pending" ? translate("orgApproval.pendingHint") : org.rejectionReason}
-          </p>
+          {org?.status === "pending" && (
+            <p className="text-sm text-muted-foreground" data-testid="orgs-request-reason">
+              {translate("orgApproval.pendingHint")}
+            </p>
+          )}
           <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
             {translate("org.back")}
           </Button>
