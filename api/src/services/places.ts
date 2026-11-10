@@ -151,7 +151,6 @@ export const PlacesLive = Layer.effect(
                 updatedAt: placesTable.updatedAt,
                 nodeId: nodesTable.id,
                 activatedAt: nodesTable.activatedAt,
-                organizationId: nodesTable.orgId,
                 memberCount: memberCountObservations.count,
               })
               .from(placesTable)
@@ -193,13 +192,14 @@ export const PlacesLive = Layer.effect(
               .where(eq(placeAliasesTable.placeId, place.id)),
           );
 
-          const community: PlaceCommunity | null = row.nodeId
-            ? {
-                nodeId: row.nodeId,
-                activatedAt: toTimestampIso(row.activatedAt),
-                memberCount: row.memberCount ?? null,
-              }
-            : null;
+          const community: PlaceCommunity | null =
+            row.nodeId && row.activatedAt
+              ? {
+                  nodeId: row.nodeId,
+                  activatedAt: toTimestampIso(row.activatedAt),
+                  memberCount: row.memberCount ?? null,
+                }
+              : null;
 
           return { place, aliases: aliasRows.map((a) => a.value), community };
         }),

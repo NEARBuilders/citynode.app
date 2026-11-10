@@ -50,10 +50,6 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function normalizeName(value: string): string {
-  return slugify(value);
-}
-
 function roundCoordinates(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => roundCoordinates(item));
@@ -74,6 +70,7 @@ function toBoundary(geometry: unknown): PlaceBoundary | null {
 
 interface CountryRow {
   iso2: string;
+  iso3: string;
   name: string;
   geonameid: string;
   boundary: PlaceBoundary | null;
@@ -102,11 +99,13 @@ function parseCountries(countryInfo: string, admin0Geojson: string): CountryRow[
     if (line.startsWith("#") || line.trim() === "") continue;
     const columns = line.split("\t");
     const iso2 = columns[0]?.trim().toUpperCase();
+    const iso3 = columns[1]?.trim().toUpperCase();
     const name = columns[4]?.trim();
     const geonameid = columns[16]?.trim();
-    if (!iso2 || !name || !geonameid) continue;
+    if (!iso2 || !iso3 || !name || !geonameid) continue;
     rows.push({
       iso2,
+      iso3,
       name,
       geonameid,
       boundary: boundariesByIso.get(iso2) ?? null,
@@ -159,7 +158,7 @@ function parseAdmin1Boundaries(admin1Geojson: string): Admin1Boundary[] {
     if (!iso2 || typeof name !== "string") continue;
     const boundary = toBoundary(feature.geometry);
     if (!boundary) continue;
-    rows.push({ key: `${iso2}:${normalizeName(name)}`, boundary });
+    rows.push({ key: `${iso2}:${slugify(name)}`, boundary });
   }
   return rows;
 }
@@ -241,13 +240,14 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
     });
     aliases.push({ value: country.geonameid, kind: "geonames", slug });
     aliases.push({ value: country.iso2, kind: "iso", slug });
+    aliases.push({ value: country.iso3, kind: "iso", slug });
   }
 
   for (const row of admin1) {
     const countrySlug = countrySlugByIso.get(row.countryCode);
     if (!countrySlug) continue;
     const slug = `${row.countryCode.toLowerCase()}-${slugify(row.name)}`;
-    const boundary = boundariesByAdmin1.get(`${row.countryCode}:${normalizeName(row.name)}`);
+    const boundary = boundariesByAdmin1.get(`${row.countryCode}:${slugify(row.name)}`);
     const pin = boundary ? bboxCenter(boundary) : null;
     places.push({
       slug,
@@ -285,7 +285,13 @@ export async function seedPlacesInto(db: Database, catalog: PlacesCatalog): Prom
           longitude: sql`excluded.longitude`,
           boundary: sql`excluded.boundary`,
           label: sql`excluded.label`,
-          updatedAt: new Date(),
+          updatedAt: sql`CASE
+            WHEN excluded.name IS DISTINCT FROM places.name
+              OR excluded.latitude IS DISTINCT FROM places.latitude
+              OR excluded.longitude IS DISTINCT FROM places.longitude
+              OR excluded.boundary IS DISTINCT FROM places.boundary
+              OR excluded.label IS DISTINCT FROM places.label
+            THEN now() ELSE places.updated_at END`,
         },
       });
   }
@@ -298,7 +304,9 @@ export async function seedPlacesInto(db: Database, catalog: PlacesCatalog): Prom
     );
     await db.execute(sql`
       UPDATE places
-      SET parent_id = parent.id, updated_at = now()
+      SET parent_id = parent.id,
+        updated_at = CASE
+          WHEN places.parent_id IS DISTINCT FROM parent.id THEN now() ELSE places.updated_at END
       FROM (VALUES ${values}) AS seed_parent(slug, parent_slug)
       INNER JOIN places parent ON parent.slug = seed_parent.parent_slug
       WHERE places.slug = seed_parent.slug

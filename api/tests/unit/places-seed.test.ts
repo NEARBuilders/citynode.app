@@ -1,12 +1,19 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive, DatabaseTag } from "@/db/layer";
 import { placeAliases, places as placesTable } from "@/db/schema";
 import { buildPlacesCatalog, type SeedSources, seedPlacesInto } from "@/seed/places-catalog";
+import { createTempDb } from "./test-harness";
+
+let cleanup: (() => void) | null = null;
+
+afterEach(() => {
+  if (cleanup) {
+    cleanup();
+    cleanup = null;
+  }
+});
 
 const countryInfo = [
   "#ISO\tISO3\tIANA\tFIPS\tCountry\tCapital\tArea\tPopulation\tContinent\ttld\tCurrencyCode\tCurrencyName\tPhone\tPostalFormat\tPostalRegex\tLanguages\tgeonameid\tneighbours\tEquivalentFipsCode",
@@ -97,15 +104,6 @@ function sources(): SeedSources {
   };
 }
 
-let activeDir: string | null = null;
-
-afterEach(() => {
-  if (activeDir) {
-    rmSync(activeDir, { recursive: true, force: true });
-    activeDir = null;
-  }
-});
-
 describe("buildPlacesCatalog", () => {
   it("builds countries with boundaries, geonames and iso aliases", () => {
     const catalog = buildPlacesCatalog(sources());
@@ -135,6 +133,7 @@ describe("buildPlacesCatalog", () => {
     const nigeriaAliases = catalog.aliases.filter((a) => a.slug === "nigeria");
     expect(nigeriaAliases).toContainEqual({ value: "2328926", kind: "geonames", slug: "nigeria" });
     expect(nigeriaAliases).toContainEqual({ value: "NG", kind: "iso", slug: "nigeria" });
+    expect(nigeriaAliases).toContainEqual({ value: "NGA", kind: "iso", slug: "nigeria" });
   });
 
   it("matches admin-0 iso fallbacks when ISO_A2 is -99", () => {
@@ -194,28 +193,38 @@ describe("buildPlacesCatalog", () => {
     expect(buildPlacesCatalog(sources())).toEqual(buildPlacesCatalog(sources()));
   });
 
-  it("seeds idempotently: running twice leaves identical rows", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "api-places-seed-"));
-    activeDir = dir;
-    const layer = Layer.mergeAll(DatabaseLive(`pglite:${dir}`)).pipe(
+  it("seeds idempotently: running twice leaves identical rows and timestamps", async () => {
+    const temp = createTempDb("api-places-seed-");
+    cleanup = temp.cleanup;
+    const layer = Layer.mergeAll(DatabaseLive(temp.url)).pipe(
       Layer.provide(Layer.succeed(PluginIdTag, "api")),
     );
     const catalog = buildPlacesCatalog(sources());
 
-    const { placeRows, aliasRows, parentIds } = await Effect.runPromise(
-      Effect.gen(function* () {
-        const db = yield* DatabaseTag;
-        yield* Effect.tryPromise(() => seedPlacesInto(db, catalog));
-        yield* Effect.tryPromise(() => seedPlacesInto(db, catalog));
-        const placeRows = yield* Effect.tryPromise(() => db.select().from(placesTable));
-        const aliasRows = yield* Effect.tryPromise(() => db.select().from(placeAliases));
-        const parentIds = new Map(placeRows.map((row) => [row.slug, row.parentId] as const));
-        return { placeRows, aliasRows, parentIds };
-      }).pipe(Effect.provide(layer)),
-    );
+    const { firstRunUpdatedAt, secondRunUpdatedAt, placeRows, aliasRows, parentIds } =
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const db = yield* DatabaseTag;
+          yield* Effect.tryPromise(() => seedPlacesInto(db, catalog));
+          const firstRunUpdatedAt = new Map(
+            (yield* Effect.tryPromise(() => db.select().from(placesTable))).map(
+              (row) => [row.slug, row.updatedAt] as const,
+            ),
+          );
+          yield* Effect.tryPromise(() => seedPlacesInto(db, catalog));
+          const placeRows = yield* Effect.tryPromise(() => db.select().from(placesTable));
+          const aliasRows = yield* Effect.tryPromise(() => db.select().from(placeAliases));
+          const parentIds = new Map(placeRows.map((row) => [row.slug, row.parentId] as const));
+          const secondRunUpdatedAt = new Map(
+            placeRows.map((row) => [row.slug, row.updatedAt] as const),
+          );
+          return { firstRunUpdatedAt, secondRunUpdatedAt, placeRows, aliasRows, parentIds };
+        }).pipe(Effect.provide(layer)),
+      );
 
     expect(placeRows).toHaveLength(5);
-    expect(aliasRows).toHaveLength(6);
+    expect(aliasRows).toHaveLength(8);
+    expect(secondRunUpdatedAt).toEqual(firstRunUpdatedAt);
     expect(parentIds.get("cis")).toBeNull();
     const bySlug = new Map(placeRows.map((row) => [row.slug, row] as const));
     expect(parentIds.get("russia")).toBe(bySlug.get("cis")?.id);

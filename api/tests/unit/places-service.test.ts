@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { Effect, Layer } from "effect";
@@ -14,18 +11,17 @@ import {
   placeAliases,
   places as placesTable,
 } from "@/db/schema";
-import { buildPlacesCatalog, type SeedSources, seedPlacesInto } from "@/seed/places-catalog";
 import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { PlacesLive, type PlacesService, PlacesTag } from "@/services/places";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
-import { createServiceHarness } from "./test-harness";
+import { createServiceHarness, createTempDb } from "./test-harness";
 
-let activeDir: string | null = null;
+let cleanup: (() => void) | null = null;
 
 afterEach(() => {
-  if (activeDir) {
-    rmSync(activeDir, { recursive: true, force: true });
-    activeDir = null;
+  if (cleanup) {
+    cleanup();
+    cleanup = null;
   }
 });
 
@@ -34,9 +30,9 @@ function freshLayer(): Layer.Layer<
   DatabaseError,
   never
 > {
-  const dir = mkdtempSync(join(tmpdir(), "api-places-"));
-  activeDir = dir;
-  const database = DatabaseLive(`pglite:${dir}`);
+  const temp = createTempDb("api-places-");
+  cleanup = temp.cleanup;
+  const database = DatabaseLive(temp.url);
   return Layer.mergeAll(
     PlacesLive.pipe(Layer.provide(database)),
     NodesLive.pipe(Layer.provide(database)),
@@ -141,8 +137,9 @@ describe("PlacesService", () => {
     );
     await runService(layer, ({ db }) => insertAlias(db, "2328926", "geonames", place.id));
     await runService(layer, ({ db }) => insertAlias(db, "NG", "iso", place.id));
+    await runService(layer, ({ db }) => insertAlias(db, "NGA", "iso", place.id));
 
-    for (const input of ["2328926", "geonames:2328926", "GEONAMES:2328926", "ng", "NG"]) {
+    for (const input of ["2328926", "geonames:2328926", "GEONAMES:2328926", "ng", "NG", "nga"]) {
       const resolved = await runService(layer, ({ places }) => places.resolve({ place: input }));
       expect(resolved?.place.id, `input ${input}`).toBe(place.id);
     }
@@ -192,15 +189,33 @@ describe("PlacesService", () => {
       insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
     );
     await runService(layer, ({ db }) =>
-      db.insert(nodesTable).values({ slug: "nigeria", name: "Nigeria", placeId: place.id }),
+      db.insert(nodesTable).values({
+        slug: "nigeria",
+        name: "Nigeria",
+        placeId: place.id,
+        activatedAt: new Date("2026-01-15T00:00:00Z"),
+      }),
     );
 
     const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
     expect(resolved?.community).toEqual({
       nodeId: expect.any(String),
-      activatedAt: null,
+      activatedAt: "2026-01-15T00:00:00.000Z",
       memberCount: null,
     });
+  });
+
+  it("resolve reports no community for a node that was never activated", async () => {
+    const layer = freshLayer();
+    const place = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
+    );
+    await runService(layer, ({ db }) =>
+      db.insert(nodesTable).values({ slug: "nigeria", name: "Nigeria", placeId: place.id }),
+    );
+
+    const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
+    expect(resolved?.community).toBeNull();
   });
 
   it("children returns direct children only", async () => {
