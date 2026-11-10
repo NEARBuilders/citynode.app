@@ -41,15 +41,6 @@ export interface PlacesCatalog {
   aliases: AliasUpsertRow[];
 }
 
-function slugify(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 function roundCoordinates(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => roundCoordinates(item));

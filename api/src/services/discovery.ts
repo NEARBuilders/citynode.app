@@ -1132,7 +1132,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             : (previous?.geocodedLocation ?? null);
         const kind = nodeKindOf(record.node.metadata);
         const place = profilePlace(input, kind);
-        const missingBoundary = kind === "country" && !previous?.boundary;
         const stale = shouldGeocodeProfile({
           location: place,
           latitude: input.latitude,
@@ -1143,7 +1142,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           ...input,
           geocodedLocation,
           geocodeHint: null,
-          boundary: previous?.boundary ?? null,
         };
         if (!place) {
           next = {
@@ -1152,9 +1150,8 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             longitude: null,
             geocodedLocation: null,
             geocodeHint: null,
-            boundary: null,
           };
-        } else if (stale || missingBoundary) {
+        } else if (stale) {
           const geocoded = yield* geocode.geocode(place);
           if (geocoded.ok) {
             next = {
@@ -1163,17 +1160,40 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               longitude: geocoded.longitude,
               geocodedLocation: place,
               geocodeHint: null,
-              boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
             };
-          } else if (stale) {
+          } else {
             next = {
               ...next,
               latitude: null,
               longitude: null,
               geocodedLocation: null,
               geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
-              boundary: null,
             };
+          }
+        }
+        // Map geometry lives in the places catalog. When this community is a
+        // place-backed kind and its node is not linked yet, resolve the catalog
+        // place from the location and adopt it — the on-demand boundary
+        // endpoint then serves the outline.
+        if (place && record.node.placeId === null) {
+          const [matched] = yield* query(() =>
+            db
+              .select({ id: placesTable.id })
+              .from(placesTable)
+              .where(
+                sql`${placesTable.slug} = ${slugify(place)} OR ${placesTable.id} IN (
+                  SELECT place_id FROM place_aliases WHERE value = ${place}
+                )`,
+              )
+              .limit(1),
+          );
+          if (matched) {
+            yield* query(() =>
+              db
+                .update(nodes)
+                .set({ placeId: matched.id })
+                .where(and(eq(nodes.id, record.node.id), isNull(nodes.placeId))),
+            );
           }
         }
         yield* query(() =>
