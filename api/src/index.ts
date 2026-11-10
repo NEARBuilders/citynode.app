@@ -2035,10 +2035,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
           );
         }
-        const auth = authPlugin.client({
-          userId,
-          user: context.user,
-        });
+        const auth = yield* memberAuthClient(context);
         return yield* Effect.tryPromise({
           try: () =>
             activateCommunity({ places: services.places, nodes: services.nodes }, auth, {
