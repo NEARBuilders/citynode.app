@@ -48,10 +48,10 @@ export default defineConfig({
     command,
     url: `${regressionEnv.baseUrl}/health`,
     reuseExistingServer: false,
-    // The pnpm-based image build + container boot outgrew the bun-era 2m
-    // budget; 5m keeps headroom (an early exit still fails the webServer).
-    // Runners with slow docker initdb have blown 5m (postgres initdb alone
-    // observed at 7m), so budget 10m — an early stack exit still fails fast.
+    // KEEP: budget 10m — runners with slow docker initdb have blown the old 5m
+    // budget (postgres initdb alone observed at 7m); an early stack exit still
+    // fails the webServer fast, so the larger budget only costs time on a
+    // genuinely hung boot.
     timeout: 600_000,
     stdout: "pipe",
     stderr: "pipe",
