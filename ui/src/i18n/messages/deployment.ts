@@ -25,12 +25,7 @@ export const deploymentMessages = createMessageCatalogs(["en", "es", "fr", "zh"]
     "Créez une organisation. Vous en serez propriétaire et pourrez inviter des personnes.",
     "创建组织。你将成为所有者并可邀请他人。",
   ],
-  "orgApproval.pending": [
-    "Not yet active",
-    "Aún no está activa",
-    "Pas encore active",
-    "尚未激活",
-  ],
+  "orgApproval.pending": ["Not yet active", "Aún no está activa", "Pas encore active", "尚未激活"],
   "orgApproval.rejected": [
     "Request rejected",
     "Solicitud rechazada",
