@@ -1,4 +1,6 @@
 import { rmSync } from "node:fs";
+import { ORPCError } from "@orpc/server";
+import { eq } from "drizzle-orm";
 import { Effect } from "effect";
 import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -22,18 +24,27 @@ const orgsBySlug = new Map<string, { id: string; name: string; slug: string }>()
 const codesBySlug = new Map<string, string>();
 const membersByOrg = new Map<string, Set<string>>();
 const redemptionCalls: Array<{ userId: string; code: string; threw: string | null }> = [];
+// The runtime initializes once per file, so stub overrides after the first
+// getPluginClient are ignored — conflict behavior rides the shared stub via
+// this flag instead.
+let conflictOnCreate = false;
 
 function authStubFor(context: unknown) {
   const userId = (context as { userId?: string }).userId ?? "anonymous";
   return {
     client: () => ({
       createOrganization: async (input: { name: string; slug: string }) => {
+        if (conflictOnCreate) {
+          throw new ORPCError("CONFLICT", { message: "Organization slug already taken" });
+        }
         const id = `org-${input.slug}`;
         if (!orgsBySlug.has(id)) {
           orgsBySlug.set(id, { id, name: input.name, slug: input.slug });
         }
         return orgsBySlug.get(id)!;
       },
+      listOrganizations: async () =>
+        [...orgsBySlug.values()].filter((org) => membersByOrg.get(org.id)?.has(userId)),
       addMember: async (input: { userId: string; role: string; organizationId: string }) => {
         const set = membersByOrg.get(input.organizationId) ?? new Set<string>();
         set.add(input.userId);
@@ -108,13 +119,21 @@ beforeAll(async () => {
   try {
     const { migrations } = await Effect.runPromise(loadMigrations);
     await Effect.runPromise(migrate(driver.db, migrations, getMigrationStorage(slug), schemaName));
-    await driver.db
-      .insert(placesTable)
-      .values({ slug: "nigeria", name: "Nigeria", label: "country" });
+    await driver.db.insert(placesTable).values([
+      { slug: "nigeria", name: "Nigeria", label: "country" },
+      { slug: "kenya", name: "Kenya", label: "country" },
+      { slug: "ghana", name: "Ghana", label: "country" },
+    ]);
     await driver.db.insert(placeAliases).values({
       value: "2328926",
       kind: "geonames",
-      placeId: (await driver.db.select({ id: placesTable.id }).from(placesTable).limit(1))[0]!.id,
+      placeId: (
+        await driver.db
+          .select({ id: placesTable.id })
+          .from(placesTable)
+          .where(eq(placesTable.slug, "nigeria"))
+          .limit(1)
+      )[0]!.id,
     });
   } finally {
     await driver.close();
@@ -189,5 +208,47 @@ describe("places activation + join flow", () => {
     await expect(caller.activateCommunity({ place: "atlantis" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  // A slug CONFLICT followed by a caller-owned org in listOrganizations models
+  // a previous activation that died after creating the org — the retry must
+  // reuse it instead of failing.
+  it("reuses the caller's own organization when the slug is already taken", async () => {
+    // Membership is keyed to the boot-time stub identity — that is the
+    // identity every RPC in this file authenticates as.
+    orgsBySlug.set("org-kenya", { id: "org-kenya", name: "Kenya", slug: "kenya" });
+    membersByOrg.set("org-kenya", new Set(["boot"]));
+    conflictOnCreate = true;
+    try {
+      const caller = await getPluginClient(authedContext("boot"), {
+        auth: authStubFor({ userId: "boot" }),
+      } as never);
+
+      const result = await caller.activateCommunity({ place: "kenya" });
+      expect(result).toMatchObject({
+        slug: "kenya",
+        organizationId: "org-kenya",
+        joinCode: "join-code-kenya",
+        alreadyActivated: false,
+      });
+    } finally {
+      conflictOnCreate = false;
+    }
+  });
+
+  it("still conflicts when the slug belongs to another organization", async () => {
+    orgsBySlug.set("org-ghana", { id: "org-ghana", name: "Ghana", slug: "ghana" });
+    conflictOnCreate = true;
+    try {
+      const caller = await getPluginClient(authedContext("boot"), {
+        auth: authStubFor({ userId: "boot" }),
+      } as never);
+
+      await expect(caller.activateCommunity({ place: "ghana" })).rejects.toMatchObject({
+        code: "CONFLICT",
+      });
+    } finally {
+      conflictOnCreate = false;
+    }
   });
 });
