@@ -140,7 +140,7 @@ function replaceMetadataKeepingKind(replacement: string): SQL {
 }
 
 /**
- * Recursive reachability over the merged hierarchy: node-tree edges
+ * KEEP: reachability spans both hierarchy axes — node-tree edges
  * (nodes.parent_id, carrying nodes that have no place identity yet) plus
  * place-tree edges (a child place's anchored nodes). Place-anchored and
  * unlinked subtrees coexist until the backfill/join flow links every node,
