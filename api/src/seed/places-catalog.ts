@@ -6,6 +6,7 @@ import {
   placeAliases as placeAliasesTable,
   places as placesTable,
 } from "../db/schema";
+import { slugify } from "../lib/slug";
 
 // KEEP: display-grade geometry — 0.02° (~2km) keeps the 10m Natural Earth
 // source small enough for the JSONB boundary column and on-demand map fetches

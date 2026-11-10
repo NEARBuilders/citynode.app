@@ -237,9 +237,7 @@ export const PlacesLive = Layer.effect(
             .from(placesTable)
             .where(inArray(placesTable.id, placeIds)),
         ).pipe(
-          Effect.map((rows) =>
-            rows.map((row) => ({ placeId: row.id, boundary: row.boundary })),
-          ),
+          Effect.map((rows) => rows.map((row) => ({ placeId: row.id, boundary: row.boundary }))),
         ),
 
       roots: () =>

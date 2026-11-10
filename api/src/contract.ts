@@ -939,9 +939,7 @@ export const contract = oc.router({
         "Map views fetch geometry in one round trip. Places without a boundary are omitted — callers treat a missing key as marker-only.",
     })
     .input(z.object({ placeIds: z.array(z.uuid()).min(1).max(500) }))
-    .output(
-      z.array(z.object({ placeId: z.uuid(), boundary: PlaceBoundarySchema.nullable() })),
-    ),
+    .output(z.array(z.object({ placeId: z.uuid(), boundary: PlaceBoundarySchema.nullable() }))),
 
   listValidators: oc
     .route({
