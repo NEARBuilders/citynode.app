@@ -73,368 +73,353 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     return Effect.void;
   }
 
-  function nodeAccess(nodeId: string, context: AuthContext, area?: FeatureArea) {
-    return Effect.gen(function* () {
-      if (!context.userId || !context.user) {
-        return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
-      }
-      const [record] = yield* query(() =>
-        db
-          .select({ node: nodes, tenant: tenants })
-          .from(nodes)
-          .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-          .where(eq(nodes.id, nodeId)),
-      );
-      if (!record) {
-        return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-      }
-      if (context.user.role === "admin") return { record, level: "editor" as const, manager: true };
-      const org = context.organization;
-      const role = org?.member?.role ?? "";
-      if (!record.tenant.orgId || org?.activeOrganizationId !== record.tenant.orgId || !role) {
-        return { record, level: null, manager: false };
-      }
-      const manager = ["owner", "admin"].includes(role);
-      const granted =
-        manager ||
-        (!!area && resolveTeamAccess(context).teams.some((team) => team.areas.includes(area)));
-      return { record, level: granted ? ("editor" as const) : ("member" as const), manager };
-    });
-  }
+  const nodeAccess = Effect.fn("DiscoveryService.nodeAccess")(function* (
+    nodeId: string,
+    context: AuthContext,
+    area?: FeatureArea,
+  ) {
+    if (!context.userId || !context.user) {
+      return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
+    }
+    const [record] = yield* query(() =>
+      db
+        .select({ node: nodes, tenant: tenants })
+        .from(nodes)
+        .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+        .where(eq(nodes.id, nodeId)),
+    );
+    if (!record) {
+      return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+    }
+    if (context.user.role === "admin") return { record, level: "editor" as const, manager: true };
+    const org = context.organization;
+    const role = org?.member?.role ?? "";
+    if (!record.tenant.orgId || org?.activeOrganizationId !== record.tenant.orgId || !role) {
+      return { record, level: null, manager: false };
+    }
+    const manager = ["owner", "admin"].includes(role);
+    const granted =
+      manager ||
+      (!!area && resolveTeamAccess(context).teams.some((team) => team.areas.includes(area)));
+    return { record, level: granted ? ("editor" as const) : ("member" as const), manager };
+  });
 
-  function authorize(nodeId: string, context: AuthContext, area?: FeatureArea) {
-    return Effect.gen(function* () {
-      const { record, level } = yield* nodeAccess(nodeId, context, area);
-      if (level !== "editor") {
-        return yield* Effect.fail(new ORPCError("FORBIDDEN"));
-      }
-      return record;
-    });
-  }
+  const authorize = Effect.fn("DiscoveryService.authorize")(function* (
+    nodeId: string,
+    context: AuthContext,
+    area?: FeatureArea,
+  ) {
+    const { record, level } = yield* nodeAccess(nodeId, context, area);
+    if (level !== "editor") {
+      return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+    }
+    return record;
+  });
 
-  function requireCurator(context: AuthContext): DiscoveryEffect<void> {
-    return Effect.gen(function* () {
-      if (!context.userId || !context.user) {
-        return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
-      }
-      if (context.user.role === "admin") return;
-      const userId = context.userId;
-      const [grant] = yield* query(() =>
-        db.select().from(discoveryCurators).where(eq(discoveryCurators.userId, userId)),
-      );
-      if (!grant) {
-        return yield* Effect.fail(new ORPCError("FORBIDDEN"));
-      }
-    });
-  }
+  const requireCurator = Effect.fn("DiscoveryService.requireCurator")(function* (
+    context: AuthContext,
+  ): Effect.fn.Return<void, ORPCError<string, unknown>> {
+    if (!context.userId || !context.user) {
+      return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
+    }
+    if (context.user.role === "admin") return;
+    const userId = context.userId;
+    const [grant] = yield* query(() =>
+      db.select().from(discoveryCurators).where(eq(discoveryCurators.userId, userId)),
+    );
+    if (!grant) {
+      return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+    }
+  });
 
-  function eligibleProfiles(ids?: string[]) {
-    return Effect.gen(function* () {
-      if (ids?.length === 0) return [];
-      return yield* query(() =>
-        db
-          .select({ profile: discoveryProfiles.data, node: nodes })
-          .from(discoveryProfiles)
-          .innerJoin(nodes, eq(discoveryProfiles.nodeId, nodes.id))
-          .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-          .where(
-            and(
-              eq(tenants.status, "active"),
-              sql`${discoveryProfiles.data}->>'published' = 'true'`,
-              ids ? inArray(nodes.id, ids) : undefined,
-            ),
+  const eligibleProfiles = Effect.fn("DiscoveryService.eligibleProfiles")(function* (
+    ids?: string[],
+  ) {
+    if (ids?.length === 0) return [];
+    return yield* query(() =>
+      db
+        .select({ profile: discoveryProfiles.data, node: nodes })
+        .from(discoveryProfiles)
+        .innerJoin(nodes, eq(discoveryProfiles.nodeId, nodes.id))
+        .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+        .where(
+          and(
+            eq(tenants.status, "active"),
+            sql`${discoveryProfiles.data}->>'published' = 'true'`,
+            ids ? inArray(nodes.id, ids) : undefined,
           ),
-      );
-    });
-  }
+        ),
+    );
+  });
 
-  function eligibleProfile(nodeId: string | null) {
-    return Effect.gen(function* () {
-      if (!nodeId) return null;
-      const rows = yield* eligibleProfiles([nodeId]);
-      return rows[0]?.profile ?? null;
-    });
-  }
+  const eligibleProfile = Effect.fn("DiscoveryService.eligibleProfile")(function* (
+    nodeId: string | null,
+  ) {
+    if (!nodeId) return null;
+    const rows = yield* eligibleProfiles([nodeId]);
+    return rows[0]?.profile ?? null;
+  });
 
-  function activityById(id: string) {
-    return Effect.gen(function* () {
-      const [row] = yield* query(() =>
-        db.select().from(discoveryActivities).where(eq(discoveryActivities.id, id)),
-      );
-      return row?.data ?? null;
-    });
-  }
+  const activityById = Effect.fn("DiscoveryService.activityById")(function* (id: string) {
+    const [row] = yield* query(() =>
+      db.select().from(discoveryActivities).where(eq(discoveryActivities.id, id)),
+    );
+    return row?.data ?? null;
+  });
 
-  function publicActivity(id: string) {
-    return Effect.gen(function* () {
-      const activity = yield* activityById(id);
-      if (
-        !activity ||
-        activity.status === "draft" ||
-        activity.luma?.available === false ||
-        activity.luma?.hidden === true ||
-        Date.parse(activity.publishedAt) > (yield* Clock.currentTimeMillis) ||
-        !(yield* eligibleProfile(activity.ownerNodeId))
-      ) {
-        return null;
-      }
-      const eligible = new Set((yield* eligibleProfiles(activity.nodeIds)).map((r) => r.node.id));
-      return { ...activity, nodeIds: activity.nodeIds.filter((id) => eligible.has(id)) };
-    });
-  }
+  const publicActivity = Effect.fn("DiscoveryService.publicActivity")(function* (id: string) {
+    const activity = yield* activityById(id);
+    if (
+      !activity ||
+      activity.status === "draft" ||
+      activity.luma?.available === false ||
+      activity.luma?.hidden === true ||
+      Date.parse(activity.publishedAt) > (yield* Clock.currentTimeMillis) ||
+      !(yield* eligibleProfile(activity.ownerNodeId))
+    ) {
+      return null;
+    }
+    const eligible = new Set((yield* eligibleProfiles(activity.nodeIds)).map((r) => r.node.id));
+    return { ...activity, nodeIds: activity.nodeIds.filter((id) => eligible.has(id)) };
+  });
 
-  function list(input: {
+  const list = Effect.fn("DiscoveryService.list")(function* (input: {
     query?: string;
     region?: string;
     active?: boolean;
     upcoming?: boolean;
     nodeId?: string;
   }) {
-    return Effect.gen(function* () {
-      yield* Effect.forkDetach(syncDueLuma);
-      const rows = yield* eligibleProfiles(input.nodeId ? [input.nodeId] : undefined);
-      const activityRows = yield* query(() =>
-        db
-          .select({ data: discoveryActivities.data })
-          .from(discoveryActivities)
-          .innerJoin(
-            discoveryProfiles,
-            eq(discoveryActivities.ownerNodeId, discoveryProfiles.nodeId),
-          )
-          .innerJoin(nodes, eq(nodes.id, discoveryProfiles.nodeId))
-          .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-          .where(
-            and(
-              eq(tenants.status, "active"),
-              sql`${discoveryProfiles.data}->>'published' = 'true'`,
-              sql`${discoveryActivities.data}->>'status' = 'published'`,
-              sql`${discoveryActivities.data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
-              sql`(${discoveryActivities.data}->>'publishedAt')::timestamptz <= ${new Date(Date.now()).toISOString()}`,
-              input.nodeId
-                ? sql`${discoveryActivities.data}->'nodeIds' ? ${input.nodeId}`
-                : undefined,
-            ),
+    yield* Effect.forkDetach(syncDueLuma);
+    const rows = yield* eligibleProfiles(input.nodeId ? [input.nodeId] : undefined);
+    const activityRows = yield* query(() =>
+      db
+        .select({ data: discoveryActivities.data })
+        .from(discoveryActivities)
+        .innerJoin(discoveryProfiles, eq(discoveryActivities.ownerNodeId, discoveryProfiles.nodeId))
+        .innerJoin(nodes, eq(nodes.id, discoveryProfiles.nodeId))
+        .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+        .where(
+          and(
+            eq(tenants.status, "active"),
+            sql`${discoveryProfiles.data}->>'published' = 'true'`,
+            sql`${discoveryActivities.data}->>'status' = 'published'`,
+            sql`${discoveryActivities.data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
+            sql`(${discoveryActivities.data}->>'publishedAt')::timestamptz <= ${new Date(Date.now()).toISOString()}`,
+            input.nodeId
+              ? sql`${discoveryActivities.data}->'nodeIds' ? ${input.nodeId}`
+              : undefined,
           ),
-      );
-      const activities = activityRows.map((r) => r.data);
-      const eligible = new Set(
-        (input.nodeId
-          ? yield* eligibleProfiles([...new Set(activities.flatMap((a) => a.nodeIds))])
-          : rows
-        ).map((r) => r.node.id),
-      );
-      const byNode = new Map<string, DiscoveryActivity[]>();
-      for (const activity of activities)
-        for (const id of activity.nodeIds) {
-          const group = byNode.get(id) ?? [];
-          group.push(activity);
-          byNode.set(id, group);
-        }
-      const now = yield* Clock.currentTimeMillis;
-      const features = yield* query(() =>
-        db
-          .select()
-          .from(discoveryFeatures)
-          .where(
-            and(
-              gte(discoveryFeatures.expiresAt, DateTime.toDateUtc(DateTime.makeUnsafe(now))),
-              input.nodeId ? eq(discoveryFeatures.nodeId, input.nodeId) : undefined,
-            ),
+        ),
+    );
+    const activities = activityRows.map((r) => r.data);
+    const eligible = new Set(
+      (input.nodeId
+        ? yield* eligibleProfiles([...new Set(activities.flatMap((a) => a.nodeIds))])
+        : rows
+      ).map((r) => r.node.id),
+    );
+    const byNode = new Map<string, DiscoveryActivity[]>();
+    for (const activity of activities)
+      for (const id of activity.nodeIds) {
+        const group = byNode.get(id) ?? [];
+        group.push(activity);
+        byNode.set(id, group);
+      }
+    const now = yield* Clock.currentTimeMillis;
+    const features = yield* query(() =>
+      db
+        .select()
+        .from(discoveryFeatures)
+        .where(
+          and(
+            gte(discoveryFeatures.expiresAt, DateTime.toDateUtc(DateTime.makeUnsafe(now))),
+            input.nodeId ? eq(discoveryFeatures.nodeId, input.nodeId) : undefined,
           ),
-      );
-      const featureLabels = new Map(features.map((f) => [f.nodeId, f.label]));
-      const day = 86_400_000;
-      return rows
-        .filter(
-          ({ profile, node }) =>
-            profile.published &&
-            (!input.query ||
-              `${node.name} ${profile.location}`
-                .toLowerCase()
-                .includes(input.query.toLowerCase())) &&
-            (!input.region || profile.region === input.region),
-        )
-        .map(({ profile, node }) => {
-          const content = byNode.get(node.id) ?? [];
-          const events = content
-            .filter((a) => a.kind === "event" && Date.parse(a.endsAt!) >= now)
-            .sort((a, b) => a.startsAt!.localeCompare(b.startsAt!));
-          const updates = content
-            .filter((a) => a.kind === "social")
-            .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
-          const upcoming = events.some((a) => Date.parse(a.startsAt!) <= now + 60 * day);
-          const recent =
-            updates.some((a) => Date.parse(a.publishedAt) >= now - 30 * day) ||
-            content.some(
-              (a) =>
-                a.kind === "event" &&
-                Date.parse(a.endsAt!) >= now - 30 * day &&
-                Date.parse(a.startsAt!) <= now,
-            );
-          return {
-            ...profile,
-            featured: featureLabels.get(node.id) ?? null,
-            active: upcoming || recent,
-            upcoming,
-            activityReason: upcoming
-              ? "Upcoming event"
-              : recent
-                ? "Recently active"
-                : "Quiet lately",
-            events: events
-              .slice(0, 3)
-              .map((a) => ({ ...a, nodeIds: a.nodeIds.filter((id) => eligible.has(id)) })),
-            updates: updates.slice(0, 3),
-            name: node.name,
-            slug: node.slug,
-            parentId: node.parentId,
-            kind: nodeKindOf(node.metadata),
-          };
-        })
-        .filter((p) => (!input.active || p.active) && (!input.upcoming || p.upcoming))
-        .sort((a, b) => a.name.localeCompare(b.name) || a.nodeId.localeCompare(b.nodeId));
-    });
-  }
+        ),
+    );
+    const featureLabels = new Map(features.map((f) => [f.nodeId, f.label]));
+    const day = 86_400_000;
+    return rows
+      .filter(
+        ({ profile, node }) =>
+          profile.published &&
+          (!input.query ||
+            `${node.name} ${profile.location}`.toLowerCase().includes(input.query.toLowerCase())) &&
+          (!input.region || profile.region === input.region),
+      )
+      .map(({ profile, node }) => {
+        const content = byNode.get(node.id) ?? [];
+        const events = content
+          .filter((a) => a.kind === "event" && Date.parse(a.endsAt!) >= now)
+          .sort((a, b) => a.startsAt!.localeCompare(b.startsAt!));
+        const updates = content
+          .filter((a) => a.kind === "social")
+          .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+        const upcoming = events.some((a) => Date.parse(a.startsAt!) <= now + 60 * day);
+        const recent =
+          updates.some((a) => Date.parse(a.publishedAt) >= now - 30 * day) ||
+          content.some(
+            (a) =>
+              a.kind === "event" &&
+              Date.parse(a.endsAt!) >= now - 30 * day &&
+              Date.parse(a.startsAt!) <= now,
+          );
+        return {
+          ...profile,
+          featured: featureLabels.get(node.id) ?? null,
+          active: upcoming || recent,
+          upcoming,
+          activityReason: upcoming ? "Upcoming event" : recent ? "Recently active" : "Quiet lately",
+          events: events
+            .slice(0, 3)
+            .map((a) => ({ ...a, nodeIds: a.nodeIds.filter((id) => eligible.has(id)) })),
+          updates: updates.slice(0, 3),
+          name: node.name,
+          slug: node.slug,
+          parentId: node.parentId,
+          kind: nodeKindOf(node.metadata),
+        };
+      })
+      .filter((p) => (!input.active || p.active) && (!input.upcoming || p.upcoming))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.nodeId.localeCompare(b.nodeId));
+  });
 
-  function directory(input: {
+  const directory = Effect.fn("DiscoveryService.directory")(function* (input: {
     query?: string;
     region?: string;
     active?: boolean;
     upcoming?: boolean;
   }) {
-    return Effect.gen(function* () {
-      const listed = yield* list(input);
-      if (input.region || input.active || input.upcoming) return listed;
-      const rows = yield* query(() =>
-        db
-          .select({ node: nodes })
-          .from(nodes)
-          .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-          .leftJoin(discoveryProfiles, eq(discoveryProfiles.nodeId, nodes.id))
-          .where(and(eq(tenants.status, "active"), isNull(discoveryProfiles.nodeId))),
-      );
-      const search = input.query?.toLowerCase();
-      const basic = rows
-        .filter(({ node }) => !search || node.name.toLowerCase().includes(search))
-        .map(({ node }) => ({
-          nodeId: node.id,
-          summary: "",
-          location: "",
-          region: "",
-          latitude: null,
-          longitude: null,
-          channels: [],
-          published: false,
-          featured: null,
-          active: false,
-          upcoming: false,
-          activityReason: "Quiet lately",
-          events: [],
-          updates: [],
-          name: node.name,
-          slug: node.slug,
-          parentId: node.parentId,
-          kind: nodeKindOf(node.metadata),
-        }));
-      return [...listed, ...basic].sort(
-        (a, b) => a.name.localeCompare(b.name) || a.nodeId.localeCompare(b.nodeId),
-      );
-    });
-  }
+    const listed = yield* list(input);
+    if (input.region || input.active || input.upcoming) return listed;
+    const rows = yield* query(() =>
+      db
+        .select({ node: nodes })
+        .from(nodes)
+        .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+        .leftJoin(discoveryProfiles, eq(discoveryProfiles.nodeId, nodes.id))
+        .where(and(eq(tenants.status, "active"), isNull(discoveryProfiles.nodeId))),
+    );
+    const search = input.query?.toLowerCase();
+    const basic = rows
+      .filter(({ node }) => !search || node.name.toLowerCase().includes(search))
+      .map(({ node }) => ({
+        nodeId: node.id,
+        summary: "",
+        location: "",
+        region: "",
+        latitude: null,
+        longitude: null,
+        channels: [],
+        published: false,
+        featured: null,
+        active: false,
+        upcoming: false,
+        activityReason: "Quiet lately",
+        events: [],
+        updates: [],
+        name: node.name,
+        slug: node.slug,
+        parentId: node.parentId,
+        kind: nodeKindOf(node.metadata),
+      }));
+    return [...listed, ...basic].sort(
+      (a, b) => a.name.localeCompare(b.name) || a.nodeId.localeCompare(b.nodeId),
+    );
+  });
 
-  function saveActivity(
+  const saveActivity = Effect.fn("DiscoveryService.saveActivity")(function* (
     input: Omit<DiscoveryActivity, "id" | "luma"> & { id?: string },
     context: AuthContext,
   ) {
-    return Effect.gen(function* () {
-      const initial = input.id ? yield* activityById(input.id) : null;
-      if (input.id && !initial) {
-        return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-      }
-      const area = input.kind === "event" ? EVENTS_AREA : undefined;
-      yield* authorize(initial?.ownerNodeId ?? input.ownerNodeId, context, area);
-      for (const nodeId of new Set(input.nodeIds)) {
-        if (!initial?.nodeIds.includes(nodeId)) yield* authorize(nodeId, context, area);
-      }
-      return yield* query(() =>
-        db.transaction(async (tx) => {
-          await tx
-            .select()
-            .from(nodes)
-            .where(eq(nodes.id, initial?.ownerNodeId ?? input.ownerNodeId))
-            .for("update");
-          const [row] = input.id
-            ? await tx
-                .select()
-                .from(discoveryActivities)
-                .where(eq(discoveryActivities.id, input.id))
-                .for("update")
-            : [];
-          const previous = row?.data;
-          if (input.id && !previous) throw new ORPCError("NOT_FOUND");
-          if (
-            previous &&
-            (previous.ownerNodeId !== input.ownerNodeId || previous.kind !== input.kind)
-          )
-            throw new ORPCError("BAD_REQUEST", {
-              message: "Activity ownership and kind cannot change",
-            });
-          if (previous?.luma) {
-            const fields = [
-              "title",
-              "summary",
-              "url",
-              "source",
-              "publishedAt",
-              "startsAt",
-              "endsAt",
-              "timezone",
-              "venue",
-            ] as const;
-            if (fields.some((field) => input[field] !== previous[field]))
-              throw new ORPCError("BAD_REQUEST", {
-                message: "Edit this event in Luma. Changes appear here automatically.",
-              });
-            if (!previous.luma.available && input.status !== "draft")
-              throw new ORPCError("BAD_REQUEST", {
-                message: "This event is no longer public on its Luma calendar.",
-              });
-          }
-          const data = {
-            ...input,
-            luma: previous?.luma
-              ? { ...previous.luma, hidden: input.status !== "published" }
-              : undefined,
-            id: input.id ?? crypto.randomUUID(),
-            nodeIds: [...new Set(input.nodeIds)],
-            url: canonicalActivityUrl(input.url),
-          };
-          const [duplicate] = await tx
-            .select()
-            .from(discoveryActivities)
-            .where(eq(discoveryActivities.canonicalUrl, data.url));
-          if (duplicate && duplicate.id !== data.id)
-            throw new ORPCError("BAD_REQUEST", {
-              message: `"${duplicate.data.title}" already uses this link. Give each event its own page link, like its Luma or Meetup page.`,
-            });
-          await tx
-            .insert(discoveryActivities)
-            .values({ id: data.id, ownerNodeId: data.ownerNodeId, canonicalUrl: data.url, data })
-            .onConflictDoUpdate({
-              target: discoveryActivities.id,
-              set: { data, canonicalUrl: data.url },
-            });
-          await tx.insert(discoveryHistory).values({
-            nodeId: data.ownerNodeId,
-            targetId: data.id,
-            actorId: context.userId!,
-            action: `${data.kind} ${data.status}`,
+    const initial = input.id ? yield* activityById(input.id) : null;
+    if (input.id && !initial) {
+      return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+    }
+    const area = input.kind === "event" ? EVENTS_AREA : undefined;
+    yield* authorize(initial?.ownerNodeId ?? input.ownerNodeId, context, area);
+    for (const nodeId of new Set(input.nodeIds)) {
+      if (!initial?.nodeIds.includes(nodeId)) yield* authorize(nodeId, context, area);
+    }
+    return yield* query(() =>
+      db.transaction(async (tx) => {
+        await tx
+          .select()
+          .from(nodes)
+          .where(eq(nodes.id, initial?.ownerNodeId ?? input.ownerNodeId))
+          .for("update");
+        const [row] = input.id
+          ? await tx
+              .select()
+              .from(discoveryActivities)
+              .where(eq(discoveryActivities.id, input.id))
+              .for("update")
+          : [];
+        const previous = row?.data;
+        if (input.id && !previous) throw new ORPCError("NOT_FOUND");
+        if (
+          previous &&
+          (previous.ownerNodeId !== input.ownerNodeId || previous.kind !== input.kind)
+        )
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Activity ownership and kind cannot change",
           });
-          return data;
-        }),
-      );
-    });
-  }
+        if (previous?.luma) {
+          const fields = [
+            "title",
+            "summary",
+            "url",
+            "source",
+            "publishedAt",
+            "startsAt",
+            "endsAt",
+            "timezone",
+            "venue",
+          ] as const;
+          if (fields.some((field) => input[field] !== previous[field]))
+            throw new ORPCError("BAD_REQUEST", {
+              message: "Edit this event in Luma. Changes appear here automatically.",
+            });
+          if (!previous.luma.available && input.status !== "draft")
+            throw new ORPCError("BAD_REQUEST", {
+              message: "This event is no longer public on its Luma calendar.",
+            });
+        }
+        const data = {
+          ...input,
+          luma: previous?.luma
+            ? { ...previous.luma, hidden: input.status !== "published" }
+            : undefined,
+          id: input.id ?? crypto.randomUUID(),
+          nodeIds: [...new Set(input.nodeIds)],
+          url: canonicalActivityUrl(input.url),
+        };
+        const [duplicate] = await tx
+          .select()
+          .from(discoveryActivities)
+          .where(eq(discoveryActivities.canonicalUrl, data.url));
+        if (duplicate && duplicate.id !== data.id)
+          throw new ORPCError("BAD_REQUEST", {
+            message: `"${duplicate.data.title}" already uses this link. Give each event its own page link, like its Luma or Meetup page.`,
+          });
+        await tx
+          .insert(discoveryActivities)
+          .values({ id: data.id, ownerNodeId: data.ownerNodeId, canonicalUrl: data.url, data })
+          .onConflictDoUpdate({
+            target: discoveryActivities.id,
+            set: { data, canonicalUrl: data.url },
+          });
+        await tx.insert(discoveryHistory).values({
+          nodeId: data.ownerNodeId,
+          targetId: data.id,
+          actorId: context.userId!,
+          action: `${data.kind} ${data.status}`,
+        });
+        return data;
+      }),
+    );
+  });
 
   function syncLuma(input: { nodeId: string; calendarId: string }, actorId?: string) {
     return query(() =>
@@ -618,651 +603,663 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
 
   return {
     directory,
-    lumaCalendars: (nodeId: string, context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* authorize(nodeId, context, EVENTS_AREA);
-        const [connection] = yield* query(() =>
+    lumaCalendars: Effect.fn("DiscoveryService.lumaCalendars")(function* (
+      nodeId: string,
+      context: AuthContext,
+    ) {
+      yield* authorize(nodeId, context, EVENTS_AREA);
+      const [connection] = yield* query(() =>
+        db
+          .select()
+          .from(discoveryLumaConnections)
+          .where(eq(discoveryLumaConnections.nodeId, nodeId)),
+      );
+      return {
+        ...(yield* query(() => luma.list())),
+        connection: connection
+          ? {
+              calendarId: connection.calendarId,
+              calendarName: connection.calendarName,
+              syncedAt: connection.syncedAt.toISOString(),
+              error: connection.error,
+            }
+          : null,
+      };
+    }),
+    syncDueLuma,
+    importLuma: Effect.fn("DiscoveryService.importLuma")(function* (
+      input: { nodeId: string; calendarId: string },
+      context: AuthContext,
+    ) {
+      yield* authorize(input.nodeId, context, EVENTS_AREA);
+      return yield* syncLuma(input, context.userId!);
+    }),
+    disconnectLuma: Effect.fn("DiscoveryService.disconnectLuma")(function* (
+      nodeId: string,
+      context: AuthContext,
+    ) {
+      yield* authorize(nodeId, context);
+      yield* query(() =>
+        db.transaction(async (tx) => {
+          await tx.select().from(nodes).where(eq(nodes.id, nodeId)).for("update");
+          await tx
+            .delete(discoveryLumaConnections)
+            .where(eq(discoveryLumaConnections.nodeId, nodeId));
+          const rows = await tx
+            .select()
+            .from(discoveryActivities)
+            .where(eq(discoveryActivities.ownerNodeId, nodeId));
+          for (const row of rows)
+            if (row.data.luma)
+              await tx
+                .update(discoveryActivities)
+                .set({
+                  data: {
+                    ...row.data,
+                    status: "draft",
+                    luma: { ...row.data.luma, available: false },
+                  },
+                })
+                .where(eq(discoveryActivities.id, row.id));
+          await tx.insert(discoveryHistory).values({
+            nodeId,
+            targetId: nodeId,
+            actorId: context.userId!,
+            action: "Luma calendar disconnected",
+          });
+        }),
+      );
+      return { disconnected: true };
+    }),
+    track: Effect.fn("DiscoveryService.track")(function* (
+      input: DiscoveryMeasurement,
+      context: AuthContext,
+    ) {
+      if (
+        !input.consent ||
+        context.user?.role === "admin" ||
+        ["owner", "admin"].includes(context.organization?.member?.role ?? "")
+      )
+        return { accepted: false };
+      if (context.userId) {
+        const userId = context.userId;
+        const curators = yield* query(() =>
+          db.select().from(discoveryCurators).where(eq(discoveryCurators.userId, userId)),
+        );
+        if (curators.length) return { accepted: false };
+      }
+      const now = yield* Clock.currentTimeMillis;
+      yield* query(() =>
+        db
+          .delete(discoveryMeasurements)
+          .where(
+            lt(
+              discoveryMeasurements.createdAt,
+              DateTime.toDateUtc(DateTime.makeUnsafe(now - 28 * 86400000)),
+            ),
+          ),
+      );
+      if (input.kind !== "visit") {
+        const [visit] = yield* query(() =>
           db
             .select()
-            .from(discoveryLumaConnections)
-            .where(eq(discoveryLumaConnections.nodeId, nodeId)),
+            .from(discoveryMeasurements)
+            .where(eq(discoveryMeasurements.key, `${input.visitId}:visit`)),
         );
-        return {
-          ...(yield* query(() => luma.list())),
-          connection: connection
-            ? {
-                calendarId: connection.calendarId,
-                calendarName: connection.calendarName,
-                syncedAt: connection.syncedAt.toISOString(),
-                error: connection.error,
-              }
-            : null,
-        };
-      }),
-    syncDueLuma,
-    importLuma: (input: { nodeId: string; calendarId: string }, context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* authorize(input.nodeId, context, EVENTS_AREA);
-        return yield* syncLuma(input, context.userId!);
-      }),
-    disconnectLuma: (nodeId: string, context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* authorize(nodeId, context);
-        yield* query(() =>
-          db.transaction(async (tx) => {
-            await tx.select().from(nodes).where(eq(nodes.id, nodeId)).for("update");
-            await tx
-              .delete(discoveryLumaConnections)
-              .where(eq(discoveryLumaConnections.nodeId, nodeId));
-            const rows = await tx
-              .select()
-              .from(discoveryActivities)
-              .where(eq(discoveryActivities.ownerNodeId, nodeId));
-            for (const row of rows)
-              if (row.data.luma)
-                await tx
-                  .update(discoveryActivities)
-                  .set({
-                    data: {
-                      ...row.data,
-                      status: "draft",
-                      luma: { ...row.data.luma, available: false },
-                    },
-                  })
-                  .where(eq(discoveryActivities.id, row.id));
-            await tx.insert(discoveryHistory).values({
-              nodeId,
-              targetId: nodeId,
-              actorId: context.userId!,
-              action: "Luma calendar disconnected",
-            });
-          }),
-        );
-        return { disconnected: true };
-      }),
-    track: (input: DiscoveryMeasurement, context: AuthContext) =>
-      Effect.gen(function* () {
         if (
-          !input.consent ||
-          context.user?.role === "admin" ||
-          ["owner", "admin"].includes(context.organization?.member?.role ?? "")
+          !visit ||
+          visit.createdAt.getTime() < now - 30 * 60000 ||
+          visit.campaign !== input.campaign
         )
           return { accepted: false };
-        if (context.userId) {
-          const userId = context.userId;
-          const curators = yield* query(() =>
-            db.select().from(discoveryCurators).where(eq(discoveryCurators.userId, userId)),
-          );
-          if (curators.length) return { accepted: false };
-        }
-        const now = yield* Clock.currentTimeMillis;
-        yield* query(() =>
-          db
-            .delete(discoveryMeasurements)
-            .where(
-              lt(
-                discoveryMeasurements.createdAt,
-                DateTime.toDateUtc(DateTime.makeUnsafe(now - 28 * 86400000)),
-              ),
-            ),
-        );
-        if (input.kind !== "visit") {
-          const [visit] = yield* query(() =>
-            db
-              .select()
-              .from(discoveryMeasurements)
-              .where(eq(discoveryMeasurements.key, `${input.visitId}:visit`)),
-          );
+        const node = yield* eligibleProfile(input.nodeId);
+        if (!node) return { accepted: false };
+        if (input.kind === "channel" && !node.channels.some((c) => c.url === input.target))
+          return { accepted: false };
+        if (input.kind === "event") {
+          const activity = yield* publicActivity(input.target);
           if (
-            !visit ||
-            visit.createdAt.getTime() < now - 30 * 60000 ||
-            visit.campaign !== input.campaign
+            !activity ||
+            activity.kind !== "event" ||
+            activity.status !== "published" ||
+            !activity.nodeIds.includes(node.nodeId)
           )
             return { accepted: false };
-          const node = yield* eligibleProfile(input.nodeId);
-          if (!node) return { accepted: false };
-          if (input.kind === "channel" && !node.channels.some((c) => c.url === input.target))
-            return { accepted: false };
-          if (input.kind === "event") {
-            const activity = yield* publicActivity(input.target);
-            if (
-              !activity ||
-              activity.kind !== "event" ||
-              activity.status !== "published" ||
-              !activity.nodeIds.includes(node.nodeId)
-            )
-              return { accepted: false };
-          }
         }
-        const target = input.kind === "channel" || input.kind === "event" ? input.target : "";
-        const key =
-          input.kind === "visit"
-            ? `${input.visitId}:visit`
-            : `${input.visitId}:${input.kind}:${input.nodeId}:${target}`;
-        yield* query(() =>
-          db
-            .insert(discoveryMeasurements)
-            .values({
-              key,
-              visitId: input.visitId,
-              nodeId: input.kind === "visit" ? null : input.nodeId,
-              campaign: input.campaign,
-              kind: input.kind,
-            })
-            .onConflictDoNothing(),
-        );
-        return { accepted: true };
-      }),
-    metrics: (context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* requireCurator(context);
-        const since = gte(
-          discoveryMeasurements.createdAt,
-          DateTime.toDateUtc(DateTime.makeUnsafe((yield* Clock.currentTimeMillis) - 28 * 86400000)),
-        );
-        const [totals] = yield* query(() =>
-          db
-            .select({
-              visits: sql<number>`count(distinct case when kind = 'visit' then visit_id end)::int`,
-              activatedVisits: sql<number>`count(distinct case when kind in ('event', 'channel') then visit_id end)::int`,
-            })
-            .from(discoveryMeasurements)
-            .where(since),
-        );
-        const rows = yield* query(() =>
-          db
-            .select({
-              nodeId: discoveryMeasurements.nodeId,
-              campaign: discoveryMeasurements.campaign,
-              kind: discoveryMeasurements.kind,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(discoveryMeasurements)
-            .where(since)
-            .groupBy(
-              discoveryMeasurements.nodeId,
-              discoveryMeasurements.campaign,
-              discoveryMeasurements.kind,
+      }
+      const target = input.kind === "channel" || input.kind === "event" ? input.target : "";
+      const key =
+        input.kind === "visit"
+          ? `${input.visitId}:visit`
+          : `${input.visitId}:${input.kind}:${input.nodeId}:${target}`;
+      yield* query(() =>
+        db
+          .insert(discoveryMeasurements)
+          .values({
+            key,
+            visitId: input.visitId,
+            nodeId: input.kind === "visit" ? null : input.nodeId,
+            campaign: input.campaign,
+            kind: input.kind,
+          })
+          .onConflictDoNothing(),
+      );
+      return { accepted: true };
+    }),
+    metrics: Effect.fn("DiscoveryService.metrics")(function* (context: AuthContext) {
+      yield* requireCurator(context);
+      const since = gte(
+        discoveryMeasurements.createdAt,
+        DateTime.toDateUtc(DateTime.makeUnsafe((yield* Clock.currentTimeMillis) - 28 * 86400000)),
+      );
+      const [totals] = yield* query(() =>
+        db
+          .select({
+            visits: sql<number>`count(distinct case when kind = 'visit' then visit_id end)::int`,
+            activatedVisits: sql<number>`count(distinct case when kind in ('event', 'channel') then visit_id end)::int`,
+          })
+          .from(discoveryMeasurements)
+          .where(since),
+      );
+      const rows = yield* query(() =>
+        db
+          .select({
+            nodeId: discoveryMeasurements.nodeId,
+            campaign: discoveryMeasurements.campaign,
+            kind: discoveryMeasurements.kind,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(discoveryMeasurements)
+          .where(since)
+          .groupBy(
+            discoveryMeasurements.nodeId,
+            discoveryMeasurements.campaign,
+            discoveryMeasurements.kind,
+          ),
+      );
+      return { visits: totals?.visits ?? 0, activatedVisits: totals?.activatedVisits ?? 0, rows };
+    }),
+    eventStats: Effect.fn("DiscoveryService.eventStats")(function* (context: AuthContext) {
+      yield* requireAdmin(context);
+      const now = new Date(yield* Clock.currentTimeMillis).toISOString();
+      const data = discoveryActivities.data;
+      const isEvent = sql`${data}->>'kind' = 'event'`;
+      const endsAt = sql`(${data}->>'endsAt')::timestamptz`;
+      const startsAt = sql`(${data}->>'startsAt')::timestamptz`;
+      return yield* query(() =>
+        db
+          .select({
+            nodeId: discoveryActivities.ownerNodeId,
+            upcoming: sql<number>`count(*) filter (where ${isEvent} and ${endsAt} >= ${now})::int`,
+            past: sql<number>`count(*) filter (where ${isEvent} and ${endsAt} < ${now})::int`,
+            lastActivityAt: sql<
+              string | null
+            >`to_char(max(greatest((${data}->>'publishedAt')::timestamptz, case when ${startsAt} <= ${now}::timestamptz then ${startsAt} end)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+          })
+          .from(discoveryActivities)
+          .where(
+            and(
+              sql`${data}->>'status' = 'published'`,
+              sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
+              sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
+              sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
             ),
-        );
-        return { visits: totals?.visits ?? 0, activatedVisits: totals?.activatedVisits ?? 0, rows };
-      }),
-    eventStats: (context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* requireAdmin(context);
-        const now = new Date(yield* Clock.currentTimeMillis).toISOString();
-        const data = discoveryActivities.data;
-        const isEvent = sql`${data}->>'kind' = 'event'`;
-        const endsAt = sql`(${data}->>'endsAt')::timestamptz`;
-        const startsAt = sql`(${data}->>'startsAt')::timestamptz`;
-        return yield* query(() =>
-          db
-            .select({
-              nodeId: discoveryActivities.ownerNodeId,
-              upcoming: sql<number>`count(*) filter (where ${isEvent} and ${endsAt} >= ${now})::int`,
-              past: sql<number>`count(*) filter (where ${isEvent} and ${endsAt} < ${now})::int`,
-              lastActivityAt: sql<
-                string | null
-              >`to_char(max(greatest((${data}->>'publishedAt')::timestamptz, case when ${startsAt} <= ${now}::timestamptz then ${startsAt} end)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
-            })
-            .from(discoveryActivities)
-            .where(
-              and(
-                sql`${data}->>'status' = 'published'`,
-                sql`${data}->'luma'->>'hidden' IS DISTINCT FROM 'true'`,
-                sql`${data}->'luma'->>'available' IS DISTINCT FROM 'false'`,
-                sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
-              ),
-            )
-            .groupBy(discoveryActivities.ownerNodeId),
-        );
-      }),
-    studio: (context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* requireCurator(context);
-        const isAdmin = context.user?.role === "admin";
-        const reports = isAdmin
-          ? yield* query(() =>
-              db
-                .select()
-                .from(discoveryReports)
-                .orderBy(desc(discoveryReports.createdAt))
-                .limit(200),
-            )
-          : [];
-        const curators = isAdmin ? yield* query(() => db.select().from(discoveryCurators)) : [];
-        return {
-          isAdmin,
-          nodes: yield* list({}),
-          curators: curators.map((r) => r.userId),
-          reports: reports.map(({ token: _token, ...r }) => ({
-            ...r,
-            createdAt: r.createdAt.toISOString(),
-          })),
-        };
-      }),
-    setCurator: (input: { userId: string; enabled: boolean }, context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* requireAdmin(context);
-        if (input.enabled) {
-          yield* query(() =>
-            db.insert(discoveryCurators).values({ userId: input.userId }).onConflictDoNothing(),
-          );
-        } else {
-          yield* query(() =>
-            db.delete(discoveryCurators).where(eq(discoveryCurators.userId, input.userId)),
-          );
-        }
-        return { success: true };
-      }),
-    feature: (input: { nodeId: string; label: string; expiresAt: string }, context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* requireCurator(context);
-        if (Date.parse(input.expiresAt) > (yield* Clock.currentTimeMillis) + 90 * 86400000) {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", { message: "Feature expiry must be within 90 days" }),
-          );
-        }
-        if (!(yield* eligibleProfile(input.nodeId))) {
-          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-        }
-        const data = {
-          ...input,
-          expiresAt: DateTime.toDateUtc(DateTime.makeUnsafe(input.expiresAt)),
-        };
+          )
+          .groupBy(discoveryActivities.ownerNodeId),
+      );
+    }),
+    studio: Effect.fn("DiscoveryService.studio")(function* (context: AuthContext) {
+      yield* requireCurator(context);
+      const isAdmin = context.user?.role === "admin";
+      const reports = isAdmin
+        ? yield* query(() =>
+            db.select().from(discoveryReports).orderBy(desc(discoveryReports.createdAt)).limit(200),
+          )
+        : [];
+      const curators = isAdmin ? yield* query(() => db.select().from(discoveryCurators)) : [];
+      return {
+        isAdmin,
+        nodes: yield* list({}),
+        curators: curators.map((r) => r.userId),
+        reports: reports.map(({ token: _token, ...r }) => ({
+          ...r,
+          createdAt: r.createdAt.toISOString(),
+        })),
+      };
+    }),
+    setCurator: Effect.fn("DiscoveryService.setCurator")(function* (
+      input: { userId: string; enabled: boolean },
+      context: AuthContext,
+    ) {
+      yield* requireAdmin(context);
+      if (input.enabled) {
         yield* query(() =>
-          db
-            .insert(discoveryFeatures)
-            .values(data)
-            .onConflictDoUpdate({ target: discoveryFeatures.nodeId, set: data }),
+          db.insert(discoveryCurators).values({ userId: input.userId }).onConflictDoNothing(),
         );
-        return { success: true };
-      }),
-    report: (input: {
+      } else {
+        yield* query(() =>
+          db.delete(discoveryCurators).where(eq(discoveryCurators.userId, input.userId)),
+        );
+      }
+      return { success: true };
+    }),
+    feature: Effect.fn("DiscoveryService.feature")(function* (
+      input: { nodeId: string; label: string; expiresAt: string },
+      context: AuthContext,
+    ) {
+      yield* requireCurator(context);
+      if (Date.parse(input.expiresAt) > (yield* Clock.currentTimeMillis) + 90 * 86400000) {
+        return yield* Effect.fail(
+          new ORPCError("BAD_REQUEST", { message: "Feature expiry must be within 90 days" }),
+        );
+      }
+      if (!(yield* eligibleProfile(input.nodeId))) {
+        return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+      }
+      const data = {
+        ...input,
+        expiresAt: DateTime.toDateUtc(DateTime.makeUnsafe(input.expiresAt)),
+      };
+      yield* query(() =>
+        db
+          .insert(discoveryFeatures)
+          .values(data)
+          .onConflictDoUpdate({ target: discoveryFeatures.nodeId, set: data }),
+      );
+      return { success: true };
+    }),
+    report: Effect.fn("DiscoveryService.report")(function* (input: {
       targetId: string;
       kind: "profile" | "activity";
       reason: string;
       token: string;
-    }) =>
-      Effect.gen(function* () {
-        const activity = input.kind === "activity" ? yield* publicActivity(input.targetId) : null;
-        const ownerNodeId = activity?.ownerNodeId ?? input.targetId;
-        if (input.kind === "profile" ? !(yield* eligibleProfile(input.targetId)) : !activity) {
-          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-        }
-        yield* query(() =>
-          db.transaction(async (tx) => {
-            await tx
-              .select({ id: nodes.id })
-              .from(nodes)
-              .where(eq(nodes.id, ownerNodeId))
-              .for("update");
-            const recent = await tx
-              .select({ id: discoveryReports.id })
-              .from(discoveryReports)
-              .where(
-                and(
-                  eq(discoveryReports.targetId, input.targetId),
-                  gte(discoveryReports.createdAt, new Date(Date.now() - 3600000)),
-                ),
-              )
-              .limit(20);
-            if (recent.length >= 20)
-              throw new ORPCError("BAD_REQUEST", {
-                message: "This content has already received many reports. Please try again later.",
-              });
-            await tx.insert(discoveryReports).values(input).onConflictDoNothing();
-          }),
-        );
-        return { success: true };
-      }),
-    moderate: (
+    }) {
+      const activity = input.kind === "activity" ? yield* publicActivity(input.targetId) : null;
+      const ownerNodeId = activity?.ownerNodeId ?? input.targetId;
+      if (input.kind === "profile" ? !(yield* eligibleProfile(input.targetId)) : !activity) {
+        return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+      }
+      yield* query(() =>
+        db.transaction(async (tx) => {
+          await tx
+            .select({ id: nodes.id })
+            .from(nodes)
+            .where(eq(nodes.id, ownerNodeId))
+            .for("update");
+          const recent = await tx
+            .select({ id: discoveryReports.id })
+            .from(discoveryReports)
+            .where(
+              and(
+                eq(discoveryReports.targetId, input.targetId),
+                gte(discoveryReports.createdAt, new Date(Date.now() - 3600000)),
+              ),
+            )
+            .limit(20);
+          if (recent.length >= 20)
+            throw new ORPCError("BAD_REQUEST", {
+              message: "This content has already received many reports. Please try again later.",
+            });
+          await tx.insert(discoveryReports).values(input).onConflictDoNothing();
+        }),
+      );
+      return { success: true };
+    }),
+    moderate: Effect.fn("DiscoveryService.moderate")(function* (
       input: { reportId: string; action: "dismiss" | "unpublish"; note: string },
       context: AuthContext,
-    ) =>
-      Effect.gen(function* () {
-        yield* requireAdmin(context);
-        const [report] = yield* query(() =>
-          db.select().from(discoveryReports).where(eq(discoveryReports.id, input.reportId)),
-        );
-        if (!report) {
-          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-        }
-        yield* query(() =>
-          db.transaction(async (tx) => {
-            if (input.action === "unpublish") {
-              let ownerNodeId: string;
-              if (report.kind === "profile") {
-                const [row] = await tx
-                  .select()
-                  .from(discoveryProfiles)
-                  .where(eq(discoveryProfiles.nodeId, report.targetId));
-                if (!row) throw new ORPCError("NOT_FOUND");
-                ownerNodeId = row.nodeId;
-                await tx
-                  .update(discoveryProfiles)
-                  .set({ data: { ...row.data, published: false } })
-                  .where(eq(discoveryProfiles.nodeId, report.targetId));
-              } else {
-                const [row] = await tx
-                  .select()
-                  .from(discoveryActivities)
-                  .where(eq(discoveryActivities.id, report.targetId))
-                  .for("update");
-                if (!row) throw new ORPCError("NOT_FOUND");
-                ownerNodeId = row.ownerNodeId;
-                await tx
-                  .update(discoveryActivities)
-                  .set({
-                    data: {
-                      ...row.data,
-                      status: "draft",
-                      luma: row.data.luma ? { ...row.data.luma, hidden: true } : undefined,
-                    },
-                  })
-                  .where(eq(discoveryActivities.id, report.targetId));
-              }
-              await tx.insert(discoveryHistory).values({
-                nodeId: ownerNodeId,
-                targetId: report.targetId,
-                actorId: context.userId!,
-                action: "moderation: unpublish",
-              });
+    ) {
+      yield* requireAdmin(context);
+      const [report] = yield* query(() =>
+        db.select().from(discoveryReports).where(eq(discoveryReports.id, input.reportId)),
+      );
+      if (!report) {
+        return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+      }
+      yield* query(() =>
+        db.transaction(async (tx) => {
+          if (input.action === "unpublish") {
+            let ownerNodeId: string;
+            if (report.kind === "profile") {
+              const [row] = await tx
+                .select()
+                .from(discoveryProfiles)
+                .where(eq(discoveryProfiles.nodeId, report.targetId));
+              if (!row) throw new ORPCError("NOT_FOUND");
+              ownerNodeId = row.nodeId;
+              await tx
+                .update(discoveryProfiles)
+                .set({ data: { ...row.data, published: false } })
+                .where(eq(discoveryProfiles.nodeId, report.targetId));
+            } else {
+              const [row] = await tx
+                .select()
+                .from(discoveryActivities)
+                .where(eq(discoveryActivities.id, report.targetId))
+                .for("update");
+              if (!row) throw new ORPCError("NOT_FOUND");
+              ownerNodeId = row.ownerNodeId;
+              await tx
+                .update(discoveryActivities)
+                .set({
+                  data: {
+                    ...row.data,
+                    status: "draft",
+                    luma: row.data.luma ? { ...row.data.luma, hidden: true } : undefined,
+                  },
+                })
+                .where(eq(discoveryActivities.id, report.targetId));
             }
-            await tx
-              .update(discoveryReports)
-              .set({ resolved: true, note: input.note })
-              .where(eq(discoveryReports.id, report.id));
-          }),
-        );
-        return { success: true };
-      }),
-    history: (nodeId: string, context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* authorize(nodeId, context);
-        const rows = yield* query(() =>
-          db
-            .select()
-            .from(discoveryHistory)
-            .where(eq(discoveryHistory.nodeId, nodeId))
-            .orderBy(desc(discoveryHistory.recordedAt))
-            .limit(100),
-        );
-        return rows.map(({ nodeId: _nodeId, ...row }) => ({
-          ...row,
-          recordedAt: row.recordedAt.toISOString(),
-        }));
-      }),
+            await tx.insert(discoveryHistory).values({
+              nodeId: ownerNodeId,
+              targetId: report.targetId,
+              actorId: context.userId!,
+              action: "moderation: unpublish",
+            });
+          }
+          await tx
+            .update(discoveryReports)
+            .set({ resolved: true, note: input.note })
+            .where(eq(discoveryReports.id, report.id));
+        }),
+      );
+      return { success: true };
+    }),
+    history: Effect.fn("DiscoveryService.history")(function* (
+      nodeId: string,
+      context: AuthContext,
+    ) {
+      yield* authorize(nodeId, context);
+      const rows = yield* query(() =>
+        db
+          .select()
+          .from(discoveryHistory)
+          .where(eq(discoveryHistory.nodeId, nodeId))
+          .orderBy(desc(discoveryHistory.recordedAt))
+          .limit(100),
+      );
+      return rows.map(({ nodeId: _nodeId, ...row }) => ({
+        ...row,
+        recordedAt: row.recordedAt.toISOString(),
+      }));
+    }),
     saveActivity,
-    setLumaVisibility: (
+    setLumaVisibility: Effect.fn("DiscoveryService.setLumaVisibility")(function* (
       input: { nodeId: string; activityId: string; show: boolean },
       context: AuthContext,
-    ) =>
-      Effect.gen(function* () {
-        yield* authorize(input.nodeId, context, EVENTS_AREA);
-        return yield* query(() =>
-          db.transaction(async (tx) => {
-            await tx.select().from(nodes).where(eq(nodes.id, input.nodeId)).for("update");
-            const [row] = await tx
-              .select()
-              .from(discoveryActivities)
-              .where(
-                and(
-                  eq(discoveryActivities.id, input.activityId),
-                  eq(discoveryActivities.ownerNodeId, input.nodeId),
-                ),
-              )
-              .for("update");
-            if (!row) throw new ORPCError("NOT_FOUND");
-            if (!row.data.luma) throw new ORPCError("BAD_REQUEST", { message: "Not a Luma event" });
-            if (input.show && !row.data.luma.available)
-              throw new ORPCError("BAD_REQUEST", {
-                message: "This event is no longer public on its Luma calendar.",
-              });
-            const data: DiscoveryActivity = {
-              ...row.data,
-              status: input.show ? "published" : "draft",
-              luma: { ...row.data.luma, hidden: !input.show },
-            };
-            await tx
-              .update(discoveryActivities)
-              .set({ data })
-              .where(eq(discoveryActivities.id, row.id));
-            await tx.insert(discoveryHistory).values({
-              nodeId: input.nodeId,
-              targetId: row.id,
-              actorId: context.userId!,
-              action: input.show ? "Luma event shown" : "Luma event hidden",
-            });
-            return data;
-          }),
-        );
-      }),
-    activities: (nodeId: string, context: AuthContext) =>
-      Effect.gen(function* () {
-        const { level, manager } = yield* nodeAccess(nodeId, context, EVENTS_AREA);
-        if (!level) {
-          return yield* Effect.fail(new ORPCError("FORBIDDEN"));
-        }
-        const rows = yield* query(() =>
-          db.select().from(discoveryActivities).where(eq(discoveryActivities.ownerNodeId, nodeId)),
-        );
-        const activities = rows.map((r) => r.data);
-        if (manager) return activities;
-        if (level === "editor") return activities.filter((activity) => activity.kind === "event");
-        return activities.filter(
-          (activity) => activity.status !== "draft" && !activity.luma?.hidden,
-        );
-      }),
-    eventOrganization: (eventId: string) =>
-      Effect.gen(function* () {
-        const [row] = yield* query(() =>
-          db
-            .select({ event: discoveryActivities.data, organizationId: tenants.orgId })
+    ) {
+      yield* authorize(input.nodeId, context, EVENTS_AREA);
+      return yield* query(() =>
+        db.transaction(async (tx) => {
+          await tx.select().from(nodes).where(eq(nodes.id, input.nodeId)).for("update");
+          const [row] = await tx
+            .select()
             .from(discoveryActivities)
-            .innerJoin(nodes, eq(discoveryActivities.ownerNodeId, nodes.id))
-            .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-            .where(eq(discoveryActivities.id, eventId)),
-        );
-        return row ?? null;
-      }),
-    organizationEvents: (organizationIds: string[]) =>
-      Effect.gen(function* () {
-        const byOrganization = new Map<
-          string,
-          {
-            communityName: string | null;
-            events: Array<{ id: string; title: string; startsAt: string | null }>;
-          }
-        >(organizationIds.map((id) => [id, { communityName: null, events: [] }]));
-        if (organizationIds.length === 0) return byOrganization;
-        const rows = yield* query(() =>
-          db
-            .select({
-              organizationId: tenants.orgId,
-              communityName: tenants.name,
-              event: discoveryActivities.data,
-            })
-            .from(tenants)
-            .leftJoin(nodes, eq(nodes.tenantId, tenants.id))
-            .leftJoin(discoveryActivities, eq(discoveryActivities.ownerNodeId, nodes.id))
-            .where(inArray(tenants.orgId, organizationIds)),
-        );
-        for (const row of rows) {
-          const entry = row.organizationId ? byOrganization.get(row.organizationId) : undefined;
-          if (!entry) continue;
-          entry.communityName ??= row.communityName;
-          if (row.event?.kind !== "event") continue;
-          entry.events.push({
-            id: row.event.id,
-            title: row.event.title,
-            startsAt: row.event.startsAt,
+            .where(
+              and(
+                eq(discoveryActivities.id, input.activityId),
+                eq(discoveryActivities.ownerNodeId, input.nodeId),
+              ),
+            )
+            .for("update");
+          if (!row) throw new ORPCError("NOT_FOUND");
+          if (!row.data.luma) throw new ORPCError("BAD_REQUEST", { message: "Not a Luma event" });
+          if (input.show && !row.data.luma.available)
+            throw new ORPCError("BAD_REQUEST", {
+              message: "This event is no longer public on its Luma calendar.",
+            });
+          const data: DiscoveryActivity = {
+            ...row.data,
+            status: input.show ? "published" : "draft",
+            luma: { ...row.data.luma, hidden: !input.show },
+          };
+          await tx
+            .update(discoveryActivities)
+            .set({ data })
+            .where(eq(discoveryActivities.id, row.id));
+          await tx.insert(discoveryHistory).values({
+            nodeId: input.nodeId,
+            targetId: row.id,
+            actorId: context.userId!,
+            action: input.show ? "Luma event shown" : "Luma event hidden",
           });
+          return data;
+        }),
+      );
+    }),
+    activities: Effect.fn("DiscoveryService.activities")(function* (
+      nodeId: string,
+      context: AuthContext,
+    ) {
+      const { level, manager } = yield* nodeAccess(nodeId, context, EVENTS_AREA);
+      if (!level) {
+        return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+      }
+      const rows = yield* query(() =>
+        db.select().from(discoveryActivities).where(eq(discoveryActivities.ownerNodeId, nodeId)),
+      );
+      const activities = rows.map((r) => r.data);
+      if (manager) return activities;
+      if (level === "editor") return activities.filter((activity) => activity.kind === "event");
+      return activities.filter((activity) => activity.status !== "draft" && !activity.luma?.hidden);
+    }),
+    eventOrganization: Effect.fn("DiscoveryService.eventOrganization")(function* (eventId: string) {
+      const [row] = yield* query(() =>
+        db
+          .select({ event: discoveryActivities.data, organizationId: tenants.orgId })
+          .from(discoveryActivities)
+          .innerJoin(nodes, eq(discoveryActivities.ownerNodeId, nodes.id))
+          .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+          .where(eq(discoveryActivities.id, eventId)),
+      );
+      return row ?? null;
+    }),
+    organizationEvents: Effect.fn("DiscoveryService.organizationEvents")(function* (
+      organizationIds: string[],
+    ) {
+      const byOrganization = new Map<
+        string,
+        {
+          communityName: string | null;
+          events: Array<{ id: string; title: string; startsAt: string | null }>;
         }
-        return byOrganization;
-      }),
-    activity: (id: string) =>
-      Effect.gen(function* () {
-        yield* Effect.forkDetach(syncDueLuma);
-        return yield* publicActivity(id);
-      }),
-    get: (nodeId: string) =>
-      Effect.gen(function* () {
-        const results = yield* list({ nodeId });
-        return results[0] ?? null;
-      }),
-    profile: (nodeId: string, context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* authorize(nodeId, context, EVENTS_AREA);
-        const [row] = yield* query(() =>
-          db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, nodeId)),
-        );
-        return row?.data ?? null;
-      }),
-    saveProfile: (input: DiscoveryProfile, context: AuthContext) =>
-      Effect.gen(function* () {
-        const record = yield* authorize(input.nodeId, context);
-        const [existing] = yield* query(() =>
-          db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, input.nodeId)),
-        );
-        const previous = existing?.data;
-        const geocodedLocation =
-          input.geocodedLocation !== undefined
-            ? input.geocodedLocation
-            : (previous?.geocodedLocation ?? null);
-        const kind = nodeKindOf(record.node.metadata);
-        const place = profilePlace(input, kind);
-        const missingBoundary = kind === "country" && !previous?.boundary;
-        const stale = shouldGeocodeProfile({
-          location: place,
-          latitude: input.latitude,
-          longitude: input.longitude,
-          geocodedLocation,
+      >(organizationIds.map((id) => [id, { communityName: null, events: [] }]));
+      if (organizationIds.length === 0) return byOrganization;
+      const rows = yield* query(() =>
+        db
+          .select({
+            organizationId: tenants.orgId,
+            communityName: tenants.name,
+            event: discoveryActivities.data,
+          })
+          .from(tenants)
+          .leftJoin(nodes, eq(nodes.tenantId, tenants.id))
+          .leftJoin(discoveryActivities, eq(discoveryActivities.ownerNodeId, nodes.id))
+          .where(inArray(tenants.orgId, organizationIds)),
+      );
+      for (const row of rows) {
+        const entry = row.organizationId ? byOrganization.get(row.organizationId) : undefined;
+        if (!entry) continue;
+        entry.communityName ??= row.communityName;
+        if (row.event?.kind !== "event") continue;
+        entry.events.push({
+          id: row.event.id,
+          title: row.event.title,
+          startsAt: row.event.startsAt,
         });
-        let next: StoredDiscoveryProfile = {
-          ...input,
-          geocodedLocation,
+      }
+      return byOrganization;
+    }),
+    activity: Effect.fn("DiscoveryService.activity")(function* (id: string) {
+      yield* Effect.forkDetach(syncDueLuma);
+      return yield* publicActivity(id);
+    }),
+    get: Effect.fn("DiscoveryService.get")(function* (nodeId: string) {
+      const results = yield* list({ nodeId });
+      return results[0] ?? null;
+    }),
+    profile: Effect.fn("DiscoveryService.profile")(function* (
+      nodeId: string,
+      context: AuthContext,
+    ) {
+      yield* authorize(nodeId, context, EVENTS_AREA);
+      const [row] = yield* query(() =>
+        db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, nodeId)),
+      );
+      return row?.data ?? null;
+    }),
+    saveProfile: Effect.fn("DiscoveryService.saveProfile")(function* (
+      input: DiscoveryProfile,
+      context: AuthContext,
+    ) {
+      const record = yield* authorize(input.nodeId, context);
+      const [existing] = yield* query(() =>
+        db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, input.nodeId)),
+      );
+      const previous = existing?.data;
+      const geocodedLocation =
+        input.geocodedLocation !== undefined
+          ? input.geocodedLocation
+          : (previous?.geocodedLocation ?? null);
+      const kind = nodeKindOf(record.node.metadata);
+      const place = profilePlace(input, kind);
+      const missingBoundary = kind === "country" && !previous?.boundary;
+      const stale = shouldGeocodeProfile({
+        location: place,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        geocodedLocation,
+      });
+      let next: StoredDiscoveryProfile = {
+        ...input,
+        geocodedLocation,
+        geocodeHint: null,
+        boundary: previous?.boundary ?? null,
+      };
+      if (!place) {
+        next = {
+          ...next,
+          latitude: null,
+          longitude: null,
+          geocodedLocation: null,
           geocodeHint: null,
-          boundary: previous?.boundary ?? null,
+          boundary: null,
         };
-        if (!place) {
+      } else if (stale || missingBoundary) {
+        const geocoded = yield* geocode.geocode(place);
+        if (geocoded.ok) {
+          next = {
+            ...next,
+            latitude: geocoded.latitude,
+            longitude: geocoded.longitude,
+            geocodedLocation: place,
+            geocodeHint: null,
+            boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
+          };
+        } else if (stale) {
           next = {
             ...next,
             latitude: null,
             longitude: null,
             geocodedLocation: null,
-            geocodeHint: null,
+            geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
             boundary: null,
           };
-        } else if (stale || missingBoundary) {
-          const geocoded = yield* geocode.geocode(place);
-          if (geocoded.ok) {
-            next = {
-              ...next,
-              latitude: geocoded.latitude,
-              longitude: geocoded.longitude,
-              geocodedLocation: place,
-              geocodeHint: null,
-              boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
-            };
-          } else if (stale) {
-            next = {
-              ...next,
-              latitude: null,
-              longitude: null,
-              geocodedLocation: null,
-              geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
-              boundary: null,
-            };
-          }
         }
-        yield* query(() =>
-          db.transaction(async (tx) => {
-            await tx
-              .insert(discoveryProfiles)
-              .values({ nodeId: next.nodeId, data: next })
-              .onConflictDoUpdate({ target: discoveryProfiles.nodeId, set: { data: next } });
-            await tx.insert(discoveryHistory).values({
-              nodeId: next.nodeId,
-              targetId: next.nodeId,
-              actorId: context.userId!,
-              action: next.published ? "profile published" : "profile saved as draft",
-            });
+      }
+      yield* query(() =>
+        db.transaction(async (tx) => {
+          await tx
+            .insert(discoveryProfiles)
+            .values({ nodeId: next.nodeId, data: next })
+            .onConflictDoUpdate({ target: discoveryProfiles.nodeId, set: { data: next } });
+          await tx.insert(discoveryHistory).values({
+            nodeId: next.nodeId,
+            targetId: next.nodeId,
+            actorId: context.userId!,
+            action: next.published ? "profile published" : "profile saved as draft",
+          });
+        }),
+      );
+      return next;
+    }),
+    eventReport: Effect.fn("DiscoveryService.eventReport")(function* (
+      activityId: string,
+      context: AuthContext,
+    ) {
+      const activity = yield* activityById(activityId);
+      if (!activity || activity.kind !== "event") {
+        return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+      }
+      yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
+      const [row] = yield* query(() =>
+        db.select().from(eventReports).where(eq(eventReports.activityId, activityId)),
+      );
+      return row ? storedReport(row) : null;
+    }),
+    saveEventReport: Effect.fn("DiscoveryService.saveEventReport")(function* (
+      input: { activityId: string; report: EventReport },
+      context: AuthContext,
+    ) {
+      const activity = yield* activityById(input.activityId);
+      if (!activity || activity.kind !== "event") {
+        return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+      }
+      yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
+      const now = yield* Clock.currentTimeMillis;
+      const end = activity.endsAt ?? activity.startsAt;
+      if (activity.status === "cancelled" || !end || Date.parse(end) > now) {
+        return yield* Effect.fail(
+          new ORPCError("BAD_REQUEST", {
+            message: "Reports can only be submitted for events that have ended",
           }),
         );
-        return next;
-      }),
-    eventReport: (activityId: string, context: AuthContext) =>
-      Effect.gen(function* () {
-        const activity = yield* activityById(activityId);
-        if (!activity || activity.kind !== "event") {
-          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-        }
-        yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
-        const [row] = yield* query(() =>
-          db.select().from(eventReports).where(eq(eventReports.activityId, activityId)),
-        );
-        return row ? storedReport(row) : null;
-      }),
-    saveEventReport: (input: { activityId: string; report: EventReport }, context: AuthContext) =>
-      Effect.gen(function* () {
-        const activity = yield* activityById(input.activityId);
-        if (!activity || activity.kind !== "event") {
-          return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-        }
-        yield* authorize(activity.ownerNodeId, context, EVENTS_AREA);
-        const now = yield* Clock.currentTimeMillis;
-        const end = activity.endsAt ?? activity.startsAt;
-        if (activity.status === "cancelled" || !end || Date.parse(end) > now) {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", {
-              message: "Reports can only be submitted for events that have ended",
-            }),
-          );
-        }
-        const userId = context.userId!;
-        const at = new Date(now);
-        const [row] = yield* query(() =>
-          db
-            .insert(eventReports)
-            .values({
-              activityId: input.activityId,
-              nodeId: activity.ownerNodeId,
+      }
+      const userId = context.userId!;
+      const at = new Date(now);
+      const [row] = yield* query(() =>
+        db
+          .insert(eventReports)
+          .values({
+            activityId: input.activityId,
+            nodeId: activity.ownerNodeId,
+            formVersion: EVENT_REPORT_FORM_VERSION,
+            report: input.report,
+            submittedBy: userId,
+            submittedAt: at,
+            updatedBy: userId,
+            updatedAt: at,
+          })
+          .onConflictDoUpdate({
+            target: eventReports.activityId,
+            set: {
               formVersion: EVENT_REPORT_FORM_VERSION,
               report: input.report,
-              submittedBy: userId,
-              submittedAt: at,
               updatedBy: userId,
               updatedAt: at,
-            })
-            .onConflictDoUpdate({
-              target: eventReports.activityId,
-              set: {
-                formVersion: EVENT_REPORT_FORM_VERSION,
-                report: input.report,
-                updatedBy: userId,
-                updatedAt: at,
-              },
-            })
-            .returning(),
-        );
-        if (!row) return yield* Effect.fail(new ORPCError("INTERNAL_SERVER_ERROR"));
-        return storedReport(row);
-      }),
-    eventReportStatuses: (nodeId: string, context: AuthContext) =>
-      Effect.gen(function* () {
-        yield* authorize(nodeId, context, EVENTS_AREA);
-        const rows = yield* query(() =>
-          db
-            .select({ activityId: eventReports.activityId, submittedAt: eventReports.submittedAt })
-            .from(eventReports)
-            .where(eq(eventReports.nodeId, nodeId)),
-        );
-        return rows.map((row) => ({
-          activityId: row.activityId,
-          submittedAt: row.submittedAt.toISOString(),
-        }));
-      }),
+            },
+          })
+          .returning(),
+      );
+      if (!row) return yield* Effect.fail(new ORPCError("INTERNAL_SERVER_ERROR"));
+      return storedReport(row);
+    }),
+    eventReportStatuses: Effect.fn("DiscoveryService.eventReportStatuses")(function* (
+      nodeId: string,
+      context: AuthContext,
+    ) {
+      yield* authorize(nodeId, context, EVENTS_AREA);
+      const rows = yield* query(() =>
+        db
+          .select({ activityId: eventReports.activityId, submittedAt: eventReports.submittedAt })
+          .from(eventReports)
+          .where(eq(eventReports.nodeId, nodeId)),
+      );
+      return rows.map((row) => ({
+        activityId: row.activityId,
+        submittedAt: row.submittedAt.toISOString(),
+      }));
+    }),
   };
 }
 export type DiscoveryService = ReturnType<typeof createDiscovery>;
