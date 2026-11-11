@@ -205,7 +205,7 @@ describe("generalized node model", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("resolves staking validators through a non-geo subtree", async () => {
+  it("lists a non-geo node's own validators and its ancestors", async () => {
     const admin = await getPluginClient(
       daoContext("spawn-staking-owner", ORG, "spawn-staking.near"),
     );
@@ -231,13 +231,11 @@ describe("generalized node model", () => {
       role: "official",
     });
 
-    const fromChild = await admin.resolveStakingValidators({ nodeId: child.id });
-    expect(fromChild.sourceNodeId).toBe(child.id);
-    expect(fromChild.validators).toHaveLength(1);
-
-    const fromRoot = await admin.resolveStakingValidators({ nodeId: root.id });
-    expect(fromRoot.sourceNodeId).toBe(child.id);
-    expect(fromRoot.validators).toHaveLength(1);
+    expect(await admin.listValidatorsByNode({ nodeId: child.id })).toHaveLength(1);
+    expect(await admin.listValidatorsByNode({ nodeId: root.id })).toEqual([]);
+    expect(await admin.listNodeAncestors({ nodeId: child.id })).toEqual([
+      expect.objectContaining({ id: root.id }),
+    ]);
   });
 
   it("includes tenant-attached non-geo nodes in listTenantApps", async () => {

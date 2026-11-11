@@ -18,6 +18,7 @@ import { useNow } from "@/hooks/use-client";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
+import type { StakingValidators } from "@/lib/queries/nodes";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import { Disclosure, ListSkeleton, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
@@ -151,10 +152,10 @@ function ProgressStat<V>({
 
 export function CommunityStats({
   summary,
-  sourceName,
+  staking,
 }: {
   summary: NodeSummary;
-  sourceName?: string;
+  staking: StakingValidators;
 }) {
   const translate = useAppTranslation();
   const { node } = summary;
@@ -162,8 +163,7 @@ export function CommunityStats({
   const noJoinsHint = progress.hasSite
     ? translate("admin.community.noOrganization")
     : translate("admin.community.noSite");
-  const stakingCount = summary.stakingValidators.validators.length;
-  const stakingInherited = summary.stakingValidators.sourceNodeId !== node.id;
+  const stakingCount = staking.validators.length;
 
   return (
     <StatGrid>
@@ -206,10 +206,8 @@ export function CommunityStats({
         hint={
           stakingCount === 0
             ? translate("admin.community.stakingNone")
-            : stakingInherited
-              ? translate("admin.community.stakingFrom", {
-                  name: sourceName ?? summary.stakingValidators.sourceNodeId,
-                })
+            : staking.via
+              ? translate("admin.community.stakingFrom", { name: staking.via.name })
               : translate("admin.community.stakingOwn")
         }
         tone={stakingCount === 0 ? "attention" : "default"}
@@ -221,10 +219,10 @@ export function CommunityStats({
 
 export function CommunityOverview({
   summary,
-  sourceName,
+  staking,
 }: {
   summary: NodeSummary;
-  sourceName?: string;
+  staking: StakingValidators;
 }) {
   const translate = useAppTranslation();
   const { node } = summary;
@@ -232,11 +230,10 @@ export function CommunityOverview({
   const attention = communityAttention({
     hasSite: progress.hasSite,
     tenant: progress.tenant,
-    stakingValidators: summary.stakingValidators.validators.length,
+    stakingValidators: staking.validators.length,
     upcomingEvents:
       progress.events.status === "ready" ? progress.events.value.upcoming.length : undefined,
   });
-  const resolvedElsewhere = summary.stakingValidators.sourceNodeId !== node.id;
   const description =
     typeof node.metadata.description === "string" ? node.metadata.description : null;
 
@@ -305,20 +302,18 @@ export function CommunityOverview({
         <SectionHeader
           title={translate("common.staking")}
           description={
-            resolvedElsewhere
-              ? translate("admin.validatorSourceNamed", {
-                  name: sourceName ?? summary.stakingValidators.sourceNodeId,
-                })
+            staking.via
+              ? translate("admin.validatorSourceNamed", { name: staking.via.name })
               : translate("admin.community.stakingHint")
           }
         />
-        {summary.stakingValidators.validators.length === 0 ? (
+        {staking.validators.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {translate("admin.community.noStakeValidators")}
           </p>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-border">
-            <NodeValidatorTable validators={summary.stakingValidators.validators} />
+            <NodeValidatorTable validators={staking.validators} />
           </div>
         )}
       </section>

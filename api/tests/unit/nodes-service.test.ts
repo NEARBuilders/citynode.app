@@ -592,4 +592,61 @@ describe("NodesService", () => {
       }),
     );
   });
+
+  it("listAncestors walks the places tree nearest first, skipping places without a community", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const usa = yield* Effect.tryPromise(() => seedPlaceWithNode(db, { placeSlug: "usa" }));
+        const illinois = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "illinois", placeParentSlug: "usa" }),
+        );
+        const chicago = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "chicago", placeParentSlug: "illinois" }),
+        );
+        const malaysia = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "malaysia" }),
+        );
+        yield* Effect.tryPromise(() => seedPlace(db, "selangor", malaysia.place.id));
+        const kualaLumpur = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "kuala-lumpur", placeParentSlug: "selangor" }),
+        );
+
+        const chicagoChain = yield* nodes.listAncestors(chicago.node.id);
+        expect(chicagoChain.map((n) => n.id)).toEqual([illinois.node.id, usa.node.id]);
+
+        const klChain = yield* nodes.listAncestors(kualaLumpur.node.id);
+        expect(klChain.map((n) => n.id)).toEqual([malaysia.node.id]);
+
+        expect(yield* nodes.listAncestors(usa.node.id)).toEqual([]);
+        expect(yield* nodes.listAncestors(MISSING_ID)).toEqual([]);
+      }),
+    );
+  });
+
+  it("listAncestors follows the legacy parent for nodes without a place", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ nodes, tenants }) =>
+      Effect.gen(function* () {
+        const tenantId = yield* seedTenant(tenants);
+        const country = yield* nodes.spawn({
+          kind: "country",
+          slug: "testland",
+          name: "Testland",
+          parentId: null,
+          tenantId,
+        });
+        const city = yield* nodes.spawn({
+          kind: "city",
+          slug: "alpha",
+          name: "Alpha",
+          parentId: country.id,
+          tenantId,
+        });
+
+        const chain = yield* nodes.listAncestors(city.id);
+        expect(chain.map((n) => n.id)).toEqual([country.id]);
+      }),
+    );
+  });
 });

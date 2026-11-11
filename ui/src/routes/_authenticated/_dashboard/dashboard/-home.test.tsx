@@ -73,11 +73,12 @@ const api = {
   },
   listNodes: async () => harness.nodes,
   getNodeSummary: async () => ({
-    stakingValidators: { sourceNodeId: "", validators: [] },
     validators: [],
     children: [],
   }),
   getNode: async () => null,
+  listValidatorsByNode: async () => [],
+  listNodeAncestors: async () => [],
   getDiscoveryNode: async () => null,
   getMyAttendance: async (input: { organizationId?: string }) => {
     harness.attendanceReads.push(input.organizationId ?? "all");

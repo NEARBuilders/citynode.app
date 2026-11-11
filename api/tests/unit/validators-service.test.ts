@@ -329,191 +329,8 @@ describe("ValidatorsService", () => {
     expect(fetched).toBeNull();
   });
 
-  describe("resolveForStaking", () => {
-    it("returns subtree validators preferring the local node", async () => {
-      const layer = freshLayer();
-      const tenant = await runService(layer, ({ tenants }) =>
-        tenants.createTenant({
-          name: "Test Tenant",
-          accountId: "test.example.near",
-          orgId: "org-1",
-        }),
-      );
-      const country = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "country",
-          slug: "testland",
-          name: "Testland",
-          parentId: null,
-          tenantId: tenant.id,
-        }),
-      );
-      const state = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "state",
-          slug: "north",
-          name: "North",
-          parentId: country.id,
-          tenantId: tenant.id,
-        }),
-      );
-      const city = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "city",
-          slug: "alpha",
-          name: "Alpha",
-          parentId: state.id,
-          tenantId: tenant.id,
-        }),
-      );
-
-      await runService(layer, ({ validators }) =>
-        validators.create({ nodeId: country.id, accountId: "validator1.near" }),
-      );
-
-      const result = await runService(layer, ({ validators }) =>
-        validators.resolveForStaking(city.id),
-      );
-
-      expect(result.sourceNodeId).toBe(country.id);
-      expect(result.validators.map((v) => v.accountId)).toEqual(["validator1.near"]);
-    });
-
-    it("walks up to ancestors when subtree has no validators", async () => {
-      const layer = freshLayer();
-      const tenant = await runService(layer, ({ tenants }) =>
-        tenants.createTenant({
-          name: "Test Tenant",
-          accountId: "test.example.near",
-          orgId: "org-1",
-        }),
-      );
-      const country = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "country",
-          slug: "testland",
-          name: "Testland",
-          parentId: null,
-          tenantId: tenant.id,
-        }),
-      );
-      const state = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "state",
-          slug: "north",
-          name: "North",
-          parentId: country.id,
-          tenantId: tenant.id,
-        }),
-      );
-      const city = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "city",
-          slug: "alpha",
-          name: "Alpha",
-          parentId: state.id,
-          tenantId: tenant.id,
-        }),
-      );
-      await runService(layer, ({ validators }) =>
-        validators.create({ nodeId: state.id, accountId: "valState.near" }),
-      );
-
-      const result = await runService(layer, ({ validators }) =>
-        validators.resolveForStaking(city.id),
-      );
-
-      expect(result.sourceNodeId).toBe(state.id);
-      expect(result.validators.map((v) => v.accountId)).toEqual(["valState.near"]);
-    });
-
-    it("returns empty when neither subtree nor ancestors have validators", async () => {
-      const layer = freshLayer();
-      const tenant = await runService(layer, ({ tenants }) =>
-        tenants.createTenant({
-          name: "Test Tenant",
-          accountId: "test.example.near",
-          orgId: "org-1",
-        }),
-      );
-      const city = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "city",
-          slug: "alpha",
-          name: "Alpha",
-          parentId: null,
-          tenantId: tenant.id,
-        }),
-      );
-
-      const result = await runService(layer, ({ validators }) =>
-        validators.resolveForStaking(city.id),
-      );
-
-      expect(result.validators).toEqual([]);
-      expect(result.sourceNodeId).toBe(city.id);
-    });
-
-    it("prefers the local node when it has its own validators", async () => {
-      const layer = freshLayer();
-      const tenant = await runService(layer, ({ tenants }) =>
-        tenants.createTenant({
-          name: "Test Tenant",
-          accountId: "test.example.near",
-          orgId: "org-1",
-        }),
-      );
-      const country = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "country",
-          slug: "testland",
-          name: "Testland",
-          parentId: null,
-          tenantId: tenant.id,
-        }),
-      );
-      const state = await runService(layer, ({ nodes }) =>
-        nodes.spawn({
-          kind: "state",
-          slug: "north",
-          name: "North",
-          parentId: country.id,
-          tenantId: tenant.id,
-        }),
-      );
-      await runService(layer, ({ validators }) =>
-        validators.create({
-          nodeId: country.id,
-          accountId: "country-validator.near",
-        }),
-      );
-      await runService(layer, ({ validators }) =>
-        validators.create({
-          nodeId: state.id,
-          accountId: "state-validator.near",
-        }),
-      );
-
-      const result = await runService(layer, ({ validators }) =>
-        validators.resolveForStaking(state.id),
-      );
-
-      expect(result.sourceNodeId).toBe(state.id);
-      expect(result.validators.map((v) => v.accountId)).toEqual(["state-validator.near"]);
-    });
-
-    it("fails with NOT_FOUND when the node does not exist", async () => {
-      const layer = freshLayer();
-      const error = await squashServiceError(layer, ({ validators }) =>
-        validators.resolveForStaking("00000000-0000-0000-0000-000000000000"),
-      );
-      expect(error).toBeInstanceOf(ORPCError);
-      expect((error as ORPCError<string, unknown>).code).toBe("NOT_FOUND");
-    });
-  });
-
-  describe("stakeableNodeIds", () => {
-    it("matches resolveForStaking for every node in one call", async () => {
+  describe("nodeIdsWithValidators", () => {
+    it("returns only the nodes that have their own validators", async () => {
       const layer = freshLayer();
       const tenant = await runService(layer, ({ tenants }) =>
         tenants.createTenant({
@@ -529,28 +346,22 @@ describe("ValidatorsService", () => {
       const country = await spawn("country", "testland", null);
       const state = await spawn("state", "north", country.id);
       const city = await spawn("city", "alpha", state.id);
-      const otherCountry = await spawn("country", "otherland", null);
-      const standalone = await spawn("city", "lonely", null);
       await runService(layer, ({ validators }) =>
         validators.create({ nodeId: state.id, accountId: "valState.near" }),
       );
+      await runService(layer, ({ validators }) =>
+        validators.create({ nodeId: state.id, accountId: "valState2.near" }),
+      );
       const missing = "00000000-0000-0000-0000-000000000000";
 
-      const stakeable = await runService(layer, ({ validators }) =>
-        validators.stakeableNodeIds([
-          country.id,
-          state.id,
-          city.id,
-          otherCountry.id,
-          standalone.id,
-          missing,
-        ]),
+      const withValidators = await runService(layer, ({ validators }) =>
+        validators.nodeIdsWithValidators([country.id, state.id, city.id, missing]),
       );
 
-      expect([...stakeable].sort()).toEqual([country.id, state.id, city.id].sort());
-      expect(await runService(layer, ({ validators }) => validators.stakeableNodeIds([]))).toEqual(
-        new Set(),
-      );
+      expect([...withValidators]).toEqual([state.id]);
+      expect(
+        await runService(layer, ({ validators }) => validators.nodeIdsWithValidators([])),
+      ).toEqual(new Set());
     });
   });
 });

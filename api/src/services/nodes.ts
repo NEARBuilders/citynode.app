@@ -89,6 +89,7 @@ export interface NodesService {
   delete(id: string): NodeEffect<boolean>;
   listRootNodes: NodeEffect<NodeRecord[]>;
   listChildren(parentId: string): NodeEffect<NodeRecord[]>;
+  listAncestors(nodeId: string): NodeEffect<NodeRecord[]>;
   resolveBySlug(slug: string, parentId?: string | null): NodeEffect<NodeRecord | null>;
   subtreeWithValidators(nodeId: string): NodeEffect<SubtreeNode[]>;
 }
@@ -461,6 +462,27 @@ export const NodesLive = Layer.effect(
             db.select().from(nodesTable).where(nodeParentIs(parentId)),
           );
           return rows.map(toNodeRecord);
+        }),
+
+      listAncestors: (nodeId) =>
+        Effect.gen(function* () {
+          const edges = yield* query(() => db.execute(nodeParentEdgesQuery())).pipe(
+            Effect.map((result) => rowsOf<ParentEdge>(result)),
+          );
+          const parentById = new Map(edges.map((edge) => [edge.id, edge.parent_id]));
+          const ids: string[] = [];
+          const seen = new Set([nodeId]);
+          let parentId = parentById.get(nodeId) ?? null;
+          while (parentId && !seen.has(parentId)) {
+            seen.add(parentId);
+            ids.push(parentId);
+            parentId = parentById.get(parentId) ?? null;
+          }
+          if (ids.length === 0) return [];
+          const rows = yield* query(() =>
+            db.select().from(nodesTable).where(inArray(nodesTable.id, ids)),
+          );
+          return rows.map(toNodeRecord).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
         }),
 
       resolveBySlug: (slug, parentId) =>

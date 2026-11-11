@@ -931,12 +931,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Les communautés sont gérées par des organisations.",
     "社区由组织运营。",
   ],
-  "dashboard.parentFallback": [
-    "a parent community",
-    "una comunidad superior",
-    "une communauté parente",
-    "上级社区",
-  ],
   "dashboard.passkey": ["Passkey", "Clave de acceso", "Clé d'accès", "通行密钥"],
   "dashboard.passkeyHint": [
     "Add a passkey to sign in again later.",

@@ -1916,7 +1916,7 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Certaines modifications n’ont pas été enregistrées",
     "部分更改未保存",
   ],
-  "admin.community.stakingFrom": ["From {name}", "De {name}", "De {name}", "来自 {name}"],
+  "admin.community.stakingFrom": ["Via {name}", "Vía {name}", "Via {name}", "经由 {name}"],
   "admin.community.stakingNone": [
     "None set yet",
     "Aún sin configurar",
