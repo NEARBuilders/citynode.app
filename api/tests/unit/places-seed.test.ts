@@ -199,10 +199,7 @@ function sources(): SeedSources {
     admin0Geojson,
     admin1Geojson,
     cities,
-    curatedAliases: [
-      { value: "nyc", geonameid: "5128581" },
-      { value: "gone", geonameid: "1" },
-    ],
+    curatedAliases: [{ value: "nyc", geonameid: "5128581" }],
     supranationals: [
       {
         slug: "cis",
@@ -409,7 +406,45 @@ describe("buildPlacesCatalog", () => {
       kind: "curated",
       slug: "new-york-city",
     });
-    expect(catalog.aliases.find((a) => a.value === "gone")).toBeUndefined();
+  });
+
+  it("rejects a curated alias for a city that is not in the cities file", () => {
+    expect(() =>
+      buildPlacesCatalog({ ...sources(), curatedAliases: [{ value: "gone", geonameid: "1" }] }),
+    ).toThrow(/unknown city/);
+  });
+
+  it("keeps the slug a city was seeded with even if populations reorder", () => {
+    const catalog = buildPlacesCatalog({
+      ...sources(),
+      existingCitySlugs: [
+        { geonameid: "4951788", slug: "springfield" },
+        { geonameid: "4409896", slug: "us-mo-springfield" },
+        { geonameid: "2988507", slug: "paris" },
+      ],
+    });
+    const springfields = catalog.places
+      .filter((p) => p.name === "Springfield")
+      .map((p) => [p.slug, p.parentSlug]);
+    expect(springfields).toEqual([
+      ["us-mo-springfield", "us-missouri"],
+      ["springfield", "us-massachusetts"],
+      ["us-il-springfield", "us-illinois"],
+    ]);
+    expect(catalog.places.find((p) => p.slug === "paris")).toBeUndefined();
+  });
+
+  it("skips city rows with blank coordinates or a non-numeric id", () => {
+    const catalog = buildPlacesCatalog({
+      ...sources(),
+      cities: [
+        cities,
+        cityLine("9000007", "Nowhere", "US", "IL", 90000).replace("\t0\t0\t", "\t\t\t"),
+        cityLine("abc", "Lettered", "US", "IL", 90000),
+      ].join("\n"),
+    });
+    expect(catalog.places.find((p) => p.name === "Nowhere")).toBeUndefined();
+    expect(catalog.places.find((p) => p.name === "Lettered")).toBeUndefined();
   });
 
   it("rejects a curated alias that collides with an iso code or slug", () => {

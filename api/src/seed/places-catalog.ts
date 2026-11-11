@@ -32,6 +32,12 @@ export interface SeedSources {
   cities: string;
   supranationals: Supranational[];
   curatedAliases: CuratedAlias[];
+  existingCitySlugs?: ExistingCitySlug[];
+}
+
+export interface ExistingCitySlug {
+  geonameid: string;
+  slug: string;
 }
 
 export interface PlaceUpsertRow {
@@ -195,10 +201,13 @@ function parseCities(cities: string): CityRow[] {
     const geonameid = columns[0]?.trim();
     const name = columns[1]?.trim();
     const base = slugify(name ?? "") || slugify(columns[2]?.trim() ?? "");
-    const latitude = Number(columns[4]);
-    const longitude = Number(columns[5]);
+    const latitudeText = columns[4]?.trim() ?? "";
+    const longitudeText = columns[5]?.trim() ?? "";
+    const latitude = Number(latitudeText);
+    const longitude = Number(longitudeText);
     const countryCode = columns[8]?.trim().toUpperCase();
-    if (!geonameid || !name || !base || !countryCode) continue;
+    if (!geonameid || !/^\d+$/.test(geonameid) || !name || !base || !countryCode) continue;
+    if (!latitudeText || !longitudeText) continue;
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
     const population = Number(columns[14]);
     rows.push({
@@ -213,10 +222,7 @@ function parseCities(cities: string): CityRow[] {
     });
   }
   return rows.sort(
-    (a, b) =>
-      b.population - a.population ||
-      Number(a.geonameid) - Number(b.geonameid) ||
-      a.geonameid.localeCompare(b.geonameid),
+    (a, b) => b.population - a.population || Number(a.geonameid) - Number(b.geonameid),
   );
 }
 
@@ -225,12 +231,7 @@ function citySlug(city: CityRow, taken: Set<string>, countryBaseCounts: Map<stri
   const admin1 = slugify(city.admin1);
   const sharesCountry = (countryBaseCounts.get(`${city.countryCode}:${city.base}`) ?? 0) > 1;
   const qualified = admin1 ? `${country}-${admin1}-${city.base}` : `${country}-${city.base}`;
-  const candidates = [
-    city.base,
-    sharesCountry ? qualified : `${country}-${city.base}`,
-    qualified,
-    `${qualified}-${city.geonameid}`,
-  ];
+  const candidates = [city.base, ...(sharesCountry ? [] : [`${country}-${city.base}`]), qualified];
   return candidates.find((candidate) => !taken.has(candidate)) ?? `${qualified}-${city.geonameid}`;
 }
 
@@ -531,9 +532,19 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
   }
   const taken = new Set(places.map((place) => place.slug));
   const aliasValues = new Set(aliases.map((alias) => alias.value));
+  const seededGeonameids = new Set(cities.map((city) => city.geonameid));
   const citySlugByGeonameid = new Map<string, string>();
+  for (const existing of [...(sources.existingCitySlugs ?? [])].sort((a, b) =>
+    a.geonameid.localeCompare(b.geonameid),
+  )) {
+    if (!seededGeonameids.has(existing.geonameid) || taken.has(existing.slug)) continue;
+    if (citySlugByGeonameid.has(existing.geonameid)) continue;
+    taken.add(existing.slug);
+    citySlugByGeonameid.set(existing.geonameid, existing.slug);
+  }
   for (const city of cities) {
-    const slug = citySlug(city, taken, countryBaseCounts);
+    const slug =
+      citySlugByGeonameid.get(city.geonameid) ?? citySlug(city, taken, countryBaseCounts);
     taken.add(slug);
     citySlugByGeonameid.set(city.geonameid, slug);
     places.push({
@@ -556,7 +567,11 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
   const foldedAliasValues = new Set([...aliasValues].map((value) => value.toLowerCase()));
   for (const curated of sources.curatedAliases) {
     const slug = citySlugByGeonameid.get(curated.geonameid);
-    if (!slug) continue;
+    if (!slug) {
+      throw new Error(
+        `curated alias "${curated.value}" references unknown city ${curated.geonameid}`,
+      );
+    }
     const value = curated.value.toLowerCase();
     if (foldedAliasValues.has(value) || taken.has(value)) {
       throw new Error(`curated alias "${curated.value}" collides with an existing place or alias`);
