@@ -45,7 +45,7 @@ export async function resolveApplicationCommunity(
     (await Effect.runPromise(deps.places.resolve({ place: application.slug })))?.place.id;
   const node = placeId ? await Effect.runPromise(deps.nodes.getByPlace(placeId)) : null;
   if (!node?.orgId) {
-    throw new ORPCError("BAD_REQUEST", {
+    throw new ORPCError("PRECONDITION_FAILED", {
       message: "This place has no community yet. Activate it before approving the application.",
     });
   }

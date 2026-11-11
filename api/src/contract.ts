@@ -768,6 +768,7 @@ export const contract = oc.router({
       BAD_REQUEST,
       NOT_FOUND,
       CONFLICT: { status: 409, message: "The community is linked to another DAO" },
+      PRECONDITION_FAILED: { status: 412, message: "The place has no community yet" },
     }),
 
   applyCommunityProposal: oc

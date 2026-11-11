@@ -300,7 +300,7 @@ describe("Official Application approval", () => {
         entityId: "kano",
         expectedUpdatedAt: savedAt,
       }),
-    ).rejects.toThrow(/no community yet/);
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
     expect(calls.linkDao).toEqual([]);
     expect(proposals.get("kano")?.reviewStatus).toBe("pending");
     expect(await communityNodeId("kano")).toBeNull();

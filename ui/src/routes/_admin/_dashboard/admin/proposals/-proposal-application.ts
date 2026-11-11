@@ -8,11 +8,11 @@ type ProposalApplicationInput = Pick<
   "id" | "pluginId" | "entityId" | "payload" | "updatedAt"
 >;
 
-function isConflict(error: unknown) {
+function hasCode(error: unknown, code: string, status: number) {
   return (
     !!error &&
     typeof error === "object" &&
-    (Reflect.get(error, "code") === "CONFLICT" || Reflect.get(error, "status") === 409)
+    (Reflect.get(error, "code") === code || Reflect.get(error, "status") === status)
   );
 }
 
@@ -38,7 +38,10 @@ export async function approveProposal({
       expectedUpdatedAt: proposal.updatedAt,
     });
   } catch (error) {
-    if (isConflict(error)) throw new AppActionError("proposal.daoConflict");
+    if (hasCode(error, "CONFLICT", 409)) throw new AppActionError("proposal.daoConflict");
+    if (hasCode(error, "PRECONDITION_FAILED", 412)) {
+      throw new AppActionError("proposal.communityNotActivated");
+    }
     throw error;
   }
   const { data } = await apiClient.proposals.getProposals({

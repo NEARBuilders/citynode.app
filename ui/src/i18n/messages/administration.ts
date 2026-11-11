@@ -1410,6 +1410,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Cette communauté est déjà liée à une autre DAO. Refusez la demande ou dissociez d’abord l’autre DAO.",
     "该社区已关联另一个 DAO。请拒绝此申请，或先解除另一个 DAO 的关联。",
   ],
+  "proposal.communityNotActivated": [
+    "This place has no community yet, so there is nothing to link the DAO to. Reject the application, or start the community and approve again.",
+    "Este lugar aún no tiene comunidad, así que no hay a qué vincular la DAO. Rechaza la solicitud, o crea la comunidad y vuelve a aprobar.",
+    "Ce lieu n’a pas encore de communauté, la DAO ne peut donc être liée à rien. Refusez la demande, ou créez la communauté et approuvez à nouveau.",
+    "该地点还没有社区，因此无法关联 DAO。请拒绝此申请，或先创建社区后再批准。",
+  ],
   "proposal.decisionUnconfirmed": [
     "The application was approved, but its new status couldn't be loaded. Refresh to check it.",
     "La solicitud se aprobó, pero no se pudo cargar su nuevo estado. Actualiza para comprobarlo.",

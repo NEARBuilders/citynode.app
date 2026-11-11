@@ -33,12 +33,13 @@ function PlaceLevel({
 }) {
   const t = useAppTranslation();
   const id = `application-place-${level}`;
+  const sorted = [...options].sort((left, right) => left.name.localeCompare(right.name));
   const label = t(LEVEL_LABELS[Math.min(level, LEVEL_LABELS.length - 1)]);
   return (
     <Field className="sm:flex-1">
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Select
-        items={options.map((option) => ({ label: option.name, value: option.id }))}
+        items={sorted.map((option) => ({ label: option.name, value: option.id }))}
         value={value}
         onValueChange={(placeId) => {
           const place = options.find((option) => option.id === placeId);
@@ -49,7 +50,7 @@ function PlaceLevel({
           <SelectValue placeholder={t("apply.place.choose")} />
         </SelectTrigger>
         <SelectContent>
-          {options.map((option) => (
+          {sorted.map((option) => (
             <SelectItem key={option.id} value={option.id}>
               {option.name}
             </SelectItem>

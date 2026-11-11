@@ -70,6 +70,16 @@ describe("approving an Official Application", () => {
     await expect(result).rejects.toMatchObject({ messageId: "proposal.daoConflict" });
   });
 
+  it("explains when the place has no community to link", async () => {
+    const apiClient = client();
+    apiClient.approveOfficialApplication.mockRejectedValue(
+      Object.assign(new Error("no community"), { code: "PRECONDITION_FAILED", status: 412 }),
+    );
+    await expect(
+      approveProposal({ apiClient: apiClient as unknown as ApiClient, proposal: proposal("node") }),
+    ).rejects.toMatchObject({ messageId: "proposal.communityNotActivated" });
+  });
+
   it("approves other plugins directly", async () => {
     const apiClient = client();
     await approveProposal({
