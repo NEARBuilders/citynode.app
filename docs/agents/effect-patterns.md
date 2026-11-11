@@ -11,21 +11,26 @@ Effect 4 uses `Context.Service<Self, Shape>()("id")` class tags. `Context.Tag` a
 `Effect.Service` are removed. Methods returning effects have `R = never`; a service
 interface must never leak requirements.
 
-This repo uses three shapes for the Live layer — all fine, pick per service and stay
+This repo uses these shapes for the Live layer — all fine, pick per service and stay
 consistent within a package:
 
-- **Static layer** (docs exemplar below): `static readonly layer = Layer.effect(Tag, ...)` on the class.
+- **Static layer** (the `Database` exemplar further down): `static readonly layer = Layer.effect(Tag, ...)` on the class.
 - **Module-level Live + plain factory** (auth plugin): `export const XServiceLive = Layer.effect(X, Effect.gen(...))`
   with a `buildXService({ dep })` plain function returning `X.of({...})` — the factory is the
   test-harness seam (tests assemble the service directly over test doubles); `X.of` makes the
   class shape the single type-enforcement point.
-- **Interface + tag + module-level Live** (`api/src/services/*`, proposals plugin): an
-  `XService` interface, an `XTag` class over it, and `export const XLive = Layer.effect(XTag, Effect.gen(...))`
-  returning a `const service: XService = {...}` object literal.
+- **Interface + tag + module-level Live** (most of `api/src/services/*`): an `XService`
+  interface, an `XTag` class over it, and `export const XLive = Layer.effect(XTag, Effect.gen(...))`
+  returning a `const service: XService = {...}` object literal. `discovery.ts` is the
+  exception: a `createDiscovery` factory, with `DiscoveryService = ReturnType<typeof createDiscovery>`.
+- **Inline shape + module-level Live** (proposals plugin): the shape is written inline in
+  `Context.Service<ProposalService, {...}>()`, and `ProposalServiceLive` returns the method
+  object literal directly.
 
-In every shape, each method is an `Effect.fn("XService.method")` so the span and stack
-trace carry the method name. Parameter types flow from the service interface, so the
-generator needs no annotations:
+Methods with a generator body use `Effect.fn("XService.method")` so the span and stack
+trace carry the method name. Methods that return a single effect directly (one `query(...)`,
+`Effect.tryPromise`, `Effect.promise`) can stay plain arrows. Parameter types flow from the
+service interface, so the generator needs no annotations:
 
 ```ts
 export interface NodesService {
