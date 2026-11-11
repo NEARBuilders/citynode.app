@@ -55,9 +55,13 @@ test.describe("docs", () => {
     await expect(page.getByTestId("docs.nav-skill")).toBeAttached();
     await expect(page.getByTestId("docs.nav-group-guides")).toHaveCount(0);
     await expect(page.getByTestId("docs.guides")).toHaveCount(0);
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
+    const overflow = await page.getByTestId("docs.tabs").evaluate((tabs) => {
+      let widest = 0;
+      for (let node = tabs.parentElement; node; node = node.parentElement) {
+        widest = Math.max(widest, node.scrollWidth - node.clientWidth);
+      }
+      return widest;
+    });
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
