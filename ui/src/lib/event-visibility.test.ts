@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eventVisibilityCases } from "../../../api/tests/fixtures/event-visibility-cases";
 import {
+  eventTitleLink,
   eventVisibility,
   isWaitingImport,
   saveConfirmation,
@@ -80,6 +81,28 @@ describe("eventVisibility against the server's public rules", () => {
     if (["scheduled", "published", "draft", "hiddenImport", "removed"].includes(expected.uiState))
       expect(expected.onEventPage || expected.inLists).toBe(false);
     if (["cancelled", "ended"].includes(expected.uiState)) expect(expected.inLists).toBe(false);
+  });
+});
+
+describe("eventTitleLink", () => {
+  it("opens the public page only when the event is live", () => {
+    expect(eventTitleLink("live", false)).toBe("activity");
+    expect(eventTitleLink("live", true)).toBe("activity");
+  });
+
+  it("sends editors to the edit page when visitors would get not-found", () => {
+    expect(eventTitleLink("draft", true)).toBe("edit");
+    expect(eventTitleLink("scheduled", true)).toBe("edit");
+    expect(eventTitleLink("published", true)).toBe("edit");
+    expect(eventTitleLink("hiddenImport", true)).toBe("edit");
+    expect(eventTitleLink(null, true)).toBe("edit");
+  });
+
+  it("leaves the title as text for members when the public page does not exist", () => {
+    expect(eventTitleLink("draft", false)).toBeNull();
+    expect(eventTitleLink("published", false)).toBeNull();
+    expect(eventTitleLink("scheduled", false)).toBeNull();
+    expect(eventTitleLink(null, false)).toBeNull();
   });
 });
 

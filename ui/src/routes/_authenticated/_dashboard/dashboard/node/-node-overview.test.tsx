@@ -57,17 +57,24 @@ vi.mock("@tanstack/react-router", () => ({
   }: {
     children?: ReactNode;
     to?: string;
-    params?: { accountId?: string };
+    params?: { accountId?: string; activityId?: string; nodeId?: string };
     hash?: string;
     "data-testid"?: string;
-  }) => (
-    <a
-      href={`${to === "/$accountId" ? `/${params?.accountId}` : "/dashboard"}${hash ? `#${hash}` : ""}`}
-      data-testid={testId}
-    >
-      {children}
-    </a>
-  ),
+  }) => {
+    const href =
+      to === "/$accountId"
+        ? `/${params?.accountId}`
+        : to === "/activity/$activityId"
+          ? `/activity/${params?.activityId}`
+          : to === "/nodes/$nodeId/events/$activityId/edit"
+            ? `/nodes/${params?.nodeId}/events/${params?.activityId}/edit`
+            : `/dashboard${hash ? `#${hash}` : ""}`;
+    return (
+      <a href={href} data-testid={testId}>
+        {children}
+      </a>
+    );
+  },
   redirect: (options: unknown) => ({ redirect: options }),
   useLocation: ({ select }: { select: (location: { hash: string }) => string }) =>
     select({ hash: harness.hash }),
@@ -218,12 +225,14 @@ function renderOverview({
   inFinanceTeam = false,
   canOrganize = false,
   network = "mainnet",
+  tenantStatus,
 }: {
   nearAccount: string | null;
   canManage?: boolean;
   inFinanceTeam?: boolean;
   canOrganize?: boolean;
   network?: "mainnet" | "testnet";
+  tenantStatus?: "active";
 }) {
   harness.nearAccount = nearAccount;
   harness.routeContext = {
@@ -248,7 +257,12 @@ function renderOverview({
       },
     },
     stakingSourceNode: null,
-    tenant: { orgId: "org-1", accountId: "example.citynode.near", ownerKind: "platform" },
+    tenant: {
+      orgId: "org-1",
+      accountId: "example.citynode.near",
+      ownerKind: "platform",
+      ...(tenantStatus ? { status: tenantStatus } : {}),
+    },
     auth: { activeOrganizationId: "org-1" },
     canManage,
     inFinanceTeam,
@@ -887,6 +901,165 @@ describe("node overview for members", () => {
   });
 });
 
+const overviewSections = [
+  "dashboard-node.stat-events",
+  "dashboard-node.map-status",
+  "dashboard-node.pending-config-proposal",
+  "dashboard-node.events-to-report",
+  "dashboard-node.owner-actions",
+  "dashboard-node.coming-up",
+  "dashboard-node.updates",
+  "dashboard-node.channels",
+  "dashboard-node.team-stake",
+  "dashboard-node.members",
+  "dashboard-node.attendance",
+  "dashboard-node.teams",
+  "node-validators",
+];
+
+function visibleOverviewOrder() {
+  return overviewSections
+    .map((id) => document.querySelector(`[data-testid="${id}"]`))
+    .filter((el): el is HTMLElement => el !== null)
+    .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+    .map((el) => el.getAttribute("data-testid"));
+}
+
+const upcomingEvent = {
+  id: "event-launch",
+  kind: "event",
+  title: "Launch Night",
+  status: "published",
+  publishedAt: "2026-01-01T00:00:00.000Z",
+  startsAt: "2099-06-01T18:00:00.000Z",
+  endsAt: "2099-06-01T21:00:00.000Z",
+  venue: "Harbor Hall",
+  timezone: "UTC",
+};
+
+const endedEvent = (id: string, title: string) => ({
+  id,
+  title,
+  kind: "event",
+  status: "published",
+  publishedAt: "2020-01-01T00:00:00.000Z",
+  startsAt: "2020-01-01T16:00:00.000Z",
+  endsAt: "2020-01-01T18:00:00.000Z",
+  venue: "Town Hall",
+});
+
+describe("node overview member layout", () => {
+  it("hides the Explore map notice from a plain member", async () => {
+    stubChain();
+    renderOverview({ nearAccount: null, tenantStatus: "active" });
+    await screen.findByTestId("dashboard-node.members");
+    expect(screen.queryByTestId("dashboard-node.map-status")).toBeNull();
+  });
+
+  it("shows the Explore map notice to an owner", async () => {
+    stubChain();
+    renderOverview({ nearAccount: "owner.near", canManage: true, tenantStatus: "active" });
+    const notice = await screen.findByTestId("dashboard-node.map-status");
+    expect(notice.textContent).toContain("Hidden from Explore");
+    expect(notice.textContent).toContain("Visitors can't find your community");
+  });
+
+  it("opens a live upcoming event on its activity page", async () => {
+    stubChain();
+    harness.listing = () => Promise.resolve(listing);
+    harness.activities = async () => [upcomingEvent];
+    renderOverview({ nearAccount: null });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId(`dashboard-node.event-${upcomingEvent.id}`).getAttribute("href"),
+      ).toBe(`/activity/${upcomingEvent.id}`),
+    );
+    expect(screen.getByTestId(`dashboard-node.event-${upcomingEvent.id}`).textContent).toBe(
+      "Launch Night",
+    );
+  });
+
+  it("does not send a member to a public page that would 404", async () => {
+    stubChain();
+    harness.activities = async () => [upcomingEvent];
+    renderOverview({ nearAccount: null });
+    const title = await screen.findByTestId(`dashboard-node.event-${upcomingEvent.id}`);
+    expect(title.textContent).toBe("Launch Night");
+    expect(title.getAttribute("href")).toBeNull();
+  });
+
+  it("opens a draft upcoming event on the edit page for an organizer", async () => {
+    stubChain();
+    harness.activities = async () => [{ ...upcomingEvent, status: "draft" }];
+    renderOverview({ nearAccount: "owner.near", canManage: true });
+    const link = await screen.findByTestId(`dashboard-node.event-${upcomingEvent.id}`);
+    expect(link.textContent).toBe("Launch Night");
+    expect(link.getAttribute("href")).toBe(`/nodes/node-1/events/${upcomingEvent.id}/edit`);
+  });
+
+  it("opens a published event on the edit page when the community is off the map", async () => {
+    stubChain();
+    harness.activities = async () => [upcomingEvent];
+    renderOverview({ nearAccount: "owner.near", canManage: true });
+    const link = await screen.findByTestId(`dashboard-node.event-${upcomingEvent.id}`);
+    expect(link.textContent).toBe("Launch Night");
+    expect(link.getAttribute("href")).toBe(`/nodes/node-1/events/${upcomingEvent.id}/edit`);
+  });
+
+  it("puts coming up, updates and channels above members for a plain member", async () => {
+    stubChain();
+    harness.listing = () => Promise.resolve(listing);
+    harness.activities = async () => [upcomingEvent];
+    renderOverview({ nearAccount: null });
+    await screen.findByTestId("dashboard-node.updates");
+    await screen.findByTestId("dashboard-node.attendance-event");
+    expect(screen.queryByTestId("dashboard-node.map-status")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.owner-actions")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.events-to-report")).toBeNull();
+    expect(visibleOverviewOrder()).toEqual([
+      "dashboard-node.stat-events",
+      "dashboard-node.coming-up",
+      "dashboard-node.updates",
+      "dashboard-node.channels",
+      "dashboard-node.members",
+      "dashboard-node.attendance",
+      "dashboard-node.teams",
+      "node-validators",
+    ]);
+  });
+
+  it("keeps owner actions and the map notice above coming up for an owner", async () => {
+    stubChain();
+    harness.listing = () => Promise.resolve({ ...listing, latitude: null, longitude: null });
+    harness.activities = async () => [upcomingEvent, endedEvent("event-missing", "Report Night")];
+    renderOverview({
+      nearAccount: "owner.near",
+      canManage: true,
+      inFinanceTeam: true,
+      tenantStatus: "active",
+    });
+    await screen.findByTestId("dashboard-node.owner-actions");
+    await screen.findByTestId("dashboard-node.events-to-report");
+    await screen.findByTestId("dashboard-node.updates");
+    await screen.findByTestId("dashboard-node.team-stake");
+    await screen.findByTestId("dashboard-node.attendance-event");
+    expect(visibleOverviewOrder()).toEqual([
+      "dashboard-node.stat-events",
+      "dashboard-node.map-status",
+      "dashboard-node.events-to-report",
+      "dashboard-node.owner-actions",
+      "dashboard-node.coming-up",
+      "dashboard-node.updates",
+      "dashboard-node.channels",
+      "dashboard-node.team-stake",
+      "dashboard-node.members",
+      "dashboard-node.attendance",
+      "dashboard-node.teams",
+      "node-validators",
+    ]);
+  });
+});
+
 describe("node overview attendance", () => {
   it("shows a plain member their events in this community without syncing", async () => {
     stubChain();
@@ -903,17 +1076,6 @@ describe("node overview attendance", () => {
     await screen.findByTestId("dashboard-node.attendance-event");
     expect(harness.attendanceCalls).toEqual(["reconcile:org-1", "read:org-1"]);
   });
-});
-
-const endedEvent = (id: string, title: string) => ({
-  id,
-  title,
-  kind: "event",
-  status: "published",
-  publishedAt: "2020-01-01T00:00:00.000Z",
-  startsAt: "2020-01-01T16:00:00.000Z",
-  endsAt: "2020-01-01T18:00:00.000Z",
-  venue: "Town Hall",
 });
 
 describe("node overview events to report", () => {

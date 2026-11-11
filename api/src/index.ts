@@ -33,6 +33,8 @@ import { resolveNetwork } from "./services/near-rpc";
 import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
+import type { PlacesService } from "./services/places";
+import { PlacesLive, PlacesTag } from "./services/places";
 import {
   makeStakingPools,
   StakingPoolCheckFailed,
@@ -80,6 +82,7 @@ class ApiServices extends Context.Service<
   {
     tenants: TenantsService;
     nodes: NodesService;
+    places: PlacesService;
     validators: ValidatorsService;
     discovery: DiscoveryService;
     storage: StorageService;
@@ -429,6 +432,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         Layer.mergeAll(
           TenantsLive,
           NodesLive,
+          PlacesLive,
           ValidatorsLive,
           DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS).pipe(
             Layer.provide(
@@ -451,6 +455,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         Layer.succeed(ApiServices, {
           tenants: Context.get(services, TenantsTag),
           nodes: Context.get(services, NodesTag),
+          places: Context.get(services, PlacesTag),
           validators: Context.get(services, ValidatorsTag),
           discovery: Context.get(services, DiscoveryTag),
           storage: Context.get(services, StorageTag),
@@ -1982,6 +1987,31 @@ export default createPlugin.withPlugins<PluginsClient>()({
           input.slug,
           input.parentId === undefined ? undefined : input.parentId,
         );
+      }),
+
+      resolvePlace: builder.resolvePlace.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.places.resolve(input);
+      }),
+
+      listRootPlaces: builder.listRootPlaces.effect(function* () {
+        const services = yield* ApiServices;
+        return yield* services.places.roots();
+      }),
+
+      getPlace: builder.getPlace.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.places.getById(input.placeId);
+      }),
+
+      listPlaceChildren: builder.listPlaceChildren.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.places.children(input.placeId);
+      }),
+
+      getPlaceBoundary: builder.getPlaceBoundary.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.places.boundary(input.placeId);
       }),
 
       listValidators: builder.listValidators.effect(function* ({ input }) {

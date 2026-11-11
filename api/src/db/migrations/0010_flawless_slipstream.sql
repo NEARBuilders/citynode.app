@@ -1,0 +1,1 @@
+ALTER TABLE "nodes" ADD COLUMN "org_id" text;

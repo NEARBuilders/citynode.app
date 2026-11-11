@@ -40,6 +40,17 @@ export function eventVisibility(
   return "live";
 }
 
+export type EventTitleLink = "activity" | "edit" | null;
+
+export function eventTitleLink(
+  visibility: EventVisibility | null,
+  canEdit: boolean,
+): EventTitleLink {
+  if (visibility === "live") return "activity";
+  if (canEdit) return "edit";
+  return null;
+}
+
 const saveConfirmations: Record<EventVisibility, AppMessageId> = {
   live: "events.savedLive",
   scheduled: "events.savedScheduled",

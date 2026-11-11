@@ -1,6 +1,17 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Cause, Data, Effect, Exit, type Layer } from "effect";
 
 class TestRunError extends Data.TaggedError("TestRunError")<{ cause: unknown }> {}
+
+export function createTempDb(prefix: string): { url: string; cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  return {
+    url: `pglite:${dir}`,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
 
 export interface ServiceHarness<Svc, LayerError, ServiceError> {
   run<A>(
