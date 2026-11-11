@@ -241,7 +241,14 @@ function NodeOverview() {
           </span>
         ))}
       </p>
-      {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
+      {typeof bulletin === "string" && bulletin.trim() && (
+        <Bulletin
+          content={bulletin}
+          communityName={selectedNode.name}
+          publisherName={selectedNode.bulletinPublisherName}
+          publishedAt={selectedNode.bulletinPublishedAt}
+        />
+      )}
       <div className="flex flex-col gap-6">
         <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
           <Stat
