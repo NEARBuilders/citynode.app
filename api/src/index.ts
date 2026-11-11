@@ -2018,19 +2018,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
         context,
       }) {
         const services = yield* ApiServices;
-        const authPlugin = plugins.auth;
-        if (!authPlugin) {
-          return yield* Effect.fail(
-            new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
-          );
-        }
         const userId = context.userId ?? context.user?.id;
         if (!userId) {
           return yield* Effect.fail(
             new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
           );
         }
-        const auth = authPlugin.client({
+        const auth = yield* memberAuthClient({
+          reqHeaders: context.reqHeaders,
           userId,
           user: context.user,
         });
