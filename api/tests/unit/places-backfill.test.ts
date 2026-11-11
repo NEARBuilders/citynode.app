@@ -309,6 +309,43 @@ describe("buildBackfillPlan", () => {
     expect(plan.curated[0]?.parentSlug).toBe("india");
   });
 
+  it("curates instead of matching a place a node linked on an earlier run", () => {
+    const plan = buildBackfillPlan({
+      ...baseInputs,
+      nodes: [
+        node({
+          id: "second",
+          slug: "springfield",
+          name: "Springfield",
+          label: "city",
+          parentId: "south-node",
+        }),
+      ],
+      places: [
+        place({ id: "p-south", slug: "south", label: "subdivision" }),
+        place({ id: "p-springfield", slug: "springfield", name: "Springfield", label: "city" }),
+      ],
+      linkedPlaceSlugByNodeId: { first: "springfield", "south-node": "south" },
+    });
+
+    expect(plan.nodeLinks[0]?.placeSlug).toBe("south-springfield");
+    expect(plan.curated[0]).toMatchObject({ slug: "south-springfield", parentSlug: "south" });
+  });
+
+  it("curates the second of two nodes that match the same place by slug and name", () => {
+    const plan = buildBackfillPlan({
+      ...baseInputs,
+      nodes: [
+        node({ id: "by-slug", slug: "singapore", name: "Singapore", label: "country" }),
+        node({ id: "by-name", slug: "sg-node", name: "Singapore", label: "country" }),
+      ],
+      places: [place({ id: "p-sg", slug: "singapore", name: "Singapore", label: "country" })],
+    });
+
+    expect(plan.nodeLinks.map((link) => link.placeSlug)).toEqual(["singapore", "sg-node"]);
+    expect(plan.curated.map((p) => p.slug)).toEqual(["sg-node"]);
+  });
+
   it("chains curated parents through the parent node's planned place", () => {
     const plan = buildBackfillPlan({
       ...baseInputs,
