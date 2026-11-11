@@ -327,11 +327,6 @@ describe("approved community proposal provisioning", () => {
             }) => {
               const organization = organizations.get(organizationId);
               if (!organization) throw notFound("Organization not found");
-              if (organization.status !== "active") {
-                throw new ORPCError("FORBIDDEN", {
-                  message: "Organization approval is required",
-                });
-              }
               if (organization.members.some((item) => item.userId === userId)) {
                 throw new ORPCError("BAD_REQUEST", {
                   message: "User is already a member of this organization",
@@ -558,6 +553,45 @@ describe("approved community proposal provisioning", () => {
     const node = await admin.getNode({ nodeId: applied.nodeId });
     const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
     expect(tenant?.orgId).toBe("legacy-org");
+  });
+
+  it("binds a legacy pending organization the applicant owns", async () => {
+    organizations.set("legacy-pending", {
+      id: "legacy-pending",
+      name: "Austin Collective",
+      slug: "austin-collective",
+      status: "pending",
+      requestedBy: "user-applicant",
+      metadata: { seeded: true },
+      members: [
+        {
+          id: "member-legacy-pending-applicant",
+          userId: "user-applicant",
+          organizationId: "legacy-pending",
+          role: "owner",
+        },
+      ],
+      invitations: [],
+      teams: [],
+    });
+    proposals.set("austin", savedProposal("prop-austin", "austin", { orgId: "legacy-pending" }));
+    const admin = await getPluginClient(authedContext("platform-reviewer", "admin"));
+    const applied = await admin.applyCommunityProposal({
+      proposalId: "prop-austin",
+      entityId: "austin",
+      hostname: "austin.citynode.app",
+    });
+    const legacy = organizations.get("legacy-pending")!;
+    expect(legacy.metadata).toMatchObject({
+      communityProposalId: "prop-austin",
+      communityApplicantId: "user-applicant",
+    });
+    expect(
+      Object.fromEntries(legacy.members.map((member) => [member.userId, member.role])),
+    ).toEqual({ "user-applicant": "owner", "platform-reviewer": "admin" });
+    const node = await admin.getNode({ nodeId: applied.nodeId });
+    const tenant = (await admin.listTenants()).find((item) => item.id === node?.tenantId);
+    expect(tenant?.orgId).toBe("legacy-pending");
   });
 
   it("keeps a single resource set under concurrent apply calls", async () => {
