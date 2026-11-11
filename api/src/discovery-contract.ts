@@ -6,11 +6,6 @@ export const webUrl = z
   .url()
   .max(2000)
   .refine((value) => /^https?:\/\//i.test(value), "Use an HTTP(S) URL");
-const ring = z.array(z.array(z.number()).min(2));
-export const boundarySchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("Polygon"), coordinates: z.array(ring) }),
-  z.object({ type: z.literal("MultiPolygon"), coordinates: z.array(z.array(ring)) }),
-]);
 export const profileSchema = z
   .object({
     nodeId: z.uuid(),
@@ -33,9 +28,7 @@ export const profileSchema = z
     "Confirm the location label",
   );
 export type DiscoveryProfile = z.infer<typeof profileSchema>;
-export type StoredDiscoveryProfile = DiscoveryProfile & {
-  boundary?: z.infer<typeof boundarySchema> | null;
-};
+export type StoredDiscoveryProfile = DiscoveryProfile;
 
 export const EVENT_REPORT_AUDIENCES = [
   "general",
@@ -171,7 +164,8 @@ export const activityInput = activitySchema
       });
   });
 export const discoveryNodeSchema = profileSchema.safeExtend({
-  boundary: boundarySchema.nullable().optional(),
+  placeId: z.uuid().nullable(),
+  placeSlug: z.string().nullable(),
   featured: z.string().nullable(),
   active: z.boolean(),
   activityReason: z.string(),

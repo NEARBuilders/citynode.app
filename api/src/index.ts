@@ -11,7 +11,7 @@ import {
   type EventOnboardingCodeSchema,
   NodeProposalPayloadSchema,
 } from "./contract";
-import { DatabaseLive, DatabaseTag } from "./db/layer";
+import { DatabaseLive } from "./db/layer";
 import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import {
@@ -2013,6 +2013,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return yield* services.places.boundary(input.placeId);
       }),
 
+      listPlaceBoundaries: builder.listPlaceBoundaries.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.places.boundaries(input.placeIds);
+      }),
       activateCommunity: builder.activateCommunity.use(requireAuth).effect(function* ({
         input,
         context,
@@ -2030,10 +2034,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
           );
         }
-        const auth = authPlugin.client({
-          userId,
-          user: context.user,
-        });
+        const auth = yield* memberAuthClient(context);
         return yield* Effect.tryPromise({
           try: () =>
             activateCommunity({ places: services.places, nodes: services.nodes }, auth, {

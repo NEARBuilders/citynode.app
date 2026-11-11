@@ -931,6 +931,16 @@ export const contract = oc.router({
     .input(z.object({ placeId: z.uuid() }))
     .output(PlaceBoundarySchema.nullable()),
 
+  listPlaceBoundaries: oc
+    .route({
+      method: "POST",
+      path: "/places/boundaries",
+      summary: "Boundary geometry for many catalog places, keyed by place id",
+      description:
+        "Map views fetch geometry in one round trip. Places without a boundary are omitted — callers treat a missing key as marker-only.",
+    })
+    .input(z.object({ placeIds: z.array(z.uuid()).min(1).max(500) }))
+    .output(z.array(z.object({ placeId: z.uuid(), boundary: PlaceBoundarySchema.nullable() }))),
   activateCommunity: oc
     .route({
       method: "POST",

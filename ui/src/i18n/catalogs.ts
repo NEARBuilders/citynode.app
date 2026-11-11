@@ -81,6 +81,7 @@ const englishPublicMessages = {
   "explore.detail.basic":
     "This community hasn’t set up its Explore profile yet. Open its page to learn more.",
   "explore.detail.open": "Open community",
+  "explore.detail.join": "Join community",
   "explore.detail.copy": "Copy link",
   "explore.detail.copied": "Link copied.",
   "explore.detail.copyFallback": "Copy the address from your browser to share this page.",
@@ -280,6 +281,7 @@ const spanishAppMessages = {
   "explore.detail.basic":
     "Esta comunidad aún no ha configurado su perfil en Explorar. Abre su página para saber más.",
   "explore.detail.open": "Abrir comunidad",
+  "explore.detail.join": "Unirse a la comunidad",
   "explore.detail.copy": "Copiar enlace",
   "explore.detail.copied": "Enlace copiado.",
   "explore.detail.copyFallback": "Copia la dirección del navegador para compartir esta página.",
@@ -459,6 +461,7 @@ const frenchAppMessages = {
   "explore.detail.basic":
     "Cette communauté n’a pas encore configuré son profil Explorer. Ouvrez sa page pour en savoir plus.",
   "explore.detail.open": "Ouvrir la communauté",
+  "explore.detail.join": "Rejoindre la communauté",
   "explore.detail.copy": "Copier le lien",
   "explore.detail.copied": "Lien copié.",
   "explore.detail.copyFallback": "Copiez l’adresse du navigateur pour partager cette page.",
@@ -639,6 +642,7 @@ const chineseAppMessages = {
   "explore.detail.unavailable": "此社区暂不可用。",
   "explore.detail.basic": "此社区尚未设置探索资料。打开其页面了解更多。",
   "explore.detail.open": "打开社区",
+  "explore.detail.join": "加入社区",
   "explore.detail.copy": "复制链接",
   "explore.detail.copied": "链接已复制。",
   "explore.detail.copyFallback": "请复制浏览器地址来分享此页面。",

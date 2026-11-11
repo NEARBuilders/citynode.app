@@ -4,7 +4,7 @@ import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabaseDriver } from "@/db/index";
 import { loadMigrations, migrate } from "@/db/migrate";
-import { nodes, placeAliases, places as placesTable } from "@/db/schema";
+import { placeAliases, places as placesTable } from "@/db/schema";
 import pluginDevConfig from "../../plugin.dev";
 import { authedContext, getPluginClient, teardown } from "../setup";
 

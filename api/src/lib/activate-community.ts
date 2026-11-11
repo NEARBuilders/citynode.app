@@ -55,13 +55,19 @@ export async function activateCommunity(
 
   const organization = await auth
     .createOrganization({ name: place.name, slug: place.slug })
-    .catch((error) => {
-      if (error instanceof ORPCError && error.code === "CONFLICT") {
+    .catch(async (error) => {
+      if (!(error instanceof ORPCError) || error.code !== "CONFLICT") throw error;
+      // The slug is taken — but if it belongs to an organization this caller
+      // owns, an earlier activation died after creating it. Reuse and finish;
+      // only a stranger's name is a real conflict.
+      const mine = await auth.listOrganizations();
+      const owned = mine.find((org) => org.slug === place.slug);
+      if (!owned) {
         throw new ORPCError("CONFLICT", {
           message: "This community's name is already used by another organization",
         });
       }
-      throw error;
+      return owned;
     });
 
   const joinCode = await auth.createOnboardingCode({
