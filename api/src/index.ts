@@ -2140,6 +2140,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         const auth = authPlugin.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
           userId,
           user: context.user,
         });
