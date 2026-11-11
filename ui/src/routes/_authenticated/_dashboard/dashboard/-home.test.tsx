@@ -28,6 +28,7 @@ const harness = vi.hoisted(() => ({
   attendanceReads: [] as string[],
   teamRequests: [] as Record<string, unknown>[],
   dismissed: [] as string[],
+  navigations: [] as unknown[],
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -56,7 +57,12 @@ vi.mock("@tanstack/react-router", () => ({
   Outlet: () => null,
   useRouterState: () => "/dashboard",
   useNavigate: () => async () => {},
-  useRouter: () => ({ invalidate: async () => {}, navigate: async () => {} }),
+  useRouter: () => ({
+    invalidate: async () => {},
+    navigate: async (target: unknown) => {
+      harness.navigations.push(target);
+    },
+  }),
 }));
 
 const api = {
@@ -103,6 +109,8 @@ const session = () => ({
   session: { activeOrganizationId: harness.activeOrganizationId },
 });
 
+const setActiveTeam = vi.fn(async (_: { teamId: string | null }) => ({ error: null }));
+
 const setActive = vi.fn(async ({ organizationId }: { organizationId: string }) => {
   harness.activeOrganizationId = organizationId;
   return { error: null };
@@ -114,7 +122,7 @@ vi.mock("@/app", () => ({
   clearAuthenticatedQueries: async () => {},
   useAuthClient: () => ({
     passkey: { listUserPasskeys: async () => ({ data: [{ id: "passkey-1" }] }) },
-    organization: { setActive, setActiveTeam: async () => ({ error: null }) },
+    organization: { setActive, setActiveTeam },
     getSession: async () => ({ data: session(), error: null }),
     near: { getProfile: async () => ({ data: null }), disconnect: async () => {} },
   }),
@@ -136,6 +144,8 @@ afterEach(() => {
   harness.tenants = { "org-1": "Example Community" };
   harness.nodes = [];
   setActive.mockClear();
+  setActiveTeam.mockClear();
+  harness.navigations.length = 0;
   harness.authContext = null;
   harness.attendance = { events: [], unclassified: [], communities: [] };
   harness.attendanceReads.length = 0;
@@ -548,6 +558,44 @@ describe("Home for a member whose team request was decided", () => {
     fireEvent.click(screen.getByTestId("home-team-update-dismiss-request-approved"));
     await waitFor(() => expect(screen.queryByTestId("home-team-updates")).toBeNull());
     expect(harness.dismissed).toEqual(["request-approved"]);
+  });
+
+  it("switches to the approved team before opening its area when another team is selected", async () => {
+    inCommunity("member");
+    harness.authContext = {
+      organization: {
+        member: { role: "member" },
+        activeTeamId: "team-finance",
+        teams: [
+          { id: "team-finance", name: "Finance Team", areas: ["finance"] },
+          { id: "team-events", name: "Events Team", areas: ["events"] },
+        ],
+      },
+    };
+    harness.teamRequests = [
+      teamRequest({ id: "request-approved", isMine: true, status: "approved" }),
+    ];
+    renderHome();
+
+    fireEvent.click(await screen.findByTestId("home-team-update-open-request-approved"));
+    await waitFor(() =>
+      expect(harness.navigations).toEqual([
+        expect.objectContaining({ to: "/nodes/$nodeId/content", search: { tab: "events" } }),
+      ]),
+    );
+    expect(setActiveTeam).toHaveBeenCalledWith({ teamId: "team-events" });
+  });
+
+  it("opens the area directly when no other team is selected", async () => {
+    inCommunity("member");
+    harness.teamRequests = [
+      teamRequest({ id: "request-approved", isMine: true, status: "approved" }),
+    ];
+    renderHome();
+
+    fireEvent.click(await screen.findByTestId("home-team-update-open-request-approved"));
+    expect(setActiveTeam).not.toHaveBeenCalled();
+    expect(harness.navigations).toEqual([]);
   });
 
   it("tells a declined member without a link, and skips dismissed or pending requests", async () => {

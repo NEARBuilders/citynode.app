@@ -117,6 +117,27 @@ describe("home next steps", () => {
     expect(ids({ community: harbor, teamRequestsWaiting: 0 })).not.toContain("team-requests");
   });
 
+  it("never shows more than five steps once team requests are waiting", () => {
+    const steps = ids({
+      isAnonymous: true,
+      hasPasskey: false,
+      isAdmin: true,
+      community: harbor,
+      canManageCommunity: true,
+      teamRequestsWaiting: 2,
+    });
+    expect(steps).toEqual([
+      "save-account",
+      "launch-node",
+      "admin",
+      "team-requests",
+      "open-community",
+    ]);
+    expect(
+      ids({ community: harbor, canManageCommunity: true, teamRequestsWaiting: 2 }),
+    ).toHaveLength(4);
+  });
+
   it("keeps the organizer steps for events-team organizers", () => {
     const steps = getNextSteps({ ...base, community: harbor, canOrganizeEvents: true });
     expect(steps.map((step) => step.id)).toEqual(["open-community", "stake"]);

@@ -12,6 +12,8 @@ export type NextStepId =
   | "stake"
   | "explore";
 
+export const MAX_NEXT_STEPS = 5;
+
 export interface NextStep {
   id: NextStepId;
   title: string;
@@ -99,7 +101,7 @@ export function getNextSteps(
     });
   }
 
-  return steps;
+  return steps.slice(0, MAX_NEXT_STEPS);
 }
 
 function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {

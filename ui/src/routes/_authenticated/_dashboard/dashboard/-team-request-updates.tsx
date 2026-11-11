@@ -1,9 +1,10 @@
 import { CheckCircleIcon, XCircleIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { Link, type LinkProps, useRouter } from "@tanstack/react-router";
+import { type MouseEvent, useEffect } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button } from "@/components";
+import { useSwitchTeam } from "@/components/layout/use-switch-team";
 import {
   Item,
   ItemActions,
@@ -30,27 +31,40 @@ export function decidedTeamRequests(requests: readonly TeamJoinRequest[] | undef
   );
 }
 
-function newAreaLink(areas: readonly FeatureArea[], nodeId: string | null) {
+function newAreaTarget(areas: readonly FeatureArea[], nodeId: string | null): LinkProps {
   if (areas.includes("events") && nodeId) {
-    return <Link to="/nodes/$nodeId/content" params={{ nodeId }} search={{ tab: "events" }} />;
+    return { to: "/nodes/$nodeId/content", params: { nodeId }, search: { tab: "events" } };
   }
-  if (areas.includes("finance")) return <Link to="/dashboard/node" hash="payouts" />;
-  if (areas.includes("stake") && !areas.includes("node-operations")) return <Link to="/stake" />;
-  return <Link to="/dashboard/node" />;
+  if (areas.includes("finance")) return { to: "/dashboard/node", hash: "payouts" };
+  if (areas.includes("stake") && !areas.includes("node-operations")) return { to: "/stake" };
+  return { to: "/dashboard/node" };
 }
 
 export function TeamRequestUpdates({
   organizationId,
   nodeId,
+  activeTeamId,
   requests,
 }: {
   organizationId: string;
   nodeId: string | null;
+  activeTeamId: string | null;
   requests: TeamJoinRequest[];
 }) {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const switchTeam = useSwitchTeam();
+  const openArea = (request: TeamJoinRequest, target: LinkProps) => (event: MouseEvent) => {
+    if (!activeTeamId || activeTeamId === request.teamId) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    event.preventDefault();
+    void switchTeam
+      .mutateAsync(request.teamId)
+      .then(() => router.navigate(target))
+      .catch(() => {});
+  };
   const dismiss = useMutation({
     mutationFn: (requestId: string) => apiClient.dismissTeamJoinRequest({ requestId }),
     onSettled: () =>
@@ -78,6 +92,7 @@ export function TeamRequestUpdates({
         {requests.map((request) => {
           const approved = request.status === "approved";
           const StatusIcon = approved ? CheckCircleIcon : XCircleIcon;
+          const target = newAreaTarget(request.teamAreas, nodeId);
           return (
             <Item
               key={request.id}
@@ -114,7 +129,8 @@ export function TeamRequestUpdates({
                   <Button
                     size="sm"
                     nativeButton={false}
-                    render={newAreaLink(request.teamAreas, nodeId)}
+                    disabled={switchTeam.isPending}
+                    render={<Link {...target} onClick={openArea(request, target)} />}
                     data-testid={`home-team-update-open-${request.id}`}
                   >
                     {translate("teamRequests.whatYouCanDo")}
