@@ -161,10 +161,14 @@ function bulletinAttributionOnChange(
   bulletin: string | null,
   publisher: BulletinPublisher | undefined,
   publishedAt: Date,
+  claimUnattributed: boolean,
 ) {
   const fresh = bulletinAttribution(bulletin, publisher, publishedAt);
   if (bulletin === null) return fresh;
-  const keep = sql`${nodesTable.bulletinPublishedAt} IS NOT NULL AND ${nodesTable.metadata}->>'bulletin' IS NOT DISTINCT FROM ${bulletin}::text`;
+  const sameText = sql`${nodesTable.metadata}->>'bulletin' IS NOT DISTINCT FROM ${bulletin}::text`;
+  const keep = claimUnattributed
+    ? sql`${nodesTable.bulletinPublishedAt} IS NOT NULL AND ${sameText}`
+    : sameText;
   return {
     bulletinPublishedAt: sql`CASE WHEN ${keep} THEN ${nodesTable.bulletinPublishedAt} ELSE ${publishedAt.toISOString()}::timestamptz END`,
     bulletinPublishedBy: sql`CASE WHEN ${keep} THEN ${nodesTable.bulletinPublishedBy} ELSE ${fresh.bulletinPublishedBy}::text END`,
@@ -365,7 +369,7 @@ export const NodesLive = Layer.effect(
                 : replaceMetadataKeepingKind(replacement);
             Object.assign(
               patch,
-              bulletinAttributionOnChange(bulletinOf(input.metadata), input.publisher, now),
+              bulletinAttributionOnChange(bulletinOf(input.metadata), input.publisher, now, false),
             );
           } else if (input.kind !== undefined) {
             patch.metadata = withMetadataKey("kind", input.kind);
@@ -450,7 +454,7 @@ export const NodesLive = Layer.effect(
               .update(nodesTable)
               .set({
                 metadata,
-                ...bulletinAttributionOnChange(published, publisher, now),
+                ...bulletinAttributionOnChange(published, publisher, now, true),
                 updatedAt: now,
               })
               .where(eq(nodesTable.id, id))

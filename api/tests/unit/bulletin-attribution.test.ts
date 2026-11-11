@@ -139,6 +139,35 @@ describe("bulletin attribution", () => {
     expect(claimed.bulletinPublishedAt).not.toBeNull();
   });
 
+  it("leaves a bulletin saved before attribution existed unattributed when a node update keeps its text", async () => {
+    const layer = freshLayer();
+    const node = await seedNode(layer);
+    await run(layer, ({ db }) =>
+      db
+        .update(nodesTable)
+        .set({ metadata: { kind: "city", bulletin: "Old news" } })
+        .where(eq(nodesTable.id, node.id)),
+    );
+
+    const updated = await run(layer, ({ nodes }) =>
+      nodes.update(node.id, {
+        metadata: { bulletin: "Old news", poolAccountId: "pool.poolv1.near" },
+        publisher: GRACE,
+      }),
+    );
+    expect(updated.metadata.bulletin).toBe("Old news");
+    expect(updated.metadata.poolAccountId).toBe("pool.poolv1.near");
+    expect(updated.bulletinPublishedAt).toBeNull();
+    expect(updated.bulletinPublisherName).toBeNull();
+    expect(await storedPublisher(layer, node.id)).toBeNull();
+
+    const changed = await run(layer, ({ nodes }) =>
+      nodes.update(node.id, { metadata: { bulletin: "New news" }, publisher: GRACE }),
+    );
+    expect(changed.bulletinPublisherName).toBe("Grace");
+    expect(changed.bulletinPublishedAt).not.toBeNull();
+  });
+
   it("attributes a bulletin written through a node update and keeps it across unrelated edits", async () => {
     const layer = freshLayer();
     const node = await seedNode(layer);
