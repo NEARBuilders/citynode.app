@@ -30,7 +30,7 @@ export interface SeedSources {
 export interface PlaceUpsertRow {
   slug: string;
   name: string;
-  label: string;
+  label: string | null;
   latitude: number | null;
   longitude: number | null;
   boundary: PlaceBoundary | null;
@@ -48,7 +48,7 @@ export interface PlacesCatalog {
   aliases: AliasUpsertRow[];
 }
 
-function slugify(value: string): string {
+export function slugify(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
