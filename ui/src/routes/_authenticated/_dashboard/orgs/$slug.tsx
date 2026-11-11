@@ -110,8 +110,12 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
     ],
   }),
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
-    await context.queryClient.ensureQueryData(organizationsQueryOptions(context.apiClient));
+    const session = await context.queryClient.ensureQueryData(
+      sessionQueryOptions(context.authClient),
+    );
+    await context.queryClient.ensureQueryData(
+      organizationsQueryOptions(context.apiClient, session?.user?.id),
+    );
   },
   component: OrganizationDetail,
 });
@@ -126,7 +130,7 @@ function OrganizationDetail() {
   const apiClient = useApiClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery(
-    organizationsQueryOptions(apiClient),
+    organizationsQueryOptions(apiClient, session?.user?.id),
   );
   const org = organizations.find((organization) => organization.slug === orgSlug);
   const orgId = org?.id ?? "";

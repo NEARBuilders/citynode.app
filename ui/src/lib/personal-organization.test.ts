@@ -64,19 +64,21 @@ describe("resolveCommunityMembership", () => {
     });
   });
 
-  it("opens the only community when nothing valid is active", () => {
-    expect(resolve([personal, harbor], null)).toEqual({
-      status: "open",
-      organization: harbor,
-    });
-    expect(resolve([harbor], "org-gone")).toEqual({ status: "open", organization: harbor });
+  it("asks to choose the only community instead of selecting it", () => {
+    expect(resolve([personal, harbor], null)).toEqual({ status: "choose", count: 1 });
+    expect(resolve([harbor], "org-gone")).toEqual({ status: "choose", count: 1 });
+    expect(resolve([personal, harbor], personal.id)).toEqual({ status: "choose", count: 1 });
   });
 
-  it("asks to choose instead of switching away from an active personal organization", () => {
-    expect(resolve([personal, harbor], personal.id)).toEqual({
-      status: "choose",
-      count: 1,
-    });
+  it("asks to choose rather than trusting a list that is still refreshing", () => {
+    expect(
+      resolveCommunityMembership({
+        organizations: [personal, harbor],
+        activeOrganizationId: null,
+        userId,
+        refreshing: true,
+      }),
+    ).toEqual({ status: "choose", count: 1 });
   });
 
   it("asks to choose when several communities are visible and none is active", () => {
@@ -97,10 +99,6 @@ describe("resolveCommunityMembership", () => {
     expect(resolve([personal, rejected], personal.id)).toEqual({ status: "none" });
     expect(resolve([pending, rejected], null)).toEqual({ status: "none" });
     expect(resolve([personal, pending, harbor], null)).toEqual({
-      status: "open",
-      organization: harbor,
-    });
-    expect(resolve([personal, pending, harbor], personal.id)).toEqual({
       status: "choose",
       count: 1,
     });
@@ -108,7 +106,6 @@ describe("resolveCommunityMembership", () => {
 
   it("gives the organization to load a community from", () => {
     expect(communityOrganizationId({ status: "active", organization: harbor })).toBe(harbor.id);
-    expect(communityOrganizationId({ status: "open", organization: harbor })).toBe(harbor.id);
     expect(communityOrganizationId({ status: "choose", count: 2 })).toBeNull();
     expect(communityOrganizationId({ status: "none" })).toBeNull();
   });

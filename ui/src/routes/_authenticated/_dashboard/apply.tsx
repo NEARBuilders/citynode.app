@@ -100,7 +100,7 @@ function ApplyPage() {
   const myApplications = useQuery(myNodeApplicationsQueryOptions(apiClient, nearAccountId ?? ""));
   const { data: session, isPending: sessionPending } = useQuery(sessionQueryOptions(authClient));
   const { data: organizations, isPending: organizationsPending } = useQuery(
-    organizationsQueryOptions(apiClient),
+    organizationsQueryOptions(apiClient, session?.user?.id),
   );
   const latestApplication = myApplications.data?.data.reduce<
     (typeof myApplications.data.data)[number] | undefined

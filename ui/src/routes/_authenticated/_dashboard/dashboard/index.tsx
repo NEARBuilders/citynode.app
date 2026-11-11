@@ -84,7 +84,7 @@ function Home() {
     },
     staleTime: 60 * 1000,
   });
-  const organizations = useQuery(organizationsQueryOptions(apiClient));
+  const organizations = useQuery(organizationsQueryOptions(apiClient, session?.user?.id));
   const invitations = useQuery({
     queryKey: ["user-invitations"],
     queryFn: async (): Promise<HomeInvitation[]> => {

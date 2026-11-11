@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RouterContext } from "@/app";
 import { render } from "@/i18n/test-render";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
+import { organizationQueryKeys } from "@/lib/queries/organizations";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
 import { selectTenantNode, TenantDetailContent } from "./-tenant-detail";
 
@@ -369,7 +370,9 @@ function renderTenant(current: Harness, session: unknown = { user: { id: USER_ID
   queryClient.setQueryData(tenantQueryKeys.list(), [current.server.tenant]);
   queryClient.setQueryData(nodeQueryKeys.tenant(TENANT_ID), current.server.nodes);
   queryClient.setQueryData(tenantQueryKeys.bindings(TENANT_ID), current.server.bindings);
-  queryClient.setQueryData(["organizations"], [{ id: ORG_ID, slug: "tenant-org" }]);
+  queryClient.setQueryData(organizationQueryKeys.list(USER_ID), [
+    { id: ORG_ID, slug: "tenant-org" },
+  ]);
   queryClient.setQueryData(["session"], session);
 
   render(
