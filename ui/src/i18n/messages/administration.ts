@@ -1514,12 +1514,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Approuvez ou refusez les nouvelles communautés.",
     "批准或拒绝新社区。",
   ],
-  "admin.action.organizationsCount": [
-    "{count, plural, one {# organization request to review} other {# organization requests to review}}",
-    "{count, plural, one {# solicitud de organización por revisar} other {# solicitudes de organización por revisar}}",
-    "{count, plural, one {# demande d’organisation à examiner} other {# demandes d’organisation à examiner}}",
-    "{count, plural, other {# 个组织申请待审核}}",
-  ],
   "admin.action.stakingNamed": [
     "{name} has no validator",
     "{name} no tiene validador",
@@ -1785,12 +1779,6 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Nada pendiente",
     "Rien en attente",
     "没有待处理事项",
-  ],
-  "admin.manage.requestsPending": [
-    "{count, plural, one {# request to review} other {# requests to review}}",
-    "{count, plural, one {# solicitud por revisar} other {# solicitudes por revisar}}",
-    "{count, plural, one {# demande à examiner} other {# demandes à examiner}}",
-    "{count, plural, other {# 个申请待审核}}",
   ],
   "admin.manage.relayerBalance": [
     "{balance} NEAR available",
