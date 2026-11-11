@@ -73,22 +73,39 @@ jobs:
 
   # Self-owned: the citynode browser regression suite (the app's E2E safety
   # net). The reusable consumer-ci job only runs lint/typecheck/vitest — it
-  # never boots databases or browsers. This job mirrors the base runtime's
-  # browser leg: test-database service containers, then the full retained
-  # suite against a local `bos dev` stack (base host remote, local workspaces).
-  # Once upstream's consumer-regression.yml (everything-dev#368) ships, this
-  # job can move onto it. Gating: the suite is green against the current
-  # platform pin and the historical blocker (everything-dev#531) is closed.
+  # never boots databases or browsers. Runs in the official Playwright
+  # container (browsers + system deps baked in), so `playwright install` and
+  # `install-deps` — the apt step that kept hanging, paid unconditionally on
+  # every browser-cache hit — are gone entirely, along with the binary-only
+  # browser cache Playwright's CI docs warn against. Test databases stay
+  # Postgres service containers: the app seeds (organizer/event-station/
+  # redemption/onboarding) connect directly from the test process, so an
+  # in-memory pglite stack database can't be shared with them. Inside a job
+  # container the services are reached by label on the job network — host
+  # port mappings are inert there. Once upstream's consumer-regression.yml
+  # (everything-dev#368) ships, this job can move onto it. Gating: the suite
+  # is green against the current platform pin and the historical blocker
+  # (everything-dev#531) is closed.
   regression-browser:
     name: Regression browser (dev:ssr)
     needs: [filter]
     if: ${{ github.event_name != 'pull_request' || needs.filter.outputs.ci == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    # Matrix-of-one: the single literal the container tag and the drift-guard
+    # step both derive from (env context isn't available in container.image).
+    # Must track the lockfile's @playwright/test resolution.
+    strategy:
+      matrix:
+        playwright-version: ["1.65.0"]
+    container:
+      image: mcr.microsoft.com/playwright:v${{ matrix.playwright-version }}-noble
+      options: --user 1001 --init --ipc=host
     env:
+      PLAYWRIGHT_VERSION: ${{ matrix.playwright-version }}
       CI: true
-      API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db
-      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5435/auth_test_db
+      API_DATABASE_URL: postgres://everythingdev:everythingdev@postgres-api-test:5432/api_test_db
+      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@postgres-auth-test:5432/auth_test_db
       CORS_ORIGIN: http://localhost:4100
       BETTER_AUTH_SECRET: regression-test-secret-do-not-use-in-production
     services:
@@ -98,8 +115,6 @@ jobs:
           POSTGRES_USER: everythingdev
           POSTGRES_PASSWORD: everythingdev
           POSTGRES_DB: api_test_db
-        ports:
-          - 5434:5432
         options: >-
           --health-cmd "pg_isready -U everythingdev -d api_test_db"
           --health-interval 3s
@@ -111,8 +126,6 @@ jobs:
           POSTGRES_USER: everythingdev
           POSTGRES_PASSWORD: everythingdev
           POSTGRES_DB: auth_test_db
-        ports:
-          - 5435:5432
         options: >-
           --health-cmd "pg_isready -U everythingdev -d auth_test_db"
           --health-interval 3s
@@ -149,20 +162,14 @@ jobs:
       - name: Generate resolved config and ui bootstrap stubs
         run: pnpm run types:gen
 
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 (Node 24)
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Playwright browser
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Install Playwright system deps
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      - name: Verify container matches the lockfile's Playwright
+        run: |
+          actual="$(pnpm exec playwright --version)"
+          expected="Version ${PLAYWRIGHT_VERSION}"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::lockfile resolves ${actual}, but the job container ships v${PLAYWRIGHT_VERSION} browsers — bump the playwright-version matrix value in this job"
+            exit 1
+          fi
 
       - name: Run browser regression suite (dev:ssr)
         run: pnpm run test:regression:browser:dev:ssr
