@@ -14,6 +14,8 @@ import {
   discoveryReports,
   eventReports,
   nodes,
+  placeAliases as placeAliasesTable,
+  places as placesTable,
   tenants,
 } from "../db/schema";
 import type {
@@ -27,6 +29,7 @@ import { EVENT_REPORT_FORM_VERSION } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
+import { slugify } from "../lib/slug";
 import { resolveTeamAccess } from "../team-access-policy";
 import {
   type GeocodeService,
@@ -59,6 +62,34 @@ function canonicalActivityUrl(value: string) {
     if (key.startsWith("utm_") || key === "fbclid") url.searchParams.delete(key);
   url.searchParams.sort();
   return url.toString();
+}
+
+// Map geometry lives in the places catalog, not on discovery profiles. When a
+// community's location names a catalog place (by slug or alias) and the node
+// is not linked yet, adopt it — the on-demand boundary endpoint then serves
+// the outline for map views. Best-effort: an unresolved location simply stays
+// marker-only until the join flow attaches a place.
+export async function adoptCatalogPlace(
+  db: Database,
+  node: { id: string; placeId: string | null },
+  place: string,
+): Promise<void> {
+  const location = place.trim();
+  if (!location || node.placeId !== null) return;
+  const [matched] = await db
+    .select({ id: placesTable.id })
+    .from(placesTable)
+    .where(
+      sql`${placesTable.slug} = ${slugify(location)} OR ${placesTable.id} IN (
+        SELECT place_id FROM ${placeAliasesTable} WHERE value = ${location}
+      )`,
+    )
+    .limit(1);
+  if (!matched) return;
+  await db
+    .update(nodes)
+    .set({ placeId: matched.id })
+    .where(and(eq(nodes.id, node.id), isNull(nodes.placeId)));
 }
 
 function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService) {
@@ -288,6 +319,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             name: node.name,
             slug: node.slug,
             parentId: node.parentId,
+            placeId: node.placeId,
             kind: nodeKindOf(node.metadata),
           };
         })
@@ -334,6 +366,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           name: node.name,
           slug: node.slug,
           parentId: node.parentId,
+          placeId: node.placeId,
           kind: nodeKindOf(node.metadata),
         }));
       return [...listed, ...basic].sort(
@@ -1132,7 +1165,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             : (previous?.geocodedLocation ?? null);
         const kind = nodeKindOf(record.node.metadata);
         const place = profilePlace(input, kind);
-        const missingBoundary = kind === "country" && !previous?.boundary;
         const stale = shouldGeocodeProfile({
           location: place,
           latitude: input.latitude,
@@ -1143,7 +1175,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           ...input,
           geocodedLocation,
           geocodeHint: null,
-          boundary: previous?.boundary ?? null,
         };
         if (!place) {
           next = {
@@ -1152,9 +1183,8 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             longitude: null,
             geocodedLocation: null,
             geocodeHint: null,
-            boundary: null,
           };
-        } else if (stale || missingBoundary) {
+        } else if (stale) {
           const geocoded = yield* geocode.geocode(place);
           if (geocoded.ok) {
             next = {
@@ -1163,19 +1193,22 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               longitude: geocoded.longitude,
               geocodedLocation: place,
               geocodeHint: null,
-              boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
             };
-          } else if (stale) {
+          } else {
             next = {
               ...next,
               latitude: null,
               longitude: null,
               geocodedLocation: null,
               geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
-              boundary: null,
             };
           }
         }
+        // Map geometry lives in the places catalog. When this community is not
+        // linked to a catalog place yet, resolve the place from its location
+        // and adopt it — the on-demand boundary endpoint then serves the
+        // outline for map views.
+        yield* Effect.tryPromise(() => adoptCatalogPlace(db, record.node, place));
         yield* query(() =>
           db.transaction(async (tx) => {
             await tx

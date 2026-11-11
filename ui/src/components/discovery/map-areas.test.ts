@@ -10,8 +10,8 @@ const square = [
   ],
 ];
 
-function node(boundary: Parameters<typeof boundaryLatLngs>[0] | null) {
-  return { nodeId: crypto.randomUUID(), boundary } as Parameters<typeof mapAreas>[0][number];
+function node(placeId: string | null) {
+  return { nodeId: crypto.randomUUID(), placeId } as Parameters<typeof mapAreas>[0][number];
 }
 
 describe("boundaryLatLngs", () => {
@@ -36,11 +36,17 @@ describe("boundaryLatLngs", () => {
 });
 
 describe("mapAreas", () => {
-  it("keeps only communities with a country outline", () => {
-    const country = node({ type: "Polygon", coordinates: square });
-    expect(mapAreas([country, node(null)]).map((area) => area.node.nodeId)).toEqual([
-      country.nodeId,
+  it("keeps only communities whose linked place has geometry", () => {
+    const placeId = crypto.randomUUID();
+    const linked = node(placeId);
+    const boundaries: Parameters<typeof mapAreas>[1] = new Map([
+      [placeId, { type: "Polygon" as const, coordinates: square }],
     ]);
+    expect(
+      mapAreas([linked, node(null), node(crypto.randomUUID())], boundaries).map(
+        (area) => area.node.nodeId,
+      ),
+    ).toEqual([linked.nodeId]);
   });
 });
 

@@ -6,6 +6,9 @@ import {
   placeAliases as placeAliasesTable,
   places as placesTable,
 } from "../db/schema";
+import { slugify } from "../lib/slug";
+
+export { slugify };
 
 // KEEP: display-grade geometry — 0.02° (~2km) keeps the 10m Natural Earth
 // source small enough for the JSONB boundary column and on-demand map fetches
@@ -46,15 +49,6 @@ export interface AliasUpsertRow {
 export interface PlacesCatalog {
   places: PlaceUpsertRow[];
   aliases: AliasUpsertRow[];
-}
-
-export function slugify(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 function roundCoordinates(value: unknown): unknown {
