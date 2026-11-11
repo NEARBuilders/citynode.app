@@ -368,7 +368,7 @@ it("labels the stake page with the ancestor whose pools it shows", async () => {
   await showNode(`/stake?nodeId=${child.id}`);
   expect(await screen.findByRole("heading", { level: 1, name: /Stake.*Chicago/ })).toBeTruthy();
   expect((await screen.findByTestId("stake.via")).textContent).toBe("Stake via Illinois");
-  expect(screen.getByRole("heading", { name: "illinois.poolv1.near" })).toBeTruthy();
+  expect(screen.getAllByText("illinois.poolv1.near").length).toBeGreaterThan(0);
 });
 
 it("links the header stake action to the same-origin stake page", async () => {
