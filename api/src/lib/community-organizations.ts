@@ -60,7 +60,7 @@ const SLUG_UNREACHABLE =
 type CommunityOrganization = NonNullable<Awaited<ReturnType<typeof fetchOrganization>>>;
 type OrganizationSummary = Pick<
   CommunityOrganization,
-  "id" | "name" | "slug" | "status" | "requestedBy" | "metadata"
+  "id" | "name" | "slug" | "status" | "metadata"
 >;
 type ReviewerRole = "owner" | "admin";
 
@@ -77,9 +77,6 @@ async function openOrganization(
 ): Promise<{ organization: CommunityOrganization; joined: boolean }> {
   const visible = await readOrganization(auth, summary.id);
   if (visible) return { organization: visible, joined: false };
-  if (summary.status === "pending") {
-    await auth.reviewOrganization({ organizationId: summary.id, decision: "approve" });
-  }
   await auth.addMember({ userId: reviewerUserId, role, organizationId: summary.id });
   const joined = await readOrganization(auth, summary.id);
   if (!joined) {
@@ -94,8 +91,6 @@ async function locateSlugOrganization(
   auth: AuthClient,
   input: {
     slug: string;
-    proposalId: string;
-    proposerUserId?: string;
     recordedOrganizationId?: string;
   },
 ): Promise<OrganizationSummary | null> {
@@ -105,17 +100,7 @@ async function locateSlugOrganization(
     });
     if (recorded?.slug === input.slug) return recorded;
   }
-  const visible = await readOrganization(auth, undefined, input.slug);
-  if (visible) return visible;
-  const requests = await auth.listOrganizationRequests();
-  return (
-    requests.find(
-      (request) =>
-        request.slug === input.slug &&
-        ((!!input.proposerUserId && request.requestedBy === input.proposerUserId) ||
-          request.metadata?.communityProposalId === input.proposalId),
-    ) ?? null
-  );
+  return await readOrganization(auth, undefined, input.slug);
 }
 
 async function createCommunityOrganization(
@@ -233,34 +218,22 @@ async function bindCommunityOrganization(
       adopted ? SLUG_CONFLICT : "This organization belongs to another community application",
     );
   }
-  if (summary.status === "rejected") {
-    throw conflict(adopted ? SLUG_CONFLICT : "The existing organization request was rejected");
-  }
-  if (
-    summary.status === "pending" &&
-    summary.requestedBy &&
-    proposerUserId &&
-    summary.requestedBy !== proposerUserId
-  ) {
-    throw notOwned();
-  }
   const { organization, joined } = await openOrganization(
     auth,
     summary,
     input.reviewerUserId,
     "admin",
   );
-  if (organization.requestedBy && proposerUserId && organization.requestedBy !== proposerUserId) {
-    const proposerMember = organization.members.find((member) => member.userId === proposerUserId);
-    if (proposerMember?.role !== "owner") {
-      if (joined) {
-        await auth.leaveOrganization({ organizationId: organization.id }).catch(() => undefined);
-      }
-      throw notOwned();
+  if (
+    proposerUserId &&
+    !organization.members.some(
+      (member) => member.userId === proposerUserId && member.role === "owner",
+    )
+  ) {
+    if (joined) {
+      await auth.leaveOrganization({ organizationId: organization.id }).catch(() => undefined);
     }
-  }
-  if (organization.status === "pending") {
-    await auth.reviewOrganization({ organizationId: organization.id, decision: "approve" });
+    throw notOwned();
   }
   await input.onOrganization?.(organization.id);
   const metadata = organization.metadata ?? {};
@@ -337,9 +310,6 @@ export async function provisionCommunityOrganization(
       if (!slugStatus.status && isSlugTaken(error)) throw conflict(SLUG_UNREACHABLE);
       throw error;
     }));
-  if (summary.status === "rejected") {
-    throw conflict("The community organization request was rejected");
-  }
   await input.onOrganization?.(summary.id);
   const linked = summary.metadata?.communityLinkedOrg === "true";
   const { organization, joined } = await openOrganization(
@@ -348,9 +318,6 @@ export async function provisionCommunityOrganization(
     input.reviewerUserId,
     proposerUserId || linked ? "admin" : "owner",
   );
-  if (organization.status === "pending") {
-    await auth.reviewOrganization({ organizationId: organization.id, decision: "approve" });
-  }
   if (joined) {
     const metadata = organization.metadata ?? {};
     await auth.updateOrganization({
@@ -455,7 +422,6 @@ export async function releaseCommunityOrganization(
   };
   const provisioned = new Set(
     [
-      organization.requestedBy,
       organization.metadata?.communityApplicantId,
       organization.metadata?.communityReviewerId,
       ...joinedReviewerIds(organization.metadata ?? {}),

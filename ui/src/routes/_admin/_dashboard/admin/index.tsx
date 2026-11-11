@@ -42,7 +42,6 @@ import {
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeListQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
-import { organizationRequestsQueryOptions } from "@/lib/queries/organizations";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
@@ -109,7 +108,6 @@ function AdminOverview() {
   const pendingQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
   const awaitingQuery = useQuery(awaitingReviewQueryOptions(apiClient, APPLICATION_ITEMS_LIMIT));
   const relayerQuery = useRelayerInfoQuery();
-  const requestsQuery = useQuery(organizationRequestsQueryOptions(apiClient));
   const progress = useCommunityProgress();
 
   const setupsQuery = useQuery(stalledSetupsQueryOptions(apiClient));
@@ -120,7 +118,6 @@ function AdminOverview() {
   const relayer = relayerQuery.data;
   const relayerNeedsFunding = !!relayer?.accountId && relayer.enabled === false;
   const relayerFailed = relayerQuery.isError && !relayer;
-  const requestCount = requestsQuery.data?.length;
 
   return (
     <>
@@ -167,20 +164,6 @@ function AdminOverview() {
             status={translate("admin.sitesDescription")}
           />
           <ManageTile
-            to="/admin/organizations"
-            icon={UsersIcon}
-            title={translate("common.organizations")}
-            testId="admin.heading.organizations"
-            status={
-              requestsQuery.isError
-                ? translate("admin.loadFailed")
-                : requestCount
-                  ? translate("admin.manage.requestsPending", { count: requestCount })
-                  : translate("orgApproval.reviewDescription")
-            }
-            attention={!!requestCount || requestsQuery.isError}
-          />
-          <ManageTile
             to="/admin/relayer"
             icon={GasPumpIcon}
             title={translate("nav.relayer")}
@@ -223,14 +206,8 @@ function AdminOverview() {
           setupNeedsAttention: communitySetupNeedsAttention(proposal),
         }))}
         relayerNeedsFunding={relayerNeedsFunding}
-        organizationRequestCount={requestCount ?? 0}
         progress={progress}
-        sources={[
-          setupsQuery,
-          awaitingQuery,
-          { ...relayerQuery, isError: relayerFailed },
-          requestsQuery,
-        ]}
+        sources={[setupsQuery, awaitingQuery, { ...relayerQuery, isError: relayerFailed }]}
       />
 
       <CommunityProgress progress={progress} />
@@ -271,14 +248,12 @@ function NeedsAction({
   reviewTotal,
   proposals,
   relayerNeedsFunding,
-  organizationRequestCount,
   progress,
   sources,
 }: {
   reviewTotal: number;
   proposals: Parameters<typeof deriveNeedsAction>[0]["proposals"];
   relayerNeedsFunding: boolean;
-  organizationRequestCount: number;
   progress: ReturnType<typeof useCommunityProgress>;
   sources: { isLoading: boolean; isError: boolean; refetch: () => unknown }[];
 }) {
@@ -287,7 +262,6 @@ function NeedsAction({
     pendingReviewCount: reviewTotal,
     proposals,
     relayerNeedsFunding,
-    organizationRequestCount,
     communities: progress.rows,
   });
   const loading = progress.isLoading || sources.some((source) => source.isLoading);
@@ -404,12 +378,6 @@ function NeedsActionRow({ item }: { item: NeedsActionItem }) {
           title: translate("admin.action.moreApplications", { count: item.count }),
           description: translate("admin.action.reviewHint"),
           link: <Link to="/admin/proposals" search={{ status: "pending" }} />,
-        };
-      case "organizations":
-        return {
-          title: translate("admin.action.organizationsCount", { count: item.count }),
-          description: translate("orgApproval.reviewDescription"),
-          link: <Link to="/admin/organizations" />,
         };
       case "stakingMany":
         return {
