@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { afterAll, expect, it, vi } from "vitest";
+import { afterAll, afterEach, expect, it, vi } from "vitest";
 import { authedContext, getPluginBaseUrl, getPluginClient, teardown } from "../setup";
 
 const SECRET = "whsec_route_fixture";
@@ -15,12 +15,14 @@ vi.mock("../../plugin.dev", async (importOriginal) => {
         secrets: {
           ...original.default.config.secrets,
           LUMA_WEBHOOK_SECRETS: "whsec_route_fixture",
+          LUMA_CALENDAR_API_KEYS: "route-key",
         },
       },
     },
   };
 });
 afterAll(teardown);
+afterEach(() => vi.unstubAllGlobals());
 
 function deliver(payload: unknown, secret = SECRET) {
   const rawBody = JSON.stringify(payload);
@@ -58,6 +60,16 @@ const onlineEvent = {
 
 it("verifies the signature over the raw body before handling a Luma delivery", async () => {
   await getPluginClient();
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.origin !== "https://public-api.luma.com") return realFetch(input, init);
+    return Response.json(
+      url.pathname === "/v1/calendars/get"
+        ? { id: "cal-main", name: "Main", url: "https://luma.com/main" }
+        : onlineEvent,
+    );
+  });
   const forged = await deliver({ type: "event.created", data: onlineEvent }, "whsec_wrong");
   expect(forged.status).toBe(401);
 

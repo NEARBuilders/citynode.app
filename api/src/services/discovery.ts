@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Clock, Context, DateTime, Effect, Layer, Schedule } from "effect";
-import { z } from "zod";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -39,12 +38,7 @@ import {
   profilePlace,
   shouldGeocodeProfile,
 } from "./discovery-geocode";
-import {
-  createLumaCalendars,
-  describeLumaFailure,
-  type LumaEvent,
-  lumaEventSchema,
-} from "./discovery-luma";
+import { createLumaCalendars, describeLumaFailure, type LumaEvent } from "./discovery-luma";
 import { lumaWebhookSchema, verifyLumaWebhook } from "./luma-webhook";
 import { nodeKindOf } from "./nodes";
 import { createPlaceMatcher, type PlaceMatcher } from "./place-match";
@@ -110,7 +104,11 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
   const query = <T>(run: () => Promise<T>): DiscoveryEffect<T> =>
     Effect.tryPromise({ try: run, catch: toOrpcError });
 
-  let placeParents: { loadedAt: number; parents: Map<string, string | null> } | null = null;
+  let placeParents: {
+    loadedAt: number;
+    parents: Map<string, string | null>;
+    children: Map<string, string[]>;
+  } | null = null;
   let placeMatcherCache: { loadedAt: number; matcher: PlaceMatcher } | null = null;
 
   function placeTree() {
@@ -120,12 +118,17 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
         const rows = yield* query(() =>
           db.select({ id: places.id, parentId: places.parentId }).from(places),
         );
+        const children = new Map<string, string[]>();
+        for (const row of rows)
+          if (row.parentId)
+            children.set(row.parentId, [...(children.get(row.parentId) ?? []), row.id]);
         placeParents = {
           loadedAt: now,
           parents: new Map(rows.map((row) => [row.id, row.parentId] as const)),
+          children,
         };
       }
-      const parents = placeParents.parents;
+      const { parents, children } = placeParents;
       const nodeRows = yield* query(() =>
         db
           .select({ id: nodes.id, placeId: nodes.placeId })
@@ -149,9 +152,6 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
         return chain;
       };
       const descendants = (placeId: string) => {
-        const children = new Map<string, string[]>();
-        for (const [id, parentId] of parents)
-          if (parentId) children.set(parentId, [...(children.get(parentId) ?? []), id]);
         const found = new Set([placeId]);
         const queue = [placeId];
         while (queue.length > 0)
@@ -166,6 +166,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
         placeOfNode,
         descendants,
         rollupNodeIds: (activity: PublicActivity) => {
+          if (activity.kind !== "event") return [];
           const placeId =
             activity.placeId ??
             (activity.ownerNodeId ? placeOfNode.get(activity.ownerNodeId) : undefined);
@@ -769,6 +770,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
             .where(eq(discoveryActivities.id, id))
             .for("update");
           const hidden = row?.data.luma?.hidden === true;
+          const cancelled = row?.data.status === "cancelled";
           const data: PublicActivity = {
             id,
             ownerNodeId: null,
@@ -784,7 +786,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
             endsAt: new Date(event.end_at).toISOString(),
             timezone: event.timezone,
             venue: lumaVenue(event),
-            status: hidden ? "draft" : "published",
+            status: cancelled ? "cancelled" : hidden ? "draft" : "published",
             luma: {
               calendarId,
               eventId: event.id,
@@ -805,6 +807,20 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
         }),
       );
     });
+  }
+
+  function cancelPlaceEvent(eventId: string) {
+    return query(() =>
+      db
+        .update(discoveryActivities)
+        .set({ data: sql`jsonb_set(${discoveryActivities.data}, '{status}', '"cancelled"')` })
+        .where(
+          and(
+            eq(discoveryActivities.id, lumaPlaceActivityId(eventId)),
+            isNull(discoveryActivities.ownerNodeId),
+          ),
+        ),
+    ).pipe(Effect.asVoid);
   }
 
   function removePlaceEvent(eventId: string) {
@@ -839,26 +855,21 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
       if (!webhook.success) return { result: "ignored" as const };
       const { type, data } = webhook.data;
       if (type === "event.canceled") {
-        yield* removePlaceEvent(data.id);
+        yield* cancelPlaceEvent(data.id);
         return { result: "removed" as const };
       }
       if (type === "calendar.event.added" && data.platform !== "luma")
         return { result: "ignored" as const };
-      const raw =
-        type === "calendar.event.added"
-          ? yield* query(() => luma.event(lumaMainCalendarId, data.id))
-          : data;
-      const visibility = z.object({ visibility: z.string() }).safeParse(raw);
-      if (!raw || (visibility.success && visibility.data.visibility !== "public")) {
+      const event = yield* query(() => luma.event(lumaMainCalendarId, data.id));
+      if (!event) {
         yield* removePlaceEvent(data.id);
         return { result: "removed" as const };
       }
-      const event = lumaEventSchema.safeParse(raw);
-      if (!event.success || Date.parse(event.data.end_at) < Date.parse(event.data.start_at)) {
+      if (Date.parse(event.end_at) < Date.parse(event.start_at)) {
         yield* Effect.logWarning(`[Discovery] Ignored invalid Luma webhook event ${data.id}`);
         return { result: "ignored" as const };
       }
-      const saved = yield* upsertPlaceEvent(event.data, lumaMainCalendarId);
+      const saved = yield* upsertPlaceEvent(event, lumaMainCalendarId);
       return { result: saved.placeId ? ("associated" as const) : ("unmatched" as const) };
     });
   }
@@ -870,9 +881,9 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
         return yield* Effect.fail(
           new ORPCError("BAD_REQUEST", { message: "No main Luma calendar is configured." }),
         );
-      const snapshot = yield* query(() => luma.snapshot(lumaMainCalendarId));
-      const result = { imported: 0, updated: 0, unmatched: 0 };
-      for (const event of snapshot.events) {
+      const listed = yield* query(() => luma.allEvents(lumaMainCalendarId));
+      const result = { imported: 0, updated: 0, unmatched: 0, skipped: listed.skipped };
+      for (const event of listed.events) {
         const saved = yield* upsertPlaceEvent(event, lumaMainCalendarId);
         if (saved.created) result.imported++;
         else result.updated++;

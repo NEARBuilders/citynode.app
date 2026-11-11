@@ -192,7 +192,9 @@ export function ActivityDetail({
 
       {host.data && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold">{translate("activity.hostedBy")}</h2>
+          <h2 className="text-xl font-semibold">
+            {translate(data.ownerNodeId ? "activity.hostedBy" : "activity.happeningIn")}
+          </h2>
           <Link
             to="/n/$slug"
             params={{ slug: host.data.slug }}

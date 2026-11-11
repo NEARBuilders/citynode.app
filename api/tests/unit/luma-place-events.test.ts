@@ -3,7 +3,7 @@ import type { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database, DatabaseError } from "@/db";
 import { DatabaseLive, DatabaseTag } from "@/db/layer";
 import {
@@ -23,6 +23,28 @@ const SECRET = "whsec_fixture";
 const MAIN_CALENDAR = "cal-main";
 
 let cleanup: (() => void) | null = null;
+const lumaEvents = new Map<string, Record<string, unknown>>();
+let listEntries: Record<string, unknown>[] = [];
+let lumaRequests: string[] = [];
+beforeEach(() => {
+  lumaEvents.clear();
+  listEntries = [];
+  lumaRequests = [];
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.origin !== "https://public-api.luma.com") return realFetch(input, init);
+    expect(new Headers(init?.headers).get("x-luma-api-key")).toBe("main-key");
+    lumaRequests.push(`${url.pathname}${url.search}`);
+    if (url.pathname === "/v1/calendars/get")
+      return Response.json({ id: MAIN_CALENDAR, name: "Main", url: "https://luma.com/main" });
+    if (url.pathname === "/v1/events/get") {
+      const event = lumaEvents.get(url.searchParams.get("event_id") ?? "");
+      return event ? Response.json(event) : new Response("Not found", { status: 404 });
+    }
+    return Response.json({ entries: listEntries, has_more: false });
+  });
+});
 afterEach(() => {
   cleanup?.();
   cleanup = null;
@@ -179,7 +201,13 @@ function lumaEvent(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function signed(payload: unknown, secret = SECRET, timestamp = Math.floor(Date.now() / 1000)) {
+function signed(
+  payload: { type: string; data: Record<string, unknown> },
+  secret = SECRET,
+  timestamp = Math.floor(Date.now() / 1000),
+) {
+  if (["event.created", "event.updated"].includes(payload.type))
+    lumaEvents.set(String(payload.data.id), payload.data);
   const rawBody = JSON.stringify(payload);
   const signature = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   return { rawBody, signature: `t=${timestamp},v1=${signature}` };
@@ -242,8 +270,49 @@ describe("Luma place association", () => {
       ),
     ).toEqual({ result: "removed" });
     await run(layer, async ({ discovery, db }) => {
-      expect(await db.select().from(discoveryActivities)).toHaveLength(0);
+      const [row] = await db.select().from(discoveryActivities);
+      expect(row?.data.status).toBe("cancelled");
       expect(await eventIdsFor(discovery, ids.nodes.usa)).toEqual([]);
+    });
+
+    lumaEvents.set("evt-chicago", lumaEvent());
+    await run(layer, async ({ discovery, db }) => {
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(
+          signed({ type: "calendar.event.added", data: { id: "evt-chicago", platform: "luma" } }),
+        ),
+      );
+      const [row] = await db.select().from(discoveryActivities);
+      expect(row?.data.status).toBe("cancelled");
+      expect(await eventIdsFor(discovery, ids.nodes.chicago)).toEqual([]);
+    });
+  });
+
+  it("reads the current event from Luma instead of trusting a stale delivery", async () => {
+    const layer = freshLayer();
+    const ids = await run(layer, ({ db }) => seed(db));
+    await run(layer, async ({ discovery, db }) => {
+      const stale = signed({ type: "event.updated", data: lumaEvent() });
+      lumaEvents.set(
+        "evt-chicago",
+        lumaEvent({
+          coordinate: { latitude: 40.71, longitude: -74 },
+          geo_address_json: { city: "New York", region: "New York", country: "United States" },
+        }),
+      );
+      await Effect.runPromise(discovery.receiveLumaWebhook(stale));
+      const [row] = await db.select().from(discoveryActivities);
+      expect(row?.placeId).toBe(ids.places.nyc);
+      expect(lumaRequests).toContain("/v1/events/get?event_id=evt-chicago");
+      lumaEvents.delete("evt-chicago");
+      expect(
+        await Effect.runPromise(
+          discovery.receiveLumaWebhook(
+            signed({ type: "calendar.event.added", data: { id: "evt-chicago", platform: "luma" } }),
+          ),
+        ),
+      ).toEqual({ result: "removed" });
+      expect(await db.select().from(discoveryActivities)).toHaveLength(0);
     });
   });
 
@@ -335,29 +404,22 @@ describe("Luma place association", () => {
   it("fetches events added to the calendar and backfills the main calendar", async () => {
     const layer = freshLayer();
     const ids = await run(layer, ({ db }) => seed(db));
-    const realFetch = globalThis.fetch;
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      if (url.origin !== "https://public-api.luma.com") return realFetch(input, init);
-      expect(new Headers(init?.headers).get("x-luma-api-key")).toBe("main-key");
-      requests.push(`${url.pathname}${url.search}`);
-      if (url.pathname === "/v1/calendars/get")
-        return Response.json({ id: MAIN_CALENDAR, name: "Main", url: "https://luma.com/main" });
-      if (url.pathname === "/v1/events/get")
-        return Response.json(lumaEvent({ id: "evt-added", name: "Added event", access: "view" }));
-      return Response.json({
-        entries: [
-          lumaEvent({ id: "evt-past", name: "Past meetup", end_at: "2026-01-01T02:00:00Z" }),
-          lumaEvent({ id: "evt-added", name: "Added event" }),
-          lumaEvent({ id: "evt-private", visibility: "private" }),
-          lumaEvent({ id: "evt-remote", name: "Remote", coordinate: null, geo_address_json: null }),
-        ].map((event) =>
-          event.id === "evt-past" ? { ...event, start_at: "2026-01-01T00:00:00Z" } : event,
-        ),
-        has_more: false,
-      });
-    });
+    lumaEvents.set(
+      "evt-added",
+      lumaEvent({ id: "evt-added", name: "Added event", access: "view" }),
+    );
+    listEntries = [
+      lumaEvent({
+        id: "evt-past",
+        name: "Past meetup",
+        start_at: "2026-01-01T00:00:00Z",
+        end_at: "2026-01-01T02:00:00Z",
+      }),
+      lumaEvent({ id: "evt-added", name: "Added event" }),
+      lumaEvent({ id: "evt-private", visibility: "private" }),
+      lumaEvent({ id: "evt-remote", name: "Remote", coordinate: null, geo_address_json: null }),
+      { id: "evt-broken", platform: "luma", visibility: "public" },
+    ];
 
     await run(layer, async ({ discovery }) => {
       expect(
@@ -367,7 +429,7 @@ describe("Luma place association", () => {
           ),
         ),
       ).toEqual({ result: "associated" });
-      expect(requests).toContain("/v1/events/get?event_id=evt-added");
+      expect(lumaRequests).toContain("/v1/events/get?event_id=evt-added");
       expect(
         await Effect.runPromise(
           discovery.receiveLumaWebhook(
@@ -386,7 +448,7 @@ describe("Luma place association", () => {
       await run(layer, ({ discovery }) =>
         discovery.backfillLumaPlaceEvents({ userId: "admin", user: { role: "admin" } } as never),
       ),
-    ).toEqual({ imported: 2, updated: 1, unmatched: 1 });
+    ).toEqual({ imported: 2, updated: 1, unmatched: 1, skipped: 1 });
 
     await run(layer, async ({ discovery, db }) => {
       const rows = await db.select().from(discoveryActivities);

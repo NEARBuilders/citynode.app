@@ -259,7 +259,14 @@ export const discoveryContract = {
     .output(z.object({ result: z.enum(["associated", "unmatched", "removed", "ignored"]) }))
     .errors({ UNAUTHORIZED, NOT_FOUND, BAD_REQUEST }),
   backfillDiscoveryLumaPlaceEvents: oc
-    .output(z.object({ imported: z.number(), updated: z.number(), unmatched: z.number() }))
+    .output(
+      z.object({
+        imported: z.number(),
+        updated: z.number(),
+        unmatched: z.number(),
+        skipped: z.number(),
+      }),
+    )
     .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
   importDiscoveryLuma: oc
     .input(z.object({ nodeId: z.uuid(), calendarId: z.string().min(1).max(200) }))

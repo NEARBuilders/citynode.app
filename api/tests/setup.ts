@@ -1,5 +1,6 @@
 import "./test-env";
 import { createServer } from "node:http";
+import { Readable } from "node:stream";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { ContractRouterClient } from "@orpc/contract";
@@ -65,7 +66,6 @@ export async function getPluginClient(
         const reqHeaders = new Headers();
         for (const [key, value] of Object.entries(req.headers))
           if (typeof value === "string") reqHeaders.set(key, value);
-        const { Readable } = await import("node:stream");
         const replay = Object.assign(Readable.from([Buffer.from(rawBody)]), {
           method: req.method,
           url: req.url,
