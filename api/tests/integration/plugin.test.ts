@@ -318,10 +318,6 @@ describe("API Plugin Integration Tests", () => {
       ]);
       expect(summary.subtreeValidatorCount).toBe(2);
       expect(summary.subtreeValidatorCountsByRole).toEqual({ official: 1, community: 1 });
-      expect(summary.stakingValidators.sourceNodeId).toBe(country.id);
-      expect(
-        summary.stakingValidators.validators.map((validator) => validator.accountId).sort(),
-      ).toEqual(["summary-community.near", "summary-official.near"]);
       expect(summary.children).toEqual([
         {
           id: state.id,
@@ -332,7 +328,7 @@ describe("API Plugin Integration Tests", () => {
       ]);
     });
 
-    it("summarizes a leaf and resolves staking from its nearest ancestor", async () => {
+    it("summarizes a leaf and lists its ancestors nearest first", async () => {
       const client = await getPluginClient(
         daoContext("leaf-summary-1", "leaf-summary-org-1", "admin-leaf-summary-1.near"),
       );
@@ -379,10 +375,9 @@ describe("API Plugin Integration Tests", () => {
       expect(summary.subtreeValidatorCount).toBe(0);
       expect(summary.subtreeValidatorCountsByRole).toEqual({ official: 0, community: 0 });
       expect(summary.children).toEqual([]);
-      expect(summary.stakingValidators.sourceNodeId).toBe(state.id);
-      expect(summary.stakingValidators.validators).toEqual([
-        expect.objectContaining({ accountId: "leaf-summary-validator.near" }),
-      ]);
+      expect(summary).not.toHaveProperty("stakingValidators");
+      const ancestors = await client.listNodeAncestors({ nodeId: city.id });
+      expect(ancestors.map((node) => node.id)).toEqual([state.id, country.id]);
     });
 
     it("rejects aggregation requests for an unknown node", async () => {
@@ -394,6 +389,10 @@ describe("API Plugin Integration Tests", () => {
         message: "Node not found",
       });
       await expect(client.getNodeSummary({ nodeId })).rejects.toMatchObject({
+        code: "NOT_FOUND",
+        message: "Node not found",
+      });
+      await expect(client.listNodeAncestors({ nodeId })).rejects.toMatchObject({
         code: "NOT_FOUND",
         message: "Node not found",
       });
@@ -419,7 +418,7 @@ describe("API Plugin Integration Tests", () => {
   });
 
   describe("validators", () => {
-    it("creates a validator and resolves it for staking from descendants", async () => {
+    it("creates a validator and lists it on its own node only", async () => {
       const client = await getPluginClient(
         daoContext("validator-holder-1", "validator-holder-org-1", "admin-validator-1.near"),
       );
@@ -458,9 +457,9 @@ describe("API Plugin Integration Tests", () => {
         isDefault: true,
       });
 
-      const resolved = await client.resolveStakingValidators({ nodeId: state.id });
-      expect(resolved.sourceNodeId).toBe(country.id);
-      expect(resolved.validators.map((v) => v.accountId)).toEqual(["val1.near"]);
+      const own = await client.listValidatorsByNode({ nodeId: country.id });
+      expect(own.map((v) => v.accountId)).toEqual(["val1.near"]);
+      expect(await client.listValidatorsByNode({ nodeId: state.id })).toEqual([]);
 
       const fetched = await client.getValidator({ validatorId: validator.id });
       expect(fetched?.id).toBe(validator.id);

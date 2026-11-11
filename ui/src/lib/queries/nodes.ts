@@ -6,6 +6,12 @@ const NODE_STALE_TIME = 30 * 1000;
 export type AdminNodeListScope = "roots" | "all";
 
 type NodeRecord = Awaited<ReturnType<ApiClient["listNodes"]>>[number];
+type ValidatorRecord = Awaited<ReturnType<ApiClient["listValidatorsByNode"]>>[number];
+
+export interface StakingValidators {
+  validators: ValidatorRecord[];
+  via: NodeRecord | null;
+}
 export type AdminNodeListKind = string;
 
 export interface AdminNodeListRow {
@@ -36,6 +42,7 @@ export const nodeQueryKeys = {
     ] as const,
   adminDetail: (nodeId: string) => [...nodeQueryKeys.details(), "admin", nodeId] as const,
   validators: (nodeId: string) => [...nodeQueryKeys.details(), nodeId, "validators"] as const,
+  subtree: (nodeId: string) => [...nodeQueryKeys.details(), nodeId, "subtree"] as const,
   stakingValidators: (nodeId: string) =>
     [...nodeQueryKeys.details(), nodeId, "staking-validators"] as const,
 };
@@ -101,10 +108,35 @@ export function nodeValidatorsQueryOptions(apiClient: ApiClient, nodeId: string)
   });
 }
 
+export function nodeSubtreeQueryOptions(apiClient: ApiClient, nodeId: string) {
+  return queryOptions({
+    queryKey: nodeQueryKeys.subtree(nodeId),
+    queryFn: () => apiClient.getSubtree({ nodeId }),
+    staleTime: NODE_STALE_TIME,
+  });
+}
+
+function defaultFirst(validators: ValidatorRecord[]) {
+  return [...validators].sort((a, b) => Number(b.isDefault) - Number(a.isDefault));
+}
+
+export async function loadStakingValidators(
+  apiClient: ApiClient,
+  nodeId: string,
+): Promise<StakingValidators> {
+  const own = await apiClient.listValidatorsByNode({ nodeId });
+  if (own.length > 0) return { validators: defaultFirst(own), via: null };
+  for (const ancestor of await apiClient.listNodeAncestors({ nodeId })) {
+    const validators = await apiClient.listValidatorsByNode({ nodeId: ancestor.id });
+    if (validators.length > 0) return { validators: defaultFirst(validators), via: ancestor };
+  }
+  return { validators: [], via: null };
+}
+
 export function stakingValidatorsQueryOptions(apiClient: ApiClient, nodeId: string) {
   return queryOptions({
     queryKey: nodeQueryKeys.stakingValidators(nodeId),
-    queryFn: () => apiClient.resolveStakingValidators({ nodeId }),
+    queryFn: () => loadStakingValidators(apiClient, nodeId),
     staleTime: NODE_STALE_TIME,
   });
 }
@@ -147,15 +179,14 @@ export function adminNodeDetailQueryOptions(apiClient: ApiClient, nodeId: string
   return queryOptions({
     queryKey: nodeQueryKeys.adminDetail(nodeId),
     queryFn: async () => {
-      const summary = await apiClient.getNodeSummary({ nodeId });
-      const sourceNode =
-        summary.stakingValidators.sourceNodeId === nodeId
-          ? summary.node
-          : await apiClient.getNode({ nodeId: summary.stakingValidators.sourceNodeId });
+      const [summary, staking] = await Promise.all([
+        apiClient.getNodeSummary({ nodeId }),
+        loadStakingValidators(apiClient, nodeId),
+      ]);
       const parent = summary.node.parentId
         ? await apiClient.getNode({ nodeId: summary.node.parentId })
         : null;
-      return { summary, sourceNode, parent };
+      return { summary, staking, parent };
     },
     staleTime: NODE_STALE_TIME,
   });
