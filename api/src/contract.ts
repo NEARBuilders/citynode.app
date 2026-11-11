@@ -199,6 +199,8 @@ export const NodeSchema = z.object({
   parentId: z.string().nullable(),
   tenantId: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()),
+  bulletinPublishedAt: z.string().nullable(),
+  bulletinPublisherName: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

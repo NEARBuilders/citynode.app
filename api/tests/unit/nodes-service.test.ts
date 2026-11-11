@@ -35,6 +35,7 @@ function freshLayer(): Layer.Layer<NodesTag | TenantsTag, DatabaseError, never> 
 }
 
 const MISSING_ID = "00000000-0000-0000-0000-000000000000";
+const PUBLISHER = { userId: "user-1", name: "Ada" };
 
 interface TestServices {
   nodes: NodesService;
@@ -535,7 +536,7 @@ describe("NodesService", () => {
     );
 
     const withBulletin = await runService(layer, ({ nodes }) =>
-      nodes.setBulletin(node.id, "More features are coming soon."),
+      nodes.setBulletin(node.id, "More features are coming soon.", PUBLISHER),
     );
     expect(withBulletin.metadata).toEqual({
       kind: "city",
@@ -543,7 +544,9 @@ describe("NodesService", () => {
       bulletin: "More features are coming soon.",
     });
 
-    const cleared = await runService(layer, ({ nodes }) => nodes.setBulletin(node.id, null));
+    const cleared = await runService(layer, ({ nodes }) =>
+      nodes.setBulletin(node.id, null, PUBLISHER),
+    );
     expect(cleared.metadata).toEqual({
       kind: "city",
       poolAccountId: "chicago-pool.poolv1.near",
@@ -554,7 +557,7 @@ describe("NodesService", () => {
     const layer = freshLayer();
 
     const error = await squashServiceError(layer, ({ nodes }) =>
-      nodes.setBulletin(MISSING_ID, "hi"),
+      nodes.setBulletin(MISSING_ID, "hi", PUBLISHER),
     );
     expect(error).toBeInstanceOf(ORPCError);
     expect((error as ORPCError<string, unknown>).code).toBe("NOT_FOUND");

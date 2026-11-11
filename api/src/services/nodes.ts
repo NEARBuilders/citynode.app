@@ -24,8 +24,15 @@ export interface NodeRecord {
   parentId: string | null;
   tenantId: string | null;
   metadata: Record<string, unknown>;
+  bulletinPublishedAt: string | null;
+  bulletinPublisherName: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BulletinPublisher {
+  userId: string | null;
+  name: string | null;
 }
 
 export interface NodeSpawnInput {
@@ -35,6 +42,7 @@ export interface NodeSpawnInput {
   parentId: string | null;
   tenantId?: string | null;
   metadata?: Record<string, unknown>;
+  publisher?: BulletinPublisher;
 }
 
 export interface NodeUpdateInput {
@@ -43,6 +51,7 @@ export interface NodeUpdateInput {
   name?: string;
   parentId?: string | null;
   metadata?: Record<string, unknown>;
+  publisher?: BulletinPublisher;
 }
 
 export interface NodeListFilter {
@@ -81,7 +90,11 @@ export interface NodesService {
   listSummaries(filter?: NodeListFilter): NodeEffect<NodeListSummaryRecord[]>;
   getById(id: string): NodeEffect<NodeRecord | null>;
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
-  setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
+  setBulletin(
+    id: string,
+    bulletin: string | null,
+    publisher: BulletinPublisher,
+  ): NodeEffect<NodeRecord>;
   delete(id: string): NodeEffect<boolean>;
   listRootNodes: NodeEffect<NodeRecord[]>;
   listChildren(parentId: string): NodeEffect<NodeRecord[]>;
@@ -108,6 +121,8 @@ function toNodeRecord(row: NodeRow): NodeRecord {
     parentId: row.parentId,
     tenantId: row.tenantId,
     metadata: metadata as Record<string, unknown>,
+    bulletinPublishedAt: row.bulletinPublishedAt?.toISOString() ?? null,
+    bulletinPublisherName: row.bulletinPublisherName,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
   };
@@ -121,6 +136,40 @@ function mergeKindMetadata(
     ...metadata,
     ...(kind !== undefined && { kind }),
   } as NodeMetadata;
+}
+
+function bulletinOf(metadata: Record<string, unknown> | undefined): string | null {
+  const bulletin = metadata?.bulletin;
+  return typeof bulletin === "string" && bulletin.trim() !== "" ? bulletin : null;
+}
+
+function bulletinAttribution(
+  bulletin: string | null,
+  publisher: BulletinPublisher | undefined,
+  publishedAt: Date,
+) {
+  return bulletin === null
+    ? { bulletinPublishedAt: null, bulletinPublishedBy: null, bulletinPublisherName: null }
+    : {
+        bulletinPublishedAt: publishedAt,
+        bulletinPublishedBy: publisher?.userId ?? null,
+        bulletinPublisherName: publisher?.name ?? null,
+      };
+}
+
+function bulletinAttributionOnChange(
+  bulletin: string | null,
+  publisher: BulletinPublisher | undefined,
+  publishedAt: Date,
+) {
+  const fresh = bulletinAttribution(bulletin, publisher, publishedAt);
+  if (bulletin === null) return fresh;
+  const keep = sql`${nodesTable.bulletinPublishedAt} IS NOT NULL AND ${nodesTable.metadata}->>'bulletin' IS NOT DISTINCT FROM ${bulletin}::text`;
+  return {
+    bulletinPublishedAt: sql`CASE WHEN ${keep} THEN ${nodesTable.bulletinPublishedAt} ELSE ${publishedAt.toISOString()}::timestamptz END`,
+    bulletinPublishedBy: sql`CASE WHEN ${keep} THEN ${nodesTable.bulletinPublishedBy} ELSE ${fresh.bulletinPublishedBy}::text END`,
+    bulletinPublisherName: sql`CASE WHEN ${keep} THEN ${nodesTable.bulletinPublisherName} ELSE ${fresh.bulletinPublisherName}::text END`,
+  };
 }
 
 function withMetadataKey(key: string, value: string): SQL {
@@ -196,6 +245,7 @@ export const NodesLive = Layer.effect(
             }
           }
 
+          const publishedAt = yield* DateTime.nowAsDate;
           const [row] = yield* query(() =>
             db
               .insert(nodesTable)
@@ -205,6 +255,7 @@ export const NodesLive = Layer.effect(
                 parentId: input.parentId,
                 tenantId: input.tenantId ?? null,
                 metadata: mergeKindMetadata(input.kind, input.metadata),
+                ...bulletinAttribution(bulletinOf(input.metadata), input.publisher, publishedAt),
               })
               .returning(),
           );
@@ -300,7 +351,8 @@ export const NodesLive = Layer.effect(
       update: (id, input) =>
         Effect.gen(function* () {
           yield* input.slug !== undefined ? validateSlug(input.slug) : Effect.void;
-          const patch: Record<string, unknown> = { updatedAt: yield* DateTime.nowAsDate };
+          const now = yield* DateTime.nowAsDate;
+          const patch: Record<string, unknown> = { updatedAt: now };
           if (input.slug !== undefined) patch.slug = input.slug;
           if (input.name !== undefined) patch.name = input.name;
           if (input.parentId !== undefined) patch.parentId = input.parentId;
@@ -311,6 +363,10 @@ export const NodesLive = Layer.effect(
               kind !== undefined
                 ? sql`${replacement}::jsonb`
                 : replaceMetadataKeepingKind(replacement);
+            Object.assign(
+              patch,
+              bulletinAttributionOnChange(bulletinOf(input.metadata), input.publisher, now),
+            );
           } else if (input.kind !== undefined) {
             patch.metadata = withMetadataKey("kind", input.kind);
           }
@@ -381,16 +437,22 @@ export const NodesLive = Layer.effect(
           );
         }),
 
-      setBulletin: (id, bulletin) =>
+      setBulletin: (id, bulletin, publisher) =>
         Effect.gen(function* () {
+          const published = bulletin === null || bulletin.trim() === "" ? null : bulletin;
           const metadata =
-            bulletin === null || bulletin.trim() === ""
+            published === null
               ? withoutMetadataKey("bulletin")
-              : withMetadataKey("bulletin", bulletin);
+              : withMetadataKey("bulletin", published);
+          const now = yield* DateTime.nowAsDate;
           const [row] = yield* query(() =>
             db
               .update(nodesTable)
-              .set({ metadata, updatedAt: new Date() })
+              .set({
+                metadata,
+                ...bulletinAttributionOnChange(published, publisher, now),
+                updatedAt: now,
+              })
               .where(eq(nodesTable.id, id))
               .returning(),
           );

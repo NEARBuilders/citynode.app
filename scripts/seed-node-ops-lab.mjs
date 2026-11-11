@@ -135,7 +135,7 @@ async function ensureValidator(nodeId) {
   });
 }
 
-async function ensureBulletin(nodeId) {
+async function ensureBulletin(nodeId, publisher) {
   return withApi(async (client) => {
     const row = await client.query("SELECT metadata FROM nodes WHERE id = $1", [nodeId]);
     const metadata = row.rows[0]?.metadata ?? {};
@@ -143,9 +143,11 @@ async function ensureBulletin(nodeId) {
       return metadata.bulletin;
     }
     const bulletin = "Node-ops lab bulletin — edit me to confirm setNodeBulletin works.";
+    const publisherName =
+      publisher.name?.trim() && !publisher.name.includes("@") ? publisher.name.trim() : null;
     await client.query(
-      `UPDATE nodes SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = NOW() WHERE id = $1`,
-      [nodeId, JSON.stringify({ bulletin })],
+      `UPDATE nodes SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, bulletin_published_at = NOW(), bulletin_published_by = $3, bulletin_publisher_name = $4, updated_at = NOW() WHERE id = $1`,
+      [nodeId, JSON.stringify({ bulletin }), publisher.id, publisherName],
     );
     return bulletin;
   });
@@ -355,7 +357,7 @@ async function main() {
       .where(eq(authSchema.session.userId, user.id));
 
     const validator = await ensureValidator(harbor.node.id);
-    const bulletin = await ensureBulletin(harbor.node.id);
+    const bulletin = await ensureBulletin(harbor.node.id, user);
 
     const unique = randomUUID().slice(0, 8);
     const saveUser = async (label) =>
