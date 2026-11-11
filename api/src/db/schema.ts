@@ -38,7 +38,7 @@ export const places = pgTable(
   }),
 );
 
-export const placeAliasKind = pgEnum("place_alias_kind", ["geonames", "iso", "legacy"]);
+export const placeAliasKind = pgEnum("place_alias_kind", ["geonames", "iso", "legacy", "curated"]);
 
 export const placeAliases = pgTable("place_aliases", {
   value: text("value").primaryKey(),

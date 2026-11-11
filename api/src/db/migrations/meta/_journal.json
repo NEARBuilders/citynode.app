@@ -134,6 +134,13 @@
       "when": 1795025762503,
       "tag": "0018_drop-legacy-node-identity",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795027809228,
+      "tag": "0019_place-alias-curated",
+      "breakpoints": true
     }
   ]
 }
