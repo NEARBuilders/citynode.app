@@ -401,6 +401,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .url({ protocol: /^https?$/ })
       .default("https://nearbuilders.org")
       .describe("NEAR Builders base URL for community builders and projects"),
+    lumaMainCalendarId: z
+      .string()
+      .default("")
+      .describe("Luma calendar whose events are associated to places by location"),
     mainnetStakingPoolWhitelist: z
       .string()
       .default("lockup-whitelist.near")
@@ -413,6 +417,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   secrets: z.object({
     LUMA_CALENDAR_API_KEYS: z.string().default(""),
+    LUMA_WEBHOOK_SECRETS: z.string().default(""),
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
     BETTER_AUTH_SECRET: z.string().default(""),
   }),
@@ -434,7 +439,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
           NodesLive,
           PlacesLive,
           ValidatorsLive,
-          DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS).pipe(
+          DiscoveryLive({
+            lumaKeys: config.secrets.LUMA_CALENDAR_API_KEYS,
+            lumaMainCalendarId: config.variables.lumaMainCalendarId,
+            lumaWebhookSecrets: config.secrets.LUMA_WEBHOOK_SECRETS,
+          }).pipe(
             Layer.provide(
               GeocodeLive({
                 domain: config.variables.domain,
@@ -828,6 +837,20 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         return yield* services.discovery.disconnectLuma(input.nodeId, context);
+      }),
+      receiveLumaWebhook: builder.receiveLumaWebhook.effect(function* ({ context }) {
+        const services = yield* ApiServices;
+        const rawBody = yield* Effect.promise(() => context.getRawBody?.() ?? Promise.resolve(""));
+        return yield* services.discovery.receiveLumaWebhook({
+          signature: context.reqHeaders?.get("webhook-signature") ?? null,
+          rawBody,
+        });
+      }),
+      backfillDiscoveryLumaPlaceEvents: builder.backfillDiscoveryLumaPlaceEvents.effect(function* ({
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.backfillLumaPlaceEvents(context);
       }),
       importDiscoveryLuma: builder.importDiscoveryLuma.effect(function* ({ input, context }) {
         const services = yield* ApiServices;

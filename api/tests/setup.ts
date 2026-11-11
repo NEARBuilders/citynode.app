@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { ContractRouterClient } from "@orpc/contract";
+import { OpenAPIHandler } from "@orpc/openapi/node";
 import { RPCHandler } from "@orpc/server/node";
 import { createPluginRuntime } from "every-plugin";
 import type { contract } from "@/contract";
@@ -35,6 +36,7 @@ export async function getPluginClient(
   if (!server) {
     const { router, initialized } = await runtime.usePlugin(TEST_PLUGIN_ID, TEST_CONFIG, plugins);
     const rpcHandler = new RPCHandler(router);
+    const apiHandler = new OpenAPIHandler(router);
     const effectContext = initialized.effectContext;
 
     server = createServer(async (req, res) => {
@@ -52,6 +54,30 @@ export async function getPluginClient(
         const result = await rpcHandler.handle(req, res, {
           prefix: "/rpc",
           context: { ...requestContext, "effect/context": effectContext },
+        });
+        if (result.matched) return;
+      }
+
+      if (url.pathname.startsWith("/api/")) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        const rawBody = Buffer.concat(chunks).toString("utf8");
+        const reqHeaders = new Headers();
+        for (const [key, value] of Object.entries(req.headers))
+          if (typeof value === "string") reqHeaders.set(key, value);
+        const { Readable } = await import("node:stream");
+        const replay = Object.assign(Readable.from([Buffer.from(rawBody)]), {
+          method: req.method,
+          url: req.url,
+          headers: req.headers,
+        });
+        const result = await apiHandler.handle(replay as unknown as typeof req, res, {
+          prefix: "/api",
+          context: {
+            reqHeaders,
+            getRawBody: async () => rawBody,
+            "effect/context": effectContext,
+          },
         });
         if (result.matched) return;
       }
@@ -89,6 +115,10 @@ export async function getPluginClient(
 
   const client: ContractRouterClient<typeof contract> = createORPCClient(link);
   return client;
+}
+
+export function getPluginBaseUrl() {
+  return baseUrl;
 }
 
 export function authedContext(userId = "user-1", userRole?: string): Record<string, unknown> {

@@ -36,7 +36,9 @@ export function ActivityDetail({
     refetchInterval: 30_000,
   });
   const selectedNode =
-    node && activity.data?.nodeIds.includes(node) ? node : activity.data?.ownerNodeId;
+    node && activity.data?.nodeIds.includes(node)
+      ? node
+      : (activity.data?.ownerNodeId ?? activity.data?.nodeIds[0]);
   const host = useQuery({
     queryKey: ["discovery-node", selectedNode],
     queryFn: () => api.getDiscoveryNode({ nodeId: selectedNode! }),
