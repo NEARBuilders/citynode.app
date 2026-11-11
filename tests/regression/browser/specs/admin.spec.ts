@@ -106,7 +106,7 @@ test.describe("admin", () => {
     });
     await expect(page.getByText(name, { exact: false }).first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("orgs-tab-members")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId("org-badges")).toContainText("Active");
+    await expect(page.getByTestId("org-badges")).toContainText("Owner");
 
     expectNoHydrationFailure(pageErrors);
   });
