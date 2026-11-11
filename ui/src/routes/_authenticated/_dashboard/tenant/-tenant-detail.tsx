@@ -98,8 +98,6 @@ export function TenantDetailContent({
     enabled: !!tenantId,
   });
 
-  const { data: organizations } = useQuery(organizationsQueryOptions(apiClient));
-
   const { data: session, isPending: sessionPending } = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
@@ -108,6 +106,8 @@ export function TenantDetailContent({
     },
     staleTime: 60 * 1000,
   });
+
+  const { data: organizations } = useQuery(organizationsQueryOptions(apiClient, session?.user?.id));
 
   const membersQuery = useQuery({
     ...orgMembersQueryOptions(apiClient, tenant?.orgId ?? ""),

@@ -20,7 +20,7 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
   const enabled = signedIn && !!tenantId;
 
   const { data: organizations = [] } = useQuery({
-    ...organizationsQueryOptions(apiClient),
+    ...organizationsQueryOptions(apiClient, session?.user?.id),
     enabled,
   });
 

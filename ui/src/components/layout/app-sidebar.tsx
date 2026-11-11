@@ -32,7 +32,6 @@ import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
 import { SidebarTeamSwitcher } from "./sidebar-team-switcher";
 import { useClearStaleTeam } from "./use-clear-stale-team";
 import { useIdentity } from "./use-identity";
-import { useOpenSoleCommunity } from "./use-open-sole-community";
 import { useSwitchTeam } from "./use-switch-team";
 import { useTeamWorkspace } from "./use-team-workspace";
 
@@ -47,7 +46,6 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
   const {
     user,
     communities,
-    membership,
     activeOrgId,
     isOrganizationsLoading,
     organizationsError,
@@ -56,7 +54,6 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
   const { data: workspace } = useTeamWorkspace(!!user);
   const switchTeam = useSwitchTeam();
   useClearStaleTeam(workspace?.staleActiveTeamId ?? null);
-  useOpenSoleCommunity(membership.status === "open" ? membership.organization.id : null);
   const tab = useRouterState({
     select: (s) => {
       const value = (s.location.search as { tab?: unknown }).tab;

@@ -9,7 +9,6 @@ export type CommunityMembership<T extends OrganizationLike> =
   | { status: "unknown" }
   | { status: "none" }
   | { status: "active"; organization: T }
-  | { status: "open"; organization: T }
   | { status: "choose"; count: number };
 
 export function isPersonalOrganization(
@@ -59,21 +58,11 @@ export function resolveCommunityMembership<T extends OrganizationLike>({
   if (active) return { status: "active", organization: active };
   const openable = visible.filter(isOpenable);
   if (openable.length === 0) return { status: "none" };
-  const activeIsPersonal = organizations.some(
-    (organization) =>
-      organization.id === activeOrganizationId && isPersonalOrganization(organization, userId),
-  );
-  const [only] = openable;
-  if (!activeIsPersonal && openable.length === 1 && only) {
-    return { status: "open", organization: only };
-  }
   return { status: "choose", count: openable.length };
 }
 
 export function communityOrganizationId(
   membership: CommunityMembership<OrganizationLike>,
 ): string | null {
-  return membership.status === "active" || membership.status === "open"
-    ? membership.organization.id
-    : null;
+  return membership.status === "active" ? membership.organization.id : null;
 }

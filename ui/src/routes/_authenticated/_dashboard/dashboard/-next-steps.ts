@@ -22,7 +22,7 @@ export interface NextStepsState {
   isAnonymous: boolean;
   hasPasskey: boolean;
   hasNear: boolean;
-  membership: "unknown" | "none" | "open" | "choose" | "active";
+  membership: "unknown" | "none" | "choose" | "active";
   communityCount: number;
   community: { name: string; tenantId: string } | null;
   canManageCommunity: boolean;
