@@ -438,3 +438,60 @@ describe("team board upstream cost", () => {
     ]);
   });
 });
+
+describe("dismissing a decided request", () => {
+  it("keeps an approved request on the requester's board until they dismiss it", async () => {
+    const { organizationId, ops } = community();
+    const member = await as("member");
+    const request = await member.requestToJoinTeam({ organizationId, teamId: ops });
+    await (await as("owner")).decideTeamJoinRequest({
+      requestId: request.id,
+      decision: "approve",
+    });
+    expect((await member.getTeamJoinBoard({ organizationId })).requests).toEqual([
+      expect.objectContaining({ id: request.id, status: "approved", dismissedAt: null }),
+    ]);
+    const dismissed = await member.dismissTeamJoinRequest({ requestId: request.id });
+    expect(dismissed.dismissedAt).toEqual(expect.any(String));
+    expect((await member.getTeamJoinBoard({ organizationId })).requests).toEqual([]);
+  });
+
+  it("keeps a dismissed declined request on the board with its dismissal time", async () => {
+    const { organizationId, ops } = community();
+    const member = await as("member");
+    const request = await member.requestToJoinTeam({ organizationId, teamId: ops });
+    await (await as("owner")).decideTeamJoinRequest({
+      requestId: request.id,
+      decision: "decline",
+    });
+    await member.dismissTeamJoinRequest({ requestId: request.id });
+    expect((await member.getTeamJoinBoard({ organizationId })).requests).toEqual([
+      expect.objectContaining({
+        id: request.id,
+        status: "declined",
+        dismissedAt: expect.any(String),
+      }),
+    ]);
+    await expect(member.dismissTeamJoinRequest({ requestId: request.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+  });
+
+  it("refuses pending requests and anyone but the requester", async () => {
+    const { organizationId, ops } = community();
+    const request = await (await as("member")).requestToJoinTeam({ organizationId, teamId: ops });
+    await expect(
+      (await as("member")).dismissTeamJoinRequest({ requestId: request.id }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await (await as("owner")).decideTeamJoinRequest({
+      requestId: request.id,
+      decision: "decline",
+    });
+    await expect(
+      (await as("owner")).dismissTeamJoinRequest({ requestId: request.id }),
+    ).rejects.toMatchObject({ code: expect.stringMatching(/FORBIDDEN|NOT_FOUND/) });
+    await expect(
+      (await as("steward")).dismissTeamJoinRequest({ requestId: request.id }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});

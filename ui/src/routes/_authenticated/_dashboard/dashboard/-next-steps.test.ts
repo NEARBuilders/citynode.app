@@ -99,6 +99,45 @@ describe("home next steps", () => {
     ]);
   });
 
+  it("puts waiting team requests first for anyone who can decide them", () => {
+    const steps = getNextSteps({
+      ...base,
+      community: harbor,
+      canManageCommunity: true,
+      teamRequestsWaiting: 2,
+    });
+    expect(steps.map((step) => step.id)).toEqual([
+      "team-requests",
+      "open-community",
+      "payouts",
+      "stake",
+    ]);
+    expect(steps[0]?.title).toBe("2 team requests waiting");
+    expect(steps[0]?.description).toBe("Decide who joins which team in Harbor City.");
+    expect(ids({ community: harbor, teamRequestsWaiting: 0 })).not.toContain("team-requests");
+  });
+
+  it("never shows more than five steps once team requests are waiting", () => {
+    const steps = ids({
+      isAnonymous: true,
+      hasPasskey: false,
+      isAdmin: true,
+      community: harbor,
+      canManageCommunity: true,
+      teamRequestsWaiting: 2,
+    });
+    expect(steps).toEqual([
+      "save-account",
+      "launch-node",
+      "admin",
+      "team-requests",
+      "open-community",
+    ]);
+    expect(
+      ids({ community: harbor, canManageCommunity: true, teamRequestsWaiting: 2 }),
+    ).toHaveLength(4);
+  });
+
   it("keeps the organizer steps for events-team organizers", () => {
     const steps = getNextSteps({ ...base, community: harbor, canOrganizeEvents: true });
     expect(steps.map((step) => step.id)).toEqual(["open-community", "stake"]);
