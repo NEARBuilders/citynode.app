@@ -218,19 +218,27 @@ function ContributorRequest({
   const queryClient = useQueryClient();
   const signing = useMemberSigning<unknown>(accountId);
   const funds = useBondFunds(accountId, bondYocto);
-  const submit = () =>
-    signing
+  const canSubmit =
+    bondYocto !== null &&
+    funds.enough &&
+    signing.state.status !== "connecting" &&
+    signing.state.status !== "signing" &&
+    signing.state.status !== "submitted";
+  const submit = () => {
+    if (!canSubmit) return;
+    void signing
       .submit((wallet) =>
         submitProposalWithBond(
           wallet,
           daoAccountId,
           { kind: "add_member_to_role", memberId: accountId, role },
           contributorRequestDescription(accountId, role, community),
-          bondYocto ?? 0n,
+          bondYocto,
         ),
       )
       .then(() => queryClient.invalidateQueries({ queryKey: nodeDaoQueryKeys.open(daoAccountId) }))
       .catch(() => {});
+  };
 
   return (
     <Item variant="outline" data-testid="member-dao.can-request">
@@ -246,18 +254,7 @@ function ContributorRequest({
         <MemberSigningStatus state={signing.state} onRetry={submit} />
       </ItemContent>
       <ItemActions className="w-full justify-end sm:w-auto">
-        <Button
-          size="sm"
-          data-testid="member-dao.become"
-          disabled={
-            bondYocto === null ||
-            !funds.enough ||
-            signing.state.status === "connecting" ||
-            signing.state.status === "signing" ||
-            signing.state.status === "submitted"
-          }
-          onClick={submit}
-        >
+        <Button size="sm" data-testid="member-dao.become" disabled={!canSubmit} onClick={submit}>
           {translate("memberDao.become")}
         </Button>
       </ItemActions>
@@ -281,9 +278,12 @@ function PollForm({
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
   const busy = signing.state.status === "connecting" || signing.state.status === "signing";
+  const canSubmit = !!title.trim() && !busy && funds.enough;
 
-  const submit = () =>
-    signing
+  const submit = () => {
+    if (!canSubmit) return;
+    if (signing.state.status === "submitted") signing.reset();
+    void signing
       .submit((wallet) =>
         submitProposalWithBond(
           wallet,
@@ -299,12 +299,11 @@ function PollForm({
         await queryClient.invalidateQueries({ queryKey: ["node-dao"] });
       })
       .catch(() => {});
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!title.trim() || busy || !funds.enough) return;
-    if (signing.state.status === "submitted") signing.reset();
-    void submit();
+    submit();
   };
 
   return (
@@ -343,12 +342,12 @@ function PollForm({
         </Field>
       </FieldGroup>
       <BondNotice accountId={accountId} bondYocto={bondYocto} funds={funds} />
-      <MemberSigningStatus state={signing.state} onRetry={() => void submit()} />
+      <MemberSigningStatus state={signing.state} onRetry={submit} />
       <Button
         type="submit"
         size="sm"
         className="self-end"
-        disabled={!title.trim() || busy || !funds.enough}
+        disabled={!canSubmit}
         data-testid="member-dao.poll-submit"
       >
         {translate("memberDao.pollSubmit")}

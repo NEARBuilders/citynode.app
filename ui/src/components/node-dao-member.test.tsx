@@ -276,6 +276,62 @@ describe("MemberDaoPanel", () => {
     expect(description).toBe("* Title: Picnic in May? <br>* Description: At the park");
   });
 
+  it("doesn't let Retry request with a wallet that holds too little", async () => {
+    harness.policy = policy({ bond: NEAR.toString() });
+    harness.spendable = NEAR / 4n;
+    harness.signing = { status: "error", failure: "network", result: null };
+    renderPanel();
+    await screen.findByTestId("member-dao.insufficient");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.submitProposalWithBond).not.toHaveBeenCalled();
+  });
+
+  it("lets Retry resend a request from a funded wallet", async () => {
+    harness.policy = policy({ bond: NEAR.toString() });
+    harness.spendable = 2n * NEAR;
+    harness.signing = { status: "error", failure: "network", result: null };
+    renderPanel();
+    const become = await screen.findByTestId("member-dao.become");
+    await waitFor(() => expect((become as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(harness.submitProposalWithBond.mock.calls[0]?.[4]).toBe(NEAR));
+  });
+
+  it("doesn't let Retry file a poll without a question", async () => {
+    harness.policy = policy({ contributors: [MEMBER] });
+    harness.signing = { status: "error", failure: "network", result: null };
+    renderPanel();
+    await screen.findByTestId("member-dao.poll-form");
+    fireEvent.change(screen.getByLabelText("Question"), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.submitProposalWithBond).not.toHaveBeenCalled();
+  });
+
+  it("doesn't let Retry file a poll from a wallet that holds too little", async () => {
+    harness.policy = policy({ contributors: [MEMBER], bond: NEAR.toString() });
+    harness.spendable = NEAR / 4n;
+    harness.signing = { status: "error", failure: "network", result: null };
+    renderPanel();
+    await screen.findByTestId("member-dao.insufficient");
+    fireEvent.change(screen.getByLabelText("Question"), { target: { value: "Picnic in May?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.submitProposalWithBond).not.toHaveBeenCalled();
+  });
+
+  it("lets Retry resend a valid poll", async () => {
+    harness.policy = policy({ contributors: [MEMBER] });
+    harness.signing = { status: "error", failure: "network", result: null };
+    renderPanel();
+    await screen.findByTestId("member-dao.poll-form");
+    fireEvent.change(screen.getByLabelText("Question"), { target: { value: "Picnic in May?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(harness.submitProposalWithBond).toHaveBeenCalledTimes(1));
+    expect(harness.submitProposalWithBond.mock.calls[0]?.[3]).toBe("* Title: Picnic in May?");
+  });
+
   it("shows signing errors in plain words", async () => {
     harness.policy = policy({ contributors: [MEMBER] });
     harness.signing = { status: "error", failure: "rejected", result: null };
