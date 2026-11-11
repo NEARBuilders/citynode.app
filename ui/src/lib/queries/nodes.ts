@@ -124,13 +124,19 @@ export async function loadStakingValidators(
   apiClient: ApiClient,
   nodeId: string,
 ): Promise<StakingValidators> {
-  const own = await apiClient.listValidatorsByNode({ nodeId });
+  const [own, ancestors] = await Promise.all([
+    apiClient.listValidatorsByNode({ nodeId }),
+    apiClient.listNodeAncestors({ nodeId }),
+  ]);
   if (own.length > 0) return { validators: defaultFirst(own), via: null };
-  for (const ancestor of await apiClient.listNodeAncestors({ nodeId })) {
-    const validators = await apiClient.listValidatorsByNode({ nodeId: ancestor.id });
-    if (validators.length > 0) return { validators: defaultFirst(validators), via: ancestor };
-  }
-  return { validators: [], via: null };
+  const byAncestor = await Promise.all(
+    ancestors.map((ancestor) => apiClient.listValidatorsByNode({ nodeId: ancestor.id })),
+  );
+  const index = byAncestor.findIndex((validators) => validators.length > 0);
+  const via = ancestors[index];
+  return via
+    ? { validators: defaultFirst(byAncestor[index] ?? []), via }
+    : { validators: [], via: null };
 }
 
 export function stakingValidatorsQueryOptions(apiClient: ApiClient, nodeId: string) {

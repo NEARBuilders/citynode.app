@@ -649,4 +649,31 @@ describe("NodesService", () => {
       }),
     );
   });
+
+  it("listAncestors ignores the legacy parent once a node has a place", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes, tenants }) =>
+      Effect.gen(function* () {
+        const tenantId = yield* seedTenant(tenants);
+        const country = yield* nodes.spawn({
+          kind: "country",
+          slug: "oldland",
+          name: "Oldland",
+          parentId: null,
+          tenantId,
+        });
+        const city = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "newtown", placeParentSlug: "unlinked-region" }),
+        );
+        yield* Effect.tryPromise(() =>
+          db
+            .update(nodesTable)
+            .set({ parentId: country.id })
+            .where(eq(nodesTable.id, city.node.id)),
+        );
+
+        expect(yield* nodes.listAncestors(city.node.id)).toEqual([]);
+      }),
+    );
+  });
 });
