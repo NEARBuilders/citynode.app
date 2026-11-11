@@ -268,6 +268,7 @@ function Home() {
                 <TeamRequestUpdates
                   organizationId={communityOrgId}
                   nodeId={node?.id ?? null}
+                  activeTeamId={authContext.data?.organization?.activeTeamId ?? null}
                   requests={teamUpdates}
                 />
                 <NextStepsList
