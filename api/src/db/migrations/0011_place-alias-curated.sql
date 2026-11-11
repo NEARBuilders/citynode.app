@@ -1,0 +1,1 @@
+ALTER TYPE "public"."place_alias_kind" ADD VALUE 'curated';
