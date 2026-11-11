@@ -390,7 +390,7 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Ouvrez cette proposition depuis la liste",
     "请从列表中打开此提案",
   ],
-  "admin.proposal.owningDao": ["Owning DAO", "DAO propietario", "DAO propriétaire", "所属 DAO"],
+  "admin.proposal.owningDao": ["DAO to link", "DAO a vincular", "DAO à lier", "要关联的 DAO"],
   "admin.proposal.reason": ["Reason", "Motivo", "Motif", "理由"],
   "admin.proposal.reasonExample": [
     "What needs to change",
@@ -473,10 +473,10 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "等待 DAO 投票",
   ],
   "admin.proposal.resumeHint": [
-    "Resuming continues from the first unfinished step. Existing organization, community and node records are reused, and DAO settings are not proposed again while a DAO vote is open.",
-    "Al reanudar se continúa desde el primer paso sin terminar. Se reutilizan la organización, la comunidad y el nodo existentes, y no se vuelve a proponer la configuración del DAO mientras haya una votación abierta.",
-    "La reprise continue à partir de la première étape inachevée. L’organisation, la communauté et le nœud existants sont réutilisés, et les paramètres de la DAO ne sont pas proposés à nouveau tant qu’un vote de la DAO est ouvert.",
-    "继续设置会从第一个未完成的步骤开始。现有的组织、社区和节点记录会被复用；DAO 投票未结束时不会再次提议 DAO 设置。",
+    "This application was approved under the old setup. Resuming links its DAO to the activated community and finishes the approval. Nothing else is created.",
+    "Esta solicitud se aprobó con el proceso anterior. Al reanudar se vincula su DAO a la comunidad activada y se completa la aprobación. No se crea nada más.",
+    "Cette demande a été approuvée avec l’ancien processus. La reprise lie sa DAO à la communauté activée et termine l’approbation. Rien d’autre n’est créé.",
+    "此申请是按旧流程批准的。继续操作会将其 DAO 关联到已激活的社区并完成批准，不会创建其他内容。",
   ],
   "admin.proposal.resource": [
     "Created resource",
@@ -498,11 +498,11 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "Proposition approuvée",
     "提案已批准",
   ],
-  "admin.proposalApprovedCreated": [
-    "Proposal approved and resource created",
-    "Propuesta aprobada y recurso creado",
-    "Proposition approuvée et ressource créée",
-    "提案已批准，资源已创建",
+  "admin.proposalApprovedOfficial": [
+    "Approved. The community is official and its DAO is linked.",
+    "Aprobada. La comunidad es oficial y su DAO está vinculada.",
+    "Approuvée. La communauté est officielle et sa DAO est liée.",
+    "已批准。该社区现为官方社区，其 DAO 已关联。",
   ],
   "admin.proposalRejected": [
     "Proposal rejected",
@@ -1403,6 +1403,18 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "La propuesta se aprobó, pero no pudo aplicarse por completo. Revisa sus detalles antes de volver a intentarlo.",
     "La proposition a été approuvée, mais n’a pas pu être entièrement appliquée. Vérifiez ses détails avant de réessayer.",
     "提案已获批准，但未能完全应用。重试前请检查提案详情。",
+  ],
+  "proposal.daoConflict": [
+    "This community is already linked to another DAO. Reject the application or unlink the other DAO first.",
+    "Esta comunidad ya está vinculada a otra DAO. Rechaza la solicitud o desvincula primero la otra DAO.",
+    "Cette communauté est déjà liée à une autre DAO. Refusez la demande ou dissociez d’abord l’autre DAO.",
+    "该社区已关联另一个 DAO。请拒绝此申请，或先解除另一个 DAO 的关联。",
+  ],
+  "proposal.decisionUnconfirmed": [
+    "The application was approved, but its new status couldn't be loaded. Refresh to check it.",
+    "La solicitud se aprobó, pero no se pudo cargar su nuevo estado. Actualiza para comprobarlo.",
+    "La demande a été approuvée, mais son nouveau statut n’a pas pu être chargé. Actualisez pour le vérifier.",
+    "申请已获批准，但无法加载其新状态。请刷新查看。",
   ],
   "proposal.resourceConflict": [
     "The application was approved, but its organization or community resources conflict with existing records. Review the saved application and existing resources before retrying.",

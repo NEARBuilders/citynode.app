@@ -100,25 +100,20 @@ describe("proposal review UI seams", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it("keeps the DAO gate visible and asks for a reason before rejecting", () => {
+  it("needs no DAO wallet to decide and asks for a reason before rejecting", () => {
     const onApprove = vi.fn();
     const onReject = vi.fn();
-    const onDaoVerified = vi.fn();
     const onRejectionReasonChange = vi.fn();
     const props = {
       isPending: true,
-      isNodeProposal: true,
-      proposalDaoAccountId: "dao.sputnik-dao.near",
-      daoIsVerified: true,
       isReviewing: false,
-      onDaoVerified,
       onRejectionReasonChange,
       onApprove,
       onReject,
     };
     const { rerender } = render(<ProposalReviewActions {...props} rejectionReason="" />);
 
-    expect(screen.getByTestId("connect-dao")).toBeTruthy();
+    expect(screen.queryByTestId("connect-dao")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(onApprove).toHaveBeenCalledOnce();
 
@@ -132,7 +127,6 @@ describe("proposal review UI seams", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reject proposal" }));
 
     expect(onReject).toHaveBeenCalledOnce();
-    expect(onDaoVerified).not.toHaveBeenCalled();
   });
 
   it("allows admin approval without a connected DAO", () => {
@@ -140,12 +134,8 @@ describe("proposal review UI seams", () => {
     render(
       <ProposalReviewActions
         isPending
-        isNodeProposal
-        proposalDaoAccountId="dao.sputnik-dao.near"
-        daoIsVerified={false}
         rejectionReason=""
         isReviewing={false}
-        onDaoVerified={vi.fn()}
         onRejectionReasonChange={vi.fn()}
         onApprove={onApprove}
         onReject={vi.fn()}
@@ -154,7 +144,6 @@ describe("proposal review UI seams", () => {
 
     const approve = screen.getByRole("button", { name: "Approve" });
     expect(approve).toHaveProperty("disabled", false);
-    expect(screen.getByText(/Approval can proceed without a DAO connection/)).toBeTruthy();
     fireEvent.click(approve);
     expect(onApprove).toHaveBeenCalledOnce();
   });
@@ -166,12 +155,8 @@ describe("proposal review UI seams", () => {
         isPending={false}
         isRetry
         applyError="User closed the window"
-        isNodeProposal
-        proposalDaoAccountId="dao.sputnik-dao.near"
-        daoIsVerified={false}
         rejectionReason=""
         isReviewing={false}
-        onDaoVerified={vi.fn()}
         onRejectionReasonChange={vi.fn()}
         onApprove={onApprove}
         onReject={vi.fn()}
@@ -180,8 +165,7 @@ describe("proposal review UI seams", () => {
 
     expect(screen.getByRole("alert").textContent).toBe("User closed the window");
     expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
-    expect(screen.getByText(/Connect the proposed DAO with Trezu before retrying/)).toBeTruthy();
-    expect(screen.getByText(/continues from the first unfinished step/)).toBeTruthy();
+    expect(screen.getByText(/links its DAO to the activated community/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     expect(onApprove).toHaveBeenCalledOnce();
   });
@@ -193,12 +177,8 @@ describe("proposal review UI seams", () => {
         isPending={false}
         isRetry
         canReject={false}
-        isNodeProposal
-        proposalDaoAccountId="dao.sputnik-dao.near"
-        daoIsVerified
         rejectionReason=""
         isReviewing={false}
-        onDaoVerified={vi.fn()}
         onRejectionReasonChange={vi.fn()}
         onApprove={onApprove}
         onReject={vi.fn()}

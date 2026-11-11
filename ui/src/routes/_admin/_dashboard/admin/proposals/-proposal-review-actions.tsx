@@ -13,7 +13,6 @@ import {
   FieldLabel,
   Textarea,
 } from "@/components";
-import { ConnectDao } from "@/components/connect-dao";
 import { useAppTranslation } from "@/i18n/runtime";
 
 interface ProposalReviewActionsProps {
@@ -21,12 +20,8 @@ interface ProposalReviewActionsProps {
   isRetry?: boolean;
   canReject?: boolean;
   applyError?: string | null;
-  isNodeProposal: boolean;
-  proposalDaoAccountId: string | null;
-  daoIsVerified: boolean;
   rejectionReason: string;
   isReviewing: boolean;
-  onDaoVerified: (value: { daoAccountId: string }) => void;
   onRejectionReasonChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
   onApprove: () => void;
   onReject: () => void;
@@ -37,12 +32,8 @@ export function ProposalReviewActions({
   isRetry = false,
   canReject = true,
   applyError,
-  isNodeProposal,
-  proposalDaoAccountId,
-  daoIsVerified,
   rejectionReason,
   isReviewing,
-  onDaoVerified,
   onRejectionReasonChange,
   onApprove,
   onReject,
@@ -63,15 +54,6 @@ export function ProposalReviewActions({
       )}
       {isRetry && (
         <p className="text-sm text-muted-foreground">{translate("admin.proposal.resumeHint")}</p>
-      )}
-
-      {isNodeProposal && (
-        <ConnectDao
-          purpose="proposal-review"
-          variant="plain"
-          expectedDaoAccountId={proposalDaoAccountId}
-          onVerified={onDaoVerified}
-        />
       )}
 
       <div className="flex flex-col gap-2">
@@ -95,23 +77,13 @@ export function ProposalReviewActions({
             </Button>
           )}
         </div>
-        {!daoIsVerified && (
-          <p className="text-sm text-muted-foreground">
-            {translate(isRetry ? "admin.proposal.retryDaoHint" : "admin.proposal.daoHint")}
-          </p>
-        )}
       </div>
 
       <Dialog open={rejecting} onOpenChange={setRejecting}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{translate("admin.proposal.rejectTitle")}</DialogTitle>
-            <DialogDescription>
-              {translate("admin.proposal.reasonSaved")}
-              {isRetry && isNodeProposal && (
-                <span className="mt-2 block">{translate("admin.proposal.rejectReleases")}</span>
-              )}
-            </DialogDescription>
+            <DialogDescription>{translate("admin.proposal.reasonSaved")}</DialogDescription>
           </DialogHeader>
           <Field>
             <FieldLabel htmlFor="rejection-reason">{translate("admin.proposal.reason")}</FieldLabel>

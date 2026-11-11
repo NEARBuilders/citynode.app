@@ -96,6 +96,10 @@ export interface NodesService {
   }): NodeEffect<{ node: NodeRecord; created: boolean }>;
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
   setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
+  recordOfficialDao(
+    id: string,
+    dao: { accountId: string; network: "mainnet" | "testnet" },
+  ): NodeEffect<NodeRecord>;
   delete(id: string): NodeEffect<boolean>;
   listRootNodes: NodeEffect<NodeRecord[]>;
   listChildren(parentId: string): NodeEffect<NodeRecord[]>;
@@ -478,6 +482,27 @@ export const NodesLive = Layer.effect(
             bulletin === null || bulletin.trim() === ""
               ? withoutMetadataKey("bulletin")
               : withMetadataKey("bulletin", bulletin);
+          const [row] = yield* query(() =>
+            db
+              .update(nodesTable)
+              .set({ metadata, updatedAt: new Date() })
+              .where(eq(nodesTable.id, id))
+              .returning(),
+          );
+          if (!row) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", {
+                message: "Node not found",
+                data: { resource: "node", resourceId: id },
+              }),
+            );
+          }
+          return toNodeRecord(row);
+        }),
+
+      recordOfficialDao: (id, dao) =>
+        Effect.gen(function* () {
+          const metadata = sql`${nodesTable.metadata} || jsonb_build_object('daoAccountId', ${dao.accountId}::text, 'daoNetwork', ${dao.network}::text)`;
           const [row] = yield* query(() =>
             db
               .update(nodesTable)

@@ -332,22 +332,6 @@ export const ProposalServiceLive = Layer.effect(
                 }),
               );
             }
-            const previous = parseJson(existing.payload);
-            const previousOrgId =
-              previous && typeof previous === "object" && "orgId" in previous
-                ? previous.orgId
-                : null;
-            const nextOrgId =
-              input.payload && typeof input.payload === "object" && "orgId" in input.payload
-                ? input.payload.orgId
-                : null;
-            if (previousOrgId && previousOrgId !== nextOrgId) {
-              return yield* Effect.fail(
-                new ORPCError("FORBIDDEN", {
-                  message: "This community application belongs to another organization",
-                }),
-              );
-            }
           }
 
           if (

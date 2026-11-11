@@ -7,22 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Button } from "@/components/ui/button";
 import { AppI18nProvider } from "@/i18n/runtime";
 import { render } from "@/i18n/test-render";
-import { nodeQueryKeys } from "@/lib/queries/nodes";
 import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
-import { tenantQueryKeys } from "@/lib/queries/tenants";
-import type { NodeApplicationValues } from "./-node-application";
 import { Route } from "./apply";
 
 type ApplyApiClient = {
-  listRootNodes: ReturnType<typeof vi.fn>;
-  listChildren: ReturnType<typeof vi.fn>;
-  getNode: ReturnType<typeof vi.fn>;
-  bindingPreflight: ReturnType<typeof vi.fn>;
-  auth: {
-    checkSlug: ReturnType<typeof vi.fn>;
-    listOrganizations: ReturnType<typeof vi.fn>;
-    listMembers: ReturnType<typeof vi.fn>;
-  };
+  resolvePlace: ReturnType<typeof vi.fn>;
+  activateCommunity: ReturnType<typeof vi.fn>;
   proposals: { propose: ReturnType<typeof vi.fn>; getMyNodeApplications: ReturnType<typeof vi.fn> };
 };
 
@@ -60,13 +50,11 @@ const harness = vi.hoisted(() => ({
   },
   daoAccountIdForVerification: "dao.sputnik",
   nearAccount: "applicant.near" as string | null,
-  search: {} as { application?: string; org?: string },
-  initialRootNodes: [{ id: "country-1", name: "United States", kind: "country" }],
+  search: {} as { application?: string },
   routeContext: {
     auth: { activeOrganizationId: "org-1" as string | null },
     runtimeConfig: TEST_RUNTIME_CONFIG,
   },
-  switchOrganization: { isError: false, mutate: vi.fn() },
   success: vi.fn(),
   warning: vi.fn(),
   error: vi.fn(),
@@ -93,8 +81,20 @@ vi.mock("@/components/connect-dao", () => ({
   ),
 }));
 
-vi.mock("@/components/layout/use-switch-organization", () => ({
-  useSwitchOrganization: () => harness.switchOrganization,
+vi.mock("./-apply-place-fields", () => ({
+  ApplyPlaceFields: ({ onPathChange }: { onPathChange: (path: unknown[]) => void }) => (
+    <Button
+      type="button"
+      onClick={() =>
+        onPathChange([
+          { id: "11111111-1111-4111-8111-111111111111", slug: "united-states", name: "USA" },
+          { id: "22222222-2222-4222-8222-222222222222", slug: "chicago", name: "Chicago" },
+        ])
+      }
+    >
+      choose Chicago
+    </Button>
+  ),
 }));
 
 vi.mock("@/lib/dao-connect", () => ({
@@ -120,7 +120,6 @@ vi.mock("@tanstack/react-router", async () => {
     ...actual,
     createFileRoute: () => (options: { component?: ComponentType }) => ({
       options,
-      useLoaderData: () => harness.initialRootNodes,
       useRouteContext: () => harness.routeContext,
       useSearch: () => harness.search,
     }),
@@ -132,21 +131,12 @@ vi.mock("@tanstack/react-router", async () => {
 
 function createApiClient(): ApplyApiClient {
   return {
-    listRootNodes: vi.fn().mockResolvedValue(harness.initialRootNodes),
-    listChildren: vi.fn().mockResolvedValue([]),
-    getNode: vi.fn().mockResolvedValue(null),
-    bindingPreflight: vi.fn().mockResolvedValue({
-      hostname: { available: true, format: "valid" },
+    resolvePlace: vi.fn().mockResolvedValue({
+      place: { id: "22222222-2222-4222-8222-222222222222", slug: "chicago", name: "Chicago" },
+      aliases: [],
+      community: { nodeId: "node-1", activatedAt: null, memberCount: 3 },
     }),
-    auth: {
-      checkSlug: vi.fn().mockResolvedValue({ status: true }),
-      listOrganizations: vi
-        .fn()
-        .mockResolvedValue([
-          { id: "org-1", name: "CityNode", slug: "citynode", status: "active", metadata: null },
-        ]),
-      listMembers: vi.fn().mockResolvedValue({ members: [{ userId: "user-1", role: "owner" }] }),
-    },
+    activateCommunity: vi.fn().mockResolvedValue({ placeId: "p", slug: "chicago" }),
     proposals: {
       propose: vi.fn().mockResolvedValue({ data: { id: "proposal-1" } }),
       getMyNodeApplications: vi.fn().mockResolvedValue({ data: [] }),
@@ -196,9 +186,7 @@ async function renderApply(queryClient = createQueryClient()) {
 }
 
 async function fillValidApplication() {
-  fireEvent.change(screen.getByLabelText("Name"), {
-    target: { value: "Chicago" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "choose Chicago" }));
   fireEvent.change(screen.getByLabelText("Why you want to run it"), {
     target: { value: "Serve the local community." },
   });
@@ -207,9 +195,14 @@ async function fillValidApplication() {
   });
 }
 
-function freeFormMode() {
-  harness.sessionActiveOrganizationId = null;
-}
+const chicagoPayload = {
+  placeId: "22222222-2222-4222-8222-222222222222",
+  name: "Chicago",
+  slug: "chicago",
+  motivation: "Serve the local community.",
+  accountId: "dao.sputnik",
+  submitterAccountId: "applicant.near",
+};
 
 function stepStatus(id: string) {
   return screen.getByTestId(`apply.step-${id}`).getAttribute("data-status");
@@ -225,12 +218,10 @@ beforeEach(() => {
   harness.daoAccountIdForVerification = "dao.sputnik";
   harness.nearAccount = "applicant.near";
   harness.search = {};
-  harness.initialRootNodes = [{ id: "country-1", name: "United States", kind: "country" }];
   harness.routeContext = {
     auth: { activeOrganizationId: "org-1" },
     runtimeConfig: TEST_RUNTIME_CONFIG,
   };
-  harness.switchOrganization = { isError: false, mutate: vi.fn() };
 });
 
 afterEach(() => {
@@ -240,15 +231,10 @@ afterEach(() => {
 });
 
 describe("apply route submission", () => {
-  it("submits the validated payload, shows the proposal id, and only invalidates proposal queries", async () => {
-    freeFormMode();
+  it("submits an Official Application for an active community without activating it again", async () => {
     const queryClient = createQueryClient();
     queryClient.setQueryData(proposalReviewQueryKeys.list("pending"), []);
     queryClient.setQueryData(proposalReviewQueryKeys.pendingCount(), 0);
-    queryClient.setQueryData(nodeQueryKeys.roots(), harness.initialRootNodes);
-    queryClient.setQueryData(tenantQueryKeys.preflight("chicago.citynode.app"), {
-      hostname: { available: true, format: "valid" },
-    });
     await renderApply(queryClient);
 
     expect(stepStatus("near")).toBe("complete");
@@ -266,51 +252,53 @@ describe("apply route submission", () => {
       expect(harness.apiClient?.proposals.propose).toHaveBeenCalledWith({
         pluginId: "node",
         entityId: "chicago",
-        payload: {
-          kind: "city",
-          parentId: null,
-          name: "Chicago",
-          slug: "chicago",
-          motivation: "Serve the local community.",
-          accountId: "dao.sputnik",
-          submitterAccountId: "applicant.near",
-        },
+        payload: chicagoPayload,
         source: "/apply",
         idempotencyKey: expect.any(String),
       }),
     );
-    expect(await screen.findByText("Your community application")).toBeTruthy();
+    expect(harness.apiClient?.activateCommunity).not.toHaveBeenCalled();
+    expect(await screen.findByText("Your Official Application")).toBeTruthy();
     expect(screen.getByText("proposal-1")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "View application status" }).getAttribute("href")).toBe(
-      "/apply",
-    );
     await waitFor(() => {
       expect(
         queryClient.getQueryState(proposalReviewQueryKeys.list("pending"))?.isInvalidated,
       ).toBe(true);
-      expect(queryClient.getQueryState(proposalReviewQueryKeys.pendingCount())?.isInvalidated).toBe(
-        true,
-      );
     });
-    expect(queryClient.getQueryState(nodeQueryKeys.roots())?.isInvalidated).toBe(false);
-    expect(
-      queryClient.getQueryState(tenantQueryKeys.preflight("chicago.citynode.app"))?.isInvalidated,
-    ).toBe(false);
   });
 
-  it("starts as a standalone city and requires a country for a state", async () => {
-    freeFormMode();
+  it("activates the place first when it has no community yet", async () => {
+    harness.apiClient?.resolvePlace.mockResolvedValue({
+      place: { id: "22222222-2222-4222-8222-222222222222", slug: "chicago", name: "Chicago" },
+      aliases: [],
+      community: null,
+    });
     await renderApply();
     fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
     await waitFor(() => expect(stepStatus("details")).toBe("current"));
-    expect(screen.getByTestId("apply.kind-city").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("No country (standalone city)")).toBeTruthy();
     await fillValidApplication();
     const submitButton = screen.getByRole("button", { name: "Submit for review" });
     await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
-    fireEvent.click(screen.getByTestId("apply.kind-state"));
-    await waitFor(() => expect(submitButton).toHaveProperty("disabled", true));
-    expect(screen.queryByText("No country (standalone city)")).toBeNull();
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalled());
+    expect(harness.apiClient?.activateCommunity).toHaveBeenCalledWith({ place: "chicago" });
+    expect(harness.apiClient?.activateCommunity.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.apiClient?.proposals.propose.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("keeps submit disabled until a place is chosen", async () => {
+    await renderApply();
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await waitFor(() => expect(stepStatus("details")).toBe("current"));
+    fireEvent.change(screen.getByLabelText("Why you want to run it"), {
+      target: { value: "Serve the local community." },
+    });
+    expect(screen.getByRole("button", { name: "Submit for review" })).toHaveProperty(
+      "disabled",
+      true,
+    );
   });
 
   it.each([
@@ -493,348 +481,5 @@ describe("apply route submission", () => {
     expect(stepStatus("dao")).toBe("current");
     fireEvent.click(screen.getByTestId("apply.dao-continue"));
     expect(stepStatus("details")).toBe("current");
-  });
-
-  it("does not carry an earlier application's organization into a new application", async () => {
-    freeFormMode();
-    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
-      data: [
-        {
-          id: "existing-1",
-          reviewStatus: "approved",
-          applyStatus: "applied",
-          rejectionReason: null,
-          applySteps: {},
-          applyTimedOut: false,
-          appliedAt: null,
-          payload: { name: "Springfield", slug: "springfield", orgId: "legacy-org" },
-        },
-      ],
-    });
-    await renderApply();
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    await fillValidApplication();
-    const submitButton = screen.getByRole("button", { name: "Submit for review" });
-    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
-    fireEvent.click(submitButton);
-
-    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
-    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).not.toHaveProperty(
-      "orgId",
-    );
-    expect(harness.apiClient?.auth.checkSlug).toHaveBeenCalledWith({ slug: "chicago" });
-  });
-
-  function rejectedApplication(payload: Partial<NodeApplicationValues>) {
-    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
-      data: [
-        {
-          id: "existing-1",
-          reviewStatus: "rejected",
-          applyStatus: "not_started",
-          rejectionReason: "More detail needed",
-          applySteps: {},
-          applyTimedOut: false,
-          appliedAt: null,
-          payload: { name: "Chicago", slug: "chicago", motivation: "Serve.", ...payload },
-        },
-      ],
-    });
-  }
-
-  it("only offers countries as the country of a new community", async () => {
-    harness.initialRootNodes = [
-      { id: "country-1", name: "United States", kind: "country" },
-      { id: "city-root", name: "Lonely City", kind: "city" },
-    ];
-    rejectedApplication({ kind: "state", parentId: "city-root" });
-    harness.apiClient?.getNode.mockResolvedValue({ id: "city-root", parentId: null });
-    renderApply();
-    fireEvent.click(await screen.findByTestId("apply.revise"));
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    await waitFor(() => expect(harness.apiClient?.getNode).toHaveBeenCalled());
-    expect(screen.queryByText("Lonely City")).toBeNull();
-  });
-
-  it("restores the country and state when revising a city under a state", async () => {
-    rejectedApplication({ kind: "city", parentId: "state-1" });
-    harness.apiClient?.getNode.mockResolvedValue({ id: "state-1", parentId: "country-1" });
-    harness.apiClient?.listChildren.mockResolvedValue([
-      { id: "state-1", name: "Illinois", kind: "state" },
-    ]);
-    renderApply();
-    fireEvent.click(await screen.findByTestId("apply.revise"));
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    expect(await screen.findByText("Illinois")).toBeTruthy();
-    expect(screen.getByText("United States")).toBeTruthy();
-    expect(screen.queryByText("No country (standalone city)")).toBeNull();
-    expect(harness.apiClient?.getNode).toHaveBeenCalledWith({ nodeId: "state-1" });
-  });
-
-  it("keeps the organization when revising a rejected legacy application", async () => {
-    freeFormMode();
-    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
-      data: [
-        {
-          id: "existing-1",
-          reviewStatus: "rejected",
-          applyStatus: "not_started",
-          rejectionReason: "More detail needed",
-          applySteps: {},
-          applyTimedOut: false,
-          appliedAt: null,
-          payload: {
-            kind: "country",
-            parentId: null,
-            name: "Chicago",
-            slug: "chicago",
-            motivation: "Serve the local community.",
-            orgId: "legacy-org",
-          },
-        },
-      ],
-    });
-    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: false });
-    await renderApply();
-    fireEvent.click(await screen.findByTestId("apply.revise"));
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    await fillValidApplication();
-    const submitButton = screen.getByRole("button", { name: "Submit for review" });
-    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
-    fireEvent.click(submitButton);
-
-    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
-    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
-      slug: "chicago",
-      orgId: "legacy-org",
-    });
-  });
-
-  function malaysiaOrganization() {
-    harness.apiClient?.auth.listOrganizations.mockResolvedValue([
-      { id: "org-malaysia", name: "Malaysia", slug: "malaysia", status: "active", metadata: null },
-    ]);
-    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: false });
-  }
-
-  async function fillMalaysiaApplication() {
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Malaysia" } });
-    fireEvent.change(screen.getByLabelText("Why you want to run it"), {
-      target: { value: "Serve the local community." },
-    });
-  }
-
-  it("reports the address as taken when a free-form application matches another organization", async () => {
-    freeFormMode();
-    malaysiaOrganization();
-    await renderApply();
-    await fillMalaysiaApplication();
-    await waitFor(() =>
-      expect(screen.getByTestId("apply.slug-status").textContent).toContain(
-        "An organization already uses this address",
-      ),
-    );
-    expect(
-      (screen.getByRole("button", { name: "Submit for review" }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-    expect(harness.apiClient?.proposals.propose).not.toHaveBeenCalled();
-  });
-
-  it("prefills and locks the active organization without an ?org= parameter", async () => {
-    await renderApply();
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    await waitFor(() =>
-      expect((screen.getByTestId("apply.name") as HTMLInputElement).value).toBe("CityNode"),
-    );
-    expect(screen.getByTestId("apply.slug-locked").textContent).toBe("citynode.citynode.app");
-    expect(screen.queryByTestId("apply.slug")).toBeNull();
-    expect(screen.queryByTestId("apply.slug-unlock")).toBeNull();
-    expect(harness.apiClient?.auth.checkSlug).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Why you want to run it"), {
-      target: { value: "Serve the local community." },
-    });
-    const submitButton = screen.getByRole("button", { name: "Submit for review" });
-    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
-    fireEvent.click(submitButton);
-
-    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
-    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
-      name: "CityNode",
-      slug: "citynode",
-      orgId: "org-1",
-    });
-  });
-
-  it("prefills the organization name and locks the address when arriving with ?org=", async () => {
-    harness.search = { org: "malaysia" };
-    malaysiaOrganization();
-    await renderApply();
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    await waitFor(() =>
-      expect((screen.getByTestId("apply.name") as HTMLInputElement).value).toBe("Malaysia"),
-    );
-    expect(screen.getByTestId("apply.slug-locked").textContent).toBe("malaysia.citynode.app");
-    expect(screen.queryByTestId("apply.slug")).toBeNull();
-    expect(screen.queryByTestId("apply.slug-unlock")).toBeNull();
-    expect(harness.apiClient?.auth.checkSlug).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Why you want to run it"), {
-      target: { value: "Serve the local community." },
-    });
-    const submitButton = screen.getByRole("button", { name: "Submit for review" });
-    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
-    fireEvent.click(submitButton);
-
-    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
-    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
-      name: "Malaysia",
-      slug: "malaysia",
-      orgId: "org-malaysia",
-    });
-  });
-
-  it("shows no unlock control once the web address is locked to the organization", async () => {
-    harness.search = { org: "malaysia" };
-    malaysiaOrganization();
-    await renderApply();
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    await waitFor(() => expect(screen.getByTestId("apply.slug-locked")).toBeTruthy());
-    expect(screen.queryByTestId("apply.slug-unlock")).toBeNull();
-    expect(harness.apiClient?.auth.checkSlug).not.toHaveBeenCalled();
-  });
-
-  it("prompts for another organization when the active one already runs a community", async () => {
-    harness.apiClient?.auth.listOrganizations.mockResolvedValue([
-      {
-        id: "org-1",
-        name: "CityNode",
-        slug: "citynode",
-        status: "active",
-        metadata: { communityProposalId: "proposal-1" },
-      },
-    ]);
-    await renderApply();
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    await waitFor(() => expect(screen.getByText("Choose an organization")).toBeTruthy());
-    expect(screen.queryByTestId("apply.name")).toBeNull();
-    expect(harness.apiClient?.proposals.propose).not.toHaveBeenCalled();
-  });
-
-  it("prompts for another organization when the applicant is not the active organization's owner", async () => {
-    harness.apiClient?.auth.listMembers.mockResolvedValue({
-      members: [
-        { userId: "user-9", role: "owner" },
-        { userId: "user-1", role: "member" },
-      ],
-    });
-    await renderApply();
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    await waitFor(() => expect(screen.getByText("Choose an organization")).toBeTruthy());
-    expect(screen.queryByTestId("apply.name")).toBeNull();
-    expect(harness.apiClient?.proposals.propose).not.toHaveBeenCalled();
-  });
-
-  it("keeps the plain application form when there is no selected organization", async () => {
-    freeFormMode();
-    await renderApply();
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    expect(await screen.findByTestId("apply.slug")).toBeTruthy();
-  });
-
-  it("keeps the plain application form when the active organization is the personal workspace", async () => {
-    harness.apiClient?.auth.listOrganizations.mockResolvedValue([
-      { id: "org-1", name: "Personal", slug: "user-1", status: "active", metadata: null },
-    ]);
-    await renderApply();
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    expect(await screen.findByTestId("apply.slug")).toBeTruthy();
-    expect(screen.queryByText("Choose an organization")).toBeNull();
-    await fillValidApplication();
-    const submitButton = screen.getByRole("button", { name: "Submit for review" });
-    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
-    fireEvent.click(submitButton);
-
-    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
-    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).not.toHaveProperty(
-      "orgId",
-    );
-    expect(harness.apiClient?.auth.listMembers).not.toHaveBeenCalled();
-  });
-
-  function pendingApplication() {
-    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
-      data: [
-        {
-          id: "existing-1",
-          reviewStatus: "pending",
-          applyStatus: "not_started",
-          rejectionReason: null,
-          applySteps: {},
-          applyTimedOut: false,
-          appliedAt: null,
-          createdAt: "2026-10-01T00:00:00.000Z",
-          payload: { name: "Springfield", slug: "springfield" },
-        },
-      ],
-    });
-    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: false });
-  }
-
-  async function applyAgain() {
-    await renderApply();
-    fireEvent.click(await screen.findByTestId("apply.new"));
-    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    fireEvent.change(screen.getByLabelText("Why you want to run it"), {
-      target: { value: "Serve the local community." },
-    });
-  }
-
-  it("accepts the applicant's own organization address after Apply again", async () => {
-    pendingApplication();
-    await applyAgain();
-    expect(((await screen.findByTestId("apply.slug")) as HTMLInputElement).value).toBe("citynode");
-    const submitButton = screen.getByRole("button", { name: "Submit for review" });
-    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
-    expect(screen.getByTestId("apply.slug-status").textContent).not.toContain(
-      "An organization already uses this address",
-    );
-    expect(harness.apiClient?.auth.checkSlug).not.toHaveBeenCalled();
-    fireEvent.click(submitButton);
-
-    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
-    expect(harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload).toMatchObject({
-      slug: "citynode",
-      orgId: "org-1",
-    });
-  });
-
-  it("does not send the selected organization when Apply again uses a different address", async () => {
-    pendingApplication();
-    harness.apiClient?.auth.checkSlug.mockResolvedValue({ status: true });
-    await applyAgain();
-    fireEvent.change(await screen.findByTestId("apply.slug"), { target: { value: "chicago" } });
-    const submitButton = screen.getByRole("button", { name: "Submit for review" });
-    await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
-    fireEvent.click(submitButton);
-
-    await waitFor(() => expect(harness.apiClient?.proposals.propose).toHaveBeenCalledOnce());
-    const payload = harness.apiClient?.proposals.propose.mock.calls[0]?.[0].payload;
-    expect(payload).toMatchObject({ slug: "chicago" });
-    expect(payload).not.toHaveProperty("orgId");
-    expect(harness.apiClient?.auth.checkSlug).toHaveBeenCalledWith({ slug: "chicago" });
-  });
-
-  it("starts with the NEAR account when there is no active organization", async () => {
-    harness.routeContext = {
-      auth: { activeOrganizationId: null },
-      runtimeConfig: TEST_RUNTIME_CONFIG,
-    };
-    harness.nearAccount = null;
-    await renderApply();
-
-    expect(stepStatus("near")).toBe("current");
-    expect(screen.queryByTestId("apply.step-organization")).toBeNull();
-    expect(await screen.findByRole("link", { name: /Link NEAR account/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "verify DAO" })).toBeNull();
   });
 });
