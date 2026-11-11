@@ -64,25 +64,32 @@ function canonicalActivityUrl(value: string) {
   return url.toString();
 }
 
-// Map geometry lives in the places catalog, not on discovery profiles. When a
-// community's location names a catalog place (by slug or alias) and the node
-// is not linked yet, adopt it — the on-demand boundary endpoint then serves
-// the outline for map views. Best-effort: an unresolved location simply stays
-// marker-only until the join flow attaches a place.
+const placeLabelByKind: Record<string, string> = {
+  country: "country",
+  state: "subdivision",
+  city: "city",
+};
+
 export async function adoptCatalogPlace(
   db: Database,
   node: { id: string; placeId: string | null },
   place: string,
+  kind: string | null,
 ): Promise<void> {
   const location = place.trim();
   if (!location || node.placeId !== null) return;
+  const label = kind ? placeLabelByKind[kind] : undefined;
   const [matched] = await db
     .select({ id: placesTable.id })
     .from(placesTable)
     .where(
-      sql`${placesTable.slug} = ${slugify(location)} OR ${placesTable.id} IN (
-        SELECT place_id FROM ${placeAliasesTable} WHERE value = ${location}
-      )`,
+      and(
+        sql`(${placesTable.slug} = ${slugify(location)} OR ${placesTable.id} IN (
+          SELECT place_id FROM ${placeAliasesTable} WHERE value = ${location}
+        ))`,
+        label ? eq(placesTable.label, label) : undefined,
+        sql`NOT EXISTS (SELECT 1 FROM ${nodes} WHERE ${nodes.placeId} = ${placesTable.id})`,
+      ),
     )
     .limit(1);
   if (!matched) return;
@@ -1204,11 +1211,9 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             };
           }
         }
-        // Map geometry lives in the places catalog. When this community is not
-        // linked to a catalog place yet, resolve the place from its location
-        // and adopt it — the on-demand boundary endpoint then serves the
-        // outline for map views.
-        yield* Effect.tryPromise(() => adoptCatalogPlace(db, record.node, place));
+        yield* Effect.tryPromise(() => adoptCatalogPlace(db, record.node, place, kind)).pipe(
+          Effect.ignore,
+        );
         yield* query(() =>
           db.transaction(async (tx) => {
             await tx

@@ -4,7 +4,13 @@ import type { ApiClient } from "@/app";
 import { useApiClient } from "@/app";
 import { useAppTranslation } from "@/i18n/runtime";
 import "leaflet/dist/leaflet.css";
-import { type BoundaryMap, boundaryBounds, boundaryLatLngs, mapAreas } from "./map-areas";
+import {
+  type Boundary,
+  type BoundaryMap,
+  boundaryBounds,
+  boundaryLatLngs,
+  mapAreas,
+} from "./map-areas";
 
 type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
 
@@ -35,29 +41,36 @@ export function GeographicMap({
   select.current = onSelect;
   selected.current = selectedId;
   nodesRef.current = nodes;
-  // Geometry lives in the places catalog; fetch it once per distinct place and
-  // let react-query keep it across searches (it only changes on re-seed).
-  const placeIds = useMemo(
+  const [catalog, setCatalog] = useState<Map<string, Boundary | null>>(() => new Map());
+  const missing = useMemo(
     () =>
-      [
-        ...new Set(nodes.map((node) => node.placeId).filter((id): id is string => id !== null)),
-      ].sort(),
-    [nodes],
+      [...new Set(nodes.map((node) => node.placeId).filter((id): id is string => id !== null))]
+        .filter((id) => !catalog.has(id))
+        .sort(),
+    [nodes, catalog],
   );
-  const placeIdsKey = placeIds.join(",");
   const boundariesQuery = useQuery({
-    queryKey: ["place-boundaries", placeIdsKey],
-    queryFn: () => api.listPlaceBoundaries({ placeIds }),
-    enabled: placeIds.length > 0,
+    queryKey: ["place-boundaries", missing.join(",")],
+    queryFn: async () => {
+      const rows = await api.listPlaceBoundaries({ placeIds: missing });
+      const found = new Map(rows.map((row) => [row.placeId, row.boundary] as const));
+      return missing.map((id) => [id, found.get(id) ?? null] as const);
+    },
+    enabled: missing.length > 0,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  useEffect(() => {
+    const fetched = boundariesQuery.data;
+    if (!fetched?.length) return;
+    setCatalog((current) => new Map([...current, ...fetched]));
+  }, [boundariesQuery.data]);
   const boundaries = useMemo(() => {
     const map: BoundaryMap = new Map();
-    for (const row of boundariesQuery.data ?? []) {
-      if (row.boundary) map.set(row.placeId, row.boundary);
+    for (const [placeId, boundary] of catalog) {
+      if (boundary) map.set(placeId, boundary);
     }
     return map;
-  }, [boundariesQuery.data]);
+  }, [catalog]);
   boundariesRef.current = boundaries;
   // The map is created once and then fed new nodes; rebuilding it on every
   // refetch made it flash and lose the viewport while typing in search.
@@ -198,9 +211,7 @@ export function GeographicMap({
             }),
           }));
           // Only move the viewport when the result set itself changed, so a
-          // background refetch of the same communities leaves it alone. The
-          // boundary count rides along: outlines arriving from the catalog
-          // should fit the viewport to them once, like the inline era did.
+          // background refetch of the same communities leaves it alone.
           const key = `${points
             .map((entry) => entry.node.nodeId)
             .sort()
@@ -245,7 +256,6 @@ export function GeographicMap({
   useEffect(() => {
     apply.current?.(nodes, boundariesRef.current);
   }, [nodes]);
-  // Areas appear once their geometry lands — redraw without touching markers.
   useEffect(() => {
     if (boundaries.size > 0) apply.current?.(nodesRef.current, boundaries);
   }, [boundaries]);

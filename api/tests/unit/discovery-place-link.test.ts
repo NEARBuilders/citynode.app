@@ -24,6 +24,7 @@ afterEach(() => {
 
 interface Ctx {
   db: Database;
+  tenantId: string;
   nodeId: string;
   countryId: string;
   aliasValue: string;
@@ -76,7 +77,14 @@ function run<A>(body: (ctx: Ctx) => Promise<A>): Promise<A> {
         return row?.placeId ?? null;
       };
       return yield* Effect.tryPromise(() =>
-        body({ db, nodeId: node!.id, countryId: country!.id, aliasValue, nodePlace }),
+        body({
+          db,
+          tenantId: tenant!.id,
+          nodeId: node!.id,
+          countryId: country!.id,
+          aliasValue,
+          nodePlace,
+        }),
       );
     }).pipe(Effect.provide(layer)),
   );
@@ -85,25 +93,44 @@ function run<A>(body: (ctx: Ctx) => Promise<A>): Promise<A> {
 describe("adoptCatalogPlace", () => {
   it("links an unlinked node by the place slug of its location", () =>
     run(async ({ db, nodeId, countryId, nodePlace }) => {
-      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India");
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
       expect(await nodePlace()).toBe(countryId);
     }));
 
   it("links by alias values such as the geonames id", () =>
     run(async ({ db, nodeId, countryId, aliasValue, nodePlace }) => {
-      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, aliasValue);
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, aliasValue, "country");
       expect(await nodePlace()).toBe(countryId);
     }));
 
   it("leaves unknown locations and already-linked nodes alone", () =>
     run(async ({ db, nodeId, countryId, nodePlace }) => {
-      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "Atlantis");
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "Atlantis", "country");
       expect(await nodePlace()).toBeNull();
 
-      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India");
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
       expect(await nodePlace()).toBe(countryId);
 
-      await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "Pakistan");
+      await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "Pakistan", "country");
       expect(await nodePlace()).toBe(countryId);
+    }));
+
+  it("only adopts places that match the node kind", () =>
+    run(async ({ db, nodeId, nodePlace }) => {
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "state");
+      expect(await nodePlace()).toBeNull();
+    }));
+
+  it("skips places already linked to another node without failing", () =>
+    run(async ({ db, tenantId, nodeId, countryId, nodePlace }) => {
+      await db.insert(nodesTable).values({
+        slug: `linked-${crypto.randomUUID()}`,
+        name: "Linked",
+        tenantId,
+        parentId: null,
+        placeId: countryId,
+      });
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
+      expect(await nodePlace()).toBeNull();
     }));
 });
