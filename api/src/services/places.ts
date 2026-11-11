@@ -120,6 +120,28 @@ function subtreeQuery(placeId: string): SQL {
   `;
 }
 
+export function nodeParentEdgesQuery(): SQL {
+  return sql`
+    WITH RECURSIVE climb AS (
+      SELECT n.id AS node_id, p.parent_id AS place_id, ARRAY[p.id] AS path
+      FROM nodes n
+      INNER JOIN places p ON p.id = n.place_id
+      UNION ALL
+      SELECT climb.node_id, p.parent_id, climb.path || p.id
+      FROM climb
+      INNER JOIN places p ON p.id = climb.place_id
+      WHERE NOT EXISTS (SELECT 1 FROM nodes m WHERE m.place_id = climb.place_id)
+        AND NOT (p.id = ANY(climb.path))
+    )
+    SELECT climb.node_id AS id, m.id AS parent_id
+    FROM climb
+    LEFT JOIN nodes m ON m.place_id = climb.place_id
+    WHERE climb.place_id IS NULL OR m.id IS NOT NULL
+    UNION ALL
+    SELECT id, parent_id FROM nodes WHERE place_id IS NULL
+  `;
+}
+
 async function readIds(db: { execute: (q: SQL) => Promise<unknown> }, q: SQL): Promise<string[]> {
   const result = await db.execute(q);
   const rows = ((result as { rows?: unknown }).rows ?? result) as Array<{ id: string }>;
