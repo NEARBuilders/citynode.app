@@ -104,8 +104,11 @@ jobs:
     env:
       PLAYWRIGHT_VERSION: ${{ matrix.playwright-version }}
       CI: true
-      API_DATABASE_URL: postgres://everythingdev:everythingdev@postgres-api-test:5432/api_test_db
-      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@postgres-auth-test:5432/auth_test_db
+      # sslmode=disable: the shared driver defaults to verified TLS for
+      # non-local hosts (prod-provider safety, driver.ts resolvePoolSsl);
+      # these test containers don't speak TLS.
+      API_DATABASE_URL: postgres://everythingdev:everythingdev@postgres-api-test:5432/api_test_db?sslmode=disable
+      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@postgres-auth-test:5432/auth_test_db?sslmode=disable
       CORS_ORIGIN: http://localhost:4100
       BETTER_AUTH_SECRET: regression-test-secret-do-not-use-in-production
     services:
