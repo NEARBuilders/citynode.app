@@ -272,14 +272,14 @@ const harbor = { id: "org-harbor", name: "Harbor", slug: "harbor", status: "acti
 const delta = { id: "org-delta", name: "Delta", slug: "delta", status: "active" };
 
 describe("Home without a community", () => {
-  it("leads a new user whose only organization is personal with Start a community", async () => {
+  it("leads a new user whose only organization is personal with Explore, then Start a community", async () => {
     harness.user = member;
     harness.activeOrganizationId = personal.id;
     harness.organizations = [personal];
     renderHome();
 
     expect(await screen.findByTestId("home-step-start-community")).toBeTruthy();
-    expect(stepIds()).toEqual(["start-community", "stake", "explore"]);
+    expect(stepIds()).toEqual(["explore", "start-community", "stake"]);
     expect(screen.queryByText(/choose an organization/i)).toBeNull();
     expect(screen.queryByText(/organization/i)).toBeNull();
   });

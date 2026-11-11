@@ -861,6 +861,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Découvrez ce qui se passe près de vous.",
     "了解附近的活动。",
   ],
+  "dashboard.findCommunityHint": [
+    "Find a community near you on Explore, or apply to start one for your area.",
+    "Encuentra una comunidad cerca de ti en Explorar, o solicita iniciar una en tu zona.",
+    "Trouvez une communauté près de chez vous dans Explorer, ou proposez d’en lancer une dans votre ville.",
+    "在“探索”中寻找你附近的社区，或申请在你所在的地区发起一个社区。",
+  ],
   "dashboard.guest": ["Guest account", "Cuenta de invitado", "Compte invité", "访客账户"],
   "dashboard.invitedAs": [
     "Invited as {role}",

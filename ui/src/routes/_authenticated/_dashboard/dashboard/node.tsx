@@ -176,11 +176,17 @@ function NodeDashboardLayout() {
           icon={NetworkIcon}
           title={emptyState.title}
           description={emptyState.description}
-          action={
-            <Button nativeButton={false} render={<Link to={emptyState.actionTo} />}>
-              {emptyState.actionLabel}
+          action={emptyState.actions.map((action) => (
+            <Button
+              key={action.to}
+              variant={action.primary ? "default" : "outline"}
+              nativeButton={false}
+              render={<Link to={action.to} />}
+              data-testid={`node-empty-action-${action.to.slice(1)}`}
+            >
+              {action.label}
             </Button>
-          }
+          ))}
         />
       </PageContainer>
     );
