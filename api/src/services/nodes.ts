@@ -25,6 +25,7 @@ export interface NodeRecord {
   slug: string;
   name: string;
   placeId: string | null;
+  orgId: string | null;
   parentId: string | null;
   tenantId: string | null;
   metadata: Record<string, unknown>;
@@ -84,6 +85,15 @@ export interface NodesService {
   list(filter?: NodeListFilter): NodeEffect<NodeRecord[]>;
   listSummaries(filter?: NodeListFilter): NodeEffect<NodeListSummaryRecord[]>;
   getById(id: string): NodeEffect<NodeRecord | null>;
+  getByPlace(placeId: string): NodeEffect<NodeRecord | null>;
+  activateForPlace(input: {
+    placeId: string;
+    slug: string;
+    name: string;
+    orgId: string;
+    activatedBy: string;
+    joinCodeId: string;
+  }): NodeEffect<{ node: NodeRecord; created: boolean }>;
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
   setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
   delete(id: string): NodeEffect<boolean>;
@@ -110,6 +120,7 @@ function toNodeRecord(row: NodeRow): NodeRecord {
     slug: row.slug,
     name: row.name,
     placeId: row.placeId,
+    orgId: row.orgId,
     parentId: row.parentId,
     tenantId: row.tenantId,
     metadata: metadata as Record<string, unknown>,
@@ -333,6 +344,51 @@ export const NodesLive = Layer.effect(
           );
           return row ? toNodeRecord(row) : null;
         }),
+
+      getByPlace: (placeId) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db.select().from(nodesTable).where(eq(nodesTable.placeId, placeId)).limit(1),
+          );
+          return row ? toNodeRecord(row) : null;
+        }),
+
+      activateForPlace: (input) =>
+        query(() =>
+          db.transaction(async (tx) => {
+            const existing = await tx
+              .select()
+              .from(nodesTable)
+              .where(eq(nodesTable.placeId, input.placeId))
+              .limit(1);
+            if (existing[0]) {
+              return { node: toNodeRecord(existing[0]), created: false };
+            }
+            const [row] = await tx
+              .insert(nodesTable)
+              .values({
+                slug: input.slug,
+                name: input.name,
+                placeId: input.placeId,
+                orgId: input.orgId,
+                activatedAt: new Date(),
+                activatedBy: input.activatedBy,
+                metadata: { joinCodeId: input.joinCodeId },
+              })
+              .onConflictDoNothing()
+              .returning();
+            if (row) return { node: toNodeRecord(row), created: true };
+            const [raced] = await tx
+              .select()
+              .from(nodesTable)
+              .where(eq(nodesTable.placeId, input.placeId))
+              .limit(1);
+            if (!raced) {
+              throw new ORPCError("CONFLICT", { message: "Activation raced and lost" });
+            }
+            return { node: toNodeRecord(raced), created: false };
+          }),
+        ),
 
       update: (id, input) =>
         Effect.gen(function* () {
