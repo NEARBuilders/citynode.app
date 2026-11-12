@@ -5,11 +5,11 @@ import type { AuthRequestContext } from "@/lib/auth";
 export type OnboardingCodeState = "active" | "expired" | "revoked" | "used-up";
 
 export function onboardingCodeState(
-  code: { expiresAt: Date; revokedAt: Date | null; usedCount: number; maxUses: number },
+  code: { expiresAt: Date | null; revokedAt: Date | null; usedCount: number; maxUses: number },
   now: number = Date.now(),
 ): OnboardingCodeState {
   if (code.revokedAt) return "revoked";
-  if (new Date(code.expiresAt).getTime() < now) return "expired";
+  if (code.expiresAt && new Date(code.expiresAt).getTime() < now) return "expired";
   if (code.usedCount >= code.maxUses) return "used-up";
   return "active";
 }

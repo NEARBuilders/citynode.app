@@ -95,6 +95,19 @@ describe("OpenEventStationButton", () => {
     expect(api.createEventOnboardingCode).not.toHaveBeenCalled();
   });
 
+  it("opens a live station that has no expiry", async () => {
+    api.auth.listOnboardingCodes.mockResolvedValue([code("standing", { expiresAt: null })]);
+
+    renderButton();
+
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith(
+        expect.objectContaining({ params: { codeId: "standing" } }),
+      ),
+    );
+    expect(api.createEventOnboardingCode).not.toHaveBeenCalled();
+  });
+
   it("starts a station with the default join limit when none is live", async () => {
     api.auth.listOnboardingCodes.mockResolvedValue([
       code("expired", { expiresAt: new Date(Date.now() - hour) }),
