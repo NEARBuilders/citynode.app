@@ -128,8 +128,12 @@ boundary above; until it lands, this document is the contract.
 `pnpm run seed:demo` fills the local databases with six communities that look
 like real usage: Lagos and Lisbon (mature, events and reports since August),
 Nairobi and Buenos Aires (activated this month, setup incomplete), Kraków
-(quiet since September) and Manila (events, no reports). Dates are relative to
-the day it runs (`--today YYYY-MM-DD` pins them). Ids are deterministic and each
+(quiet since September) and Manila (events, no reports). Lagos and Lisbon have
+the month's monthly report in (Lagos reviewed, Lisbon waiting), and some of
+their event reports are reviewed. Dates are relative to the day it runs
+(`--today YYYY-MM-DD` pins them); the monthly reports belong to the month that
+held the day a week before, so `--today 2026-12-03` shows November being
+chased. Ids are deterministic and each
 run deletes and rewrites only demo rows, so it is safe to re-run.
 
 1. In `.env`, set `BETTER_AUTH_SECRET`, `API_DATABASE_URL`, `AUTH_DATABASE_URL`
@@ -149,7 +153,7 @@ run deletes and rewrites only demo rows, so it is safe to re-run.
 | `organizer` | Tunde Bakare | Lagos events team, not owner |
 | `finance` | Ifeoma Nwosu | Lagos finance team |
 | `member` | Chidi Eze | plain Lagos member who attended most events |
-| `twoCommunities` | Sofia Almeida | member of Lisbon (active) and Lagos |
+| `twoCommunities` | Sofia Almeida | on the events team of Lisbon (active) and Lagos, so `/report` asks which |
 | `noCommunity` | Daniel Mensah | signed in, no community |
 | `ownerNew`, `ownerNewWithEvents`, `ownerQuiet`, `ownerNoReports`, `ownerSecondMature` | | owners of Nairobi, Buenos Aires, Kraków, Manila, Lisbon |
 
@@ -161,7 +165,8 @@ community; new content is a new field there plus one section function in
 
 `pnpm run screens:capture -- --out <dir> --label <before|after>` signs in as
 each persona and saves `<persona>--<page>--<desktop|mobile>.png` at 1440×900
-and 390×844 (`--base-url`, `--only <persona|page,…>`). Its `SHOTS` list in
+and 390×844 (`--base-url`, `--only <persona|page|persona:page,…>`, and
+`--now <ISO date>` to pin the browser clock to a seed date). Its `SHOTS` list in
 `scripts/capture-screens.mjs` is the place to add routes; a route that answers
 404 is skipped and reported in `<label>.json`.
 

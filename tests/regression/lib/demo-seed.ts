@@ -7,6 +7,7 @@ import {
   eventReportSchema,
   profileSchema,
 } from "../../../api/src/discovery-contract.ts";
+import { isReportableMonth, reportMonthWindow } from "../../../api/src/report-month.ts";
 import {
   DEMO_ACCOUNT_SUFFIX,
   DEMO_COMMUNITIES,
@@ -18,6 +19,7 @@ import {
   type DemoCommunity,
   type DemoCommunityKey,
   type DemoEvent,
+  type DemoMonthlyReportPlan,
   type DemoPersona,
   type DemoPersonKey,
   type DemoTeamName,
@@ -63,6 +65,13 @@ export interface DemoSeedEvent {
   startsAt: string;
   endsAt: string;
   reported: boolean;
+  reviewed: boolean;
+}
+
+export interface DemoSeedMonthlyReport {
+  month: string;
+  submittedAt: string;
+  reviewedAt: string | null;
 }
 
 export interface DemoSeedCommunity {
@@ -74,10 +83,12 @@ export interface DemoSeedCommunity {
   hostname: string;
   timezone: string;
   events: DemoSeedEvent[];
+  monthlyReport: DemoSeedMonthlyReport | null;
 }
 
 export interface DemoSeed {
   today: string;
+  reportMonth: string | null;
   people: Record<DemoPersonKey, DemoSeedPerson>;
   personas: Record<DemoPersona, DemoSeedPerson>;
   communities: Record<DemoCommunityKey, DemoSeedCommunity>;
@@ -126,7 +137,15 @@ interface PlannedEvent {
     createdBy: string;
     redemptions: PlannedRedemption[];
   } | null;
-  report: { report: EventReport; by: string; at: Date } | null;
+  report: { report: EventReport; by: string; at: Date; reviewedAt: Date | null } | null;
+}
+
+interface PlannedMonthlyReport {
+  month: string;
+  plan: DemoMonthlyReportPlan;
+  submittedAt: Date;
+  reviewedAt: Date | null;
+  stats: { eventsHeld: number; checkIns: number; joins: number; newMembers: number };
 }
 
 interface PlannedCommunity {
@@ -140,11 +159,13 @@ interface PlannedCommunity {
   members: PlannedMember[];
   teams: PlannedTeam[];
   events: PlannedEvent[];
+  monthlyReport: PlannedMonthlyReport | null;
 }
 
 interface DemoPlan {
   today: Date;
   now: Date;
+  reportMonth: string | null;
   communities: PlannedCommunity[];
 }
 
@@ -178,6 +199,65 @@ export function demoToday(input?: string | Date) {
 
 const daysAgo = (today: Date, days: number) => new Date(today.getTime() - days * DAY);
 
+export function demoReportMonth(today: Date) {
+  const month = new Date(today.getTime() - 7 * DAY).toISOString().slice(0, 7);
+  return isReportableMonth(month) ? month : null;
+}
+
+function reviewedAfter(at: Date, days: number | undefined, now: Date) {
+  if (days === undefined) return null;
+  const reviewed = new Date(at.getTime() + days * DAY);
+  return reviewed < now ? reviewed : null;
+}
+
+function planMonthlyReport(
+  def: DemoCommunity,
+  events: PlannedEvent[],
+  members: PlannedMember[],
+  today: Date,
+  month: string | null,
+): PlannedMonthlyReport | null {
+  if (!def.monthlyReport || !month) return null;
+  const plan = def.monthlyReport;
+  const window = reportMonthWindow(month);
+  const submittedAt = new Date(
+    Math.max(
+      daysAgo(today, plan.submittedDaysAgo).getTime() + 10 * HOUR,
+      window.from.getTime() + HOUR,
+    ),
+  );
+  const inMonth = (at: Date) => at >= window.from && at < window.to && at <= submittedAt;
+  const held = events.filter(
+    (event) =>
+      event.def.status !== "cancelled" &&
+      event.startsAt >= window.from &&
+      event.startsAt < window.to &&
+      event.endsAt <= submittedAt,
+  );
+  const redemptions = events.flatMap((event) => event.code?.redemptions ?? []);
+  return {
+    month,
+    plan,
+    submittedAt,
+    reviewedAt:
+      plan.reviewedDaysAgo === undefined
+        ? null
+        : new Date(
+            Math.max(
+              daysAgo(today, plan.reviewedDaysAgo).getTime() + 9 * HOUR,
+              submittedAt.getTime() + HOUR,
+            ),
+          ),
+    stats: {
+      eventsHeld: held.length,
+      checkIns: held.reduce((sum, event) => sum + (event.code?.redemptions.length ?? 0), 0),
+      joins: redemptions.filter((redemption) => inMonth(redemption.at)).length,
+      newMembers: members.filter((member) => member.role !== "owner" && inMonth(member.joinedAt))
+        .length,
+    },
+  };
+}
+
 function reportFor(
   event: DemoEvent,
   community: DemoCommunity,
@@ -207,7 +287,13 @@ function reportFor(
   });
 }
 
-function planCommunity(key: DemoCommunityKey, def: DemoCommunity, today: Date): PlannedCommunity {
+function planCommunity(
+  key: DemoCommunityKey,
+  def: DemoCommunity,
+  today: Date,
+  now: Date,
+  reportMonth: string | null,
+): PlannedCommunity {
   const organizationId = demoOrganizationId(key);
   const nodeId = demoUuid(`node:${key}`);
   const owner = def.people.find((person) => person.role === "owner");
@@ -223,6 +309,9 @@ function planCommunity(key: DemoCommunityKey, def: DemoCommunity, today: Date): 
       Math.min(startsAt.getTime() - 14 * DAY, today.getTime() - 2 * DAY - 6 * HOUR),
     );
     const id = demoUuid(`event:${key}:${event.key}`);
+    const reportedAt = event.report
+      ? new Date(endsAt.getTime() + event.report.submittedDaysAfter * DAY + 2 * HOUR)
+      : null;
     const attendees = event.attendees ?? [];
     const code =
       attendees.length > 0
@@ -246,13 +335,15 @@ function planCommunity(key: DemoCommunityKey, def: DemoCommunity, today: Date): 
       endsAt,
       publishedAt,
       code,
-      report: event.report
-        ? {
-            report: reportFor(event, def, event.report),
-            by: demoUserId(event.report.by),
-            at: new Date(endsAt.getTime() + event.report.submittedDaysAfter * DAY + 2 * HOUR),
-          }
-        : null,
+      report:
+        event.report && reportedAt
+          ? {
+              report: reportFor(event, def, event.report),
+              by: demoUserId(event.report.by),
+              at: reportedAt,
+              reviewedAt: reviewedAfter(reportedAt, event.report.reviewedDaysAfter, now),
+            }
+          : null,
     };
   });
 
@@ -320,15 +411,19 @@ function planCommunity(key: DemoCommunityKey, def: DemoCommunity, today: Date): 
     members,
     teams,
     events,
+    monthlyReport: planMonthlyReport(def, events, members, today, reportMonth),
   };
 }
 
 export function buildDemoPlan(today: Date): DemoPlan {
+  const now = new Date();
+  const reportMonth = demoReportMonth(today);
   return {
     today,
-    now: new Date(),
+    now,
+    reportMonth,
     communities: (Object.entries(DEMO_COMMUNITIES) as Array<[DemoCommunityKey, DemoCommunity]>).map(
-      ([key, def]) => planCommunity(key, def, today),
+      ([key, def]) => planCommunity(key, def, today, today, reportMonth),
     ),
   };
 }
@@ -531,6 +626,9 @@ async function seedAuth(client: SqlClient, plan: DemoPlan, secret: string) {
 async function seedApi(client: SqlClient, plan: DemoPlan) {
   const organizationIds = plan.communities.map((community) => community.organizationId);
   const userIds = (Object.keys(DEMO_PEOPLE) as DemoPersonKey[]).map(demoUserId);
+  const nodeIds = plan.communities.map((community) => community.nodeId);
+  await client.query(`DELETE FROM monthly_reports WHERE node_id = ANY($1)`, [nodeIds]);
+  await client.query(`DELETE FROM event_reports WHERE node_id = ANY($1)`, [nodeIds]);
   await client.query(`DELETE FROM tenants WHERE account_id LIKE $1`, [`%.${DEMO_ACCOUNT_SUFFIX}`]);
   for (const table of [
     "attendance_check_ins",
@@ -639,6 +737,8 @@ async function seedApi(client: SqlClient, plan: DemoPlan) {
           submitted_at: event.report.at,
           updated_by: event.report.by,
           updated_at: event.report.at,
+          reviewed_by: event.report.reviewedAt ? demoUserId(DEMO_PERSONAS.platformAdmin) : null,
+          reviewed_at: event.report.reviewedAt,
         });
       }
       if (event.code) {
@@ -678,6 +778,24 @@ async function seedApi(client: SqlClient, plan: DemoPlan) {
       reconciled_at: plan.now,
     });
 
+    if (community.monthlyReport) {
+      const { month, plan: report, submittedAt, reviewedAt, stats } = community.monthlyReport;
+      await insert(client, "monthly_reports", {
+        node_id: community.nodeId,
+        month,
+        notes: report.notes,
+        events_held: stats.eventsHeld,
+        check_ins: stats.checkIns,
+        joins: stats.joins,
+        new_members: stats.newMembers,
+        submitted_by: demoUserId(report.by),
+        submitted_at: submittedAt,
+        updated_by: demoUserId(report.by),
+        updated_at: submittedAt,
+        reviewed_by: reviewedAt ? demoUserId(DEMO_PERSONAS.platformAdmin) : null,
+        reviewed_at: reviewedAt,
+      });
+    }
     for (const member of community.members) {
       if (!member.directory) continue;
       await insert(client, "member_directory_opt_ins", {
@@ -813,11 +931,25 @@ async function summarize(plan: DemoPlan, secret: string, secure: boolean): Promi
           startsAt: event.startsAt.toISOString(),
           endsAt: event.endsAt.toISOString(),
           reported: !!event.report,
+          reviewed: !!event.report?.reviewedAt,
         })),
+        monthlyReport: community.monthlyReport
+          ? {
+              month: community.monthlyReport.month,
+              submittedAt: community.monthlyReport.submittedAt.toISOString(),
+              reviewedAt: community.monthlyReport.reviewedAt?.toISOString() ?? null,
+            }
+          : null,
       },
     ]),
   ) as Record<DemoCommunityKey, DemoSeedCommunity>;
-  return { today: plan.today.toISOString().slice(0, 10), people, personas, communities };
+  return {
+    today: plan.today.toISOString().slice(0, 10),
+    reportMonth: plan.reportMonth,
+    people,
+    personas,
+    communities,
+  };
 }
 
 export async function seedDemo({

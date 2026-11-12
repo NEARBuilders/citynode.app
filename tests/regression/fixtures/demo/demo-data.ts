@@ -99,6 +99,14 @@ export interface DemoEventReportPlan {
   nextActions: string;
   partners?: string;
   insights?: string;
+  reviewedDaysAfter?: number;
+}
+
+export interface DemoMonthlyReportPlan {
+  by: DemoPersonKey;
+  submittedDaysAgo: number;
+  reviewedDaysAgo?: number;
+  notes: string;
 }
 
 export interface DemoEvent {
@@ -135,6 +143,7 @@ export interface DemoCommunity {
   people: DemoMembership[];
   events: DemoEvent[];
   teamRequests?: Array<{ person: DemoPersonKey; team: DemoTeamName; daysAgo: number }>;
+  monthlyReport?: DemoMonthlyReportPlan;
 }
 
 export interface DemoProposal {
@@ -257,7 +266,7 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
       { person: "olumide", role: "member" },
       { person: "ngozi", role: "member" },
       { person: "yusuf", role: "member" },
-      { person: "sofia", role: "member" },
+      { person: "sofia", role: "member", teams: ["Events"] },
       { person: "amara", role: "member" },
       { person: "bolaji", role: "member" },
       { person: "tobi", role: "member" },
@@ -265,6 +274,18 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
       { person: "precious", role: "member" },
     ],
     teamRequests: [{ person: "chidi", team: "Events", daysAgo: 2 }],
+    monthlyReport: {
+      by: "adaeze",
+      submittedDaysAgo: 3,
+      reviewedDaysAgo: 1,
+      notes: [
+        "A busy month. The payments hack afternoon was the highlight: six teams built a payment link or a checkout, and two of them want to keep going as a small study group on Thursdays. The November community call drew people who had never come to an in-person event, which tells us online calls are worth keeping.",
+        "",
+        "What we struggled with: the campus tour at UNILAG was cancelled two days before because the computer science society lost its room. We will try again in January with a confirmed booking. Check-in still slows down when more than thirty people arrive at once; Tunde is testing a second phone as a station.",
+        "",
+        "Coming up: Demo Day at the Yaba hub, the stablecoins breakfast for small businesses, and the year-end social. We would like help finding a sponsor for food at Demo Day, and we want to invite two speakers from the agents meetup back for a longer workshop.",
+      ].join("\n"),
+    },
     events: [
       {
         key: "launch",
@@ -286,6 +307,7 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
           improvements: "Check-in queue was slow; we need a second phone running the station.",
           nextActions: "Run a hands-on wallet session for the people who asked for one.",
           partners: "CcHub",
+          reviewedDaysAfter: 3,
         },
       },
       {
@@ -306,6 +328,7 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
           wentWell: "Pairing newcomers with a builder meant everyone left with a working wallet.",
           improvements: "Breakfast ran late; start 30 minutes earlier next time.",
           nextActions: "Publish the wallet checklist we used and share it on Telegram.",
+          reviewedDaysAfter: 4,
         },
       },
       {
@@ -328,6 +351,7 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
           improvements: "Power cut for 40 minutes. Book a venue with a generator.",
           nextActions: "Start a fortnightly study group for the students who finished.",
           partners: "Yaba College of Technology computer society",
+          reviewedDaysAfter: 2,
         },
       },
       {
@@ -387,6 +411,18 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
         day: -11,
         hours: 5,
         attendees: ["chidi", "segun", "funmi", "bolaji", "tobi", "halima"],
+        report: {
+          ...lagosReport,
+          submittedDaysAfter: 2,
+          by: "tunde",
+          theme: "Payment links and checkouts for Lagos merchants",
+          attendees: 27,
+          kpis: ["27 attendees", "6 teams shipped a payment link", "2 joined the community"],
+          wentWell: "Every team demoed something that worked; two merchants asked to pilot.",
+          improvements: "Five hours was long; a short break at the halfway point would help.",
+          nextActions: "Start a Thursday study group for the teams who want to keep building.",
+          partners: "CcHub",
+        },
       },
       {
         key: "community-call",
@@ -449,7 +485,7 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
       { person: "rui", role: "member", teams: ["Events"], joinedDaysAgo: 340, directory: true },
       { person: "beatriz", role: "member", teams: ["Treasury"], joinedDaysAgo: 330 },
       { person: "rita", role: "member", joinedDaysAgo: 90 },
-      { person: "sofia", role: "member", directory: true },
+      { person: "sofia", role: "member", teams: ["Events"], directory: true },
       { person: "tiago", role: "member", directory: true },
       { person: "marta", role: "member" },
       { person: "joao", role: "member" },
@@ -460,6 +496,12 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
       { person: "leonor", role: "member" },
       { person: "filipa", role: "member" },
     ],
+    monthlyReport: {
+      by: "rui",
+      submittedDaysAgo: 1,
+      notes:
+        "Meetup #15 went well: wallets for normal people got the best questions we've had. Validator workshop and the hackathon kickoff are next.",
+    },
     events: [
       {
         key: "meetup-14",
@@ -481,6 +523,7 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
           improvements: "Sound was poor at the back of the room.",
           nextActions: "Record the next talks and post them in the channel.",
           partners: "Second Home",
+          reviewedDaysAfter: 5,
         },
       },
       {
@@ -544,6 +587,21 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
         venue: "Second Home, Mercado da Ribeira",
         day: -6,
         attendees: ["tiago", "marta", "ana", "filipa"],
+        report: {
+          format: "irl",
+          focus: "crypto",
+          audiences: ["general", "developers"],
+          submittedDaysAfter: 1,
+          by: "rui",
+          theme: "Wallets for people who have never used one",
+          attendees: 44,
+          kpis: ["44 attendees", "1 live demo", "3 joined the community"],
+          wentWell: "The live demo set up a wallet for a volunteer in under two minutes.",
+          improvements: "Start on time; we lost fifteen minutes waiting for the projector.",
+          nextActions: "Share the demo recording and the wallet guide in the channel.",
+          partners: "Second Home",
+          reviewedDaysAfter: 2,
+        },
       },
       {
         key: "validator-workshop",
@@ -667,6 +725,7 @@ export const DEMO_COMMUNITIES: Record<DemoCommunityKey, DemoCommunity> = {
           wentWell: "Relaxed format; people stayed to talk.",
           improvements: "Promote earlier, most people heard about it the same day.",
           nextActions: "Run a hands-on Rust workshop.",
+          reviewedDaysAfter: 3,
         },
       },
       {
