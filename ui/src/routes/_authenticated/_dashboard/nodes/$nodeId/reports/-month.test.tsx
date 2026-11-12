@@ -88,8 +88,7 @@ const stored = {
 const closesAt = "2027-01-01T00:00:00.000Z";
 const owner = { canEdit: true, canReview: false };
 
-function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const Page = (Route as unknown as { component: ComponentType }).component;
   return render(
     <QueryClientProvider client={client}>
@@ -191,6 +190,54 @@ describe("monthly report form", () => {
     await waitFor(() =>
       expect(harness.saved).toEqual([{ nodeId: NODE, month: MONTH, notes: "Quiet month." }]),
     );
+  });
+
+  it("keeps the numbers and Submit while check-ins refresh in the background", async () => {
+    let syncs = 0;
+    let release: () => void = () => {};
+    harness.reconcile = () => {
+      if (syncs === 0) {
+        syncs += 1;
+        return Promise.resolve({ events: 1, truncated: [], failed: [] });
+      }
+      return new Promise((resolve) => {
+        release = () => {
+          syncs += 1;
+          resolve({ events: 1, truncated: [], failed: [] });
+        };
+      });
+    };
+    harness.report = async () => ({
+      report: null,
+      ...owner,
+      organizationId: "org-h",
+      open: true,
+      closesAt,
+      stats: { ...stats, checkIns: 30 + syncs * 10 },
+      checkInsSyncedAt: "2026-11-20T10:00:00.000Z",
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    await waitFor(() =>
+      expect(screen.getByTestId("monthly-report.checkIns").textContent).toContain("40"),
+    );
+    const notes = screen.getByTestId("monthly-report.notes-input") as HTMLTextAreaElement;
+    fireEvent.change(notes, { target: { value: "Draft of the month." } });
+
+    void client.refetchQueries({ queryKey: ["attendance", "reconcile", "org-h"] });
+    await waitFor(() => expect(harness.synced).toHaveLength(2));
+    expect(screen.getByTestId("monthly-report.checkIns").textContent).toContain("40");
+    expect(screen.queryByTestId("monthly-report.stats-syncing")).toBeNull();
+    expect((screen.getByTestId("monthly-report.submit") as HTMLButtonElement).disabled).toBe(false);
+
+    release();
+    await waitFor(() =>
+      expect(screen.getByTestId("monthly-report.checkIns").textContent).toContain("50"),
+    );
+    expect((screen.getByTestId("monthly-report.notes-input") as HTMLTextAreaElement).value).toBe(
+      "Draft of the month.",
+    );
+    expect((screen.getByTestId("monthly-report.submit") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("treats a sync that could not read every event as a failed sync", async () => {
