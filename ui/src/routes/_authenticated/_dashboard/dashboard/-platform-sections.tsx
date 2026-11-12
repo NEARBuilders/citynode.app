@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useSeenOnce } from "@/hooks";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
 import {
@@ -129,10 +130,11 @@ export function CommunityProgress({ progress }: { progress: PlatformStatus["prog
         : value;
   const [showAll, setShowAll] = useState(false);
   const visibleRows = visibleCommunityJoinRows(rows, showAll);
-  const rewards = useCommunityRewards(isLoading || isError ? [] : rows);
+  const [sectionRef, seen] = useSeenOnce<HTMLElement>();
+  const rewards = useCommunityRewards(isLoading || isError || !seen ? [] : rows);
 
   return (
-    <section className="flex flex-col gap-6">
+    <section ref={sectionRef} className="flex flex-col gap-6">
       <SectionHeader
         title={translate("admin.progress.title")}
         description={translate("admin.progress.description")}
@@ -140,7 +142,10 @@ export function CommunityProgress({ progress }: { progress: PlatformStatus["prog
       />
       {!isLoading && !isError && rows.length > 0 && (
         <StatGrid>
-          <CommunityRewardsStat summary={rewards.summary} onRetry={rewards.retryUnreadable} />
+          <CommunityRewardsStat
+            summary={seen ? rewards.summary : { ...rewards.summary, loading: true }}
+            onRetry={rewards.retryUnreadable}
+          />
         </StatGrid>
       )}
       {isLoading ? (
