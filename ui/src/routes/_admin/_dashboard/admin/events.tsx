@@ -265,14 +265,18 @@ function AdminEvents() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{translate("admin.events.event")}</TableHead>
-                  <TableHead>{translate("common.community")}</TableHead>
-                  <TableHead>{translate("admin.events.date")}</TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    {translate("common.community")}
+                  </TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    {translate("admin.events.date")}
+                  </TableHead>
                   {when === "past" && (
                     <>
                       <TableHead className="text-right">
                         {translate("admin.events.checkIns")}
                       </TableHead>
-                      <TableHead className="text-right">
+                      <TableHead className="hidden text-right sm:table-cell">
                         {translate("admin.progress.returning")}
                       </TableHead>
                       <TableHead className="hidden md:table-cell">
@@ -286,7 +290,7 @@ function AdminEvents() {
               <TableBody>
                 {visible.map((event) => (
                   <TableRow key={event.id} data-testid={`admin-event-${event.id}`}>
-                    <TableCell>
+                    <TableCell className="whitespace-normal">
                       {event.publicPage ? (
                         <Link
                           to="/activity/$activityId"
@@ -306,8 +310,17 @@ function AdminEvents() {
                           {event.title}
                         </Link>
                       )}
+                      <p className="text-xs text-muted-foreground sm:hidden">
+                        {event.nodeName}
+                        {event.startsAt && (
+                          <>
+                            {" · "}
+                            <LocalDate value={event.startsAt} />
+                          </>
+                        )}
+                      </p>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <Link
                         to="/admin/nodes/$nodeId"
                         params={{ nodeId: event.nodeId }}
@@ -317,7 +330,7 @@ function AdminEvents() {
                         {event.nodeName}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="hidden text-muted-foreground sm:table-cell">
                       {event.startsAt ? <LocalDate value={event.startsAt} /> : "—"}
                     </TableCell>
                     {when === "past" && (
@@ -329,7 +342,7 @@ function AdminEvents() {
                           {event.checkIns ? event.checkIns.people : "—"}
                         </TableCell>
                         <TableCell
-                          className="text-right tabular-nums"
+                          className="hidden text-right tabular-nums sm:table-cell"
                           data-testid="admin-event-returning"
                         >
                           {event.checkIns ? event.checkIns.returning : "—"}
