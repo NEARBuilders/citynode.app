@@ -855,7 +855,7 @@ export const contract = oc.router({
       path: "/nodes/{nodeId}/ancestors",
       summary: "List a node's ancestor communities, nearest first",
       description:
-        "Public — walks the place tree up from the node and returns the communities linked to its ancestor places.",
+        "Public — follows the same parent edges as listChildren up from the node: the nearest ancestor place with a community, or the legacy parent for nodes without a place.",
     })
     .input(z.object({ nodeId: z.string() }))
     .output(z.array(NodeSchema))
