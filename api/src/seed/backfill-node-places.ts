@@ -1,6 +1,11 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Database } from "../db";
-import { nodes as nodesTable, type PlaceBoundary, places as placesTable } from "../db/schema";
+import {
+  nodes as nodesTable,
+  type PlaceBoundary,
+  placeAliases as placeAliasesTable,
+  places as placesTable,
+} from "../db/schema";
 import {
   type AliasUpsertRow,
   type PlaceUpsertRow,

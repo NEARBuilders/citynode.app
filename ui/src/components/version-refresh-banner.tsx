@@ -27,7 +27,7 @@ export function VersionRefreshBanner({
   );
 
   useEffect(() => {
-    const fingerprint = runtimeConfig?.deploymentFingerprint;
+    const fingerprint = runtimeConfig?.deploymentDigest;
     if (!fingerprint || dismissed) return;
 
     let cancelled = false;
@@ -43,7 +43,7 @@ export function VersionRefreshBanner({
       }
       if (cancelled || !signedIn) return;
       handle = startVersionWatch({
-        currentFingerprint: fingerprint,
+        currentDeploymentDigest: fingerprint,
         onNewVersion: () => setShow(true),
       });
     };
@@ -53,7 +53,7 @@ export function VersionRefreshBanner({
       cancelled = true;
       handle?.stop();
     };
-  }, [runtimeConfig?.deploymentFingerprint, dismissed, authClient]);
+  }, [runtimeConfig?.deploymentDigest, dismissed, authClient]);
 
   if (!show || dismissed) return null;
 

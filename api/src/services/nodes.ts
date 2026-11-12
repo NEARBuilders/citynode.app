@@ -12,6 +12,7 @@ import {
   validators as validatorsTable,
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
+import { nodeParentEdgesQuery } from "./places";
 
 export type NodeKind = string;
 type ValidatorRole = (typeof validatorRoleEnum)["enumValues"][number];
@@ -139,32 +140,39 @@ function replaceMetadataKeepingKind(replacement: string): SQL {
   return sql`${replacement}::jsonb || CASE WHEN ${nodesTable.metadata} ? 'kind' THEN jsonb_build_object('kind', ${nodesTable.metadata} -> 'kind') ELSE '{}'::jsonb END`;
 }
 
-/**
- * KEEP: reachability spans both hierarchy axes — node-tree edges
- * (nodes.parent_id, carrying nodes that have no place identity yet) plus
- * place-tree edges (a child place's anchored nodes). Place-anchored and
- * unlinked subtrees coexist until the backfill/join flow links every node,
- * so reads and move-safety checks have to traverse both.
- */
-function mergedSubtreeBody(rootId: string): SQL {
-  return sql`
-    WITH RECURSIVE subtree AS (
-      SELECT id, place_id, 0 AS depth, ARRAY[id] AS path
-      FROM nodes
-      WHERE id = ${rootId}
-      UNION ALL
-      SELECT c.id, c.place_id, subtree.depth + 1, subtree.path || c.id
-      FROM subtree
-      CROSS JOIN LATERAL (
-        SELECT n.id, n.place_id FROM nodes n WHERE n.parent_id = subtree.id
-        UNION ALL
-        SELECT n.id, n.place_id
-        FROM nodes n INNER JOIN places p ON p.id = n.place_id
-        WHERE subtree.place_id IS NOT NULL AND p.parent_id = subtree.place_id
-      ) c
-      WHERE NOT (c.id = ANY(subtree.path))
-    )
-  `;
+interface ParentEdge {
+  id: string;
+  parent_id: string | null;
+}
+
+function rowsOf<T>(result: unknown): T[] {
+  const rows = (result as { rows?: unknown }).rows ?? result;
+  return Array.isArray(rows) ? (rows as T[]) : [];
+}
+
+function nodeParentIs(parentId: string | null): SQL {
+  return sql`${nodesTable.id} IN (
+    SELECT id FROM (${nodeParentEdgesQuery()}) edges
+    WHERE ${parentId === null ? sql`parent_id IS NULL` : sql`parent_id = ${parentId}`}
+  )`;
+}
+
+function subtreeDepths(rootId: string, edges: ParentEdge[]): Map<string, number> {
+  const childrenOf = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (edge.parent_id)
+      childrenOf.set(edge.parent_id, [...(childrenOf.get(edge.parent_id) ?? []), edge.id]);
+  }
+  const depths = new Map([[rootId, 0]]);
+  const queue = [rootId];
+  for (const current of queue) {
+    for (const child of childrenOf.get(current) ?? []) {
+      if (depths.has(child)) continue;
+      depths.set(child, (depths.get(current) ?? 0) + 1);
+      queue.push(child);
+    }
+  }
+  return depths;
 }
 
 const SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
@@ -262,20 +270,7 @@ export const NodesLive = Layer.effect(
             conditions.push(eq(nodesTable.tenantId, filter.tenantId));
           }
           if (filter?.parentId !== undefined) {
-            if (filter.parentId === null) {
-              conditions.push(
-                sql`(${nodesTable.placeId} IN (SELECT id FROM places WHERE parent_id IS NULL)
-                  OR (${nodesTable.placeId} IS NULL AND ${nodesTable.parentId} IS NULL))`,
-              );
-            } else {
-              conditions.push(
-                sql`(${nodesTable.placeId} IN (
-                    SELECT id FROM places
-                    WHERE parent_id = (SELECT place_id FROM nodes WHERE id = ${filter.parentId})
-                  )
-                  OR (${nodesTable.placeId} IS NULL AND ${nodesTable.parentId} = ${filter.parentId}))`,
-              );
-            }
+            conditions.push(nodeParentIs(filter.parentId));
           }
           const rows = yield* query(() =>
             conditions.length === 0
@@ -294,30 +289,18 @@ export const NodesLive = Layer.effect(
           if (nodes.length === 0) return [];
 
           const nodeIds = nodes.map((node) => node.id);
-          const placeIds = nodes
-            .map((node) => node.placeId)
-            .filter((placeId): placeId is string => placeId !== null);
-          const [childRows, nodeChildRows, validatorRows] = yield* Effect.all([
+          const [childRows, validatorRows] = yield* Effect.all([
             query(() =>
-              db
-                .select({
-                  parentPlaceId: placesTable.parentId,
-                  count: sql<number>`cast(count(*) as integer)`,
-                })
-                .from(placesTable)
-                .where(inArray(placesTable.parentId, placeIds))
-                .groupBy(placesTable.parentId),
-            ),
-            query(() =>
-              db
-                .select({
-                  nodeId: nodesTable.parentId,
-                  count: sql<number>`cast(count(*) as integer)`,
-                })
-                .from(nodesTable)
-                .where(and(inArray(nodesTable.parentId, nodeIds), isNull(nodesTable.placeId)))
-                .groupBy(nodesTable.parentId),
-            ),
+              db.execute(sql`
+                SELECT parent_id, cast(count(*) as integer) AS count
+                FROM (${nodeParentEdgesQuery()}) edges
+                WHERE parent_id IN (${sql.join(
+                  nodeIds.map((nodeId) => sql`${nodeId}`),
+                  sql`, `,
+                )})
+                GROUP BY parent_id
+              `),
+            ).pipe(Effect.map((result) => rowsOf<{ parent_id: string; count: number }>(result))),
             query(() =>
               db
                 .select({
@@ -329,19 +312,9 @@ export const NodesLive = Layer.effect(
                 .groupBy(validatorsTable.nodeId),
             ),
           ]);
-          const placeIdByNode = new Map(
-            nodes.flatMap((node) => (node.placeId ? [[node.placeId, node.id] as const] : [])),
+          const childrenByNode = new Map(
+            childRows.map((row) => [row.parent_id, Number(row.count)] as const),
           );
-          const childrenByNode = new Map<string, number>();
-          for (const row of childRows) {
-            const nodeId = row.parentPlaceId ? placeIdByNode.get(row.parentPlaceId) : undefined;
-            if (!nodeId) continue;
-            childrenByNode.set(nodeId, (childrenByNode.get(nodeId) ?? 0) + row.count);
-          }
-          for (const row of nodeChildRows) {
-            if (!row.nodeId) continue;
-            childrenByNode.set(row.nodeId, (childrenByNode.get(row.nodeId) ?? 0) + row.count);
-          }
           const validatorsByNode = new Map(
             validatorRows.map((row) => [row.nodeId, row.count] as const),
           );
@@ -389,10 +362,9 @@ export const NodesLive = Layer.effect(
 
                 await tx.execute(sql`LOCK TABLE nodes, places IN SHARE ROW EXCLUSIVE MODE`);
 
-                let parentPlaceId: string | null = null;
                 if (input.parentId !== null) {
                   const [parent] = await tx
-                    .select({ id: nodesTable.id, placeId: nodesTable.placeId })
+                    .select({ id: nodesTable.id })
                     .from(nodesTable)
                     .where(eq(nodesTable.id, input.parentId))
                     .limit(1);
@@ -402,16 +374,9 @@ export const NodesLive = Layer.effect(
                       data: { resource: "node", resourceId: input.parentId },
                     });
                   }
-                  parentPlaceId = parent.placeId;
-                }
 
-                if (input.parentId !== null) {
-                  const cycleResult = await tx.execute(sql`
-                    ${mergedSubtreeBody(id)}
-                    SELECT id FROM subtree WHERE id = ${input.parentId} LIMIT 1
-                  `);
-                  const cycleRows = (cycleResult as { rows?: unknown }).rows ?? cycleResult;
-                  if (Array.isArray(cycleRows) && cycleRows.length > 0) {
+                  const edges = rowsOf<ParentEdge>(await tx.execute(nodeParentEdgesQuery()));
+                  if (subtreeDepths(id, edges).has(input.parentId)) {
                     throw new ORPCError("BAD_REQUEST", {
                       message: "Node cannot be moved below one of its descendants",
                     });
@@ -428,13 +393,6 @@ export const NodesLive = Layer.effect(
                     message: "Node not found",
                     data: { resource: "node", resourceId: id },
                   });
-                }
-
-                if (moved.placeId && (input.parentId === null || parentPlaceId !== null)) {
-                  await tx
-                    .update(placesTable)
-                    .set({ parentId: input.parentId === null ? null : parentPlaceId })
-                    .where(eq(placesTable.id, moved.placeId));
                 }
 
                 return toNodeRecord(moved);
@@ -493,29 +451,14 @@ export const NodesLive = Layer.effect(
           return rows.length > 0;
         }),
 
-      listRootNodes: query(() =>
-        db
-          .select()
-          .from(nodesTable)
-          .where(
-            sql`(${nodesTable.placeId} IN (SELECT id FROM places WHERE parent_id IS NULL)
-              OR (${nodesTable.placeId} IS NULL AND ${nodesTable.parentId} IS NULL))`,
-          ),
-      ).pipe(Effect.map((rows) => rows.map(toNodeRecord))),
+      listRootNodes: query(() => db.select().from(nodesTable).where(nodeParentIs(null))).pipe(
+        Effect.map((rows) => rows.map(toNodeRecord)),
+      ),
 
       listChildren: (parentId) =>
         Effect.gen(function* () {
           const rows = yield* query(() =>
-            db
-              .select()
-              .from(nodesTable)
-              .where(
-                sql`(${nodesTable.placeId} IN (
-                    SELECT id FROM places
-                    WHERE parent_id = (SELECT place_id FROM nodes WHERE id = ${parentId})
-                  )
-                  OR (${nodesTable.placeId} IS NULL AND ${nodesTable.parentId} = ${parentId}))`,
-              ),
+            db.select().from(nodesTable).where(nodeParentIs(parentId)),
           );
           return rows.map(toNodeRecord);
         }),
@@ -557,26 +500,17 @@ export const NodesLive = Layer.effect(
 
       subtreeWithValidators: (nodeId) =>
         Effect.gen(function* () {
-          const subtreeResult = yield* query(() =>
-            db.execute(sql`
-              ${mergedSubtreeBody(nodeId)}
-              SELECT DISTINCT ON (id) id, depth FROM subtree ORDER BY id, depth
-            `),
+          const edges = yield* query(() => db.execute(nodeParentEdgesQuery())).pipe(
+            Effect.map((result) => rowsOf<ParentEdge>(result)),
           );
-          const subtreeRows = (subtreeResult as { rows?: unknown }).rows ?? subtreeResult;
-          if (!Array.isArray(subtreeRows) || subtreeRows.length === 0) return [];
-
-          const depthById = new Map(
-            (subtreeRows as Array<{ id: string; depth: number }>).map(
-              (r) => [r.id, r.depth] as const,
-            ),
-          );
+          const depthById = subtreeDepths(nodeId, edges);
           const nodeRows = yield* query(() =>
             db
               .select()
               .from(nodesTable)
               .where(inArray(nodesTable.id, [...depthById.keys()])),
           );
+          if (nodeRows.length === 0) return [];
           const orderedNodes = nodeRows.sort(
             (a, b) => (depthById.get(a.id) ?? 0) - (depthById.get(b.id) ?? 0),
           );

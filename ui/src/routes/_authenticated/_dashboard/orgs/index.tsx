@@ -286,16 +286,6 @@ function OrganizationsList() {
                     </Link>
                     <div className="flex flex-wrap gap-1.5">
                       {myRole && <Badge variant="secondary">{roleLabel(myRole, translate)}</Badge>}
-                      {org.status === "pending" && (
-                        <Badge variant="warning" data-testid="orgs-pending">
-                          {translate("orgApproval.pending")}
-                        </Badge>
-                      )}
-                      {org.status === "rejected" && (
-                        <Badge variant="destructive" data-testid="orgs-rejected">
-                          {translate("label.rejected")}
-                        </Badge>
-                      )}
                       {isActive && <Badge variant="success">{translate("common.active")}</Badge>}
                       {tenantOrgIds.has(org.id) && (
                         <Badge variant="outline">{translate("common.community")}</Badge>
@@ -306,30 +296,19 @@ function OrganizationsList() {
                         {members ? translate("org.memberCount", { count: members.length }) : " "}
                       </span>
                       <div className="flex items-center gap-2">
-                        {org.status === "active" &&
-                          myRole === "owner" &&
-                          !tenantOrgIds.has(org.id) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              nativeButton={false}
-                              render={<Link to="/apply" search={{ org: org.slug }} />}
-                              data-testid={`orgs-start-community-${org.slug}`}
-                            >
-                              <RocketLaunchIcon />
-                              {translate("dashboard.startCommunity")}
-                            </Button>
-                          )}
-                        {org.status !== "active" ? (
+                        {myRole === "owner" && !tenantOrgIds.has(org.id) && (
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             nativeButton={false}
-                            render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                            render={<Link to="/apply" search={{ org: org.slug }} />}
+                            data-testid={`orgs-start-community-${org.slug}`}
                           >
-                            {translate("orgApproval.view")}
+                            <RocketLaunchIcon />
+                            {translate("dashboard.startCommunity")}
                           </Button>
-                        ) : isActive ? (
+                        )}
+                        {isActive ? (
                           <Button
                             variant="ghost"
                             size="sm"
