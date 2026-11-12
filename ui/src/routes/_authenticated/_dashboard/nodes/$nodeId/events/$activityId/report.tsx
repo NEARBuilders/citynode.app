@@ -1,6 +1,6 @@
 import { CalendarDotsIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
@@ -46,6 +46,7 @@ import {
 } from "@/lib/queries/event-reports";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
+import { useReturnToReport } from "@/lib/use-return-to-report";
 
 export const Route = createFileRoute(
   "/_authenticated/_dashboard/nodes/$nodeId/events/$activityId/report",
@@ -177,6 +178,7 @@ function EventReportPage() {
         <ReportForm
           key={saved?.updatedAt ?? "new"}
           nodeId={nodeId}
+          organizationId={tenant.data?.orgId ?? null}
           activityId={activityId}
           initial={saved ? draftFromReport(saved.report) : emptyReportDraft(checkIns.data ?? null)}
           isEdit={!!saved}
@@ -253,11 +255,13 @@ function ReportAnswers({ report }: { report: EventReport }) {
 
 function ReportForm({
   nodeId,
+  organizationId,
   activityId,
   initial,
   isEdit,
 }: {
   nodeId: string;
+  organizationId: string | null;
   activityId: string;
   initial: ReportDraft;
   isEdit: boolean;
@@ -265,7 +269,7 @@ function ReportForm({
   const translate = useAppTranslation();
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const returnToReport = useReturnToReport();
   const [draft, setDraft] = useState(initial);
   const [errors, setErrors] = useState<Record<string, ReportFieldError>>({});
   const update = (patch: Partial<ReportDraft>) => setDraft((current) => ({ ...current, ...patch }));
@@ -278,11 +282,7 @@ function ReportForm({
         queryClient.invalidateQueries({ queryKey: eventReportQueryKeys.all }),
         queryClient.invalidateQueries({ queryKey: engagementQueryKeys.events() }),
       ]);
-      await navigate({
-        to: "/nodes/$nodeId/content",
-        params: { nodeId },
-        search: { tab: "events" },
-      });
+      await returnToReport({ nodeId, organizationId });
     },
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });

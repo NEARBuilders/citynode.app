@@ -801,17 +801,17 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "{name} : événements, stations, propositions.",
     "{name}：活动、站点和提案。",
   ],
-  "dashboard.eventsToReport": [
-    "Events to report on",
-    "Eventos por informar",
-    "Événements à rapporter",
-    "待提交报告的活动",
+  "dashboard.monthlyReport": [
+    "Send your {month} report",
+    "Envía tu informe de {month}",
+    "Envoyez votre rapport de {month}",
+    "提交您的{month}报告",
   ],
-  "dashboard.eventsToReportHint": [
-    "These events have ended and still need a report.",
-    "Estos eventos ya terminaron y aún necesitan un informe.",
-    "Ces événements sont terminés et n'ont pas encore de rapport.",
-    "这些活动已结束，仍需要提交报告。",
+  "dashboard.monthlyReportHint": [
+    "{name}: the month's numbers are filled in. Add what happened.",
+    "{name}: las cifras del mes ya están completadas. Añade lo que pasó.",
+    "{name} : les chiffres du mois sont déjà remplis. Ajoutez ce qui s'est passé.",
+    "{name}：本月数据已自动填写，请补充发生了什么。",
   ],
   "dashboard.configWaitingHint": [
     "A community config change (e.g. a custom UI bundle) is waiting for DAO approval.",
