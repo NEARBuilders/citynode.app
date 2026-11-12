@@ -301,7 +301,7 @@ function OrganizationsList() {
                             variant="outline"
                             size="sm"
                             nativeButton={false}
-                            render={<Link to="/apply" search={{ org: org.slug }} />}
+                            render={<Link to="/apply" search={{}} />}
                             data-testid={`orgs-start-community-${org.slug}`}
                           >
                             <RocketLaunchIcon />

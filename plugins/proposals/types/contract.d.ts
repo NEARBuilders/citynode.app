@@ -161,16 +161,10 @@ export declare const ProposalEventSchema: z.ZodObject<{
     timestamp: z.ZodISODateTime;
 }, z.core.$strip>;
 export declare const NodeApplicationPayloadSchema: z.ZodObject<{
-    kind: z.ZodEnum<{
-        city: "city";
-        country: "country";
-        state: "state";
-    }>;
-    parentId: z.ZodNullable<z.ZodString>;
+    placeId: z.ZodUUID;
     name: z.ZodString;
     slug: z.ZodString;
     motivation: z.ZodString;
-    orgId: z.ZodOptional<z.ZodString>;
     accountId: z.ZodString;
     submitterAccountId: z.ZodOptional<z.ZodString>;
     applicantUserId: z.ZodOptional<z.ZodString>;
@@ -1211,7 +1205,7 @@ export declare const contract: {
             hasMore: z.ZodBoolean;
             nextCursor: z.ZodNullable<z.ZodString>;
         }, z.core.$strip>;
-    }, z.core.$strip>, object>;
+    }, z.core.$strip>, Record<never, never>>;
     getProposalCount: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         pluginId: z.ZodString;
         entityId: z.ZodString;
@@ -1219,7 +1213,7 @@ export declare const contract: {
         pluginId: z.ZodString;
         entityId: z.ZodString;
         totalCount: z.ZodNumber;
-    }, z.core.$strip>, object>;
+    }, z.core.$strip>, Record<never, never>>;
     getAuditLog: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         pluginId: z.ZodString;
         entityId: z.ZodString;
@@ -1241,7 +1235,7 @@ export declare const contract: {
             hasMore: z.ZodBoolean;
             nextCursor: z.ZodNullable<z.ZodString>;
         }, z.core.$strip>;
-    }, z.core.$strip>, object>;
+    }, z.core.$strip>, Record<never, never>>;
     getSubmissions: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         pluginId: z.ZodString;
         entityId: z.ZodString;
@@ -1414,7 +1408,7 @@ export declare const contract: {
         removeStatus: "failed" | "not_started" | "removed" | "removing";
         submissionCount: number;
         timestamp: string;
-    }, unknown, void>>, object>;
+    }, unknown, void>>, Record<never, never>>;
 };
 export type ContractType = typeof contract;
 export type InferOutput<K extends keyof InferContractRouterOutputs<ContractType>> = InferContractRouterOutputs<ContractType>[K];

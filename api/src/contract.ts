@@ -60,6 +60,21 @@ export const NodeProposalPayloadSchema = z
 
 export type NodeProposalPayload = z.infer<typeof NodeProposalPayloadSchema>;
 
+export const OfficialApplicationPayloadSchema = z.object({
+  placeId: z.uuid().optional(),
+  name: z.string().trim().min(1),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/),
+  motivation: z.string().trim().min(1),
+  accountId: z.string().min(1),
+  submitterAccountId: z.string().min(1).optional(),
+  applicantUserId: z.string().min(1).optional(),
+});
+
+export type OfficialApplicationPayload = z.infer<typeof OfficialApplicationPayloadSchema>;
+
 /** Setup steps recorded on an approved community application, in the order they run. */
 export const CommunitySetupStepSchema = z.enum(["organization", "community", "publication"]);
 
@@ -724,6 +739,38 @@ export const contract = oc.router({
     )
     .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
 
+  approveOfficialApplication: oc
+    .route({
+      method: "POST",
+      path: "/nodes/official-applications/approve",
+      summary: "Approve an Official Application and link its DAO to the community",
+      description:
+        "Platform admin — links the applicant's Sputnik DAO to the activated community's organization and marks the application approved. Nothing else about the community changes; a failed approval leaves the application pending.",
+    })
+    .input(
+      z.object({
+        proposalId: z.string().min(1),
+        entityId: z.string().min(1),
+        expectedUpdatedAt: z.iso.datetime(),
+      }),
+    )
+    .output(
+      z.object({
+        nodeId: z.string(),
+        organizationId: z.string(),
+        daoAccountId: z.string(),
+        network: z.enum(["mainnet", "testnet"]),
+      }),
+    )
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      BAD_REQUEST,
+      NOT_FOUND,
+      CONFLICT: { status: 409, message: "The community is linked to another DAO" },
+      PRECONDITION_FAILED: { status: 412, message: "The place has no community yet" },
+    }),
+
   applyCommunityProposal: oc
     .route({ method: "POST", path: "/nodes/community-proposals/apply" })
     .input(
@@ -1165,7 +1212,7 @@ export const contract = oc.router({
       path: "/nodes/{nodeId}/dao",
       summary: "Get the Node DAO that owns a community",
       description:
-        "Public — the Sputnik DAO recorded as the community's tenant owner, read live, with its network. Null when a person or the platform owns the community.",
+        "Public — the Sputnik DAO linked to the community: the DAO an approved Official Application linked to its organization, or the legacy tenant owner. Null when the community is not official.",
     })
     .input(z.object({ nodeId: z.string() }))
     .output(NodeDaoSchema),

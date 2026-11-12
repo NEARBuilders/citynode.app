@@ -19,6 +19,12 @@ import {
   releaseCommunityOrganization,
 } from "./lib/community-organizations";
 import { ContextSchema } from "./lib/context";
+import {
+  linkOfficialDao,
+  officialDaoOf,
+  parseOfficialApplication,
+  resolveApplicationCommunity,
+} from "./lib/official-application";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { AttendanceLive, type AttendanceService, AttendanceTag } from "./services/attendance";
 import { verifyDaoMembership } from "./services/dao";
@@ -222,13 +228,20 @@ const authorizeNodeAccess = (
 ): NodeEffect<void> =>
   Effect.gen(function* () {
     if (!node.tenantId) {
-      if (context.user?.role !== "admin") {
+      if (context.user?.role === "admin") return;
+      const officialOrgId =
+        options.resource === "validators" && node.orgId && officialDaoOf(node) ? node.orgId : null;
+      if (!officialOrgId || context.organization?.activeOrganizationId !== officialOrgId) {
         return yield* Effect.fail(
           new ORPCError("FORBIDDEN", {
-            message: "Standalone nodes can only be managed by platform admins",
+            message:
+              options.resource === "validators" && node.orgId
+                ? "Validators can be attached once the community is official"
+                : "Standalone nodes can only be managed by platform admins",
           }),
         );
       }
+      yield* requireNodeOperationsAccess(context);
       return;
     }
     const tenant = yield* services.tenants.resolveTenantById(node.tenantId!);
@@ -1066,7 +1079,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         const none = { daoAccountId: null, network: null };
         const node = yield* services.nodes.getById(input.nodeId);
-        if (!node?.tenantId) return none;
+        if (!node) return none;
+        const official = officialDaoOf(node);
+        if (official) return official;
+        if (!node.tenantId) return none;
         const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
         if (!tenant || tenant.ownerKind !== "dao") return none;
         return { daoAccountId: tenant.accountId, network: resolveNetwork(tenant.accountId) };
@@ -1631,6 +1647,99 @@ export default createPlugin.withPlugins<PluginsClient>()({
           });
         }),
 
+      approveOfficialApplication: builder.approveOfficialApplication
+        .use(requireAdmin)
+        .effect(function* ({ input, context }) {
+          const proposalsPlugin = plugins.proposals;
+          const authPlugin = plugins.auth;
+          if (!proposalsPlugin || !authPlugin) {
+            return yield* Effect.fail(
+              new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "The proposals or auth plugin is not available",
+              }),
+            );
+          }
+          const reviewerUserId = context.userId ?? context.user?.id ?? "";
+          const reviewerContext = {
+            reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+            userId: reviewerUserId,
+            user: context.user,
+          };
+          const proposalsClient = proposalsPlugin.client(reviewerContext);
+          const auth = authPlugin.client(reviewerContext);
+          const services = yield* ApiServices;
+          const failure = (message: string) => (error: unknown) =>
+            error instanceof ORPCError
+              ? error
+              : new ORPCError("INTERNAL_SERVER_ERROR", { message });
+          const listed = yield* Effect.tryPromise({
+            try: () =>
+              proposalsClient.getProposals({
+                pluginId: "node",
+                entityId: input.entityId,
+                limit: 1,
+              }),
+            catch: failure("Could not load the application"),
+          });
+          const proposal = listed.data.find((item) => item.id === input.proposalId);
+          if (!proposal) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", { message: "Application not found" }),
+            );
+          }
+          if (proposal.updatedAt !== input.expectedUpdatedAt) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", {
+                message: "This proposal changed. Refresh and try again.",
+              }),
+            );
+          }
+          if (
+            proposal.reviewStatus === "rejected" ||
+            proposal.reviewStatus === "removed" ||
+            (proposal.reviewStatus === "approved" && proposal.applyStatus === "applied")
+          ) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", { message: "This application is already decided" }),
+            );
+          }
+          const link = yield* Effect.tryPromise({
+            try: async () => {
+              const application = parseOfficialApplication(proposal.payload, proposal.entityId);
+              const community = await resolveApplicationCommunity(services, application);
+              return linkOfficialDao(services, auth, {
+                community,
+                daoAccountId: application.accountId,
+                reviewerUserId,
+              });
+            },
+            catch: failure("Could not link the DAO to the community"),
+          });
+          const approved =
+            proposal.reviewStatus === "approved" && proposal.applyStatus === "applying"
+              ? proposal
+              : (yield* Effect.tryPromise({
+                  try: () =>
+                    proposalsClient.approve({
+                      pluginId: "node",
+                      entityId: proposal.entityId,
+                      expectedUpdatedAt: proposal.updatedAt,
+                    }),
+                  catch: failure("Could not approve the application"),
+                })).data;
+          yield* Effect.tryPromise({
+            try: () =>
+              proposalsClient.markApplied({
+                pluginId: "node",
+                entityId: proposal.entityId,
+                expectedUpdatedAt: approved.updatedAt,
+                appliedResourceId: link.nodeId,
+              }),
+            catch: failure("Could not record the approval"),
+          });
+          return link;
+        }),
+
       applyCommunityProposal: builder.applyCommunityProposal.effect(function* ({
         input,
         context,
@@ -2031,6 +2140,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         const auth = authPlugin.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
           userId,
           user: context.user,
         });
