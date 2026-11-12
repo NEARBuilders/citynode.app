@@ -17,7 +17,6 @@ const base: NextStepsState = {
   canOrganizeEvents: false,
   inFinanceTeam: false,
   isAdmin: false,
-  monthlyReportDue: null,
 };
 
 const harbor = { name: "Harbor City", tenantId: "t1" };
@@ -116,26 +115,26 @@ describe("home next steps", () => {
     expect(ids({ membership: "none", isAdmin: true })).toEqual(["stake", "explore"]);
   });
 
-  it("puts a monthly report that's due after account safety and before the community", () => {
-    const steps = getNextSteps({
-      ...base,
-      isAnonymous: true,
-      hasPasskey: false,
-      community: harbor,
-      canManageCommunity: true,
-      monthlyReportDue: "November 2026",
-    });
-    expect(steps.map((step) => step.id)).toEqual([
+  it("puts account safety first and never offers more than five steps", () => {
+    const unsaved = { isAnonymous: true, hasPasskey: false };
+    const states: Partial<NextStepsState>[] = [
+      { ...unsaved, community: harbor, canManageCommunity: true },
+      { ...unsaved, community: harbor, inFinanceTeam: true, canOrganizeEvents: true },
+      { ...unsaved, membership: "none" },
+      { ...unsaved, membership: "choose", communityCount: 3 },
+      { ...unsaved, community: harbor, isAdmin: true },
+    ];
+    for (const state of states) {
+      const steps = ids(state);
+      expect(steps[0]).toBe("save-account");
+      expect(steps.length).toBeLessThanOrEqual(5);
+    }
+    expect(ids({ ...unsaved, community: harbor, canManageCommunity: true })).toEqual([
       "save-account",
-      "monthly-report",
       "open-community",
       "payouts",
       "stake",
     ]);
-    expect(steps[1]?.title).toBe("Send your November 2026 report");
-    expect(ids({ community: null, monthlyReportDue: "November 2026" })).not.toContain(
-      "monthly-report",
-    );
   });
 });
 

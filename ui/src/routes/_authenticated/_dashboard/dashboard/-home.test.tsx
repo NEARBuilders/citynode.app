@@ -26,6 +26,7 @@ const harness = vi.hoisted(() => ({
   authContext: null as unknown,
   attendance: { events: [], unclassified: [], communities: [] } as Record<string, unknown>,
   attendanceReads: [] as string[],
+  passkeys: [{ id: "passkey-1" }] as { id: string }[],
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -66,6 +67,11 @@ const api = {
     listUserInvitations: async () => [],
     getContext: async () => harness.authContext,
     listOnboardingCodes: async () => [],
+    getOnboardingStats: async ({ month }: { month: string }) => ({
+      month,
+      totals: { redeemed: 0, newMembers: 0 },
+      organizations: [],
+    }),
   },
   getDiscoveryProfile: async () => null,
   listDiscoveryActivities: async () => [],
@@ -75,6 +81,10 @@ const api = {
     return { id: `tenant-${orgId}`, orgId, name };
   },
   listNodes: async () => harness.nodes,
+  listEventReportStatuses: async () => [],
+  listMonthlyReportStatuses: async () => [],
+  getMonthlyReport: async () => ({ stats: null }),
+  getTeamJoinBoard: async () => ({ canReview: true, teams: [], requests: [] }),
   getNodeSummary: async () => ({
     stakingValidators: { sourceNodeId: "", validators: [] },
     validators: [],
@@ -103,7 +113,7 @@ vi.mock("@/app", () => ({
   sessionQueryOptions: () => ({ queryKey: ["session"], queryFn: async () => session() }),
   clearAuthenticatedQueries: async () => {},
   useAuthClient: () => ({
-    passkey: { listUserPasskeys: async () => ({ data: [{ id: "passkey-1" }] }) },
+    passkey: { listUserPasskeys: async () => ({ data: harness.passkeys }) },
     organization: { setActive, setActiveTeam: async () => ({ error: null }) },
     getSession: async () => ({ data: session(), error: null }),
     near: { getProfile: async () => ({ data: null }), disconnect: async () => {} },
@@ -132,6 +142,7 @@ afterEach(() => {
   harness.authContext = null;
   harness.attendance = { events: [], unclassified: [], communities: [] };
   harness.attendanceReads.length = 0;
+  harness.passkeys = [{ id: "passkey-1" }];
 });
 
 function Switcher() {
@@ -358,24 +369,6 @@ describe("Home without a community", () => {
     expect(stepIds()).toEqual(["stake", "explore"]);
   });
 
-  it("keeps the community setup checklist for owners, off a platform admin's Home", async () => {
-    harness.user = member;
-    harness.activeOrganizationId = harbor.id;
-    harness.organizations = [personal, harbor];
-    harness.tenants = { [harbor.id]: "Harbor" };
-    harness.nodes = [node("node-h", "Harbor")];
-    harness.authContext = { organization: { member: { role: "owner" }, teams: [] } };
-    renderHome();
-    expect(await screen.findByTestId("home-node-setup")).toBeTruthy();
-
-    cleanup();
-    harness.user = { ...member, role: "admin" };
-    renderHome();
-    expect(await screen.findByTestId("home-admin-overview")).toBeTruthy();
-    await screen.findByTestId("home-step-open-community");
-    expect(screen.queryByTestId("home-node-setup")).toBeNull();
-  });
-
   it("offers a retry instead of a false Start a community when organizations fail", async () => {
     harness.user = member;
     harness.organizationsFail = true;
@@ -389,6 +382,109 @@ describe("Home without a community", () => {
     harness.organizations = [personal];
     fireEvent.click(screen.getByTestId("home-organizations-retry"));
     expect(await screen.findByTestId("home-step-start-community")).toBeTruthy();
+  });
+});
+
+describe("who sees the community overview on Home", () => {
+  const inHarbor = (organization: unknown, user: Record<string, unknown> = member) => {
+    harness.user = user;
+    harness.activeOrganizationId = harbor.id;
+    harness.organizations = [personal, harbor];
+    harness.tenants = { [harbor.id]: "Harbor" };
+    harness.nodes = [node("node-h", "Harbor")];
+    harness.authContext = { organization };
+  };
+  const owner = { member: { role: "owner" }, teams: [] };
+  const follows = (first: HTMLElement, second: HTMLElement) =>
+    Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it("leads an owner's Home with the overview, then a setup line instead of the checklist", async () => {
+    inHarbor(owner);
+    renderHome();
+
+    const overview = await screen.findByTestId("home-owner.overview");
+    expect(screen.getByTestId("home.heading").textContent).toContain(
+      "How Harbor is doing this month",
+    );
+    const setup = await screen.findByTestId("home-owner.setup");
+    expect(setup.textContent).toContain("Get Harbor running");
+    expect(setup.textContent).toContain("0 of 4 done");
+    expect(screen.getByTestId("home-owner.setup-open").getAttribute("href")).toBe(
+      "/dashboard/node",
+    );
+    expect(screen.queryByTestId("home-node-setup")).toBeNull();
+    expect(screen.queryByTestId("home-setup-map")).toBeNull();
+    const steps = await screen.findByTestId("home-next-steps");
+    expect(follows(overview, setup)).toBe(true);
+    expect(follows(setup, steps)).toBe(true);
+    expect(stepIds()).toEqual(["open-community", "payouts", "stake"]);
+    expect(follows(steps, screen.getByText("Bulletin for Harbor node-h"))).toBe(true);
+  });
+
+  it("gives an events-team organizer the overview without the setup line", async () => {
+    inHarbor({
+      member: { role: "member" },
+      teams: [{ id: "team-events", name: "Events", areas: ["events"] }],
+      activeTeamId: null,
+    });
+    renderHome();
+
+    expect(await screen.findByTestId("home-owner.overview")).toBeTruthy();
+    expect(await screen.findByTestId("home-owner.reports-list")).toBeTruthy();
+    expect(stepIds()).toEqual(["open-community", "stake"]);
+    expect(screen.queryByTestId("home-owner.setup")).toBeNull();
+  });
+
+  it("leaves Home unchanged for Finance-only members and plain members", async () => {
+    inHarbor({
+      member: { role: "member" },
+      teams: [{ id: "team-finance", name: "Finance", areas: ["finance"] }],
+      activeTeamId: null,
+    });
+    renderHome();
+    expect(await screen.findByTestId("home-step-payouts")).toBeTruthy();
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+    expect(stepIds()[0]).toBe("open-community");
+
+    cleanup();
+    inHarbor({ member: { role: "member" }, teams: [] });
+    renderHome();
+    expect(await screen.findByTestId("home-step-open-community")).toBeTruthy();
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+    expect(screen.getByTestId("home.heading").textContent).toContain("Pick up where you left off.");
+  });
+
+  it("shows no overview to someone without a community", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = personal.id;
+    harness.organizations = [personal];
+    harness.authContext = { organization: owner };
+    renderHome();
+    expect(await screen.findByTestId("home-step-start-community")).toBeTruthy();
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+  });
+
+  it("gives a platform admin who owns a community the platform overview only, with My community", async () => {
+    inHarbor(owner, { ...member, role: "admin" });
+    renderHome();
+
+    expect(await screen.findByTestId("home-admin-overview")).toBeTruthy();
+    const open = await screen.findByTestId("home-step-open-community");
+    expect(open.querySelector("a")?.getAttribute("href")).toBe("/dashboard/node");
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+    expect(screen.queryByTestId("home-owner.setup")).toBeNull();
+  });
+
+  it("keeps account safety featured above the overview", async () => {
+    inHarbor(owner, { ...member, isAnonymous: true });
+    harness.passkeys = [];
+    renderHome();
+
+    const safety = await screen.findByTestId("home-owner.account-safety");
+    expect(safety.querySelector("[data-testid=home-step-save-account]")).toBeTruthy();
+    expect(follows(safety, await screen.findByTestId("home-owner.overview"))).toBe(true);
+    await screen.findByTestId("home-next-steps");
+    expect(stepIds()).toEqual(["open-community", "payouts", "stake"]);
   });
 });
 

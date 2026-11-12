@@ -61,7 +61,6 @@ describe("Home next steps for team members", () => {
       canOrganizeEvents: false,
       inFinanceTeam: false,
       isAdmin: false,
-      monthlyReportDue: null,
     });
     render(<NextStepsList steps={steps} primary={false} />);
 
@@ -89,7 +88,6 @@ describe("Home next steps for a plain member", () => {
       canOrganizeEvents: false,
       inFinanceTeam: false,
       isAdmin: false,
-      monthlyReportDue: null,
     });
     render(<NextStepsList steps={steps} primary />);
 

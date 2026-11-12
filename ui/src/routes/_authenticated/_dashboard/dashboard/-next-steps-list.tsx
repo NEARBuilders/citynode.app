@@ -1,6 +1,5 @@
 import {
   CaretRightIcon,
-  ClipboardTextIcon,
   CoinsIcon,
   CompassIcon,
   FingerprintIcon,
@@ -26,7 +25,6 @@ import type { NextStep, NextStepId } from "./-next-steps";
 
 const STEP_ICONS: Record<NextStepId, Icon> = {
   "save-account": FingerprintIcon,
-  "monthly-report": ClipboardTextIcon,
   "choose-org": UsersThreeIcon,
   "start-community": RocketLaunchIcon,
   "open-community": NetworkIcon,
@@ -43,8 +41,6 @@ function stepLink(step: NextStep) {
   switch (step.id) {
     case "save-account":
       return <Link to={pluginPath("/settings/auth-methods")} />;
-    case "monthly-report":
-      return <Link to="/report" />;
     case "choose-org":
       return <Link to="/orgs" />;
     case "start-community":
@@ -98,12 +94,20 @@ function StepRow({ step }: StepProps) {
   );
 }
 
-export function NextStepsList({ steps, primary }: { steps: NextStep[]; primary: boolean }) {
+export function NextStepsList({
+  steps,
+  primary,
+  testId = "home-next-steps",
+}: {
+  steps: NextStep[];
+  primary: boolean;
+  testId?: string;
+}) {
   const [first, ...rest] = steps;
   const featured = primary && first ? first : null;
   const rows = featured ? rest : steps;
   return (
-    <ItemGroup data-testid="home-next-steps">
+    <ItemGroup data-testid={testId}>
       {featured && <FeaturedStep step={featured} />}
       {rows.map((step) => (
         <StepRow key={step.id} step={step} />
