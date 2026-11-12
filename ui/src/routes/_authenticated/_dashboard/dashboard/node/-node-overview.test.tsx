@@ -155,6 +155,7 @@ vi.mock("@/lib/dao-connect", () => ({
 const clients: QueryClient[] = [];
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   harness.hash = "";
   harness.memberDirectory.optedIn = false;
@@ -1114,9 +1115,11 @@ describe("node overview events to report", () => {
   });
 
   it("shows an organizer this month's and last month's monthly reports with their status", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-10T12:00:00.000Z"));
     stubChain();
     harness.monthlyStatuses = () =>
-      Promise.resolve([{ month: utcMonth(-1), submittedAt: "2026-11-01T00:00:00.000Z" }]);
+      Promise.resolve([{ month: utcMonth(-1), submittedAt: "2026-12-01T00:00:00.000Z" }]);
     renderOverview({ nearAccount: null, canOrganize: true });
     const last = await screen.findByTestId(`dashboard-node.reports-list-month-${utcMonth(-1)}`);
     expect(last.textContent).toContain("Report in");

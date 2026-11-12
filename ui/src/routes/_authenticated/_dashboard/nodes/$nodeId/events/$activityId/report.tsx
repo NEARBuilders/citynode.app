@@ -6,8 +6,10 @@ import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { ActivityFormPage, activitiesQueryOptions } from "@/components/discovery/activity-form";
+import { ReviewButton } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -147,7 +149,11 @@ function EventReportPage() {
     );
   }
 
-  const { report: saved, canEdit } = report.data ?? { report: null, canEdit: false };
+  const {
+    report: saved,
+    canEdit,
+    canReview,
+  } = report.data ?? { report: null, canEdit: false, canReview: false };
   return (
     <ActivityFormPage
       nodeId={nodeId}
@@ -170,10 +176,31 @@ function EventReportPage() {
               />
             </>
           )}
+          {saved?.reviewedAt && (
+            <span data-testid="report.reviewed-on">
+              {" · "}
+              <Trans
+                id="report.reviewedOn"
+                components={{ date: <LocalDate value={saved.reviewedAt} format="relative" /> }}
+              />
+            </span>
+          )}
         </span>
       }
       headerTestId="report.heading"
     >
+      {canReview && saved && (
+        <div className="flex flex-wrap items-center gap-3" data-testid="report.review-row">
+          <Badge variant={saved.reviewedAt ? "success" : "secondary"}>
+            {translate(saved.reviewedAt ? "report.status.reviewed" : "report.status.submitted")}
+          </Badge>
+          <ReviewButton
+            target={{ kind: "event", activityId }}
+            reviewed={!!saved.reviewedAt}
+            testId="report.review"
+          />
+        </div>
+      )}
       {canEdit ? (
         <ReportForm
           key={saved?.updatedAt ?? "new"}

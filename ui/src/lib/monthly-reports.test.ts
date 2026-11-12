@@ -1,20 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { chooseReportCommunity, monthlyReportsOwed } from "./monthly-reports";
+import {
+  chooseReportCommunity,
+  monthlyReportsOwed,
+  reportableMonthsUntil,
+  reportMonthsShown,
+} from "./monthly-reports";
 
 const at = (iso: string) => Date.parse(iso);
 
 describe("monthly reports owed", () => {
   it("owes last month's report until it is submitted, through the edit window", () => {
-    expect(monthlyReportsOwed([], at("2026-11-12T12:00:00.000Z"))).toEqual(["2026-10"]);
-    expect(monthlyReportsOwed(["2026-10"], at("2026-11-12T12:00:00.000Z"))).toEqual([]);
-    expect(monthlyReportsOwed(["2026-10"], at("2026-12-05T12:00:00.000Z"))).toEqual(["2026-11"]);
+    expect(monthlyReportsOwed([], at("2026-12-12T12:00:00.000Z"))).toEqual(["2026-11"]);
+    expect(monthlyReportsOwed(["2026-11"], at("2026-12-12T12:00:00.000Z"))).toEqual([]);
+    expect(monthlyReportsOwed(["2026-11"], at("2027-01-05T12:00:00.000Z"))).toEqual(["2026-12"]);
   });
 
   it("owes this month's report in its last seven days", () => {
-    expect(monthlyReportsOwed(["2026-10"], at("2026-11-23T23:59:00.000Z"))).toEqual([]);
-    expect(monthlyReportsOwed(["2026-10"], at("2026-11-24T00:00:00.000Z"))).toEqual(["2026-11"]);
-    expect(monthlyReportsOwed(["2026-10", "2026-11"], at("2026-11-28T00:00:00.000Z"))).toEqual([]);
-    expect(monthlyReportsOwed(["2026-11"], at("2026-12-29T00:00:00.000Z"))).toEqual(["2026-12"]);
+    expect(monthlyReportsOwed(["2026-11"], at("2026-12-23T23:59:00.000Z"))).toEqual([]);
+    expect(monthlyReportsOwed(["2026-11"], at("2026-12-25T00:00:00.000Z"))).toEqual(["2026-12"]);
+    expect(monthlyReportsOwed(["2026-11", "2026-12"], at("2026-12-28T00:00:00.000Z"))).toEqual([]);
+  });
+
+  it("never owes a month before November 2026, the first reported month", () => {
+    expect(monthlyReportsOwed([], at("2026-11-12T12:00:00.000Z"))).toEqual([]);
+    expect(monthlyReportsOwed([], at("2026-11-24T00:00:00.000Z"))).toEqual(["2026-11"]);
+    expect(reportMonthsShown(at("2026-11-12T12:00:00.000Z"))).toEqual(["2026-11"]);
+    expect(reportMonthsShown(at("2026-12-12T12:00:00.000Z"))).toEqual(["2026-12", "2026-11"]);
+    expect(reportableMonthsUntil(at("2027-01-02T00:00:00.000Z"))).toEqual([
+      "2027-01",
+      "2026-12",
+      "2026-11",
+    ]);
   });
 });
 

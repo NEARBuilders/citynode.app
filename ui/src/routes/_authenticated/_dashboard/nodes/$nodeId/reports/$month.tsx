@@ -5,10 +5,12 @@ import { Trans } from "everything-dev/ui/i18n";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
+import { ReviewButton } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
 import { LocalDate } from "@/components/local-date";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +25,7 @@ import {
 } from "@/i18n/runtime";
 import {
   formatReportMonth,
+  isReportableMonth,
   isReportMonth,
   MONTHLY_REPORT_GUIDE,
   MONTHLY_REPORT_NOTES_MAX,
@@ -66,7 +69,7 @@ function MonthlyReportPage() {
   const { locale } = useAppLocale();
   const { nodeId, month } = Route.useParams();
   const api = useApiClient();
-  const valid = isReportMonth(month);
+  const valid = isReportMonth(month) && isReportableMonth(month);
   const report = useQuery({ ...monthlyReportQueryOptions(api, nodeId, month), enabled: valid });
   const node = useQuery(nodeByIdQueryOptions(api, nodeId));
   const title = valid
@@ -108,11 +111,12 @@ function MonthlyReportPage() {
     );
   }
 
-  const { report: saved, canEdit, open, stats, closesAt } = report.data;
+  const { report: saved, canEdit, canReview, open, stats, closesAt } = report.data;
   const editable = canEdit && open;
   return (
     <MonthlyReportShell
       title={title}
+      backToAdmin={canReview && !canEdit ? month : undefined}
       description={
         <span>
           {node.data?.name}
@@ -125,9 +129,30 @@ function MonthlyReportPage() {
               />
             </>
           )}
+          {saved?.reviewedAt && (
+            <span data-testid="monthly-report.reviewed-on">
+              {" · "}
+              <Trans
+                id="report.reviewedOn"
+                components={{ date: <LocalDate value={saved.reviewedAt} format="relative" /> }}
+              />
+            </span>
+          )}
         </span>
       }
     >
+      {canReview && saved && (
+        <div className="flex flex-wrap items-center gap-3" data-testid="monthly-report.review-row">
+          <Badge variant={saved.reviewedAt ? "success" : "secondary"}>
+            {translate(saved.reviewedAt ? "report.status.reviewed" : "report.status.submitted")}
+          </Badge>
+          <ReviewButton
+            target={{ kind: "monthly", nodeId, month }}
+            reviewed={!!saved.reviewedAt}
+            testId="monthly-report.review"
+          />
+        </div>
+      )}
       {stats && (
         <section className="flex flex-col gap-3" data-testid="monthly-report.stats">
           <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
@@ -175,10 +200,12 @@ function MonthlyReportPage() {
 function MonthlyReportShell({
   title,
   description,
+  backToAdmin,
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
+  backToAdmin?: string;
   children: ReactNode;
 }) {
   const translate = useAppTranslation();
@@ -191,7 +218,13 @@ function MonthlyReportShell({
           className="-ml-3 self-start"
           nativeButton={false}
           data-testid="monthly-report.back"
-          render={<Link to="/report" />}
+          render={
+            backToAdmin ? (
+              <Link to="/admin/reports" search={{ month: backToAdmin }} />
+            ) : (
+              <Link to="/report" />
+            )
+          }
         >
           <ArrowLeftIcon />
           {translate("reports.title")}

@@ -30,7 +30,7 @@ vi.mock("@tanstack/react-router", () => ({
   },
 }));
 
-const now = Date.parse("2026-11-05T12:00:00.000Z");
+const now = Date.parse("2026-12-05T12:00:00.000Z");
 
 function activity(id: string, title: string, ended: boolean) {
   return {
@@ -39,8 +39,8 @@ function activity(id: string, title: string, ended: boolean) {
     kind: "event" as const,
     status: "published" as const,
     publishedAt: "2026-01-01T00:00:00.000Z",
-    startsAt: ended ? "2026-11-01T16:00:00.000Z" : "2026-12-01T16:00:00.000Z",
-    endsAt: ended ? "2026-11-01T18:00:00.000Z" : "2026-12-01T18:00:00.000Z",
+    startsAt: ended ? "2026-11-01T16:00:00.000Z" : "2027-01-01T16:00:00.000Z",
+    endsAt: ended ? "2026-11-01T18:00:00.000Z" : "2027-01-01T18:00:00.000Z",
     venue: "Town Hall",
   };
 }
@@ -68,23 +68,56 @@ function renderList(props: Partial<Parameters<typeof ReportChecklist>[0]> = {}) 
 describe("ReportChecklist", () => {
   it("lists this month's and last month's reports, each one click from its form", () => {
     renderList({
-      monthlyStatuses: [{ month: "2026-10", submittedAt: "2026-11-01T00:00:00.000Z" }],
+      monthlyStatuses: [{ month: "2026-11", submittedAt: "2026-12-01T00:00:00.000Z" }],
     });
-    const november = screen.getByTestId("list-month-2026-11");
-    expect(november.textContent).toContain("November 2026 report");
-    expect(november.textContent).toContain("until the end of December 2026");
-    expect(screen.getByTestId("list-month-2026-11-open").textContent).toBe("Start report");
-    expect(screen.getByTestId("list-month-2026-11-open").getAttribute("href")).toBe(
-      "/nodes/node-1/reports/2026-11",
+    const december = screen.getByTestId("list-month-2026-12");
+    expect(december.textContent).toContain("December 2026 report");
+    expect(december.textContent).toContain("until the end of January 2027");
+    expect(screen.getByTestId("list-month-2026-12-open").textContent).toBe("Start report");
+    expect(screen.getByTestId("list-month-2026-12-open").getAttribute("href")).toBe(
+      "/nodes/node-1/reports/2026-12",
     );
-    expect(screen.getByTestId("list-month-2026-10").textContent).toContain("Report in");
-    expect(screen.getByTestId("list-month-2026-10-open").textContent).toBe("Edit report");
+    expect(screen.getByTestId("list-month-2026-11").textContent).toContain("Report in");
+    expect(screen.getByTestId("list-month-2026-11-open").textContent).toBe("Edit report");
   });
 
-  it("marks last month missing until it is submitted", () => {
-    renderList();
-    expect(screen.getByTestId("list-month-2026-10").textContent).toContain("Report missing");
-    expect(screen.getByTestId("list-month-2026-11").textContent).not.toContain("Report missing");
+  it("marks last month missing until it is submitted, and says when it was reviewed", () => {
+    const { rerender } = renderList();
+    expect(screen.getByTestId("list-month-2026-11").textContent).toContain("Report missing");
+    expect(screen.getByTestId("list-month-2026-12").textContent).not.toContain("Report missing");
+
+    rerender(
+      <ReportChecklist
+        nodeId="node-1"
+        now={now}
+        testId="list"
+        monthlyStatuses={[
+          {
+            month: "2026-11",
+            submittedAt: "2026-12-01T00:00:00.000Z",
+            reviewedAt: "2026-12-03T00:00:00.000Z",
+          },
+        ]}
+        activities={[]}
+        eventStatuses={[]}
+      />,
+    );
+    expect(screen.getByTestId("list-month-2026-11-reviewed").textContent).toBe("Reviewed");
+  });
+
+  it("starts with November 2026", () => {
+    render(
+      <ReportChecklist
+        nodeId="node-1"
+        now={Date.parse("2026-11-12T12:00:00.000Z")}
+        testId="list"
+        monthlyStatuses={[]}
+        activities={[]}
+        eventStatuses={[]}
+      />,
+    );
+    expect(screen.getByTestId("list-month-2026-11")).toBeTruthy();
+    expect(screen.queryByTestId("list-month-2026-10")).toBeNull();
   });
 
   it("lists ended events with a missing report until one is submitted", () => {
@@ -110,7 +143,7 @@ describe("ReportChecklist", () => {
       />,
     );
     expect(screen.queryByTestId("list-event-event-missing")).toBeNull();
-    expect(screen.queryByTestId("list-month-2026-11")).toBeNull();
+    expect(screen.queryByTestId("list-month-2026-12")).toBeNull();
     expect(screen.getByTestId("list-events-done")).toBeTruthy();
   });
 });

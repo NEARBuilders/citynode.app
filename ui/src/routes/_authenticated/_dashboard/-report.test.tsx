@@ -91,19 +91,24 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-12-10T12:00:00.000Z"));
   harness.search = {};
   harness.activeOrganizationId = "org-harbor";
   harness.opened.length = 0;
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("/report", () => {
-  it("sends platform admins to their view of missing reports", () => {
+  it("sends platform admins to Admin → Reports", () => {
     const beforeLoad = (Route as unknown as { options: { beforeLoad: (args: unknown) => void } })
       .options.beforeLoad;
     expect(() => beforeLoad({ context: { auth: { user: { role: "admin" } } } })).toThrow(
       expect.objectContaining({
-        redirect: { to: "/admin/events", search: { report: "missing" } },
+        redirect: { to: "/admin/reports" },
       }),
     );
     expect(() => beforeLoad({ context: { auth: { user: { role: null } } } })).not.toThrow();

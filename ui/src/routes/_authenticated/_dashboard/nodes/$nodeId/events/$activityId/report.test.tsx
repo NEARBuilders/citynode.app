@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
@@ -15,6 +15,8 @@ const harness = vi.hoisted(() => ({
   activities: [] as unknown[],
   report: null as unknown,
   canEdit: true,
+  canReview: false,
+  reviewed: [] as unknown[],
   node: Promise.resolve({ tenantId: "tenant-1" }) as Promise<unknown>,
   tenant: Promise.resolve({ orgId: "org-1" }) as Promise<unknown>,
   codes: Promise.resolve([]) as Promise<Array<{ usedCount: number }>>,
@@ -34,7 +36,15 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/app", () => ({
   useApiClient: () => ({
     listDiscoveryActivities: async () => harness.activities,
-    getEventReport: async () => ({ report: harness.report, canEdit: harness.canEdit }),
+    getEventReport: async () => ({
+      report: harness.report,
+      canEdit: harness.canEdit,
+      canReview: harness.canReview,
+    }),
+    reviewEventReport: async (input: unknown) => {
+      harness.reviewed.push(input);
+      return { reviewedAt: "2026-10-20T00:00:00.000Z" };
+    },
     getNode: () => {
       harness.calls.node += 1;
       return harness.node;
@@ -84,6 +94,8 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   harness.canEdit = true;
+  harness.canReview = false;
+  harness.reviewed.length = 0;
 });
 
 const savedReport = {
@@ -91,6 +103,7 @@ const savedReport = {
   formVersion: 1,
   submittedAt: "2026-10-16T00:00:00.000Z",
   updatedAt: "2026-10-16T00:00:00.000Z",
+  reviewedAt: null as string | null,
   report: {
     format: "irl",
     socialLinks: ["https://example.com/post"],
@@ -180,5 +193,29 @@ describe("event report check-in prefill", () => {
     expect(await screen.findByTestId("report-answers")).toBeTruthy();
     expect(screen.getByText("Launch notes")).toBeTruthy();
     expect(screen.queryByTestId("report-attendees")).toBeNull();
+  });
+
+  it("lets a platform admin mark the report reviewed", async () => {
+    harness.activities = [activity];
+    harness.report = savedReport;
+    harness.canEdit = false;
+    harness.canReview = true;
+
+    renderPage();
+
+    fireEvent.click(await screen.findByTestId("report.review"));
+    await waitFor(() =>
+      expect(harness.reviewed).toEqual([{ activityId: ACTIVITY, reviewed: true }]),
+    );
+  });
+
+  it("tells the organizer their report was reviewed", async () => {
+    harness.activities = [activity];
+    harness.report = { ...savedReport, reviewedAt: "2026-10-20T00:00:00.000Z" };
+
+    renderPage();
+
+    expect((await screen.findByTestId("report.reviewed-on")).textContent).toContain("Reviewed");
+    expect(screen.queryByTestId("report.review")).toBeNull();
   });
 });

@@ -33,3 +33,11 @@ export function reportCommunitiesQueryOptions(apiClient: ApiClient) {
     retry: false,
   });
 }
+
+export function adminMonthlyReportsQueryOptions(apiClient: ApiClient, month: string) {
+  return queryOptions({
+    queryKey: [...monthlyReportQueryKeys.all, "admin", month] as const,
+    queryFn: () => apiClient.getAdminMonthlyReports({ month }),
+    staleTime: 30 * 1000,
+  });
+}

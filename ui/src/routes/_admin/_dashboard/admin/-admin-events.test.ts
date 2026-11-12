@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseEventsWhen, selectAdminEvents } from "./-admin-events";
+import { parseEventsReportFilter, parseEventsWhen, selectAdminEvents } from "./-admin-events";
 
 const now = Date.parse("2026-11-05T12:00:00.000Z");
 const event = (id: string, startsAt: string | null, endsAt: string | null, nodeId = "lisbon") => ({
@@ -38,8 +38,16 @@ describe("selectAdminEvents", () => {
     ).toEqual(["no-end"]);
   });
 
+  it("filters by the month the event started, for the Reports page's links", () => {
+    expect(
+      selectAdminEvents(events, { when: "past", month: "2026-10", now }).map((e) => e.id),
+    ).toEqual(["no-end"]);
+  });
+
   it("parses only known tabs", () => {
     expect(parseEventsWhen("upcoming")).toBe("upcoming");
     expect(parseEventsWhen("soon")).toBeUndefined();
+    expect(parseEventsReportFilter("review")).toBe("review");
+    expect(parseEventsReportFilter("late")).toBeUndefined();
   });
 });

@@ -40,7 +40,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/report")({
     typeof search.community === "string" && search.community ? { community: search.community } : {},
   beforeLoad: ({ context }) => {
     if (context.auth.user?.role === "admin") {
-      throw redirect({ to: "/admin/events", search: { report: "missing" } });
+      throw redirect({ to: "/admin/reports" });
     }
   },
   head: ({ match }) => ({

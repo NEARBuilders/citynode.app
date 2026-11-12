@@ -1,4 +1,4 @@
-import { CalendarDotsIcon } from "@phosphor-icons/react";
+import { CalendarDotsIcon, XIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -29,14 +29,32 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useNow } from "@/hooks/use-client";
-import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import {
+  resolveAppLocale,
+  translateAppMessage,
+  useAppLocale,
+  useAppTranslation,
+} from "@/i18n/runtime";
 import { eventReportStatus, reportedWithinWeek } from "@/lib/event-reports";
+import { formatReportMonth, isReportMonth } from "@/lib/monthly-reports";
 import { pageTitle } from "@/lib/page-title";
 import { adminEventsQueryOptions } from "@/lib/queries/engagement";
-import { EVENTS_WHEN, type EventsWhen, parseEventsWhen, selectAdminEvents } from "./-admin-events";
+import {
+  EVENTS_WHEN,
+  type EventsReportFilter,
+  type EventsWhen,
+  parseEventsReportFilter,
+  parseEventsWhen,
+  selectAdminEvents,
+} from "./-admin-events";
 import { ListSkeleton, LoadError } from "./-admin-ui";
 
-type AdminEventsSearch = { when?: EventsWhen; community?: string; report?: "missing" };
+type AdminEventsSearch = {
+  when?: EventsWhen;
+  community?: string;
+  month?: string;
+  report?: EventsReportFilter;
+};
 
 const ALL_COMMUNITIES = "all";
 
@@ -44,7 +62,9 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/events")({
   validateSearch: (search: Record<string, unknown>): AdminEventsSearch => ({
     when: parseEventsWhen(search.when),
     community: typeof search.community === "string" ? search.community : undefined,
-    report: search.report === "missing" ? "missing" : undefined,
+    month:
+      typeof search.month === "string" && isReportMonth(search.month) ? search.month : undefined,
+    report: parseEventsReportFilter(search.report),
   }),
   head: ({ match }) => ({
     meta: [
@@ -67,7 +87,8 @@ function AdminEvents() {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
   const navigate = Route.useNavigate();
-  const { when = "past", community, report } = Route.useSearch();
+  const { when = "past", community, month, report } = Route.useSearch();
+  const { locale } = useAppLocale();
   const now = useNow(60_000);
   const eventsQuery = useQuery(adminEventsQueryOptions(apiClient));
   const events = eventsQuery.data?.events ?? [];
@@ -78,15 +99,18 @@ function AdminEvents() {
     return [...names.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [events]);
   const selected = useMemo(
-    () => selectAdminEvents(events, { when, nodeId: community, now }),
-    [events, when, community, now],
+    () => selectAdminEvents(events, { when, nodeId: community, month, now }),
+    [events, when, community, month, now],
   );
   const missingOnly = when === "past" && report === "missing";
+  const reviewOnly = when === "past" && report === "review";
   const visible = missingOnly
     ? selected.filter(
         (event) => eventReportStatus(event, event.reportSubmittedAt, now).state === "missing",
       )
-    : selected;
+    : reviewOnly
+      ? selected.filter((event) => event.reportSubmittedAt && !event.reportReviewedAt)
+      : selected;
   const measure = when === "past" ? reportedWithinWeek(selected, now) : null;
 
   return (
@@ -152,21 +176,54 @@ function AdminEvents() {
             </SelectContent>
           </Select>
           {when === "past" && (
+            <>
+              <Button
+                variant={missingOnly ? "default" : "outline"}
+                size="sm"
+                aria-pressed={missingOnly}
+                data-testid="admin-events-missing"
+                onClick={() =>
+                  void navigate({
+                    search: (previous) => ({
+                      ...previous,
+                      report: missingOnly ? undefined : "missing",
+                    }),
+                  })
+                }
+              >
+                {translate("admin.events.missingOnly")}
+              </Button>
+              <Button
+                variant={reviewOnly ? "default" : "outline"}
+                size="sm"
+                aria-pressed={reviewOnly}
+                data-testid="admin-events-review"
+                onClick={() =>
+                  void navigate({
+                    search: (previous) => ({
+                      ...previous,
+                      report: reviewOnly ? undefined : "review",
+                    }),
+                  })
+                }
+              >
+                {translate("admin.events.toReviewOnly")}
+              </Button>
+            </>
+          )}
+          {month && (
             <Button
-              variant={missingOnly ? "default" : "outline"}
+              variant="ghost"
               size="sm"
-              aria-pressed={missingOnly}
-              data-testid="admin-events-missing"
+              data-testid="admin-events-month"
               onClick={() =>
-                void navigate({
-                  search: (previous) => ({
-                    ...previous,
-                    report: missingOnly ? undefined : "missing",
-                  }),
-                })
+                void navigate({ search: (previous) => ({ ...previous, month: undefined }) })
               }
             >
-              {translate("admin.events.missingOnly")}
+              {translate("admin.events.monthFilter", {
+                month: formatReportMonth(month, locale),
+              })}
+              <XIcon />
             </Button>
           )}
         </div>
@@ -194,9 +251,11 @@ function AdminEvents() {
             title={translate(
               missingOnly
                 ? "admin.events.noMissing"
-                : when === "past"
-                  ? "admin.events.noPast"
-                  : "admin.events.noUpcoming",
+                : reviewOnly
+                  ? "admin.events.noneToReview"
+                  : when === "past"
+                    ? "admin.events.noPast"
+                    : "admin.events.noUpcoming",
             )}
             className="py-10"
           />
@@ -293,6 +352,7 @@ function AdminEvents() {
                             <ReportStatusBadge
                               activity={event}
                               submittedAt={event.reportSubmittedAt}
+                              reviewedAt={event.reportReviewedAt}
                               now={now}
                             />
                           </Link>

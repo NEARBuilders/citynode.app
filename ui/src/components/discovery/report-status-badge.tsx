@@ -5,10 +5,12 @@ import { eventReportStatus } from "@/lib/event-reports";
 export function ReportStatusBadge({
   activity,
   submittedAt,
+  reviewedAt,
   now,
 }: {
   activity: { id: string; startsAt: string | null; endsAt: string | null };
   submittedAt: string | null | undefined;
+  reviewedAt?: string | null;
   now: number;
 }) {
   const translate = useAppTranslation();
@@ -18,6 +20,13 @@ export function ReportStatusBadge({
     return (
       <Badge variant="warning" data-testid={`report-status-${activity.id}`}>
         {translate("report.status.missing")}
+      </Badge>
+    );
+  }
+  if (reviewedAt) {
+    return (
+      <Badge variant="success" data-testid={`report-status-${activity.id}`}>
+        {translate("report.status.reviewed")}
       </Badge>
     );
   }

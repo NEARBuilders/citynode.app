@@ -14,6 +14,7 @@ import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { eventsMissingReports } from "@/lib/event-reports";
 import type { VisibilityActivity } from "@/lib/event-visibility";
 import { formatReportMonth, reportMonth, reportMonthsShown } from "@/lib/monthly-reports";
+import { ReviewedBadge } from "./report-review";
 
 type ReportActivity = VisibilityActivity & { id: string; title: string; venue: string };
 
@@ -29,7 +30,9 @@ export function ReportChecklist({
   nodeId: string;
   now: number;
   testId: string;
-  monthlyStatuses: readonly { month: string; submittedAt: string }[] | null;
+  monthlyStatuses:
+    | readonly { month: string; submittedAt: string; reviewedAt?: string | null }[]
+    | null;
   activities: readonly ReportActivity[];
   eventStatuses: readonly { activityId: string; submittedAt: string }[];
   showAllReported?: boolean;
@@ -37,14 +40,15 @@ export function ReportChecklist({
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const events = eventsMissingReports(activities, eventStatuses, now);
-  const submitted = new Set(monthlyStatuses?.map((status) => status.month) ?? []);
+  const submitted = new Map(monthlyStatuses?.map((status) => [status.month, status]) ?? []);
   const previous = reportMonth(now, -1);
   return (
     <div className="flex flex-col gap-6" data-testid={testId}>
       {monthlyStatuses && (
         <ItemGroup>
           {reportMonthsShown(now).map((month) => {
-            const done = submitted.has(month);
+            const status = submitted.get(month);
+            const done = !!status;
             const closesIn = reportMonth(Date.parse(`${month}-01T00:00:00.000Z`), 1);
             return (
               <Item key={month} variant="outline" data-testid={`${testId}-month-${month}`}>
@@ -53,7 +57,9 @@ export function ReportChecklist({
                     {translate("reports.monthlyTitle", {
                       month: formatReportMonth(month, locale),
                     })}
-                    {done ? (
+                    {status?.reviewedAt ? (
+                      <ReviewedBadge testId={`${testId}-month-${month}-reviewed`} />
+                    ) : done ? (
                       <Badge variant="secondary">{translate("report.status.submitted")}</Badge>
                     ) : month === previous ? (
                       <Badge variant="warning">{translate("report.status.missing")}</Badge>
