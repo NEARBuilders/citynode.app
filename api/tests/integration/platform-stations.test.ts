@@ -1,6 +1,22 @@
 import { ORPCError } from "@orpc/server";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { authedContext, getPluginClient, orgContext, teardown } from "../setup";
+
+vi.mock("../../plugin.dev", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../plugin.dev")>();
+  return {
+    default: {
+      ...original.default,
+      config: {
+        ...original.default.config,
+        variables: {
+          ...original.default.config.variables,
+          platformStationsAccount: "stations.citynode.testnet",
+        },
+      },
+    },
+  };
+});
 
 type FakeMember = { id: string; userId: string; organizationId: string; role: string };
 
