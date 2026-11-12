@@ -193,6 +193,22 @@ describe("monthly report form", () => {
     );
   });
 
+  it("treats a sync that could not read every event as a failed sync", async () => {
+    harness.reconcile = () => Promise.resolve({ events: 2, truncated: [], failed: ["*"] });
+    harness.report = async () => ({
+      report: null,
+      ...owner,
+      organizationId: "org-h",
+      open: true,
+      closesAt,
+      stats,
+      checkInsSyncedAt: "2026-11-01T10:00:00.000Z",
+    });
+    renderPage();
+    expect(await screen.findByTestId("monthly-report.sync-error")).toBeTruthy();
+    expect((screen.getByTestId("monthly-report.submit") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("reopens a submitted report for editing", async () => {
     harness.report = async () => ({ report: stored, ...owner, open: true, closesAt, stats });
     renderPage();
