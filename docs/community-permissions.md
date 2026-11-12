@@ -25,6 +25,8 @@ community sites.
 | Suspend / reactivate community | No | No | Own active org | No (existing admin-only middleware) | Requires the active org admin role |
 | Delete community | No | No | No | Own active org | Requires the active org owner role |
 | Edit homepage or publish config | No | No | Own org, with required signing authority | Own org, with required signing authority | With required signing authority |
+| Submit and edit Event Reports and Monthly Reports | No | Own active org, on a team with the events area | Own active org | Own active org | No (reads every community's reports) |
+| Read Event Reports and Monthly Reports | No | Own active org, on a team with the events area | Own active org | Own active org | All |
 
 Visibility of the settings page is enforced by role and cannot be toggled for
 regular members. Owners manage community naming and override permissions; admins
