@@ -1,6 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
+import { seedNode } from "../../lib/seed-tenant.mjs";
 import { type DemoSeed, seedDemoCommunities, signInAsDemo } from "../helpers/demo";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
+import { injectAdminCookies } from "../helpers/seeded";
 
 let seed: DemoSeed;
 
@@ -184,7 +186,7 @@ test.describe("platform admins review reports from Home", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
-  test("/admin goes to Home and /report goes to Admin → Reports for a platform admin", async ({
+  test("/admin goes to Home; /report is a platform admin's own community, or Admin → Reports", async ({
     page,
   }) => {
     await signInAsDemo(page, seed, "platformAdmin");
@@ -194,7 +196,50 @@ test.describe("platform admins review reports from Home", () => {
     await expect(page.getByTestId("home-admin-overview")).toBeVisible({ timeout: 15000 });
 
     await open(page, "/report");
+    await expect(page.getByTestId("report.heading")).toContainText(seed.communities.nairobi.name, {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId("report.desk")).toBeVisible();
+    await page.getByTestId("report.admin-reports").click();
+    await page.waitForURL(/\/admin\/reports/);
+
+    await page.context().clearCookies();
+    await injectAdminCookies(page);
+    await open(page, "/report");
     await page.waitForURL(/\/admin\/reports/);
     await expect(page.getByTestId("admin-reports.heading")).toBeVisible({ timeout: 15000 });
+  });
+
+  test("a report stays with its community when a node that sorts first is added", async ({
+    page,
+  }) => {
+    const pageErrors = collectErrors(page);
+    const month = reportMonth();
+    const { lagos } = seed.communities;
+    const annex = await seedNode({
+      tenantId: lagos.tenantId,
+      slug: `aardvark-annex-${process.pid}`,
+      name: "Aardvark Annex",
+    });
+
+    await signInAsDemo(page, seed, "ownerMature");
+    await open(page, "/report");
+    await expect(page.getByTestId(`report.list-month-${month}-reviewed`)).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByTestId(`report.list-month-${month}-open`)).toHaveAttribute(
+      "href",
+      `/nodes/${annex.id}/reports/${month}`,
+    );
+
+    await page.context().clearCookies();
+    await signInAsDemo(page, seed, "platformAdmin");
+    await open(page, `/admin/reports?month=${month}`);
+    await expect(page.getByTestId(`admin-report-status-${annex.id}`)).toHaveText("Reviewed", {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId(`admin-report-${lagos.nodeId}`)).toHaveCount(0);
+
+    expectNoHydrationFailure(pageErrors);
   });
 });

@@ -182,6 +182,29 @@ test.describe("owners and organizers report from one link", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
+  test("a new community is asked only for the months since it started", async ({ page }) => {
+    const pageErrors = collectErrors(page);
+    const month = (offset: number) => {
+      const now = new Date();
+      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1))
+        .toISOString()
+        .slice(0, 7);
+    };
+    const started = seed.communities.nairobi.activatedAt.slice(0, 7);
+    const firstMonth = started > "2026-11" ? started : "2026-11";
+    await signInAsDemo(page, seed, "ownerNew");
+
+    await open(page, "/report");
+    await expect(page.getByTestId(`report.list-month-${month(0)}`)).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByTestId(`report.list-month-${month(-1)}`)).toHaveCount(
+      month(-1) >= firstMonth ? 1 : 0,
+    );
+
+    expectNoHydrationFailure(pageErrors);
+  });
+
   test("an organizer reports for their community", async ({ page }) => {
     const pageErrors = collectErrors(page);
     await signInAsDemo(page, seed, "organizer");

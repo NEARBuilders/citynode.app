@@ -83,6 +83,7 @@ export interface DemoSeedCommunity {
   nodeId: string;
   hostname: string;
   timezone: string;
+  activatedAt: string;
   events: DemoSeedEvent[];
   monthlyReport: DemoSeedMonthlyReport | null;
 }
@@ -628,7 +629,9 @@ async function seedApi(client: SqlClient, plan: DemoPlan) {
   const organizationIds = plan.communities.map((community) => community.organizationId);
   const userIds = (Object.keys(DEMO_PEOPLE) as DemoPersonKey[]).map(demoUserId);
   const nodeIds = plan.communities.map((community) => community.nodeId);
-  await client.query(`DELETE FROM monthly_reports WHERE node_id = ANY($1)`, [nodeIds]);
+  await client.query(`DELETE FROM monthly_reports WHERE tenant_id = ANY($1)`, [
+    plan.communities.map((community) => community.tenantId),
+  ]);
   await client.query(`DELETE FROM event_reports WHERE node_id = ANY($1)`, [nodeIds]);
   await client.query(`DELETE FROM tenants WHERE account_id LIKE $1`, [`%.${DEMO_ACCOUNT_SUFFIX}`]);
   for (const table of [
@@ -782,7 +785,7 @@ async function seedApi(client: SqlClient, plan: DemoPlan) {
     if (community.monthlyReport) {
       const { month, plan: report, submittedAt, reviewedAt, stats } = community.monthlyReport;
       await insert(client, "monthly_reports", {
-        node_id: community.nodeId,
+        tenant_id: community.tenantId,
         month,
         notes: report.notes,
         events_held: stats.eventsHeld,
@@ -790,6 +793,7 @@ async function seedApi(client: SqlClient, plan: DemoPlan) {
         joins: stats.joins,
         new_members: stats.newMembers,
         submitted_by: demoUserId(report.by),
+        submitted_by_name: DEMO_PEOPLE[report.by].name,
         submitted_at: submittedAt,
         updated_by: demoUserId(report.by),
         updated_at: submittedAt,
@@ -924,6 +928,7 @@ async function summarize(plan: DemoPlan, secret: string, secure: boolean): Promi
         nodeId: community.nodeId,
         hostname: community.def.slug,
         timezone: community.def.timezone,
+        activatedAt: daysAgo(plan.today, community.def.activatedDaysAgo).toISOString(),
         events: community.events.map((event) => ({
           key: event.def.key,
           id: event.id,
