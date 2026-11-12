@@ -17,6 +17,7 @@ const base: NextStepsState = {
   canOrganizeEvents: false,
   inFinanceTeam: false,
   isAdmin: false,
+  monthlyReportDue: null,
 };
 
 const harbor = { name: "Harbor City", tenantId: "t1" };
@@ -113,6 +114,28 @@ describe("home next steps", () => {
 
   it("doesn't offer platform admins Start a community", () => {
     expect(ids({ membership: "none", isAdmin: true })).toEqual(["stake", "explore"]);
+  });
+
+  it("puts a monthly report that's due after account safety and before the community", () => {
+    const steps = getNextSteps({
+      ...base,
+      isAnonymous: true,
+      hasPasskey: false,
+      community: harbor,
+      canManageCommunity: true,
+      monthlyReportDue: "November 2026",
+    });
+    expect(steps.map((step) => step.id)).toEqual([
+      "save-account",
+      "monthly-report",
+      "open-community",
+      "payouts",
+      "stake",
+    ]);
+    expect(steps[1]?.title).toBe("Send your November 2026 report");
+    expect(ids({ community: null, monthlyReportDue: "November 2026" })).not.toContain(
+      "monthly-report",
+    );
   });
 });
 

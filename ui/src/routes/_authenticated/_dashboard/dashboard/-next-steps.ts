@@ -2,6 +2,7 @@ import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
 export type NextStepId =
   | "save-account"
+  | "monthly-report"
   | "choose-org"
   | "start-community"
   | "open-community"
@@ -27,6 +28,7 @@ export interface NextStepsState {
   canOrganizeEvents: boolean;
   inFinanceTeam: boolean;
   isAdmin: boolean;
+  monthlyReportDue: string | null;
 }
 
 export function getNextSteps(
@@ -41,6 +43,15 @@ export function getNextSteps(
       title: t("dashboard.saveAccount"),
       description: t("dashboard.passkeyHint"),
       actionLabel: t("common.addPasskey"),
+    });
+  }
+
+  if (state.monthlyReportDue && state.community) {
+    steps.push({
+      id: "monthly-report",
+      title: t("dashboard.monthlyReport", { month: state.monthlyReportDue }),
+      description: t("dashboard.monthlyReportHint", { name: state.community.name }),
+      actionLabel: t("common.open"),
     });
   }
 

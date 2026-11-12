@@ -11,11 +11,19 @@ import { Bulletin, Button, PageContainer, PageHeader, SectionHeader, Skeleton } 
 import { AttendanceRecord } from "@/components/attendance-record";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
-import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { useNow } from "@/hooks";
+import {
+  resolveAppLocale,
+  translateAppMessage,
+  useAppLocale,
+  useAppTranslation,
+} from "@/i18n/runtime";
 import { selectCommunityNode } from "@/lib/community-node";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
+import { formatReportMonth, monthlyReportsOwed } from "@/lib/monthly-reports";
 import { pageTitle } from "@/lib/page-title";
 import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
+import { monthlyReportStatusesQueryOptions } from "@/lib/queries/monthly-reports";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
@@ -70,6 +78,8 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
 
 function Home() {
   const translate = useAppTranslation();
+  const { locale } = useAppLocale();
+  const now = useNow(60_000);
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const { restricted } = Route.useSearch();
@@ -139,6 +149,22 @@ function Home() {
     retry: false,
   });
 
+  const reportsForCommunity =
+    !!nodeId &&
+    user?.role !== "admin" &&
+    communityOrgId === activeOrgId &&
+    canOrganizeEvents(authContext.data, { includePlatformAdmin: false });
+  const monthlyStatuses = useQuery({
+    ...monthlyReportStatusesQueryOptions(apiClient, nodeId),
+    enabled: reportsForCommunity,
+  });
+  const [monthlyReportDue] = monthlyStatuses.data
+    ? monthlyReportsOwed(
+        monthlyStatuses.data.map((status) => status.month),
+        now,
+      )
+    : [];
+
   const bulletin = node?.metadata?.bulletin;
 
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
@@ -165,6 +191,10 @@ function Home() {
         resolveTeamWorkspace(authContext.data).allowedAreas,
       ),
       isAdmin,
+      monthlyReportDue:
+        reportsForCommunity && monthlyReportDue
+          ? formatReportMonth(monthlyReportDue, locale)
+          : null,
     },
     translate,
   );
