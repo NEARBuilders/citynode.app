@@ -1454,12 +1454,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "nav.invitation": ["Invitation", "Invitación", "Invitation", "邀请"],
   "nav.join": ["Join", "Unirse", "Rejoindre", "加入"],
   "nav.manage": ["Manage", "Gestionar", "Gérer", "管理"],
-  "nav.methods": [
-    "Sign-in methods",
-    "Métodos de inicio de sesión",
-    "Méthodes de connexion",
-    "登录方式",
-  ],
   "nav.myCommunity": ["My community", "Mi comunidad", "Ma communauté", "我的社区"],
   "nav.newCommunity": ["New community", "Nueva comunidad", "Nouvelle communauté", "新建社区"],
   "nav.newEvent": ["New event", "Nuevo evento", "Nouvel événement", "新建活动"],
@@ -1496,7 +1490,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Afficher ou masquer {name}",
     "展开或收起 {name}",
   ],
-  "nav.workspace": ["Workspace", "Espacio de trabajo", "Espace de travail", "工作空间"],
   "permissions.adminOnly": [
     "{area} is only for platform admins.",
     "{area} solo está disponible para administradores de plataforma.",

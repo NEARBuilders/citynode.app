@@ -2,10 +2,11 @@ import {
   BankIcon,
   BuildingsIcon,
   CalendarDotsIcon,
-  ChartBarIcon,
+  ClipboardTextIcon,
   CoinsIcon,
   CompassIcon,
   CubeIcon,
+  GearSixIcon,
   HouseIcon,
   LightningIcon,
   ListChecksIcon,
@@ -17,7 +18,6 @@ import {
   ShieldIcon,
   SparkleIcon,
   TreeStructureIcon,
-  UsersThreeIcon,
   WrenchIcon,
 } from "@phosphor-icons/react";
 import type { AppTranslator } from "@/i18n/catalogs";
@@ -25,7 +25,7 @@ import { translateEnglishAppMessage } from "@/i18n/runtime";
 
 export type SidebarRole = "anon" | "member" | "admin";
 
-export type SidebarSection = "main" | "organization" | "manage";
+export type SidebarSection = "main" | "manage";
 
 interface NavManifestItem {
   label: string;
@@ -52,24 +52,13 @@ export interface SidebarItem {
 }
 
 export interface NavContext {
-  activeOrgSlug?: string | null;
   hasOrganization?: boolean;
-  canManageOrganization?: boolean;
-  canOrganizeEvents?: boolean;
   canCurate?: boolean;
   isAdmin?: boolean;
 }
 
-export function createAdminChildren(t: AppTranslator): SidebarItem[] {
+export function createAdminChildren(t: AppTranslator, context: NavContext = {}): SidebarItem[] {
   return [
-    {
-      icon: ChartBarIcon,
-      label: t("common.overview"),
-      slug: "admin-overview",
-      to: "/admin",
-      exact: true,
-      roleRequired: "admin",
-    },
     {
       icon: NetworkIcon,
       label: t("common.communities"),
@@ -85,49 +74,77 @@ export function createAdminChildren(t: AppTranslator): SidebarItem[] {
       roleRequired: "admin",
     },
     {
+      icon: ClipboardTextIcon,
+      label: t("reports.title"),
+      slug: "admin-reports",
+      to: "/admin/reports",
+      roleRequired: "admin",
+    },
+    {
       icon: ScrollIcon,
       label: t("common.proposals"),
       slug: "admin-proposals",
       to: "/admin/proposals",
       roleRequired: "admin",
     },
-    {
-      icon: QrCodeIcon,
-      label: t("org.stations"),
-      slug: "admin-stations",
-      to: "/admin/stations",
-      roleRequired: "admin",
-    },
-    {
-      icon: TreeStructureIcon,
-      label: t("nav.sites"),
-      slug: "admin-tenants",
-      to: "/admin/tenants",
-      roleRequired: "admin",
-    },
-    {
-      icon: LightningIcon,
-      label: t("nav.relayer"),
-      slug: "admin-relayer",
-      to: "/admin/relayer",
-      roleRequired: "admin",
-    },
+    ...(context.canCurate || context.isAdmin
+      ? [
+          {
+            icon: ListChecksIcon,
+            label: t("nav.directory"),
+            slug: "discover",
+            to: "/discover",
+            roleRequired: "member" as const,
+          },
+        ]
+      : []),
     {
       icon: WrenchIcon,
-      label: t("nav.system"),
-      slug: "admin-system",
-      to: "/admin/system",
+      label: t("common.platform"),
+      slug: "admin-platform",
+      to: "/admin/stations",
+      activePrefixes: PLATFORM_PATHS,
       roleRequired: "admin",
+      children: [
+        {
+          icon: QrCodeIcon,
+          label: t("org.stations"),
+          slug: "admin-stations",
+          to: "/admin/stations",
+          roleRequired: "admin",
+        },
+        {
+          icon: TreeStructureIcon,
+          label: t("nav.sites"),
+          slug: "admin-tenants",
+          to: "/admin/tenants",
+          roleRequired: "admin",
+        },
+        {
+          icon: LightningIcon,
+          label: t("nav.relayer"),
+          slug: "admin-relayer",
+          to: "/admin/relayer",
+          roleRequired: "admin",
+        },
+        {
+          icon: GearSixIcon,
+          label: t("nav.system"),
+          slug: "admin-system",
+          to: "/admin/system",
+          roleRequired: "admin",
+        },
+      ],
     },
   ];
 }
+
+const PLATFORM_PATHS = ["/admin/stations", "/admin/tenants", "/admin/relayer", "/admin/system"];
 
 export function buildNavItems(
   context: NavContext = {},
   t: AppTranslator = translateEnglishAppMessage,
 ): SidebarItem[] {
-  const ADMIN_CHILDREN = createAdminChildren(t);
-  const orgPath = context.activeOrgSlug ? `/orgs/${context.activeOrgSlug}` : "/orgs";
   return [
     {
       icon: HouseIcon,
@@ -138,6 +155,30 @@ export function buildNavItems(
       roleRequired: "member",
       section: "main",
     },
+    ...(context.hasOrganization === false
+      ? context.isAdmin
+        ? []
+        : [
+            {
+              icon: RocketLaunchIcon,
+              label: t("dashboard.startCommunity"),
+              slug: "start-community",
+              to: "/apply",
+              roleRequired: "member" as const,
+              section: "main" as const,
+            },
+          ]
+      : [
+          {
+            icon: NetworkIcon,
+            label: t("nav.myCommunity"),
+            slug: "my-node",
+            to: "/dashboard/node",
+            activePrefixes: ["/dashboard/node", "/nodes/", "/tenant/", "/orgs"],
+            roleRequired: "member" as const,
+            section: "main" as const,
+          },
+        ]),
     {
       icon: CompassIcon,
       label: t("common.explore"),
@@ -155,63 +196,15 @@ export function buildNavItems(
       roleRequired: "anon",
       section: "main",
     },
-    ...(context.hasOrganization === false
-      ? context.isAdmin
-        ? []
-        : [
-            {
-              icon: RocketLaunchIcon,
-              label: t("dashboard.startCommunity"),
-              slug: "start-community",
-              to: "/apply",
-              roleRequired: "member" as const,
-              section: "organization" as const,
-            },
-          ]
-      : [
-          {
-            icon: NetworkIcon,
-            label: t("nav.myCommunity"),
-            slug: "my-node",
-            to: "/dashboard/node",
-            activePrefixes: ["/dashboard/node", "/nodes/", "/tenant/"],
-            roleRequired: "member" as const,
-            section: "organization" as const,
-          },
-          ...(context.canManageOrganization || context.canOrganizeEvents || context.isAdmin
-            ? [
-                {
-                  icon: UsersThreeIcon,
-                  label: t("common.organization"),
-                  slug: "orgs",
-                  to: orgPath,
-                  activePrefixes: ["/orgs"],
-                  roleRequired: "member" as const,
-                  section: "organization" as const,
-                },
-              ]
-            : []),
-        ]),
-    ...(context.canCurate || context.isAdmin
-      ? [
-          {
-            icon: ListChecksIcon,
-            label: t("nav.directory"),
-            slug: "discover",
-            to: "/discover",
-            roleRequired: "member" as const,
-            section: "manage" as const,
-          },
-        ]
-      : []),
     {
       icon: ShieldIcon,
       label: t("org.admin"),
       slug: "admin",
-      to: "/admin",
-      roleRequired: "admin",
+      to: context.isAdmin ? "/admin/nodes" : "/discover",
+      activePrefixes: ["/admin", "/discover"],
+      roleRequired: context.canCurate && !context.isAdmin ? "member" : "admin",
       section: "manage",
-      children: ADMIN_CHILDREN,
+      children: createAdminChildren(t, context),
     },
   ];
 }
@@ -372,12 +365,6 @@ export function appendPluginSidebarItems(
   return [...builtin, ...plugin.filter((item) => !builtinTos.has(item.to))];
 }
 
-export const SECTION_LABELS: Record<SidebarSection, string | null> = {
-  main: null,
-  organization: "Workspace",
-  manage: "Manage",
-};
-
 export function groupSidebarItems(
   items: SidebarItem[],
   t: AppTranslator = translateEnglishAppMessage,
@@ -386,13 +373,11 @@ export function groupSidebarItems(
   for (const item of items) {
     const key = item.section ?? item.group ?? "more";
     const label =
-      item.section === "organization"
-        ? t("nav.workspace")
-        : item.section === "manage"
-          ? t("nav.manage")
-          : item.section === "main"
-            ? null
-            : (item.group ?? t("common.more"));
+      item.section === "manage"
+        ? t("nav.manage")
+        : item.section === "main"
+          ? null
+          : (item.group ?? t("common.more"));
     const existing = sections.find((section) => section.key === key);
     if (existing) existing.items.push(item);
     else sections.push({ key, label, items: [item] });

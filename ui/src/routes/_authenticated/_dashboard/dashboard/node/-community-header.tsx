@@ -1,4 +1,4 @@
-import { ArrowSquareOutIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, ArrowUpRightIcon, UsersThreeIcon } from "@phosphor-icons/react";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
@@ -16,6 +16,7 @@ import { sortCommunityNodes } from "@/lib/community-node";
 import { isPlatformNode } from "@/lib/node-kind";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import {
   canManageCommunity,
   canOperateNodes,
@@ -103,6 +104,12 @@ export function CommunityHeader({
   const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
   const workspace = useQuery(teamWorkspaceQueryOptions(api));
   const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
+  const organizationSlug = useQuery({
+    ...organizationsQueryOptions(api),
+    enabled: canOrganize && !!activeOrganizationId,
+    select: (organizations) =>
+      organizations.find((organization) => organization.id === activeOrganizationId)?.slug ?? null,
+  }).data;
 
   const siteUrl =
     node && gateway && !isPlatformNode(node) ? buildTenantUrl(node.slug, gateway) : null;
@@ -191,6 +198,23 @@ export function CommunityHeader({
                   ))}
                 </SelectContent>
               </Select>
+            )}
+            {canOrganize && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  organizationSlug ? (
+                    <Link to="/orgs/$slug" params={{ slug: organizationSlug }} />
+                  ) : (
+                    <Link to="/orgs" />
+                  )
+                }
+                data-testid="community-header.organization"
+              >
+                <UsersThreeIcon />
+                {translate("common.organization")}
+              </Button>
             )}
             {nodeId && listing.data && (
               <>

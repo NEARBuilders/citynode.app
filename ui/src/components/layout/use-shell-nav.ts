@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useApiClient } from "@/app";
 import { useAppTranslation } from "@/i18n/runtime";
-import { resolveTeamWorkspace } from "@/lib/team-workspace";
 import manifestJson from "@/manifest.gen.json" with { type: "json" };
 import {
   appendPluginSidebarItems,
@@ -14,7 +13,6 @@ import {
   routePathsFromManifest,
 } from "./nav-items";
 import { useIdentity } from "./use-identity";
-import { useTeamWorkspace } from "./use-team-workspace";
 
 const shippedRoutePaths = routePathsFromManifest(
   (manifestJson as { routes: ManifestRoute[] }).routes,
@@ -39,20 +37,16 @@ export function useShellNav(
   pluginNav?: { items: Parameters<typeof pluginNavToSidebar>[0] },
 ) {
   const translate = useAppTranslation();
-  const { user, activeOrg, organizations, membership, isOrganizationsLoading } = useIdentity();
+  const { user, organizations, membership, isOrganizationsLoading } = useIdentity();
   const signedIn = Boolean(user);
-  const { data: workspace = resolveTeamWorkspace(null) } = useTeamWorkspace(signedIn);
   const canCurate = useCanCurate(signedIn && !isAdmin);
   const role = getUserRole(signedIn, isAdmin);
 
   const builtin = buildNavItems(
     {
-      activeOrgSlug: activeOrg?.slug ?? null,
       hasOrganization: isAdmin
         ? isOrganizationsLoading || organizations.length > 0
         : membership.status !== "none",
-      canManageOrganization: workspace.canManageOrganization ?? false,
-      canOrganizeEvents: workspace.teams.some((team) => team.areas.includes("events")),
       canCurate,
       isAdmin,
     },
