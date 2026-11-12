@@ -27,7 +27,7 @@ Then write what happened in one open field, as short or as long as you like. The
 
 ## When it's due
 
-Send the report for a month by the end of the following month. City Node reminds you on Home from the last week of the month. Until the following month ends you can reopen the report and change it; after that it's read-only.
+Monthly reports start with November 2026. Send the report for a month by the end of the following month. City Node reminds you on Home from the last week of the month. Until the following month ends you can reopen the report and change it; after that it's read-only.
 
 ## Event reports
 
@@ -36,3 +36,5 @@ Each ended event has its own report with a few set questions. Open it from [your
 ## Who reads it
 
 You, your community's other owners and organizers, and the City Node platform team. Nobody else can see it.
+
+The platform team reads each report and marks it **Reviewed**, which you'll see on [your reports](/report) and on the report itself. They don't send comments back through City Node. If you change a report after it was reviewed, it goes back to them to read again.

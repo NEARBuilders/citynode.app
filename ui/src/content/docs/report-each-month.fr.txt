@@ -27,7 +27,7 @@ Racontez ensuite ce qui s'est passé dans un seul champ libre, aussi court ou lo
 
 ## Quand l'envoyer
 
-Envoyez le rapport d'un mois avant la fin du mois suivant. City Node vous le rappelle sur l'Accueil à partir de la dernière semaine du mois. Jusqu'à la fin du mois suivant, vous pouvez rouvrir le rapport et le modifier ; ensuite il passe en lecture seule.
+Les rapports mensuels commencent en novembre 2026. Envoyez le rapport d'un mois avant la fin du mois suivant. City Node vous le rappelle sur l'Accueil à partir de la dernière semaine du mois. Jusqu'à la fin du mois suivant, vous pouvez rouvrir le rapport et le modifier ; ensuite il passe en lecture seule.
 
 ## Rapports d'événement
 
@@ -36,3 +36,5 @@ Chaque événement terminé a son propre rapport, avec quelques questions fixes.
 ## Qui le lit
 
 Vous, les autres propriétaires et organisateurs de votre communauté, et l'équipe de la plateforme City Node. Personne d'autre ne peut le voir.
+
+L'équipe de la plateforme lit chaque rapport et le marque **Examiné**, ce que vous verrez dans [vos rapports](/report) et sur le rapport lui-même. Elle n'envoie pas de commentaires via City Node. Si vous modifiez un rapport après son examen, il lui revient pour être relu.

@@ -27,7 +27,7 @@ Después cuenta lo que pasó en un único campo libre, tan breve o extenso como 
 
 ## Cuándo se entrega
 
-Envía el informe de un mes antes de que termine el mes siguiente. City Node te lo recuerda en Inicio desde la última semana del mes. Hasta que termine el mes siguiente puedes volver a abrir el informe y cambiarlo; después queda en solo lectura.
+Los informes mensuales empiezan en noviembre de 2026. Envía el informe de un mes antes de que termine el mes siguiente. City Node te lo recuerda en Inicio desde la última semana del mes. Hasta que termine el mes siguiente puedes volver a abrir el informe y cambiarlo; después queda en solo lectura.
 
 ## Informes de eventos
 
@@ -36,3 +36,5 @@ Cada evento terminado tiene su propio informe con unas pocas preguntas fijas. Á
 ## Quién lo lee
 
 Tú, los demás propietarios y organizadores de tu comunidad y el equipo de la plataforma City Node. Nadie más puede verlo.
+
+El equipo de la plataforma lee cada informe y lo marca como **Revisado**, lo que verás en [tus informes](/report) y en el propio informe. No envía comentarios a través de City Node. Si cambias un informe después de que lo revisaran, vuelve a ellos para leerlo de nuevo.
