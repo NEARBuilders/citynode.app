@@ -179,7 +179,9 @@ function AdminReports() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{translate("common.community")}</TableHead>
-                    <TableHead>{translate("admin.reports.monthly")}</TableHead>
+                    <TableHead className="hidden sm:table-cell">
+                      {translate("admin.reports.monthly")}
+                    </TableHead>
                     <TableHead className="hidden lg:table-cell">
                       {translate("admin.reports.numbersHeading")}
                     </TableHead>
@@ -219,24 +221,12 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
         >
           {row.name}
         </Link>
-      </TableCell>
-      <TableCell className="whitespace-normal">
-        <div className="flex flex-col items-start gap-1">
-          <MonthlyStatusBadge row={row} due={due} />
-          {report && (
-            <span className="text-xs text-muted-foreground">
-              {report.submittedByName ? (
-                <Trans
-                  id="admin.reports.submittedBy"
-                  values={{ name: report.submittedByName }}
-                  components={{ date: <LocalDate value={report.submittedAt} /> }}
-                />
-              ) : (
-                <LocalDate value={report.submittedAt} />
-              )}
-            </span>
-          )}
+        <div className="mt-1 sm:hidden">
+          <MonthlyStatus row={row} due={due} testId={null} />
         </div>
+      </TableCell>
+      <TableCell className="hidden whitespace-normal sm:table-cell">
+        <MonthlyStatus row={row} due={due} testId={`admin-report-status-${row.nodeId}`} />
       </TableCell>
       <TableCell className="hidden text-muted-foreground lg:table-cell">
         {report ? translate("admin.reports.numbers", report.stats) : "—"}
@@ -304,9 +294,46 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
   );
 }
 
-function MonthlyStatusBadge({ row, due }: { row: AdminMonthlyRow; due: boolean }) {
+function MonthlyStatus({
+  row,
+  due,
+  testId,
+}: {
+  row: AdminMonthlyRow;
+  due: boolean;
+  testId: string | null;
+}) {
+  const { report } = row;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <MonthlyStatusBadge row={row} due={due} testId={testId ?? undefined} />
+      {report && (
+        <span className="text-xs text-muted-foreground">
+          {report.submittedByName ? (
+            <Trans
+              id="admin.reports.submittedBy"
+              values={{ name: report.submittedByName }}
+              components={{ date: <LocalDate value={report.submittedAt} /> }}
+            />
+          ) : (
+            <LocalDate value={report.submittedAt} />
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function MonthlyStatusBadge({
+  row,
+  due,
+  testId,
+}: {
+  row: AdminMonthlyRow;
+  due: boolean;
+  testId?: string;
+}) {
   const translate = useAppTranslation();
-  const testId = `admin-report-status-${row.nodeId}`;
   if (row.status === "reviewed") {
     return (
       <Badge variant="success" data-testid={testId}>
