@@ -13,6 +13,7 @@ import {
   discoveryProfiles,
   discoveryReports,
   eventReports,
+  monthlyReports,
   nodes,
   tenants,
 } from "../db/schema";
@@ -21,12 +22,14 @@ import type {
   DiscoveryMeasurement,
   DiscoveryProfile,
   EventReport,
+  MonthlyReportStats,
   StoredDiscoveryProfile,
 } from "../discovery-contract";
 import { EVENT_REPORT_FORM_VERSION } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
+import { type ReportMonthWindow, reportMonthWindow } from "../report-month";
 import { resolveTeamAccess } from "../team-access-policy";
 import {
   type GeocodeService,
@@ -40,6 +43,29 @@ import { listedNode, nodeKindOf, PLATFORM_NODE_KIND } from "./nodes";
 const EVENTS_AREA: FeatureArea = "events";
 
 export type DiscoveryEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
+
+export type MonthlyExternalStats = (target: {
+  organizationId: string;
+  month: string;
+  window: ReportMonthWindow;
+}) => DiscoveryEffect<Omit<MonthlyReportStats, "eventsHeld">>;
+
+function storedMonthlyReport(row: typeof monthlyReports.$inferSelect) {
+  return {
+    nodeId: row.nodeId,
+    month: row.month,
+    notes: row.notes,
+    stats: {
+      eventsHeld: row.eventsHeld,
+      checkIns: row.checkIns,
+      joins: row.joins,
+      newMembers: row.newMembers,
+    },
+    submittedBy: row.submittedBy,
+    submittedAt: row.submittedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
 
 function storedReport(row: typeof eventReports.$inferSelect) {
   return {
@@ -121,14 +147,66 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
 
   function reportAccess(nodeId: string, context: AuthContext) {
     return Effect.gen(function* () {
-      const { level } = yield* nodeAccess(nodeId, context, EVENTS_AREA, {
+      const { level, record } = yield* nodeAccess(nodeId, context, EVENTS_AREA, {
         platformAdminEdits: false,
       });
       const canEdit = level === "editor";
       if (!canEdit && context.user?.role !== "admin") {
         return yield* Effect.fail(new ORPCError("FORBIDDEN"));
       }
-      return { canEdit };
+      return { canEdit, organizationId: record.tenant.orgId };
+    });
+  }
+
+  function monthlyReportTarget(input: { nodeId: string; month: string }, context: AuthContext) {
+    return Effect.gen(function* () {
+      const access = yield* reportAccess(input.nodeId, context);
+      const now = yield* Clock.currentTimeMillis;
+      const window = reportMonthWindow(input.month);
+      if (window.from.getTime() > now) {
+        return yield* Effect.fail(
+          new ORPCError("BAD_REQUEST", { message: "This month hasn't started yet" }),
+        );
+      }
+      return { ...access, window, now, open: now < window.closesAt.getTime() };
+    });
+  }
+
+  function monthlyStats(
+    target: { nodeId: string; month: string; organizationId: string | null },
+    window: ReportMonthWindow,
+    now: number,
+    externalStats: MonthlyExternalStats,
+  ) {
+    return Effect.gen(function* () {
+      if (!target.organizationId) return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+      const data = discoveryActivities.data;
+      const startsAt = sql`(${data}->>'startsAt')::timestamptz`;
+      const endsAt = sql`coalesce((${data}->>'endsAt')::timestamptz, ${startsAt})`;
+      const nowIso = new Date(now).toISOString();
+      const [held, external] = yield* Effect.all([
+        query(() =>
+          db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(discoveryActivities)
+            .where(
+              and(
+                eq(discoveryActivities.ownerNodeId, target.nodeId),
+                shownActivity(nowIso),
+                sql`${data}->>'kind' = 'event'`,
+                sql`${startsAt} >= ${window.from.toISOString()}::timestamptz`,
+                sql`${startsAt} < ${window.to.toISOString()}::timestamptz`,
+                sql`${endsAt} <= ${nowIso}::timestamptz`,
+              ),
+            ),
+        ),
+        externalStats({
+          organizationId: target.organizationId,
+          month: target.month,
+          window,
+        }),
+      ]);
+      return { eventsHeld: held[0]?.count ?? 0, ...external };
     });
   }
 
@@ -1322,6 +1400,102 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         return rows.map((row) => ({
           activityId: row.activityId,
           submittedAt: row.submittedAt.toISOString(),
+        }));
+      }),
+    monthlyReport: (
+      input: { nodeId: string; month: string },
+      context: AuthContext,
+      externalStats: MonthlyExternalStats,
+    ) =>
+      Effect.gen(function* () {
+        const target = yield* monthlyReportTarget(input, context);
+        const [row] = yield* query(() =>
+          db
+            .select()
+            .from(monthlyReports)
+            .where(
+              and(eq(monthlyReports.nodeId, input.nodeId), eq(monthlyReports.month, input.month)),
+            ),
+        );
+        const report = row ? storedMonthlyReport(row) : null;
+        const stats =
+          target.canEdit && target.open
+            ? yield* monthlyStats(
+                { ...input, organizationId: target.organizationId },
+                target.window,
+                target.now,
+                externalStats,
+              )
+            : (report?.stats ?? null);
+        return {
+          report,
+          canEdit: target.canEdit,
+          open: target.open,
+          closesAt: target.window.closesAt.toISOString(),
+          stats,
+        };
+      }),
+    saveMonthlyReport: (
+      input: { nodeId: string; month: string; notes: string },
+      context: AuthContext,
+      externalStats: MonthlyExternalStats,
+    ) =>
+      Effect.gen(function* () {
+        const target = yield* monthlyReportTarget(input, context);
+        if (!target.canEdit) return yield* Effect.fail(new ORPCError("FORBIDDEN"));
+        if (!target.open) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "This month's report closed at the end of the following month",
+            }),
+          );
+        }
+        const stats = yield* monthlyStats(
+          { ...input, organizationId: target.organizationId },
+          target.window,
+          target.now,
+          externalStats,
+        );
+        const userId = context.userId!;
+        const at = new Date(target.now);
+        const values = { notes: input.notes, ...stats, updatedBy: userId, updatedAt: at };
+        const [row] = yield* query(() =>
+          db
+            .insert(monthlyReports)
+            .values({
+              nodeId: input.nodeId,
+              month: input.month,
+              ...values,
+              submittedBy: userId,
+              submittedAt: at,
+            })
+            .onConflictDoUpdate({
+              target: [monthlyReports.nodeId, monthlyReports.month],
+              set: values,
+            })
+            .returning(),
+        );
+        if (!row) return yield* Effect.fail(new ORPCError("INTERNAL_SERVER_ERROR"));
+        return storedMonthlyReport(row);
+      }),
+    monthlyReportStatuses: (nodeId: string, context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* reportAccess(nodeId, context);
+        const rows = yield* query(() =>
+          db
+            .select({
+              month: monthlyReports.month,
+              submittedAt: monthlyReports.submittedAt,
+              updatedAt: monthlyReports.updatedAt,
+            })
+            .from(monthlyReports)
+            .where(eq(monthlyReports.nodeId, nodeId))
+            .orderBy(desc(monthlyReports.month)),
+        );
+        return rows.map((row) => ({
+          month: row.month,
+          submittedAt: row.submittedAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
         }));
       }),
   };

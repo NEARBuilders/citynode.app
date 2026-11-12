@@ -1233,6 +1233,29 @@ export const contract = oc.router({
     .output(AttendanceRecordSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN }),
 
+  listReportCommunities: oc
+    .route({
+      method: "GET",
+      path: "/reports/communities",
+      summary: "List the communities the caller reports for",
+      description:
+        "Caller only — communities where the caller is an owner, an admin or on a team with the events area, each with the node its reports are kept on. memberships counts every community the caller belongs to.",
+    })
+    .output(
+      z.object({
+        communities: z.array(
+          z.object({
+            organizationId: z.string(),
+            slug: z.string(),
+            name: z.string(),
+            nodeId: z.uuid(),
+          }),
+        ),
+        memberships: z.number().int().nonnegative(),
+      }),
+    )
+    .errors({ UNAUTHORIZED }),
+
   reconcileAttendance: oc
     .route({
       method: "POST",

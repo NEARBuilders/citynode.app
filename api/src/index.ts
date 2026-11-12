@@ -22,7 +22,7 @@ import { createPlatformOrganization, isPlatformOrganization } from "./lib/platfo
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { AttendanceLive, type AttendanceService, AttendanceTag } from "./services/attendance";
 import { verifyDaoMembership } from "./services/dao";
-import type { DiscoveryService } from "./services/discovery";
+import type { DiscoveryService, MonthlyExternalStats } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import { GeocodeLive } from "./services/discovery-geocode";
 import {
@@ -613,6 +613,37 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
     type MemberAuthClient = Effect.Success<ReturnType<typeof memberAuthClient>>;
 
+    const monthlyExternalStats =
+      (
+        attendance: AttendanceService,
+        context: {
+          reqHeaders?: ConstructorParameters<typeof Headers>[0];
+          userId?: string | null;
+          user?: AuthContext["user"];
+        },
+      ): MonthlyExternalStats =>
+      ({ organizationId, month, window }) =>
+        Effect.gen(function* () {
+          const userId = context.userId;
+          if (!userId) return yield* Effect.fail(new ORPCError("UNAUTHORIZED"));
+          const auth = yield* memberAuthClient({ ...context, userId });
+          const [checkIns, onboarding] = yield* Effect.all([
+            attendance.monthlyCheckIns(organizationId, window),
+            Effect.tryPromise({
+              try: () => auth.getOnboardingStats({ month, organizationId }),
+              catch: () =>
+                new ORPCError("INTERNAL_SERVER_ERROR", {
+                  message: "Could not load this month's joins",
+                }),
+            }),
+          ]);
+          return {
+            checkIns,
+            joins: onboarding.totals.redeemed,
+            newMembers: onboarding.totals.newMembers,
+          };
+        });
+
     const callAuth = <T>(run: () => Promise<T>, message: string) =>
       Effect.tryPromise({
         try: run,
@@ -947,6 +978,82 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         return yield* services.discovery.eventReportStatuses(input.nodeId, context);
+      }),
+      getMonthlyReport: builder.getMonthlyReport.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.monthlyReport(
+          input,
+          context,
+          monthlyExternalStats(services.attendance, context),
+        );
+      }),
+      saveMonthlyReport: builder.saveMonthlyReport.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.saveMonthlyReport(
+          input,
+          context,
+          monthlyExternalStats(services.attendance, context),
+        );
+      }),
+      listMonthlyReportStatuses: builder.listMonthlyReportStatuses.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.monthlyReportStatuses(input.nodeId, context);
+      }),
+      listReportCommunities: builder.listReportCommunities.use(requireAuth).effect(function* ({
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const auth = yield* memberAuthClient(context);
+        const organizations = (yield* callAuth(
+          () => auth.listOrganizations(),
+          "Could not load your communities",
+        )).filter(
+          (organization) =>
+            organization.status === "active" &&
+            organization.slug !== context.userId &&
+            organization.metadata?.isPersonal !== true,
+        );
+        const communities = yield* Effect.forEach(
+          organizations,
+          (organization) =>
+            Effect.gen(function* () {
+              const { role } = yield* callAuth(
+                () => auth.getActiveMemberRole({ organizationId: organization.id }),
+                "Could not read your role",
+              );
+              const organizer =
+                role === "owner" ||
+                role === "admin" ||
+                (!!role &&
+                  (yield* callAuth(
+                    () => auth.listUserTeams({ organizationId: organization.id }),
+                    "Could not read your teams",
+                  )).some((team) => team.areas.includes("events")));
+              if (!organizer) return [];
+              const tenant = yield* services.tenants.resolveTenantByOrgId(organization.id);
+              if (!tenant) return [];
+              const [node] = (yield* services.nodes.list({ tenantId: tenant.id })).sort(
+                (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+              );
+              if (!node) return [];
+              return [
+                {
+                  organizationId: organization.id,
+                  slug: organization.slug,
+                  name: tenant.name,
+                  nodeId: node.id,
+                },
+              ];
+            }),
+          { concurrency: 4 },
+        );
+        return {
+          communities: communities.flat().sort((a, b) => a.name.localeCompare(b.name)),
+          memberships: organizations.length,
+        };
       }),
       createEventOnboardingCode: builder.createEventOnboardingCode.effect(function* ({
         input,

@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, isNotNull, min, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, min, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -109,6 +109,10 @@ export interface AttendanceService {
   engagement(): AttendanceEffect<CommunityEngagement[]>;
   eventAttendance(): AttendanceEffect<EventAttendance[]>;
   platformAttendance(window: { from: Date; to: Date }): AttendanceEffect<PlatformAttendance>;
+  monthlyCheckIns(
+    organizationId: string,
+    window: { from: Date; to: Date },
+  ): AttendanceEffect<number>;
 }
 
 export class AttendanceTag extends Context.Service<AttendanceTag, AttendanceService>()(
@@ -555,6 +559,26 @@ export const AttendanceLive = Layer.effect(
             people: people.length,
             returning: people.filter(({ before }) => before >= 2).length,
           };
+        }),
+      monthlyCheckIns: (organizationId, { from, to }) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db
+              .select({
+                count: sql<number>`count(distinct (${attendanceCheckIns.userId}, ${attendanceCheckIns.eventId}))::int`,
+              })
+              .from(attendanceCheckIns)
+              .where(
+                and(
+                  eq(attendanceCheckIns.organizationId, organizationId),
+                  eq(attendanceCheckIns.classified, true),
+                  isNotNull(attendanceCheckIns.eventId),
+                  gte(attendanceCheckIns.checkedInAt, from),
+                  lt(attendanceCheckIns.checkedInAt, to),
+                ),
+              ),
+          );
+          return row?.count ?? 0;
         }),
     };
 
