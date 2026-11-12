@@ -10,8 +10,8 @@ test.describe("docs", () => {
 
     await expect(page.getByTestId("docs.heading")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("docs.nav-overview")).toHaveAttribute("aria-current", "page");
-    await expect(page.getByTestId("docs.nav-group-guides")).toHaveCount(0);
-    await expect(page.getByTestId("docs.guides")).toHaveCount(0);
+    await expect(page.getByTestId("docs.nav-group-guides")).toBeVisible();
+    await expect(page.getByTestId("docs.guide-report-each-month")).toBeVisible();
     await expect(page.getByTestId("docs.nav-builders")).not.toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("public-nav-docs")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("about.path-learn")).toBeVisible();
@@ -43,20 +43,18 @@ test.describe("docs", () => {
     await expect(page.getByTestId("docs.nav-skill")).toHaveAttribute("aria-current", "page");
   });
 
-  test("at 375px the docs menu is used and still hides Guides when none exist", async ({
-    page,
-  }) => {
+  test("at 375px the docs menu is used and lists the guides", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/docs", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
     await expect(page.getByTestId("docs.heading")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("docs.nav-menu")).toBeVisible();
-    await expect(page.getByTestId("docs.nav-group-guides")).toHaveCount(0);
-    await expect(page.getByTestId("docs.guides")).toHaveCount(0);
+    await expect(page.getByTestId("docs.nav-group-guides")).toBeHidden();
+    await expect(page.getByTestId("docs.guide-report-each-month")).toBeVisible();
 
     await page.getByTestId("docs.nav-menu").click();
-    await expect(page.getByTestId("docs.nav-group-guides")).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Report each month" })).toBeVisible();
   });
 
   test("signed-in members reach the docs from the sidebar About item", async ({ page }) => {
