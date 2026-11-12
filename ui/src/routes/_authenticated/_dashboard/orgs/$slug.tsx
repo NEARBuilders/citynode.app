@@ -15,7 +15,6 @@ import {
   Button,
   EmptyState,
   PageContainer,
-  PageHeader,
   Skeleton,
   Tabs,
   TabsList,
@@ -135,12 +134,12 @@ function OrganizationDetail() {
   const isActive = orgId === activeOrgId;
   const membersQuery = useQuery({
     ...orgMembersQueryOptions(apiClient, orgId),
-    enabled: !!orgId && org?.status === "active",
+    enabled: !!orgId,
   });
   const members = membersQuery.data ?? [];
   const roleQuery = useQuery({
     ...orgActiveRoleQueryOptions(apiClient, orgId),
-    enabled: !!orgId && org?.status === "active",
+    enabled: !!orgId,
   });
   const myRole = roleQuery.data;
   const canManageMembers = isCommunitySettingsRole(myRole);
@@ -150,7 +149,7 @@ function OrganizationDetail() {
       queryFn: async (): Promise<InvitationItem[]> => {
         return apiClient.auth.listInvitations({ organizationId: orgId });
       },
-      enabled: !!orgId && org?.status === "active" && canManageMembers,
+      enabled: !!orgId && canManageMembers,
     }).data ?? [];
   const apiKeys =
     useQuery({
@@ -162,13 +161,13 @@ function OrganizationDetail() {
         if (error) throw new Error(error.message);
         return (data?.apiKeys ?? []) as OrganizationApiKey[];
       },
-      enabled: !!orgId && org?.status === "active" && canManageMembers,
+      enabled: !!orgId && canManageMembers,
     }).data ?? [];
   const canViewSettings = canManageMembers || session?.user?.role === "admin";
   const isOwner = myRole === "owner";
   const tenantQuery = useQuery({
     ...tenantByOrgQueryOptions(apiClient, orgId),
-    enabled: !!orgId && org?.status === "active" && canViewSettings,
+    enabled: !!orgId && canViewSettings,
   });
   const settingsTenantId = canViewSettings ? tenantQuery.data?.id : undefined;
   const workspace = useTeamWorkspace(isActive).data;
@@ -222,11 +221,7 @@ function OrganizationDetail() {
     if (!isOrganizationTab(value) || !visibleTabs.includes(value) || value === activeTab) return;
     void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
   };
-  const teamsState = useOrganizationTeams(
-    orgId,
-    activeTab === "teams" && org?.status === "active",
-    canManageMembers && org?.status === "active",
-  );
+  const teamsState = useOrganizationTeams(orgId, activeTab === "teams", canManageMembers);
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
     orgId,
@@ -258,31 +253,6 @@ function OrganizationDetail() {
             </Button>
           }
         />
-      </PageContainer>
-    );
-  }
-
-  if (org?.status !== "active") {
-    return (
-      <PageContainer variant="narrow">
-        <PageHeader
-          title={org.name}
-          subtitle={`@${org.slug}`}
-          headerTestId="orgs.request.heading"
-        />
-        <div className="flex flex-col gap-4" data-testid="orgs-request-status">
-          <h2 className="text-lg font-medium">
-            {org?.status === "pending"
-              ? translate("orgApproval.pending")
-              : translate("orgApproval.rejected")}
-          </h2>
-          <p className="text-sm text-muted-foreground" data-testid="orgs-request-reason">
-            {org?.status === "pending" ? translate("orgApproval.pendingHint") : org.rejectionReason}
-          </p>
-          <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
-            {translate("org.back")}
-          </Button>
-        </div>
       </PageContainer>
     );
   }
@@ -331,11 +301,7 @@ function OrganizationDetail() {
         onSwitch={() => switchOrg.mutate(orgId)}
         org={org}
         settingsTenantId={settingsTenantId}
-        startCommunitySlug={
-          org.status === "active" && isOwner && !isPersonal && !settingsTenantId
-            ? org.slug
-            : undefined
-        }
+        startCommunitySlug={isOwner && !isPersonal && !settingsTenantId ? org.slug : undefined}
       />
       {isOwner && (
         <OrganizationEditForm

@@ -285,14 +285,10 @@ describe("team area navigation", () => {
 describe("breadcrumbs", () => {
   const labels = (pathname: string) => crumbsFor(pathname).map((crumb) => crumb.label);
 
-  it("translates builder and organization review pages instead of using raw route names", () => {
+  it("translates app pages instead of using raw route names", () => {
     const translate = (id: Parameters<typeof translateAppMessage>[0]) =>
       translateAppMessage(id, undefined, "es");
     expect(crumbsFor("/apply", {}, translate)).toEqual([{ label: "Crear una comunidad" }]);
-    expect(crumbsFor("/admin/organizations", {}, translate)).toEqual([
-      { label: "Administración", to: "/admin" },
-      { label: "Organizaciones" },
-    ]);
     expect(crumbsFor("/onboarding/station/abc", {}, translate)).toEqual([{ label: "Estación" }]);
     expect(crumbsFor("/admin/tenants", {}, translate)).toEqual([
       { label: "Administración", to: "/admin" },
