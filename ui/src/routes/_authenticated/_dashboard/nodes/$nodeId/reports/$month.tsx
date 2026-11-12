@@ -262,7 +262,7 @@ function useCheckInSync(
   }, [stale, queryClient, nodeId, month]);
   return {
     syncing: editable && (sync.isPending || sync.isFetching || stale),
-    failed: editable && sync.isError,
+    failed: editable && (sync.isError || (sync.data?.failed.length ?? 0) > 0),
     retry: () => void sync.refetch(),
   };
 }
