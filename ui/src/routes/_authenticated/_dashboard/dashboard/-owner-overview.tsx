@@ -193,9 +193,7 @@ function OwnerEvents({ community }: { community: OwnerCommunity }) {
   const activities = useQuery(activitiesQueryOptions(apiClient, nodeId));
   const eventStatuses = useQuery(eventReportStatusesQueryOptions(apiClient, nodeId));
   const failed = [activities, eventStatuses].filter((query) => query.isError);
-  const submitted = new Map(
-    (eventStatuses.data ?? []).map((status) => [status.activityId, status.submittedAt]),
-  );
+  const reported = new Map((eventStatuses.data ?? []).map((status) => [status.activityId, status]));
   const all = activities.data ?? [];
   const recent = all
     .filter((event) => eventVisibility(event, { communityPublic: true, now }) === "ended")
@@ -228,7 +226,15 @@ function OwnerEvents({ community }: { community: OwnerCommunity }) {
         </>
       }
       report={
-        past ? { nodeId, event, submittedAt: submitted.get(event.id) ?? null, now } : undefined
+        past
+          ? {
+              nodeId,
+              event,
+              submittedAt: reported.get(event.id)?.submittedAt ?? null,
+              reviewedAt: reported.get(event.id)?.reviewedAt ?? null,
+              now,
+            }
+          : undefined
       }
     />
   );

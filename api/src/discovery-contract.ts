@@ -389,7 +389,15 @@ export const discoveryContract = {
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
   listEventReportStatuses: oc
     .input(z.object({ nodeId: z.uuid() }))
-    .output(z.array(z.object({ activityId: z.uuid(), submittedAt: z.iso.datetime() })))
+    .output(
+      z.array(
+        z.object({
+          activityId: z.uuid(),
+          submittedAt: z.iso.datetime(),
+          reviewedAt: z.iso.datetime().nullable(),
+        }),
+      ),
+    )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getMonthlyReport: oc
     .input(z.object({ nodeId: z.uuid(), month: reportMonthSchema }))

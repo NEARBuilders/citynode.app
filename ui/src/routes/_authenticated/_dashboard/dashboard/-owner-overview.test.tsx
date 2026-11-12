@@ -122,7 +122,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-12-10T12:00:00.000Z"));
   harness.activities = async () => [coming, unreported, reported];
   harness.eventStatuses = async () => [
-    { activityId: "harbor", submittedAt: "2026-12-06T00:00:00.000Z" },
+    { activityId: "harbor", submittedAt: "2026-12-06T00:00:00.000Z", reviewedAt: null },
   ];
   harness.monthlyStatuses = async () => [
     {
@@ -256,6 +256,19 @@ describe("an owner's Home overview", () => {
     expect(screen.getByTestId("home-owner.all-events").getAttribute("href")).toBe(
       "/nodes/node-1/content?tab=events",
     );
+  });
+
+  it("shows Reviewed on an event report a platform admin has marked", async () => {
+    harness.eventStatuses = async () => [
+      {
+        activityId: "harbor",
+        submittedAt: "2026-12-06T00:00:00.000Z",
+        reviewedAt: "2026-12-07T00:00:00.000Z",
+      },
+    ];
+    renderOverview();
+    const recent = await screen.findByTestId("home-owner.events-recent");
+    expect(within(recent).getByTestId("report-status-harbor").textContent).toBe("Reviewed");
   });
 
   it("shows event and check-in load errors with Retry", async () => {

@@ -1416,13 +1416,18 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         yield* reportAccess(nodeId, context);
         const rows = yield* query(() =>
           db
-            .select({ activityId: eventReports.activityId, submittedAt: eventReports.submittedAt })
+            .select({
+              activityId: eventReports.activityId,
+              submittedAt: eventReports.submittedAt,
+              reviewedAt: eventReports.reviewedAt,
+            })
             .from(eventReports)
             .where(eq(eventReports.nodeId, nodeId)),
         );
         return rows.map((row) => ({
           activityId: row.activityId,
           submittedAt: row.submittedAt.toISOString(),
+          reviewedAt: row.reviewedAt?.toISOString() ?? null,
         }));
       }),
     monthlyReport: (

@@ -80,9 +80,7 @@ export function ActivityEditor({
     ...eventReportStatusesQueryOptions(api, nodeId),
     enabled: canReport,
   });
-  const reportedAt = new Map(
-    (reportStatuses.data ?? []).map((status) => [status.activityId, status.submittedAt]),
-  );
+  const reported = new Map((reportStatuses.data ?? []).map((status) => [status.activityId, status]));
   const luma = useQuery({
     queryKey: ["discovery-luma-calendars", nodeId],
     queryFn: () => api.listDiscoveryLumaCalendars({ nodeId }),
@@ -186,7 +184,7 @@ export function ActivityEditor({
       {canReport && eventVisibility(a, visibilityContext) === "ended" && (
         <Button
           size="sm"
-          variant={reportedAt.has(a.id) ? "ghost" : "outline"}
+          variant={reported.has(a.id) ? "ghost" : "outline"}
           data-testid={`activity-editor.submit-report-${a.id}`}
           nativeButton={false}
           render={
@@ -196,7 +194,7 @@ export function ActivityEditor({
             />
           }
         >
-          {translate(reportedAt.has(a.id) ? "events.editReport" : "events.submitReport")}
+          {translate(reported.has(a.id) ? "events.editReport" : "events.submitReport")}
         </Button>
       )}
       {canOnboard && a.kind === "event" && a.status !== "cancelled" && (
@@ -351,7 +349,8 @@ export function ActivityEditor({
                       {canReport && eventVisibility(a, visibilityContext) === "ended" && (
                         <ReportStatusBadge
                           activity={a}
-                          submittedAt={reportedAt.get(a.id)}
+                          submittedAt={reported.get(a.id)?.submittedAt}
+                          reviewedAt={reported.get(a.id)?.reviewedAt}
                           now={now}
                         />
                       )}
