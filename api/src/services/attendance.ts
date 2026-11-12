@@ -31,7 +31,7 @@ export interface UpstreamCode {
 
 export interface UpstreamCodeStatus {
   eventId: string | null;
-  eventName: string;
+  eventName: string | null;
   joined: Array<{ userId: string; createdAt: Date }>;
 }
 
@@ -140,7 +140,7 @@ export const AttendanceLive = Layer.effect(
                     codeId: code.id,
                     userId: join.userId,
                     eventId,
-                    eventName,
+                    eventName: eventName ?? input.communityName,
                     communityName: input.communityName,
                     classified,
                     checkedInAt: join.createdAt,

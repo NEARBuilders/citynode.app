@@ -226,6 +226,7 @@ function renderOverview({
   canOrganize = false,
   network = "mainnet",
   tenantStatus,
+  selectedNode = { id: "node-1", metadata: {} },
 }: {
   nearAccount: string | null;
   canManage?: boolean;
@@ -233,12 +234,13 @@ function renderOverview({
   canOrganize?: boolean;
   network?: "mainnet" | "testnet";
   tenantStatus?: "active";
+  selectedNode?: Record<string, unknown>;
 }) {
   harness.nearAccount = nearAccount;
   harness.routeContext = {
     runtimeConfig: {},
     nodes: [{ id: "node-1" }, { id: "node-2" }],
-    selectedNode: { id: "node-1", metadata: {} },
+    selectedNode,
     summary: {
       validators: [],
       children: [],
@@ -847,6 +849,43 @@ const listing = {
   ],
   events: [],
 };
+
+describe("node overview bulletin", () => {
+  it("labels the bulletin with its community, publisher and date", async () => {
+    stubChain();
+    renderOverview({
+      nearAccount: null,
+      selectedNode: {
+        id: "node-1",
+        name: "New York City",
+        metadata: { bulletin: "Hackathon on Friday" },
+        bulletinPublisherName: "Ada Lovelace",
+        bulletinPublishedAt: "2026-11-11T18:30:00.000Z",
+      },
+    });
+    const bulletin = await screen.findByRole("region", { name: "Bulletin · New York City" });
+    expect(bulletin.textContent).toContain("Hackathon on Friday");
+    expect(screen.getByTestId("bulletin-attribution").textContent).toContain(
+      "Posted by Ada Lovelace",
+    );
+  });
+
+  it("names the community without attribution for an older bulletin", async () => {
+    stubChain();
+    renderOverview({
+      nearAccount: null,
+      selectedNode: {
+        id: "node-1",
+        name: "New York City",
+        metadata: { bulletin: "Hackathon on Friday" },
+        bulletinPublisherName: null,
+        bulletinPublishedAt: null,
+      },
+    });
+    await screen.findByRole("region", { name: "Bulletin · New York City" });
+    expect(screen.queryByTestId("bulletin-attribution")).toBeNull();
+  });
+});
 
 describe("node overview for members", () => {
   it("says what membership gives them, linking only to sections on the page", async () => {

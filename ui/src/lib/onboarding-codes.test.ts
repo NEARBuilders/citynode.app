@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest";
 import type { AuthRequestContext } from "@/lib/auth";
-import { isOnboardingOrganizer } from "./onboarding-codes";
+import { formatRemaining, isOnboardingOrganizer, onboardingCodeState } from "./onboarding-codes";
+
+const NOW = Date.parse("2026-11-12T00:00:00.000Z");
+
+function code(
+  overrides: Partial<{
+    expiresAt: Date | null;
+    revokedAt: Date | null;
+    usedCount: number;
+    maxUses: number;
+  }> = {},
+) {
+  return {
+    expiresAt: new Date(NOW + 86_400_000),
+    revokedAt: null,
+    usedCount: 0,
+    maxUses: 10,
+    ...overrides,
+  };
+}
 
 function contextFor({
   userRole = "user",
@@ -49,5 +68,21 @@ describe("isOnboardingOrganizer", () => {
   it("hides onboarding while the auth context is unavailable", () => {
     expect(isOnboardingOrganizer(null)).toBe(false);
     expect(isOnboardingOrganizer(undefined)).toBe(false);
+  });
+});
+
+describe("onboardingCodeState", () => {
+  it("keeps a future expiry active", () => {
+    expect(onboardingCodeState(code(), NOW)).toBe("active");
+  });
+
+  it("treats a missing expiry as expired", () => {
+    expect(onboardingCodeState(code({ expiresAt: null }), NOW)).toBe("expired");
+  });
+});
+
+describe("formatRemaining", () => {
+  it("shows expired when the timestamp is missing", () => {
+    expect(formatRemaining(null, NOW)).toBe("Expired");
   });
 });

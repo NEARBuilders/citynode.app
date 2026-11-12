@@ -75,12 +75,12 @@ export const EventOnboardingCodeSchema = z.object({
   id: z.string(),
   code: z.string(),
   eventId: z.string().nullable(),
-  eventName: z.string(),
+  eventName: z.string().nullable(),
   teamId: z.string(),
   role: z.string(),
   maxUses: z.number(),
   usedCount: z.number(),
-  expiresAt: z.date(),
+  expiresAt: z.date().nullable(),
   revokedAt: z.date().nullable(),
   createdAt: z.date(),
 });
@@ -199,6 +199,8 @@ export const NodeSchema = z.object({
   parentId: z.string().nullable(),
   tenantId: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()),
+  bulletinPublishedAt: z.string().nullable(),
+  bulletinPublisherName: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

@@ -14,9 +14,9 @@ vi.mock("@/services/dao", () => ({
 type StubCode = {
   id: string;
   eventId: string | null;
-  eventName: string;
+  eventName: string | null;
   createdAt: Date;
-  expiresAt: Date;
+  expiresAt: Date | null;
   joined: Array<{ userId: string; createdAt: Date }>;
 };
 
@@ -171,7 +171,7 @@ function member(userId: string, ...organizations: Array<{ org: string; name: str
 function addCode(
   org: string,
   eventId: string | null,
-  eventName: string,
+  eventName: string | null,
   joined: Array<[string, Date]>,
   createdAt = new Date(),
 ) {
@@ -386,6 +386,17 @@ describe("confirming attendance from an organizer session", () => {
       "Hackathon sign-up",
       "Legacy sign-up",
     ]);
+  });
+
+  it("names a check-in after the community when the station has no event title", async () => {
+    const city = await community();
+    addCode(city.org, null, null, [["nameless-member", past(10)]]);
+    await (await city.organizer()).reconcileAttendance({ organizationId: city.org });
+
+    const record = await (await member("nameless-member", city)).getMyAttendance({
+      organizationId: city.org,
+    });
+    expect(record.unclassified.map((row) => row.eventName)).toEqual([city.name]);
   });
 
   it("reports events nobody has synced yet as incomplete, not as no events", async () => {

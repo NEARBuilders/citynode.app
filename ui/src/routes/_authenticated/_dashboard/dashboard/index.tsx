@@ -194,7 +194,14 @@ function Home() {
       />
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
-          {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
+          {typeof bulletin === "string" && bulletin.trim() && node && (
+            <Bulletin
+              content={bulletin}
+              communityName={node.name}
+              publisherName={node.bulletinPublisherName}
+              publishedAt={node.bulletinPublishedAt}
+            />
+          )}
           {pending.length > 0 && (
             <section className="flex flex-col gap-6">
               <SectionHeader title={translate("org.invitations")} />

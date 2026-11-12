@@ -184,10 +184,18 @@ async function loadCommunity(nodeId?: string) {
   });
 }
 
-const node = (id: string, name: string) => ({
+const node = (
+  id: string,
+  name: string,
+  attribution: { bulletinPublisherName: string | null; bulletinPublishedAt: string | null } = {
+    bulletinPublisherName: null,
+    bulletinPublishedAt: null,
+  },
+) => ({
   id,
   name,
   metadata: { bulletin: `Bulletin for ${name} ${id}` },
+  ...attribution,
 });
 
 describe("Home and My community pick the same node", () => {
@@ -211,6 +219,40 @@ describe("Home and My community pick the same node", () => {
     harness.nodes = [node("node-c", "Lagos"), node("node-a", "Berlin")];
     expect((await loadCommunity("node-c")).selectedNode?.id).toBe("node-c");
     expect((await loadCommunity("missing")).selectedNode?.id).toBe("node-a");
+  });
+});
+
+describe("Home bulletin attribution", () => {
+  it("labels the bulletin with its community, publisher and date", async () => {
+    harness.user = { id: "user-1", name: "Member", email: "member@example.com" };
+    harness.activeOrganizationId = "org-1";
+    harness.organizations = [{ id: "org-1", name: "Example Community", slug: "example" }];
+    harness.nodes = [
+      node("node-a", "New York City", {
+        bulletinPublisherName: "Ada Lovelace",
+        bulletinPublishedAt: "2026-11-11T18:30:00.000Z",
+      }),
+    ];
+    renderHome();
+
+    const bulletin = await screen.findByRole("region", { name: "Bulletin · New York City" });
+    expect(bulletin.textContent).toContain("Bulletin for New York City node-a");
+    const attribution = screen.getByTestId("bulletin-attribution");
+    expect(attribution.textContent).toContain("Posted by Ada Lovelace");
+    expect(attribution.querySelector("time")?.getAttribute("datetime")).toBe(
+      "2026-11-11T18:30:00.000Z",
+    );
+  });
+
+  it("still names the community for a bulletin saved before attribution", async () => {
+    harness.user = { id: "user-1", name: "Member", email: "member@example.com" };
+    harness.activeOrganizationId = "org-1";
+    harness.organizations = [{ id: "org-1", name: "Example Community", slug: "example" }];
+    harness.nodes = [node("node-a", "New York City")];
+    renderHome();
+
+    await screen.findByRole("region", { name: "Bulletin · New York City" });
+    expect(screen.queryByTestId("bulletin-attribution")).toBeNull();
   });
 });
 
