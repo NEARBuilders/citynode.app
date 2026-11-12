@@ -980,9 +980,16 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             })
             .from(discoveryActivities)
             .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
-            .leftJoin(tenants, eq(tenants.id, nodes.tenantId))
+            .innerJoin(tenants, eq(tenants.id, nodes.tenantId))
             .leftJoin(eventReports, eq(eventReports.activityId, discoveryActivities.id))
-            .where(and(shownActivity(now), sql`${data}->>'kind' = 'event'`))
+            .where(
+              and(
+                shownActivity(now),
+                sql`${data}->>'kind' = 'event'`,
+                eq(tenants.status, "active"),
+                isNull(tenants.deletedAt),
+              ),
+            )
             .orderBy(desc(sql`(${data}->>'startsAt')::timestamptz`)),
         );
         return rows.map((row) => ({
