@@ -1,9 +1,11 @@
+import { sql } from "drizzle-orm";
 import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive, DatabaseTag } from "@/db/layer";
 import { placeAliases, places as placesTable } from "@/db/schema";
 import { buildPlacesCatalog, type SeedSources, seedPlacesInto } from "@/seed/places-catalog";
+import { PlacesLive, PlacesTag } from "@/services/places";
 import { createTempDb } from "./test-harness";
 
 let cleanup: (() => void) | null = null;
@@ -18,6 +20,7 @@ afterEach(() => {
 const countryInfo = [
   "#ISO\tISO3\tIANA\tFIPS\tCountry\tCapital\tArea\tPopulation\tContinent\ttld\tCurrencyCode\tCurrencyName\tPhone\tPostalFormat\tPostalRegex\tLanguages\tgeonameid\tneighbours\tEquivalentFipsCode",
   "NG\tNGA\t.ng\tNGA\tNigeria\tAbuja\t356669\t223000000\tAF\t.ng\tNGN\tNaira\t234\t######\t^(\\d{6})$\ten\t2328926\tTD,CM\tNIGA",
+  "US\tUSA\t.us\tUSA\tUnited States\tWashington\t9629091\t331000000\tNA\t.us\tUSD\tDollar\t1\t#####\t^\\d{5}$\ten-US\t6252001\tCA,MX\t",
   "RU\tRUS\t.ru\tRUS\tRussia\tMoscow\t6637687\t144000000\tEU\t.ru\tRUB\tRuble\t7\t######\t^(\\d{6})$\tru\t2017370\tCN,UA\tRSTA",
 ].join("\n");
 
@@ -25,7 +28,62 @@ const admin1Codes = [
   "NG.LA\tLagos\tLagos\t2591381\t6.5241\t3.3790\tADM1\tLagos State\tNG",
   "NG.AB\tAbia\tAbia\t2328863\t5.4\t7.5\tADM1\tAbia\tNG",
   "RU.MO\tMoscow\tMoscow\t524894\t55.7558\t37.6173\tADM1\tMoscow\tRU",
+  "US.IL\tIllinois\tIllinois\t4896861",
+  "US.NY\tNew York\tNew York\t5128638",
+  "US.MO\tMissouri\tMissouri\t4398678",
+  "US.MA\tMassachusetts\tMassachusetts\t6254926",
 ].join("\n");
+
+function cityLine(
+  geonameid: string,
+  name: string,
+  countryCode: string,
+  admin1: string,
+  population: number,
+  latitude = 0,
+  longitude = 0,
+): string {
+  return [
+    geonameid,
+    name,
+    name.normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
+    "",
+    String(latitude),
+    String(longitude),
+    "P",
+    "PPL",
+    countryCode,
+    "",
+    admin1,
+    "",
+    "",
+    "",
+    String(population),
+    "",
+    "",
+    "UTC",
+    "2026-01-01",
+  ].join("\t");
+}
+
+const cityLines = [
+  cityLine("4887398", "Chicago", "US", "IL", 2720546, 41.85003, -87.65005),
+  cityLine("5128581", "New York City", "US", "NY", 8804190, 40.71427, -74.00597),
+  cityLine("4250542", "Springfield", "US", "IL", 114394, 39.80172, -89.64371),
+  cityLine("4409896", "Springfield", "US", "MO", 169176, 37.21533, -93.29824),
+  cityLine("4951788", "Springfield", "US", "MA", 155929, 42.10148, -72.58981),
+  cityLine("2332459", "Lagos", "NG", "LA", 9000000, 6.45407, 3.39467),
+  cityLine("524901", "Moscow", "RU", "MO", 10381222, 55.75222, 37.61556),
+  cityLine("9000001", "Nigeria", "NG", "AB", 20000),
+  cityLine("9000002", "Gotham", "US", "00", 50000),
+  cityLine("9000003", "Twin", "US", "IL", 30000),
+  cityLine("9000005", "Twin", "US", "IL", 20000),
+  cityLine("9000004", "Twin", "US", "IL", 20000),
+  cityLine("2988507", "Paris", "FR", "11", 2138551),
+  cityLine("9000006", "Zürich", "RU", "MO", 15000),
+];
+
+const cities = cityLines.join("\n");
 
 const admin0Geojson = JSON.stringify({
   type: "FeatureCollection",
@@ -140,6 +198,8 @@ function sources(): SeedSources {
     admin1Codes,
     admin0Geojson,
     admin1Geojson,
+    cities,
+    curatedAliases: [{ value: "nyc", geonameid: "5128581" }],
     supranationals: [
       {
         slug: "cis",
@@ -273,6 +333,185 @@ describe("buildPlacesCatalog", () => {
     expect(buildPlacesCatalog(sources())).toEqual(buildPlacesCatalog(sources()));
   });
 
+  it("is independent of the order of the cities file", () => {
+    const reversed = { ...sources(), cities: [...cityLines].reverse().join("\n") };
+    expect(buildPlacesCatalog(reversed)).toEqual(buildPlacesCatalog(sources()));
+  });
+
+  it("builds pin-only cities under their subdivision", () => {
+    const catalog = buildPlacesCatalog(sources());
+    expect(catalog.places.find((p) => p.slug === "chicago")).toEqual({
+      slug: "chicago",
+      name: "Chicago",
+      label: "city",
+      latitude: 41.85,
+      longitude: -87.65,
+      boundary: null,
+      parentSlug: "us-illinois",
+    });
+    expect(catalog.places.find((p) => p.slug === "new-york-city")?.parentSlug).toBe("us-new-york");
+    expect(catalog.places.find((p) => p.slug === "lagos")?.parentSlug).toBe("ng-lagos");
+    expect(catalog.places.find((p) => p.slug === "moscow")?.parentSlug).toBe("ru-moscow");
+    expect(catalog.places.find((p) => p.slug === "zurich")?.name).toBe("Zürich");
+  });
+
+  it("parents a city to its country when its subdivision is unknown", () => {
+    const catalog = buildPlacesCatalog(sources());
+    expect(catalog.places.find((p) => p.slug === "gotham")?.parentSlug).toBe("united-states");
+  });
+
+  it("skips cities whose country is not in the catalog", () => {
+    const catalog = buildPlacesCatalog(sources());
+    expect(catalog.places.find((p) => p.name === "Paris")).toBeUndefined();
+    expect(catalog.aliases.find((a) => a.value === "2988507")).toBeUndefined();
+  });
+
+  it("gives the most populous city the plain slug and disambiguates the rest", () => {
+    const catalog = buildPlacesCatalog(sources());
+    const springfields = catalog.places
+      .filter((p) => p.name === "Springfield")
+      .map((p) => [p.slug, p.parentSlug]);
+    expect(springfields).toEqual([
+      ["springfield", "us-missouri"],
+      ["us-ma-springfield", "us-massachusetts"],
+      ["us-il-springfield", "us-illinois"],
+    ]);
+  });
+
+  it("prefixes a city whose name is taken by a country", () => {
+    const catalog = buildPlacesCatalog(sources());
+    expect(catalog.places.find((p) => p.slug === "nigeria")?.label).toBe("country");
+    expect(catalog.places.find((p) => p.slug === "ng-nigeria")).toMatchObject({
+      label: "city",
+      parentSlug: "ng-abia",
+    });
+  });
+
+  it("falls back to the geonameid when country and subdivision still collide", () => {
+    const catalog = buildPlacesCatalog(sources());
+    const twins = catalog.places.filter((p) => p.name === "Twin").map((p) => p.slug);
+    expect(twins).toEqual(["twin", "us-il-twin", "us-il-twin-9000005"]);
+  });
+
+  it("adds geonames aliases for cities and curated short forms", () => {
+    const catalog = buildPlacesCatalog(sources());
+    expect(catalog.aliases).toContainEqual({ value: "4887398", kind: "geonames", slug: "chicago" });
+    expect(catalog.aliases).toContainEqual({
+      value: "4250542",
+      kind: "geonames",
+      slug: "us-il-springfield",
+    });
+    expect(catalog.aliases).toContainEqual({
+      value: "nyc",
+      kind: "curated",
+      slug: "new-york-city",
+    });
+  });
+
+  it("rejects a curated alias for a city that is not in the cities file", () => {
+    expect(() =>
+      buildPlacesCatalog({ ...sources(), curatedAliases: [{ value: "gone", geonameid: "1" }] }),
+    ).toThrow(/unknown city/);
+  });
+
+  it("keeps the slug a city was seeded with even if populations reorder", () => {
+    const catalog = buildPlacesCatalog({
+      ...sources(),
+      existingCitySlugs: [
+        { geonameid: "4951788", slug: "springfield" },
+        { geonameid: "4409896", slug: "us-mo-springfield" },
+        { geonameid: "2988507", slug: "paris" },
+      ],
+    });
+    const springfields = catalog.places
+      .filter((p) => p.name === "Springfield")
+      .map((p) => [p.slug, p.parentSlug]);
+    expect(springfields).toEqual([
+      ["us-mo-springfield", "us-missouri"],
+      ["springfield", "us-massachusetts"],
+      ["us-il-springfield", "us-illinois"],
+    ]);
+    expect(catalog.places.find((p) => p.slug === "paris")).toBeUndefined();
+  });
+
+  it("skips city rows with blank coordinates or a non-numeric id", () => {
+    const catalog = buildPlacesCatalog({
+      ...sources(),
+      cities: [
+        cities,
+        cityLine("9000007", "Nowhere", "US", "IL", 90000).replace("\t0\t0\t", "\t\t\t"),
+        cityLine("abc", "Lettered", "US", "IL", 90000),
+      ].join("\n"),
+    });
+    expect(catalog.places.find((p) => p.name === "Nowhere")).toBeUndefined();
+    expect(catalog.places.find((p) => p.name === "Lettered")).toBeUndefined();
+  });
+
+  it("rejects a curated alias that collides with an iso code or slug", () => {
+    expect(() =>
+      buildPlacesCatalog({
+        ...sources(),
+        curatedAliases: [{ value: "ng", geonameid: "2332459" }],
+      }),
+    ).toThrow(/collides/);
+    expect(() =>
+      buildPlacesCatalog({
+        ...sources(),
+        curatedAliases: [{ value: "springfield", geonameid: "4250542" }],
+      }),
+    ).toThrow(/collides/);
+  });
+
+  it("resolvePlace finds seeded cities by slug, short form and geonameid", async () => {
+    const temp = createTempDb("api-places-cities-");
+    cleanup = temp.cleanup;
+    const database = DatabaseLive(temp.url);
+    const layer = Layer.mergeAll(PlacesLive.pipe(Layer.provide(database)), database).pipe(
+      Layer.provide(Layer.succeed(PluginIdTag, "api")),
+    );
+    const catalog = buildPlacesCatalog(sources());
+
+    const resolved = await Effect.runPromise(
+      Effect.gen(function* () {
+        const db = yield* DatabaseTag;
+        const places = yield* PlacesTag;
+        yield* Effect.tryPromise(() => seedPlacesInto(db, catalog));
+        const lookup = (place: string) =>
+          places.resolve({ place }).pipe(Effect.map((r) => r?.place.slug ?? null));
+        const illinois = yield* Effect.tryPromise(() =>
+          db.select().from(placesTable).where(sql`${placesTable.slug} = 'us-illinois'`),
+        );
+        const chicago = yield* places.resolve({ place: "chicago" });
+        return {
+          chicago: yield* lookup("chicago"),
+          chicagoUpper: yield* lookup("Chicago"),
+          newYork: yield* lookup("new-york-city"),
+          nyc: yield* lookup("nyc"),
+          nycUpper: yield* lookup("NYC"),
+          springfield: yield* lookup("springfield"),
+          springfieldIl: yield* lookup("us-il-springfield"),
+          springfieldIlById: yield* lookup("geonames:4250542"),
+          chicagoParent: chicago?.place.parentId,
+          illinoisId: illinois[0]?.id,
+          chicagoLabel: chicago?.place.label,
+        };
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(resolved).toMatchObject({
+      chicago: "chicago",
+      chicagoUpper: "chicago",
+      newYork: "new-york-city",
+      nyc: "new-york-city",
+      nycUpper: "new-york-city",
+      springfield: "springfield",
+      springfieldIl: "us-il-springfield",
+      springfieldIlById: "us-il-springfield",
+      chicagoLabel: "city",
+    });
+    expect(resolved.chicagoParent).toBe(resolved.illinoisId);
+  });
+
   it("seeds idempotently: running twice leaves identical rows and timestamps", async () => {
     const temp = createTempDb("api-places-seed-");
     cleanup = temp.cleanup;
@@ -302,8 +541,8 @@ describe("buildPlacesCatalog", () => {
         }).pipe(Effect.provide(layer)),
       );
 
-    expect(placeRows).toHaveLength(6);
-    expect(aliasRows).toHaveLength(9);
+    expect(placeRows).toHaveLength(24);
+    expect(aliasRows).toHaveLength(30);
     expect(secondRunUpdatedAt).toEqual(firstRunUpdatedAt);
     expect(parentIds.get("cis")).toBeNull();
     const bySlug = new Map(placeRows.map((row) => [row.slug, row] as const));
@@ -311,6 +550,9 @@ describe("buildPlacesCatalog", () => {
     expect(parentIds.get("ng-lagos")).toBe(bySlug.get("nigeria")?.id);
     expect(parentIds.get("ng-abia")).toBe(bySlug.get("nigeria")?.id);
     expect(parentIds.get("ru-moscow")).toBe(bySlug.get("russia")?.id);
+    expect(parentIds.get("chicago")).toBe(bySlug.get("us-illinois")?.id);
+    expect(parentIds.get("gotham")).toBe(bySlug.get("united-states")?.id);
+    expect(bySlug.get("chicago")?.boundary).toBeNull();
     const cis = bySlug.get("cis");
     expect(cis?.boundary).toMatchObject({ type: "MultiPolygon" });
   });
