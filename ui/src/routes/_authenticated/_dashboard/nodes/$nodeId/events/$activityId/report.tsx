@@ -1,6 +1,6 @@
 import { CalendarDotsIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
@@ -101,11 +101,22 @@ function EventReportPage() {
       (!!tenantId && tenant.isPending) ||
       (!!organizationId && checkIns.data === undefined && !checkIns.isError));
 
+  const readsAsAdmin = report.data
+    ? report.data.canReview && !report.data.canEdit
+    : auth.user?.role === "admin";
+  const back = readsAsAdmin
+    ? {
+        link: <Link to="/admin/events" search={{ community: nodeId }} />,
+        label: translate("events.title"),
+      }
+    : { link: <Link to="/report" />, label: translate("reports.title") };
+
   const loading = activities.isPending || report.isPending || waitingForCheckIns;
   if (loading) {
     return (
       <ActivityFormPage
         nodeId={nodeId}
+        back={back}
         title={<Skeleton className="h-10 w-full max-w-64" />}
         headerTestId="report.heading"
       >
@@ -123,6 +134,7 @@ function EventReportPage() {
     return (
       <ActivityFormPage
         nodeId={nodeId}
+        back={back}
         title={translate("report.title")}
         headerTestId="report.heading"
       >
@@ -157,6 +169,7 @@ function EventReportPage() {
   return (
     <ActivityFormPage
       nodeId={nodeId}
+      back={back}
       title={translate("report.title")}
       description={
         <span>

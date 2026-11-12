@@ -29,7 +29,20 @@ vi.mock("@tanstack/react-router", () => ({
     useParams: () => ({ nodeId: NODE, activityId: ACTIVITY }),
     useRouteContext: () => ({ auth: { activeOrganizationId: ORG } }),
   }),
-  Link: ({ children }: { children?: ReactNode }) => <a href="/events">{children}</a>,
+  Link: ({
+    children,
+    to,
+    search,
+    ...props
+  }: {
+    children?: ReactNode;
+    to?: string;
+    search?: Record<string, string>;
+  }) => (
+    <a href={`${to ?? ""}${search ? `?${new URLSearchParams(search)}` : ""}`} {...props}>
+      {children}
+    </a>
+  ),
   useNavigate: () => vi.fn(),
 }));
 
@@ -207,6 +220,9 @@ describe("event report check-in prefill", () => {
     await waitFor(() =>
       expect(harness.reviewed).toEqual([{ activityId: ACTIVITY, reviewed: true }]),
     );
+    const back = screen.getByTestId("activity-form.back");
+    expect(back.getAttribute("href")).toBe(`/admin/events?community=${NODE}`);
+    expect(back.textContent).toBe("Events");
   });
 
   it("tells the organizer their report was reviewed", async () => {
@@ -217,5 +233,8 @@ describe("event report check-in prefill", () => {
 
     expect((await screen.findByTestId("report.reviewed-on")).textContent).toContain("Reviewed");
     expect(screen.queryByTestId("report.review")).toBeNull();
+    const back = screen.getByTestId("activity-form.back");
+    expect(back.getAttribute("href")).toBe("/report");
+    expect(back.textContent).toBe("Reports");
   });
 });
