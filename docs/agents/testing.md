@@ -123,6 +123,48 @@ boundary above; until it lands, this document is the contract.
   can hang waits explicitly (bounded `waitFor`, assertions with timeout), it
   doesn't spin silently.
 
+## Demo seed — realistic local data and persona fixtures
+
+`pnpm run seed:demo` fills the local databases with six communities that look
+like real usage: Lagos and Lisbon (mature, events and reports since August),
+Nairobi and Buenos Aires (activated this month, setup incomplete), Kraków
+(quiet since September) and Manila (events, no reports). Dates are relative to
+the day it runs (`--today YYYY-MM-DD` pins them). Ids are deterministic and each
+run deletes and rewrites only demo rows, so it is safe to re-run.
+
+1. In `.env`, set `BETTER_AUTH_SECRET`, `API_DATABASE_URL`, `AUTH_DATABASE_URL`
+   (and `PROPOSALS_DATABASE_URL` if it has its own database) to explicit
+   `pglite:<absolute dir>` or local `postgres://` URLs, and `BASE_URL`.
+2. Boot the app once (`pnpm run dev`) so migrations run. With PGlite, stop it
+   before seeding — one process per data dir; the seed refuses while the app
+   answers on `BASE_URL`.
+3. `pnpm run seed:demo`, then start the app again.
+4. `pnpm run seed:demo:login` and open `http://localhost:4599`: each link sets
+   that person's session cookie for `localhost` and redirects into the app.
+
+| Persona | Person | Shows |
+|---|---|---|
+| `platformAdmin` | Nadia Rahman | platform admin, also an admin of Nairobi |
+| `ownerMature` | Adaeze Okonkwo | owner of Lagos: events to report, joins, returning members |
+| `organizer` | Tunde Bakare | Lagos events team, not owner |
+| `finance` | Ifeoma Nwosu | Lagos finance team |
+| `member` | Chidi Eze | plain Lagos member who attended most events |
+| `twoCommunities` | Sofia Almeida | member of Lisbon (active) and Lagos |
+| `noCommunity` | Daniel Mensah | signed in, no community |
+| `ownerNew`, `ownerNewWithEvents`, `ownerQuiet`, `ownerNoReports`, `ownerSecondMature` | | owners of Nairobi, Buenos Aires, Kraków, Manila, Lisbon |
+
+The data lives in `tests/regression/fixtures/demo/demo-data.ts` (one entry per
+community; new content is a new field there plus one section function in
+`tests/regression/lib/demo-seed.ts`). Specs import
+`seedDemoCommunities()` and `signInAsDemo(page, seed, "ownerMature")` from
+`tests/regression/browser/helpers/demo.ts`.
+
+`pnpm run screens:capture -- --out <dir> --label <before|after>` signs in as
+each persona and saves `<persona>--<page>--<desktop|mobile>.png` at 1440×900
+and 390×844 (`--base-url`, `--only <persona|page,…>`). Its `SHOTS` list in
+`scripts/capture-screens.mjs` is the place to add routes; a route that answers
+404 is skipped and reported in `<label>.json`.
+
 ## Writing a good regression test
 
 1. Name it for the journey ("owner sees whether visitors see each event"), not
