@@ -27,7 +27,7 @@ Después cuenta lo que pasó en un único campo libre, tan breve o extenso como 
 
 ## Cuándo se entrega
 
-Los informes mensuales empiezan en noviembre de 2026. Envía el informe de un mes antes de que termine el mes siguiente. City Node te lo recuerda en Inicio desde la última semana del mes. Hasta que termine el mes siguiente puedes volver a abrir el informe y cambiarlo; después queda en solo lectura.
+Los informes mensuales empiezan en noviembre de 2026, o en el mes en que empezó tu comunidad si es posterior. Envía el informe de un mes antes de que termine el mes siguiente. Tu Inicio muestra el informe de este mes y el del mes pasado hasta que los envíes. Hasta que termine el mes siguiente puedes volver a abrir el informe y cambiarlo; después queda en solo lectura.
 
 ## Informes de eventos
 

@@ -27,7 +27,7 @@ Racontez ensuite ce qui s'est passé dans un seul champ libre, aussi court ou lo
 
 ## Quand l'envoyer
 
-Les rapports mensuels commencent en novembre 2026. Envoyez le rapport d'un mois avant la fin du mois suivant. City Node vous le rappelle sur l'Accueil à partir de la dernière semaine du mois. Jusqu'à la fin du mois suivant, vous pouvez rouvrir le rapport et le modifier ; ensuite il passe en lecture seule.
+Les rapports mensuels commencent en novembre 2026, ou au mois où votre communauté a démarré si c'est plus tard. Envoyez le rapport d'un mois avant la fin du mois suivant. Votre Accueil affiche le rapport de ce mois et celui du mois dernier tant qu'ils ne sont pas envoyés. Jusqu'à la fin du mois suivant, vous pouvez rouvrir le rapport et le modifier ; ensuite il passe en lecture seule.
 
 ## Rapports d'événement
 

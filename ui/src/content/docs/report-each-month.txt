@@ -27,7 +27,7 @@ Then write what happened in one open field, as short or as long as you like. The
 
 ## When it's due
 
-Monthly reports start with November 2026. Send the report for a month by the end of the following month. City Node reminds you on Home from the last week of the month. Until the following month ends you can reopen the report and change it; after that it's read-only.
+Monthly reports start with November 2026, or with the month your community started if that is later. Send the report for a month by the end of the following month. Your Home shows this month's and last month's report until they are in. Until the following month ends you can reopen the report and change it; after that it's read-only.
 
 ## Event reports
 
