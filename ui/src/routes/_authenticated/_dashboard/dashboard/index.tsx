@@ -10,7 +10,7 @@ import {
 import { Bulletin, Button, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
 import { AttendanceRecord } from "@/components/attendance-record";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
-import { useNow } from "@/hooks";
+import { useIsClient, useNow } from "@/hooks";
 import {
   resolveAppLocale,
   translateAppMessage,
@@ -83,7 +83,8 @@ function Home() {
   const apiClient = useApiClient();
   const { restricted } = Route.useSearch();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const nearAccountId = useNearAccount();
+  const linkedNearAccount = useNearAccount();
+  const nearAccountId = useIsClient() ? linkedNearAccount : null;
   const activeOrgId = session?.session?.activeOrganizationId ?? "";
 
   const passkeys = useQuery({
