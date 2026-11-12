@@ -1403,6 +1403,71 @@ export default createPlugin.withPlugins<PluginsClient>()({
           };
         }),
 
+      getAdminMonthlyReports: builder.getAdminMonthlyReports
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ input, context }) {
+          const services = yield* ApiServices;
+          const rows = yield* services.discovery.adminMonthlyReports(input.month, context);
+          const auth = yield* memberAuthClient(context);
+          const communities = yield* Effect.forEach(
+            rows,
+            ({ report, ...row }) =>
+              Effect.gen(function* () {
+                const organizationId = row.organizationId;
+                const full = report
+                  ? yield* callAuth(
+                      () => auth.adminGetOrganizationFull({ organizationId }),
+                      "Could not load the communities",
+                    )
+                  : null;
+                const slug = full
+                  ? full.slug
+                  : ((yield* callAuth(
+                      () => auth.getOrganizationForAdmin({ organizationId }),
+                      "Could not load the communities",
+                    ))?.slug ?? null);
+                const submitter = report
+                  ? full?.members.find((member) => member.userId === report.submittedBy)
+                  : undefined;
+                return {
+                  ...row,
+                  slug,
+                  status: !report
+                    ? ("missing" as const)
+                    : report.reviewedAt
+                      ? ("reviewed" as const)
+                      : ("submitted" as const),
+                  report: report && {
+                    submittedAt: report.submittedAt,
+                    submittedByName: memberDisplayName(submitter?.user?.name),
+                    updatedAt: report.updatedAt,
+                    reviewedAt: report.reviewedAt,
+                    stats: report.stats,
+                  },
+                };
+              }),
+            { concurrency: 4 },
+          );
+          return { month: input.month, communities };
+        }),
+
+      reviewMonthlyReport: builder.reviewMonthlyReport
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ input, context }) {
+          const services = yield* ApiServices;
+          return yield* services.discovery.reviewMonthlyReport(input, context);
+        }),
+
+      reviewEventReport: builder.reviewEventReport
+        .use(requireAuth)
+        .use(requireAdmin)
+        .effect(function* ({ input, context }) {
+          const services = yield* ApiServices;
+          return yield* services.discovery.reviewEventReport(input, context);
+        }),
+
       getCommunityTeamRequests: builder.getCommunityTeamRequests
         .use(requireAuth)
         .use(requireAdmin)

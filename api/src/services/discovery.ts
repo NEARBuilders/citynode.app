@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { Clock, Context, DateTime, Effect, Layer, Schedule } from "effect";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
@@ -29,7 +29,12 @@ import { EVENT_REPORT_FORM_VERSION } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
-import { type ReportMonthWindow, reportMonthWindow } from "../report-month";
+import {
+  FIRST_REPORT_MONTH,
+  isReportableMonth,
+  type ReportMonthWindow,
+  reportMonthWindow,
+} from "../report-month";
 import { resolveTeamAccess } from "../team-access-policy";
 import {
   type GeocodeService,
@@ -64,6 +69,7 @@ function storedMonthlyReport(row: typeof monthlyReports.$inferSelect) {
     submittedBy: row.submittedBy,
     submittedAt: row.submittedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    reviewedAt: row.reviewedAt?.toISOString() ?? null,
   };
 }
 
@@ -74,8 +80,11 @@ function storedReport(row: typeof eventReports.$inferSelect) {
     report: row.report,
     submittedAt: row.submittedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    reviewedAt: row.reviewedAt?.toISOString() ?? null,
   };
 }
+
+const NOT_REVIEWED = { reviewedBy: null, reviewedAt: null };
 
 function shownActivity(now: string) {
   const data = discoveryActivities.data;
@@ -163,6 +172,13 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       const access = yield* reportAccess(input.nodeId, context);
       const now = yield* Clock.currentTimeMillis;
       const window = reportMonthWindow(input.month);
+      if (!isReportableMonth(input.month)) {
+        return yield* Effect.fail(
+          new ORPCError("BAD_REQUEST", {
+            message: `Monthly reports start with ${FIRST_REPORT_MONTH}`,
+          }),
+        );
+      }
       if (window.from.getTime() > now) {
         return yield* Effect.fail(
           new ORPCError("BAD_REQUEST", { message: "This month hasn't started yet" }),
@@ -934,6 +950,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               nodeMetadata: nodes.metadata,
               organizationId: tenants.orgId,
               reportSubmittedAt: eventReports.submittedAt,
+              reportReviewedAt: eventReports.reviewedAt,
             })
             .from(discoveryActivities)
             .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
@@ -953,6 +970,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           publicPage: nodeKindOf(row.nodeMetadata) !== PLATFORM_NODE_KIND,
           organizationId: row.organizationId ?? null,
           reportSubmittedAt: row.reportSubmittedAt?.toISOString() ?? null,
+          reportReviewedAt: row.reportReviewedAt?.toISOString() ?? null,
         }));
       }),
     studio: (context: AuthContext) =>
@@ -1340,7 +1358,11 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         const [row] = yield* query(() =>
           db.select().from(eventReports).where(eq(eventReports.activityId, activityId)),
         );
-        return { report: row ? storedReport(row) : null, canEdit };
+        return {
+          report: row ? storedReport(row) : null,
+          canEdit,
+          canReview: context.user?.role === "admin",
+        };
       }),
     saveEventReport: (input: { activityId: string; report: EventReport }, context: AuthContext) =>
       Effect.gen(function* () {
@@ -1381,6 +1403,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
                 report: input.report,
                 updatedBy: userId,
                 updatedAt: at,
+                ...NOT_REVIEWED,
               },
             })
             .returning(),
@@ -1430,6 +1453,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         return {
           report,
           canEdit: target.canEdit,
+          canReview: context.user?.role === "admin",
           open: target.open,
           closesAt: target.window.closesAt.toISOString(),
           stats,
@@ -1471,7 +1495,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             })
             .onConflictDoUpdate({
               target: [monthlyReports.nodeId, monthlyReports.month],
-              set: values,
+              set: { ...values, ...NOT_REVIEWED },
             })
             .returning(),
         );
@@ -1487,16 +1511,146 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               month: monthlyReports.month,
               submittedAt: monthlyReports.submittedAt,
               updatedAt: monthlyReports.updatedAt,
+              reviewedAt: monthlyReports.reviewedAt,
             })
             .from(monthlyReports)
-            .where(eq(monthlyReports.nodeId, nodeId))
+            .where(
+              and(eq(monthlyReports.nodeId, nodeId), gte(monthlyReports.month, FIRST_REPORT_MONTH)),
+            )
             .orderBy(desc(monthlyReports.month)),
         );
         return rows.map((row) => ({
           month: row.month,
           submittedAt: row.submittedAt.toISOString(),
           updatedAt: row.updatedAt.toISOString(),
+          reviewedAt: row.reviewedAt?.toISOString() ?? null,
         }));
+      }),
+    reviewMonthlyReport: (
+      input: { nodeId: string; month: string; reviewed: boolean },
+      context: AuthContext,
+    ) =>
+      Effect.gen(function* () {
+        yield* requireAdmin(context);
+        const at = new Date(yield* Clock.currentTimeMillis);
+        const [row] = yield* query(() =>
+          db
+            .update(monthlyReports)
+            .set(input.reviewed ? { reviewedBy: context.userId!, reviewedAt: at } : NOT_REVIEWED)
+            .where(
+              and(eq(monthlyReports.nodeId, input.nodeId), eq(monthlyReports.month, input.month)),
+            )
+            .returning({ reviewedAt: monthlyReports.reviewedAt }),
+        );
+        if (!row) return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+        return { reviewedAt: row.reviewedAt?.toISOString() ?? null };
+      }),
+    reviewEventReport: (input: { activityId: string; reviewed: boolean }, context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* requireAdmin(context);
+        const at = new Date(yield* Clock.currentTimeMillis);
+        const [row] = yield* query(() =>
+          db
+            .update(eventReports)
+            .set(input.reviewed ? { reviewedBy: context.userId!, reviewedAt: at } : NOT_REVIEWED)
+            .where(eq(eventReports.activityId, input.activityId))
+            .returning({ reviewedAt: eventReports.reviewedAt }),
+        );
+        if (!row) return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+        return { reviewedAt: row.reviewedAt?.toISOString() ?? null };
+      }),
+    adminMonthlyReports: (month: string, context: AuthContext) =>
+      Effect.gen(function* () {
+        yield* requireAdmin(context);
+        const now = yield* Clock.currentTimeMillis;
+        const window = reportMonthWindow(month);
+        if (!isReportableMonth(month) || window.from.getTime() > now) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", { message: "No reports are due for this month" }),
+          );
+        }
+        const candidates = yield* query(() =>
+          db
+            .select({
+              organizationId: tenants.orgId,
+              name: tenants.name,
+              nodeId: nodes.id,
+              nodeName: nodes.name,
+              activatedAt: nodes.activatedAt,
+              createdAt: nodes.createdAt,
+            })
+            .from(tenants)
+            .innerJoin(nodes, eq(nodes.tenantId, tenants.id))
+            .where(
+              and(
+                eq(tenants.status, "active"),
+                isNull(tenants.deletedAt),
+                isNotNull(tenants.orgId),
+                listedNode,
+              ),
+            ),
+        );
+        const mainNodes = new Map<string, (typeof candidates)[number]>();
+        for (const candidate of [...candidates].sort(
+          (a, b) => a.nodeName.localeCompare(b.nodeName) || a.nodeId.localeCompare(b.nodeId),
+        )) {
+          if (candidate.organizationId && !mainNodes.has(candidate.organizationId)) {
+            mainNodes.set(candidate.organizationId, candidate);
+          }
+        }
+        const expected = [...mainNodes.values()].filter(
+          (community) => (community.activatedAt ?? community.createdAt) < window.to,
+        );
+        const nodeIds = expected.map((community) => community.nodeId);
+        if (nodeIds.length === 0) return [];
+        const nowIso = new Date(now).toISOString();
+        const data = discoveryActivities.data;
+        const startsAt = sql`(${data}->>'startsAt')::timestamptz`;
+        const endsAt = sql`coalesce((${data}->>'endsAt')::timestamptz, ${startsAt})`;
+        const [reports, events] = yield* Effect.all([
+          query(() =>
+            db
+              .select()
+              .from(monthlyReports)
+              .where(and(inArray(monthlyReports.nodeId, nodeIds), eq(monthlyReports.month, month))),
+          ),
+          query(() =>
+            db
+              .select({
+                nodeId: discoveryActivities.ownerNodeId,
+                ended: sql<number>`count(*)::int`,
+                reported: sql<number>`count(${eventReports.activityId})::int`,
+                toReview: sql<number>`(count(${eventReports.activityId}) filter (where ${eventReports.reviewedAt} is null))::int`,
+              })
+              .from(discoveryActivities)
+              .leftJoin(eventReports, eq(eventReports.activityId, discoveryActivities.id))
+              .where(
+                and(
+                  inArray(discoveryActivities.ownerNodeId, nodeIds),
+                  shownActivity(nowIso),
+                  sql`${data}->>'kind' = 'event'`,
+                  sql`${startsAt} >= ${window.from.toISOString()}::timestamptz`,
+                  sql`${startsAt} < ${window.to.toISOString()}::timestamptz`,
+                  sql`${endsAt} <= ${nowIso}::timestamptz`,
+                ),
+              )
+              .groupBy(discoveryActivities.ownerNodeId),
+          ),
+        ]);
+        const reportByNode = new Map(reports.map((row) => [row.nodeId, row]));
+        const eventsByNode = new Map(events.map(({ nodeId, ...counts }) => [nodeId, counts]));
+        return expected
+          .map((community) => {
+            const row = reportByNode.get(community.nodeId);
+            return {
+              organizationId: community.organizationId ?? "",
+              name: community.name,
+              nodeId: community.nodeId,
+              report: row ? storedMonthlyReport(row) : null,
+              events: eventsByNode.get(community.nodeId) ?? { ended: 0, reported: 0, toReview: 0 },
+            };
+          })
+          .sort((a, b) => a.name.localeCompare(b.name));
       }),
   };
 }

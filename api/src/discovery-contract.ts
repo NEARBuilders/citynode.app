@@ -89,6 +89,7 @@ export const storedEventReportSchema = z.object({
   report: eventReportSchema,
   submittedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+  reviewedAt: z.iso.datetime().nullable(),
 });
 
 export const MONTHLY_REPORT_NOTES_MAX = 20_000;
@@ -113,6 +114,7 @@ export const storedMonthlyReportSchema = z.object({
   submittedBy: z.string(),
   submittedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+  reviewedAt: z.iso.datetime().nullable(),
 });
 
 export const communityBuildersSchema = z.object({
@@ -373,7 +375,13 @@ export const discoveryContract = {
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getEventReport: oc
     .input(z.object({ activityId: z.uuid() }))
-    .output(z.object({ report: storedEventReportSchema.nullable(), canEdit: z.boolean() }))
+    .output(
+      z.object({
+        report: storedEventReportSchema.nullable(),
+        canEdit: z.boolean(),
+        canReview: z.boolean(),
+      }),
+    )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   saveEventReport: oc
     .input(z.object({ activityId: z.uuid(), report: eventReportSchema }))
@@ -389,6 +397,7 @@ export const discoveryContract = {
       z.object({
         report: storedMonthlyReportSchema.nullable(),
         canEdit: z.boolean(),
+        canReview: z.boolean(),
         open: z.boolean(),
         closesAt: z.iso.datetime(),
         stats: monthlyReportStatsSchema.nullable(),
@@ -413,6 +422,7 @@ export const discoveryContract = {
           month: reportMonthSchema,
           submittedAt: z.iso.datetime(),
           updatedAt: z.iso.datetime(),
+          reviewedAt: z.iso.datetime().nullable(),
         }),
       ),
     )

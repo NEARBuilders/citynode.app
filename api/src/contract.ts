@@ -8,7 +8,11 @@ import {
   UNAUTHORIZED,
 } from "every-plugin/errors";
 import { z } from "zod";
-import { discoveryContract } from "./discovery-contract";
+import {
+  discoveryContract,
+  monthlyReportStatsSchema,
+  reportMonthSchema,
+} from "./discovery-contract";
 
 const ErrorTestKindSchema = z.enum([
   "unauthorized",
@@ -451,10 +455,42 @@ export const AdminEventsSchema = z.object({
       publicPage: z.boolean(),
       organizationId: z.string().nullable(),
       reportSubmittedAt: z.iso.datetime().nullable(),
+      reportReviewedAt: z.iso.datetime().nullable(),
       checkIns: AttendanceSummarySchema.nullable(),
     }),
   ),
 });
+
+export const MonthlyReportStatusSchema = z.enum(["missing", "submitted", "reviewed"]);
+
+export const AdminMonthlyReportsSchema = z.object({
+  month: reportMonthSchema,
+  communities: z.array(
+    z.object({
+      organizationId: z.string(),
+      slug: z.string().nullable(),
+      name: z.string(),
+      nodeId: z.uuid(),
+      status: MonthlyReportStatusSchema,
+      report: z
+        .object({
+          submittedAt: z.iso.datetime(),
+          submittedByName: z.string().nullable(),
+          updatedAt: z.iso.datetime(),
+          reviewedAt: z.iso.datetime().nullable(),
+          stats: monthlyReportStatsSchema,
+        })
+        .nullable(),
+      events: z.object({
+        ended: z.number().int().nonnegative(),
+        reported: z.number().int().nonnegative(),
+        toReview: z.number().int().nonnegative(),
+      }),
+    }),
+  ),
+});
+
+export const ReportReviewSchema = z.object({ reviewedAt: z.iso.datetime().nullable() });
 
 export const AdminTeamRequestsSchema = z.object({
   teams: z.array(
@@ -1301,6 +1337,42 @@ export const contract = oc.router({
     })
     .output(AdminEventsSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  getAdminMonthlyReports: oc
+    .route({
+      method: "GET",
+      path: "/admin/reports/monthly",
+      summary: "List every community's monthly report for one month",
+      description:
+        "Platform admins only — one row per community expected to report that month (active, not a platform node, activated before the month ended), with its report status, who submitted it, the saved numbers, and the month's ended events reported.",
+    })
+    .input(z.object({ month: reportMonthSchema }))
+    .output(AdminMonthlyReportsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
+
+  reviewMonthlyReport: oc
+    .route({
+      method: "POST",
+      path: "/admin/reports/monthly/review",
+      summary: "Mark a community's monthly report reviewed, or not reviewed",
+      description:
+        "Platform admins only. Reading and marking reviewed is the whole review: nothing is sent back to the community. Editing the report clears it.",
+    })
+    .input(z.object({ nodeId: z.uuid(), month: reportMonthSchema, reviewed: z.boolean() }))
+    .output(ReportReviewSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+
+  reviewEventReport: oc
+    .route({
+      method: "POST",
+      path: "/admin/reports/events/review",
+      summary: "Mark an event report reviewed, or not reviewed",
+      description:
+        "Platform admins only. Reading and marking reviewed is the whole review: nothing is sent back to the community. Editing the report clears it.",
+    })
+    .input(z.object({ activityId: z.uuid(), reviewed: z.boolean() }))
+    .output(ReportReviewSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   getCommunityTeamRequests: oc
     .route({

@@ -121,6 +121,7 @@ describe("event reports", () => {
     expect(await organizer.getEventReport({ activityId: ended.id })).toEqual({
       report: null,
       canEdit: true,
+      canReview: false,
     });
     const saved = await organizer.saveEventReport({ activityId: ended.id, report });
     expect(saved).toMatchObject({
@@ -164,6 +165,55 @@ describe("event reports", () => {
         code: "FORBIDDEN",
       });
     }
+  });
+
+  it("lets platform admins mark a report reviewed, which the community sees and an edit clears", async () => {
+    const { node, owner } = await community();
+    const ended = await owner.saveDiscoveryActivity(
+      eventInput(node.id, {
+        status: "published",
+        startsAt: new Date(Date.now() - 5 * HOUR).toISOString(),
+        endsAt: new Date(Date.now() - 2 * HOUR).toISOString(),
+      }),
+    );
+    const admin = await getPluginClient({
+      userId: "platform-admin",
+      user: { id: "platform-admin", email: "admin@example.com", name: "Admin", role: "admin" },
+    });
+    await expect(
+      admin.reviewEventReport({ activityId: ended.id, reviewed: true }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await owner.saveEventReport({ activityId: ended.id, report });
+
+    await expect(
+      owner.reviewEventReport({ activityId: ended.id, reviewed: true }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      (await getPluginClient()).reviewEventReport({ activityId: ended.id, reviewed: true }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+
+    expect(await admin.getEventReport({ activityId: ended.id })).toMatchObject({
+      report: { reviewedAt: null },
+      canEdit: false,
+      canReview: true,
+    });
+    const { reviewedAt } = await admin.reviewEventReport({ activityId: ended.id, reviewed: true });
+    expect(reviewedAt).not.toBeNull();
+    expect((await owner.getEventReport({ activityId: ended.id })).report?.reviewedAt).toBe(
+      reviewedAt,
+    );
+    const listed = (await admin.getAdminEvents()).events.find((event) => event.id === ended.id);
+    expect(listed?.reportReviewedAt).toBe(reviewedAt);
+
+    expect(await admin.reviewEventReport({ activityId: ended.id, reviewed: false })).toEqual({
+      reviewedAt: null,
+    });
+    await admin.reviewEventReport({ activityId: ended.id, reviewed: true });
+    const edited = await owner.saveEventReport({
+      activityId: ended.id,
+      report: { ...report, attendees: 50 },
+    });
+    expect(edited.reviewedAt).toBeNull();
   });
 
   it("only takes reports for events that have ended and weren't cancelled", async () => {

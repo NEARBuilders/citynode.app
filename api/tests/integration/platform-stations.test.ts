@@ -221,6 +221,14 @@ describe("platform stations", () => {
     });
   });
 
+  it("never expects a monthly report from the platform organization", async () => {
+    const admin = await getPluginClient(adminContext("admin-one"));
+    const { organization } = await admin.getPlatformStations();
+    const month = new Date().toISOString().slice(0, 7);
+    const { communities } = await admin.getAdminMonthlyReports({ month });
+    expect(communities.map((community) => community.nodeId)).not.toContain(organization?.nodeId);
+  });
+
   it("reserves the platform kind for platform stations", async () => {
     const admin = await getPluginClient(orgContext("admin-one", "org-elsewhere", "owner", "admin"));
     await expect(
