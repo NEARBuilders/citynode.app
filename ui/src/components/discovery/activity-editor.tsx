@@ -80,7 +80,9 @@ export function ActivityEditor({
     ...eventReportStatusesQueryOptions(api, nodeId),
     enabled: canReport,
   });
-  const reported = new Map((reportStatuses.data ?? []).map((status) => [status.activityId, status]));
+  const reported = new Map(
+    (reportStatuses.data ?? []).map((status) => [status.activityId, status]),
+  );
   const luma = useQuery({
     queryKey: ["discovery-luma-calendars", nodeId],
     queryFn: () => api.listDiscoveryLumaCalendars({ nodeId }),
