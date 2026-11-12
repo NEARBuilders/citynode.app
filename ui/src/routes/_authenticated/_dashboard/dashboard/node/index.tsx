@@ -50,6 +50,7 @@ import {
 } from "@/lib/sputnik-proposals";
 import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
+import { NodeSetupChecklist, useNodeSetupSteps } from "../-node-setup-checklist";
 import { CommunityReports } from "./-community-reports";
 import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
@@ -192,6 +193,11 @@ function NodeOverview() {
   });
   const showTeamStake = useCanSeeTeamStake(teamStake, { canManage, inFinanceTeam });
   const payoutsRef = useScrollToHash<HTMLDivElement>("payouts");
+  const setupSteps = useNodeSetupSteps({
+    nodeId,
+    organizationId: orgId ?? "",
+    enabled: !!canManage && !!tenant,
+  });
   if (!selectedNode || !summary) return null;
 
   const pendingConfig = pendingConfigQuery.data ?? null;
@@ -337,6 +343,16 @@ function NodeOverview() {
             </Button>
           </ItemActions>
         </Item>
+      )}
+
+      {tenant && setupSteps?.some((step) => !step.done) && (
+        <NodeSetupChecklist
+          steps={setupSteps}
+          communityName={tenant.name}
+          nodeId={selectedNode.id}
+          tenantId={tenant.id}
+          testId="dashboard-node.setup"
+        />
       )}
 
       {canReport && (

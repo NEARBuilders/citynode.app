@@ -9,7 +9,6 @@ import {
 } from "@/app";
 import { Bulletin, Button, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
 import { AttendanceRecord } from "@/components/attendance-record";
-import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { useNow } from "@/hooks";
 import {
@@ -36,10 +35,10 @@ import {
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
-import { getNextSteps, getNodeSetupSteps } from "./-next-steps";
+import { getNextSteps } from "./-next-steps";
 import { NextStepsList } from "./-next-steps-list";
-import { NodeSetupChecklist } from "./-node-setup-checklist";
-import { PlatformSummary } from "./-platform-summary";
+import { NodeSetupChecklist, useNodeSetupSteps } from "./-node-setup-checklist";
+import { PlatformOverview } from "./-platform-overview";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
@@ -129,24 +128,14 @@ function Home() {
     staleTime: 30 * 1000,
   });
 
-  const canManage = user?.role === "admin" || canManageCommunity(authContext.data);
+  const isAdmin = user?.role === "admin";
+  const canManage = isAdmin || canManageCommunity(authContext.data);
   const node = selectCommunityNode(nodes.data ?? []);
   const nodeId = node?.id ?? "";
-  const profile = useQuery({
-    ...discoveryProfileQueryOptions(apiClient, nodeId),
-    enabled: canManage && !!nodeId,
-  });
-  const activities = useQuery({
-    queryKey: ["discovery-activities", nodeId],
-    queryFn: () => apiClient.listDiscoveryActivities({ nodeId }),
-    enabled: canManage && !!nodeId,
-    retry: false,
-  });
-  const onboardingCodes = useQuery({
-    queryKey: ["home-onboarding-codes", activeOrgId],
-    queryFn: () => apiClient.auth.listOnboardingCodes({ organizationId: activeOrgId }),
-    enabled: canManage && !!nodeId && !!activeOrgId,
-    retry: false,
+  const setupSteps = useNodeSetupSteps({
+    nodeId,
+    organizationId: activeOrgId,
+    enabled: canManage && !isAdmin,
   });
 
   const reportsForCommunity =
@@ -168,7 +157,6 @@ function Home() {
   const bulletin = node?.metadata?.bulletin;
 
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
-  const isAdmin = user?.role === "admin";
   const community = tenant.data ? { name: tenant.data.name, tenantId: tenant.data.id } : null;
   const loading =
     !user ||
@@ -199,20 +187,12 @@ function Home() {
     translate,
   );
 
-  const setupSteps =
-    canManage && community && node && profile.isSuccess && activities.isSuccess
-      ? getNodeSetupSteps({
-          profile: profile.data,
-          eventCount: activities.data.length,
-          onboardingCodeCount: onboardingCodes.data?.length ?? 0,
-        })
-      : null;
-  const showSetup = !!setupSteps && setupSteps.some((step) => !step.done);
+  const showSetup = !!community && !!setupSteps && setupSteps.some((step) => !step.done);
 
   const firstName = user?.isAnonymous ? null : user?.name?.split(" ")[0];
 
   return (
-    <PageContainer>
+    <PageContainer variant={isAdmin ? "wide" : "default"}>
       {restricted && <RestrictedAreaNotice area={restricted} />}
       <PageHeader
         headerTestId="home.heading"
@@ -221,11 +201,11 @@ function Home() {
             ? translate("dashboard.welcomeNamed", { name: firstName ?? "" })
             : translate("common.home")
         }
-        description={translate("dashboard.description")}
+        description={translate(isAdmin ? "admin.home.description" : "dashboard.description")}
       />
+      {isAdmin && <PlatformOverview />}
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
-          {isAdmin && <PlatformSummary />}
           {typeof bulletin === "string" && bulletin.trim() && <Bulletin content={bulletin} />}
           {pending.length > 0 && (
             <section className="flex flex-col gap-6">

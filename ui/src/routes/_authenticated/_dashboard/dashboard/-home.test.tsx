@@ -65,7 +65,10 @@ const api = {
     },
     listUserInvitations: async () => [],
     getContext: async () => harness.authContext,
+    listOnboardingCodes: async () => [],
   },
+  getDiscoveryProfile: async () => null,
+  listDiscoveryActivities: async () => [],
   resolveTenantByOrgId: async ({ orgId }: { orgId: string }) => {
     const name = harness.tenants[orgId];
     if (!name) throw new Error("no tenant");
@@ -311,7 +314,7 @@ describe("Home without a community", () => {
     const open = await screen.findByTestId("home-step-open-community");
     expect(open.textContent).toContain("Open Harbor");
     expect(stepIds()).toEqual(["open-community", "stake"]);
-    expect(screen.queryByTestId("home-platform-summary")).toBeNull();
+    expect(screen.queryByTestId("home-admin-overview")).toBeNull();
   });
 
   it("gives a Finance team member the payouts step", async () => {
@@ -344,15 +347,33 @@ describe("Home without a community", () => {
     expect(stepIds()).toEqual(["open-community", "stake"]);
   });
 
-  it("opens a platform admin's Home with the platform summary, not a launch step", async () => {
+  it("opens a platform admin's Home with the platform overview, not a launch step", async () => {
     harness.user = { ...member, role: "admin" };
     harness.activeOrganizationId = personal.id;
     harness.organizations = [personal];
     renderHome();
 
-    expect(await screen.findByTestId("home-platform-summary")).toBeTruthy();
+    expect(await screen.findByTestId("home-admin-overview")).toBeTruthy();
     expect(await screen.findByTestId("home-step-stake")).toBeTruthy();
     expect(stepIds()).toEqual(["stake", "explore"]);
+  });
+
+  it("keeps the community setup checklist for owners, off a platform admin's Home", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = harbor.id;
+    harness.organizations = [personal, harbor];
+    harness.tenants = { [harbor.id]: "Harbor" };
+    harness.nodes = [node("node-h", "Harbor")];
+    harness.authContext = { organization: { member: { role: "owner" }, teams: [] } };
+    renderHome();
+    expect(await screen.findByTestId("home-node-setup")).toBeTruthy();
+
+    cleanup();
+    harness.user = { ...member, role: "admin" };
+    renderHome();
+    expect(await screen.findByTestId("home-admin-overview")).toBeTruthy();
+    await screen.findByTestId("home-step-open-community");
+    expect(screen.queryByTestId("home-node-setup")).toBeNull();
   });
 
   it("offers a retry instead of a false Start a community when organizations fail", async () => {

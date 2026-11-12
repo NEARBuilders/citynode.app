@@ -6,6 +6,8 @@ import {
   deriveNeedsAction,
   eventHealth,
   type NeedsActionProposal,
+  REPORT_CHASE_LIMIT,
+  reportsToChase,
   STAKING_ITEMS_LIMIT,
   stakingStates,
 } from "./-admin-progress";
@@ -217,7 +219,7 @@ describe("eventHealth", () => {
   });
 
   it("counts reports missing more than a week after events from the last 30 days", () => {
-    const { overdueReports } = eventHealth({
+    const { overdue } = eventHealth({
       communities,
       now,
       events: [
@@ -227,7 +229,54 @@ describe("eventHealth", () => {
         { nodeId: "medellin", startsAt: at(-45), endsAt: at(-45), reportSubmittedAt: null },
       ],
     });
-    expect(overdueReports).toBe(1);
+    expect(overdue.map((event) => event.startsAt)).toEqual([at(-10)]);
+  });
+});
+
+describe("reportsToChase", () => {
+  const harbor = { organizationId: "org-h", nodeId: "h", name: "Harbor", slug: "harbor" };
+  const alder = { organizationId: "org-a", nodeId: "a", name: "Alder", slug: "alder" };
+
+  it("chases each community for owed monthly reports and its overdue event reports", () => {
+    const { chases, unattributed } = reportsToChase({
+      now: Date.parse("2026-12-26T12:00:00.000Z"),
+      monthly: [
+        {
+          month: "2026-12",
+          communities: [
+            { ...harbor, status: "missing" },
+            { ...alder, status: "submitted" },
+          ],
+        },
+        {
+          month: "2026-11",
+          communities: [
+            { ...harbor, status: "missing" },
+            { ...alder, status: "reviewed" },
+          ],
+        },
+      ],
+      overdue: [
+        { organizationId: "org-a" },
+        { organizationId: "org-a" },
+        { organizationId: "org-platform" },
+        { organizationId: null },
+      ],
+    });
+    expect(chases).toEqual([
+      { ...alder, months: [], overdueEvents: 2 },
+      { ...harbor, months: ["2026-11", "2026-12"], overdueEvents: 0 },
+    ]);
+    expect(unattributed).toBe(2);
+  });
+
+  it("doesn't chase this month's report before its last week", () => {
+    const { chases } = reportsToChase({
+      now: Date.parse("2026-12-10T12:00:00.000Z"),
+      monthly: [{ month: "2026-12", communities: [{ ...harbor, status: "missing" }] }],
+      overdue: [],
+    });
+    expect(chases).toEqual([]);
   });
 });
 
@@ -259,6 +308,29 @@ describe("community health in Needs action", () => {
     expect(deriveNeedsAction({ ...base, overdueReports: 3 })).toEqual([
       { kind: "reportsOverdue", count: 3 },
     ]);
+  });
+
+  it("lists a community per missing report, folding the rest into one item", () => {
+    const chase = (index: number) => ({
+      organizationId: `org-${index}`,
+      nodeId: `node-${index}`,
+      name: `Community ${index}`,
+      slug: `community-${index}`,
+      months: ["2026-11"],
+      overdueEvents: 0,
+    });
+    const chases = Array.from({ length: REPORT_CHASE_LIMIT + 2 }, (_, index) => chase(index));
+    const items = deriveNeedsAction({ ...base, reportChases: chases, overdueReports: 1 });
+    expect(items.map((item) => item.kind)).toEqual([
+      ...chases.slice(0, REPORT_CHASE_LIMIT).map(() => "reportsMissing"),
+      "reportsMissingMany",
+      "reportsOverdue",
+    ]);
+    expect(items[REPORT_CHASE_LIMIT]).toEqual({
+      kind: "reportsMissingMany",
+      count: 2,
+      month: "2026-11",
+    });
   });
 });
 

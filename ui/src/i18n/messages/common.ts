@@ -552,12 +552,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.notifications": ["Notifications", "Notificaciones", "Notifications", "通知"],
   "common.on": ["On", "Activado", "Activé", "已开启"],
   "common.open": ["Open", "Abrir", "Ouvrir", "打开"],
-  "common.openAdmin": [
-    "Open admin",
-    "Abrir administración",
-    "Ouvrir l'administration",
-    "打开管理页面",
-  ],
   "common.opening": ["Opening…", "Abriendo…", "Ouverture…", "正在打开…"],
   "common.openNamed": ["Open {name}", "Abrir {name}", "Ouvrir {name}", "打开 {name}"],
   "common.openSettings": [

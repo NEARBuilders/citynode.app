@@ -1,10 +1,16 @@
-import { CaretRightIcon, GavelIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import {
+  CaretRightIcon,
+  ClipboardTextIcon,
+  GavelIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
 import { type ComponentType, type ReactElement, type ReactNode, useMemo } from "react";
 import { useApiClient } from "@/app";
 import { LocalDate } from "@/components";
+import { CopyReportLink } from "@/components/discovery/report-review";
 import {
   Item,
   ItemActions,
@@ -14,8 +20,10 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useNow } from "@/hooks/use-client";
-import { useAppTranslation } from "@/i18n/runtime";
+import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { formatReportMonth, reportMonthsShown } from "@/lib/monthly-reports";
 import { adminEventsQueryOptions } from "@/lib/queries/engagement";
+import { adminMonthlyReportsQueryOptions } from "@/lib/queries/monthly-reports";
 import { adminNodeListQueryOptions, communityEventStatsQueryOptions } from "@/lib/queries/nodes";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
@@ -27,6 +35,8 @@ import {
   deriveNeedsAction,
   eventHealth,
   type NeedsActionItem,
+  type ReportChase,
+  reportsToChase,
 } from "./-admin-progress";
 import {
   awaitingReviewQueryOptions,
@@ -46,9 +56,21 @@ export function usePlatformStatus() {
   const progress = useCommunityProgress();
   const eventsQuery = useQuery(adminEventsQueryOptions(apiClient));
   const now = useNow(60_000);
+  const monthly = useMonthlyReports(now);
   const health = eventHealth({
     communities: progress.rows,
     events: eventsQuery.data?.events ?? [],
+    now,
+  });
+  const monthlyLoaded = monthly.every((query) => query.isSuccess);
+  const reports = reportsToChase({
+    monthly: monthlyLoaded
+      ? monthly.map((query) => ({
+          month: query.month,
+          communities: query.data?.communities ?? [],
+        }))
+      : [],
+    overdue: eventsQuery.isSuccess ? health.overdue : [],
     now,
   });
 
@@ -63,6 +85,7 @@ export function usePlatformStatus() {
     awaitingQuery,
     { ...relayerQuery, isError: relayerFailed },
     eventsQuery,
+    ...monthly,
   ];
 
   const items = deriveNeedsAction({
@@ -79,7 +102,8 @@ export function usePlatformStatus() {
     relayerNeedsFunding,
     communities: progress.rows,
     quietCommunities: eventsQuery.isSuccess ? health.quiet : [],
-    overdueReports: eventsQuery.isSuccess ? health.overdueReports : 0,
+    reportChases: monthlyLoaded ? reports.chases : [],
+    overdueReports: monthlyLoaded ? reports.unattributed : 0,
   });
 
   return {
@@ -102,6 +126,14 @@ export function usePlatformStatus() {
 }
 
 export type PlatformStatus = ReturnType<typeof usePlatformStatus>;
+
+export function useMonthlyReports(now: number) {
+  const apiClient = useApiClient();
+  const months = reportMonthsShown(now);
+  return useQueries({
+    queries: months.map((month) => adminMonthlyReportsQueryOptions(apiClient, month)),
+  }).map((query, index) => ({ ...query, month: months[index] ?? "" }));
+}
 
 export function useCommunityProgress() {
   const apiClient = useApiClient();
@@ -136,10 +168,72 @@ export function needsActionKey(item: NeedsActionItem) {
   }
   if (item.kind === "staking") return `staking-${item.nodeId}`;
   if (item.kind === "quiet") return `quiet-${item.nodeId}`;
+  if (item.kind === "reportsMissing") return `reports-${item.chase.organizationId}`;
   return item.kind;
 }
 
+function ReportChaseRow({ chase }: { chase: ReportChase }) {
+  const translate = useAppTranslation();
+  const { locale } = useAppLocale();
+  const [month] = chase.months;
+  const key = `reports-${chase.organizationId}`;
+  const details = [
+    ...chase.months.map((owed) =>
+      translate("admin.action.monthlyMissing", { month: formatReportMonth(owed, locale) }),
+    ),
+    ...(chase.overdueEvents > 0
+      ? [translate("admin.action.eventReportsOverdue", { count: chase.overdueEvents })]
+      : []),
+  ];
+  return (
+    <Item variant="outline" size="sm" data-testid={`admin-needs-action-${key}`}>
+      <ItemMedia variant="icon">
+        <ClipboardTextIcon className="text-brand-strong" />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="max-w-full">
+          {month ? (
+            <Link
+              to="/admin/reports"
+              search={{ month, show: "missing" }}
+              className="min-w-0 truncate hover:underline"
+            >
+              {translate("admin.action.chaseNamed", { name: chase.name })}
+            </Link>
+          ) : (
+            <Link
+              to="/admin/events"
+              search={{ community: chase.nodeId, report: "missing" }}
+              className="min-w-0 truncate hover:underline"
+            >
+              {translate("admin.action.chaseNamed", { name: chase.name })}
+            </Link>
+          )}
+        </ItemTitle>
+        <ItemDescription>{details.join(" · ")}</ItemDescription>
+      </ItemContent>
+      {chase.slug && (
+        <ItemActions>
+          <CopyReportLink
+            slug={chase.slug}
+            testId={`admin-needs-action-copy-${chase.organizationId}`}
+          />
+        </ItemActions>
+      )}
+    </Item>
+  );
+}
+
 export function NeedsActionRow({ item }: { item: NeedsActionItem }) {
+  if (item.kind === "reportsMissing") return <ReportChaseRow chase={item.chase} />;
+  return <NeedsActionLinkRow item={item} />;
+}
+
+function NeedsActionLinkRow({
+  item,
+}: {
+  item: Exclude<NeedsActionItem, { kind: "reportsMissing" }>;
+}) {
   const translate = useAppTranslation();
   const content: {
     icon?: ComponentType<{ className?: string }>;
@@ -197,6 +291,12 @@ export function NeedsActionRow({ item }: { item: NeedsActionItem }) {
           title: translate("admin.action.stakingCount", { count: item.count }),
           description: translate("admin.action.stakingHint"),
           link: <Link to="/admin/nodes" />,
+        };
+      case "reportsMissingMany":
+        return {
+          title: translate("admin.action.reportsMissingMany", { count: item.count }),
+          description: translate("admin.action.reportsMissingManyHint"),
+          link: <Link to="/admin/reports" search={{ month: item.month, show: "missing" }} />,
         };
       case "reportsOverdue":
         return {
