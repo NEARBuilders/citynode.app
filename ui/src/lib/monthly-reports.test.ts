@@ -28,9 +28,7 @@ describe("monthly reports owed", () => {
     expect(reportMonthsShown(at("2026-12-12T12:00:00.000Z"))).toEqual(["2026-12", "2026-11"]);
     expect(reportMonthsShown(at("2026-12-12T12:00:00.000Z"), "2026-12")).toEqual(["2026-12"]);
     expect(monthlyReportsOwed([], at("2027-01-12T12:00:00.000Z"), "2027-01")).toEqual([]);
-    expect(monthlyReportsOwed([], at("2027-01-12T12:00:00.000Z"), "2026-12")).toEqual([
-      "2026-12",
-    ]);
+    expect(monthlyReportsOwed([], at("2027-01-12T12:00:00.000Z"), "2026-12")).toEqual(["2026-12"]);
     expect(reportableMonthsUntil(at("2027-01-02T00:00:00.000Z"))).toEqual([
       "2027-01",
       "2026-12",

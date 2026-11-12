@@ -354,9 +354,7 @@ function NodeOverview() {
         />
       )}
 
-      {canReport && (
-        <CommunityReports nodeId={selectedNode.id} now={now} />
-      )}
+      {canReport && <CommunityReports nodeId={selectedNode.id} now={now} />}
 
       {canManage && (
         <OwnerActions
