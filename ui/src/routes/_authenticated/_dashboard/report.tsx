@@ -76,7 +76,9 @@ function ReportPage() {
       description={
         chosen
           ? translate("reports.descriptionNamed", { name: chosen.name })
-          : translate("reports.description")
+          : listed.data?.communities.length
+            ? translate("reports.description")
+            : undefined
       }
       headerTestId="report.heading"
       actions={

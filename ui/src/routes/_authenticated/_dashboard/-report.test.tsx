@@ -145,6 +145,9 @@ describe("/report", () => {
     harness.listed = async () => ({ communities: [alder, harbor], memberships: 2 });
     renderPage();
     await screen.findByTestId("report.choose");
+    expect(screen.getByTestId("report.heading").textContent).toContain(
+      "the events that still need a report",
+    );
     expect(screen.getByTestId("report.community-alder").getAttribute("href")).toBe(
       "/report?community=alder",
     );
@@ -170,6 +173,9 @@ describe("/report", () => {
       "Reports come from owners and organizers",
     );
     expect(screen.getByTestId("report.none-action").getAttribute("href")).toBe("/dashboard/node");
+    expect(screen.getByTestId("report.heading").textContent).not.toContain(
+      "the events that still need a report",
+    );
 
     cleanup();
     harness.listed = async () => ({ communities: [], memberships: 0 });
