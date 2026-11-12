@@ -78,6 +78,13 @@
       "when": 1794265815863,
       "tag": "0010_flawless_slipstream",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794405533558,
+      "tag": "0011_luma-place-events",
+      "breakpoints": true
     }
   ]
 }

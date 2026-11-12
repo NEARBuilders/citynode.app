@@ -1,13 +1,14 @@
 import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 import { activitySchema, webUrl } from "../discovery-contract";
+import { lumaEventLocationShape } from "./luma-webhook";
 
 const calendarSchema = z.object({
   id: z.string().min(1).max(200),
   name: z.string().min(1).max(100),
   url: webUrl,
 });
-const eventSchema = z.object({
+const lumaEventSchema = z.object({
   id: z.string().min(1).max(200),
   platform: z.literal("luma"),
   name: z.string().min(1),
@@ -18,10 +19,9 @@ const eventSchema = z.object({
   timezone: activitySchema.shape.timezone,
   visibility: z.enum(["public", "private", "members-only"]),
   location_visibility: z.enum(["public", "guests-only"]),
-  geo_address_json: z
-    .object({ full_address: z.string().nullish(), city_state: z.string().nullish() })
-    .nullish(),
+  ...lumaEventLocationShape,
 });
+export type LumaEvent = z.infer<typeof lumaEventSchema>;
 const pageSchema = z.object({
   entries: z.array(z.unknown()),
   has_more: z.boolean(),
@@ -44,13 +44,14 @@ export function createLumaCalendars(keys: string) {
         .filter(Boolean),
     ),
   ];
-  async function request(path: string, key: string) {
+  async function request(path: string, key: string, options: { missingAsNull?: boolean } = {}) {
     try {
       const response = await fetch(`https://public-api.luma.com${path}`, {
         headers: { accept: "application/json", "x-luma-api-key": key },
         signal: AbortSignal.timeout(8000),
         redirect: "error",
       });
+      if (options.missingAsNull && response.status === 404) return null;
       if (!response.ok) throw new Error(`Luma responded with HTTP ${response.status}`);
       return await response.json();
     } catch (cause) {
@@ -72,7 +73,83 @@ export function createLumaCalendars(keys: string) {
       failures: result.flatMap((r) => (r.status === "rejected" ? [r.reason] : [])),
     };
   }
+  async function calendarEntry(calendarId: string) {
+    const { entries, failures } = await registry();
+    const entry = entries.find((entry) => entry.calendar.id === calendarId);
+    if (!entry)
+      throw new ORPCError("BAD_REQUEST", {
+        message: "This Luma calendar is not connected or is unavailable.",
+        cause: failures.length
+          ? new AggregateError(failures, failures.map(describeLumaFailure).join("; "))
+          : undefined,
+      });
+    return entry;
+  }
+  async function listEvents(calendarId: string, options: { maxPages: number; strict: boolean }) {
+    const entry = await calendarEntry(calendarId);
+    const events: LumaEvent[] = [];
+    let skipped = 0;
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    for (let page = 0; page < options.maxPages; page++) {
+      const params = new URLSearchParams({
+        pagination_limit: "50",
+        platforms: "luma",
+        status: "approved",
+        sort_column: "start_at",
+        sort_direction: "asc",
+      });
+      params.append("access", "manage");
+      params.append("access", "view");
+      if (cursor) params.set("pagination_cursor", cursor);
+      const parsed = pageSchema.safeParse(
+        await request(`/v1/calendars/events/list?${String(params)}`, entry.key),
+      );
+      if (!parsed.success)
+        throw new ORPCError("BAD_REQUEST", {
+          message: "Luma returned an incomplete calendar. Nothing was imported.",
+        });
+      for (const raw of parsed.data.entries) {
+        const visibility = z.object({ visibility: z.string() }).safeParse(raw);
+        if (visibility.success && ["private", "members-only"].includes(visibility.data.visibility))
+          continue;
+        const event = lumaEventSchema.safeParse(raw);
+        if (!event.success || Date.parse(event.data.end_at) < Date.parse(event.data.start_at)) {
+          if (options.strict)
+            throw new ORPCError("BAD_REQUEST", {
+              message: "Luma returned an invalid event. Nothing was imported.",
+            });
+          skipped++;
+          continue;
+        }
+        events.push(event.data);
+      }
+      if (!parsed.data.has_more) return { calendar: entry.calendar, events, skipped };
+      cursor = parsed.data.next_cursor;
+      if (!cursor || cursors.has(cursor)) break;
+      cursors.add(cursor);
+    }
+    throw new ORPCError("BAD_REQUEST", {
+      message:
+        "Calendar exceeds the import limit or pagination is incomplete. Nothing was imported.",
+    });
+  }
   return {
+    event: async (calendarId: string, eventId: string): Promise<LumaEvent | null> => {
+      const entry = await calendarEntry(calendarId);
+      const raw = await request(
+        `/v1/events/get?${String(new URLSearchParams({ event_id: eventId }))}`,
+        entry.key,
+        { missingAsNull: true },
+      );
+      if (raw === null) return null;
+      const visibility = z.object({ visibility: z.string() }).safeParse(raw);
+      if (visibility.success && visibility.data.visibility !== "public") return null;
+      const event = lumaEventSchema.safeParse(raw);
+      if (!event.success)
+        throw new ORPCError("BAD_REQUEST", { message: "Luma returned an invalid event." });
+      return event.data;
+    },
     list: async () => {
       const result = await registry();
       return {
@@ -81,59 +158,9 @@ export function createLumaCalendars(keys: string) {
       };
     },
     snapshot: async (calendarId: string) => {
-      const { entries, failures } = await registry();
-      const entry = entries.find((entry) => entry.calendar.id === calendarId);
-      if (!entry)
-        throw new ORPCError("BAD_REQUEST", {
-          message: "This Luma calendar is not connected or is unavailable.",
-          cause: failures.length
-            ? new AggregateError(failures, failures.map(describeLumaFailure).join("; "))
-            : undefined,
-        });
-      const events: z.infer<typeof eventSchema>[] = [];
-      const cursors = new Set<string>();
-      let cursor: string | undefined;
-      for (let page = 0; page < 20; page++) {
-        const params = new URLSearchParams({
-          pagination_limit: "50",
-          platforms: "luma",
-          status: "approved",
-          sort_column: "start_at",
-          sort_direction: "asc",
-        });
-        params.append("access", "manage");
-        params.append("access", "view");
-        if (cursor) params.set("pagination_cursor", cursor);
-        const parsed = pageSchema.safeParse(
-          await request(`/v1/calendars/events/list?${String(params)}`, entry.key),
-        );
-        if (!parsed.success)
-          throw new ORPCError("BAD_REQUEST", {
-            message: "Luma returned an incomplete calendar. Nothing was imported.",
-          });
-        for (const raw of parsed.data.entries) {
-          const visibility = z.object({ visibility: z.string() }).safeParse(raw);
-          if (
-            visibility.success &&
-            ["private", "members-only"].includes(visibility.data.visibility)
-          )
-            continue;
-          const event = eventSchema.safeParse(raw);
-          if (!event.success || Date.parse(event.data.end_at) < Date.parse(event.data.start_at))
-            throw new ORPCError("BAD_REQUEST", {
-              message: "Luma returned an invalid event. Nothing was imported.",
-            });
-          events.push(event.data);
-        }
-        if (!parsed.data.has_more) return { calendar: entry.calendar, events };
-        cursor = parsed.data.next_cursor;
-        if (!cursor || cursors.has(cursor)) break;
-        cursors.add(cursor);
-      }
-      throw new ORPCError("BAD_REQUEST", {
-        message:
-          "Calendar exceeds the import limit or pagination is incomplete. Nothing was imported.",
-      });
+      const { calendar, events } = await listEvents(calendarId, { maxPages: 20, strict: true });
+      return { calendar, events };
     },
+    allEvents: (calendarId: string) => listEvents(calendarId, { maxPages: 200, strict: false }),
   };
 }

@@ -6,6 +6,7 @@ import {
   placeAliases as placeAliasesTable,
   places as placesTable,
 } from "../db/schema";
+import { pointInBoundary } from "../services/place-match";
 import {
   type AliasUpsertRow,
   type PlaceUpsertRow,
@@ -66,25 +67,6 @@ function labelFor(kind: string | null): string | null {
   if (kind === "state") return "subdivision";
   if (kind === "city") return "city";
   return null;
-}
-
-function pointInRing(lng: number, lat: number, ring: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i]?.[0];
-    const yi = ring[i]?.[1];
-    const xj = ring[j]?.[0];
-    const yj = ring[j]?.[1];
-    if (xi === undefined || yi === undefined || xj === undefined || yj === undefined) continue;
-    const intersects = yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
-function pointInBoundary(lng: number, lat: number, boundary: PlaceBoundary): boolean {
-  const rings = boundary.type === "Polygon" ? boundary.coordinates : boundary.coordinates.flat();
-  return rings.some((ring) => pointInRing(lng, lat, ring as number[][]));
 }
 
 function placeDepth(placeId: string, byId: Map<string, ExistingPlace>): number {

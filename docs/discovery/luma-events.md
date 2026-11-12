@@ -8,6 +8,21 @@ Following [nearbuilders.org's integration](https://github.com/NEARBuilders/nearb
 
 Luma requires a Plus subscription for API access. See [Luma's API setup](https://docs.luma.com/reference/getting-started-with-your-api) and [calendar event listing](https://docs.luma.com/reference/get_v1-calendars-events-list). Connect only calendars approved for public discovery. All authorized node editors can select the platform's connected public calendars; a calendar key does not confer editing access to another CityNode node.
 
+## Main calendar and places
+
+The main shared Luma calendar is the primary source of events. Its events are attached to a place instead of a community, and every community shows the events of its own place and of every place below it. A country community sees the events of its states and cities; a city sees only its own.
+
+Configure it with the `lumaMainCalendarId` API variable, the calendar's API key in `LUMA_CALENDAR_API_KEYS`, and the webhook signing secret (`whsec_…`) in `LUMA_WEBHOOK_SECRETS` (comma-separated, so a rotated secret can overlap the old one). In Luma, open the calendar's Settings → Developer → Webhooks and point a webhook at `https://<host>/api/webhooks/luma` for Event Created, Event Updated, Event Canceled and Calendar Event Added. Until both the calendar and a secret are set, the endpoint answers 404.
+
+- Every delivery is checked against the `Webhook-Signature` header (HMAC-SHA256 over `timestamp.body`) and rejected when the signature is wrong or older than five minutes.
+- An event's `coordinate` is matched against the place boundaries and the deepest containing place wins; a city named in the address that sits under that place refines it. Events without coordinates match on the address country, then region, then city. Online events and events that match nothing are stored without a place and never shown publicly.
+- A delivery is treated as a signal: the receiver reads the event's current state with `GET /v1/events/get`, so retried or out-of-order deliveries never apply old data. This needs the main calendar's key in `LUMA_CALENDAR_API_KEYS`. A later Event Updated re-runs the match, so a venue change moves the event.
+- Event Canceled marks the event cancelled and takes it off every feed; a late retry of an earlier delivery can't bring it back. An event turning private or members-only, or no longer found on Luma, is deleted.
+- An admin runs `backfillDiscoveryLumaPlaceEvents` once to bring in the events already on the calendar, past ones included (up to 10,000; events Luma returns malformed are skipped and counted). Running it again only refreshes them.
+- When a community's own connected calendar lists the same event, the community's copy is shown and the main calendar's copy is skipped.
+
+Still to come under #525: one admin triage list with "associate to place" for unmatched events, webhooks for per-place calendars, and removing the show/hide and polling state below.
+
 ## Editor workflow
 
 1. Open the community's Events tab, choose **Import from Luma** and select a calendar. The selection is saved and public approved events are imported **hidden**. Under the calendar picker, a status line reports each non-zero outcome on its own line: events newly imported (with a reminder that they stay hidden), already imported events that were updated, events skipped because an event with the same URL is already on the community, and events hidden because they are no longer public on the selected calendar. When nothing was imported, updated or skipped and nothing was hidden, it says no new events were found.

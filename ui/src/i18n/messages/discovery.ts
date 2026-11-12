@@ -2,6 +2,7 @@ import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "activity.hostedBy": ["Hosted by", "Organizado por", "Organisé par", "主办方"],
+  "activity.happeningIn": ["Happening in", "Ocurre en", "Se déroule à", "举办地"],
   "directory.all": [
     "All communities",
     "Todas las comunidades",

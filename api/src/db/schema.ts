@@ -176,13 +176,13 @@ export const discoveryActivities = pgTable(
   "discovery_activities",
   {
     id: uuid("id").primaryKey(),
-    ownerNodeId: uuid("owner_node_id")
-      .notNull()
-      .references(() => nodes.id, { onDelete: "cascade" }),
+    ownerNodeId: uuid("owner_node_id").references(() => nodes.id, { onDelete: "cascade" }),
+    placeId: uuid("place_id").references(() => places.id, { onDelete: "set null" }),
     canonicalUrl: text("canonical_url").notNull(),
-    data: jsonb("data").$type<import("../discovery-contract").DiscoveryActivity>().notNull(),
+    data: jsonb("data").$type<import("../discovery-contract").PublicActivity>().notNull(),
   },
   (table) => ({
+    placeIdx: index("discovery_activities_place_idx").on(table.placeId),
     manualUrl: uniqueIndex("discovery_manual_url")
       .on(table.canonicalUrl)
       .where(sql`${table.data}->'luma' IS NULL`),
