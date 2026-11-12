@@ -146,6 +146,7 @@ export const STAKING_ITEMS_LIMIT = 1;
 export const QUIET_ITEMS_LIMIT = 1;
 export const QUIET_AFTER_DAYS = 30;
 export const REPORT_OVERDUE_DAYS = 7;
+export const REPORT_CHASE_DAYS = 90;
 export const REPORT_CHASE_LIMIT = 5;
 
 type HealthEvent = {
@@ -165,6 +166,7 @@ export function eventHealth<E extends HealthEvent>({
   now: number;
 }): { quiet: { nodeId: string; name: string }[]; overdue: E[] } {
   const recentSince = now - QUIET_AFTER_DAYS * DAY_MS;
+  const chaseSince = now - REPORT_CHASE_DAYS * DAY_MS;
   const active = new Set<string>();
   const overdue: E[] = [];
   for (const event of events) {
@@ -172,7 +174,7 @@ export function eventHealth<E extends HealthEvent>({
     if (!Number.isFinite(end)) continue;
     if (end >= recentSince) active.add(event.nodeId);
     if (
-      end >= recentSince &&
+      end >= chaseSince &&
       end + REPORT_OVERDUE_DAYS * DAY_MS < now &&
       eventReportStatus(event, event.reportSubmittedAt, now).state === "missing"
     ) {
