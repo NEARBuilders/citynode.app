@@ -22,6 +22,7 @@ const baseUrl = flag(
   process.env.BASE_URL || fileEnv.BASE_URL || "http://localhost:3000",
 );
 const seedFile = path.resolve(flag("--seed", path.join(root, ".bos", "demo", "seed.json")));
+const now = flag("--now", "");
 const only = flag("--only", "")
   .split(",")
   .map((value) => value.trim())
@@ -38,23 +39,45 @@ const lagosEvent = (key) => (seed) => {
   return `/nodes/${lagos.nodeId}/events/${event.id}/report`;
 };
 
+const monthlyReport = (community) => (seed) =>
+  `/nodes/${seed.communities[community].nodeId}/reports/${seed.reportMonth}`;
+
 export const SHOTS = [
   { persona: "platformAdmin", page: "home", path: "/dashboard" },
   { persona: "platformAdmin", page: "admin-overview", path: "/admin" },
   { persona: "platformAdmin", page: "admin-communities", path: "/admin/nodes" },
   { persona: "platformAdmin", page: "sidebar", path: "/admin/nodes", sidebar: true },
+  { persona: "platformAdmin", page: "admin-reports", path: "/admin/reports" },
+  {
+    persona: "platformAdmin",
+    page: "admin-reports-seed-month",
+    path: (seed) => `/admin/reports?month=${seed.reportMonth}`,
+  },
+  { persona: "platformAdmin", page: "admin-events", path: "/admin/events" },
+  { persona: "platformAdmin", page: "monthly-report-review", path: monthlyReport("lisbon") },
+  { persona: "platformAdmin", page: "report", path: "/report" },
   { persona: "ownerMature", page: "home", path: "/dashboard" },
   { persona: "ownerMature", page: "my-community", path: "/dashboard/node" },
-  { persona: "ownerMature", page: "event-report", path: lagosEvent("payments-hack") },
+  { persona: "ownerMature", page: "event-report", path: lagosEvent("community-call") },
+  { persona: "ownerMature", page: "event-report-reviewed", path: lagosEvent("launch") },
+  { persona: "ownerMature", page: "report", path: "/report" },
+  { persona: "ownerMature", page: "monthly-report-reviewed", path: monthlyReport("lagos") },
   { persona: "ownerMature", page: "sidebar", path: "/dashboard", sidebar: true },
+  { persona: "ownerSecondMature", page: "monthly-report-submitted", path: monthlyReport("lisbon") },
+  { persona: "ownerNoReports", page: "report", path: "/report" },
+  { persona: "ownerNoReports", page: "monthly-report-empty", path: monthlyReport("manila") },
   { persona: "organizer", page: "home", path: "/dashboard" },
   { persona: "organizer", page: "my-community", path: "/dashboard/node" },
+  { persona: "organizer", page: "report", path: "/report" },
   { persona: "organizer", page: "sidebar", path: "/dashboard", sidebar: true },
   { persona: "member", page: "home", path: "/dashboard" },
+  { persona: "member", page: "report", path: "/report" },
   { persona: "member", page: "sidebar", path: "/dashboard", sidebar: true },
   { persona: "noCommunity", page: "home", path: "/dashboard" },
+  { persona: "noCommunity", page: "report", path: "/report" },
   { persona: "noCommunity", page: "sidebar", path: "/dashboard", sidebar: true },
   { persona: "twoCommunities", page: "home", path: "/dashboard" },
+  { persona: "twoCommunities", page: "report", path: "/report" },
   { persona: "twoCommunities", page: "community-switcher", path: "/dashboard", switcher: true },
 ];
 
@@ -103,6 +126,10 @@ async function openSidebar(page, viewport) {
       await toggle.click();
     }
   }
+  const platform = page.getByTestId("sidebar-nav-admin-platform");
+  if ((await platform.isVisible()) && (await platform.getAttribute("aria-expanded")) === "false") {
+    await platform.click();
+  }
   await page.waitForTimeout(500);
 }
 
@@ -130,6 +157,7 @@ async function capture(browser, seed, shot, viewport) {
     locale: "en-US",
     timezoneId: home?.timezone ?? "UTC",
   });
+  if (now) await context.clock.setFixedTime(new Date(now));
   try {
     await context.addCookies(toPlaywrightCookies(person.cookies, baseUrl));
     const page = await context.newPage();
@@ -162,7 +190,14 @@ fs.mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch();
 const results = [];
 for (const shot of SHOTS) {
-  if (only.length > 0 && !only.includes(shot.persona) && !only.includes(shot.page)) continue;
+  if (
+    only.length > 0 &&
+    !only.includes(shot.persona) &&
+    !only.includes(shot.page) &&
+    !only.includes(`${shot.persona}:${shot.page}`)
+  ) {
+    continue;
+  }
   for (const viewport of Object.keys(VIEWPORTS)) {
     const result = await capture(browser, seed, shot, viewport);
     results.push(result);
@@ -173,7 +208,7 @@ await browser.close();
 
 fs.writeFileSync(
   path.join(outDir, `${label}.json`),
-  `${JSON.stringify({ label, baseUrl, seedDate: seed.today, capturedAt: new Date().toISOString(), results }, null, 2)}\n`,
+  `${JSON.stringify({ label, baseUrl, seedDate: seed.today, clock: now || null, capturedAt: new Date().toISOString(), results }, null, 2)}\n`,
 );
 const failed = results.filter((result) => result.status.startsWith("failed"));
 console.log(
