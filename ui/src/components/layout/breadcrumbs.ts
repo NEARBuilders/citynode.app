@@ -84,6 +84,7 @@ export function crumbsFor(
   const PLATFORM: Crumb = { label: t("common.platform") };
   const SETTINGS: Crumb = { label: t("nav.settings"), to: "/settings" };
   const DOCS: Crumb = { label: t("nav.docs"), to: "/docs" };
+  const REPORTS: Crumb = { label: t("reports.title"), to: "/report" };
 
   const segments = pathname.split("/").filter(Boolean);
   const [first, second, third, fourth, fifth] = segments;
@@ -102,7 +103,11 @@ export function crumbsFor(
         ];
       }
       return [page(MY_COMMUNITY.label)];
+    case "report":
+      return [page(REPORTS.label)];
     case "nodes":
+      if (third === "reports") return [REPORTS, page(t("reports.monthlyHeading"))];
+      if (third === "events" && fifth === "report") return [REPORTS, page(t("report.title"))];
       if (third === "events" && second) {
         const events = { label: t("events.title"), to: `/nodes/${second}/content` };
         if (fourth === "new") return [MY_COMMUNITY, events, page(t("nav.newEvent"))];

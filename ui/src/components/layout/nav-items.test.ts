@@ -334,6 +334,9 @@ describe("breadcrumbs", () => {
     expect(labels("/me")).toEqual(["Your activity"]);
     expect(labels("/dashboard/node/proposals")).toEqual(["My community", "Proposals"]);
     expect(labels("/nodes/abc/content")).toEqual(["My community", "Events"]);
+    expect(labels("/report")).toEqual(["Reports"]);
+    expect(labels("/nodes/abc/reports/2026-11")).toEqual(["Reports", "Monthly report"]);
+    expect(labels("/nodes/abc/events/e1/report")).toEqual(["Reports", "Event report"]);
     expect(
       crumbsFor("/nodes/abc/content", { tab: "onboarding" }).map((crumb) => crumb.label),
     ).toEqual(["My community", "Stations"]);
