@@ -9,7 +9,7 @@ import {
   EventVisibilityBadge,
   useVisibilityContext,
 } from "@/components/discovery/event-visibility";
-import { ReportChecklist } from "@/components/discovery/report-checklist";
+import { ReportChecklist, useReportChecklist } from "@/components/discovery/report-checklist";
 import {
   Item,
   ItemActions,
@@ -28,11 +28,9 @@ import {
   eventCheckInCountQueryOptions,
   eventReportStatusesQueryOptions,
 } from "@/lib/queries/event-reports";
-import {
-  monthlyReportQueryOptions,
-  monthlyReportStatusesQueryOptions,
-} from "@/lib/queries/monthly-reports";
+import { monthlyReportQueryOptions } from "@/lib/queries/monthly-reports";
 import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
+import { refetchAll } from "@/lib/queries/refetch-all";
 import { teamJoinBoardQueryOptions } from "@/lib/queries/team-join-requests";
 import {
   ListSkeleton,
@@ -42,7 +40,7 @@ import {
 } from "@/routes/_admin/_dashboard/admin/-admin-ui";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
 import type { NodeSetupStep } from "./-next-steps";
-import { OverviewEventColumns, OverviewEventRow } from "./-overview-events";
+import { OverviewEventRow, RecentUpcomingEvents } from "./-overview-events";
 
 export const OWNER_EVENTS_LIMIT = 3;
 
@@ -71,13 +69,8 @@ export function OwnerOverview({
 
 function OwnerReports({ nodeId }: { nodeId: string }) {
   const translate = useAppTranslation();
-  const apiClient = useApiClient();
   const now = useNow(60_000);
-  const activities = useQuery(activitiesQueryOptions(apiClient, nodeId));
-  const eventStatuses = useQuery(eventReportStatusesQueryOptions(apiClient, nodeId));
-  const monthlyStatuses = useQuery(monthlyReportStatusesQueryOptions(apiClient, nodeId));
-  const queries = [activities, eventStatuses, monthlyStatuses];
-  const failed = queries.filter((query) => query.isError);
+  const reports = useReportChecklist(nodeId);
 
   return (
     <section className="flex flex-col gap-6" data-testid="home-owner.reports">
@@ -97,24 +90,20 @@ function OwnerReports({ nodeId }: { nodeId: string }) {
           </Button>
         }
       />
-      {failed.length > 0 ? (
+      {reports.failed ? (
         <LoadError
           message={translate("reports.loadError")}
-          onRetry={() => {
-            for (const query of failed) void query.refetch();
-          }}
+          onRetry={reports.retry}
           testId="home-owner.reports-error"
         />
-      ) : queries.some((query) => query.isPending) ? (
+      ) : reports.pending ? (
         <ListSkeleton rows={2} />
       ) : (
         <ReportChecklist
           nodeId={nodeId}
           now={now}
           testId="home-owner.reports-list"
-          monthlyStatuses={monthlyStatuses.data ?? []}
-          activities={activities.data ?? []}
-          eventStatuses={eventStatuses.data ?? []}
+          {...reports.lists}
           showAllReported
         />
       )}
@@ -262,30 +251,16 @@ function OwnerEvents({ community }: { community: OwnerCommunity }) {
       {failed.length > 0 ? (
         <LoadError
           message={translate("admin.events.failed")}
-          onRetry={() => {
-            for (const query of failed) void query.refetch();
-          }}
+          onRetry={() => refetchAll(failed)}
           testId="home-owner.events-error"
         />
       ) : activities.isPending || eventStatuses.isPending ? (
         <ListSkeleton rows={3} />
       ) : (
-        <OverviewEventColumns
+        <RecentUpcomingEvents
           testId="home-owner.events"
-          columns={[
-            {
-              key: "recent",
-              title: translate("admin.home.recentEvents"),
-              empty: translate("admin.events.noPast"),
-              rows: recent.map((event) => row(event, true)),
-            },
-            {
-              key: "upcoming",
-              title: translate("admin.events.upcoming"),
-              empty: translate("admin.events.noUpcoming"),
-              rows: upcoming.map((event) => row(event, false)),
-            },
-          ]}
+          recent={recent.map((event) => row(event, true))}
+          upcoming={upcoming.map((event) => row(event, false))}
         />
       )}
     </section>

@@ -9,21 +9,32 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { useAppTranslation } from "@/i18n/runtime";
 
-export interface OverviewEventColumn {
-  key: string;
-  title: string;
-  empty: string;
-  rows: ReactNode[];
-}
-
-export function OverviewEventColumns({
-  columns,
+export function RecentUpcomingEvents({
   testId,
+  recent,
+  upcoming,
 }: {
-  columns: OverviewEventColumn[];
   testId: string;
+  recent: ReactNode[];
+  upcoming: ReactNode[];
 }) {
+  const translate = useAppTranslation();
+  const columns = [
+    {
+      key: "recent",
+      title: translate("admin.home.recentEvents"),
+      empty: translate("admin.events.noPast"),
+      rows: recent,
+    },
+    {
+      key: "upcoming",
+      title: translate("admin.events.upcoming"),
+      empty: translate("admin.events.noUpcoming"),
+      rows: upcoming,
+    },
+  ];
   return (
     <div className="grid gap-6 md:grid-cols-2">
       {columns.map((column) => (

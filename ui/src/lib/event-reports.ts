@@ -4,7 +4,8 @@ import { eventVisibility, type VisibilityActivity } from "@/lib/event-visibility
 export type EventReport = Parameters<ApiClient["saveEventReport"]>[0]["report"];
 export type ReportAudience = EventReport["audiences"][number];
 
-const WEEK_MS = 7 * 24 * 3_600_000;
+export const DAY_MS = 24 * 3_600_000;
+const WEEK_MS = 7 * DAY_MS;
 
 export type EventReportStatus =
   | { state: "notDue" }

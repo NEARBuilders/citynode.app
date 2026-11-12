@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Trans } from "everything-dev/ui/i18n";
+import { type ComponentProps, cloneElement, type ReactElement, type ReactNode } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, LocalDate, SectionHeader } from "@/components";
-import { ReviewButton } from "@/components/discovery/report-review";
+import { ReviewButton, type ReviewTarget, SubmittedBy } from "@/components/discovery/report-review";
 import {
   Item,
   ItemActions,
@@ -17,6 +17,7 @@ import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { eventReportStatus } from "@/lib/event-reports";
 import { formatReportMonth, reportMonth } from "@/lib/monthly-reports";
 import { adminEventsQueryOptions } from "@/lib/queries/engagement";
+import { refetchAll } from "@/lib/queries/refetch-all";
 import { selectAdminEvents } from "@/routes/_admin/_dashboard/admin/-admin-events";
 import { summarizeReports } from "@/routes/_admin/_dashboard/admin/-admin-reports";
 import {
@@ -29,7 +30,7 @@ import {
   useMonthlyReports,
   usePlatformStatus,
 } from "@/routes/_admin/_dashboard/admin/-platform-status";
-import { OverviewEventColumns, OverviewEventRow } from "./-overview-events";
+import { OverviewEventRow, RecentUpcomingEvents } from "./-overview-events";
 import { CommunityProgress, NeedsAction, OnboardingOverview } from "./-platform-sections";
 
 export const REVIEW_ITEMS_LIMIT = 6;
@@ -144,13 +145,7 @@ function ReportsOverview() {
           label={translate("admin.home.toReview")}
           value={loading ? "…" : failed.length > 0 ? "—" : review.length}
           tone={review.length > 0 ? "attention" : "default"}
-          onRetry={
-            failed.length > 0
-              ? () => {
-                  for (const query of failed) void query.refetch();
-                }
-              : undefined
-          }
+          onRetry={failed.length > 0 ? () => refetchAll(failed) : undefined}
           testId="home-admin.to-review"
         />
       </StatGrid>
@@ -164,76 +159,36 @@ function ReportsOverview() {
         <ItemGroup data-testid="home-admin.review-list">
           {review.slice(0, REVIEW_ITEMS_LIMIT).map((item) =>
             item.kind === "monthly" ? (
-              <Item
+              <ReviewItem
                 key={`monthly-${item.row.nodeId}-${item.month}`}
-                variant="outline"
-                size="sm"
-                data-testid={`home-admin.review-monthly-${item.row.nodeId}-${item.month}`}
-              >
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="max-w-full line-clamp-2 sm:line-clamp-1">
-                    <Link
-                      to="/nodes/$nodeId/reports/$month"
-                      params={{ nodeId: item.row.nodeId, month: item.month }}
-                      className="min-w-0 hover:underline sm:truncate"
-                    >
-                      {translate("admin.home.monthlyReportNamed", {
-                        name: item.row.name,
-                        month: formatReportMonth(item.month, locale),
-                      })}
-                    </Link>
-                  </ItemTitle>
-                  {item.row.report && (
-                    <ItemDescription>
-                      {item.row.report.submittedByName ? (
-                        <Trans
-                          id="admin.reports.submittedBy"
-                          values={{ name: item.row.report.submittedByName }}
-                          components={{
-                            date: <LocalDate value={item.row.report.submittedAt} />,
-                          }}
-                        />
-                      ) : (
-                        <LocalDate value={item.row.report.submittedAt} />
-                      )}
-                    </ItemDescription>
-                  )}
-                </ItemContent>
-                <ItemActions>
-                  <ReviewButton
-                    target={{ kind: "monthly", nodeId: item.row.nodeId, month: item.month }}
-                    reviewed={false}
-                    testId={`home-admin.review-monthly-${item.row.nodeId}-${item.month}-mark`}
+                testId={`home-admin.review-monthly-${item.row.nodeId}-${item.month}`}
+                target={{ kind: "monthly", nodeId: item.row.nodeId, month: item.month }}
+                link={
+                  <Link
+                    to="/nodes/$nodeId/reports/$month"
+                    params={{ nodeId: item.row.nodeId, month: item.month }}
                   />
-                </ItemActions>
-              </Item>
+                }
+                title={translate("admin.home.monthlyReportNamed", {
+                  name: item.row.name,
+                  month: formatReportMonth(item.month, locale),
+                })}
+                description={item.row.report && <SubmittedBy {...item.row.report} />}
+              />
             ) : (
-              <Item
+              <ReviewItem
                 key={`event-${item.event.id}`}
-                variant="outline"
-                size="sm"
-                data-testid={`home-admin.review-event-${item.event.id}`}
-              >
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="max-w-full line-clamp-2 sm:line-clamp-1">
-                    <Link
-                      to="/nodes/$nodeId/events/$activityId/report"
-                      params={{ nodeId: item.event.nodeId, activityId: item.event.id }}
-                      className="min-w-0 hover:underline sm:truncate"
-                    >
-                      {translate("admin.home.eventReportNamed", { title: item.event.title })}
-                    </Link>
-                  </ItemTitle>
-                  <ItemDescription>{item.event.nodeName}</ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <ReviewButton
-                    target={{ kind: "event", activityId: item.event.id }}
-                    reviewed={false}
-                    testId={`home-admin.review-event-${item.event.id}-mark`}
+                testId={`home-admin.review-event-${item.event.id}`}
+                target={{ kind: "event", activityId: item.event.id }}
+                link={
+                  <Link
+                    to="/nodes/$nodeId/events/$activityId/report"
+                    params={{ nodeId: item.event.nodeId, activityId: item.event.id }}
                   />
-                </ItemActions>
-              </Item>
+                }
+                title={translate("admin.home.eventReportNamed", { title: item.event.title })}
+                description={item.event.nodeName}
+              />
             ),
           )}
           {review.length > REVIEW_ITEMS_LIMIT && (
@@ -251,6 +206,34 @@ function ReportsOverview() {
         </ItemGroup>
       )}
     </section>
+  );
+}
+
+function ReviewItem({
+  testId,
+  target,
+  link,
+  title,
+  description,
+}: {
+  testId: string;
+  target: ReviewTarget;
+  link: ReactElement<ComponentProps<"a">>;
+  title: string;
+  description: ReactNode;
+}) {
+  return (
+    <Item variant="outline" size="sm" data-testid={testId}>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="max-w-full line-clamp-2 sm:line-clamp-1">
+          {cloneElement(link, { className: "min-w-0 hover:underline sm:truncate" }, title)}
+        </ItemTitle>
+        {description && <ItemDescription>{description}</ItemDescription>}
+      </ItemContent>
+      <ItemActions>
+        <ReviewButton target={target} reviewed={false} testId={`${testId}-mark`} />
+      </ItemActions>
+    </Item>
   );
 }
 
@@ -321,22 +304,10 @@ function EventsOverview() {
       ) : eventsQuery.isLoading ? (
         <ListSkeleton rows={3} />
       ) : (
-        <OverviewEventColumns
+        <RecentUpcomingEvents
           testId="home-admin.events"
-          columns={[
-            {
-              key: "recent",
-              title: translate("admin.home.recentEvents"),
-              empty: translate("admin.events.noPast"),
-              rows: recent.map((event) => row(event, true)),
-            },
-            {
-              key: "upcoming",
-              title: translate("admin.events.upcoming"),
-              empty: translate("admin.events.noUpcoming"),
-              rows: upcoming.map((event) => row(event, false)),
-            },
-          ]}
+          recent={recent.map((event) => row(event, true))}
+          upcoming={upcoming.map((event) => row(event, false))}
         />
       )}
     </section>

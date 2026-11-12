@@ -1,4 +1,6 @@
-const DAY_MS = 86_400_000;
+import { DAY_MS } from "./event-reports";
+import { utcMonth } from "./queries/onboarding-joins";
+
 const DUE_WINDOW_DAYS = 7;
 
 export const FIRST_REPORT_MONTH = "2026-11";
@@ -6,10 +8,7 @@ export const MONTHLY_REPORT_NOTES_MAX = 20_000;
 export const MONTHLY_REPORT_GUIDE = "report-each-month";
 
 export function reportMonth(now: number, offset = 0): string {
-  const date = new Date(now);
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + offset, 1))
-    .toISOString()
-    .slice(0, 7);
+  return utcMonth(offset, now);
 }
 
 export function isReportMonth(value: string): boolean {

@@ -1,15 +1,13 @@
 import { CalendarDotsIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Trans } from "everything-dev/ui/i18n";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { ActivityFormPage, activitiesQueryOptions } from "@/components/discovery/activity-form";
-import { ReviewButton } from "@/components/discovery/report-review";
+import { ReportUpdated, ReviewRow } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -183,36 +181,23 @@ function EventReportPage() {
           {saved && (
             <>
               {" · "}
-              <Trans
-                id="report.lastUpdated"
-                components={{ date: <LocalDate value={saved.updatedAt} format="relative" /> }}
+              <ReportUpdated
+                updatedAt={saved.updatedAt}
+                reviewedAt={saved.reviewedAt}
+                reviewedTestId="report.reviewed-on"
               />
             </>
-          )}
-          {saved?.reviewedAt && (
-            <span data-testid="report.reviewed-on">
-              {" · "}
-              <Trans
-                id="report.reviewedOn"
-                components={{ date: <LocalDate value={saved.reviewedAt} format="relative" /> }}
-              />
-            </span>
           )}
         </span>
       }
       headerTestId="report.heading"
     >
       {canReview && saved && (
-        <div className="flex flex-wrap items-center gap-3" data-testid="report.review-row">
-          <Badge variant={saved.reviewedAt ? "success" : "secondary"}>
-            {translate(saved.reviewedAt ? "report.status.reviewed" : "report.status.submitted")}
-          </Badge>
-          <ReviewButton
-            target={{ kind: "event", activityId }}
-            reviewed={!!saved.reviewedAt}
-            testId="report.review"
-          />
-        </div>
+        <ReviewRow
+          target={{ kind: "event", activityId }}
+          reviewedAt={saved.reviewedAt}
+          testId="report.review"
+        />
       )}
       {canEdit ? (
         <ReportForm

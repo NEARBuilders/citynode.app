@@ -86,6 +86,14 @@ function storedReport(row: typeof eventReports.$inferSelect) {
 
 const NOT_REVIEWED = { reviewedBy: null, reviewedAt: null };
 
+const reviewPatch = (reviewed: boolean, userId: string, at: Date) =>
+  reviewed ? { reviewedBy: userId, reviewedAt: at } : NOT_REVIEWED;
+
+const reviewResult = ([row]: { reviewedAt: Date | null }[]) =>
+  row
+    ? Effect.succeed({ reviewedAt: row.reviewedAt?.toISOString() ?? null })
+    : Effect.fail(new ORPCError("NOT_FOUND"));
+
 function shownActivity(now: string) {
   const data = discoveryActivities.data;
   return and(
@@ -1538,31 +1546,29 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       Effect.gen(function* () {
         yield* requireAdmin(context);
         const at = new Date(yield* Clock.currentTimeMillis);
-        const [row] = yield* query(() =>
+        const rows = yield* query(() =>
           db
             .update(monthlyReports)
-            .set(input.reviewed ? { reviewedBy: context.userId!, reviewedAt: at } : NOT_REVIEWED)
+            .set(reviewPatch(input.reviewed, context.userId!, at))
             .where(
               and(eq(monthlyReports.nodeId, input.nodeId), eq(monthlyReports.month, input.month)),
             )
             .returning({ reviewedAt: monthlyReports.reviewedAt }),
         );
-        if (!row) return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-        return { reviewedAt: row.reviewedAt?.toISOString() ?? null };
+        return yield* reviewResult(rows);
       }),
     reviewEventReport: (input: { activityId: string; reviewed: boolean }, context: AuthContext) =>
       Effect.gen(function* () {
         yield* requireAdmin(context);
         const at = new Date(yield* Clock.currentTimeMillis);
-        const [row] = yield* query(() =>
+        const rows = yield* query(() =>
           db
             .update(eventReports)
-            .set(input.reviewed ? { reviewedBy: context.userId!, reviewedAt: at } : NOT_REVIEWED)
+            .set(reviewPatch(input.reviewed, context.userId!, at))
             .where(eq(eventReports.activityId, input.activityId))
             .returning({ reviewedAt: eventReports.reviewedAt }),
         );
-        if (!row) return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-        return { reviewedAt: row.reviewedAt?.toISOString() ?? null };
+        return yield* reviewResult(rows);
       }),
     adminMonthlyReports: (month: string, context: AuthContext) =>
       Effect.gen(function* () {

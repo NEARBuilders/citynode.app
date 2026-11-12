@@ -1,19 +1,10 @@
 import { ClipboardTextIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Trans } from "everything-dev/ui/i18n";
 import { useApiClient } from "@/app";
-import {
-  Badge,
-  Button,
-  EmptyState,
-  LocalDate,
-  PageHeader,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components";
-import { CopyReportLink, ReviewButton } from "@/components/discovery/report-review";
+import { Button, EmptyState, PageHeader, Tabs, TabsList, TabsTrigger } from "@/components";
+import { CopyReportLink, ReviewButton, SubmittedBy } from "@/components/discovery/report-review";
+import { ReportStateBadge } from "@/components/discovery/report-status-badge";
 import {
   Select,
   SelectContent,
@@ -306,51 +297,15 @@ function MonthlyStatus({
   const { report } = row;
   return (
     <div className="flex flex-col items-start gap-1">
-      <MonthlyStatusBadge row={row} due={due} testId={testId ?? undefined} />
+      <ReportStateBadge
+        state={row.status === "missing" ? (due ? "missing" : "notYet") : row.status}
+        testId={testId ?? undefined}
+      />
       {report && (
         <span className="text-xs text-muted-foreground">
-          {report.submittedByName ? (
-            <Trans
-              id="admin.reports.submittedBy"
-              values={{ name: report.submittedByName }}
-              components={{ date: <LocalDate value={report.submittedAt} /> }}
-            />
-          ) : (
-            <LocalDate value={report.submittedAt} />
-          )}
+          <SubmittedBy {...report} />
         </span>
       )}
     </div>
-  );
-}
-
-function MonthlyStatusBadge({
-  row,
-  due,
-  testId,
-}: {
-  row: AdminMonthlyRow;
-  due: boolean;
-  testId?: string;
-}) {
-  const translate = useAppTranslation();
-  if (row.status === "reviewed") {
-    return (
-      <Badge variant="success" data-testid={testId}>
-        {translate("report.status.reviewed")}
-      </Badge>
-    );
-  }
-  if (row.status === "submitted") {
-    return (
-      <Badge variant="secondary" data-testid={testId}>
-        {translate("report.status.submitted")}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant={due ? "warning" : "outline"} data-testid={testId}>
-      {translate(due ? "report.status.missing" : "admin.reports.notYet")}
-    </Badge>
   );
 }

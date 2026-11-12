@@ -1,16 +1,13 @@
 import { ArrowLeftIcon, BookOpenIcon, CalendarCheckIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Trans } from "everything-dev/ui/i18n";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
-import { ReviewButton } from "@/components/discovery/report-review";
+import { ReportUpdated, ReviewRow } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
-import { LocalDate } from "@/components/local-date";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -123,35 +120,22 @@ function MonthlyReportPage() {
           {saved && (
             <>
               {node.data?.name ? " · " : ""}
-              <Trans
-                id="report.lastUpdated"
-                components={{ date: <LocalDate value={saved.updatedAt} format="relative" /> }}
+              <ReportUpdated
+                updatedAt={saved.updatedAt}
+                reviewedAt={saved.reviewedAt}
+                reviewedTestId="monthly-report.reviewed-on"
               />
             </>
-          )}
-          {saved?.reviewedAt && (
-            <span data-testid="monthly-report.reviewed-on">
-              {" · "}
-              <Trans
-                id="report.reviewedOn"
-                components={{ date: <LocalDate value={saved.reviewedAt} format="relative" /> }}
-              />
-            </span>
           )}
         </span>
       }
     >
       {canReview && saved && (
-        <div className="flex flex-wrap items-center gap-3" data-testid="monthly-report.review-row">
-          <Badge variant={saved.reviewedAt ? "success" : "secondary"}>
-            {translate(saved.reviewedAt ? "report.status.reviewed" : "report.status.submitted")}
-          </Badge>
-          <ReviewButton
-            target={{ kind: "monthly", nodeId, month }}
-            reviewed={!!saved.reviewedAt}
-            testId="monthly-report.review"
-          />
-        </div>
+        <ReviewRow
+          target={{ kind: "monthly", nodeId, month }}
+          reviewedAt={saved.reviewedAt}
+          testId="monthly-report.review"
+        />
       )}
       {stats && (
         <section className="flex flex-col gap-3" data-testid="monthly-report.stats">

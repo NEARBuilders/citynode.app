@@ -1,6 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useApiClient } from "@/app";
 import { LocalDate } from "@/components/local-date";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -14,9 +15,36 @@ import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { eventsMissingReports } from "@/lib/event-reports";
 import { eventVisibility, type VisibilityActivity } from "@/lib/event-visibility";
 import { formatReportMonth, reportMonth, reportMonthsShown } from "@/lib/monthly-reports";
-import { ReviewedBadge } from "./report-review";
+import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
+import { monthlyReportStatusesQueryOptions } from "@/lib/queries/monthly-reports";
+import { refetchAll } from "@/lib/queries/refetch-all";
+import { activitiesQueryOptions } from "./activity-form";
+import { ReportStateBadge } from "./report-status-badge";
 
 type ReportActivity = VisibilityActivity & { id: string; title: string; venue: string };
+
+export function useReportChecklist(nodeId: string, withMonthly = true) {
+  const api = useApiClient();
+  const activities = useQuery(activitiesQueryOptions(api, nodeId));
+  const eventStatuses = useQuery(eventReportStatusesQueryOptions(api, nodeId));
+  const monthlyStatuses = useQuery({
+    ...monthlyReportStatusesQueryOptions(api, nodeId),
+    enabled: withMonthly,
+  });
+  const queries = [activities, eventStatuses, ...(withMonthly ? [monthlyStatuses] : [])];
+  const failed = queries.filter((query) => query.isError);
+  return {
+    failed: failed.length > 0,
+    error: failed[0]?.error ?? null,
+    pending: queries.some((query) => query.isPending),
+    retry: () => refetchAll(failed),
+    lists: {
+      activities: activities.data ?? [],
+      eventStatuses: eventStatuses.data ?? [],
+      monthlyStatuses: withMonthly ? (monthlyStatuses.data ?? []) : null,
+    },
+  };
+}
 
 export function ReportChecklist({
   nodeId,
@@ -61,11 +89,14 @@ export function ReportChecklist({
                       month: formatReportMonth(month, locale),
                     })}
                     {status?.reviewedAt ? (
-                      <ReviewedBadge testId={`${testId}-month-${month}-reviewed`} />
+                      <ReportStateBadge
+                        state="reviewed"
+                        testId={`${testId}-month-${month}-reviewed`}
+                      />
                     ) : done ? (
-                      <Badge variant="secondary">{translate("report.status.submitted")}</Badge>
+                      <ReportStateBadge state="submitted" />
                     ) : month === previous ? (
-                      <Badge variant="warning">{translate("report.status.missing")}</Badge>
+                      <ReportStateBadge state="missing" />
                     ) : null}
                   </ItemTitle>
                   <ItemDescription>
@@ -104,7 +135,7 @@ export function ReportChecklist({
                   >
                     {event.title}
                   </Link>
-                  <Badge variant="warning">{translate("report.status.missing")}</Badge>
+                  <ReportStateBadge state="missing" />
                 </ItemTitle>
                 <ItemDescription>
                   {(event.startsAt ?? event.endsAt) ? (

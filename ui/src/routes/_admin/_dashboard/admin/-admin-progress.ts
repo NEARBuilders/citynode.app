@@ -1,5 +1,5 @@
 import type { ApiClient } from "@/app";
-import { eventEndsAt, eventReportStatus } from "@/lib/event-reports";
+import { DAY_MS, eventEndsAt, eventReportStatus } from "@/lib/event-reports";
 import { monthlyReportsOwed } from "@/lib/monthly-reports";
 import type { AdminNodeListRow } from "@/lib/queries/nodes";
 import type { Proposal } from "@/lib/queries/proposals";
@@ -147,8 +147,6 @@ export const QUIET_ITEMS_LIMIT = 1;
 export const QUIET_AFTER_DAYS = 30;
 export const REPORT_OVERDUE_DAYS = 7;
 export const REPORT_CHASE_LIMIT = 5;
-
-const DAY_MS = 24 * 3_600_000;
 
 type HealthEvent = {
   nodeId: string;

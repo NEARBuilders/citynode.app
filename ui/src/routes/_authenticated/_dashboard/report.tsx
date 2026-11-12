@@ -2,8 +2,7 @@ import { BookOpenIcon, ClipboardTextIcon, UsersThreeIcon } from "@phosphor-icons
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { type ApiClient, useApiClient } from "@/app";
-import { activitiesQueryOptions } from "@/components/discovery/activity-form";
-import { ReportChecklist } from "@/components/discovery/report-checklist";
+import { ReportChecklist, useReportChecklist } from "@/components/discovery/report-checklist";
 import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
@@ -24,11 +23,7 @@ import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { chooseReportCommunity, MONTHLY_REPORT_GUIDE } from "@/lib/monthly-reports";
 import { pageTitle } from "@/lib/page-title";
-import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
-import {
-  monthlyReportStatusesQueryOptions,
-  reportCommunitiesQueryOptions,
-} from "@/lib/queries/monthly-reports";
+import { reportCommunitiesQueryOptions } from "@/lib/queries/monthly-reports";
 
 type ReportSearch = { community?: string };
 type ReportCommunity = Awaited<
@@ -198,14 +193,9 @@ function ReportPage() {
 
 function ReportDesk({ community, several }: { community: ReportCommunity; several: boolean }) {
   const translate = useAppTranslation();
-  const api = useApiClient();
   const now = useNow(60_000);
   const { nodeId } = community;
-  const activities = useQuery(activitiesQueryOptions(api, nodeId));
-  const eventStatuses = useQuery(eventReportStatusesQueryOptions(api, nodeId));
-  const monthlyStatuses = useQuery(monthlyReportStatusesQueryOptions(api, nodeId));
-  const queries = [activities, eventStatuses, monthlyStatuses];
-  const failed = queries.filter((query) => query.isError);
+  const reports = useReportChecklist(nodeId);
   return (
     <section className="flex flex-col gap-6" data-testid="report.desk">
       {several && (
@@ -220,24 +210,18 @@ function ReportDesk({ community, several }: { community: ReportCommunity; severa
           {translate("reports.switchCommunity")}
         </Button>
       )}
-      {failed.length > 0 ? (
+      {reports.failed ? (
         <EmptyState
           icon={ClipboardTextIcon}
           title={translate("reports.loadError")}
-          description={appErrorMessage(failed[0]?.error ?? null, translate)}
+          description={appErrorMessage(reports.error, translate)}
           action={
-            <Button
-              variant="outline"
-              onClick={() => {
-                for (const query of failed) void query.refetch();
-              }}
-              data-testid="report.desk-retry"
-            >
+            <Button variant="outline" onClick={reports.retry} data-testid="report.desk-retry">
               {translate("common.retry")}
             </Button>
           }
         />
-      ) : queries.some((query) => query.isPending) ? (
+      ) : reports.pending ? (
         <div className="flex flex-col gap-3" aria-busy="true">
           <Skeleton className="h-20 w-full rounded-2xl" />
           <Skeleton className="h-20 w-full rounded-2xl" />
@@ -247,9 +231,7 @@ function ReportDesk({ community, several }: { community: ReportCommunity; severa
           nodeId={nodeId}
           now={now}
           testId="report.list"
-          monthlyStatuses={monthlyStatuses.data ?? []}
-          activities={activities.data ?? []}
-          eventStatuses={eventStatuses.data ?? []}
+          {...reports.lists}
           showAllReported
         />
       )}

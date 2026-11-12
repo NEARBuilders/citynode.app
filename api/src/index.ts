@@ -20,6 +20,7 @@ import {
 import { ContextSchema } from "./lib/context";
 import { createPlatformOrganization, isPlatformOrganization } from "./lib/platform-stations";
 import type { PluginsClient } from "./lib/plugins-types.gen";
+import { reportMonthWindow } from "./report-month";
 import { AttendanceLive, type AttendanceService, AttendanceTag } from "./services/attendance";
 import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService, MonthlyExternalStats } from "./services/discovery";
@@ -1348,11 +1349,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAdmin)
         .effect(function* ({ input }) {
           const services = yield* ApiServices;
-          const from = new Date(`${input.month}-01T00:00:00.000Z`);
-          const attendance = yield* services.attendance.platformAttendance({
-            from,
-            to: new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1)),
-          });
+          const { from, to } = reportMonthWindow(input.month);
+          const attendance = yield* services.attendance.platformAttendance({ from, to });
           return { month: input.month, ...attendance };
         }),
 

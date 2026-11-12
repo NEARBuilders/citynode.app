@@ -1,14 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useApiClient } from "@/app";
-import { activitiesQueryOptions } from "@/components/discovery/activity-form";
-import { hasReportsToShow, ReportChecklist } from "@/components/discovery/report-checklist";
+import {
+  hasReportsToShow,
+  ReportChecklist,
+  useReportChecklist,
+} from "@/components/discovery/report-checklist";
 import { SectionHeader } from "@/components/layout/section-header";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
-import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
-import { monthlyReportStatusesQueryOptions } from "@/lib/queries/monthly-reports";
 
 export function CommunityReports({
   nodeId,
@@ -20,23 +19,12 @@ export function CommunityReports({
   now: number;
 }) {
   const translate = useAppTranslation();
-  const apiClient = useApiClient();
-  const activities = useQuery(activitiesQueryOptions(apiClient, nodeId));
-  const eventStatuses = useQuery(eventReportStatusesQueryOptions(apiClient, nodeId));
-  const monthlyStatuses = useQuery({
-    ...monthlyReportStatusesQueryOptions(apiClient, nodeId),
-    enabled: primary,
-  });
-  const failed = [activities, eventStatuses, ...(primary ? [monthlyStatuses] : [])].filter(
-    (query) => query.isError,
-  );
-  const ready =
-    activities.isSuccess && eventStatuses.isSuccess && (!primary || monthlyStatuses.isSuccess);
-  const monthly = primary ? (monthlyStatuses.data ?? null) : null;
-  if (failed.length === 0 && !ready) return null;
+  const reports = useReportChecklist(nodeId, primary);
+  const { lists } = reports;
+  if (!reports.failed && reports.pending) return null;
   if (
-    failed.length === 0 &&
-    !hasReportsToShow(monthly, activities.data ?? [], eventStatuses.data ?? [], now)
+    !reports.failed &&
+    !hasReportsToShow(lists.monthlyStatuses, lists.activities, lists.eventStatuses, now)
   ) {
     return null;
   }
@@ -57,19 +45,13 @@ export function CommunityReports({
           </Button>
         }
       />
-      {failed.length > 0 ? (
+      {reports.failed ? (
         <Item variant="outline" data-testid="dashboard-node.reports-error">
           <ItemContent className="min-w-0">
             <ItemTitle>{translate("reports.loadError")}</ItemTitle>
           </ItemContent>
           <ItemActions>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                for (const query of failed) void query.refetch();
-              }}
-            >
+            <Button size="sm" variant="outline" onClick={reports.retry}>
               {translate("common.retry")}
             </Button>
           </ItemActions>
@@ -79,9 +61,7 @@ export function CommunityReports({
           nodeId={nodeId}
           now={now}
           testId="dashboard-node.reports-list"
-          monthlyStatuses={monthly}
-          activities={activities.data ?? []}
-          eventStatuses={eventStatuses.data ?? []}
+          {...lists}
         />
       )}
     </section>

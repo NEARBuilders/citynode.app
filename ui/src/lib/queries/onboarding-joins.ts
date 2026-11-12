@@ -6,9 +6,9 @@ export const onboardingJoinQueryKeys = {
   month: (month: string) => [...onboardingJoinQueryKeys.all, month] as const,
 };
 
-export function utcMonth(offset: number) {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1))
+export function utcMonth(offset: number, now = Date.now()) {
+  const date = new Date(now);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + offset, 1))
     .toISOString()
     .slice(0, 7);
 }
