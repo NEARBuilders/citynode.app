@@ -74,7 +74,7 @@ describe("bulletin attribution through the API", () => {
     expect(published.bulletinPublisherName).toBeNull();
   });
 
-  it("attributes bulletins written through updateNode and createNode to the session, not to metadata", async () => {
+  it("attributes bulletins written through createNode to the session, and never through updateNode", async () => {
     const { tenant, node } = await seedCommunity();
     const grace = await getPluginClient(managerContext("bulletin-grace", "Grace Hopper"));
 
@@ -82,8 +82,9 @@ describe("bulletin attribution through the API", () => {
       nodeId: node.id,
       metadata: { bulletin: "Hackathon", bulletinPublisherName: "Mallory" },
     });
-    expect(updated.bulletinPublisherName).toBe("Grace Hopper");
-    expect(updated.bulletinPublishedAt).not.toBeNull();
+    expect(updated.metadata.bulletin).toBe("Hackathon");
+    expect(updated.bulletinPublisherName).toBeNull();
+    expect(updated.bulletinPublishedAt).toBeNull();
 
     const created = await grace.createNode({
       name: "Brooklyn",

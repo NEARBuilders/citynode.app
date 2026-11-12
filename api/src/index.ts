@@ -1903,7 +1903,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
             ...(input.name !== undefined && { name: input.name }),
             ...(input.parentId !== undefined && { parentId: input.parentId }),
             ...(input.metadata !== undefined && { metadata: input.metadata }),
-            publisher: bulletinPublisherOf(context),
           });
         }),
 

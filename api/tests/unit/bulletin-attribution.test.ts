@@ -152,7 +152,6 @@ describe("bulletin attribution", () => {
     const updated = await run(layer, ({ nodes }) =>
       nodes.update(node.id, {
         metadata: { bulletin: "Old news", poolAccountId: "pool.poolv1.near" },
-        publisher: GRACE,
       }),
     );
     expect(updated.metadata.bulletin).toBe("Old news");
@@ -160,40 +159,60 @@ describe("bulletin attribution", () => {
     expect(updated.bulletinPublishedAt).toBeNull();
     expect(updated.bulletinPublisherName).toBeNull();
     expect(await storedPublisher(layer, node.id)).toBeNull();
-
-    const changed = await run(layer, ({ nodes }) =>
-      nodes.update(node.id, { metadata: { bulletin: "New news" }, publisher: GRACE }),
-    );
-    expect(changed.bulletinPublisherName).toBe("Grace");
-    expect(changed.bulletinPublishedAt).not.toBeNull();
   });
 
-  it("attributes a bulletin written through a node update and keeps it across unrelated edits", async () => {
+  it("never attributes a bulletin written through a node update", async () => {
     const layer = freshLayer();
     const node = await seedNode(layer);
 
-    const published = await run(layer, ({ nodes }) =>
-      nodes.update(node.id, { metadata: { bulletin: "Hackathon" }, publisher: ADA }),
+    const written = await run(layer, ({ nodes }) =>
+      nodes.update(node.id, { metadata: { bulletin: "Hackathon" } }),
     );
+    expect(written.metadata.bulletin).toBe("Hackathon");
+    expect(written.bulletinPublishedAt).toBeNull();
+    expect(written.bulletinPublisherName).toBeNull();
+    expect(await storedPublisher(layer, node.id)).toBeNull();
+  });
+
+  it("does not credit an editor who saves a stale bulletin over a newer one", async () => {
+    const layer = freshLayer();
+    const node = await seedNode(layer);
+    await run(layer, ({ nodes }) => nodes.setBulletin(node.id, "Hackathon", GRACE));
+    await run(layer, ({ nodes }) => nodes.setBulletin(node.id, "Hackathon moved to Friday", ADA));
+
+    const stale = await run(layer, ({ nodes }) =>
+      nodes.update(node.id, { name: "NYC", metadata: { bulletin: "Hackathon" } }),
+    );
+    expect(stale.name).toBe("NYC");
+    expect(stale.metadata.bulletin).toBe("Hackathon");
+    expect(stale.bulletinPublishedAt).toBeNull();
+    expect(stale.bulletinPublisherName).toBeNull();
+    expect(await storedPublisher(layer, node.id)).toBeNull();
+  });
+
+  it("keeps a published bulletin's attribution across node updates that leave its text alone", async () => {
+    const layer = freshLayer();
+    const node = await seedNode(layer);
+
+    const published = await run(layer, ({ nodes }) => nodes.setBulletin(node.id, "Hackathon", ADA));
     expect(published.bulletinPublisherName).toBe("Ada");
-    expect(await storedPublisher(layer, node.id)).toBe("user-ada");
 
     const unrelated = await run(layer, ({ nodes }) =>
       nodes.update(node.id, {
         metadata: { bulletin: "Hackathon", poolAccountId: "pool.poolv1.near" },
-        publisher: GRACE,
       }),
     );
     expect(unrelated.bulletinPublisherName).toBe("Ada");
     expect(unrelated.bulletinPublishedAt).toBe(published.bulletinPublishedAt);
+    expect(await storedPublisher(layer, node.id)).toBe("user-ada");
 
     const renamed = await run(layer, ({ nodes }) =>
-      nodes.update(node.id, { name: "NYC", kind: "region", publisher: GRACE }),
+      nodes.update(node.id, { name: "NYC", kind: "region" }),
     );
     expect(renamed.bulletinPublisherName).toBe("Ada");
 
     const removed = await run(layer, ({ nodes }) =>
-      nodes.update(node.id, { metadata: { poolAccountId: "pool.poolv1.near" }, publisher: GRACE }),
+      nodes.update(node.id, { metadata: { poolAccountId: "pool.poolv1.near" } }),
     );
     expect(removed.metadata.bulletin).toBeUndefined();
     expect(removed.bulletinPublishedAt).toBeNull();
