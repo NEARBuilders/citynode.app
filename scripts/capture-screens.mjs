@@ -64,6 +64,8 @@ export const SHOTS = [
   { persona: "ownerMature", page: "monthly-report-reviewed", path: monthlyReport("lagos") },
   { persona: "ownerMature", page: "sidebar", path: "/dashboard", sidebar: true },
   { persona: "ownerSecondMature", page: "monthly-report-submitted", path: monthlyReport("lisbon") },
+  { persona: "ownerNew", page: "home", path: "/dashboard" },
+  { persona: "ownerNoReports", page: "home", path: "/dashboard" },
   { persona: "ownerNoReports", page: "report", path: "/report" },
   { persona: "ownerNoReports", page: "monthly-report-empty", path: monthlyReport("manila") },
   { persona: "organizer", page: "home", path: "/dashboard" },
