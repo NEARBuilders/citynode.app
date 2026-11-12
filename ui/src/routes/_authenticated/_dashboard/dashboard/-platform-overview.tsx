@@ -4,7 +4,6 @@ import { Trans } from "everything-dev/ui/i18n";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, LocalDate, SectionHeader } from "@/components";
 import { ReviewButton } from "@/components/discovery/report-review";
-import { ReportStatusBadge } from "@/components/discovery/report-status-badge";
 import {
   Item,
   ItemActions,
@@ -30,6 +29,7 @@ import {
   useMonthlyReports,
   usePlatformStatus,
 } from "@/routes/_admin/_dashboard/admin/-platform-status";
+import { OverviewEventColumns, OverviewEventRow } from "./-overview-events";
 import { CommunityProgress, NeedsAction, OnboardingOverview } from "./-platform-sections";
 
 export const REVIEW_ITEMS_LIMIT = 6;
@@ -265,10 +265,35 @@ function EventsOverview() {
     0,
     OVERVIEW_EVENTS_LIMIT,
   );
-  const columns = [
-    { key: "recent", title: translate("admin.home.recentEvents"), rows: recent, past: true },
-    { key: "upcoming", title: translate("admin.events.upcoming"), rows: upcoming, past: false },
-  ];
+  const row = (event: AdminEvent, past: boolean) => (
+    <OverviewEventRow
+      key={event.id}
+      testId={`home-admin.event-${event.id}`}
+      title={<EventTitle event={event} />}
+      description={
+        <>
+          {event.nodeName}
+          {event.startsAt && (
+            <>
+              {" · "}
+              <LocalDate value={event.startsAt} />
+            </>
+          )}
+        </>
+      }
+      report={
+        past
+          ? {
+              nodeId: event.nodeId,
+              event,
+              submittedAt: event.reportSubmittedAt,
+              reviewedAt: event.reportReviewedAt,
+              now,
+            }
+          : undefined
+      }
+    />
+  );
 
   return (
     <section className="flex flex-col gap-6" data-testid="home-admin.events">
@@ -296,63 +321,23 @@ function EventsOverview() {
       ) : eventsQuery.isLoading ? (
         <ListSkeleton rows={3} />
       ) : (
-        <div className="grid gap-6 md:grid-cols-2">
-          {columns.map((column) => (
-            <div
-              key={column.key}
-              className="flex min-w-0 flex-col gap-3"
-              data-testid={`home-admin.events-${column.key}`}
-            >
-              <h3 className="text-sm font-medium text-muted-foreground">{column.title}</h3>
-              {column.rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {translate(column.past ? "admin.events.noPast" : "admin.events.noUpcoming")}
-                </p>
-              ) : (
-                <ItemGroup>
-                  {column.rows.map((event) => (
-                    <Item
-                      key={event.id}
-                      variant="outline"
-                      size="sm"
-                      data-testid={`home-admin.event-${event.id}`}
-                    >
-                      <ItemContent className="min-w-0">
-                        <ItemTitle className="max-w-full">
-                          <EventTitle event={event} />
-                        </ItemTitle>
-                        <ItemDescription>
-                          {event.nodeName}
-                          {event.startsAt && (
-                            <>
-                              {" · "}
-                              <LocalDate value={event.startsAt} />
-                            </>
-                          )}
-                        </ItemDescription>
-                      </ItemContent>
-                      {column.past && (
-                        <ItemActions>
-                          <Link
-                            to="/nodes/$nodeId/events/$activityId/report"
-                            params={{ nodeId: event.nodeId, activityId: event.id }}
-                          >
-                            <ReportStatusBadge
-                              activity={event}
-                              submittedAt={event.reportSubmittedAt}
-                              reviewedAt={event.reportReviewedAt}
-                              now={now}
-                            />
-                          </Link>
-                        </ItemActions>
-                      )}
-                    </Item>
-                  ))}
-                </ItemGroup>
-              )}
-            </div>
-          ))}
-        </div>
+        <OverviewEventColumns
+          testId="home-admin.events"
+          columns={[
+            {
+              key: "recent",
+              title: translate("admin.home.recentEvents"),
+              empty: translate("admin.events.noPast"),
+              rows: recent.map((event) => row(event, true)),
+            },
+            {
+              key: "upcoming",
+              title: translate("admin.events.upcoming"),
+              empty: translate("admin.events.noUpcoming"),
+              rows: upcoming.map((event) => row(event, false)),
+            },
+          ]}
+        />
       )}
     </section>
   );
