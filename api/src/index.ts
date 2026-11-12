@@ -983,11 +983,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }),
       getMonthlyReport: builder.getMonthlyReport.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        return yield* services.discovery.monthlyReport(
+        const result = yield* services.discovery.monthlyReport(
           input,
           context,
           monthlyExternalStats(services.attendance, context),
         );
+        const syncedAt =
+          result.canEdit && result.open && result.organizationId
+            ? yield* services.attendance.lastSyncedAt(result.organizationId)
+            : null;
+        return { ...result, checkInsSyncedAt: syncedAt?.toISOString() ?? null };
       }),
       saveMonthlyReport: builder.saveMonthlyReport.effect(function* ({ input, context }) {
         const services = yield* ApiServices;

@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, gte, inArray, isNotNull, lt, min, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, max, min, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -113,6 +113,7 @@ export interface AttendanceService {
     organizationId: string,
     window: { from: Date; to: Date },
   ): AttendanceEffect<number>;
+  lastSyncedAt(organizationId: string): AttendanceEffect<Date | null>;
 }
 
 export class AttendanceTag extends Context.Service<AttendanceTag, AttendanceService>()(
@@ -579,6 +580,21 @@ export const AttendanceLive = Layer.effect(
               ),
           );
           return row?.count ?? 0;
+        }),
+      lastSyncedAt: (organizationId) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db
+              .select({ syncedAt: max(attendanceEventReconciliations.reconciledAt) })
+              .from(attendanceEventReconciliations)
+              .where(
+                and(
+                  eq(attendanceEventReconciliations.organizationId, organizationId),
+                  eq(attendanceEventReconciliations.failed, false),
+                ),
+              ),
+          );
+          return row?.syncedAt ?? null;
         }),
     };
 

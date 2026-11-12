@@ -405,11 +405,13 @@ export const discoveryContract = {
     .output(
       z.object({
         report: storedMonthlyReportSchema.nullable(),
+        organizationId: z.string().nullable(),
         canEdit: z.boolean(),
         canReview: z.boolean(),
         open: z.boolean(),
         closesAt: z.iso.datetime(),
         stats: monthlyReportStatsSchema.nullable(),
+        checkInsSyncedAt: z.iso.datetime().nullable(),
       }),
     )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),

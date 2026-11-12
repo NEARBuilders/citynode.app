@@ -1486,6 +1486,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             : (report?.stats ?? null);
         return {
           report,
+          organizationId: target.organizationId,
           canEdit: target.canEdit,
           canReview: context.user?.role === "admin",
           open: target.open,

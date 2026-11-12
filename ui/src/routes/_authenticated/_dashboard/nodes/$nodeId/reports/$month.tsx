@@ -1,13 +1,15 @@
 import { ArrowLeftIcon, BookOpenIcon, CalendarCheckIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { Trans } from "everything-dev/ui/i18n";
+import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
 import { ReportUpdated, ReviewRow } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
+import { LocalDate } from "@/components/local-date";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,6 +31,7 @@ import {
   reportMonth,
 } from "@/lib/monthly-reports";
 import { pageTitle } from "@/lib/page-title";
+import { attendanceReconcileQueryOptions } from "@/lib/queries/attendance";
 import { monthlyReportQueryKeys, monthlyReportQueryOptions } from "@/lib/queries/monthly-reports";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { useReturnToReport } from "@/lib/use-return-to-report";
@@ -69,6 +72,7 @@ function MonthlyReportPage() {
   const valid = isReportMonth(month) && isReportableMonth(month);
   const report = useQuery({ ...monthlyReportQueryOptions(api, nodeId, month), enabled: valid });
   const node = useQuery(nodeByIdQueryOptions(api, nodeId));
+  const sync = useCheckInSync(nodeId, month, report.data, report.dataUpdatedAt);
   const title = valid
     ? translate("reports.monthlyTitle", { month: formatReportMonth(month, locale) })
     : translate("reports.monthlyHeading");
@@ -108,7 +112,15 @@ function MonthlyReportPage() {
     );
   }
 
-  const { report: saved, canEdit, canReview, open, stats, closesAt } = report.data;
+  const {
+    report: saved,
+    canEdit,
+    canReview,
+    open,
+    stats,
+    closesAt,
+    checkInsSyncedAt,
+  } = report.data;
   const editable = canEdit && open;
   return (
     <MonthlyReportShell
@@ -137,20 +149,64 @@ function MonthlyReportPage() {
           testId="monthly-report.review"
         />
       )}
-      {stats && (
-        <section className="flex flex-col gap-3" data-testid="monthly-report.stats">
-          <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-            {STATS.map(({ key, label }) => (
-              <div key={key} className="flex flex-col gap-1" data-testid={`monthly-report.${key}`}>
-                <dt className="text-sm text-muted-foreground">{translate(label)}</dt>
-                <dd className="text-3xl font-semibold tabular-nums">{stats[key]}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="text-sm text-muted-foreground">
-            {translate(editable ? "reports.statsLive" : "reports.statsSnapshot")}
-          </p>
+      {editable && sync.syncing ? (
+        <section
+          className="flex flex-col gap-3"
+          aria-busy="true"
+          data-testid="monthly-report.stats-syncing"
+        >
+          <Skeleton className="h-16 w-full" />
+          <p className="text-sm text-muted-foreground">{translate("reports.syncingCheckIns")}</p>
         </section>
+      ) : (
+        stats && (
+          <section className="flex flex-col gap-3" data-testid="monthly-report.stats">
+            <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+              {STATS.map(({ key, label }) => (
+                <div
+                  key={key}
+                  className="flex flex-col gap-1"
+                  data-testid={`monthly-report.${key}`}
+                >
+                  <dt className="text-sm text-muted-foreground">{translate(label)}</dt>
+                  <dd className="text-3xl font-semibold tabular-nums">{stats[key]}</dd>
+                  {editable && key === "checkIns" && (
+                    <dd
+                      className="text-xs text-muted-foreground"
+                      data-testid="monthly-report.check-ins-synced"
+                    >
+                      {checkInsSyncedAt ? (
+                        <Trans
+                          id="reports.checkInsSynced"
+                          components={{
+                            date: <LocalDate value={checkInsSyncedAt} format="relative" />,
+                          }}
+                        />
+                      ) : (
+                        translate("reports.checkInsNeverSynced")
+                      )}
+                    </dd>
+                  )}
+                </div>
+              ))}
+            </dl>
+            {editable && sync.failed && (
+              <div
+                role="alert"
+                className="flex flex-wrap items-center gap-2 text-sm text-destructive"
+                data-testid="monthly-report.sync-error"
+              >
+                <span>{translate("reports.syncFailed")}</span>
+                <Button size="sm" variant="outline" onClick={sync.retry}>
+                  {translate("common.retry")}
+                </Button>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground">
+              {translate(editable ? "reports.statsLive" : "reports.statsSnapshot")}
+            </p>
+          </section>
+        )
       )}
       {editable ? (
         <MonthlyReportForm
@@ -159,6 +215,7 @@ function MonthlyReportPage() {
           month={month}
           initial={saved?.notes ?? ""}
           isEdit={!!saved}
+          waiting={sync.syncing}
         />
       ) : saved ? (
         <section className="flex flex-col gap-2" data-testid="monthly-report.notes">
@@ -179,6 +236,35 @@ function MonthlyReportPage() {
       )}
     </MonthlyReportShell>
   );
+}
+
+function useCheckInSync(
+  nodeId: string,
+  month: string,
+  report: MonthlyReport | undefined,
+  reportUpdatedAt: number,
+) {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const organizationId = report?.organizationId ?? "";
+  const editable = !!report && report.canEdit && report.open && !!organizationId;
+  const sync = useQuery({
+    ...attendanceReconcileQueryOptions(api, organizationId),
+    enabled: editable,
+  });
+  const syncedAt = sync.dataUpdatedAt;
+  const stale = editable && sync.isSuccess && syncedAt > reportUpdatedAt;
+  useEffect(() => {
+    if (!stale) return;
+    void queryClient.invalidateQueries({
+      queryKey: monthlyReportQueryKeys.report(nodeId, month),
+    });
+  }, [stale, queryClient, nodeId, month]);
+  return {
+    syncing: editable && (sync.isPending || sync.isFetching || stale),
+    failed: editable && sync.isError,
+    retry: () => void sync.refetch(),
+  };
 }
 
 function MonthlyReportShell({
@@ -241,11 +327,13 @@ function MonthlyReportForm({
   month,
   initial,
   isEdit,
+  waiting,
 }: {
   nodeId: string;
   month: string;
   initial: string;
   isEdit: boolean;
+  waiting: boolean;
 }) {
   const translate = useAppTranslation();
   const api = useApiClient();
@@ -291,7 +379,11 @@ function MonthlyReportForm({
         {missing && <FieldError>{translate("report.error.required")}</FieldError>}
       </Field>
       <div className="flex gap-2">
-        <Button type="submit" disabled={save.isPending} data-testid="monthly-report.submit">
+        <Button
+          type="submit"
+          disabled={save.isPending || waiting}
+          data-testid="monthly-report.submit"
+        >
           {translate(isEdit ? "report.saveChanges" : "report.submit")}
         </Button>
       </div>
