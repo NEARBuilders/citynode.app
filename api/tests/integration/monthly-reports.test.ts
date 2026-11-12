@@ -16,6 +16,7 @@ const eventTeams = new Set<string>();
 const memberships = new Map<string, Array<{ id: string; name: string; slug?: string }>>();
 const joins = new Map<string, { redeemed: number; newMembers: number }>();
 const codes = new Map<string, Array<{ id: string; eventId: string; joined: [string, Date][] }>>();
+const organizationLookups = { failing: false, calls: 0 };
 const NOW = "2026-12-10T12:00:00.000Z";
 
 function membersOf(organizationId: string) {
@@ -49,24 +50,29 @@ function organizer(context: unknown, organizationId: string) {
   return role === "owner" || role === "admin" || eventTeams.has(key);
 }
 
+function knownOrganizations() {
+  return [...new Set([...roles.keys()].map((key) => key.slice(0, key.indexOf(":"))))];
+}
+
 const authStub = {
   client: (context: unknown) => ({
-    getOrganizationForAdmin: async ({ organizationId }: { organizationId: string }) => ({
-      id: organizationId,
-      name: organizationId,
-      slug: `${organizationId}-slug`,
-      status: "active",
-    }),
-    adminGetOrganizationFull: async ({ organizationId }: { organizationId: string }) => ({
-      id: organizationId,
-      name: organizationId,
-      slug: `${organizationId}-slug`,
-      status: "active",
-      createdAt: new Date(0),
-      members: membersOf(organizationId),
-      invitations: [],
-      teams: [],
-    }),
+    adminListOrganizations: async ({ limit = 100, offset = 0 } = {}) => {
+      organizationLookups.calls += 1;
+      if (organizationLookups.failing) throw new ORPCError("INTERNAL_SERVER_ERROR");
+      const all = knownOrganizations();
+      return {
+        organizations: all.slice(offset, offset + limit).map((organizationId) => ({
+          id: organizationId,
+          name: organizationId,
+          slug: `${organizationId}-slug`,
+          status: "active",
+          createdAt: new Date(0),
+          memberCount: membersOf(organizationId).length,
+          teamCount: 0,
+        })),
+        total: all.length,
+      };
+    },
     listOrganizations: async () =>
       (memberships.get(callerId(context)) ?? []).map((organization) => ({
         slug: organization.id,
@@ -185,9 +191,11 @@ function withEventsTeam(userId: string, org: string) {
   };
 }
 
-async function community(name = "Harbor City") {
+async function community(name = "Harbor City", startedAt = new Date("2026-10-01T12:00:00.000Z")) {
   const id = crypto.randomUUID().slice(0, 8);
   const org = `monthly-${id}`;
+  const resume = new Date();
+  vi.setSystemTime(startedAt);
   const provisioner = await getPluginClient(daoContext(`prov-${id}`, org, `mr-${id}.near`));
   const tenant = await provisioner.createTenant({ name, accountId: `mr-${id}.near` });
   const node = await provisioner.createNode({
@@ -196,12 +204,15 @@ async function community(name = "Harbor City") {
     kind: "city",
     tenantId: tenant.id,
   });
+  vi.setSystemTime(resume);
   roles.set(`${org}:owner-${id}`, "owner");
   roles.set(`${org}:member-${id}`, "member");
   return {
     id,
     org,
     node,
+    tenant,
+    provisioner,
     owner: await getPluginClient(orgContext(`owner-${id}`, org)),
     organizer: await getPluginClient(withEventsTeam(`organizer-${id}`, org)),
     member: await getPluginClient(orgContext(`member-${id}`, org, "member")),
@@ -226,11 +237,13 @@ describe("monthly reports", () => {
       await city.organizer.getMonthlyReport({ nodeId: city.node.id, month: reported }),
     ).toEqual({
       report: null,
+      organizationId: city.org,
       canEdit: true,
       canReview: false,
       open: true,
       closesAt: `${month(1)}-01T00:00:00.000Z`,
       stats: { eventsHeld: 0, checkIns: 0, joins: 7, newMembers: 3 },
+      checkInsSyncedAt: null,
     });
 
     const saved = await city.owner.saveMonthlyReport({
@@ -243,6 +256,7 @@ describe("monthly reports", () => {
       month: reported,
       notes: "Two meetups and a hackathon.",
       submittedBy: `owner-${city.id}`,
+      submittedByName: "Test User",
       reviewedAt: null,
     });
 
@@ -254,14 +268,17 @@ describe("monthly reports", () => {
     expect(edited.submittedAt).toBe(saved.submittedAt);
     expect(edited.submittedBy).toBe(`owner-${city.id}`);
     expect(edited.notes).toBe("Two meetups, a hackathon and a workshop.");
-    expect(await city.owner.listMonthlyReportStatuses({ nodeId: city.node.id })).toEqual([
-      {
-        month: reported,
-        submittedAt: saved.submittedAt,
-        updatedAt: edited.updatedAt,
-        reviewedAt: null,
-      },
-    ]);
+    expect(await city.owner.listMonthlyReportStatuses({ nodeId: city.node.id })).toEqual({
+      firstMonth: "2026-11",
+      statuses: [
+        {
+          month: reported,
+          submittedAt: saved.submittedAt,
+          updatedAt: edited.updatedAt,
+          reviewedAt: null,
+        },
+      ],
+    });
 
     expect(
       await platformAdmin.getMonthlyReport({ nodeId: city.node.id, month: reported }),
@@ -271,7 +288,13 @@ describe("monthly reports", () => {
       canReview: true,
       open: true,
     });
-    expect(await platformAdmin.listMonthlyReportStatuses({ nodeId: city.node.id })).toHaveLength(1);
+    expect(
+      (await platformAdmin.listMonthlyReportStatuses({ nodeId: city.node.id })).statuses,
+    ).toHaveLength(1);
+    expect(
+      (await platformAdmin.getMonthlyReport({ nodeId: city.node.id, month: reported }))
+        .checkInsSyncedAt,
+    ).toBeNull();
     await expect(
       platformAdmin.saveMonthlyReport({ nodeId: city.node.id, month: reported, notes: "Mine" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -313,8 +336,15 @@ describe("monthly reports", () => {
         ],
       },
     ]);
+    expect(
+      (await city.owner.getMonthlyReport({ nodeId: city.node.id, month: reported })).stats,
+    ).toMatchObject({ checkIns: 0 });
     await city.owner.reconcileAttendance({ organizationId: city.org });
     joins.set(`${city.org}:${reported}`, { redeemed: 5, newMembers: 2 });
+    expect(
+      (await city.owner.getMonthlyReport({ nodeId: city.node.id, month: reported }))
+        .checkInsSyncedAt,
+    ).toBe(NOW);
 
     const saved = await city.organizer.saveMonthlyReport({
       nodeId: city.node.id,
@@ -383,11 +413,9 @@ describe("monthly reports", () => {
   });
 
   it("shows platform admins every community expected to report, and lets them mark reports reviewed", async () => {
-    vi.setSystemTime(new Date("2026-10-20T12:00:00.000Z"));
     const veteran = await community("Alder Town");
     const quiet = await community("Birch Bay");
-    vi.setSystemTime(new Date(NOW));
-    const newcomer = await community("Cedar Point");
+    const newcomer = await community("Cedar Point", new Date(NOW));
     const platformAdmin = await admin();
     const reported = "2026-11";
 
@@ -439,7 +467,7 @@ describe("monthly reports", () => {
       name: "Alder Town",
       status: "submitted",
       report: {
-        submittedByName: `Name of owner-${veteran.id}`,
+        submittedByName: "Test User",
         reviewedAt: null,
         stats: { eventsHeld: 2, checkIns: 0, joins: 0, newMembers: 0 },
       },
@@ -482,9 +510,9 @@ describe("monthly reports", () => {
     expect(
       (await veteran.owner.getMonthlyReport({ nodeId: veteran.node.id, month: reported })).report,
     ).toMatchObject({ reviewedAt: NOW });
-    expect(await veteran.owner.listMonthlyReportStatuses({ nodeId: veteran.node.id })).toEqual([
-      expect.objectContaining({ month: reported, reviewedAt: NOW }),
-    ]);
+    expect(
+      (await veteran.owner.listMonthlyReportStatuses({ nodeId: veteran.node.id })).statuses,
+    ).toEqual([expect.objectContaining({ month: reported, reviewedAt: NOW })]);
 
     expect(
       await platformAdmin.reviewMonthlyReport({
@@ -507,6 +535,103 @@ describe("monthly reports", () => {
     });
     expect(edited.reviewedAt).toBeNull();
     expect((await rows(reported)).get(veteran.node.id)?.status).toBe("submitted");
+  });
+
+  it("keeps one report per community, whichever of its nodes it is opened from", async () => {
+    const city = await community("Harbor City");
+    const platformAdmin = await admin();
+    const reported = month(-1);
+    await city.owner.saveMonthlyReport({
+      nodeId: city.node.id,
+      month: reported,
+      notes: "Filed from the city node.",
+    });
+
+    vi.setSystemTime(new Date("2026-10-01T12:00:00.000Z"));
+    const first = await city.provisioner.createNode({
+      name: "Aardvark Harbor",
+      slug: `monthly-aardvark-${city.id}`,
+      kind: "city",
+      tenantId: city.tenant.id,
+    });
+    vi.setSystemTime(new Date(NOW));
+    await city.provisioner.updateNode({ nodeId: city.node.id, name: "Zulu Harbor" });
+
+    for (const nodeId of [first.id, city.node.id]) {
+      expect(
+        (await city.organizer.getMonthlyReport({ nodeId, month: reported })).report,
+      ).toMatchObject({ nodeId, notes: "Filed from the city node." });
+      expect((await city.owner.listMonthlyReportStatuses({ nodeId })).statuses).toEqual([
+        expect.objectContaining({ month: reported }),
+      ]);
+    }
+    const rows = (await platformAdmin.getAdminMonthlyReports({ month: reported })).communities;
+    const mine = rows.filter((row) => row.organizationId === city.org);
+    expect(mine).toEqual([expect.objectContaining({ status: "submitted", nodeId: first.id })]);
+
+    await platformAdmin.reviewMonthlyReport({ nodeId: first.id, month: reported, reviewed: true });
+    expect(
+      (await city.owner.getMonthlyReport({ nodeId: city.node.id, month: reported })).report
+        ?.reviewedAt,
+    ).toBe(NOW);
+    const edited = await city.owner.saveMonthlyReport({
+      nodeId: first.id,
+      month: reported,
+      notes: "Filed again from the new node.",
+    });
+    expect(edited).toMatchObject({ nodeId: first.id, reviewedAt: null });
+    expect(
+      (await platformAdmin.getAdminMonthlyReports({ month: reported })).communities.filter(
+        (row) => row.organizationId === city.org,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("asks a community for reports only from the month it started", async () => {
+    const city = await community("Larch Lake", new Date("2026-12-02T09:00:00.000Z"));
+    const platformAdmin = await admin();
+
+    expect(await city.owner.listMonthlyReportStatuses({ nodeId: city.node.id })).toEqual({
+      firstMonth: "2026-12",
+      statuses: [],
+    });
+    for (const call of [
+      () => city.owner.getMonthlyReport({ nodeId: city.node.id, month: "2026-11" }),
+      () => city.owner.saveMonthlyReport({ nodeId: city.node.id, month: "2026-11", notes: "Hi" }),
+      () => platformAdmin.getMonthlyReport({ nodeId: city.node.id, month: "2026-11" }),
+    ]) {
+      await expect(call()).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
+    expect(
+      await city.owner.saveMonthlyReport({ nodeId: city.node.id, month: "2026-12", notes: "Hi" }),
+    ).toMatchObject({ month: "2026-12" });
+    const listed = async (month: string) =>
+      (await platformAdmin.getAdminMonthlyReports({ month })).communities.some(
+        (row) => row.organizationId === city.org,
+      );
+    expect(await listed("2026-11")).toBe(false);
+    expect(await listed("2026-12")).toBe(true);
+  });
+
+  it("still lists every community, without copy links, when organizations can't be read", async () => {
+    const city = await community("Maple Marsh");
+    const platformAdmin = await admin();
+    organizationLookups.failing = true;
+    try {
+      const rows = (await platformAdmin.getAdminMonthlyReports({ month: month(-1) })).communities;
+      expect(rows.find((row) => row.organizationId === city.org)).toMatchObject({
+        slug: null,
+        status: "missing",
+        name: "Maple Marsh",
+      });
+    } finally {
+      organizationLookups.failing = false;
+    }
+    organizationLookups.calls = 0;
+    const rows = (await platformAdmin.getAdminMonthlyReports({ month: month(-1) })).communities;
+    expect(rows.find((row) => row.organizationId === city.org)?.slug).toBe(`${city.org}-slug`);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(organizationLookups.calls).toBe(1);
   });
 
   it("lists the communities the caller reports for", async () => {

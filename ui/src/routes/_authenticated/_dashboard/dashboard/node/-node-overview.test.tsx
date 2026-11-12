@@ -25,7 +25,8 @@ const harness = vi.hoisted(() => ({
   attendanceCalls: [] as string[],
   activities: (() => Promise.resolve([])) as (input: { nodeId: string }) => Promise<unknown>,
   reportStatuses: (() => Promise.resolve([])) as () => Promise<unknown>,
-  monthlyStatuses: (() => Promise.resolve([])) as () => Promise<unknown>,
+  monthlyStatuses: (() =>
+    Promise.resolve({ firstMonth: "2026-11", statuses: [] })) as () => Promise<unknown>,
   listOnboardingCodes: (() => Promise.resolve([])) as (input: unknown) => Promise<unknown>,
   getOnboardingStatus: (() => Promise.resolve({ joined: [] })) as (
     input: unknown,
@@ -167,7 +168,7 @@ afterEach(() => {
   harness.listing = () => Promise.resolve(null);
   harness.activities = () => Promise.resolve([]);
   harness.reportStatuses = () => Promise.resolve([]);
-  harness.monthlyStatuses = () => Promise.resolve([]);
+  harness.monthlyStatuses = () => Promise.resolve({ firstMonth: "2026-11", statuses: [] });
   harness.listOnboardingCodes = () => Promise.resolve([]);
   harness.getOnboardingStatus = () => Promise.resolve({ joined: [] });
   harness.attendanceCalls.length = 0;
@@ -1119,7 +1120,10 @@ describe("node overview events to report", () => {
     vi.setSystemTime(new Date("2026-12-10T12:00:00.000Z"));
     stubChain();
     harness.monthlyStatuses = () =>
-      Promise.resolve([{ month: utcMonth(-1), submittedAt: "2026-12-01T00:00:00.000Z" }]);
+      Promise.resolve({
+        firstMonth: "2026-11",
+        statuses: [{ month: utcMonth(-1), submittedAt: "2026-12-01T00:00:00.000Z" }],
+      });
     renderOverview({ nearAccount: null, canOrganize: true });
     const last = await screen.findByTestId(`dashboard-node.reports-list-month-${utcMonth(-1)}`);
     expect(last.textContent).toContain("Report in");
@@ -1133,7 +1137,9 @@ describe("node overview events to report", () => {
     let calls = 0;
     harness.monthlyStatuses = () => {
       calls += 1;
-      return calls === 1 ? Promise.reject(new Error("offline")) : Promise.resolve([]);
+      return calls === 1
+        ? Promise.reject(new Error("offline"))
+        : Promise.resolve({ firstMonth: "2026-11", statuses: [] });
     };
     renderOverview({ nearAccount: null, canOrganize: true });
     await screen.findByTestId("dashboard-node.reports-error");

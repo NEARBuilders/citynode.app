@@ -218,8 +218,8 @@ describe("eventHealth", () => {
     expect(quiet).toEqual([{ nodeId: "medellin", name: "Medellín" }]);
   });
 
-  it("counts reports missing more than a week after events from the last 30 days", () => {
-    const { overdue } = eventHealth({
+  it("chases reports missing more than a week after events from the last 90 days", () => {
+    const { overdue, quiet } = eventHealth({
       communities,
       now,
       events: [
@@ -227,9 +227,11 @@ describe("eventHealth", () => {
         { nodeId: "lisbon", startsAt: at(-10), endsAt: at(-10), reportSubmittedAt: null },
         { nodeId: "nairobi", startsAt: at(-20), endsAt: at(-20), reportSubmittedAt: at(-1) },
         { nodeId: "medellin", startsAt: at(-45), endsAt: at(-45), reportSubmittedAt: null },
+        { nodeId: "medellin", startsAt: at(-95), endsAt: at(-95), reportSubmittedAt: null },
       ],
     });
-    expect(overdue.map((event) => event.startsAt)).toEqual([at(-10)]);
+    expect(overdue.map((event) => event.startsAt)).toEqual([at(-10), at(-45)]);
+    expect(quiet.map((community) => community.nodeId)).toContain("medellin");
   });
 });
 

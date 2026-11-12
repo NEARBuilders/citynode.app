@@ -12,6 +12,9 @@ const MONTH = "2026-11";
 
 const harness = vi.hoisted(() => ({
   report: (() => Promise.resolve(null)) as () => Promise<unknown>,
+  reconcile: (() =>
+    Promise.resolve({ events: 0, truncated: [], failed: [] })) as () => Promise<unknown>,
+  synced: [] as unknown[],
   saved: [] as unknown[],
   reviewed: [] as unknown[],
   month: "2026-11",
@@ -51,6 +54,10 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/app", () => ({
   useApiClient: () => ({
     getMonthlyReport: () => harness.report(),
+    reconcileAttendance: (input: unknown) => {
+      harness.synced.push(input);
+      return harness.reconcile();
+    },
     getNode: async () => ({ id: NODE, name: "Harbor" }),
     saveMonthlyReport: async (input: unknown) => {
       harness.saved.push(input);
@@ -94,6 +101,8 @@ function renderPage() {
 beforeEach(() => {
   harness.saved.length = 0;
   harness.reviewed.length = 0;
+  harness.synced.length = 0;
+  harness.reconcile = () => Promise.resolve({ events: 0, truncated: [], failed: [] });
   harness.month = MONTH;
   harness.navigate.mockClear();
 });
@@ -126,6 +135,62 @@ describe("monthly report form", () => {
       }),
     );
     expect(harness.saved).toEqual([{ nodeId: NODE, month: MONTH, notes: "A busy month." }]);
+  });
+
+  it("syncs check-ins before showing the month's numbers, and says when", async () => {
+    let synced = false;
+    let release: (value: unknown) => void = () => {};
+    harness.reconcile = () =>
+      new Promise((resolve) => {
+        release = (value) => {
+          synced = true;
+          resolve(value);
+        };
+      });
+    harness.report = async () => ({
+      report: null,
+      ...owner,
+      organizationId: "org-h",
+      open: true,
+      closesAt,
+      stats: { ...stats, checkIns: synced ? 41 : 30 },
+      checkInsSyncedAt: synced ? "2026-11-20T10:00:00.000Z" : null,
+    });
+    renderPage();
+    expect(await screen.findByTestId("monthly-report.stats-syncing")).toBeTruthy();
+    expect(screen.queryByTestId("monthly-report.checkIns")).toBeNull();
+    expect((screen.getByTestId("monthly-report.submit") as HTMLButtonElement).disabled).toBe(true);
+    expect(harness.synced).toEqual([{ organizationId: "org-h" }]);
+
+    release({ events: 2, truncated: [], failed: [] });
+    expect((await screen.findByTestId("monthly-report.checkIns")).textContent).toContain("41");
+    expect(screen.getByTestId("monthly-report.check-ins-synced").textContent).toContain("Synced");
+    expect((screen.getByTestId("monthly-report.submit") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("shows a failed check-in sync with Retry and still lets the owner submit", async () => {
+    harness.reconcile = () => Promise.reject(new Error("offline"));
+    harness.report = async () => ({
+      report: null,
+      ...owner,
+      organizationId: "org-h",
+      open: true,
+      closesAt,
+      stats,
+      checkInsSyncedAt: null,
+    });
+    renderPage();
+    expect(await screen.findByTestId("monthly-report.sync-error")).toBeTruthy();
+    expect(screen.getByTestId("monthly-report.check-ins-synced").textContent).toBe(
+      "Not synced yet",
+    );
+    fireEvent.change(screen.getByTestId("monthly-report.notes-input"), {
+      target: { value: "Quiet month." },
+    });
+    fireEvent.click(screen.getByTestId("monthly-report.submit"));
+    await waitFor(() =>
+      expect(harness.saved).toEqual([{ nodeId: NODE, month: MONTH, notes: "Quiet month." }]),
+    );
   });
 
   it("reopens a submitted report for editing", async () => {

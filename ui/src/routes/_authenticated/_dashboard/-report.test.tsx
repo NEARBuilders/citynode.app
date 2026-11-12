@@ -11,6 +11,7 @@ import { Route } from "./report";
 const harness = vi.hoisted(() => ({
   search: {} as { community?: string },
   activeOrganizationId: "org-harbor" as string | null,
+  role: null as string | null,
   listed: (() => Promise.resolve({ communities: [], memberships: 0 })) as () => Promise<unknown>,
   opened: [] as Array<string | null>,
 }));
@@ -20,9 +21,14 @@ vi.mock("@tanstack/react-router", () => ({
     options,
     ...options,
     useSearch: () => harness.search,
-    useRouteContext: () => ({ auth: { activeOrganizationId: harness.activeOrganizationId } }),
+    useRouteContext: () => ({
+      auth: {
+        activeOrganizationId: harness.activeOrganizationId,
+        user: { role: harness.role },
+      },
+    }),
   }),
-  redirect: (options: unknown) => ({ redirect: options }),
+  Navigate: ({ to }: { to: string }) => <span data-testid="navigate">{to}</span>,
   Link: ({
     children,
     to,
@@ -71,9 +77,10 @@ vi.mock("@/app", () => ({
       },
     ],
     listEventReportStatuses: async () => [],
-    listMonthlyReportStatuses: async () => [
-      { month: utcMonth(-1), submittedAt: "2026-11-01T00:00:00.000Z" },
-    ],
+    listMonthlyReportStatuses: async () => ({
+      firstMonth: "2026-11",
+      statuses: [{ month: utcMonth(-1), submittedAt: "2026-11-01T00:00:00.000Z" }],
+    }),
   }),
 }));
 
@@ -95,6 +102,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-12-10T12:00:00.000Z"));
   harness.search = {};
   harness.activeOrganizationId = "org-harbor";
+  harness.role = null;
   harness.opened.length = 0;
 });
 afterEach(() => {
@@ -103,15 +111,20 @@ afterEach(() => {
 });
 
 describe("/report", () => {
-  it("sends platform admins to Admin → Reports", () => {
-    const beforeLoad = (Route as unknown as { options: { beforeLoad: (args: unknown) => void } })
-      .options.beforeLoad;
-    expect(() => beforeLoad({ context: { auth: { user: { role: "admin" } } } })).toThrow(
-      expect.objectContaining({
-        redirect: { to: "/admin/reports" },
-      }),
-    );
-    expect(() => beforeLoad({ context: { auth: { user: { role: null } } } })).not.toThrow();
+  it("sends a platform admin who reports for no community to Admin → Reports", async () => {
+    harness.role = "admin";
+    harness.listed = async () => ({ communities: [], memberships: 0 });
+    renderPage();
+    expect((await screen.findByTestId("navigate")).textContent).toBe("/admin/reports");
+  });
+
+  it("gives a platform admin who runs a community their reports and a link to every community's", async () => {
+    harness.role = "admin";
+    harness.listed = async () => ({ communities: [harbor], memberships: 1 });
+    renderPage();
+    await screen.findByTestId("report.list");
+    expect(screen.getByTestId("report.admin-reports").getAttribute("href")).toBe("/admin/reports");
+    expect(screen.queryByTestId("navigate")).toBeNull();
   });
 
   it("shows the only community's monthly reports and the events still missing one", async () => {

@@ -150,6 +150,14 @@ async function community(name = "Attendance city") {
         nodeId: popUp.id,
       }),
     rename: (next: string) => provisioner.updateTenant({ tenantId: tenant.id, name: next }),
+    suspend: async () =>
+      (await getPluginClient(orgContext(`admin-${id}`, org, "admin"))).suspendTenant({
+        tenantId: tenant.id,
+      }),
+    remove: async () =>
+      (await getPluginClient(orgContext(`owner-${id}`, org, "owner"))).deleteTenant({
+        tenantId: tenant.id,
+      }),
     organizer: () => client(organizerId),
   };
 }
@@ -568,6 +576,12 @@ describe("confirming attendance from an organizer session", () => {
 
     const unsynced = await community("Unsynced city");
     const unsyncedEvent = await unsynced.addEvent("Not synced yet", past(3));
+    const suspended = await community("Suspended city");
+    const suspendedEvent = await suspended.addEvent("Suspended meetup", past(4));
+    await suspended.suspend();
+    const removed = await community("Removed city");
+    const removedEvent = await removed.addEvent("Removed meetup", past(4));
+    await removed.remove();
 
     const admin = await getPluginClient(authedContext("platform-admin", "admin"));
     const saved = await city.editor.saveEventReport({
@@ -609,6 +623,8 @@ describe("confirming attendance from an organizer session", () => {
     expect(byId.get(second.id)?.checkIns).toMatchObject({ people: 1, returning: 1 });
     expect(byId.get(quiet.id)?.checkIns).toMatchObject({ people: 0, returning: 0 });
     expect(byId.get(unsyncedEvent.id)?.checkIns).toBeNull();
+    expect(byId.has(suspendedEvent.id)).toBe(false);
+    expect(byId.has(removedEvent.id)).toBe(false);
     const order = events.map((event) => event.id);
     expect(order.indexOf(quiet.id)).toBeLessThan(order.indexOf(first.id));
 

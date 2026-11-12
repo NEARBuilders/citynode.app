@@ -12,7 +12,10 @@ type Call<T> = () => Promise<T>;
 const harness = vi.hoisted(() => ({
   activities: (async () => []) as () => Promise<unknown>,
   eventStatuses: (async () => []) as () => Promise<unknown>,
-  monthlyStatuses: (async () => []) as () => Promise<unknown>,
+  monthlyStatuses: (async () => ({
+    firstMonth: "2026-11",
+    statuses: [],
+  })) as () => Promise<unknown>,
   board: (async () => ({ canReview: true, teams: [], requests: [] })) as () => Promise<unknown>,
   onboarding: (async (month: string) => ({
     month,
@@ -124,14 +127,17 @@ beforeEach(() => {
   harness.eventStatuses = async () => [
     { activityId: "harbor", submittedAt: "2026-12-06T00:00:00.000Z", reviewedAt: null },
   ];
-  harness.monthlyStatuses = async () => [
-    {
-      month: "2026-11",
-      submittedAt: "2026-12-01T00:00:00.000Z",
-      updatedAt: "2026-12-01T00:00:00.000Z",
-      reviewedAt: "2026-12-02T00:00:00.000Z",
-    },
-  ];
+  harness.monthlyStatuses = async () => ({
+    firstMonth: "2026-11",
+    statuses: [
+      {
+        month: "2026-11",
+        submittedAt: "2026-12-01T00:00:00.000Z",
+        updatedAt: "2026-12-01T00:00:00.000Z",
+        reviewedAt: "2026-12-02T00:00:00.000Z",
+      },
+    ],
+  });
   harness.board = async () => ({
     canReview: true,
     teams: [],
@@ -201,8 +207,15 @@ describe("an owner's Home overview", () => {
     expect(screen.getByTestId("home-owner.open-reports").getAttribute("href")).toBe("/report");
   });
 
+  it("asks a community that started this month only for this month's report", async () => {
+    harness.monthlyStatuses = async () => ({ firstMonth: "2026-12", statuses: [] });
+    renderOverview();
+    expect(await screen.findByTestId("home-owner.reports-list-month-2026-12")).toBeTruthy();
+    expect(screen.queryByTestId("home-owner.reports-list-month-2026-11")).toBeNull();
+  });
+
   it("shows a report load error with Retry", async () => {
-    harness.monthlyStatuses = failing(1, []);
+    harness.monthlyStatuses = failing(1, { firstMonth: "2026-11", statuses: [] });
     renderOverview();
     const error = await screen.findByTestId("home-owner.reports-error");
     expect(screen.queryByTestId("home-owner.reports-list")).toBeNull();
