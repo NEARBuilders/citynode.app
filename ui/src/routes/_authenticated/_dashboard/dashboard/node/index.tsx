@@ -33,7 +33,6 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
-import { selectCommunityNode } from "@/lib/community-node";
 import {
   type EventTitleLink,
   eventTitleLink,
@@ -356,11 +355,7 @@ function NodeOverview() {
       )}
 
       {canReport && (
-        <CommunityReports
-          nodeId={selectedNode.id}
-          primary={selectCommunityNode(nodes)?.id === selectedNode.id}
-          now={now}
-        />
+        <CommunityReports nodeId={selectedNode.id} now={now} />
       )}
 
       {canManage && (

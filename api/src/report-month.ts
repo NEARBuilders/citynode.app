@@ -18,3 +18,8 @@ export function reportMonthWindow(month: string): ReportMonthWindow {
     closesAt: new Date(Date.UTC(year, index + 1, 1)),
   };
 }
+
+export function firstReportMonth(communityStart: Date | null): string {
+  const started = communityStart?.toISOString().slice(0, 7);
+  return started && started > FIRST_REPORT_MONTH ? started : FIRST_REPORT_MONTH;
+}

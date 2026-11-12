@@ -255,9 +255,9 @@ export const eventReports = pgTable("event_reports", {
 export const monthlyReports = pgTable(
   "monthly_reports",
   {
-    nodeId: uuid("node_id")
+    tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => nodes.id, { onDelete: "cascade" }),
+      .references(() => tenants.id, { onDelete: "cascade" }),
     month: text("month").notNull(),
     notes: text("notes").notNull(),
     eventsHeld: integer("events_held").notNull(),
@@ -265,6 +265,7 @@ export const monthlyReports = pgTable(
     joins: integer("joins").notNull(),
     newMembers: integer("new_members").notNull(),
     submittedBy: text("submitted_by").notNull(),
+    submittedByName: text("submitted_by_name"),
     submittedAt: timestamp("submitted_at", { mode: "date", withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -274,7 +275,7 @@ export const monthlyReports = pgTable(
     reviewedAt: timestamp("reviewed_at", { mode: "date", withTimezone: true }),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.nodeId, t.month] }),
+    pk: primaryKey({ columns: [t.tenantId, t.month] }),
     monthIdx: index("monthly_reports_month").on(t.month),
   }),
 );

@@ -9,17 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
 
-export function CommunityReports({
-  nodeId,
-  primary,
-  now,
-}: {
-  nodeId: string;
-  primary: boolean;
-  now: number;
-}) {
+export function CommunityReports({ nodeId, now }: { nodeId: string; now: number }) {
   const translate = useAppTranslation();
-  const reports = useReportChecklist(nodeId, primary);
+  const reports = useReportChecklist(nodeId);
   const { lists } = reports;
   if (!reports.failed && reports.pending) return null;
   if (

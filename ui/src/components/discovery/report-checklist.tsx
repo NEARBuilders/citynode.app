@@ -23,15 +23,12 @@ import { ReportStateBadge } from "./report-status-badge";
 
 type ReportActivity = VisibilityActivity & { id: string; title: string; venue: string };
 
-export function useReportChecklist(nodeId: string, withMonthly = true) {
+export function useReportChecklist(nodeId: string) {
   const api = useApiClient();
   const activities = useQuery(activitiesQueryOptions(api, nodeId));
   const eventStatuses = useQuery(eventReportStatusesQueryOptions(api, nodeId));
-  const monthlyStatuses = useQuery({
-    ...monthlyReportStatusesQueryOptions(api, nodeId),
-    enabled: withMonthly,
-  });
-  const queries = [activities, eventStatuses, ...(withMonthly ? [monthlyStatuses] : [])];
+  const monthlyStatuses = useQuery(monthlyReportStatusesQueryOptions(api, nodeId));
+  const queries = [activities, eventStatuses, monthlyStatuses];
   const failed = queries.filter((query) => query.isError);
   return {
     failed: failed.length > 0,
@@ -41,7 +38,8 @@ export function useReportChecklist(nodeId: string, withMonthly = true) {
     lists: {
       activities: activities.data ?? [],
       eventStatuses: eventStatuses.data ?? [],
-      monthlyStatuses: withMonthly ? (monthlyStatuses.data ?? []) : null,
+      monthlyStatuses: monthlyStatuses.data?.statuses ?? [],
+      firstMonth: monthlyStatuses.data?.firstMonth,
     },
   };
 }
@@ -53,11 +51,13 @@ export function ReportChecklist({
   monthlyStatuses,
   activities,
   eventStatuses,
+  firstMonth,
   showAllReported = false,
 }: {
   nodeId: string;
   now: number;
   testId: string;
+  firstMonth?: string;
   monthlyStatuses:
     | readonly { month: string; submittedAt: string; reviewedAt?: string | null }[]
     | null;
@@ -77,7 +77,7 @@ export function ReportChecklist({
     <div className="flex flex-col gap-6" data-testid={testId}>
       {monthlyStatuses && (
         <ItemGroup>
-          {reportMonthsShown(now).map((month) => {
+          {reportMonthsShown(now, firstMonth).map((month) => {
             const status = submitted.get(month);
             const done = !!status;
             const closesIn = reportMonth(Date.parse(`${month}-01T00:00:00.000Z`), 1);

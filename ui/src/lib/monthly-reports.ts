@@ -31,8 +31,10 @@ function inLastWeekOfMonth(now: number): boolean {
   return Date.parse(`${reportMonth(now, 1)}-01T00:00:00.000Z`) - now <= DUE_WINDOW_DAYS * DAY_MS;
 }
 
-export function reportMonthsShown(now: number): string[] {
-  return [reportMonth(now), reportMonth(now, -1)].filter(isReportableMonth);
+export function reportMonthsShown(now: number, firstMonth = FIRST_REPORT_MONTH): string[] {
+  return [reportMonth(now), reportMonth(now, -1)].filter(
+    (month) => isReportableMonth(month) && month >= firstMonth,
+  );
 }
 
 export function reportableMonthsUntil(now: number): string[] {
@@ -43,14 +45,18 @@ export function reportableMonthsUntil(now: number): string[] {
   return months;
 }
 
-export function monthlyReportsOwed(submittedMonths: readonly string[], now: number): string[] {
+export function monthlyReportsOwed(
+  submittedMonths: readonly string[],
+  now: number,
+  firstMonth = FIRST_REPORT_MONTH,
+): string[] {
   const submitted = new Set(submittedMonths);
   const owed: string[] = [];
   const previous = reportMonth(now, -1);
   const current = reportMonth(now);
   if (!submitted.has(previous)) owed.push(previous);
   if (inLastWeekOfMonth(now) && !submitted.has(current)) owed.push(current);
-  return owed.filter(isReportableMonth);
+  return owed.filter((month) => isReportableMonth(month) && month >= firstMonth);
 }
 
 export function chooseReportCommunity<T extends { slug: string }>(

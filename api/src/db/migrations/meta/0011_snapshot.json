@@ -1,5 +1,5 @@
 {
-  "id": "70aa0523-0daa-42ac-89bf-ef366bb83cc2",
+  "id": "68b91beb-c084-4cb5-822d-e48dea602d78",
   "prevId": "2e354d2e-97e8-4142-8025-a6c8278a5534",
   "version": "7",
   "dialect": "postgresql",
@@ -91,11 +91,7 @@
       "compositePrimaryKeys": {
         "attendance_check_ins_organization_id_code_id_user_id_pk": {
           "name": "attendance_check_ins_organization_id_code_id_user_id_pk",
-          "columns": [
-            "organization_id",
-            "code_id",
-            "user_id"
-          ]
+          "columns": ["organization_id", "code_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -137,10 +133,7 @@
       "compositePrimaryKeys": {
         "attendance_code_checkpoints_organization_id_code_id_pk": {
           "name": "attendance_code_checkpoints_organization_id_code_id_pk",
-          "columns": [
-            "organization_id",
-            "code_id"
-          ]
+          "columns": ["organization_id", "code_id"]
         }
       },
       "uniqueConstraints": {},
@@ -188,10 +181,7 @@
       "compositePrimaryKeys": {
         "attendance_event_reconciliations_organization_id_event_id_pk": {
           "name": "attendance_event_reconciliations_organization_id_event_id_pk",
-          "columns": [
-            "organization_id",
-            "event_id"
-          ]
+          "columns": ["organization_id", "event_id"]
         }
       },
       "uniqueConstraints": {},
@@ -273,12 +263,8 @@
           "name": "discovery_activities_owner_node_id_nodes_id_fk",
           "tableFrom": "discovery_activities",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "owner_node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -337,12 +323,8 @@
           "name": "discovery_features_node_id_nodes_id_fk",
           "tableFrom": "discovery_features",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -402,12 +384,8 @@
           "name": "discovery_history_node_id_nodes_id_fk",
           "tableFrom": "discovery_history",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -465,12 +443,8 @@
           "name": "discovery_luma_connections_node_id_nodes_id_fk",
           "tableFrom": "discovery_luma_connections",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -560,12 +534,8 @@
           "name": "discovery_measurements_node_id_nodes_id_fk",
           "tableFrom": "discovery_measurements",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -599,12 +569,8 @@
           "name": "discovery_profiles_node_id_nodes_id_fk",
           "tableFrom": "discovery_profiles",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -804,12 +770,8 @@
           "name": "domain_bindings_tenant_id_tenants_id_fk",
           "tableFrom": "domain_bindings",
           "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -819,9 +781,7 @@
         "domain_bindings_hostname_unique": {
           "name": "domain_bindings_hostname_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "hostname"
-          ]
+          "columns": ["hostname"]
         }
       },
       "policies": {},
@@ -902,12 +862,8 @@
           "name": "event_reports_activity_id_discovery_activities_id_fk",
           "tableFrom": "event_reports",
           "tableTo": "discovery_activities",
-          "columnsFrom": [
-            "activity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["activity_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -915,12 +871,8 @@
           "name": "event_reports_node_id_nodes_id_fk",
           "tableFrom": "event_reports",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1005,8 +957,8 @@
       "name": "monthly_reports",
       "schema": "",
       "columns": {
-        "node_id": {
-          "name": "node_id",
+        "tenant_id": {
+          "name": "tenant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -1052,6 +1004,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "submitted_by_name": {
+          "name": "submitted_by_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "submitted_at": {
           "name": "submitted_at",
@@ -1104,27 +1062,20 @@
         }
       },
       "foreignKeys": {
-        "monthly_reports_node_id_nodes_id_fk": {
-          "name": "monthly_reports_node_id_nodes_id_fk",
+        "monthly_reports_tenant_id_tenants_id_fk": {
+          "name": "monthly_reports_tenant_id_tenants_id_fk",
           "tableFrom": "monthly_reports",
-          "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "tableTo": "tenants",
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
-        "monthly_reports_node_id_month_pk": {
-          "name": "monthly_reports_node_id_month_pk",
-          "columns": [
-            "node_id",
-            "month"
-          ]
+        "monthly_reports_tenant_id_month_pk": {
+          "name": "monthly_reports_tenant_id_month_pk",
+          "columns": ["tenant_id", "month"]
         }
       },
       "uniqueConstraints": {},
@@ -1304,12 +1255,8 @@
           "name": "nodes_parent_id_nodes_id_fk",
           "tableFrom": "nodes",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1317,12 +1264,8 @@
           "name": "nodes_tenant_id_tenants_id_fk",
           "tableFrom": "nodes",
           "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1330,12 +1273,8 @@
           "name": "nodes_place_id_places_id_fk",
           "tableFrom": "nodes",
           "tableTo": "places",
-          "columnsFrom": [
-            "place_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["place_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1376,12 +1315,8 @@
           "name": "place_aliases_place_id_places_id_fk",
           "tableFrom": "place_aliases",
           "tableTo": "places",
-          "columnsFrom": [
-            "place_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["place_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1482,12 +1417,8 @@
           "name": "places_parent_id_places_id_fk",
           "tableFrom": "places",
           "tableTo": "places",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1497,9 +1428,7 @@
         "places_slug_unique": {
           "name": "places_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -1558,12 +1487,8 @@
           "name": "team_join_endorsements_request_id_team_join_requests_id_fk",
           "tableFrom": "team_join_endorsements",
           "tableTo": "team_join_requests",
-          "columnsFrom": [
-            "request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["request_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1815,9 +1740,7 @@
         "tenants_account_id_unique": {
           "name": "tenants_account_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "account_id"
-          ]
+          "columns": ["account_id"]
         }
       },
       "policies": {},
@@ -1936,12 +1859,8 @@
           "name": "validators_node_id_nodes_id_fk",
           "tableFrom": "validators",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1957,49 +1876,27 @@
     "public.place_alias_kind": {
       "name": "place_alias_kind",
       "schema": "public",
-      "values": [
-        "geonames",
-        "iso",
-        "legacy"
-      ]
+      "values": ["geonames", "iso", "legacy"]
     },
     "public.team_join_request_closed_reason": {
       "name": "team_join_request_closed_reason",
       "schema": "public",
-      "values": [
-        "requester_left",
-        "team_deleted",
-        "team_not_joinable"
-      ]
+      "values": ["requester_left", "team_deleted", "team_not_joinable"]
     },
     "public.team_join_request_status": {
       "name": "team_join_request_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved",
-        "declined",
-        "withdrawn",
-        "closed"
-      ]
+      "values": ["pending", "approved", "declined", "withdrawn", "closed"]
     },
     "public.tenant_status": {
       "name": "tenant_status",
       "schema": "public",
-      "values": [
-        "active",
-        "pending",
-        "suspended",
-        "pending_deletion"
-      ]
+      "values": ["active", "pending", "suspended", "pending_deletion"]
     },
     "public.validator_role": {
       "name": "validator_role",
       "schema": "public",
-      "values": [
-        "official",
-        "community"
-      ]
+      "values": ["official", "community"]
     }
   },
   "schemas": {},

@@ -100,6 +100,7 @@ class ApiServices extends Context.Service<
 const ONBOARDING_GRACE_MS = 48 * 3_600_000;
 
 const MEMBER_PAGE_SIZE = 100;
+const ORGANIZATION_PAGE = 100;
 const MEMBER_DIRECTORY_SCAN_PAGES = 10;
 
 const ACCOUNT_ID_REGEX =
@@ -1408,45 +1409,34 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const services = yield* ApiServices;
           const rows = yield* services.discovery.adminMonthlyReports(input.month, context);
           const auth = yield* memberAuthClient(context);
-          const communities = yield* Effect.forEach(
-            rows,
-            ({ report, ...row }) =>
-              Effect.gen(function* () {
-                const organizationId = row.organizationId;
-                const full = report
-                  ? yield* callAuth(
-                      () => auth.adminGetOrganizationFull({ organizationId }),
-                      "Could not load the communities",
-                    )
-                  : null;
-                const slug = full
-                  ? full.slug
-                  : ((yield* callAuth(
-                      () => auth.getOrganizationForAdmin({ organizationId }),
-                      "Could not load the communities",
-                    ))?.slug ?? null);
-                const submitter = report
-                  ? full?.members.find((member) => member.userId === report.submittedBy)
-                  : undefined;
-                return {
-                  ...row,
-                  slug,
-                  status: !report
-                    ? ("missing" as const)
-                    : report.reviewedAt
-                      ? ("reviewed" as const)
-                      : ("submitted" as const),
-                  report: report && {
-                    submittedAt: report.submittedAt,
-                    submittedByName: memberDisplayName(submitter?.user?.name),
-                    updatedAt: report.updatedAt,
-                    reviewedAt: report.reviewedAt,
-                    stats: report.stats,
-                  },
-                };
-              }),
-            { concurrency: 4 },
-          );
+          const slugs = yield* Effect.tryPromise(async () => {
+            const found = new Map<string, string>();
+            for (let offset = 0; ; offset += ORGANIZATION_PAGE) {
+              const page = await auth.adminListOrganizations({ limit: ORGANIZATION_PAGE, offset });
+              for (const organization of page.organizations) {
+                found.set(organization.id, organization.slug);
+              }
+              if (page.organizations.length < ORGANIZATION_PAGE || found.size >= page.total) {
+                return found;
+              }
+            }
+          }).pipe(Effect.orElseSucceed(() => new Map<string, string>()));
+          const communities = rows.map(({ report, ...row }) => ({
+            ...row,
+            slug: slugs.get(row.organizationId) ?? null,
+            status: !report
+              ? ("missing" as const)
+              : report.reviewedAt
+                ? ("reviewed" as const)
+                : ("submitted" as const),
+            report: report && {
+              submittedAt: report.submittedAt,
+              submittedByName: report.submittedByName,
+              updatedAt: report.updatedAt,
+              reviewedAt: report.reviewedAt,
+              stats: report.stats,
+            },
+          }));
           return { month: input.month, communities };
         }),
 

@@ -30,12 +30,13 @@ import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
 import {
-  FIRST_REPORT_MONTH,
+  firstReportMonth,
   isReportableMonth,
   type ReportMonthWindow,
   reportMonthWindow,
 } from "../report-month";
 import { resolveTeamAccess } from "../team-access-policy";
+import { memberDisplayName } from "../team-join-policy";
 import {
   type GeocodeService,
   GeocodeTag,
@@ -55,9 +56,9 @@ export type MonthlyExternalStats = (target: {
   window: ReportMonthWindow;
 }) => DiscoveryEffect<Omit<MonthlyReportStats, "eventsHeld">>;
 
-function storedMonthlyReport(row: typeof monthlyReports.$inferSelect) {
+function storedMonthlyReport(row: typeof monthlyReports.$inferSelect, nodeId: string) {
   return {
-    nodeId: row.nodeId,
+    nodeId,
     month: row.month,
     notes: row.notes,
     stats: {
@@ -67,6 +68,7 @@ function storedMonthlyReport(row: typeof monthlyReports.$inferSelect) {
       newMembers: row.newMembers,
     },
     submittedBy: row.submittedBy,
+    submittedByName: row.submittedByName,
     submittedAt: row.submittedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
@@ -171,7 +173,21 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       if (!canEdit && context.user?.role !== "admin") {
         return yield* Effect.fail(new ORPCError("FORBIDDEN"));
       }
-      return { canEdit, organizationId: record.tenant.orgId };
+      return { canEdit, organizationId: record.tenant.orgId, tenantId: record.tenant.id };
+    });
+  }
+
+  function communityFirstMonth(tenantId: string) {
+    return Effect.gen(function* () {
+      const [row] = yield* query(() =>
+        db
+          .select({
+            startedAt: sql<string | null>`min(coalesce(${nodes.activatedAt}, ${nodes.createdAt}))`,
+          })
+          .from(nodes)
+          .where(and(eq(nodes.tenantId, tenantId), listedNode)),
+      );
+      return firstReportMonth(row?.startedAt ? new Date(row.startedAt) : null);
     });
   }
 
@@ -180,10 +196,11 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       const access = yield* reportAccess(input.nodeId, context);
       const now = yield* Clock.currentTimeMillis;
       const window = reportMonthWindow(input.month);
-      if (!isReportableMonth(input.month)) {
+      const firstMonth = yield* communityFirstMonth(access.tenantId);
+      if (!isReportableMonth(input.month) || input.month < firstMonth) {
         return yield* Effect.fail(
           new ORPCError("BAD_REQUEST", {
-            message: `Monthly reports start with ${FIRST_REPORT_MONTH}`,
+            message: `This community's monthly reports start with ${firstMonth}`,
           }),
         );
       }
@@ -197,7 +214,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
   }
 
   function monthlyStats(
-    target: { nodeId: string; month: string; organizationId: string | null },
+    target: { tenantId: string; month: string; organizationId: string | null },
     window: ReportMonthWindow,
     now: number,
     externalStats: MonthlyExternalStats,
@@ -213,9 +230,10 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           db
             .select({ count: sql<number>`count(*)::int` })
             .from(discoveryActivities)
+            .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
             .where(
               and(
-                eq(discoveryActivities.ownerNodeId, target.nodeId),
+                eq(nodes.tenantId, target.tenantId),
                 shownActivity(nowIso),
                 sql`${data}->>'kind' = 'event'`,
                 sql`${startsAt} >= ${window.from.toISOString()}::timestamptz`,
@@ -1450,14 +1468,17 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             .select()
             .from(monthlyReports)
             .where(
-              and(eq(monthlyReports.nodeId, input.nodeId), eq(monthlyReports.month, input.month)),
+              and(
+                eq(monthlyReports.tenantId, target.tenantId),
+                eq(monthlyReports.month, input.month),
+              ),
             ),
         );
-        const report = row ? storedMonthlyReport(row) : null;
+        const report = row ? storedMonthlyReport(row, input.nodeId) : null;
         const stats =
           target.canEdit && target.open
             ? yield* monthlyStats(
-                { ...input, organizationId: target.organizationId },
+                { ...input, tenantId: target.tenantId, organizationId: target.organizationId },
                 target.window,
                 target.now,
                 externalStats,
@@ -1488,7 +1509,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           );
         }
         const stats = yield* monthlyStats(
-          { ...input, organizationId: target.organizationId },
+          { ...input, tenantId: target.tenantId, organizationId: target.organizationId },
           target.window,
           target.now,
           externalStats,
@@ -1500,24 +1521,26 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           db
             .insert(monthlyReports)
             .values({
-              nodeId: input.nodeId,
+              tenantId: target.tenantId,
               month: input.month,
               ...values,
               submittedBy: userId,
+              submittedByName: memberDisplayName(context.user?.name),
               submittedAt: at,
             })
             .onConflictDoUpdate({
-              target: [monthlyReports.nodeId, monthlyReports.month],
+              target: [monthlyReports.tenantId, monthlyReports.month],
               set: { ...values, ...NOT_REVIEWED },
             })
             .returning(),
         );
         if (!row) return yield* Effect.fail(new ORPCError("INTERNAL_SERVER_ERROR"));
-        return storedMonthlyReport(row);
+        return storedMonthlyReport(row, input.nodeId);
       }),
     monthlyReportStatuses: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        yield* reportAccess(nodeId, context);
+        const { tenantId } = yield* reportAccess(nodeId, context);
+        const firstMonth = yield* communityFirstMonth(tenantId);
         const rows = yield* query(() =>
           db
             .select({
@@ -1528,16 +1551,19 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             })
             .from(monthlyReports)
             .where(
-              and(eq(monthlyReports.nodeId, nodeId), gte(monthlyReports.month, FIRST_REPORT_MONTH)),
+              and(eq(monthlyReports.tenantId, tenantId), gte(monthlyReports.month, firstMonth)),
             )
             .orderBy(desc(monthlyReports.month)),
         );
-        return rows.map((row) => ({
-          month: row.month,
-          submittedAt: row.submittedAt.toISOString(),
-          updatedAt: row.updatedAt.toISOString(),
-          reviewedAt: row.reviewedAt?.toISOString() ?? null,
-        }));
+        return {
+          firstMonth,
+          statuses: rows.map((row) => ({
+            month: row.month,
+            submittedAt: row.submittedAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+            reviewedAt: row.reviewedAt?.toISOString() ?? null,
+          })),
+        };
       }),
     reviewMonthlyReport: (
       input: { nodeId: string; month: string; reviewed: boolean },
@@ -1546,12 +1572,19 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       Effect.gen(function* () {
         yield* requireAdmin(context);
         const at = new Date(yield* Clock.currentTimeMillis);
+        const tenantOfNode = db
+          .select({ tenantId: nodes.tenantId })
+          .from(nodes)
+          .where(eq(nodes.id, input.nodeId));
         const rows = yield* query(() =>
           db
             .update(monthlyReports)
             .set(reviewPatch(input.reviewed, context.userId!, at))
             .where(
-              and(eq(monthlyReports.nodeId, input.nodeId), eq(monthlyReports.month, input.month)),
+              and(
+                inArray(monthlyReports.tenantId, tenantOfNode),
+                eq(monthlyReports.month, input.month),
+              ),
             )
             .returning({ reviewedAt: monthlyReports.reviewedAt }),
         );
@@ -1583,12 +1616,14 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         const candidates = yield* query(() =>
           db
             .select({
+              tenantId: tenants.id,
               organizationId: tenants.orgId,
               name: tenants.name,
               nodeId: nodes.id,
               nodeName: nodes.name,
-              activatedAt: nodes.activatedAt,
-              createdAt: nodes.createdAt,
+              startedAt: sql<Date>`coalesce(${nodes.activatedAt}, ${nodes.createdAt})`.mapWith(
+                (value: string | Date) => new Date(value),
+              ),
             })
             .from(tenants)
             .innerJoin(nodes, eq(nodes.tenantId, tenants.id))
@@ -1601,19 +1636,41 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               ),
             ),
         );
-        const mainNodes = new Map<string, (typeof candidates)[number]>();
-        for (const candidate of [...candidates].sort(
-          (a, b) => a.nodeName.localeCompare(b.nodeName) || a.nodeId.localeCompare(b.nodeId),
-        )) {
-          if (candidate.organizationId && !mainNodes.has(candidate.organizationId)) {
-            mainNodes.set(candidate.organizationId, candidate);
+        const communities = new Map<
+          string,
+          {
+            tenantId: string;
+            organizationId: string;
+            name: string;
+            nodeId: string;
+            nodeName: string;
+            startedAt: Date;
           }
+        >();
+        for (const candidate of candidates) {
+          if (!candidate.organizationId) continue;
+          const known = communities.get(candidate.tenantId);
+          const linkFirst =
+            !known ||
+            candidate.nodeName.localeCompare(known.nodeName) < 0 ||
+            (candidate.nodeName === known.nodeName && candidate.nodeId < known.nodeId);
+          communities.set(candidate.tenantId, {
+            tenantId: candidate.tenantId,
+            organizationId: candidate.organizationId,
+            name: candidate.name,
+            nodeId: linkFirst ? candidate.nodeId : (known?.nodeId ?? candidate.nodeId),
+            nodeName: linkFirst ? candidate.nodeName : (known?.nodeName ?? candidate.nodeName),
+            startedAt:
+              known && known.startedAt < candidate.startedAt
+                ? known.startedAt
+                : candidate.startedAt,
+          });
         }
-        const expected = [...mainNodes.values()].filter(
-          (community) => (community.activatedAt ?? community.createdAt) < window.to,
+        const expected = [...communities.values()].filter(
+          (community) => firstReportMonth(community.startedAt) <= month,
         );
-        const nodeIds = expected.map((community) => community.nodeId);
-        if (nodeIds.length === 0) return [];
+        const tenantIds = expected.map((community) => community.tenantId);
+        if (tenantIds.length === 0) return [];
         const nowIso = new Date(now).toISOString();
         const data = discoveryActivities.data;
         const startsAt = sql`(${data}->>'startsAt')::timestamptz`;
@@ -1623,21 +1680,24 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             db
               .select()
               .from(monthlyReports)
-              .where(and(inArray(monthlyReports.nodeId, nodeIds), eq(monthlyReports.month, month))),
+              .where(
+                and(inArray(monthlyReports.tenantId, tenantIds), eq(monthlyReports.month, month)),
+              ),
           ),
           query(() =>
             db
               .select({
-                nodeId: discoveryActivities.ownerNodeId,
+                tenantId: nodes.tenantId,
                 ended: sql<number>`count(*)::int`,
                 reported: sql<number>`count(${eventReports.activityId})::int`,
                 toReview: sql<number>`(count(${eventReports.activityId}) filter (where ${eventReports.reviewedAt} is null))::int`,
               })
               .from(discoveryActivities)
+              .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
               .leftJoin(eventReports, eq(eventReports.activityId, discoveryActivities.id))
               .where(
                 and(
-                  inArray(discoveryActivities.ownerNodeId, nodeIds),
+                  inArray(nodes.tenantId, tenantIds),
                   shownActivity(nowIso),
                   sql`${data}->>'kind' = 'event'`,
                   sql`${startsAt} >= ${window.from.toISOString()}::timestamptz`,
@@ -1645,20 +1705,24 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
                   sql`${endsAt} <= ${nowIso}::timestamptz`,
                 ),
               )
-              .groupBy(discoveryActivities.ownerNodeId),
+              .groupBy(nodes.tenantId),
           ),
         ]);
-        const reportByNode = new Map(reports.map((row) => [row.nodeId, row]));
-        const eventsByNode = new Map(events.map(({ nodeId, ...counts }) => [nodeId, counts]));
+        const reportByTenant = new Map(reports.map((row) => [row.tenantId, row]));
+        const eventsByTenant = new Map(events.map(({ tenantId, ...counts }) => [tenantId, counts]));
         return expected
           .map((community) => {
-            const row = reportByNode.get(community.nodeId);
+            const row = reportByTenant.get(community.tenantId);
             return {
-              organizationId: community.organizationId ?? "",
+              organizationId: community.organizationId,
               name: community.name,
               nodeId: community.nodeId,
-              report: row ? storedMonthlyReport(row) : null,
-              events: eventsByNode.get(community.nodeId) ?? { ended: 0, reported: 0, toReview: 0 },
+              report: row ? storedMonthlyReport(row, community.nodeId) : null,
+              events: eventsByTenant.get(community.tenantId) ?? {
+                ended: 0,
+                reported: 0,
+                toReview: 0,
+              },
             };
           })
           .sort((a, b) => a.name.localeCompare(b.name));

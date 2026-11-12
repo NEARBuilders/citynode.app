@@ -112,6 +112,7 @@ export const storedMonthlyReportSchema = z.object({
   notes: z.string(),
   stats: monthlyReportStatsSchema,
   submittedBy: z.string(),
+  submittedByName: z.string().nullable(),
   submittedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   reviewedAt: z.iso.datetime().nullable(),
@@ -425,14 +426,17 @@ export const discoveryContract = {
   listMonthlyReportStatuses: oc
     .input(z.object({ nodeId: z.uuid() }))
     .output(
-      z.array(
-        z.object({
-          month: reportMonthSchema,
-          submittedAt: z.iso.datetime(),
-          updatedAt: z.iso.datetime(),
-          reviewedAt: z.iso.datetime().nullable(),
-        }),
-      ),
+      z.object({
+        firstMonth: reportMonthSchema,
+        statuses: z.array(
+          z.object({
+            month: reportMonthSchema,
+            submittedAt: z.iso.datetime(),
+            updatedAt: z.iso.datetime(),
+            reviewedAt: z.iso.datetime().nullable(),
+          }),
+        ),
+      }),
     )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getDiscoveryActivity: oc.input(z.object({ id: z.uuid() })).output(activitySchema.nullable()),
