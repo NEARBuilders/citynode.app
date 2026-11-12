@@ -145,5 +145,18 @@ describe("ReportChecklist", () => {
     expect(screen.queryByTestId("list-event-event-missing")).toBeNull();
     expect(screen.queryByTestId("list-month-2026-12")).toBeNull();
     expect(screen.getByTestId("list-events-done")).toBeTruthy();
+
+    rerender(
+      <ReportChecklist
+        nodeId="node-1"
+        now={now}
+        testId="list"
+        monthlyStatuses={null}
+        activities={[upcoming]}
+        eventStatuses={[]}
+        showAllReported
+      />,
+    );
+    expect(screen.queryByTestId("list-events-done")).toBeNull();
   });
 });

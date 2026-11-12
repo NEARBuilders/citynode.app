@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/item";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { eventsMissingReports } from "@/lib/event-reports";
-import type { VisibilityActivity } from "@/lib/event-visibility";
+import { eventVisibility, type VisibilityActivity } from "@/lib/event-visibility";
 import { formatReportMonth, reportMonth, reportMonthsShown } from "@/lib/monthly-reports";
 import { ReviewedBadge } from "./report-review";
 
@@ -40,6 +40,9 @@ export function ReportChecklist({
   const translate = useAppTranslation();
   const { locale } = useAppLocale();
   const events = eventsMissingReports(activities, eventStatuses, now);
+  const anyEnded = activities.some(
+    (activity) => eventVisibility(activity, { communityPublic: true, now }) === "ended",
+  );
   const submitted = new Map(monthlyStatuses?.map((status) => [status.month, status]) ?? []);
   const previous = reportMonth(now, -1);
   return (
@@ -104,7 +107,9 @@ export function ReportChecklist({
                   <Badge variant="warning">{translate("report.status.missing")}</Badge>
                 </ItemTitle>
                 <ItemDescription>
-                  {event.endsAt ? <LocalDate value={event.endsAt} format="datetime" /> : null}
+                  {(event.startsAt ?? event.endsAt) ? (
+                    <LocalDate value={event.startsAt ?? event.endsAt ?? ""} format="datetime" />
+                  ) : null}
                   {event.venue ? ` · ${event.venue}` : ""}
                 </ItemDescription>
               </ItemContent>
@@ -126,7 +131,7 @@ export function ReportChecklist({
             </Item>
           ))}
         </ItemGroup>
-      ) : showAllReported ? (
+      ) : showAllReported && anyEnded ? (
         <p className="text-sm text-muted-foreground" data-testid={`${testId}-events-done`}>
           {translate("reports.eventsAllReported")}
         </p>
