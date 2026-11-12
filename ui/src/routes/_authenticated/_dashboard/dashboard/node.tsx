@@ -6,7 +6,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { selectCommunityNode, sortCommunityNodes } from "@/lib/community-node";
 import { pageTitle } from "@/lib/page-title";
 import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
-import { nodeQueryKeys } from "@/lib/queries/nodes";
+import { nodeQueryKeys, stakingValidatorsQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { canManageCommunity, resolveTeamWorkspace } from "@/lib/team-workspace";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         nodes: [],
         selectedNode: null,
         summary: null,
-        stakingSourceNode: null,
+        staking: null,
         canReview: false,
         canManage: false,
         inFinanceTeam: false,
@@ -64,7 +64,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         nodes: [],
         selectedNode: null,
         summary: null,
-        stakingSourceNode: null,
+        staking: null,
         canReview: false,
         canManage: false,
         inFinanceTeam: false,
@@ -82,7 +82,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         nodes,
         selectedNode: null,
         summary: null,
-        stakingSourceNode: null,
+        staking: null,
         canReview: false,
         canManage: false,
         inFinanceTeam: false,
@@ -92,18 +92,15 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       };
     }
 
-    const [summary] = await Promise.all([
+    const [summary, staking] = await Promise.all([
       context.apiClient.getNodeSummary({ nodeId: selectedNode.id }),
+      context.queryClient.ensureQueryData(
+        stakingValidatorsQueryOptions(context.apiClient, selectedNode.id),
+      ),
       context.queryClient.prefetchQuery(
         discoveryNodeQueryOptions(context.apiClient, selectedNode.id),
       ),
     ]);
-    const stakingSourceNode =
-      summary.stakingValidators.sourceNodeId === selectedNode.id
-        ? selectedNode
-        : await context.apiClient.getNode({
-            nodeId: summary.stakingValidators.sourceNodeId,
-          });
 
     const canReview = hasNodeProposalReviewPermission(context.auth.user?.role);
     const authContext = await context.queryClient
@@ -123,7 +120,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       nodes,
       selectedNode,
       summary,
-      stakingSourceNode,
+      staking,
       canReview,
       canManage,
       inFinanceTeam,

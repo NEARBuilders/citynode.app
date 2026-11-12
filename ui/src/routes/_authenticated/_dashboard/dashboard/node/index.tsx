@@ -140,7 +140,7 @@ function NodeOverview() {
     nodes,
     selectedNode,
     summary,
-    stakingSourceNode,
+    staking,
     tenant,
     auth,
     canManage,
@@ -192,16 +192,15 @@ function NodeOverview() {
     daoAccountId: daoQuery.data?.daoAccountId,
     tenantAccountId: tenant?.accountId,
     tenantOwnerKind: tenant?.ownerKind,
-    validators: summary?.stakingValidators.validators ?? [],
+    validators: staking?.validators ?? [],
   });
   const showTeamStake = useCanSeeTeamStake(teamStake, { canManage, inFinanceTeam });
   const payoutsRef = useScrollToHash<HTMLDivElement>("payouts");
-  if (!selectedNode || !summary) return null;
+  if (!selectedNode || !summary || !staking) return null;
 
   const pendingConfig = pendingConfigQuery.data ?? null;
 
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
-  const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
   const upcoming = upcomingEvents(activities.data ?? [], now);
   const liveCount =
     visibilityContext.communityPublic === null
@@ -262,9 +261,9 @@ function NodeOverview() {
           <Stat
             label={translate("common.staking")}
             value={
-              summary.stakingValidators.validators.length === 0
+              staking.validators.length === 0
                 ? "—"
-                : stakingIsInherited
+                : staking.via
                   ? translate("dashboard.stakingInherited")
                   : translate("dashboard.stakingOwn")
             }
@@ -489,22 +488,16 @@ function NodeOverview() {
         <SectionHeader
           title={translate("common.validators")}
           description={
-            stakingIsInherited
-              ? translate("stake.sourceNamed", {
-                  name: stakingSourceNode?.name ?? translate("dashboard.parentFallback"),
-                })
+            staking.via
+              ? translate("stake.sourceNamed", { name: staking.via.name })
               : translate("dashboard.stakeHintDirect")
           }
         />
-        {summary.stakingValidators.validators.length === 0 && summary.validators.length === 0 ? (
+        {staking.validators.length === 0 && summary.validators.length === 0 ? (
           <p className="text-sm text-muted-foreground">{translate("tenant.noValidators")}</p>
         ) : (
           <NodeValidatorTable
-            validators={
-              summary.stakingValidators.validators.length > 0
-                ? summary.stakingValidators.validators
-                : summary.validators
-            }
+            validators={staking.validators.length > 0 ? staking.validators : summary.validators}
           />
         )}
       </section>

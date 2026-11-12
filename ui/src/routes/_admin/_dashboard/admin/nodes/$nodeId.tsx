@@ -96,7 +96,7 @@ function AdminNodeDetail() {
     );
   }
 
-  const { summary, sourceNode, parent } = nodeQuery.data;
+  const { summary, staking, parent } = nodeQuery.data;
   const { node } = summary;
 
   return (
@@ -171,7 +171,7 @@ function AdminNodeDetail() {
         }}
       />
 
-      <CommunityStats summary={summary} sourceName={sourceNode?.name} />
+      <CommunityStats summary={summary} staking={staking} />
 
       <div className="flex flex-col gap-6">
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -192,9 +192,7 @@ function AdminNodeDetail() {
           </Tabs>
         </div>
 
-        {activeTab === "overview" && (
-          <CommunityOverview summary={summary} sourceName={sourceNode?.name} />
-        )}
+        {activeTab === "overview" && <CommunityOverview summary={summary} staking={staking} />}
         {activeTab === "validators" && (
           <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
         )}

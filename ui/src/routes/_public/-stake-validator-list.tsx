@@ -15,9 +15,7 @@ import {
 } from "@/lib/queries/stake-pool";
 
 type ApiClient = ReturnType<typeof useApiClient>;
-export type StakeValidator = Awaited<
-  ReturnType<ApiClient["resolveStakingValidators"]>
->["validators"][number];
+export type StakeValidator = Awaited<ReturnType<ApiClient["listValidatorsByNode"]>>[number];
 
 export function StakeValidatorList({
   onSelect,

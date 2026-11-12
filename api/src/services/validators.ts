@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, not, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, not, type SQL } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -58,11 +58,8 @@ export interface ValidatorsService {
   update(id: string, input: ValidatorUpdateInput): ValidatorEffect<ValidatorRecord>;
   delete(id: string): ValidatorEffect<boolean>;
   setDefault(nodeId: string, validatorId: string): ValidatorEffect<ValidatorRecord>;
-  resolveForStaking(
-    nodeId: string,
-  ): ValidatorEffect<{ validators: ValidatorRecord[]; sourceNodeId: string }>;
   resolveByAccountId(accountId: string): ValidatorEffect<ValidatorRecord | null>;
-  stakeableNodeIds(nodeIds: string[]): ValidatorEffect<Set<string>>;
+  nodeIdsWithValidators(nodeIds: string[]): ValidatorEffect<Set<string>>;
 }
 
 export class ValidatorsTag extends Context.Service<ValidatorsTag, ValidatorsService>()(
@@ -84,84 +81,6 @@ function toRecord(row: ValidatorRow): ValidatorRecord {
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
   };
-}
-
-function descendantIdsQuery(nodeId: string) {
-  return sql`
-    WITH RECURSIVE subtree AS (
-      SELECT id, ARRAY[id] AS path
-      FROM nodes
-      WHERE id = ${nodeId}
-      UNION ALL
-      SELECT n.id, subtree.path || n.id
-      FROM nodes n
-      INNER JOIN subtree ON n.parent_id = subtree.id
-      WHERE NOT (n.id = ANY(subtree.path))
-    )
-    SELECT id FROM subtree
-  `;
-}
-
-function ancestorIdsQuery(nodeId: string) {
-  return sql`
-    WITH RECURSIVE ancestors AS (
-      SELECT id, parent_id, 0 AS depth, ARRAY[id] AS path
-      FROM nodes
-      WHERE id = ${nodeId}
-      UNION ALL
-      SELECT n.id, n.parent_id, ancestors.depth + 1, ancestors.path || n.id
-      FROM nodes n
-      INNER JOIN ancestors ON n.id = ancestors.parent_id
-      WHERE NOT (n.id = ANY(ancestors.path))
-    )
-    SELECT id FROM ancestors ORDER BY depth
-  `;
-}
-
-function stakeableIdsQuery(nodeIds: string[]) {
-  const ids = sql.join(
-    nodeIds.map((id) => sql`${id}::uuid`),
-    sql`, `,
-  );
-  return sql`
-    WITH RECURSIVE descendants AS (
-      SELECT id AS root, id, ARRAY[id] AS path
-      FROM nodes
-      WHERE id IN (${ids})
-      UNION ALL
-      SELECT descendants.root, n.id, descendants.path || n.id
-      FROM nodes n
-      INNER JOIN descendants ON n.parent_id = descendants.id
-      WHERE NOT (n.id = ANY(descendants.path))
-    ),
-    ancestors AS (
-      SELECT id AS root, id, parent_id, ARRAY[id] AS path
-      FROM nodes
-      WHERE id IN (${ids})
-      UNION ALL
-      SELECT ancestors.root, n.id, n.parent_id, ancestors.path || n.id
-      FROM nodes n
-      INNER JOIN ancestors ON n.id = ancestors.parent_id
-      WHERE NOT (n.id = ANY(ancestors.path))
-    ),
-    related AS (
-      SELECT root, id FROM descendants
-      UNION
-      SELECT root, id FROM ancestors
-    )
-    SELECT DISTINCT related.root AS id
-    FROM related
-    INNER JOIN validators v ON v.node_id = related.id
-  `;
-}
-
-async function readIds(
-  db: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> },
-  query: ReturnType<typeof sql>,
-): Promise<string[]> {
-  const result = await db.execute(query);
-  const rows = ((result as { rows?: unknown }).rows ?? result) as Array<{ id: string }>;
-  return Array.isArray(rows) ? rows.map((r) => r.id) : [];
 }
 
 export const ValidatorsLive = Layer.effect(
@@ -349,64 +268,6 @@ export const ValidatorsLive = Layer.effect(
           }),
         ),
 
-      resolveForStaking: (nodeId) =>
-        Effect.gen(function* () {
-          const node = yield* query(() =>
-            db
-              .select({ id: nodesTable.id })
-              .from(nodesTable)
-              .where(eq(nodesTable.id, nodeId))
-              .limit(1),
-          );
-          if (node.length === 0) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", {
-                message: "Node not found",
-                data: { resource: "node", resourceId: nodeId },
-              }),
-            );
-          }
-
-          const descendantIds = yield* query(() => readIds(db, descendantIdsQuery(nodeId)));
-          const ownValidators = yield* query(() =>
-            db.select().from(validatorsTable).where(inArray(validatorsTable.nodeId, descendantIds)),
-          );
-
-          if (ownValidators.length > 0) {
-            const ordered = [...ownValidators].sort((a, b) => {
-              if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
-              const depthA = descendantIds.indexOf(a.nodeId);
-              const depthB = descendantIds.indexOf(b.nodeId);
-              return depthA - depthB;
-            });
-            const sourceNodeId =
-              ordered.find((v) => v.nodeId === nodeId)?.nodeId ?? ordered[0]?.nodeId ?? nodeId;
-            return { validators: ordered.map(toRecord), sourceNodeId };
-          }
-
-          const ancestorIds = yield* query(() => readIds(db, ancestorIdsQuery(nodeId)));
-          const ancestorDepthById = new Map<string, number>();
-          for (const [idx, id] of ancestorIds.entries()) {
-            ancestorDepthById.set(id, idx);
-          }
-
-          const ancestorValidators = yield* query(() =>
-            db.select().from(validatorsTable).where(inArray(validatorsTable.nodeId, ancestorIds)),
-          );
-
-          if (ancestorValidators.length === 0) {
-            return { validators: [], sourceNodeId: nodeId };
-          }
-
-          const orderedAncestors = [...ancestorValidators].sort((a, b) => {
-            const depthA = ancestorDepthById.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER;
-            const depthB = ancestorDepthById.get(b.nodeId) ?? Number.MAX_SAFE_INTEGER;
-            return depthA - depthB;
-          });
-          const sourceNodeId = orderedAncestors[0]?.nodeId ?? nodeId;
-          return { validators: orderedAncestors.map(toRecord), sourceNodeId };
-        }),
-
       resolveByAccountId: (accountId) =>
         Effect.gen(function* () {
           const [row] = yield* query(() =>
@@ -419,12 +280,15 @@ export const ValidatorsLive = Layer.effect(
           return row ? toRecord(row) : null;
         }),
 
-      stakeableNodeIds: (nodeIds) =>
+      nodeIdsWithValidators: (nodeIds) =>
         nodeIds.length === 0
           ? Effect.succeed(new Set<string>())
-          : query(() => readIds(db, stakeableIdsQuery(nodeIds))).pipe(
-              Effect.map((ids) => new Set(ids)),
-            ),
+          : query(() =>
+              db
+                .selectDistinct({ nodeId: validatorsTable.nodeId })
+                .from(validatorsTable)
+                .where(inArray(validatorsTable.nodeId, nodeIds)),
+            ).pipe(Effect.map((rows) => new Set(rows.map((row) => row.nodeId)))),
     };
 
     return service;

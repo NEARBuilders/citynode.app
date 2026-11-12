@@ -242,21 +242,20 @@ function renderOverview({
     summary: {
       validators: [],
       children: [],
-      stakingValidators: {
-        sourceNodeId: "node-1",
-        validators: [
-          {
-            id: "validator-1",
-            accountId: POOL,
-            network,
-            protocol: "near",
-            isDefault: true,
-            role: "member",
-          },
-        ],
-      },
     },
-    stakingSourceNode: null,
+    staking: {
+      via: null,
+      validators: [
+        {
+          id: "validator-1",
+          accountId: POOL,
+          network,
+          protocol: "near",
+          isDefault: true,
+          role: "member",
+        },
+      ],
+    },
     tenant: {
       orgId: "org-1",
       accountId: "example.citynode.near",
