@@ -40,7 +40,6 @@ import {
 } from "./-admin-progress";
 import {
   awaitingReviewQueryOptions,
-  pendingProposalCountQueryOptions,
   proposalTitle,
   proposalTypeLabel,
   stalledSetupsQueryOptions,
@@ -49,7 +48,6 @@ import {
 export function usePlatformStatus() {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
-  const pendingQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
   const awaitingQuery = useQuery(awaitingReviewQueryOptions(apiClient, APPLICATION_ITEMS_LIMIT));
   const relayerQuery = useRelayerInfoQuery();
   const setupsQuery = useQuery(stalledSetupsQueryOptions(apiClient));
@@ -109,13 +107,7 @@ export function usePlatformStatus() {
   return {
     items,
     progress,
-    pendingQuery,
-    pendingTotal: pendingQuery.data?.meta.total,
     reviewTotal,
-    relayerQuery,
-    relayer,
-    relayerNeedsFunding,
-    relayerFailed,
     loading: progress.isLoading || sources.some((source) => source.isLoading),
     failed: progress.isError || sources.some((source) => source.isError),
     retry: () => {
