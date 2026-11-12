@@ -511,6 +511,12 @@ export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
     "Remplis depuis City Node. Ils sont enregistrés avec votre rapport à l'envoi.",
     "数据来自 City Node，提交时会随报告一起保存。",
   ],
+  "reports.allCommunities": [
+    "Every community's reports",
+    "Informes de todas las comunidades",
+    "Rapports de toutes les communautés",
+    "所有社区的报告",
+  ],
   "reports.syncingCheckIns": [
     "Bringing check-ins up to date…",
     "Actualizando los registros…",

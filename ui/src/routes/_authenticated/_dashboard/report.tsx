@@ -1,6 +1,6 @@
-import { BookOpenIcon, ClipboardTextIcon, UsersThreeIcon } from "@phosphor-icons/react";
+import { BookOpenIcon, ClipboardTextIcon, ShieldIcon, UsersThreeIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { type ApiClient, useApiClient } from "@/app";
 import { ReportChecklist, useReportChecklist } from "@/components/discovery/report-checklist";
 import { EmptyState } from "@/components/empty-state";
@@ -33,11 +33,6 @@ type ReportCommunity = Awaited<
 export const Route = createFileRoute("/_authenticated/_dashboard/report")({
   validateSearch: (search: Record<string, unknown>): ReportSearch =>
     typeof search.community === "string" && search.community ? { community: search.community } : {},
-  beforeLoad: ({ context }) => {
-    if (context.auth.user?.role === "admin") {
-      throw redirect({ to: "/admin/reports" });
-    }
-  },
   head: ({ match }) => ({
     meta: [
       {
@@ -63,6 +58,7 @@ function ReportPage() {
   const listed = useQuery(reportCommunitiesQueryOptions(api));
   const chosen = listed.data ? chooseReportCommunity(listed.data.communities, requested) : null;
   const switching = !!chosen && chosen.organizationId !== auth.activeOrganizationId;
+  const isPlatformAdmin = auth.user?.role === "admin";
   useOpenSoleCommunity(switching ? chosen.organizationId : null);
 
   const header = (
@@ -77,16 +73,30 @@ function ReportPage() {
       }
       headerTestId="report.heading"
       actions={
-        <Button
-          size="sm"
-          variant="outline"
-          nativeButton={false}
-          render={<Link to="/docs/$guide" params={{ guide: MONTHLY_REPORT_GUIDE }} />}
-          data-testid="report.guide"
-        >
-          <BookOpenIcon />
-          {translate("reports.guide")}
-        </Button>
+        <>
+          {isPlatformAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link to="/admin/reports" />}
+              data-testid="report.admin-reports"
+            >
+              <ShieldIcon />
+              {translate("reports.allCommunities")}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={<Link to="/docs/$guide" params={{ guide: MONTHLY_REPORT_GUIDE }} />}
+            data-testid="report.guide"
+          >
+            <BookOpenIcon />
+            {translate("reports.guide")}
+          </Button>
+        </>
       }
     />
   );
@@ -126,6 +136,9 @@ function ReportPage() {
   }
 
   const { communities, memberships } = listed.data;
+  if (communities.length === 0 && isPlatformAdmin) {
+    return <Navigate to="/admin/reports" replace />;
+  }
   if (communities.length === 0) {
     const member = memberships > 0;
     return (
