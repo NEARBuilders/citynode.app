@@ -16,7 +16,7 @@ import {
 import { useNow } from "@/hooks/use-client";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { eventReportStatus } from "@/lib/event-reports";
-import { formatReportMonth } from "@/lib/monthly-reports";
+import { formatReportMonth, reportMonth } from "@/lib/monthly-reports";
 import { adminEventsQueryOptions } from "@/lib/queries/engagement";
 import { selectAdminEvents } from "@/routes/_admin/_dashboard/admin/-admin-events";
 import { summarizeReports } from "@/routes/_admin/_dashboard/admin/-admin-reports";
@@ -115,7 +115,12 @@ function ReportsOverview() {
                       className="block hover:underline"
                       data-testid={`home-admin.missing-${query.month}`}
                     >
-                      {translate("admin.home.monthlyMissing", { count: summary.missing })}
+                      {translate(
+                        query.month < reportMonth(now)
+                          ? "admin.home.monthlyMissing"
+                          : "admin.home.monthlyNotIn",
+                        { count: summary.missing },
+                      )}
                     </Link>
                     {eventsQuery.isSuccess && missingEvents > 0 && (
                       <Link
@@ -166,11 +171,11 @@ function ReportsOverview() {
                 data-testid={`home-admin.review-monthly-${item.row.nodeId}-${item.month}`}
               >
                 <ItemContent className="min-w-0">
-                  <ItemTitle className="max-w-full">
+                  <ItemTitle className="max-w-full line-clamp-2 sm:line-clamp-1">
                     <Link
                       to="/nodes/$nodeId/reports/$month"
                       params={{ nodeId: item.row.nodeId, month: item.month }}
-                      className="min-w-0 truncate hover:underline"
+                      className="min-w-0 hover:underline sm:truncate"
                     >
                       {translate("admin.home.monthlyReportNamed", {
                         name: item.row.name,
@@ -210,11 +215,11 @@ function ReportsOverview() {
                 data-testid={`home-admin.review-event-${item.event.id}`}
               >
                 <ItemContent className="min-w-0">
-                  <ItemTitle className="max-w-full">
+                  <ItemTitle className="max-w-full line-clamp-2 sm:line-clamp-1">
                     <Link
                       to="/nodes/$nodeId/events/$activityId/report"
                       params={{ nodeId: item.event.nodeId, activityId: item.event.id }}
-                      className="min-w-0 truncate hover:underline"
+                      className="min-w-0 hover:underline sm:truncate"
                     >
                       {translate("admin.home.eventReportNamed", { title: item.event.title })}
                     </Link>

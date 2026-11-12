@@ -191,12 +191,12 @@ function ReportChaseRow({ chase }: { chase: ReportChase }) {
         <ClipboardTextIcon className="text-brand-strong" />
       </ItemMedia>
       <ItemContent className="min-w-0">
-        <ItemTitle className="max-w-full">
+        <ItemTitle className="max-w-full line-clamp-2 sm:line-clamp-1">
           {month ? (
             <Link
               to="/admin/reports"
               search={{ month, show: "missing" }}
-              className="min-w-0 truncate hover:underline"
+              className="min-w-0 hover:underline sm:truncate"
             >
               {translate("admin.action.chaseNamed", { name: chase.name })}
             </Link>
@@ -204,7 +204,7 @@ function ReportChaseRow({ chase }: { chase: ReportChase }) {
             <Link
               to="/admin/events"
               search={{ community: chase.nodeId, report: "missing" }}
-              className="min-w-0 truncate hover:underline"
+              className="min-w-0 hover:underline sm:truncate"
             >
               {translate("admin.action.chaseNamed", { name: chase.name })}
             </Link>

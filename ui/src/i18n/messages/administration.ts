@@ -2247,6 +2247,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "{submitted} communautés sur {expected} ont envoyé leur rapport · {toReview} à examiner · {missing} manquants",
     "{expected} 个社区中 {submitted} 个已提交 · {toReview} 个待审阅 · {missing} 个未提交",
   ],
+  "admin.reports.summaryOpen": [
+    "{submitted} of {expected} communities reported · {toReview} to review · {missing} not in yet",
+    "{submitted} de {expected} comunidades enviaron su informe · {toReview} por revisar · {missing} aún no enviados",
+    "{submitted} communautés sur {expected} ont envoyé leur rapport · {toReview} à examiner · {missing} pas encore reçus",
+    "{expected} 个社区中 {submitted} 个已提交 · {toReview} 个待审阅 · {missing} 个尚未提交",
+  ],
   "admin.reports.noneMatch": [
     "No community matches this filter",
     "Ninguna comunidad coincide con este filtro",
@@ -2280,9 +2286,9 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "<date></date> 由 {name} 提交",
   ],
   "admin.reports.numbers": [
-    "{eventsHeld} events · {checkIns} check-ins · {joins} joins · {newMembers} new members",
-    "{eventsHeld} eventos · {checkIns} registros · {joins} incorporaciones · {newMembers} miembros nuevos",
-    "{eventsHeld} événements · {checkIns} présences · {joins} adhésions · {newMembers} nouveaux membres",
+    "{eventsHeld, plural, one {# event} other {# events}} · {checkIns, plural, one {# check-in} other {# check-ins}} · {joins, plural, one {# join} other {# joins}} · {newMembers, plural, one {# new member} other {# new members}}",
+    "{eventsHeld, plural, one {# evento} other {# eventos}} · {checkIns, plural, one {# registro} other {# registros}} · {joins, plural, one {# incorporación} other {# incorporaciones}} · {newMembers, plural, one {# miembro nuevo} other {# miembros nuevos}}",
+    "{eventsHeld, plural, one {# événement} other {# événements}} · {checkIns, plural, one {# présence} other {# présences}} · {joins, plural, one {# adhésion} other {# adhésions}} · {newMembers, plural, one {# nouveau membre} other {# nouveaux membres}}",
     "{eventsHeld} 场活动 · {checkIns} 次签到 · {joins} 次加入 · {newMembers} 位新成员",
   ],
   "admin.reports.eventsReported": [
@@ -2360,6 +2366,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "{count, plural, one {Falta # comunidad} other {Faltan # comunidades}}",
     "{count, plural, one {# communauté manquante} other {# communautés manquantes}}",
     "{count} 个社区未提交",
+  ],
+  "admin.home.monthlyNotIn": [
+    "{count, plural, one {# community not in yet} other {# communities not in yet}}",
+    "{count, plural, one {# comunidad aún no lo envía} other {# comunidades aún no lo envían}}",
+    "{count, plural, one {# communauté ne l’a pas encore envoyé} other {# communautés ne l’ont pas encore envoyé}}",
+    "{count} 个社区尚未提交",
   ],
   "admin.home.eventsMissing": [
     "{count, plural, one {# event report missing} other {# event reports missing}}",

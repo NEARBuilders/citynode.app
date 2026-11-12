@@ -197,6 +197,12 @@ describe("a platform admin's Home", () => {
     expect(screen.getByTestId("home-admin.missing-2026-12").getAttribute("href")).toBe(
       "/admin/reports?month=2026-12&show=missing",
     );
+    expect(screen.getByTestId("home-admin.missing-2026-12").textContent).toBe(
+      "1 community not in yet",
+    );
+    expect(screen.getByTestId("home-admin.missing-2026-11").textContent).toBe(
+      "1 community missing",
+    );
     expect(screen.getByTestId("home-admin.events-missing-2026-12").textContent).toBe(
       "1 event report missing",
     );

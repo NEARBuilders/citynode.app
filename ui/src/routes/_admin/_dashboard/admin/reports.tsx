@@ -163,7 +163,10 @@ function AdminReports() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground" data-testid="admin-reports-summary">
-              {translate("admin.reports.summary", summary)}
+              {translate(
+                month < current ? "admin.reports.summary" : "admin.reports.summaryOpen",
+                summary,
+              )}
             </p>
             {visible.length === 0 ? (
               <EmptyState
@@ -180,7 +183,9 @@ function AdminReports() {
                     <TableHead className="hidden lg:table-cell">
                       {translate("admin.reports.numbersHeading")}
                     </TableHead>
-                    <TableHead>{translate("admin.reports.events")}</TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      {translate("admin.reports.events")}
+                    </TableHead>
                     <TableHead className="text-right">
                       <span className="sr-only">{translate("admin.reports.actions")}</span>
                     </TableHead>
@@ -205,7 +210,7 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
   const { report, events } = row;
   return (
     <TableRow data-testid={`admin-report-${row.nodeId}`}>
-      <TableCell>
+      <TableCell className="whitespace-normal">
         <Link
           to="/admin/nodes/$nodeId"
           params={{ nodeId: row.nodeId }}
@@ -215,7 +220,7 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
           {row.name}
         </Link>
       </TableCell>
-      <TableCell>
+      <TableCell className="whitespace-normal">
         <div className="flex flex-col items-start gap-1">
           <MonthlyStatusBadge row={row} due={due} />
           {report && (
@@ -236,7 +241,7 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
       <TableCell className="hidden text-muted-foreground lg:table-cell">
         {report ? translate("admin.reports.numbers", report.stats) : "—"}
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         {events.ended === 0 ? (
           <span className="text-muted-foreground">—</span>
         ) : (
@@ -270,7 +275,7 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
         )}
       </TableCell>
       <TableCell>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
           {report ? (
             <>
               <Button

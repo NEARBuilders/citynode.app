@@ -168,6 +168,9 @@ describe("Admin → Reports", () => {
       "Not in yet",
     );
     expect(harness.months).toEqual(["2026-12"]);
+    expect(screen.getByTestId("admin-reports-summary").textContent).toBe(
+      "0 of 1 communities reported · 0 to review · 1 not in yet",
+    );
   });
 
   it("filters to missing reports, or to reports waiting for review", async () => {
