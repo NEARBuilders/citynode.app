@@ -5,11 +5,11 @@ import type { AuthRequestContext } from "@/lib/auth";
 export type OnboardingCodeState = "active" | "expired" | "revoked" | "used-up";
 
 export function onboardingCodeState(
-  code: { expiresAt: Date; revokedAt: Date | null; usedCount: number; maxUses: number },
+  code: { expiresAt: Date | null; revokedAt: Date | null; usedCount: number; maxUses: number },
   now: number = Date.now(),
 ): OnboardingCodeState {
   if (code.revokedAt) return "revoked";
-  if (new Date(code.expiresAt).getTime() < now) return "expired";
+  if (code.expiresAt == null || new Date(code.expiresAt).getTime() < now) return "expired";
   if (code.usedCount >= code.maxUses) return "used-up";
   return "active";
 }
@@ -24,12 +24,12 @@ export function isOnboardingOrganizer(context: AuthRequestContext | null | undef
 }
 
 export function formatRemaining(
-  expiresAt: Date,
+  expiresAt: Date | null,
   now: number = Date.now(),
   t: AppTranslator = translateEnglishAppMessage,
   locale = "en",
 ): string {
-  const ms = new Date(expiresAt).getTime() - now;
+  const ms = expiresAt == null ? 0 : new Date(expiresAt).getTime() - now;
   if (ms <= 0) return t("station.expired");
   const days = Math.floor(ms / 86_400_000);
   const hours = Math.floor((ms % 86_400_000) / 3_600_000);
