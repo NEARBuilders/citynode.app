@@ -80,7 +80,7 @@ export const EventOnboardingCodeSchema = z.object({
   role: z.string(),
   maxUses: z.number(),
   usedCount: z.number(),
-  expiresAt: z.date(),
+  expiresAt: z.date().nullable(),
   revokedAt: z.date().nullable(),
   createdAt: z.date(),
 });

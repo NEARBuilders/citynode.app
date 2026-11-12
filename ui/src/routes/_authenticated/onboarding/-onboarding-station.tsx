@@ -154,9 +154,11 @@ export function OnboardingStation({
               ? translate("station.spotsCount", { count: maxUses - usedCount })
               : translate("station.full")}{" "}
             ·{" "}
-            {translate("station.timeRemaining", {
-              time: formatRemaining(station.data.expiresAt, Date.now(), translate, locale),
-            })}
+            {station.data.expiresAt
+              ? translate("station.timeRemaining", {
+                  time: formatRemaining(station.data.expiresAt, Date.now(), translate, locale),
+                })
+              : translate("station.noExpiry")}
           </p>
         </div>
 

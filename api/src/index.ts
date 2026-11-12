@@ -930,13 +930,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ORPCError<string, unknown>
         >({
           try: () =>
-            auth.createOnboardingCode({
-              organizationId,
-              eventId: event.id,
-              eventName: event.title,
-              ...(input.maxUses ? { maxUses: input.maxUses } : {}),
-              expiresAt,
-            }),
+            auth
+              .createOnboardingCode({
+                organizationId,
+                eventId: event.id,
+                eventName: event.title,
+                ...(input.maxUses ? { maxUses: input.maxUses } : {}),
+                expiresAt,
+              })
+              .then((code) => ({ ...code, eventName: code.eventName ?? event.title })),
           catch: (error) =>
             error instanceof ORPCError
               ? error

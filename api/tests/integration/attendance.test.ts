@@ -14,9 +14,9 @@ vi.mock("@/services/dao", () => ({
 type StubCode = {
   id: string;
   eventId: string | null;
-  eventName: string;
+  eventName: string | null;
   createdAt: Date;
-  expiresAt: Date;
+  expiresAt: Date | null;
   joined: Array<{ userId: string; createdAt: Date }>;
 };
 
@@ -171,7 +171,7 @@ function member(userId: string, ...organizations: Array<{ org: string; name: str
 function addCode(
   org: string,
   eventId: string | null,
-  eventName: string,
+  eventName: string | null,
   joined: Array<[string, Date]>,
   createdAt = new Date(),
 ) {
@@ -385,6 +385,21 @@ describe("confirming attendance from an organizer session", () => {
     expect(record.unclassified.map((row) => row.eventName)).toEqual([
       "Hackathon sign-up",
       "Legacy sign-up",
+    ]);
+  });
+
+  it("names a standing code without an event or expiry after its community", async () => {
+    const city = await community("Standing city");
+    const standing = addCode(city.org, null, null, [["walk-in-member", past(3)]]);
+    standing.expiresAt = null;
+    await (await city.organizer()).reconcileAttendance({ organizationId: city.org });
+
+    const record = await (await member("walk-in-member", city)).getMyAttendance({
+      organizationId: city.org,
+    });
+    expect(record.events).toEqual([]);
+    expect(record.unclassified).toEqual([
+      expect.objectContaining({ codeId: standing.id, eventName: "Standing city" }),
     ]);
   });
 
