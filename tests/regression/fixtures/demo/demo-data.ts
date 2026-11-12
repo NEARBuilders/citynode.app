@@ -51,7 +51,8 @@ export type DemoPersonKey =
   | "rhea"
   | "nico"
   | "joy"
-  | "daniel";
+  | "daniel"
+  | "omar";
 
 export type DemoCommunityKey =
   | "lagos"
@@ -220,6 +221,7 @@ export const DEMO_PEOPLE: Record<DemoPersonKey, DemoPerson> = {
   nico: { name: "Nico Bautista", activeCommunity: "manila", createdDaysAgo: 14 },
   joy: { name: "Joy Ramos", activeCommunity: "manila", createdDaysAgo: 4 },
   daniel: { name: "Daniel Mensah", createdDaysAgo: 3 },
+  omar: { name: "Omar Haddad", platformRole: "admin", createdDaysAgo: 200 },
 };
 
 const lagosReport = {
@@ -864,6 +866,7 @@ export const DEMO_PERSONAS = {
   member: "chidi",
   twoCommunities: "sofia",
   noCommunity: "daniel",
+  platformAdminOnly: "omar",
   ownerSecondMature: "ines",
   ownerNew: "wanjiru",
   ownerNewWithEvents: "martin",

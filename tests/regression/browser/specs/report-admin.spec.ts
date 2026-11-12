@@ -2,7 +2,6 @@ import { expect, type Page, test } from "@playwright/test";
 import { seedNode } from "../../lib/seed-tenant.mjs";
 import { type DemoSeed, seedDemoCommunities, signInAsDemo } from "../helpers/demo";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
-import { injectAdminCookies } from "../helpers/seeded";
 
 let seed: DemoSeed;
 
@@ -204,7 +203,7 @@ test.describe("platform admins review reports from Home", () => {
     await page.waitForURL(/\/admin\/reports/);
 
     await page.context().clearCookies();
-    await injectAdminCookies(page);
+    await signInAsDemo(page, seed, "platformAdminOnly");
     await open(page, "/report");
     await page.waitForURL(/\/admin\/reports/);
     await expect(page.getByTestId("admin-reports.heading")).toBeVisible({ timeout: 15000 });

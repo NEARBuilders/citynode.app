@@ -149,6 +149,7 @@ run deletes and rewrites only demo rows, so it is safe to re-run.
 | Persona | Person | Shows |
 |---|---|---|
 | `platformAdmin` | Nadia Rahman | platform admin, also an admin of Nairobi |
+| `platformAdminOnly` | Omar Haddad | platform admin who runs no community |
 | `ownerMature` | Adaeze Okonkwo | owner of Lagos: events to report, joins, returning members |
 | `organizer` | Tunde Bakare | Lagos events team, not owner |
 | `finance` | Ifeoma Nwosu | Lagos finance team |
