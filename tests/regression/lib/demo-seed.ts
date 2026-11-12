@@ -66,6 +66,7 @@ export interface DemoSeedEvent {
   endsAt: string;
   reported: boolean;
   reviewed: boolean;
+  checkIns: number;
 }
 
 export interface DemoSeedMonthlyReport {
@@ -932,6 +933,7 @@ async function summarize(plan: DemoPlan, secret: string, secure: boolean): Promi
           endsAt: event.endsAt.toISOString(),
           reported: !!event.report,
           reviewed: !!event.report?.reviewedAt,
+          checkIns: event.code?.redemptions.length ?? 0,
         })),
         monthlyReport: community.monthlyReport
           ? {

@@ -133,6 +133,11 @@ test.describe("platform admins review reports from Home", () => {
     await open(page, `/nodes/${lagos.nodeId}/events/${event.id}/report`);
     await expect(page.getByTestId("report.reviewed-on")).toBeVisible({ timeout: 15000 });
 
+    await open(page, "/dashboard");
+    await expect(
+      page.getByTestId("home-owner.events-recent").getByTestId(`report-status-${event.id}`),
+    ).toHaveText("Reviewed", { timeout: 15000 });
+
     expectNoHydrationFailure(pageErrors);
   });
 

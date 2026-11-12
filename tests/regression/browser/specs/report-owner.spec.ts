@@ -116,22 +116,19 @@ test.describe("owners and organizers report from one link", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
-  test("an owner without a report this month is reminded on Home and submits one", async ({
+  test("an owner without a report this month starts it from Home and submits it", async ({
     page,
   }) => {
     const pageErrors = collectErrors(page);
     const month = reportMonth();
     const manila = seed.communities.manila;
-    await page.clock.setFixedTime(new Date(`${month}-26T12:00:00.000Z`));
     await signInAsDemo(page, seed, "ownerNoReports");
 
     await open(page, "/dashboard");
-    const step = page.getByTestId("home-step-monthly-report");
-    await expect(step).toBeVisible({ timeout: 15000 });
-    await step.getByRole("link").click();
-    await page.waitForURL(/\/report$/);
-
-    await page.getByTestId(`report.list-month-${month}-open`).click();
+    const monthRow = page.getByTestId(`home-owner.reports-list-month-${month}`);
+    await expect(monthRow).toBeVisible({ timeout: 15000 });
+    await expect(monthRow).not.toContainText("Report in");
+    await page.getByTestId(`home-owner.reports-list-month-${month}-open`).click();
     await page.waitForURL(new RegExp(`/nodes/${manila.nodeId}/reports/${month}$`));
     await expect(page.getByTestId("monthly-report.stats")).toBeVisible({ timeout: 15000 });
     await page.getByTestId("monthly-report.submit").click();
@@ -147,8 +144,10 @@ test.describe("owners and organizers report from one link", () => {
     });
 
     await open(page, "/dashboard");
-    await expect(page.getByTestId("home-next-steps")).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId("home-step-monthly-report")).toHaveCount(0);
+    await expect(page.getByTestId(`home-owner.reports-list-month-${month}`)).toContainText(
+      "Report in",
+      { timeout: 15000 },
+    );
 
     expectNoHydrationFailure(pageErrors);
   });
