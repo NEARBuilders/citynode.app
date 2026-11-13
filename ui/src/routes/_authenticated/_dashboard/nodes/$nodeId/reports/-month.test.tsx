@@ -303,7 +303,9 @@ describe("monthly report form", () => {
 
     fireEvent.click(screen.getByTestId("monthly-report.review"));
     await waitFor(() =>
-      expect(harness.reviewed).toEqual([{ nodeId: NODE, month: MONTH, reviewed: true }]),
+      expect(harness.reviewed).toEqual([
+        { nodeId: NODE, month: MONTH, reviewed: true, updatedAt: "2026-12-02T00:00:00.000Z" },
+      ]),
     );
   });
 
@@ -321,7 +323,9 @@ describe("monthly report form", () => {
     expect(button.textContent).toBe("Mark not reviewed");
     fireEvent.click(button);
     await waitFor(() =>
-      expect(harness.reviewed).toEqual([{ nodeId: NODE, month: MONTH, reviewed: false }]),
+      expect(harness.reviewed).toEqual([
+        { nodeId: NODE, month: MONTH, reviewed: false, updatedAt: "2026-12-02T00:00:00.000Z" },
+      ]),
     );
   });
 

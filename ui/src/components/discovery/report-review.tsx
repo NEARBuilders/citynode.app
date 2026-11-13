@@ -15,8 +15,8 @@ import { monthlyReportQueryKeys } from "@/lib/queries/monthly-reports";
 import { ReportStateBadge } from "./report-status-badge";
 
 export type ReviewTarget =
-  | { kind: "monthly"; nodeId: string; month: string }
-  | { kind: "event"; activityId: string };
+  | { kind: "monthly"; nodeId: string; month: string; updatedAt: string }
+  | { kind: "event"; activityId: string; updatedAt: string };
 
 export function ReviewButton({
   target,
@@ -30,6 +30,12 @@ export function ReviewButton({
   const translate = useAppTranslation();
   const api = useApiClient();
   const queryClient = useQueryClient();
+  const refresh = () =>
+    Promise.all(
+      [monthlyReportQueryKeys.all, eventReportQueryKeys.all, engagementQueryKeys.events()].map(
+        (queryKey) => queryClient.invalidateQueries({ queryKey }),
+      ),
+    );
   const review = useMutation({
     mutationFn: () =>
       target.kind === "monthly"
@@ -37,17 +43,21 @@ export function ReviewButton({
             nodeId: target.nodeId,
             month: target.month,
             reviewed: !reviewed,
+            updatedAt: target.updatedAt,
           })
-        : api.reviewEventReport({ activityId: target.activityId, reviewed: !reviewed }),
+        : api.reviewEventReport({
+            activityId: target.activityId,
+            reviewed: !reviewed,
+            updatedAt: target.updatedAt,
+          }),
     onSuccess: async () => {
       toast.success(translate(reviewed ? "reports.review.unmarked" : "reports.review.marked"));
-      await Promise.all(
-        [monthlyReportQueryKeys.all, eventReportQueryKeys.all, engagementQueryKeys.events()].map(
-          (queryKey) => queryClient.invalidateQueries({ queryKey }),
-        ),
-      );
+      await refresh();
     },
-    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
+    onError: async (error: Error) => {
+      toast.error(appErrorMessage(error, translate));
+      await refresh();
+    },
   });
   return (
     <Button

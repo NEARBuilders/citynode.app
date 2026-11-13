@@ -123,6 +123,7 @@ const event = (
   publicPage: true,
   organizationId: `org-${nodeName.toLowerCase()}`,
   reportSubmittedAt: report.submittedAt,
+  reportUpdatedAt: report.submittedAt,
   reportReviewedAt: report.reviewedAt,
   checkIns: null,
 });
@@ -220,8 +221,13 @@ describe("a platform admin's Home", () => {
     fireEvent.click(screen.getByTestId("home-admin.review-event-lagos-dec-mark"));
     await waitFor(() =>
       expect(harness.reviewed).toEqual([
-        { nodeId: "node-lagos", month: "2026-12", reviewed: true },
-        { activityId: "lagos-dec", reviewed: true },
+        {
+          nodeId: "node-lagos",
+          month: "2026-12",
+          reviewed: true,
+          updatedAt: "2026-12-20T00:00:00.000Z",
+        },
+        { activityId: "lagos-dec", reviewed: true, updatedAt: reported.reportUpdatedAt },
       ]),
     );
   });

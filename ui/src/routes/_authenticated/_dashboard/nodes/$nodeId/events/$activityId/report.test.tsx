@@ -218,7 +218,9 @@ describe("event report check-in prefill", () => {
 
     fireEvent.click(await screen.findByTestId("report.review"));
     await waitFor(() =>
-      expect(harness.reviewed).toEqual([{ activityId: ACTIVITY, reviewed: true }]),
+      expect(harness.reviewed).toEqual([
+        { activityId: ACTIVITY, reviewed: true, updatedAt: "2026-10-16T00:00:00.000Z" },
+      ]),
     );
     const back = screen.getByTestId("activity-form.back");
     expect(back.getAttribute("href")).toBe(`/admin/events?community=${NODE}`);

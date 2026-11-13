@@ -155,7 +155,12 @@ describe("Admin → Reports", () => {
     fireEvent.click(screen.getByTestId("admin-report-review-node-lagos"));
     await waitFor(() =>
       expect(harness.reviewed).toEqual([
-        { nodeId: "node-lagos", month: "2026-11", reviewed: true },
+        {
+          nodeId: "node-lagos",
+          month: "2026-11",
+          reviewed: true,
+          updatedAt: "2026-12-01T00:00:00.000Z",
+        },
       ]),
     );
   });

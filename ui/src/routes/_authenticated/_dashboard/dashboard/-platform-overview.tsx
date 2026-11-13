@@ -63,13 +63,17 @@ function ReportsOverview() {
   const events = (eventsQuery.data?.events ?? []).filter(inMonths);
   const review = [
     ...monthly.flatMap((query) =>
-      (query.data?.communities ?? [])
-        .filter((row) => row.status === "submitted")
-        .map((row) => ({ kind: "monthly" as const, month: query.month, row })),
+      (query.data?.communities ?? []).flatMap((row) =>
+        row.status === "submitted" && row.report
+          ? [{ kind: "monthly" as const, month: query.month, row, updatedAt: row.report.updatedAt }]
+          : [],
+      ),
     ),
-    ...events
-      .filter((event) => event.reportSubmittedAt && !event.reportReviewedAt)
-      .map((event) => ({ kind: "event" as const, event })),
+    ...events.flatMap((event) =>
+      event.reportUpdatedAt && !event.reportReviewedAt
+        ? [{ kind: "event" as const, event, updatedAt: event.reportUpdatedAt }]
+        : [],
+    ),
   ];
   const failed = [...monthly, eventsQuery].filter((query) => query.isError);
   const loading = [...monthly, eventsQuery].some((query) => query.isLoading);
@@ -162,7 +166,12 @@ function ReportsOverview() {
               <ReviewItem
                 key={`monthly-${item.row.nodeId}-${item.month}`}
                 testId={`home-admin.review-monthly-${item.row.nodeId}-${item.month}`}
-                target={{ kind: "monthly", nodeId: item.row.nodeId, month: item.month }}
+                target={{
+                  kind: "monthly",
+                  nodeId: item.row.nodeId,
+                  month: item.month,
+                  updatedAt: item.updatedAt,
+                }}
                 link={
                   <Link
                     to="/nodes/$nodeId/reports/$month"
@@ -179,7 +188,7 @@ function ReportsOverview() {
               <ReviewItem
                 key={`event-${item.event.id}`}
                 testId={`home-admin.review-event-${item.event.id}`}
-                target={{ kind: "event", activityId: item.event.id }}
+                target={{ kind: "event", activityId: item.event.id, updatedAt: item.updatedAt }}
                 link={
                   <Link
                     to="/nodes/$nodeId/events/$activityId/report"

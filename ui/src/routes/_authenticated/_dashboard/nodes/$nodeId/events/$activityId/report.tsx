@@ -194,7 +194,7 @@ function EventReportPage() {
     >
       {canReview && saved && (
         <ReviewRow
-          target={{ kind: "event", activityId }}
+          target={{ kind: "event", activityId, updatedAt: saved.updatedAt }}
           reviewedAt={saved.reviewedAt}
           testId="report.review"
         />

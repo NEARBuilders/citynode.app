@@ -144,7 +144,7 @@ function MonthlyReportPage() {
     >
       {canReview && saved && (
         <ReviewRow
-          target={{ kind: "monthly", nodeId, month }}
+          target={{ kind: "monthly", nodeId, month, updatedAt: saved.updatedAt }}
           reviewedAt={saved.reviewedAt}
           testId="monthly-report.review"
         />

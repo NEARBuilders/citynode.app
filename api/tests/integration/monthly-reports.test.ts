@@ -487,20 +487,31 @@ describe("monthly reports", () => {
         code: "FORBIDDEN",
       });
       await expect(
-        refused.reviewMonthlyReport({ nodeId: veteran.node.id, month: reported, reviewed: true }),
+        refused.reviewMonthlyReport({
+          nodeId: veteran.node.id,
+          month: reported,
+          reviewed: true,
+          updatedAt: NOW,
+        }),
       ).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
     await expect(
       (await getPluginClient()).getAdminMonthlyReports({ month: reported }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(
-      platformAdmin.reviewMonthlyReport({ nodeId: quiet.node.id, month: reported, reviewed: true }),
+      platformAdmin.reviewMonthlyReport({
+        nodeId: quiet.node.id,
+        month: reported,
+        reviewed: true,
+        updatedAt: NOW,
+      }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     const { reviewedAt } = await platformAdmin.reviewMonthlyReport({
       nodeId: veteran.node.id,
       month: reported,
       reviewed: true,
+      updatedAt: NOW,
     });
     expect(reviewedAt).toBe(NOW);
     expect((await rows(reported)).get(veteran.node.id)).toMatchObject({
@@ -519,6 +530,7 @@ describe("monthly reports", () => {
         nodeId: veteran.node.id,
         month: reported,
         reviewed: false,
+        updatedAt: NOW,
       }),
     ).toEqual({ reviewedAt: null });
     expect((await rows(reported)).get(veteran.node.id)?.status).toBe("submitted");
@@ -527,6 +539,7 @@ describe("monthly reports", () => {
       nodeId: veteran.node.id,
       month: reported,
       reviewed: true,
+      updatedAt: NOW,
     });
     const edited = await veteran.organizer.saveMonthlyReport({
       nodeId: veteran.node.id,
@@ -535,6 +548,39 @@ describe("monthly reports", () => {
     });
     expect(edited.reviewedAt).toBeNull();
     expect((await rows(reported)).get(veteran.node.id)?.status).toBe("submitted");
+  });
+
+  it("refuses to mark reviewed a report that was edited after the admin read it", async () => {
+    const city = await community("Tidewater");
+    const platformAdmin = await admin();
+    const reported = month(-1);
+    const target = { nodeId: city.node.id, month: reported, reviewed: true };
+    const read = await city.owner.saveMonthlyReport({
+      nodeId: city.node.id,
+      month: reported,
+      notes: "First version.",
+    });
+
+    vi.setSystemTime(new Date(Date.parse(NOW) + 5 * 60_000));
+    const edited = await city.owner.saveMonthlyReport({
+      nodeId: city.node.id,
+      month: reported,
+      notes: "Second version, which the admin has not read.",
+    });
+    expect(edited.updatedAt).not.toBe(read.updatedAt);
+
+    await expect(
+      platformAdmin.reviewMonthlyReport({ ...target, updatedAt: read.updatedAt }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(
+      (await city.owner.getMonthlyReport({ nodeId: city.node.id, month: reported })).report
+        ?.reviewedAt,
+    ).toBeNull();
+
+    expect(
+      (await platformAdmin.reviewMonthlyReport({ ...target, updatedAt: edited.updatedAt }))
+        .reviewedAt,
+    ).not.toBeNull();
   });
 
   it("keeps one report per community, whichever of its nodes it is opened from", async () => {
@@ -569,7 +615,12 @@ describe("monthly reports", () => {
     const mine = rows.filter((row) => row.organizationId === city.org);
     expect(mine).toEqual([expect.objectContaining({ status: "submitted", nodeId: first.id })]);
 
-    await platformAdmin.reviewMonthlyReport({ nodeId: first.id, month: reported, reviewed: true });
+    await platformAdmin.reviewMonthlyReport({
+      nodeId: first.id,
+      month: reported,
+      reviewed: true,
+      updatedAt: mine[0]?.report?.updatedAt ?? "",
+    });
     expect(
       (await city.owner.getMonthlyReport({ nodeId: city.node.id, month: reported })).report
         ?.reviewedAt,

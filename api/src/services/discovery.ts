@@ -1,5 +1,16 @@
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import {
+  type AnyColumn,
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  sql,
+} from "drizzle-orm";
 import { Clock, Context, DateTime, Effect, Layer, Schedule } from "effect";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
@@ -91,10 +102,17 @@ const NOT_REVIEWED = { reviewedBy: null, reviewedAt: null };
 const reviewPatch = (reviewed: boolean, userId: string, at: Date) =>
   reviewed ? { reviewedBy: userId, reviewedAt: at } : NOT_REVIEWED;
 
-const reviewResult = ([row]: { reviewedAt: Date | null }[]) =>
+const readVersion = (column: AnyColumn, updatedAt: string) =>
+  sql`date_trunc('milliseconds', ${column}) = ${new Date(updatedAt).toISOString()}::timestamptz`;
+
+const reviewResult = ([row]: { reviewedAt: Date | null }[], exists: boolean) =>
   row
     ? Effect.succeed({ reviewedAt: row.reviewedAt?.toISOString() ?? null })
-    : Effect.fail(new ORPCError("NOT_FOUND"));
+    : Effect.fail(
+        exists
+          ? new ORPCError("CONFLICT", { message: "This report changed since it was read" })
+          : new ORPCError("NOT_FOUND"),
+      );
 
 function shownActivity(now: string) {
   const data = discoveryActivities.data;
@@ -976,6 +994,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               nodeMetadata: nodes.metadata,
               organizationId: tenants.orgId,
               reportSubmittedAt: eventReports.submittedAt,
+              reportUpdatedAt: eventReports.updatedAt,
               reportReviewedAt: eventReports.reviewedAt,
             })
             .from(discoveryActivities)
@@ -1003,6 +1022,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           publicPage: nodeKindOf(row.nodeMetadata) !== PLATFORM_NODE_KIND,
           organizationId: row.organizationId ?? null,
           reportSubmittedAt: row.reportSubmittedAt?.toISOString() ?? null,
+          reportUpdatedAt: row.reportUpdatedAt?.toISOString() ?? null,
           reportReviewedAt: row.reportReviewedAt?.toISOString() ?? null,
         }));
       }),
@@ -1574,7 +1594,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         };
       }),
     reviewMonthlyReport: (
-      input: { nodeId: string; month: string; reviewed: boolean },
+      input: { nodeId: string; month: string; reviewed: boolean; updatedAt: string },
       context: AuthContext,
     ) =>
       Effect.gen(function* () {
@@ -1584,32 +1604,47 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           .select({ tenantId: nodes.tenantId })
           .from(nodes)
           .where(eq(nodes.id, input.nodeId));
+        const report = and(
+          inArray(monthlyReports.tenantId, tenantOfNode),
+          eq(monthlyReports.month, input.month),
+        );
         const rows = yield* query(() =>
           db
             .update(monthlyReports)
             .set(reviewPatch(input.reviewed, context.userId!, at))
-            .where(
-              and(
-                inArray(monthlyReports.tenantId, tenantOfNode),
-                eq(monthlyReports.month, input.month),
-              ),
-            )
+            .where(and(report, readVersion(monthlyReports.updatedAt, input.updatedAt)))
             .returning({ reviewedAt: monthlyReports.reviewedAt }),
         );
-        return yield* reviewResult(rows);
+        if (rows.length) return yield* reviewResult(rows, true);
+        const existing = yield* query(() =>
+          db.select({ month: monthlyReports.month }).from(monthlyReports).where(report).limit(1),
+        );
+        return yield* reviewResult(rows, existing.length > 0);
       }),
-    reviewEventReport: (input: { activityId: string; reviewed: boolean }, context: AuthContext) =>
+    reviewEventReport: (
+      input: { activityId: string; reviewed: boolean; updatedAt: string },
+      context: AuthContext,
+    ) =>
       Effect.gen(function* () {
         yield* requireAdmin(context);
         const at = new Date(yield* Clock.currentTimeMillis);
+        const report = eq(eventReports.activityId, input.activityId);
         const rows = yield* query(() =>
           db
             .update(eventReports)
             .set(reviewPatch(input.reviewed, context.userId!, at))
-            .where(eq(eventReports.activityId, input.activityId))
+            .where(and(report, readVersion(eventReports.updatedAt, input.updatedAt)))
             .returning({ reviewedAt: eventReports.reviewedAt }),
         );
-        return yield* reviewResult(rows);
+        if (rows.length) return yield* reviewResult(rows, true);
+        const existing = yield* query(() =>
+          db
+            .select({ activityId: eventReports.activityId })
+            .from(eventReports)
+            .where(report)
+            .limit(1),
+        );
+        return yield* reviewResult(rows, existing.length > 0);
       }),
     adminMonthlyReports: (month: string, context: AuthContext) =>
       Effect.gen(function* () {

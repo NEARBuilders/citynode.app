@@ -271,7 +271,7 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
                 {translate("admin.reports.read")}
               </Button>
               <ReviewButton
-                target={{ kind: "monthly", nodeId: row.nodeId, month }}
+                target={{ kind: "monthly", nodeId: row.nodeId, month, updatedAt: report.updatedAt }}
                 reviewed={!!report.reviewedAt}
                 testId={`admin-report-review-${row.nodeId}`}
               />

@@ -455,6 +455,7 @@ export const AdminEventsSchema = z.object({
       publicPage: z.boolean(),
       organizationId: z.string().nullable(),
       reportSubmittedAt: z.iso.datetime().nullable(),
+      reportUpdatedAt: z.iso.datetime().nullable(),
       reportReviewedAt: z.iso.datetime().nullable(),
       checkIns: AttendanceSummarySchema.nullable(),
     }),
@@ -529,6 +530,10 @@ export const PlatformStationsSchema = z.object({
 
 const PLATFORM_STATIONS_CONFLICT = {
   CONFLICT: { status: 409, message: "Platform stations conflict" },
+} as const;
+
+const REPORT_CHANGED = {
+  CONFLICT: { status: 409, message: "This report changed since it was read" },
 } as const;
 
 const TEAM_JOIN_CONFLICT = {
@@ -1356,11 +1361,18 @@ export const contract = oc.router({
       path: "/admin/reports/monthly/review",
       summary: "Mark a community's monthly report reviewed, or not reviewed",
       description:
-        "Platform admins only. Reading and marking reviewed is the whole review: nothing is sent back to the community. Editing the report clears it.",
+        "Platform admins only. Reading and marking reviewed is the whole review: nothing is sent back to the community. Editing the report clears it, and `updatedAt` is the version that was read: a report edited since then is refused with a conflict.",
     })
-    .input(z.object({ nodeId: z.uuid(), month: reportMonthSchema, reviewed: z.boolean() }))
+    .input(
+      z.object({
+        nodeId: z.uuid(),
+        month: reportMonthSchema,
+        reviewed: z.boolean(),
+        updatedAt: z.iso.datetime(),
+      }),
+    )
     .output(ReportReviewSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...REPORT_CHANGED }),
 
   reviewEventReport: oc
     .route({
@@ -1368,11 +1380,11 @@ export const contract = oc.router({
       path: "/admin/reports/events/review",
       summary: "Mark an event report reviewed, or not reviewed",
       description:
-        "Platform admins only. Reading and marking reviewed is the whole review: nothing is sent back to the community. Editing the report clears it.",
+        "Platform admins only. Reading and marking reviewed is the whole review: nothing is sent back to the community. Editing the report clears it, and `updatedAt` is the version that was read: a report edited since then is refused with a conflict.",
     })
-    .input(z.object({ activityId: z.uuid(), reviewed: z.boolean() }))
+    .input(z.object({ activityId: z.uuid(), reviewed: z.boolean(), updatedAt: z.iso.datetime() }))
     .output(ReportReviewSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...REPORT_CHANGED }),
 
   getCommunityTeamRequests: oc
     .route({
