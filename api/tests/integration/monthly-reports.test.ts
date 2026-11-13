@@ -689,15 +689,27 @@ describe("monthly reports", () => {
     const owned = await community("Harbor City");
     const organized = await community("Alder Town");
     const joined = await community("Birch Bay");
+    const suspended = await community("Cedar Cove");
+    const pier = await owned.provisioner.createNode({
+      name: "Zeta Pier",
+      slug: `monthly-pier-${owned.id}`,
+      kind: "city",
+      tenantId: owned.tenant.id,
+    });
+    await (
+      await getPluginClient(orgContext(`admin-${suspended.id}`, suspended.org, "admin"))
+    ).suspendTenant({ tenantId: suspended.tenant.id });
     const userId = `reporter-${owned.id}`;
     roles.set(`${owned.org}:${userId}`, "owner");
     roles.set(`${organized.org}:${userId}`, "member");
     eventTeams.add(`${organized.org}:${userId}`);
     roles.set(`${joined.org}:${userId}`, "member");
+    roles.set(`${suspended.org}:${userId}`, "owner");
     memberships.set(userId, [
       { id: owned.org, name: "Harbor City" },
       { id: organized.org, name: "Alder Town" },
       { id: joined.org, name: "Birch Bay" },
+      { id: suspended.org, name: "Cedar Cove" },
       { id: userId, name: "Personal" },
     ]);
     const reporter = await getPluginClient(orgContext(userId, owned.org));
@@ -709,10 +721,17 @@ describe("monthly reports", () => {
           slug: organized.org,
           name: "Alder Town",
           nodeId: organized.node.id,
+          nodeIds: [organized.node.id],
         },
-        { organizationId: owned.org, slug: owned.org, name: "Harbor City", nodeId: owned.node.id },
+        {
+          organizationId: owned.org,
+          slug: owned.org,
+          name: "Harbor City",
+          nodeId: owned.node.id,
+          nodeIds: [owned.node.id, pier.id],
+        },
       ],
-      memberships: 3,
+      memberships: 4,
     });
 
     const newcomer = `newcomer-${owned.id}`;

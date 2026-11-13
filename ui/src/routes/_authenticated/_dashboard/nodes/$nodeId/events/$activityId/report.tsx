@@ -44,6 +44,7 @@ import {
   eventReportQueryKeys,
   eventReportQueryOptions,
 } from "@/lib/queries/event-reports";
+import { reportCommunitiesQueryOptions } from "@/lib/queries/monthly-reports";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import { useReturnToReport } from "@/lib/use-return-to-report";
@@ -91,6 +92,11 @@ function EventReportPage() {
       ? tenant.data.orgId
       : null;
   const checkIns = useQuery(eventCheckInCountQueryOptions(api, organizationId, activityId));
+  const communities = useQuery(reportCommunitiesQueryOptions(api));
+  const community = communities.data?.communities.find(
+    (item) =>
+      item.nodeId === nodeId || (!!tenant.data?.orgId && item.organizationId === tenant.data.orgId),
+  );
   const waitingForCheckIns =
     report.isSuccess &&
     report.data.canEdit &&
@@ -107,7 +113,10 @@ function EventReportPage() {
         link: <Link to="/admin/events" search={{ community: nodeId }} />,
         label: translate("events.title"),
       }
-    : { link: <Link to="/report" />, label: translate("reports.title") };
+    : {
+        link: <Link to="/report" search={community ? { community: community.slug } : {}} />,
+        label: translate("reports.title"),
+      };
 
   const loading = activities.isPending || report.isPending || waitingForCheckIns;
   if (loading) {
@@ -127,7 +136,12 @@ function EventReportPage() {
     );
   }
 
-  const loadError = activities.error ?? report.error;
+  const loadError =
+    (activities.data ? null : activities.error) ?? (report.data ? null : report.error);
+  const retry = () => {
+    if (activities.isError) void activities.refetch();
+    if (report.isError) void report.refetch();
+  };
   if (loadError || !activity) {
     return (
       <ActivityFormPage
@@ -142,14 +156,7 @@ function EventReportPage() {
           description={loadError ? appErrorMessage(loadError, translate) : undefined}
           action={
             loadError && (
-              <Button
-                variant="outline"
-                data-testid="report-retry"
-                onClick={() => {
-                  if (activities.isError) void activities.refetch();
-                  if (report.isError) void report.refetch();
-                }}
-              >
+              <Button variant="outline" data-testid="report-retry" onClick={retry}>
                 {translate("common.retry")}
               </Button>
             )
@@ -192,6 +199,18 @@ function EventReportPage() {
       }
       headerTestId="report.heading"
     >
+      {(activities.isError || report.isError) && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 text-sm text-destructive"
+          data-testid="report.refresh-error"
+        >
+          <span>{translate("report.loadError")}</span>
+          <Button size="sm" variant="outline" onClick={retry}>
+            {translate("common.retry")}
+          </Button>
+        </div>
+      )}
       {canReview && saved && (
         <ReviewRow
           target={{ kind: "event", activityId, updatedAt: saved.updatedAt }}

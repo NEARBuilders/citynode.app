@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
 import { LocalDate } from "@/components/local-date";
@@ -21,14 +21,23 @@ import { refetchAll } from "@/lib/queries/refetch-all";
 import { activitiesQueryOptions } from "./activity-form";
 import { ReportStateBadge } from "./report-status-badge";
 
-type ReportActivity = VisibilityActivity & { id: string; title: string; venue: string };
+type ReportActivity = VisibilityActivity & {
+  id: string;
+  title: string;
+  venue: string;
+  ownerNodeId?: string;
+};
 
-export function useReportChecklist(nodeId: string) {
+export function useReportChecklist(nodeId: string, nodeIds: readonly string[] = [nodeId]) {
   const api = useApiClient();
-  const activities = useQuery(activitiesQueryOptions(api, nodeId));
-  const eventStatuses = useQuery(eventReportStatusesQueryOptions(api, nodeId));
+  const activities = useQueries({
+    queries: nodeIds.map((id) => activitiesQueryOptions(api, id)),
+  });
+  const eventStatuses = useQueries({
+    queries: nodeIds.map((id) => eventReportStatusesQueryOptions(api, id)),
+  });
   const monthlyStatuses = useQuery(monthlyReportStatusesQueryOptions(api, nodeId));
-  const queries = [activities, eventStatuses, monthlyStatuses];
+  const queries = [...activities, ...eventStatuses, monthlyStatuses];
   const failed = queries.filter((query) => query.isError);
   return {
     failed: failed.length > 0,
@@ -36,8 +45,8 @@ export function useReportChecklist(nodeId: string) {
     pending: queries.some((query) => query.isPending),
     retry: () => refetchAll(failed),
     lists: {
-      activities: activities.data ?? [],
-      eventStatuses: eventStatuses.data ?? [],
+      activities: activities.flatMap((query) => query.data ?? []),
+      eventStatuses: eventStatuses.flatMap((query) => query.data ?? []),
       monthlyStatuses: monthlyStatuses.data?.statuses ?? [],
       firstMonth: monthlyStatuses.data?.firstMonth,
     },
@@ -129,7 +138,7 @@ export function ReportChecklist({
                 <ItemTitle className="flex-wrap">
                   <Link
                     to="/nodes/$nodeId/events/$activityId/report"
-                    params={{ nodeId, activityId: event.id }}
+                    params={{ nodeId: event.ownerNodeId ?? nodeId, activityId: event.id }}
                     className="hover:underline"
                     data-testid={`${testId}-event-${event.id}`}
                   >
@@ -152,7 +161,7 @@ export function ReportChecklist({
                   render={
                     <Link
                       to="/nodes/$nodeId/events/$activityId/report"
-                      params={{ nodeId, activityId: event.id }}
+                      params={{ nodeId: event.ownerNodeId ?? nodeId, activityId: event.id }}
                     />
                   }
                 >

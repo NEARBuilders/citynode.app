@@ -81,6 +81,6 @@ const server = http.createServer((request, response) => {
   response.end();
 });
 
-server.listen(port, () => {
+server.listen(port, "127.0.0.1", () => {
   console.log(`[demo-login] http://localhost:${port} — pick a persona to sign in to ${appUrl}`);
 });

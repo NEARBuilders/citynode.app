@@ -195,26 +195,35 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     });
   }
 
-  function communityFirstMonth(tenantId: string) {
+  function monthlyReportAccess(nodeId: string, context: AuthContext) {
     return Effect.gen(function* () {
+      const access = yield* reportAccess(nodeId, context);
       const [row] = yield* query(() =>
         db
           .select({
             startedAt: sql<string | null>`min(coalesce(${nodes.activatedAt}, ${nodes.createdAt}))`,
           })
           .from(nodes)
-          .where(and(eq(nodes.tenantId, tenantId), listedNode)),
+          .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+          .where(
+            and(
+              eq(nodes.tenantId, access.tenantId),
+              eq(tenants.status, "active"),
+              isNull(tenants.deletedAt),
+              listedNode,
+            ),
+          ),
       );
-      return firstReportMonth(row?.startedAt ? new Date(row.startedAt) : null);
+      if (!row?.startedAt) return yield* Effect.fail(new ORPCError("NOT_FOUND"));
+      return { ...access, firstMonth: firstReportMonth(new Date(row.startedAt)) };
     });
   }
 
   function monthlyReportTarget(input: { nodeId: string; month: string }, context: AuthContext) {
     return Effect.gen(function* () {
-      const access = yield* reportAccess(input.nodeId, context);
+      const { firstMonth, ...access } = yield* monthlyReportAccess(input.nodeId, context);
       const now = yield* Clock.currentTimeMillis;
       const window = reportMonthWindow(input.month);
-      const firstMonth = yield* communityFirstMonth(access.tenantId);
       if (!isReportableMonth(input.month) || input.month < firstMonth) {
         return yield* Effect.fail(
           new ORPCError("BAD_REQUEST", {
@@ -1567,8 +1576,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
       }),
     monthlyReportStatuses: (nodeId: string, context: AuthContext) =>
       Effect.gen(function* () {
-        const { tenantId } = yield* reportAccess(nodeId, context);
-        const firstMonth = yield* communityFirstMonth(tenantId);
+        const { tenantId, firstMonth } = yield* monthlyReportAccess(nodeId, context);
         const rows = yield* query(() =>
           db
             .select({

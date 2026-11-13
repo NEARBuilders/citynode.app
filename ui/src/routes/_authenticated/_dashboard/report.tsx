@@ -59,7 +59,7 @@ function ReportPage() {
   const chosen = listed.data ? chooseReportCommunity(listed.data.communities, requested) : null;
   const switching = !!chosen && chosen.organizationId !== auth.activeOrganizationId;
   const isPlatformAdmin = auth.user?.role === "admin";
-  useOpenSoleCommunity(switching ? chosen.organizationId : null);
+  const opening = useOpenSoleCommunity(switching ? chosen.organizationId : null);
 
   const header = (
     <PageHeader
@@ -100,6 +100,24 @@ function ReportPage() {
       }
     />
   );
+
+  if (switching && opening.failed) {
+    return (
+      <PageContainer>
+        {header}
+        <EmptyState
+          icon={ClipboardTextIcon}
+          title={translate("reports.loadError")}
+          description={appErrorMessage(opening.error, translate)}
+          action={
+            <Button variant="outline" onClick={opening.retry} data-testid="report.retry">
+              {translate("common.retry")}
+            </Button>
+          }
+        />
+      </PageContainer>
+    );
+  }
 
   if (listed.isPending || switching) {
     return (
@@ -207,8 +225,8 @@ function ReportPage() {
 function ReportDesk({ community, several }: { community: ReportCommunity; several: boolean }) {
   const translate = useAppTranslation();
   const now = useNow(60_000);
-  const { nodeId } = community;
-  const reports = useReportChecklist(nodeId);
+  const { nodeId, nodeIds } = community;
+  const reports = useReportChecklist(nodeId, nodeIds);
   return (
     <section className="flex flex-col gap-6" data-testid="report.desk">
       {several && (

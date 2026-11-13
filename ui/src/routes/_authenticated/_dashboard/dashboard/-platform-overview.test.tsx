@@ -11,6 +11,7 @@ const harness = vi.hoisted(() => ({
   monthly: (async () => ({ month: "", communities: [] })) as (month: string) => Promise<unknown>,
   events: (async () => ({ events: [] })) as () => Promise<unknown>,
   reviewed: [] as unknown[],
+  failingJoinMonths: new Set<string>(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -70,11 +71,10 @@ vi.mock("@/app", () => ({
     getCommunityEngagement: async () => ({ communities: [] }),
     proposals: { getProposals: async () => ({ data: [], meta: { total: 0 } }) },
     auth: {
-      getOnboardingStats: async ({ month }: { month: string }) => ({
-        month,
-        totals: { redeemed: 14, newMembers: 6 },
-        organizations: [],
-      }),
+      getOnboardingStats: async ({ month }: { month: string }) => {
+        if (harness.failingJoinMonths.has(month)) throw new Error("offline");
+        return { month, totals: { redeemed: 14, newMembers: 6 }, organizations: [] };
+      },
     },
   }),
 }));
@@ -154,6 +154,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-12-26T12:00:00.000Z"));
   harness.reviewed.length = 0;
+  harness.failingJoinMonths.clear();
   harness.monthly = async (month) => ({
     month,
     communities:
@@ -266,6 +267,21 @@ describe("a platform admin's Home", () => {
     );
     expect(screen.getByTestId("admin.stat.returning").textContent).toContain("4");
     expect(screen.getByTestId("admin-joins-chart")).toBeTruthy();
+  });
+
+  it("shows the joins table's load error with Retry when only last month fails", async () => {
+    harness.failingJoinMonths.add("2026-11");
+    renderOverview();
+    await waitFor(() =>
+      expect(screen.getByTestId("admin.stat.redeemed").textContent).toContain("14"),
+    );
+    fireEvent.click(screen.getByTestId("admin-joins-table-toggle"));
+    const error = await screen.findByTestId("admin-joins-table-error");
+
+    harness.failingJoinMonths.clear();
+    fireEvent.click(within(error).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.queryByTestId("admin-joins-table-error")).toBeNull());
+    expect(screen.getByText("No communities yet")).toBeTruthy();
   });
 
   it("shows load errors with Retry instead of zeros", async () => {

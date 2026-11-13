@@ -141,7 +141,7 @@ describe("Admin → Reports", () => {
       "Mark not reviewed",
     );
     expect(screen.getByTestId("admin-report-events-node-manila").getAttribute("href")).toBe(
-      "/admin/events?community=node-manila&month=2026-11&report=missing",
+      "/admin/events?community=org-node-manila&month=2026-11&report=missing",
     );
     expect(screen.getByTestId("admin-report-events-node-manila").textContent).toBe(
       "1 of 3 reported",

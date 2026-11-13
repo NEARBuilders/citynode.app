@@ -44,7 +44,6 @@ const monthlyReport = (community) => (seed) =>
 
 export const SHOTS = [
   { persona: "platformAdmin", page: "home", path: "/dashboard" },
-  { persona: "platformAdmin", page: "admin-overview", path: "/admin" },
   { persona: "platformAdmin", page: "admin-communities", path: "/admin/nodes" },
   { persona: "platformAdmin", page: "sidebar", path: "/admin/nodes", sidebar: true },
   { persona: "platformAdmin", page: "admin-reports", path: "/admin/reports" },

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OrgSwitcherMenuContent } from "@/components/layout/org-switcher-menu";
@@ -24,6 +24,7 @@ const harness = vi.hoisted(() => ({
   tenants: { "org-1": "Example Community" } as Record<string, string>,
   nodes: [] as { id: string; name: string; metadata: Record<string, unknown> }[],
   authContext: null as unknown,
+  authContextFail: false,
   attendance: { events: [], unclassified: [], communities: [] } as Record<string, unknown>,
   attendanceReads: [] as string[],
   passkeys: [{ id: "passkey-1" }] as { id: string }[],
@@ -65,7 +66,10 @@ const api = {
       return harness.organizations;
     },
     listUserInvitations: async () => [],
-    getContext: async () => harness.authContext,
+    getContext: async () => {
+      if (harness.authContextFail) throw new Error("context unavailable");
+      return harness.authContext;
+    },
     listOnboardingCodes: async () => [],
     getOnboardingStats: async ({ month }: { month: string }) => ({
       month,
@@ -140,6 +144,7 @@ afterEach(() => {
   harness.nodes = [];
   setActive.mockClear();
   harness.authContext = null;
+  harness.authContextFail = false;
   harness.attendance = { events: [], unclassified: [], communities: [] };
   harness.attendanceReads.length = 0;
   harness.passkeys = [{ id: "passkey-1" }];
@@ -452,6 +457,21 @@ describe("who sees the community overview on Home", () => {
     expect(await screen.findByTestId("home-step-open-community")).toBeTruthy();
     expect(screen.queryByTestId("home-owner.overview")).toBeNull();
     expect(screen.getByTestId("home.heading").textContent).toContain("Pick up where you left off.");
+  });
+
+  it("shows a retry, not the member Home, when the viewer's role can't be read", async () => {
+    inHarbor(owner);
+    harness.authContextFail = true;
+    renderHome();
+
+    const error = await screen.findByTestId("home.auth-context-error");
+    expect(error.textContent).toContain("Couldn't check your role");
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+
+    harness.authContextFail = false;
+    fireEvent.click(within(error).getByRole("button"));
+    expect(await screen.findByTestId("home-owner.overview")).toBeTruthy();
+    expect(screen.queryByTestId("home.auth-context-error")).toBeNull();
   });
 
   it("shows no overview to someone without a community", async () => {

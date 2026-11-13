@@ -26,6 +26,7 @@ import {
   resolveTeamWorkspace,
 } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
+import { LoadError } from "@/routes/_admin/_dashboard/admin/-admin-ui";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
 import { getNextSteps } from "./-next-steps";
@@ -34,6 +35,7 @@ import { useNodeSetupSteps } from "./-node-setup-checklist";
 import { OwnerOverview, OwnerSetupLine } from "./-owner-overview";
 import { PlatformOverview } from "./-platform-overview";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
+import { communityAuthContextQueryOptions } from "./node/-community-header";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
   validateSearch: (
@@ -115,10 +117,8 @@ function Home() {
     enabled: !!tenant.data?.id,
   });
   const authContext = useQuery({
-    queryKey: ["home-auth-context", activeOrgId],
-    queryFn: () => apiClient.auth.getContext().catch(() => null),
+    ...communityAuthContextQueryOptions(apiClient, activeOrgId),
     enabled: !!activeOrgId,
-    staleTime: 30 * 1000,
   });
 
   const isAdmin = user?.role === "admin";
@@ -132,7 +132,12 @@ function Home() {
     community &&
     communityOrgId === activeOrgId &&
     canOrganizeEvents(authContext.data, { includePlatformAdmin: false })
-      ? { nodeId: node.id, organizationId: activeOrgId, name: community.name }
+      ? {
+          nodeId: node.id,
+          nodeIds: (nodes.data ?? []).map((item) => item.id),
+          organizationId: activeOrgId,
+          name: community.name,
+        }
       : null;
   const setupSteps = useNodeSetupSteps({
     nodeId,
@@ -199,6 +204,13 @@ function Home() {
       />
       {safetyFirst && firstStep && (
         <NextStepsList steps={[firstStep]} primary testId="home-owner.account-safety" />
+      )}
+      {authContext.isError && !authContext.data && (
+        <LoadError
+          message={translate("org.roleLoadFailed")}
+          onRetry={() => void authContext.refetch()}
+          testId="home.auth-context-error"
+        />
       )}
       {isAdmin && <PlatformOverview />}
       {ownerCommunity && <OwnerOverview community={ownerCommunity} invitations={pending} />}

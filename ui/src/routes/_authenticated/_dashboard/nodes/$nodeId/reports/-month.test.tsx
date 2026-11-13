@@ -123,6 +123,12 @@ describe("monthly report form", () => {
     expect(await screen.findByText("Required")).toBeTruthy();
     expect(harness.saved).toEqual([]);
 
+    await waitFor(() =>
+      expect(screen.getByTestId("monthly-report.back").getAttribute("href")).toBe(
+        "/report?community=harbor",
+      ),
+    );
+
     fireEvent.change(screen.getByTestId("monthly-report.notes-input"), {
       target: { value: "  A busy month.  " },
     });
@@ -238,6 +244,113 @@ describe("monthly report form", () => {
       "Draft of the month.",
     );
     expect((screen.getByTestId("monthly-report.submit") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("never hides the numbers or holds Submit again once the first sync has settled", async () => {
+    let syncs = 0;
+    let fetches = 0;
+    let release: () => void = () => {};
+    harness.reconcile = () => {
+      syncs += 1;
+      return Promise.resolve({ events: 1, truncated: [], failed: [] });
+    };
+    harness.report = () => {
+      fetches += 1;
+      const value = {
+        report: null,
+        ...owner,
+        organizationId: "org-h",
+        open: true,
+        closesAt,
+        stats: { ...stats, checkIns: 30 + syncs * 10 },
+        checkInsSyncedAt: "2026-11-20T10:00:00.000Z",
+      };
+      if (fetches < 3) return Promise.resolve(value);
+      return new Promise((resolve) => {
+        release = () => resolve(value);
+      });
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    await waitFor(() =>
+      expect(screen.getByTestId("monthly-report.checkIns").textContent).toContain("40"),
+    );
+    fireEvent.change(screen.getByTestId("monthly-report.notes-input"), {
+      target: { value: "Draft of the month." },
+    });
+
+    await client.refetchQueries({ queryKey: ["attendance", "reconcile", "org-h"] });
+    await waitFor(() => expect(fetches).toBe(3));
+    expect(screen.queryByTestId("monthly-report.stats-syncing")).toBeNull();
+    expect(screen.getByTestId("monthly-report.checkIns").textContent).toContain("40");
+    expect((screen.getByTestId("monthly-report.submit") as HTMLButtonElement).disabled).toBe(false);
+
+    release();
+    await waitFor(() =>
+      expect(screen.getByTestId("monthly-report.checkIns").textContent).toContain("50"),
+    );
+    expect((screen.getByTestId("monthly-report.notes-input") as HTMLTextAreaElement).value).toBe(
+      "Draft of the month.",
+    );
+  });
+
+  it("lets the owner submit when the report can't be refreshed after the sync", async () => {
+    let fetches = 0;
+    harness.report = () => {
+      fetches += 1;
+      if (fetches > 1) return Promise.reject(new Error("offline"));
+      return Promise.resolve({
+        report: null,
+        ...owner,
+        organizationId: "org-h",
+        open: true,
+        closesAt,
+        stats,
+        checkInsSyncedAt: null,
+      });
+    };
+    renderPage();
+    expect(await screen.findByTestId("monthly-report.sync-error")).toBeTruthy();
+    expect(fetches).toBe(2);
+    expect(screen.queryByTestId("monthly-report.stats-syncing")).toBeNull();
+    expect(screen.getByTestId("monthly-report.checkIns").textContent).toContain("41");
+    fireEvent.change(screen.getByTestId("monthly-report.notes-input"), {
+      target: { value: "Quiet month." },
+    });
+    await waitFor(() => expect(harness.synced).toHaveLength(1));
+    expect(fetches).toBe(2);
+    fireEvent.click(screen.getByTestId("monthly-report.submit"));
+    await waitFor(() =>
+      expect(harness.saved).toEqual([{ nodeId: NODE, month: MONTH, notes: "Quiet month." }]),
+    );
+  });
+
+  it("keeps the typed text when a background refresh of the report fails", async () => {
+    let offline = false;
+    harness.report = () =>
+      offline
+        ? Promise.reject(new Error("offline"))
+        : Promise.resolve({ report: stored, ...owner, open: true, closesAt, stats });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    const notes = (await screen.findByTestId("monthly-report.notes-input")) as HTMLTextAreaElement;
+    fireEvent.change(notes, { target: { value: "Edited after the meetup." } });
+
+    offline = true;
+    await client.refetchQueries({ queryKey: ["monthly-reports", "report", NODE, MONTH] });
+    const alert = await screen.findByTestId("monthly-report.sync-error");
+    expect(screen.queryByTestId("monthly-report.retry")).toBeNull();
+    expect((screen.getByTestId("monthly-report.notes-input") as HTMLTextAreaElement).value).toBe(
+      "Edited after the meetup.",
+    );
+    expect((screen.getByTestId("monthly-report.submit") as HTMLButtonElement).disabled).toBe(false);
+
+    offline = false;
+    fireEvent.click(alert.querySelector("button") as HTMLButtonElement);
+    await waitFor(() => expect(screen.queryByTestId("monthly-report.sync-error")).toBeNull());
+    expect((screen.getByTestId("monthly-report.notes-input") as HTMLTextAreaElement).value).toBe(
+      "Edited after the meetup.",
+    );
   });
 
   it("treats a sync that could not read every event as a failed sync", async () => {

@@ -33,7 +33,7 @@ export function useOpenSoleCommunity(organizationId: string | null) {
     });
   };
 
-  const { mutate } = useMutation({
+  const { mutate, isError, error, variables } = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await auth.organization.setActive({ organizationId: id });
       if (error) throw new Error(error.message);
@@ -51,4 +51,13 @@ export function useOpenSoleCommunity(organizationId: string | null) {
     attempted.current = organizationId;
     mutate(organizationId);
   }, [organizationId, mutate]);
+
+  const failed = !!organizationId && isError && variables === organizationId;
+  return {
+    failed,
+    error: failed ? error : null,
+    retry: () => {
+      if (organizationId) mutate(organizationId);
+    },
+  };
 }

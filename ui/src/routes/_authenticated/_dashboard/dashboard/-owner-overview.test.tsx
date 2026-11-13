@@ -113,7 +113,12 @@ function renderOverview(invitations: Parameters<typeof OwnerOverview>[0]["invita
   return render(
     <QueryClientProvider client={client}>
       <OwnerOverview
-        community={{ nodeId: "node-1", organizationId: "org-1", name: "Harbor" }}
+        community={{
+          nodeId: "node-1",
+          nodeIds: ["node-1"],
+          organizationId: "org-1",
+          name: "Harbor",
+        }}
         invitations={invitations}
       />
     </QueryClientProvider>,

@@ -230,7 +230,7 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
             <Link
               to="/admin/events"
               search={{
-                community: row.nodeId,
+                community: row.organizationId,
                 month,
                 report: events.reported < events.ended ? "missing" : undefined,
               }}
@@ -245,7 +245,7 @@ function ReportRow({ row, month, due }: { row: AdminMonthlyRow; month: string; d
             {events.toReview > 0 && (
               <Link
                 to="/admin/events"
-                search={{ community: row.nodeId, month, report: "review" }}
+                search={{ community: row.organizationId, month, report: "review" }}
                 className="text-xs text-muted-foreground hover:underline"
                 data-testid={`admin-report-events-review-${row.nodeId}`}
               >

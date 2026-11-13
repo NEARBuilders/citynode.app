@@ -1280,7 +1280,7 @@ export const contract = oc.router({
       path: "/reports/communities",
       summary: "List the communities the caller reports for",
       description:
-        "Caller only — communities where the caller is an owner, an admin or on a team with the events area, each with the node its reports are kept on. memberships counts every community the caller belongs to.",
+        "Caller only — active communities where the caller is an owner, an admin or on a team with the events area, each with the node its reports are kept on and every node whose events it reports. memberships counts every community the caller belongs to.",
     })
     .output(
       z.object({
@@ -1290,6 +1290,7 @@ export const contract = oc.router({
             slug: z.string(),
             name: z.string(),
             nodeId: z.uuid(),
+            nodeIds: z.array(z.uuid()),
           }),
         ),
         memberships: z.number().int().nonnegative(),

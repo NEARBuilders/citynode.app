@@ -30,6 +30,7 @@ type FakeOrganization = {
 
 const organizations = new Map<string, FakeOrganization>();
 const activeOrganizationCalls: Array<string | null> = [];
+let failActiveOrganization = false;
 let counter = 0;
 
 const adminContext = (userId: string) => ({
@@ -107,6 +108,9 @@ const fakeAuth = (context: unknown) => ({
     return null;
   },
   setActiveOrganization: async ({ organizationId }: { organizationId: string | null }) => {
+    if (failActiveOrganization) {
+      throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Session store unavailable" });
+    }
     activeOrganizationCalls.push(organizationId);
     return null;
   },
@@ -144,6 +148,20 @@ describe("platform stations", () => {
     ).rejects.toMatchObject({ code: "CONFLICT" });
     expect(stored(squat.id).members.map(({ userId }) => userId)).toEqual(["squatter"]);
     await expect(squatter.getPlatformStations()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect((await admin.getPlatformStations()).organization).toBeNull();
+  });
+
+  it("removes the new organization when restoring the admin's active one fails, so the slug can be retried", async () => {
+    const admin = await getPluginClient(adminContext("admin-one"));
+    failActiveOrganization = true;
+    try {
+      await expect(
+        admin.setUpPlatformStations({ name: "City Nodes", slug: "city-nodes" }),
+      ).rejects.toThrow();
+    } finally {
+      failActiveOrganization = false;
+    }
+    expect(bySlug("city-nodes")).toBeUndefined();
     expect((await admin.getPlatformStations()).organization).toBeNull();
   });
 

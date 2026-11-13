@@ -46,6 +46,7 @@ export const OWNER_EVENTS_LIMIT = 3;
 
 export interface OwnerCommunity {
   nodeId: string;
+  nodeIds: string[];
   organizationId: string;
   name: string;
 }
@@ -59,7 +60,7 @@ export function OwnerOverview({
 }) {
   return (
     <div className="flex flex-col gap-12" data-testid="home-owner.overview">
-      <OwnerReports nodeId={community.nodeId} />
+      <OwnerReports nodeId={community.nodeId} nodeIds={community.nodeIds} />
       <OwnerWaiting organizationId={community.organizationId} invitations={invitations} />
       <OwnerEvents community={community} />
       <OwnerOnboarding community={community} />
@@ -67,10 +68,10 @@ export function OwnerOverview({
   );
 }
 
-function OwnerReports({ nodeId }: { nodeId: string }) {
+function OwnerReports({ nodeId, nodeIds }: { nodeId: string; nodeIds: string[] }) {
   const translate = useAppTranslation();
   const now = useNow(60_000);
-  const reports = useReportChecklist(nodeId);
+  const reports = useReportChecklist(nodeId, nodeIds);
 
   return (
     <section className="flex flex-col gap-6" data-testid="home-owner.reports">

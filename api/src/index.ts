@@ -1041,10 +1041,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
                   )).some((team) => team.areas.includes("events")));
               if (!organizer) return [];
               const tenant = yield* services.tenants.resolveTenantByOrgId(organization.id);
-              if (!tenant) return [];
-              const [node] = (yield* services.nodes.list({ tenantId: tenant.id })).sort(
+              if (!tenant || tenant.status !== "active" || tenant.deletedAt) return [];
+              const nodes = (yield* services.nodes.list({ tenantId: tenant.id })).sort(
                 (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
               );
+              const [node] = nodes;
               if (!node) return [];
               return [
                 {
@@ -1052,6 +1053,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                   slug: organization.slug,
                   name: tenant.name,
                   nodeId: node.id,
+                  nodeIds: nodes.map(({ id }) => id),
                 },
               ];
             }),
@@ -1574,6 +1576,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
             yield* callAuth(
               () => auth.setActiveOrganization({ organizationId: previousActiveOrganizationId }),
               "Could not restore your active organization",
+            ).pipe(
+              Effect.tapError(() =>
+                callAuth(
+                  () => auth.deleteOrganization({ organizationId }),
+                  "Could not remove the unused platform organization",
+                ).pipe(Effect.ignore),
+              ),
             );
           }
           const stationsTenant =

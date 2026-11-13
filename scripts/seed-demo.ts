@@ -26,7 +26,7 @@ function requireUrl(key: string) {
   }
   if (!url.startsWith("pglite:")) {
     const host = new URL(url).hostname.toLowerCase();
-    if (!LOCAL_HOSTS.has(host) && !process.argv.includes("--allow-remote")) {
+    if (!LOCAL_HOSTS.has(host)) {
       throw new Error(`${key} points at ${host}, not localhost. Refusing to seed demo data there.`);
     }
   }

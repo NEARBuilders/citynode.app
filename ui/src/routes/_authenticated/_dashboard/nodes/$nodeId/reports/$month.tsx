@@ -32,7 +32,11 @@ import {
 } from "@/lib/monthly-reports";
 import { pageTitle } from "@/lib/page-title";
 import { attendanceReconcileQueryOptions } from "@/lib/queries/attendance";
-import { monthlyReportQueryKeys, monthlyReportQueryOptions } from "@/lib/queries/monthly-reports";
+import {
+  monthlyReportQueryKeys,
+  monthlyReportQueryOptions,
+  reportCommunitiesQueryOptions,
+} from "@/lib/queries/monthly-reports";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { useReturnToReport } from "@/lib/use-return-to-report";
 
@@ -72,7 +76,12 @@ function MonthlyReportPage() {
   const valid = isReportMonth(month) && isReportableMonth(month);
   const report = useQuery({ ...monthlyReportQueryOptions(api, nodeId, month), enabled: valid });
   const node = useQuery(nodeByIdQueryOptions(api, nodeId));
-  const sync = useCheckInSync(nodeId, month, report.data, report.dataUpdatedAt);
+  const sync = useCheckInSync(
+    nodeId,
+    month,
+    report.data,
+    Math.max(report.dataUpdatedAt, report.errorUpdatedAt),
+  );
   const title = valid
     ? translate("reports.monthlyTitle", { month: formatReportMonth(month, locale) })
     : translate("reports.monthlyHeading");
@@ -89,7 +98,7 @@ function MonthlyReportPage() {
     );
   }
 
-  if (!valid || report.isError || !report.data) {
+  if (!valid || !report.data) {
     return (
       <MonthlyReportShell title={title}>
         <EmptyState
@@ -122,6 +131,11 @@ function MonthlyReportPage() {
     checkInsSyncedAt,
   } = report.data;
   const editable = canEdit && open;
+  const statsFailed = editable && (sync.failed || report.isError);
+  const retry = () => {
+    if (report.isError) void report.refetch();
+    if (sync.failed) sync.retry();
+  };
   return (
     <MonthlyReportShell
       title={title}
@@ -190,23 +204,25 @@ function MonthlyReportPage() {
                 </div>
               ))}
             </dl>
-            {editable && sync.failed && (
-              <div
-                role="alert"
-                className="flex flex-wrap items-center gap-2 text-sm text-destructive"
-                data-testid="monthly-report.sync-error"
-              >
-                <span>{translate("reports.syncFailed")}</span>
-                <Button size="sm" variant="outline" onClick={sync.retry}>
-                  {translate("common.retry")}
-                </Button>
-              </div>
+            {statsFailed && (
+              <RefreshAlert
+                message="reports.syncFailed"
+                onRetry={retry}
+                testId="monthly-report.sync-error"
+              />
             )}
             <p className="text-sm text-muted-foreground">
               {translate(editable ? "reports.statsLive" : "reports.statsSnapshot")}
             </p>
           </section>
         )
+      )}
+      {report.isError && !(editable && stats) && (
+        <RefreshAlert
+          message="report.loadError"
+          onRetry={retry}
+          testId="monthly-report.refresh-error"
+        />
       )}
       {editable ? (
         <MonthlyReportForm
@@ -242,7 +258,7 @@ function useCheckInSync(
   nodeId: string,
   month: string,
   report: MonthlyReport | undefined,
-  reportUpdatedAt: number,
+  reportSettledAt: number,
 ) {
   const api = useApiClient();
   const queryClient = useQueryClient();
@@ -252,8 +268,12 @@ function useCheckInSync(
     ...attendanceReconcileQueryOptions(api, organizationId),
     enabled: editable,
   });
-  const syncedAt = sync.dataUpdatedAt;
-  const stale = editable && sync.isSuccess && syncedAt > reportUpdatedAt;
+  const stale = editable && sync.isSuccess && sync.dataUpdatedAt > reportSettledAt;
+  const holding = editable && (sync.isPending || stale);
+  const [firstSyncSettled, setFirstSyncSettled] = useState(false);
+  useEffect(() => {
+    if (editable && !holding) setFirstSyncSettled(true);
+  }, [editable, holding]);
   useEffect(() => {
     if (!stale) return;
     void queryClient.invalidateQueries({
@@ -261,10 +281,34 @@ function useCheckInSync(
     });
   }, [stale, queryClient, nodeId, month]);
   return {
-    syncing: editable && (sync.isPending || stale),
+    syncing: holding && !firstSyncSettled,
     failed: editable && (sync.isError || (sync.data?.failed.length ?? 0) > 0),
     retry: () => void sync.refetch(),
   };
+}
+
+function RefreshAlert({
+  message,
+  onRetry,
+  testId,
+}: {
+  message: AppMessageId;
+  onRetry: () => void;
+  testId: string;
+}) {
+  const translate = useAppTranslation();
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center gap-2 text-sm text-destructive"
+      data-testid={testId}
+    >
+      <span>{translate(message)}</span>
+      <Button size="sm" variant="outline" onClick={onRetry}>
+        {translate("common.retry")}
+      </Button>
+    </div>
+  );
 }
 
 function MonthlyReportShell({
@@ -279,6 +323,10 @@ function MonthlyReportShell({
   children: ReactNode;
 }) {
   const translate = useAppTranslation();
+  const api = useApiClient();
+  const { nodeId } = Route.useParams();
+  const communities = useQuery(reportCommunitiesQueryOptions(api));
+  const community = communities.data?.communities.find((item) => item.nodeId === nodeId);
   return (
     <PageContainer variant="narrow">
       <div className="flex flex-col gap-4">
@@ -292,7 +340,7 @@ function MonthlyReportShell({
             backToAdmin ? (
               <Link to="/admin/reports" search={{ month: backToAdmin }} />
             ) : (
-              <Link to="/report" />
+              <Link to="/report" search={community ? { community: community.slug } : {}} />
             )
           }
         >

@@ -138,7 +138,8 @@ run deletes and rewrites only demo rows, so it is safe to re-run.
 
 1. In `.env`, set `BETTER_AUTH_SECRET`, `API_DATABASE_URL`, `AUTH_DATABASE_URL`
    (and `PROPOSALS_DATABASE_URL` if it has its own database) to explicit
-   `pglite:<absolute dir>` or local `postgres://` URLs, and `BASE_URL`.
+   `pglite:<absolute dir>` or local `postgres://` URLs, and `BASE_URL`. The
+   seed refuses a database on any host other than localhost.
 2. Boot the app once (`pnpm run dev`) so migrations run. With PGlite, stop it
    before seeding — one process per data dir; the seed refuses while the app
    answers on `BASE_URL`.

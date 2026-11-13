@@ -43,8 +43,10 @@ import {
   EVENTS_WHEN,
   type EventsReportFilter,
   type EventsWhen,
+  eventCommunities,
   parseEventsReportFilter,
   parseEventsWhen,
+  resolveEventsCommunity,
   selectAdminEvents,
 } from "./-admin-events";
 import { ListSkeleton, LoadError } from "./-admin-ui";
@@ -93,13 +95,10 @@ function AdminEvents() {
   const eventsQuery = useQuery(adminEventsQueryOptions(apiClient));
   const events = eventsQuery.data?.events ?? [];
 
-  const communities = useMemo(() => {
-    const names = new Map<string, string>();
-    for (const event of events) names.set(event.nodeId, event.nodeName);
-    return [...names.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [events]);
+  const communities = useMemo(() => eventCommunities(events), [events]);
+  const selectedCommunity = resolveEventsCommunity(events, community);
   const selected = useMemo(
-    () => selectAdminEvents(events, { when, nodeId: community, month, now }),
+    () => selectAdminEvents(events, { when, community, month, now }),
     [events, when, community, month, now],
   );
   const missingOnly = when === "past" && report === "missing";
@@ -143,7 +142,7 @@ function AdminEvents() {
             </TabsList>
           </Tabs>
           <Select
-            value={community ?? ALL_COMMUNITIES}
+            value={selectedCommunity ?? ALL_COMMUNITIES}
             items={[
               { label: translate("admin.events.allCommunities"), value: ALL_COMMUNITIES },
               ...communities.map(([value, label]) => ({ label, value })),

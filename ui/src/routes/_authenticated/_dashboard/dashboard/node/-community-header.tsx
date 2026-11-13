@@ -17,6 +17,7 @@ import { isPlatformNode } from "@/lib/node-kind";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
+import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import {
   canManageCommunity,
   canOperateNodes,
@@ -30,7 +31,7 @@ type CommunityNode = NonNullable<Awaited<ReturnType<ApiClient["getNode"]>>>;
 export function communityAuthContextQueryOptions(api: ApiClient, organizationId: string | null) {
   return queryOptions({
     queryKey: ["home-auth-context", organizationId ?? ""],
-    queryFn: () => api.auth.getContext().catch(() => null),
+    queryFn: () => api.auth.getContext(),
     staleTime: 30 * 1000,
   });
 }
@@ -104,9 +105,14 @@ export function CommunityHeader({
   const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
   const workspace = useQuery(teamWorkspaceQueryOptions(api));
   const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
+  const activeTenant = useQuery({
+    ...tenantByOrgQueryOptions(api, activeOrganizationId ?? ""),
+    enabled: canOrganize && !!activeOrganizationId,
+  });
+  const ownCommunity = !!node?.tenantId && activeTenant.data?.id === node.tenantId;
   const organizationSlug = useQuery({
     ...organizationsQueryOptions(api),
-    enabled: canOrganize && !!activeOrganizationId,
+    enabled: ownCommunity,
     select: (organizations) =>
       organizations.find((organization) => organization.id === activeOrganizationId)?.slug ?? null,
   }).data;
@@ -199,7 +205,7 @@ export function CommunityHeader({
                 </SelectContent>
               </Select>
             )}
-            {canOrganize && (
+            {canOrganize && ownCommunity && (
               <Button
                 variant="outline"
                 nativeButton={false}

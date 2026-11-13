@@ -200,22 +200,38 @@ describe("eventHealth", () => {
   const now = Date.parse("2026-11-05T12:00:00.000Z");
   const at = (days: number) => new Date(now + days * DAY).toISOString();
   const communities = [
-    { node: { id: "lisbon", name: "Lisbon" } },
-    { node: { id: "nairobi", name: "Nairobi" } },
-    { node: { id: "medellin", name: "Medellín" } },
+    { node: { id: "lisbon", name: "Lisbon" }, tenant: { orgId: "org-lisbon" } },
+    { node: { id: "nairobi", name: "Nairobi" }, tenant: { orgId: "org-nairobi" } },
+    { node: { id: "medellin", name: "Medellín" }, tenant: { orgId: "org-medellin" } },
   ];
+  const held = (nodeId: string, days: number, reportSubmittedAt: string | null = null) => ({
+    nodeId,
+    organizationId: `org-${nodeId}`,
+    startsAt: at(days),
+    endsAt: at(days),
+    reportSubmittedAt,
+  });
 
   it("finds communities with nothing upcoming and nothing in the last 30 days", () => {
     const { quiet } = eventHealth({
       communities,
       now,
-      events: [
-        { nodeId: "lisbon", startsAt: at(5), endsAt: at(5), reportSubmittedAt: null },
-        { nodeId: "nairobi", startsAt: at(-10), endsAt: at(-10), reportSubmittedAt: at(-9) },
-        { nodeId: "medellin", startsAt: at(-45), endsAt: at(-45), reportSubmittedAt: null },
-      ],
+      events: [held("lisbon", 5), held("nairobi", -10, at(-9)), held("medellin", -45)],
     });
     expect(quiet).toEqual([{ nodeId: "medellin", name: "Medellín" }]);
+  });
+
+  it("counts recent events on any of a community's nodes", () => {
+    const { quiet } = eventHealth({
+      communities,
+      now,
+      events: [
+        held("lisbon", 5),
+        held("nairobi", -10),
+        { ...held("medellin-north", -3), organizationId: "org-medellin" },
+      ],
+    });
+    expect(quiet).toEqual([]);
   });
 
   it("chases reports missing more than a week after events from the last 90 days", () => {
@@ -223,11 +239,11 @@ describe("eventHealth", () => {
       communities,
       now,
       events: [
-        { nodeId: "lisbon", startsAt: at(-3), endsAt: at(-3), reportSubmittedAt: null },
-        { nodeId: "lisbon", startsAt: at(-10), endsAt: at(-10), reportSubmittedAt: null },
-        { nodeId: "nairobi", startsAt: at(-20), endsAt: at(-20), reportSubmittedAt: at(-1) },
-        { nodeId: "medellin", startsAt: at(-45), endsAt: at(-45), reportSubmittedAt: null },
-        { nodeId: "medellin", startsAt: at(-95), endsAt: at(-95), reportSubmittedAt: null },
+        held("lisbon", -3),
+        held("lisbon", -10),
+        held("nairobi", -20, at(-1)),
+        held("medellin", -45),
+        held("medellin", -95),
       ],
     });
     expect(overdue.map((event) => event.startsAt)).toEqual([at(-10), at(-45)]);

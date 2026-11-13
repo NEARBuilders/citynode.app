@@ -151,6 +151,7 @@ export const REPORT_CHASE_LIMIT = 5;
 
 type HealthEvent = {
   nodeId: string;
+  organizationId: string | null;
   startsAt: string | null;
   endsAt: string | null;
   reportSubmittedAt: string | null;
@@ -161,7 +162,10 @@ export function eventHealth<E extends HealthEvent>({
   events,
   now,
 }: {
-  communities: readonly { node: { id: string; name: string } }[];
+  communities: readonly {
+    node: { id: string; name: string };
+    tenant: { orgId: string | null };
+  }[];
   events: readonly E[];
   now: number;
 }): { quiet: { nodeId: string; name: string }[]; overdue: E[] } {
@@ -172,7 +176,7 @@ export function eventHealth<E extends HealthEvent>({
   for (const event of events) {
     const end = eventEndsAt(event);
     if (!Number.isFinite(end)) continue;
-    if (end >= recentSince) active.add(event.nodeId);
+    if (end >= recentSince) active.add(event.organizationId ?? event.nodeId);
     if (
       end >= chaseSince &&
       end + REPORT_OVERDUE_DAYS * DAY_MS < now &&
@@ -183,7 +187,7 @@ export function eventHealth<E extends HealthEvent>({
   }
   return {
     quiet: communities
-      .filter(({ node }) => !active.has(node.id))
+      .filter(({ node, tenant }) => !active.has(tenant.orgId ?? node.id))
       .map(({ node }) => ({ nodeId: node.id, name: node.name })),
     overdue,
   };

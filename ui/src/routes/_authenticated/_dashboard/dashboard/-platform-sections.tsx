@@ -21,6 +21,7 @@ import {
   platformAttendanceQueryOptions,
 } from "@/lib/queries/engagement";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
+import { refetchAll } from "@/lib/queries/refetch-all";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import {
   attendanceCoverage,
@@ -302,6 +303,7 @@ export function OnboardingOverview({ status }: { status: PlatformStatus }) {
       ? attendanceCoverage(status.progress.rows, engagementQuery.data.communities)
       : null;
   const tableQueries = [tenantsQuery, currentQuery, previousQuery];
+  const failedTableQueries = tableQueries.filter((query) => query.isError);
   const [showAll, setShowAll] = useState(false);
   const lastMonth = (count: number | undefined) =>
     count === undefined ? undefined : translate("admin.community.lastMonthCount", { count });
@@ -375,7 +377,13 @@ export function OnboardingOverview({ status }: { status: PlatformStatus }) {
       >
         {tableQueries.some((query) => query.isLoading) ? (
           <ListSkeleton rows={3} />
-        ) : tableQueries.some((query) => query.isError) ? null : rows.length === 0 ? (
+        ) : failedTableQueries.length > 0 ? (
+          <LoadError
+            message={translate("admin.redemptions.failed")}
+            onRetry={() => refetchAll(failedTableQueries)}
+            testId="admin-joins-table-error"
+          />
+        ) : rows.length === 0 ? (
           <EmptyState
             icon={UsersIcon}
             title={translate("admin.redemptions.empty")}

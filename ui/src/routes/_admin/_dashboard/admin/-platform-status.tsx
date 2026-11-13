@@ -195,7 +195,7 @@ function ReportChaseRow({ chase }: { chase: ReportChase }) {
           ) : (
             <Link
               to="/admin/events"
-              search={{ community: chase.nodeId, report: "missing" }}
+              search={{ community: chase.organizationId, report: "missing" }}
               className="min-w-0 hover:underline sm:truncate"
             >
               {translate("admin.action.chaseNamed", { name: chase.name })}

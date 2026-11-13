@@ -21,6 +21,7 @@ const harness = vi.hoisted(() => ({
   tenant: Promise.resolve({ orgId: "org-1" }) as Promise<unknown>,
   codes: Promise.resolve([]) as Promise<Array<{ usedCount: number }>>,
   calls: { node: 0, tenant: 0, codes: 0 },
+  reportError: null as Error | null,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -49,10 +50,13 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/app", () => ({
   useApiClient: () => ({
     listDiscoveryActivities: async () => harness.activities,
-    getEventReport: async () => ({
-      report: harness.report,
-      canEdit: harness.canEdit,
-      canReview: harness.canReview,
+    getEventReport: async () => {
+      if (harness.reportError) throw harness.reportError;
+      return { report: harness.report, canEdit: harness.canEdit, canReview: harness.canReview };
+    },
+    listReportCommunities: async () => ({
+      communities: [{ organizationId: ORG, slug: "harbor", name: "Harbor", nodeId: NODE }],
+      memberships: 2,
     }),
     reviewEventReport: async (input: unknown) => {
       harness.reviewed.push(input);
@@ -87,8 +91,7 @@ function attendees() {
   return (screen.getByTestId("report-attendees") as HTMLInputElement).value;
 }
 
-function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const Page = (Route as unknown as { component: ComponentType }).component;
   return render(
     <QueryClientProvider client={client}>
@@ -109,6 +112,7 @@ afterEach(() => {
   harness.canEdit = true;
   harness.canReview = false;
   harness.reviewed.length = 0;
+  harness.reportError = null;
 });
 
 const savedReport = {
@@ -236,7 +240,28 @@ describe("event report check-in prefill", () => {
     expect((await screen.findByTestId("report.reviewed-on")).textContent).toContain("Reviewed");
     expect(screen.queryByTestId("report.review")).toBeNull();
     const back = screen.getByTestId("activity-form.back");
-    expect(back.getAttribute("href")).toBe("/report");
+    await waitFor(() => expect(back.getAttribute("href")).toBe("/report?community=harbor"));
     expect(back.textContent).toBe("Reports");
+  });
+
+  it("keeps the organizer's answers when a background refresh of the report fails", async () => {
+    harness.activities = [activity];
+    harness.report = savedReport;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+
+    await waitFor(() => expect(attendees()).toBe("12"));
+    fireEvent.change(screen.getByTestId("report-attendees"), { target: { value: "15" } });
+
+    harness.reportError = new Error("offline");
+    await client.refetchQueries({ queryKey: ["event-reports", "report", ACTIVITY] });
+    const alert = await screen.findByTestId("report.refresh-error");
+    expect(screen.queryByTestId("report-retry")).toBeNull();
+    expect(attendees()).toBe("15");
+
+    harness.reportError = null;
+    fireEvent.click(alert.querySelector("button") as HTMLButtonElement);
+    await waitFor(() => expect(screen.queryByTestId("report.refresh-error")).toBeNull());
+    expect(attendees()).toBe("15");
   });
 });

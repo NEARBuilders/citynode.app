@@ -585,16 +585,14 @@ export const AttendanceLive = Layer.effect(
         Effect.gen(function* () {
           const [row] = yield* query(() =>
             db
-              .select({ syncedAt: max(attendanceEventReconciliations.reconciledAt) })
+              .select({
+                syncedAt: max(attendanceEventReconciliations.reconciledAt),
+                failing: sql<boolean>`coalesce(bool_or(${attendanceEventReconciliations.failed}), false)`,
+              })
               .from(attendanceEventReconciliations)
-              .where(
-                and(
-                  eq(attendanceEventReconciliations.organizationId, organizationId),
-                  eq(attendanceEventReconciliations.failed, false),
-                ),
-              ),
+              .where(eq(attendanceEventReconciliations.organizationId, organizationId)),
           );
-          return row?.syncedAt ?? null;
+          return row && !row.failing ? row.syncedAt : null;
         }),
     };
 

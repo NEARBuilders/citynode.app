@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
@@ -14,6 +14,8 @@ const harness = vi.hoisted(() => ({
   role: null as string | null,
   listed: (() => Promise.resolve({ communities: [], memberships: 0 })) as () => Promise<unknown>,
   opened: [] as Array<string | null>,
+  openFailed: false,
+  retried: 0,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -58,25 +60,48 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/components/layout/use-open-sole-community", () => ({
   useOpenSoleCommunity: (organizationId: string | null) => {
     harness.opened.push(organizationId);
+    return {
+      failed: !!organizationId && harness.openFailed,
+      error: harness.openFailed ? new Error("Could not open the community") : null,
+      retry: () => {
+        harness.retried += 1;
+      },
+    };
   },
 }));
+
+const pastEvent = (id: string, title: string, ownerNodeId: string) => ({
+  id,
+  ownerNodeId,
+  title,
+  kind: "event",
+  status: "published",
+  publishedAt: "2020-01-01T00:00:00.000Z",
+  startsAt: "2020-01-01T16:00:00.000Z",
+  endsAt: "2020-01-01T18:00:00.000Z",
+  venue: "Town Hall",
+});
 
 vi.mock("@/app", () => ({
   useApiClient: () => ({
     listReportCommunities: () => harness.listed(),
-    listDiscoveryActivities: async () => [
-      {
-        id: "event-missing",
-        title: "Builders Night",
-        kind: "event",
-        status: "published",
-        publishedAt: "2020-01-01T00:00:00.000Z",
-        startsAt: "2020-01-01T16:00:00.000Z",
-        endsAt: "2020-01-01T18:00:00.000Z",
-        venue: "Town Hall",
-      },
-    ],
-    listEventReportStatuses: async () => [],
+    listDiscoveryActivities: async ({ nodeId }: { nodeId: string }) =>
+      nodeId === "node-h2"
+        ? [
+            pastEvent("event-pier", "Pier Meetup", "node-h2"),
+            pastEvent("event-pier-done", "Pier Workshop", "node-h2"),
+          ]
+        : [pastEvent("event-missing", "Builders Night", nodeId)],
+    listEventReportStatuses: async ({ nodeId }: { nodeId: string }) =>
+      nodeId === "node-h2"
+        ? [
+            {
+              activityId: "event-pier-done",
+              submittedAt: "2020-01-02T00:00:00.000Z",
+              reviewedAt: null,
+            },
+          ]
+        : [],
     listMonthlyReportStatuses: async () => ({
       firstMonth: "2026-11",
       statuses: [{ month: utcMonth(-1), submittedAt: "2026-11-01T00:00:00.000Z" }],
@@ -84,8 +109,20 @@ vi.mock("@/app", () => ({
   }),
 }));
 
-const harbor = { organizationId: "org-harbor", slug: "harbor", name: "Harbor", nodeId: "node-h" };
-const alder = { organizationId: "org-alder", slug: "alder", name: "Alder", nodeId: "node-a" };
+const harbor = {
+  organizationId: "org-harbor",
+  slug: "harbor",
+  name: "Harbor",
+  nodeId: "node-h",
+  nodeIds: ["node-h"],
+};
+const alder = {
+  organizationId: "org-alder",
+  slug: "alder",
+  name: "Alder",
+  nodeId: "node-a",
+  nodeIds: ["node-a"],
+};
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -104,6 +141,8 @@ beforeEach(() => {
   harness.activeOrganizationId = "org-harbor";
   harness.role = null;
   harness.opened.length = 0;
+  harness.openFailed = false;
+  harness.retried = 0;
 });
 afterEach(() => {
   cleanup();
@@ -152,6 +191,38 @@ describe("/report", () => {
     await waitFor(() => expect(harness.opened).toContain("org-harbor"));
     expect(screen.getByTestId("report.loading")).toBeTruthy();
     expect(screen.queryByTestId("report.list")).toBeNull();
+  });
+
+  it("shows an error with Retry, not a skeleton, when opening the community fails", async () => {
+    harness.activeOrganizationId = "org-other";
+    harness.openFailed = true;
+    harness.listed = async () => ({ communities: [harbor], memberships: 2 });
+    renderPage();
+    await screen.findByText("Couldn't load your reports.");
+    expect(screen.queryByTestId("report.loading")).toBeNull();
+    fireEvent.click(screen.getByTestId("report.retry"));
+    expect(harness.retried).toBe(1);
+  });
+
+  it("lists the events owed on every node of the community, each linking to its own node", async () => {
+    harness.listed = async () => ({
+      communities: [{ ...harbor, nodeIds: ["node-h", "node-h2"] }],
+      memberships: 1,
+    });
+    renderPage();
+    const list = await screen.findByTestId("report.list");
+    expect(list.textContent).toContain("Builders Night");
+    expect(list.textContent).toContain("Pier Meetup");
+    expect(list.textContent).not.toContain("Pier Workshop");
+    expect(screen.getByTestId("report.list-event-event-pier").getAttribute("href")).toBe(
+      "/nodes/node-h2/events/event-pier/report",
+    );
+    expect(screen.getByTestId("report.list-event-event-missing").getAttribute("href")).toBe(
+      "/nodes/node-h/events/event-missing/report",
+    );
+    expect(screen.getByTestId(`report.list-month-${utcMonth(0)}-open`).getAttribute("href")).toBe(
+      `/nodes/node-h/reports/${utcMonth(0)}`,
+    );
   });
 
   it("asks which community when the person reports for several", async () => {
