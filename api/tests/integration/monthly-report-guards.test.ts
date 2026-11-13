@@ -171,7 +171,7 @@ function monthlyCalls(
 }
 
 describe("monthly reports admins will never see", () => {
-  it("refuses them for a suspended or deleted community", async () => {
+  it("makes them read-only for a suspended or deleted community", async () => {
     for (const close of ["suspend", "remove"] as const) {
       const city = await community();
       const admin = await platformAdmin();
@@ -179,12 +179,17 @@ describe("monthly reports admins will never see", () => {
         await city.owner.getMonthlyReport({ nodeId: city.node.id, month: REPORTED }),
       ).toMatchObject({ canEdit: true, open: true });
       await city[close]();
-      for (const call of [
-        ...monthlyCalls(city.owner, city.node.id),
-        ...monthlyCalls(admin, city.node.id, { write: false }),
-      ]) {
-        await expect(call()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      for (const reader of [city.owner, admin]) {
+        expect(
+          await reader.getMonthlyReport({ nodeId: city.node.id, month: REPORTED }),
+        ).toMatchObject({ canEdit: false, report: null });
+        expect((await reader.listMonthlyReportStatuses({ nodeId: city.node.id })).statuses).toEqual(
+          [],
+        );
       }
+      await expect(
+        city.owner.saveMonthlyReport({ nodeId: city.node.id, month: REPORTED, notes: "Hi" }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
   });
 

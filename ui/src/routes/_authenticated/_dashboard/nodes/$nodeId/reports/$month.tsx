@@ -326,7 +326,7 @@ function MonthlyReportShell({
   const api = useApiClient();
   const { nodeId } = Route.useParams();
   const communities = useQuery(reportCommunitiesQueryOptions(api));
-  const community = communities.data?.communities.find((item) => item.nodeId === nodeId);
+  const community = communities.data?.communities.find((item) => item.nodeIds.includes(nodeId));
   return (
     <PageContainer variant="narrow">
       <div className="flex flex-col gap-4">

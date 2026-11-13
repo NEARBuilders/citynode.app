@@ -202,20 +202,18 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         db
           .select({
             startedAt: sql<string | null>`min(coalesce(${nodes.activatedAt}, ${nodes.createdAt}))`,
+            active: sql<boolean>`coalesce(bool_and(${tenants.status} = 'active' and ${tenants.deletedAt} is null), false)`,
           })
           .from(nodes)
           .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-          .where(
-            and(
-              eq(nodes.tenantId, access.tenantId),
-              eq(tenants.status, "active"),
-              isNull(tenants.deletedAt),
-              listedNode,
-            ),
-          ),
+          .where(and(eq(nodes.tenantId, access.tenantId), listedNode)),
       );
       if (!row?.startedAt) return yield* Effect.fail(new ORPCError("NOT_FOUND"));
-      return { ...access, firstMonth: firstReportMonth(new Date(row.startedAt)) };
+      return {
+        ...access,
+        canEdit: access.canEdit && row.active,
+        firstMonth: firstReportMonth(new Date(row.startedAt)),
+      };
     });
   }
 

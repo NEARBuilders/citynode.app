@@ -68,7 +68,15 @@ vi.mock("@/app", () => ({
       return { reviewedAt: "2026-12-03T00:00:00.000Z" };
     },
     listReportCommunities: async () => ({
-      communities: [{ organizationId: "org-h", slug: "harbor", name: "Harbor", nodeId: NODE }],
+      communities: [
+        {
+          organizationId: "org-h",
+          slug: "harbor",
+          name: "Harbor",
+          nodeId: "node-first",
+          nodeIds: ["node-first", NODE],
+        },
+      ],
       memberships: 1,
     }),
   }),

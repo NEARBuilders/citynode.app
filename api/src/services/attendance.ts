@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, gte, inArray, isNotNull, lt, max, min, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, max, min, notInArray, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -308,6 +308,19 @@ export const AttendanceLive = Layer.effect(
             truncated: false,
             ok: !!latest && outsideRecorded.every(Boolean),
           });
+          yield* query(() =>
+            db
+              .delete(attendanceEventReconciliations)
+              .where(
+                and(
+                  eq(attendanceEventReconciliations.organizationId, organizationId),
+                  notInArray(attendanceEventReconciliations.eventId, [
+                    ...known,
+                    ORGANIZATION_SWEEP,
+                  ]),
+                ),
+              ),
+          );
           const reconciledAt = new Date();
           const target = [
             attendanceEventReconciliations.organizationId,

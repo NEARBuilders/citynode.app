@@ -95,7 +95,8 @@ function EventReportPage() {
   const communities = useQuery(reportCommunitiesQueryOptions(api));
   const community = communities.data?.communities.find(
     (item) =>
-      item.nodeId === nodeId || (!!tenant.data?.orgId && item.organizationId === tenant.data.orgId),
+      item.nodeIds.includes(nodeId) ||
+      (!!tenant.data?.orgId && item.organizationId === tenant.data.orgId),
   );
   const waitingForCheckIns =
     report.isSuccess &&

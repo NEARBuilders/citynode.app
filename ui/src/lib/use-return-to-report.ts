@@ -13,7 +13,7 @@ export function useReturnToReport() {
       .catch(() => null);
     const community = listed?.communities.find(
       (item) =>
-        item.nodeId === match.nodeId ||
+        (!!match.nodeId && item.nodeIds.includes(match.nodeId)) ||
         (!!match.organizationId && item.organizationId === match.organizationId),
     );
     await navigate({ to: "/report", search: community ? { community: community.slug } : {} });

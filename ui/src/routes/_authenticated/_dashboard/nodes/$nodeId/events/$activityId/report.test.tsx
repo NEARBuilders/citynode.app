@@ -55,7 +55,9 @@ vi.mock("@/app", () => ({
       return { report: harness.report, canEdit: harness.canEdit, canReview: harness.canReview };
     },
     listReportCommunities: async () => ({
-      communities: [{ organizationId: ORG, slug: "harbor", name: "Harbor", nodeId: NODE }],
+      communities: [
+        { organizationId: ORG, slug: "harbor", name: "Harbor", nodeId: NODE, nodeIds: [NODE] },
+      ],
       memberships: 2,
     }),
     reviewEventReport: async (input: unknown) => {

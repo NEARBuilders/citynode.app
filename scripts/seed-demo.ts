@@ -25,7 +25,13 @@ function requireUrl(key: string) {
     );
   }
   if (!url.startsWith("pglite:")) {
-    const host = new URL(url).hostname.toLowerCase();
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.searchParams.has("host") || parsed.searchParams.has("hostaddr")) {
+      throw new Error(
+        `${key} sets its host in the query string. Refusing to seed demo data there.`,
+      );
+    }
     if (!LOCAL_HOSTS.has(host)) {
       throw new Error(`${key} points at ${host}, not localhost. Refusing to seed demo data there.`);
     }
