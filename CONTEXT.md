@@ -68,6 +68,20 @@ _Avoid_: blockchain event, transaction
 A node-associated public post with an attributed source, original publication time, and a link to the original content.
 _Avoid_: social account, imported activity
 
+## Reporting
+
+**Event Report**:
+An Organizer's answers about one Node Event after it has ended, kept against the event and its owner node; one per event, editable by the community's Organizers, read-only to platform admins, who mark it Reviewed.
+_Avoid_: event feedback, post-event survey, discovery report (that's a visitor flagging content)
+
+**Monthly Report**:
+A community's free-form account of one calendar month (UTC), written by its Organizers, with that month's events held, check-ins, joins and new members saved alongside it when submitted; one per community per month, whichever of the community's nodes it is opened from, editable until the end of the following month, read-only to platform admins, who mark it Reviewed. Owed from November 2026, or from the month the community started if that is later, by every active community.
+_Avoid_: monthly update, newsletter, monthly stats (the numbers are only part of it)
+
+**Reviewed**:
+A platform admin has read a report and marked it so; the community sees it. No approval, rejection or comments; editing the report clears it.
+_Avoid_: approved, accepted, signed off
+
 ## Event onboarding
 
 **Onboarding Code**:

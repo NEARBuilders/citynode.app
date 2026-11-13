@@ -1,0 +1,40 @@
+# Rendre compte chaque mois
+
+Les propriétaires et organisateurs de chaque communauté envoient depuis City Node un court rapport par mois, ainsi qu'un rapport pour chaque événement une fois terminé.
+
+## Par où commencer
+
+Ouvrez [vos rapports](/report). Connectez-vous si City Node vous le demande, puis choisissez votre communauté si vous en animez plusieurs. La page affiche le rapport de ce mois-ci, celui du mois dernier tant que vous pouvez encore le modifier, et chaque événement terminé qui attend encore un rapport. Tout est à un clic.
+
+Seuls les propriétaires et les membres d'une équipe ayant le domaine Événements peuvent rendre compte. Si la page indique que les rapports viennent des propriétaires et des organisateurs, demandez au propriétaire de votre communauté de vous ajouter à cette équipe.
+
+## Ce que demande le rapport mensuel
+
+City Node remplit pour vous les chiffres du mois :
+
+- **Événements tenus :** les événements publiés qui ont commencé ce mois-là et sont terminés.
+- **Présences :** les personnes enregistrées à vos événements ce mois-là avec vos codes QR.
+- **Adhésions** et **nouveaux membres :** les personnes qui ont rejoint votre communauté avec vos codes ce mois-là, et combien étaient nouvelles sur City Node.
+
+Les chiffres sont enregistrés avec votre rapport à l'envoi : ils ne changent plus ensuite.
+
+Racontez ensuite ce qui s'est passé dans un seul champ libre, aussi court ou long que vous voulez. Il n'y a pas de liste de questions. À mentionner par exemple :
+
+- les temps forts, et ce que les gens ont construit ou appris
+- les personnes, partenaires et lieux qui ont aidé
+- ce qui n'a pas marché et ce que vous essaierez ensuite
+- ce dont vous avez besoin de l'équipe de la plateforme
+
+## Quand l'envoyer
+
+Les rapports mensuels commencent en novembre 2026, ou au mois où votre communauté a démarré si c'est plus tard. Envoyez le rapport d'un mois avant la fin du mois suivant. Votre Accueil affiche le rapport de ce mois et celui du mois dernier tant qu'ils ne sont pas envoyés. Jusqu'à la fin du mois suivant, vous pouvez rouvrir le rapport et le modifier ; ensuite il passe en lecture seule.
+
+## Rapports d'événement
+
+Chaque événement terminé a son propre rapport, avec quelques questions fixes. Ouvrez-le depuis [vos rapports](/report) ou depuis **Ma communauté**. Après l'enregistrement d'un rapport d'événement ou d'un rapport mensuel, City Node vous ramène à vos rapports pour que le suivant soit à un clic.
+
+## Qui le lit
+
+Vous, les autres propriétaires et organisateurs de votre communauté, et l'équipe de la plateforme City Node. Personne d'autre ne peut le voir.
+
+L'équipe de la plateforme lit chaque rapport et le marque **Examiné**, ce que vous verrez dans [vos rapports](/report) et sur le rapport lui-même. Elle n'envoie pas de commentaires via City Node. Si vous modifiez un rapport après son examen, il lui revient pour être relu.

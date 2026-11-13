@@ -271,8 +271,14 @@ export function OnboardingTab({
               <div className="flex min-w-0 flex-col gap-1">
                 <h3 className="text-lg font-medium text-foreground">{selectedCode.eventName}</h3>
                 <span className="text-sm text-muted-foreground">
-                  {formatRemaining(activeStatus.expiresAt, Date.now(), translate, locale)}
-                  {translate("station.remaining")}
+                  {activeStatus.expiresAt ? (
+                    <>
+                      {formatRemaining(activeStatus.expiresAt, Date.now(), translate, locale)}
+                      {translate("station.remaining")}
+                    </>
+                  ) : (
+                    translate("station.noExpiry")
+                  )}
                 </span>
               </div>
               <div className="flex flex-col items-end" data-testid="onboard.joined-count">

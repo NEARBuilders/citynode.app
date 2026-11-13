@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, max, min, notInArray, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -31,7 +31,7 @@ export interface UpstreamCode {
 
 export interface UpstreamCodeStatus {
   eventId: string | null;
-  eventName: string;
+  eventName: string | null;
   joined: Array<{ userId: string; createdAt: Date }>;
 }
 
@@ -73,6 +73,27 @@ export interface AttendanceRecord {
   }>;
 }
 
+export interface AttendanceSummary {
+  people: number;
+  returning: number;
+  syncedAt: string | null;
+  partial: boolean;
+}
+
+export interface CommunityEngagement extends AttendanceSummary {
+  organizationId: string;
+}
+
+export interface EventAttendance extends AttendanceSummary {
+  organizationId: string;
+  eventId: string;
+}
+
+export interface PlatformAttendance {
+  people: number;
+  returning: number;
+}
+
 export interface AttendanceService {
   reconcile(input: {
     organizationId: string;
@@ -85,6 +106,14 @@ export interface AttendanceService {
     userId: string;
     communities: Array<{ organizationId: string; communityName: string; events: CommunityEvent[] }>;
   }): AttendanceEffect<AttendanceRecord>;
+  engagement(): AttendanceEffect<CommunityEngagement[]>;
+  eventAttendance(): AttendanceEffect<EventAttendance[]>;
+  platformAttendance(window: { from: Date; to: Date }): AttendanceEffect<PlatformAttendance>;
+  monthlyCheckIns(
+    organizationId: string,
+    window: { from: Date; to: Date },
+  ): AttendanceEffect<number>;
+  lastSyncedAt(organizationId: string): AttendanceEffect<Date | null>;
 }
 
 export class AttendanceTag extends Context.Service<AttendanceTag, AttendanceService>()(
@@ -140,7 +169,7 @@ export const AttendanceLive = Layer.effect(
                     codeId: code.id,
                     userId: join.userId,
                     eventId,
-                    eventName,
+                    eventName: eventName ?? input.communityName,
                     communityName: input.communityName,
                     classified,
                     checkedInAt: join.createdAt,
@@ -174,6 +203,29 @@ export const AttendanceLive = Layer.effect(
           }),
         );
         return true;
+      });
+
+    const syncedAttendance = () =>
+      Effect.all({
+        checkIns: query(() =>
+          db
+            .select({
+              organizationId: attendanceCheckIns.organizationId,
+              userId: attendanceCheckIns.userId,
+              eventId: attendanceCheckIns.eventId,
+              firstCheckedInAt: min(attendanceCheckIns.checkedInAt),
+            })
+            .from(attendanceCheckIns)
+            .where(
+              and(eq(attendanceCheckIns.classified, true), isNotNull(attendanceCheckIns.eventId)),
+            )
+            .groupBy(
+              attendanceCheckIns.organizationId,
+              attendanceCheckIns.userId,
+              attendanceCheckIns.eventId,
+            ),
+        ),
+        reconciliations: query(() => db.select().from(attendanceEventReconciliations)),
       });
 
     const service: AttendanceService = {
@@ -256,6 +308,19 @@ export const AttendanceLive = Layer.effect(
             truncated: false,
             ok: !!latest && outsideRecorded.every(Boolean),
           });
+          yield* query(() =>
+            db
+              .delete(attendanceEventReconciliations)
+              .where(
+                and(
+                  eq(attendanceEventReconciliations.organizationId, organizationId),
+                  notInArray(attendanceEventReconciliations.eventId, [
+                    ...known,
+                    ORGANIZATION_SWEEP,
+                  ]),
+                ),
+              ),
+          );
           const reconciledAt = new Date();
           const target = [
             attendanceEventReconciliations.organizationId,
@@ -420,6 +485,127 @@ export const AttendanceLive = Layer.effect(
             ),
             communities: coverage,
           };
+        }),
+      engagement: () =>
+        Effect.gen(function* () {
+          const { checkIns, reconciliations } = yield* syncedAttendance();
+          const eventsByPerson = new Map<string, Map<string, number>>();
+          for (const row of checkIns) {
+            const people = eventsByPerson.get(row.organizationId) ?? new Map<string, number>();
+            people.set(row.userId, (people.get(row.userId) ?? 0) + 1);
+            eventsByPerson.set(row.organizationId, people);
+          }
+          const coverage = new Map<string, { syncedAt: number; partial: boolean }>();
+          for (const row of reconciliations) {
+            const current = coverage.get(row.organizationId) ?? { syncedAt: 0, partial: false };
+            coverage.set(row.organizationId, {
+              syncedAt: Math.max(current.syncedAt, row.reconciledAt.getTime()),
+              partial: current.partial || row.truncated || row.failed,
+            });
+          }
+          const organizationIds = new Set([...eventsByPerson.keys(), ...coverage.keys()]);
+          return [...organizationIds].sort().map((organizationId) => {
+            const events = [...(eventsByPerson.get(organizationId)?.values() ?? [])];
+            const synced = coverage.get(organizationId);
+            return {
+              organizationId,
+              people: events.length,
+              returning: events.filter((count) => count >= 2).length,
+              syncedAt: synced?.syncedAt ? new Date(synced.syncedAt).toISOString() : null,
+              partial: synced?.partial ?? false,
+            };
+          });
+        }),
+      eventAttendance: () =>
+        Effect.gen(function* () {
+          const { checkIns, reconciliations } = yield* syncedAttendance();
+          const firstVisit = new Map<string, number>();
+          for (const row of checkIns) {
+            const key = `${row.organizationId}:${row.userId}`;
+            const at = row.firstCheckedInAt?.getTime() ?? Number.POSITIVE_INFINITY;
+            firstVisit.set(key, Math.min(firstVisit.get(key) ?? at, at));
+          }
+          const byEvent = new Map<string, EventAttendance>();
+          const entry = (organizationId: string, eventId: string) => {
+            const key = `${organizationId}:${eventId}`;
+            const current = byEvent.get(key) ?? {
+              organizationId,
+              eventId,
+              people: 0,
+              returning: 0,
+              syncedAt: null,
+              partial: false,
+            };
+            byEvent.set(key, current);
+            return current;
+          };
+          for (const row of checkIns) {
+            if (!row.eventId) continue;
+            const current = entry(row.organizationId, row.eventId);
+            current.people += 1;
+            const at = row.firstCheckedInAt?.getTime() ?? Number.POSITIVE_INFINITY;
+            if (at > (firstVisit.get(`${row.organizationId}:${row.userId}`) ?? at)) {
+              current.returning += 1;
+            }
+          }
+          for (const row of reconciliations) {
+            if (row.eventId === ORGANIZATION_SWEEP) continue;
+            const current = entry(row.organizationId, row.eventId);
+            current.syncedAt = row.reconciledAt.toISOString();
+            current.partial = row.truncated || row.failed;
+          }
+          return [...byEvent.values()];
+        }),
+      platformAttendance: ({ from, to }) =>
+        Effect.gen(function* () {
+          const { checkIns } = yield* syncedAttendance();
+          const visits = new Map<string, { before: number; during: boolean }>();
+          for (const row of checkIns) {
+            const at = row.firstCheckedInAt?.getTime();
+            if (at === undefined || at >= to.getTime()) continue;
+            const person = visits.get(row.userId) ?? { before: 0, during: false };
+            person.before += 1;
+            if (at >= from.getTime()) person.during = true;
+            visits.set(row.userId, person);
+          }
+          const people = [...visits.values()].filter(({ during }) => during);
+          return {
+            people: people.length,
+            returning: people.filter(({ before }) => before >= 2).length,
+          };
+        }),
+      monthlyCheckIns: (organizationId, { from, to }) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db
+              .select({
+                count: sql<number>`count(distinct (${attendanceCheckIns.userId}, ${attendanceCheckIns.eventId}))::int`,
+              })
+              .from(attendanceCheckIns)
+              .where(
+                and(
+                  eq(attendanceCheckIns.organizationId, organizationId),
+                  eq(attendanceCheckIns.classified, true),
+                  isNotNull(attendanceCheckIns.eventId),
+                  gte(attendanceCheckIns.checkedInAt, from),
+                  lt(attendanceCheckIns.checkedInAt, to),
+                ),
+              ),
+          );
+          return row?.count ?? 0;
+        }),
+      lastSyncedAt: (organizationId) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db
+              .select({
+                syncedAt: max(attendanceEventReconciliations.reconciledAt),
+                failing: sql<boolean>`coalesce(bool_or(${attendanceEventReconciliations.failed}), false)`,
+              })
+              .from(attendanceEventReconciliations)
+              .where(eq(attendanceEventReconciliations.organizationId, organizationId)),
+          );
+          return row && !row.failing ? row.syncedAt : null;
         }),
     };
 

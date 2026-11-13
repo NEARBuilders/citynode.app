@@ -1,4 +1,4 @@
-import { ArrowSquareOutIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, ArrowUpRightIcon, UsersThreeIcon } from "@phosphor-icons/react";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
@@ -13,8 +13,11 @@ import {
 } from "@/components/ui/select";
 import { useAppTranslation } from "@/i18n/runtime";
 import { sortCommunityNodes } from "@/lib/community-node";
+import { isPlatformNode } from "@/lib/node-kind";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import { organizationsQueryOptions } from "@/lib/queries/organizations";
+import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import {
   canManageCommunity,
   canOperateNodes,
@@ -28,7 +31,7 @@ type CommunityNode = NonNullable<Awaited<ReturnType<ApiClient["getNode"]>>>;
 export function communityAuthContextQueryOptions(api: ApiClient, organizationId: string | null) {
   return queryOptions({
     queryKey: ["home-auth-context", organizationId ?? ""],
-    queryFn: () => api.auth.getContext().catch(() => null),
+    queryFn: () => api.auth.getContext(),
     staleTime: 30 * 1000,
   });
 }
@@ -102,8 +105,20 @@ export function CommunityHeader({
   const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
   const workspace = useQuery(teamWorkspaceQueryOptions(api));
   const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
+  const activeTenant = useQuery({
+    ...tenantByOrgQueryOptions(api, activeOrganizationId ?? ""),
+    enabled: canOrganize && !!activeOrganizationId,
+  });
+  const ownCommunity = !!node?.tenantId && activeTenant.data?.id === node.tenantId;
+  const organizationSlug = useQuery({
+    ...organizationsQueryOptions(api),
+    enabled: ownCommunity,
+    select: (organizations) =>
+      organizations.find((organization) => organization.id === activeOrganizationId)?.slug ?? null,
+  }).data;
 
-  const siteUrl = node && gateway ? buildTenantUrl(node.slug, gateway) : null;
+  const siteUrl =
+    node && gateway && !isPlatformNode(node) ? buildTenantUrl(node.slug, gateway) : null;
 
   const switchTo = (targetId: string) => {
     if (active === "settings" && node?.tenantId) {
@@ -189,6 +204,23 @@ export function CommunityHeader({
                   ))}
                 </SelectContent>
               </Select>
+            )}
+            {canOrganize && ownCommunity && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  organizationSlug ? (
+                    <Link to="/orgs/$slug" params={{ slug: organizationSlug }} />
+                  ) : (
+                    <Link to="/orgs" />
+                  )
+                }
+                data-testid="community-header.organization"
+              >
+                <UsersThreeIcon />
+                {translate("common.organization")}
+              </Button>
             )}
             {nodeId && listing.data && (
               <>

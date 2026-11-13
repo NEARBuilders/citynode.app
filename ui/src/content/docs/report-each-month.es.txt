@@ -1,0 +1,40 @@
+# Informa cada mes
+
+Los propietarios y organizadores de cada comunidad envían desde City Node un informe breve al mes, además de un informe por cada evento cuando termina.
+
+## Por dónde empezar
+
+Abre [tus informes](/report). Inicia sesión si City Node te lo pide y elige tu comunidad si llevas más de una. La página muestra el informe de este mes, el del mes pasado mientras aún puedas editarlo y cada evento terminado que todavía necesita informe. Todo está a un clic.
+
+Solo pueden informar los propietarios y los miembros de un equipo con el área de Eventos. Si la página dice que los informes los envían propietarios y organizadores, pide al propietario de tu comunidad que te añada a ese equipo.
+
+## Qué pide el informe mensual
+
+City Node completa las cifras del mes por ti:
+
+- **Eventos realizados:** eventos publicados que empezaron ese mes y ya terminaron.
+- **Registros:** personas registradas en tus eventos ese mes con tus códigos QR.
+- **Uniones** y **miembros nuevos:** personas que se unieron a tu comunidad con tus códigos ese mes, y cuántas eran nuevas en City Node.
+
+Las cifras se guardan con tu informe al enviarlo, así que no cambian después.
+
+Después cuenta lo que pasó en un único campo libre, tan breve o extenso como quieras. No hay lista de preguntas. Cosas útiles que mencionar:
+
+- lo más destacado, y lo que la gente construyó o aprendió
+- personas, aliados y lugares que ayudaron
+- lo que no funcionó y lo que probarás después
+- lo que necesitas del equipo de la plataforma
+
+## Cuándo se entrega
+
+Los informes mensuales empiezan en noviembre de 2026, o en el mes en que empezó tu comunidad si es posterior. Envía el informe de un mes antes de que termine el mes siguiente. Tu Inicio muestra el informe de este mes y el del mes pasado hasta que los envíes. Hasta que termine el mes siguiente puedes volver a abrir el informe y cambiarlo; después queda en solo lectura.
+
+## Informes de eventos
+
+Cada evento terminado tiene su propio informe con unas pocas preguntas fijas. Ábrelo desde [tus informes](/report) o desde **Mi comunidad**. Al guardar un informe de evento o un informe mensual, City Node te lleva de vuelta a tus informes para que el siguiente esté a un clic.
+
+## Quién lo lee
+
+Tú, los demás propietarios y organizadores de tu comunidad y el equipo de la plataforma City Node. Nadie más puede verlo.
+
+El equipo de la plataforma lee cada informe y lo marca como **Revisado**, lo que verás en [tus informes](/report) y en el propio informe. No envía comentarios a través de City Node. Si cambias un informe después de que lo revisaran, vuelve a ellos para leerlo de nuevo.

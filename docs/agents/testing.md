@@ -43,7 +43,14 @@ The matrix runs exactly where a decision is made — never everywhere:
 |---|---|---|---|
 | **T0 local** | lefthook hooks (`lefthook.yml`, installed by `pnpm run prepare`) | pre-commit: Biome on staged files · pre-push: `typecheck` + `lint:effect` | seconds |
 | **T1 PR** | `ci.yml` on pull requests | lint/typecheck, path-gated unit suites, ui-only app-load smoke; slow stack suites skip | ~4 min |
-| **T2 gate** | `release.yml` before every npm publish · nightly on the main tip (`backcompat-nightly.yml`) via `regression-full.yml` | the full matrix: unit + dev + start + backcompat + framework regression | ~30–45 min |
+| **T2 gate** | `release.yml` before every npm publish | unit + start regression (parallel planes — `tier: release`) | ~15–20 min |
+| **T2 nightly** | nightly on the main tip (`backcompat-nightly.yml`) via `regression-full.yml` (`tier: nightly`) | the full matrix: unit + dev + start + backcompat + framework, parallel planes (backcompat mode currently broken at boot — see AGENTS.md) | ~25 min |
+
+The gate proves the production artifact (start) and the published-chain
+contract (backcompat). The dev and framework planes pin the `bos dev`
+machinery (source-mode dev server, process death) — app-code changes cannot
+break them, and the start plane's full suite already covers their user
+journeys — so they canary nightly instead of gating every publish.
 
 The slow suites (HTTP stacks, sharded browser matrix, process-death framework
 regression) live in `ci.yml` as `workflow_dispatch`-only jobs for triage, and
@@ -115,6 +122,55 @@ boundary above; until it lands, this document is the contract.
 - **The stall watchdog** fails after ~120 s of zero test progress: a spec that
   can hang waits explicitly (bounded `waitFor`, assertions with timeout), it
   doesn't spin silently.
+
+## Demo seed — realistic local data and persona fixtures
+
+`pnpm run seed:demo` fills the local databases with six communities that look
+like real usage: Lagos and Lisbon (mature, events and reports since August),
+Nairobi and Buenos Aires (activated this month, setup incomplete), Kraków
+(quiet since September) and Manila (events, no reports). Lagos and Lisbon have
+the month's monthly report in (Lagos reviewed, Lisbon waiting), and some of
+their event reports are reviewed. Dates are relative to the day it runs
+(`--today YYYY-MM-DD` pins them); the monthly reports belong to the month that
+held the day a week before, so `--today 2026-12-03` shows November being
+chased. Ids are deterministic and each
+run deletes and rewrites only demo rows, so it is safe to re-run.
+
+1. In `.env`, set `BETTER_AUTH_SECRET`, `API_DATABASE_URL`, `AUTH_DATABASE_URL`
+   (and `PROPOSALS_DATABASE_URL` if it has its own database) to explicit
+   `pglite:<absolute dir>` or local `postgres://` URLs, and `BASE_URL`. The
+   seed refuses a database on any host other than localhost.
+2. Boot the app once (`pnpm run dev`) so migrations run. With PGlite, stop it
+   before seeding — one process per data dir; the seed refuses while the app
+   answers on `BASE_URL`.
+3. `pnpm run seed:demo`, then start the app again.
+4. `pnpm run seed:demo:login` and open `http://localhost:4599`: each link sets
+   that person's session cookie for `localhost` and redirects into the app.
+
+| Persona | Person | Shows |
+|---|---|---|
+| `platformAdmin` | Nadia Rahman | platform admin, also an admin of Nairobi |
+| `platformAdminOnly` | Omar Haddad | platform admin who runs no community |
+| `ownerMature` | Adaeze Okonkwo | owner of Lagos: events to report, joins, returning members |
+| `organizer` | Tunde Bakare | Lagos events team, not owner |
+| `finance` | Ifeoma Nwosu | Lagos finance team |
+| `member` | Chidi Eze | plain Lagos member who attended most events |
+| `twoCommunities` | Sofia Almeida | on the events team of Lisbon (active) and Lagos, so `/report` asks which |
+| `noCommunity` | Daniel Mensah | signed in, no community |
+| `ownerNew`, `ownerNewWithEvents`, `ownerQuiet`, `ownerNoReports`, `ownerSecondMature` | | owners of Nairobi, Buenos Aires, Kraków, Manila, Lisbon |
+
+The data lives in `tests/regression/fixtures/demo/demo-data.ts` (one entry per
+community; new content is a new field there plus one section function in
+`tests/regression/lib/demo-seed.ts`). Specs import
+`seedDemoCommunities()` and `signInAsDemo(page, seed, "ownerMature")` from
+`tests/regression/browser/helpers/demo.ts`.
+
+`pnpm run screens:capture -- --out <dir> --label <before|after>` signs in as
+each persona and saves `<persona>--<page>--<desktop|mobile>.png` at 1440×900
+and 390×844 (`--base-url`, `--only <persona|page|persona:page,…>`, and
+`--now <ISO date>` to pin the browser clock to a seed date). Its `SHOTS` list in
+`scripts/capture-screens.mjs` is the place to add routes; a route that answers
+404 is skipped and reported in `<label>.json`.
 
 ## Writing a good regression test
 

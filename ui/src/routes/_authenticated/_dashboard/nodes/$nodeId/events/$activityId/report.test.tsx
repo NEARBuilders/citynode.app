@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
@@ -14,10 +14,14 @@ const ORG = "org-1";
 const harness = vi.hoisted(() => ({
   activities: [] as unknown[],
   report: null as unknown,
+  canEdit: true,
+  canReview: false,
+  reviewed: [] as unknown[],
   node: Promise.resolve({ tenantId: "tenant-1" }) as Promise<unknown>,
   tenant: Promise.resolve({ orgId: "org-1" }) as Promise<unknown>,
   codes: Promise.resolve([]) as Promise<Array<{ usedCount: number }>>,
   calls: { node: 0, tenant: 0, codes: 0 },
+  reportError: null as Error | null,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -26,14 +30,40 @@ vi.mock("@tanstack/react-router", () => ({
     useParams: () => ({ nodeId: NODE, activityId: ACTIVITY }),
     useRouteContext: () => ({ auth: { activeOrganizationId: ORG } }),
   }),
-  Link: ({ children }: { children?: ReactNode }) => <a href="/events">{children}</a>,
+  Link: ({
+    children,
+    to,
+    search,
+    ...props
+  }: {
+    children?: ReactNode;
+    to?: string;
+    search?: Record<string, string>;
+  }) => (
+    <a href={`${to ?? ""}${search ? `?${new URLSearchParams(search)}` : ""}`} {...props}>
+      {children}
+    </a>
+  ),
   useNavigate: () => vi.fn(),
 }));
 
 vi.mock("@/app", () => ({
   useApiClient: () => ({
     listDiscoveryActivities: async () => harness.activities,
-    getEventReport: async () => harness.report,
+    getEventReport: async () => {
+      if (harness.reportError) throw harness.reportError;
+      return { report: harness.report, canEdit: harness.canEdit, canReview: harness.canReview };
+    },
+    listReportCommunities: async () => ({
+      communities: [
+        { organizationId: ORG, slug: "harbor", name: "Harbor", nodeId: NODE, nodeIds: [NODE] },
+      ],
+      memberships: 2,
+    }),
+    reviewEventReport: async (input: unknown) => {
+      harness.reviewed.push(input);
+      return { reviewedAt: "2026-10-20T00:00:00.000Z" };
+    },
     getNode: () => {
       harness.calls.node += 1;
       return harness.node;
@@ -63,8 +93,7 @@ function attendees() {
   return (screen.getByTestId("report-attendees") as HTMLInputElement).value;
 }
 
-function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const Page = (Route as unknown as { component: ComponentType }).component;
   return render(
     <QueryClientProvider client={client}>
@@ -82,7 +111,40 @@ const activity = {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  harness.canEdit = true;
+  harness.canReview = false;
+  harness.reviewed.length = 0;
+  harness.reportError = null;
 });
+
+const savedReport = {
+  activityId: ACTIVITY,
+  formVersion: 1,
+  submittedAt: "2026-10-16T00:00:00.000Z",
+  updatedAt: "2026-10-16T00:00:00.000Z",
+  reviewedAt: null as string | null,
+  report: {
+    format: "irl",
+    socialLinks: ["https://example.com/post"],
+    focus: "crypto",
+    audiences: ["general"],
+    audienceOther: "",
+    theme: "Launch notes",
+    attendees: 12,
+    slideLinks: [],
+    kpis: ["Twelve people", "Two new members", ""],
+    wentWell: "The room stayed for the demo.",
+    improvements: "Start on time.",
+    talentAfter: "Two people offered to host.",
+    talentDuring: "A member ran check-in.",
+    materialsNeeded: "",
+    hadPartners: false,
+    partners: "",
+    nextActions: "Publish the notes.",
+    insights: "",
+    mediaLinks: [],
+  },
+};
 
 describe("event report check-in prefill", () => {
   it("waits for check-ins before showing a new report", async () => {
@@ -127,33 +189,7 @@ describe("event report check-in prefill", () => {
 
   it("shows a saved report without waiting for check-ins", async () => {
     harness.activities = [activity];
-    harness.report = {
-      activityId: ACTIVITY,
-      formVersion: 1,
-      submittedAt: "2026-10-16T00:00:00.000Z",
-      updatedAt: "2026-10-16T00:00:00.000Z",
-      report: {
-        format: "irl",
-        socialLinks: ["https://example.com/post"],
-        focus: "crypto",
-        audiences: ["general"],
-        audienceOther: "",
-        theme: "Launch notes",
-        attendees: 12,
-        slideLinks: [],
-        kpis: ["Twelve people", "Two new members", ""],
-        wentWell: "The room stayed for the demo.",
-        improvements: "Start on time.",
-        talentAfter: "Two people offered to host.",
-        talentDuring: "A member ran check-in.",
-        materialsNeeded: "",
-        hadPartners: false,
-        partners: "",
-        nextActions: "Publish the notes.",
-        insights: "",
-        mediaLinks: [],
-      },
-    };
+    harness.report = savedReport;
     harness.node = new Promise(() => {});
     harness.tenant = new Promise(() => {});
     harness.codes = new Promise(() => {});
@@ -161,5 +197,73 @@ describe("event report check-in prefill", () => {
     renderPage();
 
     await waitFor(() => expect(attendees()).toBe("12"));
+  });
+
+  it("shows a platform admin the answers without the form", async () => {
+    harness.activities = [activity];
+    harness.report = savedReport;
+    harness.canEdit = false;
+    harness.node = new Promise(() => {});
+    harness.tenant = new Promise(() => {});
+    harness.codes = new Promise(() => {});
+
+    renderPage();
+
+    expect(await screen.findByTestId("report-answers")).toBeTruthy();
+    expect(screen.getByText("Launch notes")).toBeTruthy();
+    expect(screen.queryByTestId("report-attendees")).toBeNull();
+  });
+
+  it("lets a platform admin mark the report reviewed", async () => {
+    harness.activities = [activity];
+    harness.report = savedReport;
+    harness.canEdit = false;
+    harness.canReview = true;
+
+    renderPage();
+
+    fireEvent.click(await screen.findByTestId("report.review"));
+    await waitFor(() =>
+      expect(harness.reviewed).toEqual([
+        { activityId: ACTIVITY, reviewed: true, updatedAt: "2026-10-16T00:00:00.000Z" },
+      ]),
+    );
+    const back = screen.getByTestId("activity-form.back");
+    expect(back.getAttribute("href")).toBe(`/admin/events?community=${NODE}`);
+    expect(back.textContent).toBe("Events");
+  });
+
+  it("tells the organizer their report was reviewed", async () => {
+    harness.activities = [activity];
+    harness.report = { ...savedReport, reviewedAt: "2026-10-20T00:00:00.000Z" };
+
+    renderPage();
+
+    expect((await screen.findByTestId("report.reviewed-on")).textContent).toContain("Reviewed");
+    expect(screen.queryByTestId("report.review")).toBeNull();
+    const back = screen.getByTestId("activity-form.back");
+    await waitFor(() => expect(back.getAttribute("href")).toBe("/report?community=harbor"));
+    expect(back.textContent).toBe("Reports");
+  });
+
+  it("keeps the organizer's answers when a background refresh of the report fails", async () => {
+    harness.activities = [activity];
+    harness.report = savedReport;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+
+    await waitFor(() => expect(attendees()).toBe("12"));
+    fireEvent.change(screen.getByTestId("report-attendees"), { target: { value: "15" } });
+
+    harness.reportError = new Error("offline");
+    await client.refetchQueries({ queryKey: ["event-reports", "report", ACTIVITY] });
+    const alert = await screen.findByTestId("report.refresh-error");
+    expect(screen.queryByTestId("report-retry")).toBeNull();
+    expect(attendees()).toBe("15");
+
+    harness.reportError = null;
+    fireEvent.click(alert.querySelector("button") as HTMLButtonElement);
+    await waitFor(() => expect(screen.queryByTestId("report.refresh-error")).toBeNull());
+    expect(attendees()).toBe("15");
   });
 });

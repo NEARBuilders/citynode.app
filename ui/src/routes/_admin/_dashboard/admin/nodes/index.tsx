@@ -1,4 +1,9 @@
-import { CaretRightIcon, MagnifyingGlassIcon, TreeStructureIcon } from "@phosphor-icons/react";
+import {
+  CaretRightIcon,
+  MagnifyingGlassIcon,
+  RocketLaunchIcon,
+  TreeStructureIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -182,6 +187,16 @@ function AdminNodes() {
       <PageHeader
         title={translate("common.communities")}
         description={translate("admin.community.treeDescription")}
+        actions={
+          <Button
+            nativeButton={false}
+            render={<Link to="/apply" />}
+            data-testid="admin-nodes-launch"
+          >
+            <RocketLaunchIcon />
+            {translate("admin.community.launch")}
+          </Button>
+        }
         headerTestId="admin-nodes.heading"
       />
 

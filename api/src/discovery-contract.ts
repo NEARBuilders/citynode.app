@@ -89,6 +89,33 @@ export const storedEventReportSchema = z.object({
   report: eventReportSchema,
   submittedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+  reviewedAt: z.iso.datetime().nullable(),
+});
+
+export const MONTHLY_REPORT_NOTES_MAX = 20_000;
+
+export const reportMonthSchema = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use a month like 2026-11");
+
+export const monthlyReportStatsSchema = z.object({
+  eventsHeld: z.number().int().nonnegative(),
+  checkIns: z.number().int().nonnegative(),
+  joins: z.number().int().nonnegative(),
+  newMembers: z.number().int().nonnegative(),
+});
+export type MonthlyReportStats = z.infer<typeof monthlyReportStatsSchema>;
+
+export const storedMonthlyReportSchema = z.object({
+  nodeId: z.uuid(),
+  month: reportMonthSchema,
+  notes: z.string(),
+  stats: monthlyReportStatsSchema,
+  submittedBy: z.string(),
+  submittedByName: z.string().nullable(),
+  submittedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  reviewedAt: z.iso.datetime().nullable(),
 });
 
 export const communityBuildersSchema = z.object({
@@ -349,7 +376,13 @@ export const discoveryContract = {
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getEventReport: oc
     .input(z.object({ activityId: z.uuid() }))
-    .output(storedEventReportSchema.nullable())
+    .output(
+      z.object({
+        report: storedEventReportSchema.nullable(),
+        canEdit: z.boolean(),
+        canReview: z.boolean(),
+      }),
+    )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   saveEventReport: oc
     .input(z.object({ activityId: z.uuid(), report: eventReportSchema }))
@@ -357,7 +390,56 @@ export const discoveryContract = {
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
   listEventReportStatuses: oc
     .input(z.object({ nodeId: z.uuid() }))
-    .output(z.array(z.object({ activityId: z.uuid(), submittedAt: z.iso.datetime() })))
+    .output(
+      z.array(
+        z.object({
+          activityId: z.uuid(),
+          submittedAt: z.iso.datetime(),
+          reviewedAt: z.iso.datetime().nullable(),
+        }),
+      ),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+  getMonthlyReport: oc
+    .input(z.object({ nodeId: z.uuid(), month: reportMonthSchema }))
+    .output(
+      z.object({
+        report: storedMonthlyReportSchema.nullable(),
+        organizationId: z.string().nullable(),
+        canEdit: z.boolean(),
+        canReview: z.boolean(),
+        open: z.boolean(),
+        closesAt: z.iso.datetime(),
+        stats: monthlyReportStatsSchema.nullable(),
+        checkInsSyncedAt: z.iso.datetime().nullable(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  saveMonthlyReport: oc
+    .input(
+      z.object({
+        nodeId: z.uuid(),
+        month: reportMonthSchema,
+        notes: z.string().trim().min(1).max(MONTHLY_REPORT_NOTES_MAX),
+      }),
+    )
+    .output(storedMonthlyReportSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  listMonthlyReportStatuses: oc
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(
+      z.object({
+        firstMonth: reportMonthSchema,
+        statuses: z.array(
+          z.object({
+            month: reportMonthSchema,
+            submittedAt: z.iso.datetime(),
+            updatedAt: z.iso.datetime(),
+            reviewedAt: z.iso.datetime().nullable(),
+          }),
+        ),
+      }),
+    )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getDiscoveryActivity: oc.input(z.object({ id: z.uuid() })).output(activitySchema.nullable()),
   listDiscovery: oc

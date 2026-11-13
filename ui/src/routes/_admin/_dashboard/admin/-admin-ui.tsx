@@ -81,7 +81,7 @@ export function StatFigure({
           </Button>
         </span>
       ) : (
-        hint && <span className="truncate text-sm text-muted-foreground">{hint}</span>
+        hint && <span className="text-sm text-pretty text-muted-foreground">{hint}</span>
       )}
     </div>
   );

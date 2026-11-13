@@ -27,6 +27,8 @@ function page(label: string): Crumb {
   return { label };
 }
 
+const PLATFORM_SECTIONS = new Set(["tenants", "relayer", "system"]);
+
 export function crumbsFor(
   pathname: string,
   context: CrumbContext = {},
@@ -78,9 +80,11 @@ export function crumbsFor(
   const MY_COMMUNITY: Crumb = { label: t("nav.myCommunity"), to: "/dashboard/node" };
   const EXPLORE: Crumb = { label: t("nav.explore"), to: "/explore" };
   const ORGS: Crumb = { label: t("nav.organizations"), to: "/orgs" };
-  const ADMIN: Crumb = { label: t("nav.admin"), to: "/admin" };
+  const ADMIN: Crumb = { label: t("nav.admin") };
+  const PLATFORM: Crumb = { label: t("common.platform") };
   const SETTINGS: Crumb = { label: t("nav.settings"), to: "/settings" };
   const DOCS: Crumb = { label: t("nav.docs"), to: "/docs" };
+  const REPORTS: Crumb = { label: t("reports.title"), to: "/report" };
 
   const segments = pathname.split("/").filter(Boolean);
   const [first, second, third, fourth, fifth] = segments;
@@ -99,7 +103,11 @@ export function crumbsFor(
         ];
       }
       return [page(MY_COMMUNITY.label)];
+    case "report":
+      return [page(REPORTS.label)];
     case "nodes":
+      if (third === "reports") return [REPORTS, page(t("reports.monthlyHeading"))];
+      if (third === "events" && fifth === "report") return [REPORTS, page(t("report.title"))];
       if (third === "events" && second) {
         const events = { label: t("events.title"), to: `/nodes/${second}/content` };
         if (fourth === "new") return [MY_COMMUNITY, events, page(t("nav.newEvent"))];
@@ -122,29 +130,33 @@ export function crumbsFor(
     case "apply":
       return [page(t("dashboard.startCommunity"))];
     case "discover":
-      return [page(t("nav.directory"))];
+      return [ADMIN, page(t("nav.directory"))];
     case "me":
       return [page(t("nav.activity"))];
     case "orgs": {
-      if (!second) return [page(ORGS.label)];
-      if (second === "new") return [ORGS, page(t("nav.newOrganization"))];
-      if (second === "invites") return [ORGS, page(t("nav.invitation"))];
-      return [ORGS, page(context.orgName?.(second) ?? decodeURIComponent(second))];
+      if (!second) return [MY_COMMUNITY, page(ORGS.label)];
+      if (second === "new") return [MY_COMMUNITY, ORGS, page(t("nav.newOrganization"))];
+      if (second === "invites") return [MY_COMMUNITY, ORGS, page(t("nav.invitation"))];
+      return [MY_COMMUNITY, ORGS, page(context.orgName?.(second) ?? decodeURIComponent(second))];
     }
     case "admin": {
+      if (second === "stations") return [ADMIN, PLATFORM, page(t("org.stations"))];
+      if (second === "events") return [ADMIN, page(t("events.title"))];
+      if (second === "reports") return [ADMIN, page(t("reports.title"))];
       const section = second ? ADMIN_SECTIONS[second] : undefined;
       if (!section) return [page(ADMIN.label)];
-      if (!third) return [ADMIN, page(section.label)];
+      const parents = PLATFORM_SECTIONS.has(second ?? "") ? [ADMIN, PLATFORM] : [ADMIN];
+      if (!third) return [...parents, page(section.label)];
       const sectionCrumb = { label: section.label, to: `/admin/${second}` };
       if (fourth === "edit")
         return [
-          ADMIN,
+          ...parents,
           sectionCrumb,
           { label: context.detailName ?? section.detail, to: `/admin/${second}/${third}` },
           page(t(section.edit)),
         ];
       return [
-        ADMIN,
+        ...parents,
         sectionCrumb,
         page(
           third === "new" && section.create

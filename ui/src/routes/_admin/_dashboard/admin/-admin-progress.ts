@@ -1,6 +1,9 @@
 import type { ApiClient } from "@/app";
+import { DAY_MS, eventEndsAt, eventReportStatus } from "@/lib/event-reports";
+import { monthlyReportsOwed } from "@/lib/monthly-reports";
 import type { AdminNodeListRow } from "@/lib/queries/nodes";
 import type { Proposal } from "@/lib/queries/proposals";
+import type { AdminMonthlyRow } from "./-admin-reports";
 import {
   buildCommunityJoinRows,
   type JoinCounts,
@@ -132,9 +135,112 @@ export type NeedsActionItem =
   | { kind: "setup"; proposal: NeedsActionProposal }
   | { kind: "relayer" }
   | { kind: "staking"; nodeId: string; name: string }
-  | { kind: "stakingMany"; count: number };
+  | { kind: "stakingMany"; count: number }
+  | { kind: "reportsMissing"; chase: ReportChase }
+  | { kind: "reportsMissingMany"; count: number; month?: string }
+  | { kind: "reportsOverdue"; count: number }
+  | { kind: "quiet"; nodeId: string; name: string }
+  | { kind: "quietMany"; count: number };
 
-export const STAKING_ITEMS_LIMIT = 3;
+export const STAKING_ITEMS_LIMIT = 1;
+export const QUIET_ITEMS_LIMIT = 1;
+export const QUIET_AFTER_DAYS = 30;
+export const REPORT_OVERDUE_DAYS = 7;
+export const REPORT_CHASE_DAYS = 90;
+export const REPORT_CHASE_LIMIT = 5;
+
+type HealthEvent = {
+  nodeId: string;
+  organizationId: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  reportSubmittedAt: string | null;
+};
+
+export function eventHealth<E extends HealthEvent>({
+  communities,
+  events,
+  now,
+}: {
+  communities: readonly {
+    node: { id: string; name: string };
+    tenant: { orgId: string | null };
+  }[];
+  events: readonly E[];
+  now: number;
+}): { quiet: { nodeId: string; name: string }[]; overdue: E[] } {
+  const recentSince = now - QUIET_AFTER_DAYS * DAY_MS;
+  const chaseSince = now - REPORT_CHASE_DAYS * DAY_MS;
+  const active = new Set<string>();
+  const overdue: E[] = [];
+  for (const event of events) {
+    const end = eventEndsAt(event);
+    if (!Number.isFinite(end)) continue;
+    if (end >= recentSince) active.add(event.organizationId ?? event.nodeId);
+    if (
+      end >= chaseSince &&
+      end + REPORT_OVERDUE_DAYS * DAY_MS < now &&
+      eventReportStatus(event, event.reportSubmittedAt, now).state === "missing"
+    ) {
+      overdue.push(event);
+    }
+  }
+  return {
+    quiet: communities
+      .filter(({ node, tenant }) => !active.has(tenant.orgId ?? node.id))
+      .map(({ node }) => ({ nodeId: node.id, name: node.name })),
+    overdue,
+  };
+}
+
+type ChaseCommunity = Pick<AdminMonthlyRow, "organizationId" | "nodeId" | "name" | "slug">;
+
+export interface ReportChase extends ChaseCommunity {
+  months: string[];
+  overdueEvents: number;
+}
+
+export function reportsToChase({
+  monthly,
+  overdue,
+  now,
+}: {
+  monthly: readonly {
+    month: string;
+    communities: readonly (ChaseCommunity & Pick<AdminMonthlyRow, "status">)[];
+  }[];
+  overdue: readonly { organizationId: string | null }[];
+  now: number;
+}): { chases: ReportChase[]; unattributed: number } {
+  const owed = new Set(monthlyReportsOwed([], now));
+  const known = new Map<string, ChaseCommunity>();
+  const chases = new Map<string, ReportChase>();
+  const chase = ({ organizationId, nodeId, name, slug }: ChaseCommunity) => {
+    const existing = chases.get(organizationId);
+    if (existing) return existing;
+    const created = { organizationId, nodeId, name, slug, months: [], overdueEvents: 0 };
+    chases.set(organizationId, created);
+    return created;
+  };
+  for (const { month, communities } of [...monthly].sort((a, b) =>
+    a.month.localeCompare(b.month),
+  )) {
+    for (const community of communities) {
+      known.set(community.organizationId, community);
+      if (owed.has(month) && community.status === "missing") chase(community).months.push(month);
+    }
+  }
+  let unattributed = 0;
+  for (const event of overdue) {
+    const community = event.organizationId ? known.get(event.organizationId) : undefined;
+    if (community) chase(community).overdueEvents += 1;
+    else unattributed += 1;
+  }
+  return {
+    chases: [...chases.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    unattributed,
+  };
+}
 export const APPLICATION_ITEMS_LIMIT = 5;
 
 export function deriveNeedsAction({
@@ -142,11 +248,17 @@ export function deriveNeedsAction({
   proposals,
   relayerNeedsFunding,
   communities,
+  quietCommunities = [],
+  reportChases = [],
+  overdueReports = 0,
 }: {
   pendingReviewCount: number;
   proposals: readonly NeedsActionProposal[];
   relayerNeedsFunding: boolean;
   communities: readonly { node: { id: string; name: string }; staking: StakingState }[];
+  quietCommunities?: readonly { nodeId: string; name: string }[];
+  reportChases?: readonly ReportChase[];
+  overdueReports?: number;
 }): NeedsActionItem[] {
   const items: NeedsActionItem[] = [];
   for (const proposal of proposals) {
@@ -162,6 +274,17 @@ export function deriveNeedsAction({
     items.push({ kind: "moreApplications", count: pendingReviewCount - applications.length });
   }
   if (relayerNeedsFunding) items.push({ kind: "relayer" });
+  for (const chase of reportChases.slice(0, REPORT_CHASE_LIMIT)) {
+    items.push({ kind: "reportsMissing", chase });
+  }
+  if (reportChases.length > REPORT_CHASE_LIMIT) {
+    items.push({
+      kind: "reportsMissingMany",
+      count: reportChases.length - REPORT_CHASE_LIMIT,
+      month: reportChases.flatMap((chase) => chase.months).sort()[0],
+    });
+  }
+  if (overdueReports > 0) items.push({ kind: "reportsOverdue", count: overdueReports });
   const unstaked = communities.filter(({ staking }) => staking === "none");
   if (unstaked.length > STAKING_ITEMS_LIMIT) {
     items.push({ kind: "stakingMany", count: unstaked.length });
@@ -170,5 +293,32 @@ export function deriveNeedsAction({
       items.push({ kind: "staking", nodeId: node.id, name: node.name });
     }
   }
+  if (quietCommunities.length > QUIET_ITEMS_LIMIT) {
+    items.push({ kind: "quietMany", count: quietCommunities.length });
+  } else {
+    for (const { nodeId, name } of quietCommunities) items.push({ kind: "quiet", nodeId, name });
+  }
   return items;
+}
+
+export function attendanceCoverage(
+  communities: readonly { tenant: { orgId: string | null } }[],
+  synced: readonly {
+    organizationId: string;
+    checkIns: { syncedAt: string | null; partial: boolean } | null;
+  }[],
+): { total: number; synced: number; partial: number } {
+  const byOrganization = new Map(synced.map((row) => [row.organizationId, row.checkIns]));
+  let syncedCount = 0;
+  let partial = 0;
+  const organizationIds = new Set(
+    communities.flatMap(({ tenant }) => (tenant.orgId ? [tenant.orgId] : [])),
+  );
+  for (const organizationId of organizationIds) {
+    const checkIns = byOrganization.get(organizationId);
+    if (!checkIns?.syncedAt) continue;
+    syncedCount += 1;
+    if (checkIns.partial) partial += 1;
+  }
+  return { total: organizationIds.size, synced: syncedCount, partial };
 }

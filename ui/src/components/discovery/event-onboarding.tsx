@@ -173,11 +173,16 @@ function StationRow({
       <ItemContent>
         <ItemTitle>{code.eventName}</ItemTitle>
         <ItemDescription>
-          {translate("station.joinedCount", {
-            used: code.usedCount,
-            max: code.maxUses,
-            time: formatRemaining(code.expiresAt, Date.now(), translate, locale),
-          })}
+          {code.expiresAt
+            ? translate("station.joinedCount", {
+                used: code.usedCount,
+                max: code.maxUses,
+                time: formatRemaining(code.expiresAt, Date.now(), translate, locale),
+              })
+            : translate("station.joinedCountNoExpiry", {
+                used: code.usedCount,
+                max: code.maxUses,
+              })}
         </ItemDescription>
       </ItemContent>
       <ItemActions>

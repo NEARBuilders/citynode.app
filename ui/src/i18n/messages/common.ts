@@ -552,12 +552,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.notifications": ["Notifications", "Notificaciones", "Notifications", "通知"],
   "common.on": ["On", "Activado", "Activé", "已开启"],
   "common.open": ["Open", "Abrir", "Ouvrir", "打开"],
-  "common.openAdmin": [
-    "Open admin",
-    "Abrir administración",
-    "Ouvrir l'administration",
-    "打开管理页面",
-  ],
   "common.opening": ["Opening…", "Abriendo…", "Ouverture…", "正在打开…"],
   "common.openNamed": ["Open {name}", "Abrir {name}", "Ouvrir {name}", "打开 {name}"],
   "common.openSettings": [
@@ -751,18 +745,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Les modifications de cette communauté sont signées par son DAO.",
     "社区的更改将由其 DAO 签名。",
   ],
-  "dashboard.adminQueue": [
-    "Review the admin queue",
-    "Revisar cola de administración",
-    "Examiner la file d'administration",
-    "查看管理员待办",
-  ],
-  "dashboard.adminQueueHint": [
-    "Pending proposals and tenants.",
-    "Propuestas y sitios pendientes.",
-    "Propositions et sites en attente.",
-    "待处理提案和站点。",
-  ],
   "dashboard.approved": ["Approved", "Aprobado", "Approuvé", "已批准"],
   "dashboard.awaitingReview": [
     "Awaiting review",
@@ -813,17 +795,71 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "{name} : événements, stations, propositions.",
     "{name}：活动、站点和提案。",
   ],
-  "dashboard.eventsToReport": [
-    "Events to report on",
-    "Eventos por informar",
-    "Événements à rapporter",
-    "待提交报告的活动",
+  "dashboard.checkInsThisMonth": [
+    "Check-ins this month",
+    "Registros este mes",
+    "Présences ce mois-ci",
+    "本月签到",
   ],
-  "dashboard.eventsToReportHint": [
-    "These events have ended and still need a report.",
-    "Estos eventos ya terminaron y aún necesitan un informe.",
-    "Ces événements sont terminés et n'ont pas encore de rapport.",
-    "这些活动已结束，仍需要提交报告。",
+  "dashboard.eventCheckIns": [
+    "{count, plural, one {# check-in} other {# check-ins}}",
+    "{count, plural, one {# registro} other {# registros}}",
+    "{count, plural, one {# présence} other {# présences}}",
+    "{count} 次签到",
+  ],
+  "dashboard.eventCheckInsFailed": [
+    "Check-ins didn't load",
+    "No se cargaron los registros",
+    "Les présences n'ont pas pu être chargées",
+    "签到数据未能加载",
+  ],
+  "dashboard.eventsHeldThisMonth": [
+    "Events held this month",
+    "Eventos realizados este mes",
+    "Événements tenus ce mois-ci",
+    "本月已举办活动",
+  ],
+  "dashboard.ownerDescription": [
+    "How {name} is doing this month, and what's waiting on you.",
+    "Cómo va {name} este mes y lo que está pendiente de ti.",
+    "Où en est {name} ce mois-ci, et ce qui vous attend.",
+    "{name} 本月的情况，以及等待您处理的事项。",
+  ],
+  "dashboard.ownerEventsDescription": [
+    "What's coming up in {name}, and how recent events went.",
+    "Lo que viene en {name} y cómo fueron los eventos recientes.",
+    "Ce qui arrive dans {name}, et comment se sont passés les derniers événements.",
+    "{name} 即将举行的活动，以及最近活动的情况。",
+  ],
+  "dashboard.ownerOnboardingDescription": [
+    "Who joined {name} and checked in this month, compared with last month.",
+    "Quién se unió a {name} y se registró este mes, comparado con el mes pasado.",
+    "Qui a rejoint {name} et s'est enregistré ce mois-ci, comparé au mois dernier.",
+    "本月加入 {name} 并签到的人数，与上月对比。",
+  ],
+  "dashboard.ownerTeamRequests": [
+    "{count, plural, one {# team request waiting} other {# team requests waiting}}",
+    "{count, plural, one {# solicitud de equipo en espera} other {# solicitudes de equipo en espera}}",
+    "{count, plural, one {# demande d'équipe en attente} other {# demandes d'équipe en attente}}",
+    "{count} 个团队申请待处理",
+  ],
+  "dashboard.ownerTeamRequestsHint": [
+    "Approve or decline them in My community.",
+    "Apruébalas o recházalas en Mi comunidad.",
+    "Approuvez-les ou refusez-les dans Ma communauté.",
+    "请在“我的社区”中批准或拒绝。",
+  ],
+  "dashboard.ownerWaiting": [
+    "Waiting on you",
+    "Pendiente de ti",
+    "En attente de vous",
+    "等待您处理",
+  ],
+  "dashboard.setupContinue": [
+    "Finish setup",
+    "Terminar la configuración",
+    "Terminer la configuration",
+    "完成设置",
   ],
   "dashboard.configWaitingHint": [
     "A community config change (e.g. a custom UI bundle) is waiting for DAO approval.",
@@ -1472,12 +1508,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "nav.invitation": ["Invitation", "Invitación", "Invitation", "邀请"],
   "nav.join": ["Join", "Unirse", "Rejoindre", "加入"],
   "nav.manage": ["Manage", "Gestionar", "Gérer", "管理"],
-  "nav.methods": [
-    "Sign-in methods",
-    "Métodos de inicio de sesión",
-    "Méthodes de connexion",
-    "登录方式",
-  ],
   "nav.myCommunity": ["My community", "Mi comunidad", "Ma communauté", "我的社区"],
   "nav.newCommunity": ["New community", "Nueva comunidad", "Nouvelle communauté", "新建社区"],
   "nav.newEvent": ["New event", "Nuevo evento", "Nouvel événement", "新建活动"],
@@ -1514,7 +1544,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Afficher ou masquer {name}",
     "展开或收起 {name}",
   ],
-  "nav.workspace": ["Workspace", "Espacio de trabajo", "Espace de travail", "工作空间"],
   "permissions.adminOnly": [
     "{area} is only for platform admins.",
     "{area} solo está disponible para administradores de plataforma.",
@@ -1834,18 +1863,6 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Solicita operar un City Node en tu zona. Te guiamos paso a paso.",
     "Proposez d’animer un City Node dans votre ville. Nous vous guidons à chaque étape.",
     "申请在你所在的地区运营 City Node，我们会一步步引导你。",
-  ],
-  "dashboard.launchNode": [
-    "Launch a new node",
-    "Lanzar un nuevo nodo",
-    "Lancer un nouveau nœud",
-    "启动新节点",
-  ],
-  "dashboard.launchNodeHint": [
-    "Apply for the community with its DAO, then approve it in Proposals.",
-    "Solicita la comunidad con su DAO y luego apruébala en Propuestas.",
-    "Demandez la communauté avec sa DAO, puis approuvez-la dans Propositions.",
-    "使用其 DAO 申请社区，然后在提案中批准。",
   ],
   "ownerActions.title": ["Run your node", "Gestiona tu nodo", "Gérer votre nœud", "运营你的节点"],
   "ownerActions.eventHint": [
