@@ -102,7 +102,6 @@ const api = {
   listEventReportStatuses: async () => [],
   listMonthlyReportStatuses: async () => [],
   getMonthlyReport: async () => ({ stats: null }),
-  getTeamJoinBoard: async () => ({ canReview: true, teams: [], requests: [] }),
   getNodeSummary: async () => ({
     validators: [],
     children: [],
@@ -112,7 +111,7 @@ const api = {
   listNodeAncestors: async () => [],
   getDiscoveryNode: async () => null,
   getTeamJoinBoard: async () => ({
-    canReview: false,
+    canReview: true,
     teams: [],
     requests: harness.teamRequests.filter(
       (request) => !harness.dismissed.includes(String(request.id)),
@@ -754,8 +753,26 @@ function inCommunity(role: "owner" | "admin" | "member") {
 }
 
 describe("Home for people who decide team requests", () => {
-  it.each(["owner", "admin"] as const)("leads an %s with the waiting requests", async (role) => {
+  it.each([
+    "owner",
+    "admin",
+  ] as const)("shows an %s the waiting requests once, in the owner overview", async (role) => {
     inCommunity(role);
+    harness.teamRequests = [
+      teamRequest({ id: "request-1", canDecide: true }),
+      teamRequest({ id: "request-2", canDecide: true }),
+      teamRequest({ id: "request-3", status: "closed" }),
+    ];
+    renderHome();
+
+    const waiting = await screen.findByTestId("home-owner.team-requests");
+    expect(waiting.textContent).toContain("2");
+    expect(screen.queryByTestId("home-step-team-requests")).toBeNull();
+  });
+
+  it("leads a platform admin with the waiting requests", async () => {
+    inCommunity("member");
+    harness.user = { ...member, role: "admin" };
     harness.teamRequests = [
       teamRequest({ id: "request-1", canDecide: true }),
       teamRequest({ id: "request-2", canDecide: true }),

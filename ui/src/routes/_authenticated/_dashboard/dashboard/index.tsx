@@ -36,8 +36,8 @@ import { useNodeSetupSteps } from "./-node-setup-checklist";
 import { OwnerOverview, OwnerSetupLine } from "./-owner-overview";
 import { PlatformOverview } from "./-platform-overview";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
-import { communityAuthContextQueryOptions } from "./node/-community-header";
 import { decidedTeamRequests, TeamRequestUpdates } from "./-team-request-updates";
+import { communityAuthContextQueryOptions } from "./node/-community-header";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
   validateSearch: (

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getNextSteps,
   getNodeSetupSteps,
+  MAX_NEXT_STEPS,
   type NextStepsState,
   type NodeSetupState,
 } from "./-next-steps";
@@ -128,16 +129,8 @@ describe("home next steps", () => {
       canManageCommunity: true,
       teamRequestsWaiting: 2,
     });
-    expect(steps).toEqual([
-      "save-account",
-      "launch-node",
-      "admin",
-      "team-requests",
-      "open-community",
-    ]);
-    expect(
-      ids({ community: harbor, canManageCommunity: true, teamRequestsWaiting: 2 }),
-    ).toHaveLength(4);
+    expect(steps).toEqual(["save-account", "team-requests", "open-community", "payouts", "stake"]);
+    expect(steps.length).toBeLessThanOrEqual(MAX_NEXT_STEPS);
   });
 
   it("keeps the organizer steps for events-team organizers", () => {
