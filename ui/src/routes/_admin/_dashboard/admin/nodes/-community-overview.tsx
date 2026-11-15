@@ -1,9 +1,17 @@
 import { CaretRightIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import type { ReactNode } from "react";
 import { useApiClient } from "@/app";
-import { Button, InfoRow, NodeValidatorTable, SectionHeader, Skeleton } from "@/components";
+import {
+  Button,
+  InfoRow,
+  LocalDate,
+  NodeValidatorTable,
+  SectionHeader,
+  Skeleton,
+} from "@/components";
 import { EventDate } from "@/components/discovery/event-onboarding";
 import {
   Item,
@@ -18,6 +26,7 @@ import { useNow } from "@/hooks/use-client";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
+import { communityEngagementQueryOptions } from "@/lib/queries/engagement";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import { Disclosure, ListSkeleton, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
@@ -110,6 +119,12 @@ function useCommunityProgress(node: CommunityNode) {
     tenant: tenantQuery,
     joins: joinsQuery,
   });
+  const engagementQuery = useQuery(communityEngagementQueryOptions(apiClient));
+  const engagement = communityJoinsState({
+    hasSite: !!tenantId,
+    tenant: tenantQuery,
+    joins: engagementQuery,
+  });
 
   return {
     events,
@@ -118,6 +133,10 @@ function useCommunityProgress(node: CommunityNode) {
     hasSite: !!tenantId,
     retryEvents: () => void eventsQuery.refetch(),
     retryJoins: () => void (tenantQuery.isError ? tenantQuery.refetch() : joinsQuery.refetch()),
+    engagement,
+    orgId,
+    retryEngagement: () =>
+      void (tenantQuery.isError ? tenantQuery.refetch() : engagementQuery.refetch()),
   };
 }
 
@@ -200,6 +219,49 @@ export function CommunityStats({
         onRetry={progress.retryJoins}
         testId="admin-node.stat-new-members"
       />
+      <ProgressStat
+        label={translate("admin.progress.members")}
+        state={progress.engagement}
+        render={({ communities }) => {
+          const memberCount = communities.find(
+            (row) => row.organizationId === progress.orgId,
+          )?.memberCount;
+          return memberCount?.count != null && memberCount.observedAt
+            ? {
+                value: memberCount.count,
+                hint: (
+                  <Trans
+                    id="admin.community.membersSeen"
+                    components={{
+                      date: <LocalDate value={memberCount.observedAt} format="relative" />,
+                    }}
+                  />
+                ),
+              }
+            : { value: "—", hint: translate("admin.community.membersNotSeen") };
+        }}
+        unavailableHint={noJoinsHint}
+        onRetry={progress.retryEngagement}
+        testId="admin-node.stat-members"
+      />
+      <ProgressStat
+        label={translate("admin.progress.returning")}
+        state={progress.engagement}
+        render={({ communities }) => {
+          const checkIns = communities.find(
+            (row) => row.organizationId === progress.orgId,
+          )?.checkIns;
+          return checkIns
+            ? {
+                value: checkIns.returning,
+                hint: translate("admin.community.returningOf", { count: checkIns.people }),
+              }
+            : { value: "—", hint: translate("admin.community.checkInsNotSynced") };
+        }}
+        unavailableHint={noJoinsHint}
+        onRetry={progress.retryEngagement}
+        testId="admin-node.stat-returning"
+      />
       <StatFigure
         label={translate("admin.community.stakingValidators")}
         value={stakingCount}
@@ -278,12 +340,9 @@ export function CommunityOverview({
                 variant="ghost"
                 size="sm"
                 nativeButton={false}
+                data-testid="admin-node.all-events"
                 render={
-                  <Link
-                    to="/nodes/$nodeId/content"
-                    params={{ nodeId: node.id }}
-                    search={{ tab: "events" }}
-                  />
+                  <Link to="/admin/events" search={{ when: "upcoming", community: node.id }} />
                 }
               >
                 {translate("admin.community.allEvents")}

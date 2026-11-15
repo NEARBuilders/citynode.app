@@ -87,4 +87,16 @@ describe("useOpenSoleCommunity", () => {
     await waitFor(() => expect(harness.invalidateRouter).toHaveBeenCalledOnce());
     expect(harness.setActive).toHaveBeenCalledTimes(2);
   });
+
+  it("tells the caller when opening or the refresh after it fails, and retries both", async () => {
+    harness.invalidateRouter.mockRejectedValueOnce(new Error("offline"));
+    const { result } = setup("org-harbor");
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.error).toBeInstanceOf(Error);
+    result.current.retry();
+    await waitFor(() => expect(harness.invalidateRouter).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.failed).toBe(false));
+    expect(harness.setActive).toHaveBeenCalledTimes(2);
+  });
 });

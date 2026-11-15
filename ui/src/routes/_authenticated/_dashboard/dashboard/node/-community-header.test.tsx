@@ -8,6 +8,8 @@ import { CommunityHeader } from "./-community-header";
 
 const harness = vi.hoisted(() => ({
   listing: null as unknown,
+  authContext: null as unknown,
+  activeTenantId: "tenant-1",
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -23,7 +25,7 @@ vi.mock("@tanstack/react-router", () => ({
     const query = new URLSearchParams(
       Object.entries(search ?? {}).filter((entry): entry is [string, string] => !!entry[1]),
     ).toString();
-    const path = to === "/n/$slug" ? `/n/${params?.slug}` : (to ?? "/");
+    const path = to?.replace("$slug", params?.slug ?? "") ?? "/";
     return (
       <a ref={ref} href={query ? `${path}?${query}` : path} {...props}>
         {children}
@@ -48,9 +50,19 @@ vi.mock("@/app", () => ({
   buildTenantUrl: () => null,
   getActiveRuntime: () => null,
   useApiClient: () => ({
-    auth: { getContext: async () => null },
+    auth: {
+      getContext: async () => harness.authContext,
+      listOrganizations: async () => [
+        { id: "org-1", name: "Chicago", slug: "chicago-builders", status: "active" },
+      ],
+    },
     getNode: async () => node,
     listNodes: async () => [node],
+    resolveTenantByOrgId: async ({ orgId }: { orgId: string }) => ({
+      id: harness.activeTenantId,
+      orgId,
+      name: "Active community",
+    }),
     getDiscoveryNode: async () => harness.listing,
   }),
 }));
@@ -61,6 +73,8 @@ afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
   harness.listing = null;
+  harness.authContext = null;
+  harness.activeTenantId = "tenant-1";
 });
 
 function renderHeader() {
@@ -78,6 +92,42 @@ function renderHeader() {
   );
   return client;
 }
+
+describe("CommunityHeader organization link", () => {
+  it("takes owners and organizers to their organization in one click", async () => {
+    harness.authContext = { organization: { member: { role: "owner" }, teams: [] } };
+    renderHeader();
+    const link = await screen.findByTestId("community-header.organization");
+    await waitFor(() => expect(link.getAttribute("href")).toBe("/orgs/chicago-builders"));
+    expect(link.textContent).toContain("Organization");
+
+    cleanup();
+    harness.authContext = {
+      organization: { member: { role: "member" }, teams: [{ id: "t", areas: ["events"] }] },
+    };
+    renderHeader();
+    expect(await screen.findByTestId("community-header.organization")).toBeTruthy();
+  });
+
+  it("leaves it out for plain members", async () => {
+    harness.authContext = { organization: { member: { role: "member" }, teams: [] } };
+    const client = renderHeader();
+    await waitFor(() =>
+      expect(client.getQueryState(["home-auth-context", "org-1"])?.status).toBe("success"),
+    );
+    expect(screen.queryByTestId("community-header.organization")).toBeNull();
+  });
+
+  it("leaves it out on another community's page", async () => {
+    harness.authContext = { organization: { member: { role: "owner" }, teams: [] } };
+    harness.activeTenantId = "tenant-elsewhere";
+    const client = renderHeader();
+    await waitFor(() =>
+      expect(client.getQueryState(["tenants", "detail", "org", "org-1"])?.status).toBe("success"),
+    );
+    expect(screen.queryByTestId("community-header.organization")).toBeNull();
+  });
+});
 
 describe("CommunityHeader public page link", () => {
   it("opens a child community's public page with its parent in the URL", async () => {
