@@ -305,12 +305,91 @@ describe("submittedAtFromRow", () => {
     );
   });
 
-  it("falls back when a day-first timestamp invents a month", () => {
-    expect(submittedAtFromRow({ Timestamp: "13/10/2026 14:00:00" }, fallback)).toEqual(fallback);
+  it("rejects a day-first timestamp that invents a month instead of importing it as now", () => {
+    expect(submittedAtFromRow({ Timestamp: "13/10/2026 14:00:00" }, fallback)).toBeNull();
   });
 
-  it("falls back when the calendar day does not exist", () => {
-    expect(submittedAtFromRow({ Timestamp: "2/30/2026 14:00:00" }, fallback)).toEqual(fallback);
+  it("rejects a calendar day that does not exist", () => {
+    expect(submittedAtFromRow({ Timestamp: "2/30/2026 14:00:00" }, fallback)).toBeNull();
+  });
+
+  it("reads day/month timestamps when the sheet is day-first", () => {
+    expect(submittedAtFromRow({ Timestamp: "13/10/2026 14:00:00" }, fallback, "dmy")).toEqual(
+      new Date("2026-10-13T14:00:00.000Z"),
+    );
+    expect(submittedAtFromRow({ Timestamp: "02/09/2026 12:00:00" }, fallback, "dmy")).toEqual(
+      new Date("2026-09-02T12:00:00.000Z"),
+    );
+  });
+
+  it("reads ISO timestamps without a zone as UTC", () => {
+    expect(submittedAtFromRow({ Timestamp: "2026-10-13 14:00:00" }, fallback)).toEqual(
+      new Date("2026-10-13T14:00:00.000Z"),
+    );
+  });
+
+  it("uses the fallback only when the timestamp is blank", () => {
+    expect(submittedAtFromRow({ Timestamp: "" }, fallback)).toEqual(fallback);
+  });
+});
+
+describe("day-first sheets", () => {
+  const dayFirstRow = (timestamp: string, eventDate: string) => ({
+    rowNumber: 2,
+    values: reportRow({
+      Timestamp: timestamp,
+      Community: "Harbor Demo",
+      "Event name": "Harbor Launch Night",
+      "Event date": eventDate,
+    }),
+  });
+
+  it("matches the event date and keeps the timestamp when --day-first is used", () => {
+    const plan = planGoogleFormImport({
+      rows: [dayFirstRow("13/09/2026 09:30:00", "01/09/2026")],
+      events: [event],
+      existingActivityIds: new Set(),
+      accounts: new Map(),
+      adminUserId: "platform-admin",
+      dateOrder: "dmy",
+    });
+
+    expect(plan.unmatched).toEqual([]);
+    expect(plan.matched[0]).toMatchObject({
+      activityId: event.id,
+      submittedAt: new Date("2026-09-13T09:30:00.000Z"),
+    });
+  });
+
+  it("lists a day-first row read as month/day instead of stamping it with the import time", () => {
+    const plan = planGoogleFormImport({
+      rows: [dayFirstRow("13/09/2026 09:30:00", "9/1/2026")],
+      events: [event],
+      existingActivityIds: new Set(),
+      accounts: new Map(),
+      adminUserId: "platform-admin",
+    });
+
+    expect(plan.matched).toEqual([]);
+    expect(plan.unmatched).toEqual([
+      expect.objectContaining({
+        rowNumber: 2,
+        reason: "timestamp was not a month/day/year date (use --day-first for day/month sheets)",
+      }),
+    ]);
+  });
+
+  it("does not match an event date that only exists as day/month", () => {
+    expect(
+      matchImportEvent(
+        {
+          Community: "Harbor Demo",
+          "Event name": "Harbor Launch Night",
+          "Event date": "13/09/2026",
+        },
+        [event],
+      ),
+    ).toEqual({ reason: "event date could not be parsed" });
   });
 });
 

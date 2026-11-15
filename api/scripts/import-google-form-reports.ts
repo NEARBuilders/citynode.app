@@ -18,11 +18,11 @@ loadEnv({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.
 
 function usage(): never {
   console.error(`Usage:
-  pnpm exec tsx scripts/import-google-form-reports.ts --csv <export.csv> --admin-user-id <userId> [--dry-run] [--accounts <map.json>]
+  pnpm exec tsx scripts/import-google-form-reports.ts --csv <export.csv> --admin-user-id <userId> [--dry-run] [--day-first] [--accounts <map.json>]
 
 CSV columns are matched by question text (event link, or community + event name + date, plus the in-app report questions). Unmatched rows are printed and not written.
 
-Timestamp column is month/day/year UTC (Google Sheets US locale), e.g. 10/13/2026 14:00:00. Day-first values such as 13/10/2026 are rejected.
+Timestamp and event date columns are read as month/day/year UTC (Google Sheets US locale), e.g. 10/13/2026 14:00:00. Pass --day-first for a sheet in a day/month locale (13/10/2026). Rows whose timestamp does not fit the chosen order are listed, not imported.
 `);
   process.exit(1);
 }
@@ -40,6 +40,7 @@ async function main() {
   const adminUserId = argValue(argv, "--admin-user-id");
   const accountsPath = argValue(argv, "--accounts");
   const dryRun = argv.includes("--dry-run");
+  const dateOrder = argv.includes("--day-first") ? "dmy" : "mdy";
   if (!csvPath || !adminUserId) usage();
 
   const rows = parseCsv(await readFile(csvPath, "utf8"));
@@ -101,6 +102,7 @@ async function main() {
       existingActivityIds,
       accounts,
       adminUserId,
+      dateOrder,
     });
 
     const inserted =
@@ -117,7 +119,7 @@ async function main() {
       JSON.stringify(
         {
           dryRun,
-          timestamp: "month/day/year UTC (Google Sheets US locale)",
+          dates: dateOrder === "dmy" ? "day/month/year UTC" : "month/day/year UTC",
           imported: dryRun ? planned.matched.length : insertedIds.size,
           skippedExisting:
             planned.skippedExisting + (dryRun ? 0 : planned.matched.length - insertedIds.size),

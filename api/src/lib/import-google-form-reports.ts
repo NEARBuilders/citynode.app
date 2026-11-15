@@ -269,18 +269,31 @@ function parseKpis(row: Record<string, string>): [string, string, string] {
   return [lines[0] ?? "", lines[1] ?? "", lines[2] ?? ""];
 }
 
-function parseDay(value: string): string | null {
+export type DateOrder = "mdy" | "dmy";
+
+function numericDate(
+  first: string,
+  second: string,
+  yearPart: string,
+  order: DateOrder,
+): { year: number; month: number; day: number } | null {
+  const month = Number(order === "mdy" ? first : second);
+  const day = Number(order === "mdy" ? second : first);
+  const year = Number(yearPart.length === 2 ? `20${yearPart}` : yearPart);
+  if (month < 1 || month > 12 || day < 1 || !year) return null;
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) return null;
+  return { year, month, day };
+}
+
+function parseDay(value: string, order: DateOrder): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const match = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (match) {
-    const month = Number(match[1]);
-    const day = Number(match[2]);
-    const yearPart = match[3];
-    if (!yearPart) return null;
-    const year = Number(yearPart.length === 2 ? `20${yearPart}` : yearPart);
-    if (!month || !day || !year) return null;
-    return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const date = numericDate(match[1]!, match[2]!, match[3]!, order);
+    if (!date) return null;
+    return `${String(date.year).padStart(4, "0")}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
   }
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
   const parsed = Date.parse(`${trimmed} UTC`);
@@ -350,6 +363,7 @@ function matchByLink(
 function matchByCommunityNameDate(
   row: Record<string, string>,
   events: readonly ImportEventCandidate[],
+  order: DateOrder,
 ): { event: ImportEventCandidate } | { reason: string } {
   const community = cell(row, "community");
   const eventName = cell(row, "eventName");
@@ -357,7 +371,7 @@ function matchByCommunityNameDate(
   if (!community || !eventName || !eventDate) {
     return { reason: "missing event link, or community + event name + date" };
   }
-  const day = parseDay(eventDate);
+  const day = parseDay(eventDate, order);
   if (!day) return { reason: "event date could not be parsed" };
 
   const communityKey = normalizeText(community);
@@ -377,15 +391,16 @@ function matchByCommunityNameDate(
 export function matchImportEvent(
   row: Record<string, string>,
   events: readonly ImportEventCandidate[],
+  order: DateOrder = "mdy",
 ): { event: ImportEventCandidate } | { reason: string } {
   const link = cell(row, "eventLink");
-  if (!link) return matchByCommunityNameDate(row, events);
+  if (!link) return matchByCommunityNameDate(row, events, order);
 
   const byLink = matchByLink(link, events);
   if (byLink && "event" in byLink) return byLink;
   if (byLink?.reason === "event link matched more than one activity") return byLink;
 
-  const byFields = matchByCommunityNameDate(row, events);
+  const byFields = matchByCommunityNameDate(row, events, order);
   if ("event" in byFields) return byFields;
   if (byFields.reason !== "missing event link, or community + event name + date") return byFields;
   return byLink ?? { reason: "event link did not match any activity" };
@@ -452,42 +467,41 @@ export function resolveSubmittedBy(
   return accounts.get(normalizeText(reporter)) ?? adminUserId;
 }
 
-function parseSheetsTimestamp(value: string): Date | null {
+function parseSheetsTimestamp(value: string, order: DateOrder): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const us = trimmed.match(
+  const sheets = trimmed.match(
     /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AaPp][Mm]))?)?$/,
   );
-  if (us) {
-    const month = Number(us[1]);
-    const day = Number(us[2]);
-    const yearPart = us[3]!;
-    const year = Number(yearPart.length === 2 ? `20${yearPart}` : yearPart);
-    let hour = Number(us[4] ?? 0);
-    const minute = Number(us[5] ?? 0);
-    const second = Number(us[6] ?? 0);
-    const ampm = us[7]?.toUpperCase();
+  if (sheets) {
+    const date = numericDate(sheets[1]!, sheets[2]!, sheets[3]!, order);
+    if (!date) return null;
+    let hour = Number(sheets[4] ?? 0);
+    const minute = Number(sheets[5] ?? 0);
+    const second = Number(sheets[6] ?? 0);
+    const ampm = sheets[7]?.toUpperCase();
     if (ampm === "PM" && hour < 12) hour += 12;
     if (ampm === "AM" && hour === 12) hour = 0;
-    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-    const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-    if (
-      parsed.getUTCFullYear() !== year ||
-      parsed.getUTCMonth() + 1 !== month ||
-      parsed.getUTCDate() !== day
-    ) {
-      return null;
-    }
-    return parsed;
+    if (hour > 23 || minute > 59 || second > 59) return null;
+    return new Date(Date.UTC(date.year, date.month - 1, date.day, hour, minute, second));
   }
-  const parsed = Date.parse(trimmed);
+  const iso = trimmed.match(
+    /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|[+-]\d{2}:?\d{2})?$/,
+  );
+  if (!iso) return null;
+  const base = trimmed.replace(" ", "T");
+  const parsed = Date.parse(iso[1] || !base.includes("T") ? base : `${base}Z`);
   return Number.isFinite(parsed) ? new Date(parsed) : null;
 }
 
-export function submittedAtFromRow(row: Record<string, string>, fallback: Date): Date {
+export function submittedAtFromRow(
+  row: Record<string, string>,
+  fallback: Date,
+  order: DateOrder = "mdy",
+): Date | null {
   const raw = cell(row, "timestamp");
   if (!raw) return fallback;
-  return parseSheetsTimestamp(raw) ?? fallback;
+  return parseSheetsTimestamp(raw, order);
 }
 
 export function planGoogleFormImport(input: {
@@ -497,15 +511,17 @@ export function planGoogleFormImport(input: {
   accounts: ReadonlyMap<string, string>;
   adminUserId: string;
   now?: Date;
+  dateOrder?: DateOrder;
 }): ImportPass {
   const candidates: { row: ImportReportRow; match: MatchedImport }[] = [];
   const unmatched: UnmatchedImport[] = [];
   let skippedExisting = 0;
   const rowsByEvent = new Map<string, ImportReportRow[]>();
   const now = input.now ?? new Date();
+  const order = input.dateOrder ?? "mdy";
 
   for (const row of input.rows) {
-    const match = matchImportEvent(row.values, input.events);
+    const match = matchImportEvent(row.values, input.events, order);
     if ("reason" in match) {
       unmatched.push({ rowNumber: row.rowNumber, reason: match.reason, values: row.values });
       continue;
@@ -520,6 +536,18 @@ export function planGoogleFormImport(input: {
       unmatched.push({ rowNumber: row.rowNumber, reason: report.reason, values: row.values });
       continue;
     }
+    const submittedAt = submittedAtFromRow(row.values, now, order);
+    if (!submittedAt) {
+      unmatched.push({
+        rowNumber: row.rowNumber,
+        reason:
+          order === "mdy"
+            ? "timestamp was not a month/day/year date (use --day-first for day/month sheets)"
+            : "timestamp was not a day/month/year date",
+        values: row.values,
+      });
+      continue;
+    }
     candidates.push({
       row,
       match: {
@@ -528,7 +556,7 @@ export function planGoogleFormImport(input: {
         nodeId: match.event.nodeId,
         report: report.report,
         submittedBy: resolveSubmittedBy(row.values, input.accounts, input.adminUserId),
-        submittedAt: submittedAtFromRow(row.values, now),
+        submittedAt,
       },
     });
   }
