@@ -33,7 +33,13 @@ export function filterNodeRows<T extends SearchableNodeRow>(
   );
 }
 
-export const NODE_DETAIL_TABS = ["overview", "validators", "management", "domains"] as const;
+export const NODE_DETAIL_TABS = [
+  "overview",
+  "validators",
+  "management",
+  "teams",
+  "domains",
+] as const;
 
 export type NodeDetailTab = (typeof NODE_DETAIL_TABS)[number];
 

@@ -32,11 +32,9 @@ describe("home next steps", () => {
     );
   });
 
-  it("sends someone without a community straight to starting one", () => {
-    expect(ids({ membership: "none" })).toEqual(["start-community", "stake", "explore"]);
-    expect(ids({ membership: "none", isAnonymous: true, hasPasskey: true })[0]).toBe(
-      "start-community",
-    );
+  it("suggests Explore before Start a community to someone without a community", () => {
+    expect(ids({ membership: "none" })).toEqual(["explore", "start-community", "stake"]);
+    expect(ids({ membership: "none", isAnonymous: true, hasPasskey: true })[0]).toBe("explore");
   });
 
   it("asks to choose a community, not an organization", () => {
@@ -54,8 +52,16 @@ describe("home next steps", () => {
     expect(ids({ membership: "open", community: harbor })).toEqual(["open-community", "stake"]);
   });
 
-  it("offers Start a community when the active organization has no community", () => {
-    expect(ids({})).toEqual(["start-community", "stake", "explore"]);
+  it("suggests Explore before Start a community when the active organization has no community", () => {
+    expect(ids({})).toEqual(["explore", "start-community", "stake"]);
+  });
+
+  it("keeps Explore after Stake for a member who still has to choose a community", () => {
+    expect(ids({ membership: "choose", communityCount: 2 })).toEqual([
+      "choose-org",
+      "stake",
+      "explore",
+    ]);
   });
 
   it("opens a plain member's community first, naming only what members can open", () => {
@@ -105,23 +111,35 @@ describe("home next steps", () => {
     expect(steps[0]?.title).toBe("Open My community");
   });
 
-  it("keeps the current steps for platform admins in a community", () => {
+  it("keeps platform admins' community steps, leaving platform work to the summary", () => {
     const steps = getNextSteps({ ...base, community: harbor, isAdmin: true });
-    expect(steps.map((step) => step.id)).toEqual([
-      "launch-node",
-      "admin",
-      "open-community",
-      "stake",
-    ]);
-    expect(steps[2]?.title).toBe("Open My community");
+    expect(steps.map((step) => step.id)).toEqual(["open-community", "stake"]);
+    expect(steps[0]?.title).toBe("Open My community");
   });
 
-  it("leads admins with launching a node and the review queue", () => {
-    expect(ids({ membership: "none", isAdmin: true })).toEqual([
-      "launch-node",
-      "admin",
+  it("doesn't offer platform admins Start a community", () => {
+    expect(ids({ membership: "none", isAdmin: true })).toEqual(["stake", "explore"]);
+  });
+
+  it("puts account safety first and never offers more than five steps", () => {
+    const unsaved = { isAnonymous: true, hasPasskey: false };
+    const states: Partial<NextStepsState>[] = [
+      { ...unsaved, community: harbor, canManageCommunity: true },
+      { ...unsaved, community: harbor, inFinanceTeam: true, canOrganizeEvents: true },
+      { ...unsaved, membership: "none" },
+      { ...unsaved, membership: "choose", communityCount: 3 },
+      { ...unsaved, community: harbor, isAdmin: true },
+    ];
+    for (const state of states) {
+      const steps = ids(state);
+      expect(steps[0]).toBe("save-account");
+      expect(steps.length).toBeLessThanOrEqual(5);
+    }
+    expect(ids({ ...unsaved, community: harbor, canManageCommunity: true })).toEqual([
+      "save-account",
+      "open-community",
+      "payouts",
       "stake",
-      "explore",
     ]);
   });
 });

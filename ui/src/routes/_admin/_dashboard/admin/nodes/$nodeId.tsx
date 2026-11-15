@@ -22,6 +22,7 @@ import { BackLink } from "../-admin-ui";
 import { CommunityEditorSheet } from "./-community-editor";
 import { CommunityOverview, CommunityStats } from "./-community-overview";
 import { CommunityProfileSummary } from "./-community-profile-summary";
+import { CommunityTeams } from "./-community-teams";
 import { NodeBindings } from "./-node-bindings";
 import {
   NODE_DETAIL_TABS,
@@ -36,6 +37,7 @@ const TAB_LABELS: Record<NodeDetailTab, AppMessageId> = {
   overview: "common.overview",
   validators: "common.validators",
   management: "admin.sequence.tab",
+  teams: "org.teams",
   domains: "admin.domain.title",
 };
 
@@ -207,6 +209,7 @@ function AdminNodeDetail() {
             validators={summary.validators}
           />
         )}
+        {activeTab === "teams" && <CommunityTeams tenantId={node.tenantId} />}
         {activeTab === "domains" &&
           (node.tenantId ? (
             <NodeBindings

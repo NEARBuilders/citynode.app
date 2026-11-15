@@ -1,11 +1,11 @@
 import { CalendarDotsIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Trans } from "everything-dev/ui/i18n";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { ActivityFormPage, activitiesQueryOptions } from "@/components/discovery/activity-form";
+import { ReportUpdated, ReviewRow } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import {
   draftFromReport,
+  type EventReport,
   emptyReportDraft,
   REPORT_AUDIENCES,
   REPORT_QUESTIONS,
@@ -37,13 +38,16 @@ import {
   reportFromDraft,
 } from "@/lib/event-reports";
 import { pageTitle } from "@/lib/page-title";
+import { engagementQueryKeys } from "@/lib/queries/engagement";
 import {
   eventCheckInCountQueryOptions,
   eventReportQueryKeys,
   eventReportQueryOptions,
 } from "@/lib/queries/event-reports";
+import { reportCommunitiesQueryOptions } from "@/lib/queries/monthly-reports";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
+import { useReturnToReport } from "@/lib/use-return-to-report";
 
 export const Route = createFileRoute(
   "/_authenticated/_dashboard/nodes/$nodeId/events/$activityId/report",
@@ -88,18 +92,39 @@ function EventReportPage() {
       ? tenant.data.orgId
       : null;
   const checkIns = useQuery(eventCheckInCountQueryOptions(api, organizationId, activityId));
+  const communities = useQuery(reportCommunitiesQueryOptions(api));
+  const community = communities.data?.communities.find(
+    (item) =>
+      item.nodeIds.includes(nodeId) ||
+      (!!tenant.data?.orgId && item.organizationId === tenant.data.orgId),
+  );
   const waitingForCheckIns =
     report.isSuccess &&
-    report.data === null &&
+    report.data.canEdit &&
+    report.data.report === null &&
     (node.isPending ||
       (!!tenantId && tenant.isPending) ||
       (!!organizationId && checkIns.data === undefined && !checkIns.isError));
+
+  const readsAsAdmin = report.data
+    ? report.data.canReview && !report.data.canEdit
+    : auth.user?.role === "admin";
+  const back = readsAsAdmin
+    ? {
+        link: <Link to="/admin/events" search={{ community: nodeId }} />,
+        label: translate("events.title"),
+      }
+    : {
+        link: <Link to="/report" search={community ? { community: community.slug } : {}} />,
+        label: translate("reports.title"),
+      };
 
   const loading = activities.isPending || report.isPending || waitingForCheckIns;
   if (loading) {
     return (
       <ActivityFormPage
         nodeId={nodeId}
+        back={back}
         title={<Skeleton className="h-10 w-full max-w-64" />}
         headerTestId="report.heading"
       >
@@ -112,11 +137,17 @@ function EventReportPage() {
     );
   }
 
-  const loadError = activities.error ?? report.error;
+  const loadError =
+    (activities.data ? null : activities.error) ?? (report.data ? null : report.error);
+  const retry = () => {
+    if (activities.isError) void activities.refetch();
+    if (report.isError) void report.refetch();
+  };
   if (loadError || !activity) {
     return (
       <ActivityFormPage
         nodeId={nodeId}
+        back={back}
         title={translate("report.title")}
         headerTestId="report.heading"
       >
@@ -126,14 +157,7 @@ function EventReportPage() {
           description={loadError ? appErrorMessage(loadError, translate) : undefined}
           action={
             loadError && (
-              <Button
-                variant="outline"
-                data-testid="report-retry"
-                onClick={() => {
-                  if (activities.isError) void activities.refetch();
-                  if (report.isError) void report.refetch();
-                }}
-              >
+              <Button variant="outline" data-testid="report-retry" onClick={retry}>
                 {translate("common.retry")}
               </Button>
             )
@@ -143,10 +167,15 @@ function EventReportPage() {
     );
   }
 
-  const saved = report.data;
+  const {
+    report: saved,
+    canEdit,
+    canReview,
+  } = report.data ?? { report: null, canEdit: false, canReview: false };
   return (
     <ActivityFormPage
       nodeId={nodeId}
+      back={back}
       title={translate("report.title")}
       description={
         <span>
@@ -160,9 +189,10 @@ function EventReportPage() {
           {saved && (
             <>
               {" · "}
-              <Trans
-                id="report.lastUpdated"
-                components={{ date: <LocalDate value={saved.updatedAt} format="relative" /> }}
+              <ReportUpdated
+                updatedAt={saved.updatedAt}
+                reviewedAt={saved.reviewedAt}
+                reviewedTestId="report.reviewed-on"
               />
             </>
           )}
@@ -170,24 +200,113 @@ function EventReportPage() {
       }
       headerTestId="report.heading"
     >
-      <ReportForm
-        key={saved?.updatedAt ?? "new"}
-        nodeId={nodeId}
-        activityId={activityId}
-        initial={saved ? draftFromReport(saved.report) : emptyReportDraft(checkIns.data ?? null)}
-        isEdit={!!saved}
-      />
+      {(activities.isError || report.isError) && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 text-sm text-destructive"
+          data-testid="report.refresh-error"
+        >
+          <span>{translate("report.loadError")}</span>
+          <Button size="sm" variant="outline" onClick={retry}>
+            {translate("common.retry")}
+          </Button>
+        </div>
+      )}
+      {canReview && saved && (
+        <ReviewRow
+          target={{ kind: "event", activityId, updatedAt: saved.updatedAt }}
+          reviewedAt={saved.reviewedAt}
+          testId="report.review"
+        />
+      )}
+      {canEdit ? (
+        <ReportForm
+          key={saved?.updatedAt ?? "new"}
+          nodeId={nodeId}
+          organizationId={tenant.data?.orgId ?? null}
+          activityId={activityId}
+          initial={saved ? draftFromReport(saved.report) : emptyReportDraft(checkIns.data ?? null)}
+          isEdit={!!saved}
+        />
+      ) : saved ? (
+        <ReportAnswers report={saved.report} />
+      ) : (
+        <EmptyState icon={CalendarDotsIcon} title={translate("report.notSubmitted")} />
+      )}
     </ActivityFormPage>
+  );
+}
+
+function ReportAnswers({ report }: { report: EventReport }) {
+  const translate = useAppTranslation();
+  const none = <span className="text-muted-foreground">—</span>;
+  const text = (value: string) => (value.trim() ? value : none);
+  const answer = (question: ReportQuestion): ReactNode => {
+    switch (question.kind) {
+      case "choice":
+        return translate(`report.option.${question.id}.${report[question.id]}` as AppMessageId);
+      case "audiences":
+        return [
+          ...report.audiences
+            .filter((audience) => audience !== "other")
+            .map((audience) => translate(`report.option.audiences.${audience}` as AppMessageId)),
+          ...(report.audiences.includes("other") ? [report.audienceOther] : []),
+        ].join(", ");
+      case "number":
+        return report.attendees;
+      case "kpis":
+        return (
+          <ul className="flex flex-col gap-1">
+            {report.kpis.filter(Boolean).map((kpi) => (
+              <li key={kpi}>{kpi}</li>
+            ))}
+          </ul>
+        );
+      case "partners":
+        return report.hadPartners
+          ? `${translate("report.option.partners.yes")} — ${report.partners}`
+          : translate("report.option.partners.no");
+      case "links":
+        return report[question.id].length > 0 ? (
+          <ul className="flex flex-col gap-1">
+            {report[question.id].map((link) => (
+              <li key={link} className="wrap-anywhere">
+                <a href={link} target="_blank" rel="noreferrer" className="underline">
+                  {link}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          none
+        );
+      case "longText":
+        return text(report[question.id]);
+    }
+  };
+  return (
+    <dl className="flex flex-col gap-6" data-testid="report-answers">
+      {REPORT_QUESTIONS.map((question) => (
+        <div key={question.id} className="flex flex-col gap-1">
+          <dt className="text-sm font-medium text-muted-foreground">
+            {translate(`report.q.${question.id}` as AppMessageId)}
+          </dt>
+          <dd className="whitespace-pre-wrap text-foreground">{answer(question)}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
 function ReportForm({
   nodeId,
+  organizationId,
   activityId,
   initial,
   isEdit,
 }: {
   nodeId: string;
+  organizationId: string | null;
   activityId: string;
   initial: ReportDraft;
   isEdit: boolean;
@@ -195,7 +314,7 @@ function ReportForm({
   const translate = useAppTranslation();
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const returnToReport = useReturnToReport();
   const [draft, setDraft] = useState(initial);
   const [errors, setErrors] = useState<Record<string, ReportFieldError>>({});
   const update = (patch: Partial<ReportDraft>) => setDraft((current) => ({ ...current, ...patch }));
@@ -204,12 +323,11 @@ function ReportForm({
       api.saveEventReport({ activityId, report }),
     onSuccess: async () => {
       toast.success(translate("report.saved"));
-      await queryClient.invalidateQueries({ queryKey: eventReportQueryKeys.all });
-      await navigate({
-        to: "/nodes/$nodeId/content",
-        params: { nodeId },
-        search: { tab: "events" },
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: eventReportQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: engagementQueryKeys.events() }),
+      ]);
+      await returnToReport({ nodeId, organizationId });
     },
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });

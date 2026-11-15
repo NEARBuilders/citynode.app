@@ -8,7 +8,11 @@ import {
   UNAUTHORIZED,
 } from "every-plugin/errors";
 import { z } from "zod";
-import { discoveryContract } from "./discovery-contract";
+import {
+  discoveryContract,
+  monthlyReportStatsSchema,
+  reportMonthSchema,
+} from "./discovery-contract";
 
 const ErrorTestKindSchema = z.enum([
   "unauthorized",
@@ -80,7 +84,7 @@ export const EventOnboardingCodeSchema = z.object({
   role: z.string(),
   maxUses: z.number(),
   usedCount: z.number(),
-  expiresAt: z.date(),
+  expiresAt: z.date().nullable(),
   revokedAt: z.date().nullable(),
   createdAt: z.date(),
 });
@@ -414,6 +418,123 @@ export const TeamJoinBoardSchema = z.object({
   teams: z.array(JoinableTeamSchema),
   requests: z.array(TeamJoinRequestSchema),
 });
+
+const AttendanceSummarySchema = z.object({
+  people: z.number().int().nonnegative(),
+  returning: z.number().int().nonnegative(),
+  syncedAt: z.iso.datetime().nullable(),
+  partial: z.boolean(),
+});
+
+export const CommunityEngagementSchema = z.object({
+  communities: z.array(
+    z.object({
+      organizationId: z.string(),
+      memberCount: MemberCountSchema.nullable(),
+      checkIns: AttendanceSummarySchema.nullable(),
+    }),
+  ),
+});
+
+export const PlatformAttendanceSchema = z.object({
+  month: z.string(),
+  people: z.number().int().nonnegative(),
+  returning: z.number().int().nonnegative(),
+});
+
+export const AdminEventsSchema = z.object({
+  events: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      url: z.string(),
+      startsAt: z.string().nullable(),
+      endsAt: z.string().nullable(),
+      nodeId: z.string(),
+      nodeName: z.string(),
+      publicPage: z.boolean(),
+      organizationId: z.string().nullable(),
+      reportSubmittedAt: z.iso.datetime().nullable(),
+      reportUpdatedAt: z.iso.datetime().nullable(),
+      reportReviewedAt: z.iso.datetime().nullable(),
+      checkIns: AttendanceSummarySchema.nullable(),
+    }),
+  ),
+});
+
+export const MonthlyReportStatusSchema = z.enum(["missing", "submitted", "reviewed"]);
+
+export const AdminMonthlyReportsSchema = z.object({
+  month: reportMonthSchema,
+  communities: z.array(
+    z.object({
+      organizationId: z.string(),
+      slug: z.string().nullable(),
+      name: z.string(),
+      nodeId: z.uuid(),
+      status: MonthlyReportStatusSchema,
+      report: z
+        .object({
+          submittedAt: z.iso.datetime(),
+          submittedByName: z.string().nullable(),
+          updatedAt: z.iso.datetime(),
+          reviewedAt: z.iso.datetime().nullable(),
+          stats: monthlyReportStatsSchema,
+        })
+        .nullable(),
+      events: z.object({
+        ended: z.number().int().nonnegative(),
+        reported: z.number().int().nonnegative(),
+        toReview: z.number().int().nonnegative(),
+      }),
+    }),
+  ),
+});
+
+export const ReportReviewSchema = z.object({ reviewedAt: z.iso.datetime().nullable() });
+
+export const AdminTeamRequestsSchema = z.object({
+  teams: z.array(
+    z.object({
+      teamId: z.string(),
+      teamName: z.string(),
+      teamAreas: z.array(FeatureAreaSchema),
+      pending: z.number().int().nonnegative(),
+      approved: z.number().int().nonnegative(),
+      lastRequestAt: z.iso.datetime(),
+    }),
+  ),
+  pending: z.array(
+    z.object({
+      id: z.string(),
+      teamName: z.string(),
+      requesterName: z.string().nullable(),
+      endorsementCount: z.number().int().nonnegative(),
+      createdAt: z.iso.datetime(),
+    }),
+  ),
+});
+
+export const PlatformStationsSchema = z.object({
+  account: z.string().nullable(),
+  organization: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      slug: z.string(),
+      nodeId: z.string(),
+      role: z.string().nullable(),
+    })
+    .nullable(),
+});
+
+const PLATFORM_STATIONS_CONFLICT = {
+  CONFLICT: { status: 409, message: "Platform stations conflict" },
+} as const;
+
+const REPORT_CHANGED = {
+  CONFLICT: { status: 409, message: "This report changed since it was read" },
+} as const;
 
 const TEAM_JOIN_CONFLICT = {
   CONFLICT: { status: 409, message: "This team request can't change any more" },
@@ -1153,6 +1274,30 @@ export const contract = oc.router({
     .output(AttendanceRecordSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN }),
 
+  listReportCommunities: oc
+    .route({
+      method: "GET",
+      path: "/reports/communities",
+      summary: "List the communities the caller reports for",
+      description:
+        "Caller only — active communities where the caller is an owner, an admin or on a team with the events area, each with the node its reports are kept on and every node whose events it reports. memberships counts every community the caller belongs to.",
+    })
+    .output(
+      z.object({
+        communities: z.array(
+          z.object({
+            organizationId: z.string(),
+            slug: z.string(),
+            name: z.string(),
+            nodeId: z.uuid(),
+            nodeIds: z.array(z.uuid()),
+          }),
+        ),
+        memberships: z.number().int().nonnegative(),
+      }),
+    )
+    .errors({ UNAUTHORIZED }),
+
   reconcileAttendance: oc
     .route({
       method: "POST",
@@ -1164,6 +1309,138 @@ export const contract = oc.router({
     .input(z.object({ organizationId: z.string().min(1) }))
     .output(AttendanceReconcileSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  getPlatformAttendance: oc
+    .route({
+      method: "GET",
+      path: "/admin/attendance",
+      summary: "Count the people who checked in across the platform in one month",
+      description:
+        "Platform admins only — distinct people with a synced check-in during the UTC month, each counted once across communities, and how many of them had checked in at an earlier event.",
+    })
+    .input(z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }))
+    .output(PlatformAttendanceSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  getCommunityEngagement: oc
+    .route({
+      method: "GET",
+      path: "/admin/engagement",
+      summary: "List each community's member count and check-ins on record",
+      description:
+        "Platform admins only — the last observed member count and the check-ins City Node has synced per organization, with how many people came to two or more events.",
+    })
+    .output(CommunityEngagementSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  getAdminEvents: oc
+    .route({
+      method: "GET",
+      path: "/admin/events",
+      summary: "List every community's shown events with the check-ins City Node has synced",
+      description:
+        "Platform admins only — newest first. Check-ins and returning people come from check-ins organizers have synced; null means the event hasn't been synced.",
+    })
+    .output(AdminEventsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  getAdminMonthlyReports: oc
+    .route({
+      method: "GET",
+      path: "/admin/reports/monthly",
+      summary: "List every community's monthly report for one month",
+      description:
+        "Platform admins only — one row per community expected to report that month (active, not a platform node, activated before the month ended), with its report status, who submitted it, the saved numbers, and the month's ended events reported.",
+    })
+    .input(z.object({ month: reportMonthSchema }))
+    .output(AdminMonthlyReportsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
+
+  reviewMonthlyReport: oc
+    .route({
+      method: "POST",
+      path: "/admin/reports/monthly/review",
+      summary: "Mark a community's monthly report reviewed, or not reviewed",
+      description:
+        "Platform admins only. Reading and marking reviewed is the whole review: nothing is sent back to the community. Editing the report clears it, and `updatedAt` is the version that was read: a report edited since then is refused with a conflict.",
+    })
+    .input(
+      z.object({
+        nodeId: z.uuid(),
+        month: reportMonthSchema,
+        reviewed: z.boolean(),
+        updatedAt: z.iso.datetime(),
+      }),
+    )
+    .output(ReportReviewSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...REPORT_CHANGED }),
+
+  reviewEventReport: oc
+    .route({
+      method: "POST",
+      path: "/admin/reports/events/review",
+      summary: "Mark an event report reviewed, or not reviewed",
+      description:
+        "Platform admins only. Reading and marking reviewed is the whole review: nothing is sent back to the community. Editing the report clears it, and `updatedAt` is the version that was read: a report edited since then is refused with a conflict.",
+    })
+    .input(z.object({ activityId: z.uuid(), reviewed: z.boolean(), updatedAt: z.iso.datetime() }))
+    .output(ReportReviewSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...REPORT_CHANGED }),
+
+  getCommunityTeamRequests: oc
+    .route({
+      method: "GET",
+      path: "/admin/organizations/{organizationId}/team-requests",
+      summary: "List the team requests City Node has recorded for one community",
+      description:
+        "Platform admins only — teams seen through join requests with their counts, and the requests waiting for a decision. Not the full team roster.",
+    })
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .output(AdminTeamRequestsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  getPlatformStations: oc
+    .route({
+      method: "GET",
+      path: "/admin/stations",
+      summary: "Read the platform organization that runs platform stations",
+      description:
+        "Platform admins only — the configured stations account, and the platform organization, its hidden node and the caller's role in it once set up.",
+    })
+    .output(PlatformStationsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+
+  setUpPlatformStations: oc
+    .route({
+      method: "POST",
+      path: "/admin/stations",
+      summary: "Create the platform organization and its hidden node",
+      description:
+        "Platform admins only — creates an organization owned by the caller, a tenant under the configured stations account, and a platform node kept out of every public listing.",
+    })
+    .input(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        slug: z
+          .string()
+          .min(1)
+          .max(48)
+          .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+      }),
+    )
+    .output(PlatformStationsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, ...PLATFORM_STATIONS_CONFLICT }),
+
+  joinPlatformStations: oc
+    .route({
+      method: "POST",
+      path: "/admin/stations/join",
+      summary: "Add the calling platform admin to the platform organization",
+      description:
+        "Platform admins only — makes the caller an admin of the platform organization so they can run its stations.",
+    })
+    .output(PlatformStationsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   getTeamJoinBoard: oc
     .route({
