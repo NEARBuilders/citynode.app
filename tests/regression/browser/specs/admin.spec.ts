@@ -13,32 +13,33 @@ test.describe("admin", () => {
     adminName = loadAdminSeedData().adminName;
   });
 
-  test("admin page is accessible without redirect", async ({ page }) => {
+  test("/admin opens Home, which is the overview for a platform admin", async ({ page }) => {
     await page.goto("/admin", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle");
     await waitForApp(page);
 
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000, waitUntil: "commit" });
+    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 10000, waitUntil: "commit" });
     await expect(page.getByRole("button", { name: new RegExp(adminName) }).first()).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.getByTestId("admin.section.manage")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("home-admin-overview")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("home-admin.reports-heading")).toBeVisible();
+    await expect(page.getByTestId("admin.section.needs-action")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("home-admin.events-heading")).toBeVisible();
+    await expect(page.getByTestId("admin.section.joins")).toBeVisible();
+    await expect(page.getByTestId("admin.section.progress")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("admin.stat.tenants")).toHaveCount(0);
+    await expect(page.getByTestId("home-node-setup")).toHaveCount(0);
 
     expectNoHydrationFailure(pageErrors);
   });
 
-  test("admin dashboard loads with account stats", async ({ page }) => {
-    await page.goto("/admin/", { waitUntil: "domcontentloaded" });
+  test("admin pages show the deployed version behind the info button", async ({ page }) => {
+    await page.goto("/admin/reports", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle");
     await waitForApp(page);
 
-    await expect(page.getByTestId("admin.stat.pending-proposals")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByTestId("admin.stat.tenants")).toHaveCount(0);
-    await expect(page.getByTestId("admin.section.needs-action")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByTestId("admin.section.progress")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByTestId("admin.section.manage")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByTestId("admin.section.manage")).toBeInViewport();
-
+    await expect(page.getByTestId("admin-reports.heading")).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("admin-version-card")).toHaveCount(0);
     await expect(page.getByTestId("admin.stat.role")).toHaveCount(0);
     await expect(page.getByTestId("admin.stat.platform-account")).toHaveCount(0);
@@ -52,9 +53,6 @@ test.describe("admin", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("admin-app-info")).toHaveCount(0);
     await expect(appInfo).toBeFocused();
-
-    await expect(page.getByTestId("admin.heading.nodes")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByTestId("admin.heading.tenants")).toBeVisible({ timeout: 5000 });
 
     expectNoHydrationFailure(pageErrors);
   });
