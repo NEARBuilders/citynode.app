@@ -210,6 +210,7 @@ describe("event reports", () => {
     );
     const listed = (await admin.getAdminEvents()).events.find((event) => event.id === ended.id);
     expect(listed?.reportReviewedAt).toBe(reviewedAt);
+    expect(listed?.reportSource).toBe("app");
     expect(await owner.listEventReportStatuses({ nodeId: node.id })).toEqual([
       expect.objectContaining({ activityId: ended.id, reviewedAt }),
     ]);
