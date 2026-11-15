@@ -4,7 +4,7 @@ import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
 import { eventReportStatus } from "@/lib/event-reports";
 
-type ReportSource = NonNullable<
+export type ReportSource = NonNullable<
   Awaited<ReturnType<ApiClient["listEventReportStatuses"]>>[number]["source"]
 >;
 
