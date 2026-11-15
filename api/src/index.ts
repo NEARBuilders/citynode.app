@@ -2080,7 +2080,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
             new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
           );
         }
-        const auth = yield* memberAuthClient(context);
+        const auth = authPlugin.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+          userId,
+          user: context.user,
+          session: context.session,
+        });
         const joinOutcome = yield* Effect.tryPromise({
           try: async () => {
             try {

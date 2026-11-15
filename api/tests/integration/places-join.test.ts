@@ -203,11 +203,16 @@ describe("places activation + join flow", () => {
   });
 
   it("joins the community as a second user", async () => {
-    const joiner = await getPluginClient(authedContext("joiner-1"), {
-      auth: authStubFor(authedContext("joiner-1")),
+    const joinerContext = { ...authedContext("joiner-1"), session: { id: "session-joiner-1" } };
+    const joiner = await getPluginClient(joinerContext, {
+      auth: authStubFor(joinerContext),
     } as never);
 
     const result = await joiner.joinCommunity({ placeId: nigeriaPlaceId });
+    expect(clientContexts.at(-1)).toMatchObject({
+      userId: "joiner-1",
+      session: { id: "session-joiner-1" },
+    });
     expect(result).toMatchObject({
       organizationId: "org-nigeria",
       alreadyMember: false,
