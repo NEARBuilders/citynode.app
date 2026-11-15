@@ -75,12 +75,13 @@ export function ActivityEditor({
   const list = useQuery({ ...activitiesQueryOptions(api, nodeId), refetchInterval: 30_000 });
   const visibilityContext = useVisibilityContext(nodeId);
   const { now } = visibilityContext;
-  const reportStatuses = useQuery(eventReportStatusesQueryOptions(api, nodeId));
-  const reportsByActivity = new Map(
-    (reportStatuses.data ?? []).map((status) => [
-      status.activityId,
-      { submittedAt: status.submittedAt, source: status.source },
-    ]),
+  const canReport = canPost || canOnboard;
+  const reportStatuses = useQuery({
+    ...eventReportStatusesQueryOptions(api, nodeId),
+    enabled: canReport,
+  });
+  const reported = new Map(
+    (reportStatuses.data ?? []).map((status) => [status.activityId, status]),
   );
   const luma = useQuery({
     queryKey: ["discovery-luma-calendars", nodeId],
@@ -182,10 +183,10 @@ export function ActivityEditor({
           {translate("common.edit")}
         </Button>
       )}
-      {eventVisibility(a, visibilityContext) === "ended" && (
+      {canReport && eventVisibility(a, visibilityContext) === "ended" && (
         <Button
           size="sm"
-          variant={reportsByActivity.has(a.id) ? "ghost" : "outline"}
+          variant={reported.has(a.id) ? "ghost" : "outline"}
           data-testid={`activity-editor.submit-report-${a.id}`}
           nativeButton={false}
           render={
@@ -195,7 +196,7 @@ export function ActivityEditor({
             />
           }
         >
-          {translate(reportsByActivity.has(a.id) ? "events.editReport" : "events.submitReport")}
+          {translate(reported.has(a.id) ? "events.editReport" : "events.submitReport")}
         </Button>
       )}
       {canOnboard && a.kind === "event" && a.status !== "cancelled" && (
@@ -347,15 +348,16 @@ export function ActivityEditor({
                   badges={(a) => (
                     <>
                       <EventVisibilityBadge activity={a} context={visibilityContext} />
-                      {a.luma && <Badge variant="outline">Luma</Badge>}
-                      {eventVisibility(a, visibilityContext) === "ended" && (
+                      {canReport && eventVisibility(a, visibilityContext) === "ended" && (
                         <ReportStatusBadge
                           activity={a}
-                          submittedAt={reportsByActivity.get(a.id)?.submittedAt}
-                          source={reportsByActivity.get(a.id)?.source}
+                          submittedAt={reported.get(a.id)?.submittedAt}
+                          reviewedAt={reported.get(a.id)?.reviewedAt}
+                          source={reported.get(a.id)?.source}
                           now={now}
                         />
                       )}
+                      {a.luma && <Badge variant="outline">Luma</Badge>}
                     </>
                   )}
                   actions={rowActions}

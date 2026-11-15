@@ -96,15 +96,6 @@ export function proposalTypeLabel(pluginId: string, t: AppTranslator = translate
   return pluginId.charAt(0).toUpperCase() + pluginId.slice(1);
 }
 
-export function pendingProposalCountQueryOptions(apiClient: ApiClient) {
-  return queryOptions({
-    queryKey: proposalReviewQueryKeys.pendingCount(),
-    queryFn: () =>
-      apiClient.proposals.getProposals({ lifecycleStatus: "needs_review" as const, limit: 1 }),
-    staleTime: 15 * 1000,
-  });
-}
-
 export function awaitingReviewQueryOptions(apiClient: ApiClient, limit: number) {
   return queryOptions({
     queryKey: [...proposalReviewQueryKeys.all, "awaiting-review", limit] as const,

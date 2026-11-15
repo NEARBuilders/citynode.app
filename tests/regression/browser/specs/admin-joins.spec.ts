@@ -6,7 +6,7 @@ import { injectAdminCookies } from "../helpers/seeded";
 
 test.use({ trace: "on" });
 
-test.describe("admin overview joins", () => {
+test.describe("admin Home joins", () => {
   test("shows people who redeemed a code and new members per community", async ({ page }) => {
     const pageErrors = collectErrors(page);
     const { organizationId } = await seedCommunityJoins();
@@ -20,7 +20,7 @@ test.describe("admin overview joins", () => {
     await seedNode({ tenantId: tenant.id, slug: unique, name: `Joins City ${unique}` });
     await injectAdminCookies(page);
 
-    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
     await expect(page.getByTestId("admin.section.joins")).toBeVisible({ timeout: 15000 });
 
