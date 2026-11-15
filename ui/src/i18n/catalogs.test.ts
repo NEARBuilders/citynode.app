@@ -63,6 +63,13 @@ describe("app message catalogs", () => {
     expect(appCatalogs.zh["members.notAvailable"]).toBe("暂无数据");
   });
 
+  it("says a station has no expiry in every locale", () => {
+    expect(appCatalogs.en["station.noExpiry"]).toBe("No expiry");
+    expect(appCatalogs.es["station.noExpiry"]).toBe("Sin caducidad");
+    expect(appCatalogs.fr["station.noExpiry"]).toBe("Sans expiration");
+    expect(appCatalogs.zh["station.noExpiry"]).toBe("无过期时间");
+  });
+
   it("agrees station labels with the feminine station noun in Spanish and French", () => {
     const stationLabels = [
       "station.keepOpen",

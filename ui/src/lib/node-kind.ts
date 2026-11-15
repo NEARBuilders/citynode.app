@@ -2,6 +2,12 @@ import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
 export const geoNodeKinds = ["country", "state", "city"] as const;
 
+export const PLATFORM_NODE_KIND = "platform";
+
+export function isPlatformNode(node: { kind?: string | null } | null | undefined): boolean {
+  return node?.kind === PLATFORM_NODE_KIND;
+}
+
 const GEO_KIND_LABELS: Record<string, AppMessageId> = {
   country: "common.country",
   state: "common.state",

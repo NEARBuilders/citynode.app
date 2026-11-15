@@ -248,7 +248,37 @@ export const eventReports = pgTable("event_reports", {
     .notNull(),
   updatedBy: text("updated_by").notNull(),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at", { mode: "date", withTimezone: true }),
 });
+
+export const monthlyReports = pgTable(
+  "monthly_reports",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    month: text("month").notNull(),
+    notes: text("notes").notNull(),
+    eventsHeld: integer("events_held").notNull(),
+    checkIns: integer("check_ins").notNull(),
+    joins: integer("joins").notNull(),
+    newMembers: integer("new_members").notNull(),
+    submittedBy: text("submitted_by").notNull(),
+    submittedByName: text("submitted_by_name"),
+    submittedAt: timestamp("submitted_at", { mode: "date", withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedBy: text("updated_by").notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.tenantId, t.month] }),
+    monthIdx: index("monthly_reports_month").on(t.month),
+  }),
+);
 
 export const discoveryLumaConnections = pgTable("discovery_luma_connections", {
   nodeId: uuid("node_id")

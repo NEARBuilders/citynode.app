@@ -4,7 +4,13 @@ import { eventVisibility, type VisibilityActivity } from "@/lib/event-visibility
 export type EventReport = Parameters<ApiClient["saveEventReport"]>[0]["report"];
 export type ReportAudience = EventReport["audiences"][number];
 
-export type EventReportStatus = { state: "notDue" } | { state: "missing" } | { state: "submitted" };
+export const DAY_MS = 24 * 3_600_000;
+const WEEK_MS = 7 * DAY_MS;
+
+export type EventReportStatus =
+  | { state: "notDue" }
+  | { state: "missing" }
+  | { state: "submitted"; late: boolean };
 
 export function eventEndsAt(event: { startsAt: string | null; endsAt: string | null }): number {
   return Date.parse(event.endsAt ?? event.startsAt ?? "");
@@ -31,9 +37,33 @@ export function eventReportStatus(
   now: number,
 ): EventReportStatus {
   const end = eventEndsAt(event);
-  if (submittedAt) return { state: "submitted" };
+  if (submittedAt) {
+    return {
+      state: "submitted",
+      late: Number.isFinite(end) && Date.parse(submittedAt) > end + WEEK_MS,
+    };
+  }
   if (!Number.isFinite(end) || end > now) return { state: "notDue" };
   return { state: "missing" };
+}
+
+export function reportedWithinWeek(
+  events: readonly {
+    startsAt: string | null;
+    endsAt: string | null;
+    reportSubmittedAt: string | null;
+  }[],
+  now: number,
+): { onTime: number; due: number } {
+  let onTime = 0;
+  let due = 0;
+  for (const event of events) {
+    const status = eventReportStatus(event, event.reportSubmittedAt, now);
+    if (status.state === "notDue") continue;
+    due += 1;
+    if (status.state === "submitted" && !status.late) onTime += 1;
+  }
+  return { onTime, due };
 }
 
 function everyValueOf<T>() {
