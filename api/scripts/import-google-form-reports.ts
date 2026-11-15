@@ -89,6 +89,7 @@ async function main() {
         startsAt: row.data.startsAt ?? null,
         endsAt: row.data.endsAt ?? null,
         timezone: row.data.timezone ?? null,
+        status: row.data.status,
       }));
 
     const existing = await driver.db

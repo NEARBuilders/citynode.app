@@ -274,6 +274,33 @@ describe("planGoogleFormImport", () => {
   });
 });
 
+describe("events that cannot take a report", () => {
+  const linkRow = {
+    rowNumber: 2,
+    values: reportRow({ "Event link": `https://citynode.app/activity/${event.id}` }),
+  };
+
+  it("lists rows for cancelled or not-yet-ended events instead of importing them", () => {
+    for (const candidate of [
+      { ...event, status: "cancelled" },
+      { ...event, startsAt: "2026-12-01T18:00:00.000Z", endsAt: "2026-12-01T21:00:00.000Z" },
+    ]) {
+      const plan = planGoogleFormImport({
+        rows: [linkRow],
+        events: [candidate],
+        existingActivityIds: new Set(),
+        accounts: new Map(),
+        adminUserId: "platform-admin",
+        now: new Date("2026-11-01T00:00:00.000Z"),
+      });
+      expect(plan.matched).toEqual([]);
+      expect(plan.unmatched).toEqual([
+        expect.objectContaining({ reason: "event is cancelled or has not ended yet" }),
+      ]);
+    }
+  });
+});
+
 describe("resolveSubmittedBy", () => {
   it("uses the NEAR account column even when the form also collected emails", () => {
     expect(
@@ -320,6 +347,10 @@ describe("submittedAtFromRow", () => {
     expect(submittedAtFromRow({ Timestamp: "02/09/2026 12:00:00" }, fallback, "dmy")).toEqual(
       new Date("2026-09-02T12:00:00.000Z"),
     );
+  });
+
+  it("rejects three-digit years", () => {
+    expect(submittedAtFromRow({ Timestamp: "10/13/202 14:00:00" }, fallback)).toBeNull();
   });
 
   it("reads ISO timestamps without a zone as UTC", () => {
@@ -377,6 +408,19 @@ describe("day-first sheets", () => {
         reason: "timestamp was not a month/day/year date (use --day-first for day/month sheets)",
       }),
     ]);
+  });
+
+  it("reads day-first event dates that carry a time or use dots", () => {
+    const row = (eventDate: string) => ({
+      Community: "Harbor Demo",
+      "Event name": "Harbor Launch Night",
+      "Event date": eventDate,
+    });
+    expect(matchImportEvent(row("01/09/2026 18:00"), [event], "dmy")).toEqual({ event });
+    expect(matchImportEvent(row("01.09.2026"), [event], "dmy")).toEqual({ event });
+    expect(matchImportEvent(row("09/01/2026 18:00"), [event], "dmy")).toEqual({
+      reason: "community, event name and date did not match any activity",
+    });
   });
 
   it("does not match an event date that only exists as day/month", () => {

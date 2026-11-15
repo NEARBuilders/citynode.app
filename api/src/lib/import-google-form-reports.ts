@@ -14,6 +14,7 @@ export type ImportEventCandidate = {
   startsAt: string | null;
   endsAt: string | null;
   timezone: string | null;
+  status?: string;
 };
 
 export type ImportReportRow = {
@@ -289,13 +290,16 @@ function numericDate(
 function parseDay(value: string, order: DateOrder): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const match = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  const match = trimmed.match(
+    /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:[ T,]+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)?$/,
+  );
   if (match) {
     const date = numericDate(match[1]!, match[2]!, match[3]!, order);
     if (!date) return null;
     return `${String(date.year).padStart(4, "0")}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
   }
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+  if (!/[a-z]{3}/i.test(trimmed)) return null;
   const parsed = Date.parse(`${trimmed} UTC`);
   if (!Number.isFinite(parsed)) return null;
   return new Date(parsed).toISOString().slice(0, 10);
@@ -471,7 +475,7 @@ function parseSheetsTimestamp(value: string, order: DateOrder): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const sheets = trimmed.match(
-    /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AaPp][Mm]))?)?$/,
+    /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AaPp][Mm]))?)?$/,
   );
   if (sheets) {
     const date = numericDate(sheets[1]!, sheets[2]!, sheets[3]!, order);
@@ -524,6 +528,15 @@ export function planGoogleFormImport(input: {
     const match = matchImportEvent(row.values, input.events, order);
     if ("reason" in match) {
       unmatched.push({ rowNumber: row.rowNumber, reason: match.reason, values: row.values });
+      continue;
+    }
+    const end = match.event.endsAt ?? match.event.startsAt;
+    if (match.event.status === "cancelled" || !end || Date.parse(end) > now.getTime()) {
+      unmatched.push({
+        rowNumber: row.rowNumber,
+        reason: "event is cancelled or has not ended yet",
+        values: row.values,
+      });
       continue;
     }
     if (input.existingActivityIds.has(match.event.id)) {
