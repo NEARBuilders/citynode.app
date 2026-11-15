@@ -115,7 +115,7 @@ function communitySteps(
         {
           id: "team-requests",
           title: t("teamRequests.homeTitle", { count: state.teamRequestsWaiting }),
-          description: t("teamRequests.homeHint", { name: state.community.name }),
+          description: t("teamRequests.homeHint", { name: community.name }),
           actionLabel: t("common.open"),
         },
       ]
