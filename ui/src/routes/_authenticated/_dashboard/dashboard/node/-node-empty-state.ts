@@ -3,6 +3,12 @@ import { translateEnglishAppMessage } from "@/i18n/runtime";
 
 type NodeDashboardEmptyReason = "no-org" | "no-tenant" | "no-node" | "choose";
 
+export interface NodeEmptyStateAction {
+  label: string;
+  to: "/apply" | "/orgs" | "/explore";
+  primary: boolean;
+}
+
 export function getNodeEmptyStateContent(
   reason: NodeDashboardEmptyReason,
   canCreateNode: boolean,
@@ -11,22 +17,29 @@ export function getNodeEmptyStateContent(
 ): {
   title: string;
   description: string;
-  actionLabel: string;
-  actionTo: "/apply" | "/orgs";
+  actions: NodeEmptyStateAction[];
 } {
   if (reason === "choose") {
     return {
       title: t("dashboard.chooseCommunity"),
       description: t("dashboard.communityCount", { count: communityCount }),
-      actionLabel: t("common.choose"),
-      actionTo: "/orgs",
+      actions: [{ label: t("common.choose"), to: "/orgs", primary: true }],
     };
   }
-  const hasOrganization = reason !== "no-org";
+  const title = reason === "no-org" ? t("tenant.noCommunity") : t("dashboard.noCommunity");
+  if (canCreateNode) {
+    return {
+      title,
+      description: t("dashboard.createNodeHint"),
+      actions: [{ label: t("common.createCommunity"), to: "/apply", primary: true }],
+    };
+  }
   return {
-    title: hasOrganization ? t("dashboard.noCommunity") : t("tenant.noCommunity"),
-    description: canCreateNode ? t("dashboard.createNodeHint") : t("dashboard.startCommunityHint"),
-    actionLabel: canCreateNode ? t("common.createCommunity") : t("dashboard.startCommunity"),
-    actionTo: "/apply",
+    title,
+    description: t("dashboard.findCommunityHint"),
+    actions: [
+      { label: t("common.exploreCommunities"), to: "/explore", primary: true },
+      { label: t("dashboard.startCommunity"), to: "/apply", primary: false },
+    ],
   };
 }

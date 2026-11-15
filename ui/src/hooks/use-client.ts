@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 const emptySubscribe = () => () => {};
 
@@ -49,4 +49,30 @@ export function useNow(intervalMs: number): number {
     return () => clearInterval(id);
   }, [intervalMs]);
   return now;
+}
+
+export function useSeenOnce<T extends Element>(): [(node: T | null) => void, boolean] {
+  const [seen, setSeen] = useState(false);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const ref = useCallback(
+    (node: T | null) => {
+      observer.current?.disconnect();
+      if (!node || seen) return;
+      if (typeof IntersectionObserver === "undefined") {
+        setSeen(true);
+        return;
+      }
+      observer.current = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) return;
+          observer.current?.disconnect();
+          setSeen(true);
+        },
+        { rootMargin: "200px" },
+      );
+      observer.current.observe(node);
+    },
+    [seen],
+  );
+  return [ref, seen];
 }
