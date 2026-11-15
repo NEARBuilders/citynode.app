@@ -1,5 +1,5 @@
 import { BankIcon, EnvelopeSimpleIcon, RocketLaunchIcon, WalletIcon } from "@phosphor-icons/react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Trans } from "everything-dev/ui/i18n";
 import { toast } from "sonner";
@@ -29,7 +29,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { pageTitle } from "@/lib/page-title";
 import { visibleOrganizations } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
-import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
+import { tenantByOrgQueryOptions, tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
 import { orgMembersQueryKey } from "./-organization-query-keys";
 import { useInvitationActions } from "./-use-invitation-actions";
@@ -85,6 +85,7 @@ function OrganizationsList() {
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const organizationsQuery = useQuery(organizationsQueryOptions(apiClient));
   const { data: organizations, isLoading } = organizationsQuery;
@@ -148,6 +149,12 @@ function OrganizationsList() {
   const user = session?.user;
   const activeOrgId = session?.session?.activeOrganizationId;
   const switchOrgMutation = useSwitchOrganization();
+  const openIfCommunity = async (organizationId: string) => {
+    const isCommunity =
+      tenantOrgIds.has(organizationId) ||
+      !!(await queryClient.fetchQuery(tenantByOrgQueryOptions(apiClient, organizationId)));
+    if (isCommunity) await router.navigate({ to: "/dashboard/node" });
+  };
   const invitationBusy = acceptMutation.isPending || rejectMutation.isPending;
   const hasInvitations = pendingInvitations.length > 0;
 
@@ -286,58 +293,29 @@ function OrganizationsList() {
                     </Link>
                     <div className="flex flex-wrap gap-1.5">
                       {myRole && <Badge variant="secondary">{roleLabel(myRole, translate)}</Badge>}
-                      {org.status === "pending" && (
-                        <Badge variant="warning" data-testid="orgs-pending">
-                          {translate("orgApproval.pending")}
-                        </Badge>
-                      )}
-                      {org.status === "rejected" && (
-                        <Badge variant="destructive" data-testid="orgs-rejected">
-                          {translate("label.rejected")}
-                        </Badge>
-                      )}
                       {isActive && <Badge variant="success">{translate("common.active")}</Badge>}
                       {tenantOrgIds.has(org.id) && (
                         <Badge variant="outline">{translate("common.community")}</Badge>
                       )}
                     </div>
-                    {org.status === "rejected" && (
-                      <p
-                        className="text-sm text-muted-foreground"
-                        data-testid="orgs-rejection-reason"
-                      >
-                        {org.rejectionReason}
-                      </p>
-                    )}
                     <div className="mt-auto flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">
                         {members ? translate("org.memberCount", { count: members.length }) : " "}
                       </span>
                       <div className="flex items-center gap-2">
-                        {org.status === "active" &&
-                          myRole === "owner" &&
-                          !tenantOrgIds.has(org.id) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              nativeButton={false}
-                              render={<Link to="/apply" search={{ org: org.slug }} />}
-                              data-testid={`orgs-start-community-${org.slug}`}
-                            >
-                              <RocketLaunchIcon />
-                              {translate("dashboard.startCommunity")}
-                            </Button>
-                          )}
-                        {org.status !== "active" ? (
+                        {myRole === "owner" && !tenantOrgIds.has(org.id) && (
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             nativeButton={false}
-                            render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                            render={<Link to="/apply" search={{ org: org.slug }} />}
+                            data-testid={`orgs-start-community-${org.slug}`}
                           >
-                            {translate("orgApproval.view")}
+                            <RocketLaunchIcon />
+                            {translate("dashboard.startCommunity")}
                           </Button>
-                        ) : isActive ? (
+                        )}
+                        {isActive ? (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -350,8 +328,13 @@ function OrganizationsList() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => switchOrgMutation.mutate(org.id)}
+                            onClick={() =>
+                              switchOrgMutation.mutate(org.id, {
+                                onSuccess: () => void openIfCommunity(org.id),
+                              })
+                            }
                             disabled={switchOrgMutation.isPending}
+                            data-testid={`orgs-make-active-${org.slug}`}
                           >
                             {translate("org.makeActive")}
                           </Button>

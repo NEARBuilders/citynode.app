@@ -117,29 +117,6 @@ describe("node proposal application", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it.each([
-    "pending",
-    "rejected",
-  ])("does not link a %s organization to a tenant", async (status) => {
-    const admin = await getPluginClient(adminContext);
-    await expect(
-      admin.applyNodeProposal({
-        kind: "country",
-        name: "Gated org",
-        slug: `${status}-org`,
-        parentId: null,
-        orgId: `${status}-org`,
-        motivation: "Test the organization approval gate.",
-        accountId: `${status}-org.near`,
-        submitterAccountId: "proposal-applicant.near",
-        hostname: `${status}-org.citynode.app`,
-      }),
-    ).rejects.toThrow("approval");
-    expect((await admin.listTenants()).some((tenant) => tenant.orgId === `${status}-org`)).toBe(
-      false,
-    );
-  });
-
   it("does not provision a tenant when the proposal organization no longer exists", async () => {
     const admin = await getPluginClient(adminContext);
     await expect(

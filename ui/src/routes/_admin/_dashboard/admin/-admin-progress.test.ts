@@ -126,13 +126,12 @@ describe("deriveNeedsAction", () => {
         pendingReviewCount: 0,
         proposals: [],
         relayerNeedsFunding: false,
-        organizationRequestCount: 0,
         communities: [{ node: { id: "a", name: "A" }, staking: "own" }],
       }),
     ).toEqual([]);
   });
 
-  it("lists failed setups, applications, relayer funding, organization requests and unstaked communities", () => {
+  it("lists failed setups, applications, relayer funding and unstaked communities", () => {
     const pending = {
       ...setup,
       id: "p2",
@@ -144,7 +143,6 @@ describe("deriveNeedsAction", () => {
         pendingReviewCount: 1,
         proposals: [setup, pending],
         relayerNeedsFunding: true,
-        organizationRequestCount: 1,
         communities: [
           { node: { id: "berlin", name: "Berlin" }, staking: "none" },
           { node: { id: "austin", name: "Austin" }, staking: "inherited" },
@@ -154,7 +152,6 @@ describe("deriveNeedsAction", () => {
       { kind: "setup", proposal: setup },
       { kind: "application", proposal: pending },
       { kind: "relayer" },
-      { kind: "organizations", count: 1 },
       { kind: "staking", nodeId: "berlin", name: "Berlin" },
     ]);
   });
@@ -170,7 +167,6 @@ describe("deriveNeedsAction", () => {
       pendingReviewCount: APPLICATION_ITEMS_LIMIT + 4,
       proposals: pending,
       relayerNeedsFunding: false,
-      organizationRequestCount: 0,
       communities: [],
     });
     expect(items.filter((item) => item.kind === "application")).toHaveLength(
@@ -189,7 +185,6 @@ describe("deriveNeedsAction", () => {
         pendingReviewCount: 0,
         proposals: [],
         relayerNeedsFunding: false,
-        organizationRequestCount: 0,
         communities,
       }),
     ).toEqual([{ kind: "stakingMany", count: STAKING_ITEMS_LIMIT + 1 }]);

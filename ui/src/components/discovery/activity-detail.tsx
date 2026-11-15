@@ -172,6 +172,11 @@ export function ActivityDetail({
             <ArrowUpRightIcon />
           </Button>
         </div>
+        {isEvent && !cancelled && host.data && (
+          <p className="text-sm text-muted-foreground" data-testid="activity.join-at-event">
+            {translate("community.joinAtEvent", { name: host.data.name })}
+          </p>
+        )}
       </header>
 
       {data.summary && (

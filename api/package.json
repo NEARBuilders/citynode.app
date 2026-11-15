@@ -41,6 +41,7 @@
     "@rspack/core": "catalog:",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
+    "@turf/simplify": "catalog:",
     "dotenv": "^17.2.3",
     "everything-dev": "catalog:",
     "vite-tsconfig-paths": "^5.1.4",

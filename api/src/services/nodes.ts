@@ -5,11 +5,14 @@ import { DatabaseTag } from "../db/layer";
 import {
   type NodeMetadata,
   nodes as nodesTable,
+  placeAliases as placeAliasesTable,
+  places as placesTable,
   tenants as tenantsTable,
   type validatorRole as validatorRoleEnum,
   validators as validatorsTable,
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
+import { nodeParentEdgesQuery } from "./places";
 
 export type NodeKind = string;
 type ValidatorRole = (typeof validatorRoleEnum)["enumValues"][number];
@@ -21,6 +24,7 @@ export interface NodeRecord {
   kind: NodeKind | null;
   slug: string;
   name: string;
+  placeId: string | null;
   parentId: string | null;
   tenantId: string | null;
   metadata: Record<string, unknown>;
@@ -105,6 +109,7 @@ function toNodeRecord(row: NodeRow): NodeRecord {
     kind: nodeKindOf(metadata),
     slug: row.slug,
     name: row.name,
+    placeId: row.placeId,
     parentId: row.parentId,
     tenantId: row.tenantId,
     metadata: metadata as Record<string, unknown>,
@@ -133,6 +138,41 @@ function withoutMetadataKey(key: string): SQL {
 
 function replaceMetadataKeepingKind(replacement: string): SQL {
   return sql`${replacement}::jsonb || CASE WHEN ${nodesTable.metadata} ? 'kind' THEN jsonb_build_object('kind', ${nodesTable.metadata} -> 'kind') ELSE '{}'::jsonb END`;
+}
+
+interface ParentEdge {
+  id: string;
+  parent_id: string | null;
+}
+
+function rowsOf<T>(result: unknown): T[] {
+  const rows = (result as { rows?: unknown }).rows ?? result;
+  return Array.isArray(rows) ? (rows as T[]) : [];
+}
+
+function nodeParentIs(parentId: string | null): SQL {
+  return sql`${nodesTable.id} IN (
+    SELECT id FROM (${nodeParentEdgesQuery()}) edges
+    WHERE ${parentId === null ? sql`parent_id IS NULL` : sql`parent_id = ${parentId}`}
+  )`;
+}
+
+function subtreeDepths(rootId: string, edges: ParentEdge[]): Map<string, number> {
+  const childrenOf = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (edge.parent_id)
+      childrenOf.set(edge.parent_id, [...(childrenOf.get(edge.parent_id) ?? []), edge.id]);
+  }
+  const depths = new Map([[rootId, 0]]);
+  const queue = [rootId];
+  for (const current of queue) {
+    for (const child of childrenOf.get(current) ?? []) {
+      if (depths.has(child)) continue;
+      depths.set(child, (depths.get(current) ?? 0) + 1);
+      queue.push(child);
+    }
+  }
+  return depths;
 }
 
 const SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
@@ -230,11 +270,7 @@ export const NodesLive = Layer.effect(
             conditions.push(eq(nodesTable.tenantId, filter.tenantId));
           }
           if (filter?.parentId !== undefined) {
-            if (filter.parentId === null) {
-              conditions.push(isNull(nodesTable.parentId));
-            } else {
-              conditions.push(eq(nodesTable.parentId, filter.parentId));
-            }
+            conditions.push(nodeParentIs(filter.parentId));
           }
           const rows = yield* query(() =>
             conditions.length === 0
@@ -255,15 +291,16 @@ export const NodesLive = Layer.effect(
           const nodeIds = nodes.map((node) => node.id);
           const [childRows, validatorRows] = yield* Effect.all([
             query(() =>
-              db
-                .select({
-                  nodeId: nodesTable.parentId,
-                  count: sql<number>`cast(count(*) as integer)`,
-                })
-                .from(nodesTable)
-                .where(inArray(nodesTable.parentId, nodeIds))
-                .groupBy(nodesTable.parentId),
-            ),
+              db.execute(sql`
+                SELECT parent_id, cast(count(*) as integer) AS count
+                FROM (${nodeParentEdgesQuery()}) edges
+                WHERE parent_id IN (${sql.join(
+                  nodeIds.map((nodeId) => sql`${nodeId}`),
+                  sql`, `,
+                )})
+                GROUP BY parent_id
+              `),
+            ).pipe(Effect.map((result) => rowsOf<{ parent_id: string; count: number }>(result))),
             query(() =>
               db
                 .select({
@@ -276,7 +313,7 @@ export const NodesLive = Layer.effect(
             ),
           ]);
           const childrenByNode = new Map(
-            childRows.flatMap((row) => (row.nodeId ? [[row.nodeId, row.count] as const] : [])),
+            childRows.map((row) => [row.parent_id, Number(row.count)] as const),
           );
           const validatorsByNode = new Map(
             validatorRows.map((row) => [row.nodeId, row.count] as const),
@@ -303,7 +340,6 @@ export const NodesLive = Layer.effect(
           const patch: Record<string, unknown> = { updatedAt: yield* DateTime.nowAsDate };
           if (input.slug !== undefined) patch.slug = input.slug;
           if (input.name !== undefined) patch.name = input.name;
-          if (input.parentId !== undefined) patch.parentId = input.parentId;
           if (input.metadata !== undefined) {
             const kind = input.kind ?? nodeKindOf(input.metadata) ?? undefined;
             const replacement = JSON.stringify(mergeKindMetadata(kind, input.metadata));
@@ -317,50 +353,49 @@ export const NodesLive = Layer.effect(
 
           return yield* query(() =>
             db.transaction(async (tx) => {
-              if (input.parentId !== undefined && input.parentId !== null) {
-                await tx.execute(sql`LOCK TABLE nodes IN SHARE ROW EXCLUSIVE MODE`);
-
+              if (input.parentId !== undefined) {
                 if (input.parentId === id) {
                   throw new ORPCError("BAD_REQUEST", {
                     message: "Node cannot be its own parent",
                   });
                 }
 
-                const parent = await tx
-                  .select({ id: nodesTable.id })
-                  .from(nodesTable)
-                  .where(eq(nodesTable.id, input.parentId!))
-                  .limit(1);
-                if (parent.length === 0) {
+                await tx.execute(sql`LOCK TABLE nodes, places IN SHARE ROW EXCLUSIVE MODE`);
+
+                if (input.parentId !== null) {
+                  const [parent] = await tx
+                    .select({ id: nodesTable.id })
+                    .from(nodesTable)
+                    .where(eq(nodesTable.id, input.parentId))
+                    .limit(1);
+                  if (!parent) {
+                    throw new ORPCError("NOT_FOUND", {
+                      message: "Parent node not found",
+                      data: { resource: "node", resourceId: input.parentId },
+                    });
+                  }
+
+                  const edges = rowsOf<ParentEdge>(await tx.execute(nodeParentEdgesQuery()));
+                  if (subtreeDepths(id, edges).has(input.parentId)) {
+                    throw new ORPCError("BAD_REQUEST", {
+                      message: "Node cannot be moved below one of its descendants",
+                    });
+                  }
+                }
+
+                const [moved] = await tx
+                  .update(nodesTable)
+                  .set({ ...patch, parentId: input.parentId })
+                  .where(eq(nodesTable.id, id))
+                  .returning();
+                if (!moved) {
                   throw new ORPCError("NOT_FOUND", {
-                    message: "Parent node not found",
-                    data: { resource: "node", resourceId: input.parentId },
+                    message: "Node not found",
+                    data: { resource: "node", resourceId: id },
                   });
                 }
 
-                const descendantsResult = await tx.execute(sql`
-                  WITH RECURSIVE descendants AS (
-                    SELECT id, ARRAY[id] AS path
-                    FROM nodes
-                    WHERE id = ${id}
-                    UNION ALL
-                    SELECT n.id, descendants.path || n.id
-                    FROM nodes n
-                    INNER JOIN descendants ON n.parent_id = descendants.id
-                    WHERE NOT (n.id = ANY(descendants.path))
-                  )
-                  SELECT id
-                  FROM descendants
-                  WHERE id = ${input.parentId}
-                  LIMIT 1
-                `);
-                const descendants =
-                  (descendantsResult as { rows?: unknown }).rows ?? descendantsResult;
-                if (Array.isArray(descendants) && descendants.length > 0) {
-                  throw new ORPCError("BAD_REQUEST", {
-                    message: "Node cannot be moved below one of its descendants",
-                  });
-                }
+                return toNodeRecord(moved);
               }
 
               const [row] = await tx
@@ -416,21 +451,33 @@ export const NodesLive = Layer.effect(
           return rows.length > 0;
         }),
 
-      listRootNodes: query(() =>
-        db.select().from(nodesTable).where(isNull(nodesTable.parentId)),
-      ).pipe(Effect.map((rows) => rows.map(toNodeRecord))),
+      listRootNodes: query(() => db.select().from(nodesTable).where(nodeParentIs(null))).pipe(
+        Effect.map((rows) => rows.map(toNodeRecord)),
+      ),
 
       listChildren: (parentId) =>
         Effect.gen(function* () {
           const rows = yield* query(() =>
-            db.select().from(nodesTable).where(eq(nodesTable.parentId, parentId)),
+            db.select().from(nodesTable).where(nodeParentIs(parentId)),
           );
           return rows.map(toNodeRecord);
         }),
 
       resolveBySlug: (slug, parentId) =>
         Effect.gen(function* () {
-          const conditions = [eq(nodesTable.slug, slug)];
+          const rows = yield* query(() =>
+            db
+              .select({ node: nodesTable })
+              .from(nodesTable)
+              .innerJoin(placesTable, eq(placesTable.id, nodesTable.placeId))
+              .leftJoin(placeAliasesTable, eq(placeAliasesTable.placeId, placesTable.id))
+              .where(sql`${placesTable.slug} = ${slug} OR ${placeAliasesTable.value} = ${slug}`)
+              .limit(1),
+          );
+          const row = rows[0];
+          if (row) return toNodeRecord(row.node);
+
+          const conditions: SQL[] = [eq(nodesTable.slug, slug), isNull(nodesTable.placeId)];
           if (parentId === null) {
             conditions.push(isNull(nodesTable.parentId));
           } else if (parentId !== undefined) {
@@ -444,37 +491,29 @@ export const NodesLive = Layer.effect(
               .orderBy(sql`${nodesTable.parentId} IS NOT NULL`)
               .limit(parentId === undefined ? 2 : 1),
           );
-          const row = matches[0];
-          if (parentId === undefined && matches.length > 1 && row?.parentId !== null) {
+          const match = matches[0];
+          if (parentId === undefined && matches.length > 1 && match?.parentId !== null) {
             return null;
           }
-          return row ? toNodeRecord(row) : null;
+          return match ? toNodeRecord(match) : null;
         }),
 
       subtreeWithValidators: (nodeId) =>
         Effect.gen(function* () {
-          const subtreeResult = yield* query(() =>
-            db.execute(sql`
-              WITH RECURSIVE subtree AS (
-                SELECT id, metadata->>'kind' AS kind, slug, name, parent_id, 0 AS depth, ARRAY[id] AS path
-                FROM nodes
-                WHERE id = ${nodeId}
-                UNION ALL
-                SELECT n.id, n.metadata->>'kind', n.slug, n.name, n.parent_id, subtree.depth + 1,
-                  subtree.path || n.id
-                FROM nodes n
-                INNER JOIN subtree ON n.parent_id = subtree.id
-                WHERE NOT (n.id = ANY(subtree.path))
-              )
-              SELECT id, kind, slug, name, parent_id FROM subtree
-              ORDER BY depth
-            `),
+          const edges = yield* query(() => db.execute(nodeParentEdgesQuery())).pipe(
+            Effect.map((result) => rowsOf<ParentEdge>(result)),
           );
-
-          const rows = (subtreeResult as { rows?: unknown }).rows ?? subtreeResult;
-          if (!Array.isArray(rows) || rows.length === 0) return [];
-
-          const ids = (rows as Array<{ id: string }>).map((r) => r.id);
+          const depthById = subtreeDepths(nodeId, edges);
+          const nodeRows = yield* query(() =>
+            db
+              .select()
+              .from(nodesTable)
+              .where(inArray(nodesTable.id, [...depthById.keys()])),
+          );
+          if (nodeRows.length === 0) return [];
+          const orderedNodes = nodeRows.sort(
+            (a, b) => (depthById.get(a.id) ?? 0) - (depthById.get(b.id) ?? 0),
+          );
 
           const validatorRows = yield* query(() =>
             db
@@ -488,7 +527,12 @@ export const NodesLive = Layer.effect(
                 isDefault: validatorsTable.isDefault,
               })
               .from(validatorsTable)
-              .where(inArray(validatorsTable.nodeId, ids)),
+              .where(
+                inArray(
+                  validatorsTable.nodeId,
+                  orderedNodes.map((n) => n.id),
+                ),
+              ),
           );
 
           const validatorsByNode = new Map<string, SubtreeValidator[]>();
@@ -505,21 +549,13 @@ export const NodesLive = Layer.effect(
             validatorsByNode.set(v.nodeId, arr);
           }
 
-          return (
-            rows as Array<{
-              id: string;
-              kind: string | null;
-              slug: string;
-              name: string;
-              parent_id: string | null;
-            }>
-          ).map((r) => ({
-            id: r.id,
-            kind: r.kind,
-            slug: r.slug,
-            name: r.name,
-            parentId: r.parent_id,
-            validators: validatorsByNode.get(r.id) ?? [],
+          return orderedNodes.map((n) => ({
+            id: n.id,
+            kind: nodeKindOf(n.metadata),
+            slug: n.slug,
+            name: n.name,
+            parentId: n.parentId,
+            validators: validatorsByNode.get(n.id) ?? [],
           }));
         }),
     };

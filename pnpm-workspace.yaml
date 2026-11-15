@@ -68,6 +68,7 @@ catalog:
   "@tanstack/router-core": 1.171.39
   "@tanstack/router-generator": 1.167.46
   "@tanstack/router-plugin": 1.168.48
+  "@turf/simplify": 7.4.0
   "@types/node": ^25.0.3
   "@types/pg": ^8.11.6
   "@types/react": ^19.3.0
@@ -80,8 +81,8 @@ catalog:
   drizzle-kit: ^0.31.11
   drizzle-orm: ^0.45.4
   effect: 4.0.0-rc.118
-  every-plugin: 3.0.0-rc.16
-  everything-dev: 2.0.0-rc.42
+  every-plugin: 3.0.0-rc.17
+  everything-dev: 2.0.0-rc.43
   framer-motion: 12.43.0
   near-kit: ^0.20.2
   pg: ^8.12.0
@@ -97,8 +98,8 @@ catalog:
   zod: 4.6.7
 minimumReleaseAgeExclude:
   - better-near-auth@2.0.0-rc.8
-  - every-plugin@3.0.0-rc.16
-  - everything-dev@2.0.0-rc.42
+  - every-plugin@3.0.0-rc.17
+  - everything-dev@2.0.0-rc.43
 minimumReleaseAgeExcludePrune: true
 permissions:
   "@hot-labs/near-connect@https://codeload.github.com/elliotBraem/near-connect/tar.gz/83355f19408cd98c03b9fa823f9e52cd03929418":
@@ -117,3 +118,5 @@ permissions:
     skills: true
   everything-dev:
     skills: true
+  lefthook:
+    build: false
