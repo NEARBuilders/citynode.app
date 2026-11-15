@@ -222,6 +222,7 @@ function EventReportPage() {
         <ReviewRow
           target={{ kind: "event", activityId, updatedAt: saved.updatedAt }}
           reviewedAt={saved.reviewedAt}
+          imported={saved.source === "import"}
           testId="report.review"
         />
       )}

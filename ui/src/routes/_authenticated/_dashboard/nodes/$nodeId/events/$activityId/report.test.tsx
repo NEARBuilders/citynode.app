@@ -120,7 +120,7 @@ afterEach(() => {
 const savedReport = {
   activityId: ACTIVITY,
   formVersion: 1,
-  source: "app" as const,
+  source: "app" as "app" | "import",
   submittedAt: "2026-10-16T00:00:00.000Z",
   updatedAt: "2026-10-16T00:00:00.000Z",
   reviewedAt: null as string | null,
@@ -232,6 +232,19 @@ describe("event report check-in prefill", () => {
     const back = screen.getByTestId("activity-form.back");
     expect(back.getAttribute("href")).toBe(`/admin/events?community=${NODE}`);
     expect(back.textContent).toBe("Events");
+  });
+
+  it("labels an imported report the same way in the review row", async () => {
+    harness.activities = [activity];
+    harness.report = { ...savedReport, source: "import" };
+    harness.canEdit = false;
+    harness.canReview = true;
+
+    renderPage();
+
+    expect((await screen.findByTestId("report.review-row")).textContent).toContain(
+      "Imported report",
+    );
   });
 
   it("tells the organizer their report was reviewed", async () => {

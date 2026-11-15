@@ -451,6 +451,14 @@ describe("reportFromImportRow", () => {
     });
   });
 
+  it("splits links separated by spaces, like the in-app form", () => {
+    expect(
+      reportFromImportRow(
+        reportRow({ "Links to social posts": "https://x.com/a https://x.com/b" }),
+      ),
+    ).toMatchObject({ report: { socialLinks: ["https://x.com/a", "https://x.com/b"] } });
+  });
+
   it("lists blank attendee counts instead of importing 0", () => {
     expect(reportFromImportRow(reportRow({ "How many attendees?": "" }))).toEqual({
       reason: "attendee count was missing or invalid",

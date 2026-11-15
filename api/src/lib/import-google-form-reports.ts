@@ -188,7 +188,7 @@ export function parseCsv(text: string): ImportReportRow[] {
 
 function splitLinks(value: string): string[] {
   return value
-    .split(/[\n,]+/)
+    .split(/[\s,]+/)
     .map((part) => part.trim())
     .filter(Boolean);
 }
