@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
@@ -420,9 +420,18 @@ describe("PollVote", () => {
     const approve = await screen.findByTestId("poll-vote.approve");
     harness.chainTimeFails = true;
     fireEvent.click(approve);
-    await waitFor(() => expect(harness.tasks).toHaveLength(1));
-    await expect(harness.tasks[0]?.({})).rejects.toThrow("RPC unavailable");
+    const alert = await screen.findByRole("alert");
+    expect(harness.tasks).toHaveLength(0);
     expect(harness.voteOnProposal).not.toHaveBeenCalled();
+    harness.chainTimeFails = false;
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(harness.voteOnProposal).toHaveBeenCalledTimes(1));
+    expect(harness.voteOnProposal.mock.calls[0]?.slice(1, 4)).toEqual([
+      DAO,
+      expect.objectContaining({ id: poll().id }),
+      "VoteApprove",
+    ]);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("shows no vote buttons to a Contributor signed in with a non-passkey wallet", async () => {

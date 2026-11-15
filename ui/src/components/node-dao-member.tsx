@@ -17,7 +17,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppTranslation } from "@/i18n/runtime";
-import { isPasskeyWalletAccount } from "@/lib/member-wallet";
+import { isPasskeyWalletAccount, type MemberSigningState } from "@/lib/member-wallet";
 import {
   type ContributorState,
   contributorRequestDescription,
@@ -452,6 +452,7 @@ export function PollVote({
   const chainTimeQuery = useQuery({ ...chainTimeQueryOptions(), enabled: canSign });
   const signing = useMemberSigning<unknown>(accountId);
   const [action, setAction] = useState<SputnikVoteAction | null>(null);
+  const [chainTimeFailed, setChainTimeFailed] = useState(false);
   const access = pollVoteAccess(policyQuery.data, accountId, proposal, chainTimeQuery.data);
 
   if (action === "Finalize" && signing.state.status === "submitted") {
@@ -473,14 +474,18 @@ export function PollVote({
 
   const busy = signing.state.status === "connecting" || signing.state.status === "signing";
   const done = signing.state.status === "submitted";
+  const status: MemberSigningState = chainTimeFailed
+    ? { status: "error", failure: "network", result: null }
+    : signing.state;
   const vote = async (next: SputnikVoteAction) => {
     setAction(next);
+    setChainTimeFailed(false);
     if (next !== "Finalize") {
       let nowNs: bigint;
       try {
         nowNs = await queryClient.fetchQuery({ ...chainTimeQueryOptions(), staleTime: 0 });
-      } catch (error) {
-        await signing.submit(() => Promise.reject(error)).catch(() => {});
+      } catch {
+        setChainTimeFailed(true);
         return;
       }
       if (!isOpenProposal(proposal, policyQuery.data, nowNs)) return;
@@ -506,7 +511,7 @@ export function PollVote({
           {translate("pollVote.finalize")}
         </Button>
         <MemberSigningStatus
-          state={signing.state}
+          state={status}
           onRetry={action ? () => void vote(action) : undefined}
         />
       </div>
@@ -534,10 +539,7 @@ export function PollVote({
           {translate("common.reject")}
         </Button>
       </div>
-      <MemberSigningStatus
-        state={signing.state}
-        onRetry={action ? () => void vote(action) : undefined}
-      />
+      <MemberSigningStatus state={status} onRetry={action ? () => void vote(action) : undefined} />
     </div>
   );
 }
