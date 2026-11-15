@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabaseDriver } from "@/db/index";
 import { loadMigrations, migrate } from "@/db/migrate";
 import { nodes, placeAliases, places as placesTable } from "@/db/schema";
+import { buildPlacesCatalog, seedPlacesInto } from "@/seed/places-catalog";
 import pluginDevConfig from "../../plugin.dev";
 import { authedContext, getPluginClient, teardown } from "../setup";
 
@@ -128,6 +129,44 @@ function organizationSlugOf(organizationId: string): string {
   return organizationId.replace(/^org-/, "");
 }
 
+function citySources() {
+  const city = (id: string, name: string, admin1: string, population: number) =>
+    [
+      id,
+      name,
+      name,
+      "",
+      "41.85",
+      "-87.65",
+      "P",
+      "PPL",
+      "US",
+      "",
+      admin1,
+      "",
+      "",
+      "",
+      String(population),
+    ]
+      .concat(["", "", "UTC", "2026-01-01"])
+      .join("\t");
+  return {
+    countryInfo:
+      "US\tUSA\t.us\tUSA\tUnited States\tWashington\t9629091\t331000000\tNA\t.us\tUSD\tDollar\t1\t\t\ten-US\t6252001\tCA\t",
+    admin1Codes: ["US.IL\tIllinois\tIllinois\t4896861", "US.NY\tNew York\tNew York\t5128638"].join(
+      "\n",
+    ),
+    admin0Geojson: JSON.stringify({ type: "FeatureCollection", features: [] }),
+    admin1Geojson: JSON.stringify({ type: "FeatureCollection", features: [] }),
+    cities: [
+      city("4887398", "Chicago", "IL", 2720546),
+      city("5128581", "New York City", "NY", 8804190),
+    ].join("\n"),
+    supranationals: [],
+    curatedAliases: [{ value: "nyc", geonameid: "5128581" }],
+  };
+}
+
 let driver: Awaited<ReturnType<typeof createDatabaseDriver>>;
 
 beforeAll(async () => {
@@ -147,6 +186,7 @@ beforeAll(async () => {
       kind: "geonames",
       placeId: (await driver.db.select({ id: placesTable.id }).from(placesTable).limit(1))[0]!.id,
     });
+    await seedPlacesInto(driver.db, buildPlacesCatalog(citySources()));
   } finally {
     await driver.close();
   }
@@ -256,6 +296,28 @@ describe("places activation + join flow", () => {
       organizationId: "org-togo",
       alreadyActivated: true,
     });
+  });
+
+  it("activates and joins a seeded city through its short form", async () => {
+    const activator = await getPluginClient(authedContext("city-activator"), {
+      auth: authStubFor(authedContext("city-activator")),
+    } as never);
+    const activated = await activator.activateCommunity({ place: "nyc" });
+    expect(activated).toMatchObject({
+      slug: "new-york-city",
+      organizationId: "org-new-york-city",
+      alreadyActivated: false,
+    });
+
+    const joinerContext = { ...authedContext("city-joiner"), session: { id: "session-city" } };
+    const joiner = await getPluginClient(joinerContext, {
+      auth: authStubFor(joinerContext),
+    } as never);
+    const joined = await joiner.joinCommunity({ placeId: activated.placeId });
+    expect(joined).toMatchObject({ organizationId: "org-new-york-city", alreadyMember: false });
+
+    const chicago = await activator.activateCommunity({ place: "chicago" });
+    expect(chicago).toMatchObject({ slug: "chicago", alreadyActivated: false });
   });
 
   it("rejects unknown places", async () => {
