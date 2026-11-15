@@ -44,15 +44,20 @@ export function getNextSteps(
     });
   }
 
-  if (state.membership === "none") {
-    if (!state.isAdmin) {
-      steps.push({
-        id: "start-community",
-        title: t("dashboard.startCommunity"),
-        description: t("dashboard.startCommunityHint"),
-        actionLabel: t("dashboard.startCommunity"),
-      });
-    }
+  const explore: NextStep = {
+    id: "explore",
+    title: t("dashboard.explore"),
+    description: t("dashboard.exploreHint"),
+    actionLabel: t("common.explore"),
+  };
+  const offersStartCommunity =
+    !state.community &&
+    (state.membership === "none"
+      ? !state.isAdmin
+      : state.membership === "open" || state.membership === "active");
+
+  if (offersStartCommunity) {
+    steps.push(explore, startCommunityStep(t));
   } else if (state.membership === "choose") {
     steps.push({
       id: "choose-org",
@@ -60,8 +65,8 @@ export function getNextSteps(
       description: t("dashboard.communityCount", { count: state.communityCount }),
       actionLabel: t("common.choose"),
     });
-  } else if (state.membership !== "unknown") {
-    steps.push(...communitySteps(state, t));
+  } else if (state.community && state.membership !== "unknown") {
+    steps.push(...communitySteps(state.community, state, t));
   }
 
   steps.push({
@@ -71,29 +76,27 @@ export function getNextSteps(
     actionLabel: t("common.stake"),
   });
 
-  if (!state.community) {
-    steps.push({
-      id: "explore",
-      title: t("dashboard.explore"),
-      description: t("dashboard.exploreHint"),
-      actionLabel: t("common.explore"),
-    });
+  if (!state.community && !offersStartCommunity) {
+    steps.push(explore);
   }
 
   return steps;
 }
 
-function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
-  if (!state.community) {
-    return [
-      {
-        id: "start-community",
-        title: t("dashboard.startCommunity"),
-        description: t("dashboard.startCommunityHint"),
-        actionLabel: t("dashboard.startCommunity"),
-      },
-    ];
-  }
+function startCommunityStep(t: AppTranslator): NextStep {
+  return {
+    id: "start-community",
+    title: t("dashboard.startCommunity"),
+    description: t("dashboard.startCommunityHint"),
+    actionLabel: t("dashboard.startCommunity"),
+  };
+}
+
+function communitySteps(
+  community: NonNullable<NextStepsState["community"]>,
+  state: NextStepsState,
+  t: AppTranslator,
+): NextStep[] {
   const payouts: NextStep[] =
     state.canManageCommunity || state.inFinanceTeam
       ? [
@@ -110,7 +113,7 @@ function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
       {
         id: "open-community",
         title: t("dashboard.openCommunity"),
-        description: t("dashboard.communityTasks", { name: state.community.name }),
+        description: t("dashboard.communityTasks", { name: community.name }),
         actionLabel: t("common.open"),
       },
       ...payouts,
@@ -119,7 +122,7 @@ function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
   return [
     {
       id: "open-community",
-      title: t("dashboard.openCommunityNamed", { name: state.community.name }),
+      title: t("dashboard.openCommunityNamed", { name: community.name }),
       description: t("dashboard.memberCommunityHint"),
       actionLabel: t("common.open"),
     },
