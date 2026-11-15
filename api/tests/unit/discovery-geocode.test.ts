@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  countryBoundary,
   GeocodeLive,
   GeocodeTag,
   nominatimUserAgent,
@@ -67,15 +66,6 @@ describe("shouldGeocodeProfile", () => {
   });
 });
 
-const outline = [
-  [
-    [68, 8],
-    [97, 8],
-    [97, 35],
-    [68, 8],
-  ],
-];
-
 describe("profilePlace", () => {
   it("uses the location when it is set", () => {
     expect(profilePlace({ location: " Mumbai ", region: "India" }, "country")).toBe("Mumbai");
@@ -89,35 +79,6 @@ describe("profilePlace", () => {
     expect(profilePlace({ location: "", region: "IL" }, "state")).toBe("");
     expect(profilePlace({ location: "", region: "Pakistan" }, "city")).toBe("");
     expect(profilePlace({ location: "", region: "Pakistan" }, null)).toBe("");
-  });
-});
-
-describe("countryBoundary", () => {
-  it("keeps the outline of a country", () => {
-    expect(
-      countryBoundary({
-        addresstype: "country",
-        geojson: { type: "Polygon", coordinates: outline },
-      }),
-    ).toEqual({ type: "Polygon", coordinates: outline });
-    expect(
-      countryBoundary({
-        addresstype: "country",
-        geojson: { type: "MultiPolygon", coordinates: [outline] },
-      }),
-    ).toEqual({ type: "MultiPolygon", coordinates: [outline] });
-  });
-
-  it("ignores cities, states and point results", () => {
-    expect(
-      countryBoundary({ addresstype: "city", geojson: { type: "Polygon", coordinates: outline } }),
-    ).toBeUndefined();
-    expect(
-      countryBoundary({ addresstype: "state", geojson: { type: "Polygon", coordinates: outline } }),
-    ).toBeUndefined();
-    expect(
-      countryBoundary({ addresstype: "country", geojson: { type: "Point", coordinates: [1, 2] } }),
-    ).toBeUndefined();
   });
 });
 
@@ -154,38 +115,24 @@ describe("geocodeLocation", () => {
     });
   });
 
-  it("asks Nominatim for a simplified outline and returns it for countries", async () => {
+  it("does not request polygon geometry from Nominatim", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => [
-        {
-          lat: "22.35",
-          lon: "78.66",
-          addresstype: "country",
-          geojson: { type: "Polygon", coordinates: outline },
-        },
-      ],
+      json: async () => [{ lat: "22.35", lon: "78.66", addresstype: "country" }],
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await runGeocode(
       Effect.gen(function* () {
         const geocode = yield* GeocodeTag;
-        yield* geocode.geocode("India");
         return yield* geocode.geocode("India");
       }),
     );
 
-    expect(result).toEqual({
-      ok: true,
-      latitude: 22.35,
-      longitude: 78.66,
-      boundary: { type: "Polygon", coordinates: outline },
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ ok: true, latitude: 22.35, longitude: 78.66 });
     const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
-    expect(url.searchParams.get("polygon_geojson")).toBe("1");
-    expect(url.searchParams.get("polygon_threshold")).toBe("0.05");
+    expect(url.searchParams.get("polygon_geojson")).toBeNull();
+    expect(url.searchParams.get("polygon_threshold")).toBeNull();
   });
 
   it("returns not_found when Nominatim has no match", async () => {

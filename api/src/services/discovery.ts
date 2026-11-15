@@ -26,6 +26,8 @@ import {
   eventReports,
   monthlyReports,
   nodes,
+  placeAliases as placeAliasesTable,
+  places as placesTable,
   tenants,
 } from "../db/schema";
 import type {
@@ -40,6 +42,7 @@ import { EVENT_REPORT_FORM_VERSION } from "../discovery-contract";
 import type { FeatureArea } from "../feature-areas";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
+import { slugify } from "../lib/slug";
 import {
   firstReportMonth,
   isReportableMonth,
@@ -133,6 +136,41 @@ function canonicalActivityUrl(value: string) {
     if (key.startsWith("utm_") || key === "fbclid") url.searchParams.delete(key);
   url.searchParams.sort();
   return url.toString();
+}
+
+const placeLabelByKind: Record<string, string> = {
+  country: "country",
+  state: "subdivision",
+  city: "city",
+};
+
+export async function adoptCatalogPlace(
+  db: Database,
+  node: { id: string; placeId: string | null },
+  place: string,
+  kind: string | null,
+): Promise<void> {
+  const location = place.trim();
+  if (!location || node.placeId !== null) return;
+  const label = kind ? placeLabelByKind[kind] : undefined;
+  const [matched] = await db
+    .select({ id: placesTable.id })
+    .from(placesTable)
+    .where(
+      and(
+        sql`(${placesTable.slug} = ${slugify(location)} OR ${placesTable.id} IN (
+          SELECT place_id FROM ${placeAliasesTable} WHERE value = ${location}
+        ))`,
+        label ? eq(placesTable.label, label) : undefined,
+        sql`NOT EXISTS (SELECT 1 FROM ${nodes} WHERE ${nodes.placeId} = ${placesTable.id})`,
+      ),
+    )
+    .limit(1);
+  if (!matched) return;
+  await db
+    .update(nodes)
+    .set({ placeId: matched.id })
+    .where(and(eq(nodes.id, node.id), isNull(nodes.placeId)));
 }
 
 function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService) {
@@ -465,6 +503,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             name: node.name,
             slug: node.slug,
             parentId: node.parentId,
+            placeId: node.placeId,
             kind: nodeKindOf(node.metadata),
           };
         })
@@ -511,6 +550,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           name: node.name,
           slug: node.slug,
           parentId: node.parentId,
+          placeId: node.placeId,
           kind: nodeKindOf(node.metadata),
         }));
       return [...listed, ...basic].sort(
@@ -1351,7 +1391,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             : (previous?.geocodedLocation ?? null);
         const kind = nodeKindOf(record.node.metadata);
         const place = profilePlace(input, kind);
-        const missingBoundary = kind === "country" && !previous?.boundary;
         const stale = shouldGeocodeProfile({
           location: place,
           latitude: input.latitude,
@@ -1362,7 +1401,6 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           ...input,
           geocodedLocation,
           geocodeHint: null,
-          boundary: previous?.boundary ?? null,
         };
         if (!place) {
           next = {
@@ -1371,9 +1409,8 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             longitude: null,
             geocodedLocation: null,
             geocodeHint: null,
-            boundary: null,
           };
-        } else if (stale || missingBoundary) {
+        } else if (stale) {
           const geocoded = yield* geocode.geocode(place);
           if (geocoded.ok) {
             next = {
@@ -1382,19 +1419,20 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               longitude: geocoded.longitude,
               geocodedLocation: place,
               geocodeHint: null,
-              boundary: kind === "country" ? (geocoded.boundary ?? null) : null,
             };
-          } else if (stale) {
+          } else {
             next = {
               ...next,
               latitude: null,
               longitude: null,
               geocodedLocation: null,
               geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
-              boundary: null,
             };
           }
         }
+        yield* Effect.tryPromise(() => adoptCatalogPlace(db, record.node, place, kind)).pipe(
+          Effect.ignore,
+        );
         yield* query(() =>
           db.transaction(async (tx) => {
             await tx
