@@ -2500,6 +2500,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return yield* services.places.boundary(input.placeId);
       }),
 
+      listPlaceBoundaries: builder.listPlaceBoundaries.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.places.boundaries(input.placeIds);
+      }),
+
       activateCommunity: builder.activateCommunity.use(requireAuth).effect(function* ({
         input,
         context,
