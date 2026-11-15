@@ -349,6 +349,10 @@ describe("submittedAtFromRow", () => {
     );
   });
 
+  it("rejects a 24-hour time written with AM/PM", () => {
+    expect(submittedAtFromRow({ Timestamp: "10/13/2026 13:00 AM" }, fallback)).toBeNull();
+  });
+
   it("rejects three-digit years", () => {
     expect(submittedAtFromRow({ Timestamp: "10/13/202 14:00:00" }, fallback)).toBeNull();
   });
@@ -418,6 +422,9 @@ describe("day-first sheets", () => {
     });
     expect(matchImportEvent(row("01/09/2026 18:00"), [event], "dmy")).toEqual({ event });
     expect(matchImportEvent(row("01.09.2026"), [event], "dmy")).toEqual({ event });
+    expect(matchImportEvent(row("Tue 01/09/2026"), [event], "dmy")).toEqual({
+      reason: "event date could not be parsed",
+    });
     expect(matchImportEvent(row("09/01/2026 18:00"), [event], "dmy")).toEqual({
       reason: "community, event name and date did not match any activity",
     });

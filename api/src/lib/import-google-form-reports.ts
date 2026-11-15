@@ -299,7 +299,7 @@ function parseDay(value: string, order: DateOrder): string | null {
     return `${String(date.year).padStart(4, "0")}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
   }
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
-  if (!/[a-z]{3}/i.test(trimmed)) return null;
+  if (!/[a-z]{3}/i.test(trimmed) || /\d[/.-]\d/.test(trimmed)) return null;
   const parsed = Date.parse(`${trimmed} UTC`);
   if (!Number.isFinite(parsed)) return null;
   return new Date(parsed).toISOString().slice(0, 10);
@@ -484,6 +484,7 @@ function parseSheetsTimestamp(value: string, order: DateOrder): Date | null {
     const minute = Number(sheets[5] ?? 0);
     const second = Number(sheets[6] ?? 0);
     const ampm = sheets[7]?.toUpperCase();
+    if (ampm && (hour < 1 || hour > 12)) return null;
     if (ampm === "PM" && hour < 12) hour += 12;
     if (ampm === "AM" && hour === 12) hour = 0;
     if (hour > 23 || minute > 59 || second > 59) return null;
