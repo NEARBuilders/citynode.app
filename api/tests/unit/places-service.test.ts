@@ -324,6 +324,68 @@ describe("PlacesService", () => {
     ).toBeNull();
   });
 
+  it("mapPins lists mappable places with activation status", async () => {
+    const layer = freshLayer();
+    const nigeria = await runService(layer, ({ db }) =>
+      insertPlace(db, {
+        slug: "nigeria",
+        name: "Nigeria",
+        label: "country",
+        latitude: 9.08,
+        longitude: 8.67,
+      }),
+    );
+    await runService(layer, ({ db }) =>
+      insertPlace(db, {
+        slug: "ghana",
+        name: "Ghana",
+        label: "country",
+        latitude: 7.95,
+        longitude: -1.02,
+      }),
+    );
+    await runService(layer, ({ db }) => insertPlace(db, { slug: "unpinned", name: "Unpinned" }));
+    await runService(layer, ({ db }) =>
+      db.insert(nodesTable).values({
+        slug: "nigeria",
+        name: "Nigeria",
+        placeId: nigeria.id,
+        activatedAt: new Date("2026-01-15T00:00:00Z"),
+      }),
+    );
+
+    const pins = await runService(layer, ({ places }) => places.mapPins());
+    expect(pins.map((pin) => pin.slug).sort()).toEqual(["ghana", "nigeria"]);
+    expect(pins.find((pin) => pin.slug === "nigeria")).toMatchObject({
+      id: nigeria.id,
+      name: "Nigeria",
+      latitude: 9.08,
+      longitude: 8.67,
+      label: "country",
+      activated: true,
+      nodeId: expect.any(String),
+    });
+    expect(pins.find((pin) => pin.slug === "ghana")).toMatchObject({
+      activated: false,
+      nodeId: null,
+    });
+  });
+
+  it("mapPins treats a node without activatedAt as available", async () => {
+    const layer = freshLayer();
+    const ghana = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "ghana", name: "Ghana", latitude: 7.95, longitude: -1.02 }),
+    );
+    await runService(layer, ({ db }) =>
+      db.insert(nodesTable).values({ slug: "ghana", name: "Ghana", placeId: ghana.id }),
+    );
+
+    const pins = await runService(layer, ({ places }) => places.mapPins());
+    expect(pins).toEqual([
+      expect.objectContaining({ slug: "ghana", activated: false, nodeId: null }),
+    ]);
+  });
+
   it("rejects a second place claiming an occupied slug", async () => {
     const layer = freshLayer();
     await runService(layer, ({ db }) => insertPlace(db, { slug: "nigeria", name: "Nigeria" }));

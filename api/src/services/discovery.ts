@@ -51,12 +51,7 @@ import {
 } from "../report-month";
 import { resolveTeamAccess } from "../team-access-policy";
 import { memberDisplayName } from "../team-join-policy";
-import {
-  type GeocodeService,
-  GeocodeTag,
-  profilePlace,
-  shouldGeocodeProfile,
-} from "./discovery-geocode";
+import { profilePlace } from "./discovery-geocode";
 import { createLumaCalendars, describeLumaFailure } from "./discovery-luma";
 import { listedNode, nodeKindOf, PLATFORM_NODE_KIND } from "./nodes";
 
@@ -173,7 +168,7 @@ export async function adoptCatalogPlace(
     .where(and(eq(nodes.id, node.id), isNull(nodes.placeId)));
 }
 
-function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService) {
+function createDiscovery(db: Database, lumaKeys: string) {
   const luma = createLumaCalendars(lumaKeys);
 
   const query = <T>(run: () => Promise<T>): DiscoveryEffect<T> =>
@@ -1381,55 +1376,17 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
     saveProfile: (input: DiscoveryProfile, context: AuthContext) =>
       Effect.gen(function* () {
         const record = yield* authorize(input.nodeId, context);
-        const [existing] = yield* query(() =>
-          db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, input.nodeId)),
-        );
-        const previous = existing?.data;
-        const geocodedLocation =
-          input.geocodedLocation !== undefined
-            ? input.geocodedLocation
-            : (previous?.geocodedLocation ?? null);
         const kind = nodeKindOf(record.node.metadata);
         const place = profilePlace(input, kind);
-        const stale = shouldGeocodeProfile({
-          location: place,
-          latitude: input.latitude,
-          longitude: input.longitude,
-          geocodedLocation,
-        });
-        let next: StoredDiscoveryProfile = {
-          ...input,
-          geocodedLocation,
-          geocodeHint: null,
-        };
-        if (!place) {
-          next = {
-            ...next,
-            latitude: null,
-            longitude: null,
-            geocodedLocation: null,
-            geocodeHint: null,
-          };
-        } else if (stale) {
-          const geocoded = yield* geocode.geocode(place);
-          if (geocoded.ok) {
-            next = {
-              ...next,
-              latitude: geocoded.latitude,
-              longitude: geocoded.longitude,
-              geocodedLocation: place,
-              geocodeHint: null,
-            };
-          } else {
-            next = {
-              ...next,
+        const next: StoredDiscoveryProfile = place
+          ? { ...input, geocodeHint: null }
+          : {
+              ...input,
               latitude: null,
               longitude: null,
               geocodedLocation: null,
-              geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
+              geocodeHint: null,
             };
-          }
-        }
         yield* Effect.tryPromise(() => adoptCatalogPlace(db, record.node, place, kind)).pipe(
           Effect.ignore,
         );
@@ -1830,7 +1787,7 @@ export const DiscoveryLive = (lumaKeys = "") =>
   Layer.effect(
     DiscoveryTag,
     Effect.gen(function* () {
-      const service = createDiscovery(yield* DatabaseTag, lumaKeys, yield* GeocodeTag);
+      const service = createDiscovery(yield* DatabaseTag, lumaKeys);
       yield* Effect.forkScoped(
         service.syncDueLuma.pipe(Effect.ignore, Effect.repeat(Schedule.spaced("60 seconds"))),
       );

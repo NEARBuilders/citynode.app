@@ -1,11 +1,48 @@
 import type { ApiClient } from "@/app";
 
-type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
 export type Boundary = NonNullable<
   Awaited<ReturnType<ApiClient["listPlaceBoundaries"]>>[number]["boundary"]
 >;
+type AreaNode = { nodeId: string; placeId: string | null };
 export type AreaLatLngs = [number, number][][][];
 export type BoundaryMap = Map<string, Boundary>;
+
+export const REGION_AREA_ZOOM = 5;
+
+export function showsMapAreas(zoom: number) {
+  return zoom >= REGION_AREA_ZOOM;
+}
+
+function ringStep(zoom: number) {
+  if (zoom >= 8) return 1;
+  if (zoom >= 6) return 4;
+  return 8;
+}
+
+function simplifyRing(ring: number[][], zoom: number): number[][] {
+  const step = ringStep(zoom);
+  if (step === 1 || ring.length <= 8) return ring;
+  const simplified = ring.filter((_, index) => index % step === 0 || index === ring.length - 1);
+  const first = simplified[0];
+  const last = simplified[simplified.length - 1];
+  if (first && last && (first[0] !== last[0] || first[1] !== last[1])) simplified.push(first);
+  return simplified.length >= 4 ? simplified : ring;
+}
+
+export function simplifyBoundary(boundary: Boundary, zoom: number): Boundary {
+  if (boundary.type === "Polygon") {
+    return {
+      type: "Polygon",
+      coordinates: boundary.coordinates.map((ring) => simplifyRing(ring, zoom)),
+    };
+  }
+  return {
+    type: "MultiPolygon",
+    coordinates: boundary.coordinates.map((polygon) =>
+      polygon.map((ring) => simplifyRing(ring, zoom)),
+    ),
+  };
+}
 
 export function boundaryLatLngs(boundary: Boundary, offset = 0): AreaLatLngs {
   const polygons = boundary.type === "Polygon" ? [boundary.coordinates] : boundary.coordinates;
@@ -14,7 +51,7 @@ export function boundaryLatLngs(boundary: Boundary, offset = 0): AreaLatLngs {
   );
 }
 
-export function mapAreas(nodes: Node[], boundaries: BoundaryMap) {
+export function mapAreas(nodes: AreaNode[], boundaries: BoundaryMap) {
   return nodes.flatMap((node) => {
     const boundary = node.placeId ? boundaries.get(node.placeId) : undefined;
     return boundary ? [{ node, boundary }] : [];

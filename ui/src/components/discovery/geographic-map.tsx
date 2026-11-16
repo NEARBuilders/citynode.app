@@ -10,19 +10,90 @@ import {
   boundaryBounds,
   boundaryLatLngs,
   mapAreas,
+  showsMapAreas,
+  simplifyBoundary,
 } from "./map-areas";
 
 type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
+type PlacePin = Awaited<ReturnType<ApiClient["listPlaceMapPins"]>>[number];
 
 const WORLD_COPY_OFFSETS = [-360, 0, 360] as const;
+const BOUNDARY_BATCH = 500;
+
+type MapPoint = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  kind: "community" | "place";
+  nodeId?: string;
+  slug: string;
+  placeId: string | null;
+  location?: string | null;
+  activated: boolean;
+};
+
+function listedPlaceIds(nodes: Node[]) {
+  return new Set(nodes.map((node) => node.placeId).filter((id): id is string => id !== null));
+}
+
+function toPoints(nodes: Node[], places: PlacePin[]): MapPoint[] {
+  const covered = listedPlaceIds(nodes);
+  const listedNodes = new Set(nodes.map((node) => node.nodeId));
+  const community = nodes.flatMap((node) =>
+    node.latitude !== null && node.longitude !== null
+      ? [
+          {
+            id: node.nodeId,
+            name: node.name,
+            latitude: node.latitude,
+            longitude: node.longitude,
+            kind: "community" as const,
+            nodeId: node.nodeId,
+            slug: node.slug,
+            placeId: node.placeId,
+            location: node.location,
+            activated: true,
+          },
+        ]
+      : [],
+  );
+  const available = places.flatMap((place) =>
+    covered.has(place.id) || (place.nodeId && listedNodes.has(place.nodeId))
+      ? []
+      : [
+          {
+            id: place.id,
+            name: place.name,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            kind: "place" as const,
+            nodeId: place.nodeId ?? undefined,
+            slug: place.slug,
+            placeId: place.id,
+            location: place.label,
+            activated: place.activated,
+          },
+        ],
+  );
+  return [...community, ...available];
+}
 
 export function GeographicMap({
   nodes,
+  places,
+  worldCatalog,
   onSelect,
+  onSelectPlace,
+  onOpenCommunity,
   selectedId,
 }: {
   nodes: Node[];
+  places: PlacePin[];
+  worldCatalog?: boolean;
   onSelect: (id: string) => void;
+  onSelectPlace: (slug: string) => void;
+  onOpenCommunity: (slug: string) => void;
   selectedId?: string;
 }) {
   const translate = useAppTranslation();
@@ -31,24 +102,52 @@ export function GeographicMap({
   translation.current = translate;
   const container = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+  const [zoom, setZoom] = useState(2);
+  const [viewport, setViewport] = useState<{
+    south: number;
+    west: number;
+    north: number;
+    east: number;
+  } | null>(null);
   const select = useRef(onSelect);
+  const selectPlace = useRef(onSelectPlace);
+  const openCommunity = useRef(onOpenCommunity);
   const selected = useRef(selectedId);
   const redraw = useRef<() => void>(undefined);
-  const apply = useRef<(nodes: Node[], boundaries: BoundaryMap) => void>(undefined);
+  const apply =
+    useRef<(points: MapPoint[], boundaries: BoundaryMap, zoom: number, world: boolean) => void>(
+      undefined,
+    );
+  const worldRef = useRef(worldCatalog === true);
   const mapRef = useRef<{ panTo: (latlng: [number, number]) => void } | null>(null);
-  const nodesRef = useRef(nodes);
+  const pointsRef = useRef<MapPoint[]>([]);
   const boundariesRef = useRef<BoundaryMap>(new Map());
+  const zoomRef = useRef(zoom);
   select.current = onSelect;
+  selectPlace.current = onSelectPlace;
+  openCommunity.current = onOpenCommunity;
   selected.current = selectedId;
-  nodesRef.current = nodes;
+  zoomRef.current = zoom;
+  const points = useMemo(() => toPoints(nodes, places), [nodes, places]);
+  pointsRef.current = points;
+  worldRef.current = worldCatalog === true;
   const [catalog, setCatalog] = useState<Map<string, Boundary | null>>(() => new Map());
-  const missing = useMemo(
-    () =>
-      [...new Set(nodes.map((node) => node.placeId).filter((id): id is string => id !== null))]
-        .filter((id) => !catalog.has(id))
-        .sort(),
-    [nodes, catalog],
-  );
+  const missing = useMemo(() => {
+    if (!showsMapAreas(zoom)) return [];
+    const visible = points.filter((point) => {
+      if (!point.placeId || catalog.has(point.placeId)) return false;
+      if (!viewport) return true;
+      return (
+        point.latitude >= viewport.south &&
+        point.latitude <= viewport.north &&
+        point.longitude >= viewport.west &&
+        point.longitude <= viewport.east
+      );
+    });
+    return [...new Set(visible.map((point) => point.placeId).filter((id): id is string => !!id))]
+      .sort()
+      .slice(0, BOUNDARY_BATCH);
+  }, [points, catalog, zoom, viewport]);
   const boundariesQuery = useQuery({
     queryKey: ["place-boundaries", missing.join(",")],
     queryFn: async () => {
@@ -66,15 +165,15 @@ export function GeographicMap({
   }, [boundariesQuery.data]);
   const boundaries = useMemo(() => {
     const map: BoundaryMap = new Map();
+    if (!showsMapAreas(zoom)) return map;
     for (const [placeId, boundary] of catalog) {
-      if (boundary) map.set(placeId, boundary);
+      if (boundary) map.set(placeId, simplifyBoundary(boundary, zoom));
     }
     return map;
-  }, [catalog]);
+  }, [catalog, zoom]);
   boundariesRef.current = boundaries;
-  // The map is created once and then fed new nodes; rebuilding it on every
-  // refetch made it flash and lose the viewport while typing in search.
   useEffect(() => {
+    // KEEP: the map is created once; rebuilding on refetch flashes and loses the viewport.
     let dispose: (() => void) | undefined;
     let cancelled = false;
     setFailed(false);
@@ -97,61 +196,101 @@ export function GeographicMap({
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(map);
         tiles.on("tileerror", () => setFailed(true));
-        let points: { node: Node; point: ReturnType<typeof L.latLng> }[] = [];
-        let shapes: { nodeId: string; layers: ReturnType<typeof L.polygon>[] }[] = [];
+        let drawn: { point: MapPoint; latlng: ReturnType<typeof L.latLng> }[] = [];
+        let shapes: { id: string; layers: ReturnType<typeof L.polygon>[] }[] = [];
         let fitted = "";
         const regions = L.layerGroup().addTo(map);
         const markers = L.layerGroup().addTo(map);
+        const syncViewport = () => {
+          const box = map.getBounds();
+          setZoom(map.getZoom());
+          setViewport({
+            south: box.getSouth(),
+            west: box.getWest(),
+            north: box.getNorth(),
+            east: box.getEast(),
+          });
+        };
+        const clickPoint = (point: MapPoint) => {
+          if (point.kind === "community" && point.nodeId) {
+            select.current(point.nodeId);
+            return;
+          }
+          if (point.activated) {
+            openCommunity.current(point.slug);
+            return;
+          }
+          selectPlace.current(point.slug);
+        };
         const draw = () => {
-          for (const { nodeId, layers } of shapes) {
-            const active = nodeId === selected.current;
+          for (const { id, layers } of shapes) {
+            const active = id === selected.current;
             for (const layer of layers) {
               layer.setStyle({ weight: active ? 2 : 1 });
               layer.getElement()?.setAttribute("data-active", String(active));
             }
           }
           markers.clearLayers();
-          const groups = new Map<string, typeof points>();
-          for (const p of points) {
-            const pixel = map.project(p.point);
+          const groups = new Map<string, typeof drawn>();
+          for (const entry of drawn) {
+            const pixel = map.project(entry.latlng);
             const key = `${Math.floor(pixel.x / 48)}:${Math.floor(pixel.y / 48)}`;
-            groups.set(key, [...(groups.get(key) ?? []), p]);
+            groups.set(key, [...(groups.get(key) ?? []), entry]);
           }
           for (const group of groups.values()) {
             const first = group[0];
             if (!first) continue;
-            const active = group.some((entry) => entry.node.nodeId === selected.current);
+            const active = group.some(
+              (entry) =>
+                entry.point.nodeId === selected.current || entry.point.id === selected.current,
+            );
+            const availableOnly = group.every((entry) => !entry.point.activated);
             const label =
               group.length > 1
-                ? translation.current("directory.communitiesNear", {
-                    count: group.length,
-                    location: first.node.location ?? "",
-                  })
-                : first.node.name;
+                ? translation.current(
+                    group.every((entry) => entry.point.kind === "community")
+                      ? "directory.communitiesNear"
+                      : "explore.places.near",
+                    {
+                      count: group.length,
+                      location: first.point.location ?? first.point.name,
+                    },
+                  )
+                : first.point.name;
+            const size = availableOnly ? 20 : 32;
             const content = document.createElement("span");
-            content.className = `flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold shadow-lg ${
+            content.className = `flex items-center justify-center rounded-full border-2 text-xs font-semibold shadow-lg ${
               active
                 ? "border-primary bg-primary text-primary-foreground ring-2 ring-ring ring-offset-2 ring-offset-background"
-                : "border-background bg-primary text-primary-foreground"
+                : availableOnly
+                  ? "border-border bg-muted text-muted-foreground"
+                  : "border-background bg-primary text-primary-foreground"
             }`;
+            content.style.width = `${size}px`;
+            content.style.height = `${size}px`;
             content.textContent = group.length > 1 ? String(group.length) : "";
             for (const offset of WORLD_COPY_OFFSETS) {
               const primary = offset === 0;
-              const marker = L.marker([first.point.lat, first.point.lng + offset], {
+              const marker = L.marker([first.latlng.lat, first.latlng.lng + offset], {
                 title: label,
                 alt: label,
                 keyboard: primary,
                 icon: L.divIcon({
                   html: primary ? content : content.outerHTML,
                   className: "",
-                  iconSize: [32, 32],
+                  iconSize: [size, size],
                 }),
               }).addTo(markers);
               const element = marker.getElement();
               if (primary) {
                 element?.setAttribute("aria-label", label);
                 element?.setAttribute("aria-current", active ? "true" : "false");
-                element?.setAttribute("data-testid", `discovery-map-marker-${first.node.nodeId}`);
+                element?.setAttribute(
+                  "data-testid",
+                  first.point.kind === "community" && first.point.nodeId
+                    ? `discovery-map-marker-${first.point.nodeId}`
+                    : `discovery-map-place-${first.point.slug}`,
+                );
               } else {
                 element?.setAttribute("aria-hidden", "true");
               }
@@ -159,25 +298,28 @@ export function GeographicMap({
             }
           }
         };
-        const bindSelect = (marker: ReturnType<typeof L.marker>, group: typeof points) => {
+        const bindSelect = (marker: ReturnType<typeof L.marker>, group: typeof drawn) => {
           const first = group[0];
           if (!first) return;
           marker.on("click", () => {
             if (group.length === 1) {
-              select.current(first.node.nodeId);
+              clickPoint(first.point);
               return;
             }
             const list = document.createElement("div");
             list.className = "flex max-h-64 flex-col gap-1 overflow-y-auto";
-            for (const { node } of group) {
+            for (const { point } of group) {
               const button = document.createElement("button");
               button.type = "button";
-              button.dataset.testid = `discovery-cluster-node-${node.nodeId}`;
+              button.dataset.testid =
+                point.kind === "community" && point.nodeId
+                  ? `discovery-cluster-node-${point.nodeId}`
+                  : `discovery-cluster-place-${point.slug}`;
               button.className = "rounded-lg px-3 py-2 text-left text-sm hover:bg-muted";
-              button.textContent = node.name;
+              button.textContent = point.name;
               button.addEventListener("click", () => {
                 marker.getElement()?.focus();
-                select.current(node.nodeId);
+                clickPoint(point);
                 map.closePopup();
               });
               list.append(button);
@@ -185,35 +327,77 @@ export function GeographicMap({
             marker.bindPopup(list).openPopup();
           });
         };
-        const update = (next: Node[], currentBoundaries: BoundaryMap) => {
-          points = next.flatMap((node) =>
-            node.latitude !== null && node.longitude !== null
-              ? [{ node, point: L.latLng(node.latitude, node.longitude) }]
-              : [],
-          );
-          const areas = mapAreas(next, currentBoundaries);
-          regions.clearLayers();
-          shapes = areas.map(({ node, boundary }) => ({
-            nodeId: node.nodeId,
-            layers: WORLD_COPY_OFFSETS.map((offset) => {
-              const area = L.polygon(boundaryLatLngs(boundary, offset), {
-                className:
-                  "fill-brand/35 stroke-brand-strong hover:fill-brand/45 data-[active=true]:fill-brand/55",
-                fillOpacity: 1,
-                opacity: 1,
-                weight: 1,
-              }).addTo(regions);
-              area.getElement()?.setAttribute("aria-hidden", "true");
-              if (offset === 0)
-                area.getElement()?.setAttribute("data-testid", `discovery-map-area-${node.nodeId}`);
-              area.on("click", () => select.current(node.nodeId));
-              return area;
-            }),
+        const update = (
+          next: MapPoint[],
+          currentBoundaries: BoundaryMap,
+          currentZoom: number,
+          world: boolean,
+        ) => {
+          drawn = next.map((point) => ({
+            point,
+            latlng: L.latLng(point.latitude, point.longitude),
           }));
-          // Only move the viewport when the result set itself changed, so a
-          // background refetch of the same communities leaves it alone.
-          const key = `${points
-            .map((entry) => entry.node.nodeId)
+          const areaNodes = next
+            .filter(
+              (point): point is MapPoint & { nodeId: string } =>
+                point.kind === "community" && Boolean(point.nodeId),
+            )
+            .map((point) => ({
+              nodeId: point.nodeId,
+              placeId: point.placeId,
+            }));
+          const areas = showsMapAreas(currentZoom) ? mapAreas(areaNodes, currentBoundaries) : [];
+          const extraAreas = showsMapAreas(currentZoom)
+            ? next.flatMap((point) => {
+                if (point.kind !== "place" || !point.placeId) return [];
+                const boundary = currentBoundaries.get(point.placeId);
+                return boundary ? [{ point, boundary }] : [];
+              })
+            : [];
+          regions.clearLayers();
+          shapes = [
+            ...areas.map(({ node, boundary }) => ({
+              id: node.nodeId,
+              layers: WORLD_COPY_OFFSETS.map((offset) => {
+                const area = L.polygon(boundaryLatLngs(boundary, offset), {
+                  className:
+                    "fill-brand/35 stroke-brand-strong hover:fill-brand/45 data-[active=true]:fill-brand/55",
+                  fillOpacity: 1,
+                  opacity: 1,
+                  weight: 1,
+                }).addTo(regions);
+                area.getElement()?.setAttribute("aria-hidden", "true");
+                if (offset === 0)
+                  area
+                    .getElement()
+                    ?.setAttribute("data-testid", `discovery-map-area-${node.nodeId}`);
+                area.on("click", () => select.current(node.nodeId));
+                return area;
+              }),
+            })),
+            ...extraAreas.map(({ point, boundary }) => ({
+              id: point.id,
+              layers: WORLD_COPY_OFFSETS.map((offset) => {
+                const area = L.polygon(boundaryLatLngs(boundary, offset), {
+                  className: point.activated
+                    ? "fill-brand/35 stroke-brand-strong hover:fill-brand/45 data-[active=true]:fill-brand/55"
+                    : "fill-muted/50 stroke-border hover:fill-muted",
+                  fillOpacity: 1,
+                  opacity: 1,
+                  weight: 1,
+                }).addTo(regions);
+                area.getElement()?.setAttribute("aria-hidden", "true");
+                if (offset === 0)
+                  area
+                    .getElement()
+                    ?.setAttribute("data-testid", `discovery-map-place-area-${point.slug}`);
+                area.on("click", () => clickPoint(point));
+                return area;
+              }),
+            })),
+          ];
+          const key = `${next
+            .map((point) => point.id)
             .sort()
             .join(",")}|${currentBoundaries.size}`;
           if (key !== fitted) {
@@ -221,22 +405,31 @@ export function GeographicMap({
             const outlines = new Map(
               areas.map((area) => [area.node.nodeId, boundaryBounds(area.boundary)]),
             );
-            const bounds = L.latLngBounds([]);
-            for (const p of points) bounds.extend(outlines.get(p.node.nodeId) ?? p.point);
-            if (points.length)
+            for (const extra of extraAreas)
+              outlines.set(extra.point.id, boundaryBounds(extra.boundary));
+            if (!world && drawn.length) {
+              const bounds = L.latLngBounds([]);
+              for (const entry of drawn)
+                bounds.extend(outlines.get(entry.point.nodeId ?? entry.point.id) ?? entry.latlng);
               map.fitBounds(bounds, {
                 padding: [35, 35],
                 maxZoom: 8,
               });
-            const focused = points.find((entry) => entry.node.nodeId === selected.current);
-            if (focused) map.panTo(focused.point);
+            }
+            const focused = drawn.find((entry) => entry.point.nodeId === selected.current);
+            if (focused) map.panTo(focused.latlng);
           }
           draw();
         };
         redraw.current = draw;
-        apply.current = (next, currentBoundaries) => update(next, currentBoundaries);
-        update(nodesRef.current, boundariesRef.current);
-        map.on("zoomend", draw);
+        apply.current = (next, currentBoundaries, currentZoom, world) =>
+          update(next, currentBoundaries, currentZoom, world);
+        update(pointsRef.current, boundariesRef.current, zoomRef.current, worldRef.current);
+        map.on("zoomend moveend", () => {
+          syncViewport();
+          draw();
+        });
+        syncViewport();
         const observer = new ResizeObserver(() => map.invalidateSize());
         observer.observe(container.current);
         dispose = () => {
@@ -254,19 +447,19 @@ export function GeographicMap({
     };
   }, []);
   useEffect(() => {
-    apply.current?.(nodes, boundariesRef.current);
-  }, [nodes]);
+    apply.current?.(points, boundariesRef.current, zoom, worldRef.current);
+  }, [points, zoom, worldCatalog]);
   useEffect(() => {
-    if (boundaries.size > 0) apply.current?.(nodesRef.current, boundaries);
+    if (boundaries.size > 0)
+      apply.current?.(pointsRef.current, boundaries, zoomRef.current, worldRef.current);
   }, [boundaries]);
   useEffect(() => {
     redraw.current?.();
   }, [translate]);
   useEffect(() => {
     redraw.current?.();
-    const node = nodesRef.current.find((entry) => entry.nodeId === selectedId);
-    if (node && node.latitude !== null && node.longitude !== null)
-      mapRef.current?.panTo([node.latitude, node.longitude]);
+    const point = pointsRef.current.find((entry) => entry.nodeId === selectedId);
+    if (point) mapRef.current?.panTo([point.latitude, point.longitude]);
   }, [selectedId]);
   return (
     <section aria-label={translate("directory.map")} className="flex flex-col">

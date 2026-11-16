@@ -1,5 +1,5 @@
 import type { ORPCError } from "@orpc/server";
-import { eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -37,6 +37,17 @@ export interface PlaceResolution {
   community: PlaceCommunity | null;
 }
 
+export interface PlaceMapPin {
+  id: string;
+  slug: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  label: string | null;
+  activated: boolean;
+  nodeId: string | null;
+}
+
 interface PlaceBoundaryRecord {
   placeId: string;
   boundary: PlaceBoundary | null;
@@ -47,6 +58,7 @@ export interface PlacesService {
   getById(id: string): PlaceEffect<PlaceRecord | null>;
   boundary(id: string): PlaceEffect<PlaceBoundary | null>;
   boundaries(placeIds: string[]): PlaceEffect<PlaceBoundaryRecord[]>;
+  mapPins(): PlaceEffect<PlaceMapPin[]>;
   roots(): PlaceEffect<PlaceRecord[]>;
   children(id: string): PlaceEffect<PlaceRecord[]>;
   ancestorIds(id: string): PlaceEffect<string[]>;
@@ -260,6 +272,43 @@ export const PlacesLive = Layer.effect(
             .where(inArray(placesTable.id, placeIds)),
         ).pipe(
           Effect.map((rows) => rows.map((row) => ({ placeId: row.id, boundary: row.boundary }))),
+        ),
+
+      mapPins: () =>
+        query(() =>
+          db
+            .select({
+              id: placesTable.id,
+              slug: placesTable.slug,
+              name: placesTable.name,
+              latitude: placesTable.latitude,
+              longitude: placesTable.longitude,
+              label: placesTable.label,
+              nodeId: nodesTable.id,
+              activatedAt: nodesTable.activatedAt,
+            })
+            .from(placesTable)
+            .leftJoin(nodesTable, eq(nodesTable.placeId, placesTable.id))
+            .where(and(isNotNull(placesTable.latitude), isNotNull(placesTable.longitude))),
+        ).pipe(
+          Effect.map((rows) =>
+            rows.flatMap((row) =>
+              row.latitude === null || row.longitude === null
+                ? []
+                : [
+                    {
+                      id: row.id,
+                      slug: row.slug,
+                      name: row.name,
+                      latitude: row.latitude,
+                      longitude: row.longitude,
+                      label: row.label,
+                      activated: Boolean(row.nodeId && row.activatedAt),
+                      nodeId: row.nodeId && row.activatedAt ? row.nodeId : null,
+                    },
+                  ],
+            ),
+          ),
         ),
 
       roots: () =>

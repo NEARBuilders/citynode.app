@@ -296,20 +296,7 @@ function NodeOverview() {
       </div>
 
       {canManage && (
-        <CommunityMapStatus
-          nodeId={selectedNode.id}
-          tenantStatus={tenant?.status}
-          testId="dashboard-node.map-status"
-          settingsLink={
-            tenant ? (
-              <Link
-                to="/tenant/$tenantId"
-                params={{ tenantId: tenant.id }}
-                search={{ nodeId: selectedNode.id }}
-              />
-            ) : undefined
-          }
-        />
+        <CommunityMapStatus nodeId={selectedNode.id} testId="dashboard-node.map-status" />
       )}
 
       {daoOwned && canManage && pendingConfig && tenant && (

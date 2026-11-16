@@ -11,7 +11,7 @@ import {
   type EventOnboardingCodeSchema,
   NodeProposalPayloadSchema,
 } from "./contract";
-import { DatabaseLive, DatabaseTag } from "./db/layer";
+import { DatabaseLive } from "./db/layer";
 import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import {
@@ -26,7 +26,6 @@ import { AttendanceLive, type AttendanceService, AttendanceTag } from "./service
 import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService, MonthlyExternalStats } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
-import { GeocodeLive } from "./services/discovery-geocode";
 import {
   MemberDirectoryLive,
   type MemberDirectoryService,
@@ -460,14 +459,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           NodesLive,
           PlacesLive,
           ValidatorsLive,
-          DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS).pipe(
-            Layer.provide(
-              GeocodeLive({
-                domain: config.variables.domain,
-                repository: config.variables.repository,
-              }),
-            ),
-          ),
+          DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS),
           StorageLive,
           MemberDirectoryLive,
           AttendanceLive,
@@ -2503,6 +2495,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listPlaceBoundaries: builder.listPlaceBoundaries.effect(function* ({ input }) {
         const services = yield* ApiServices;
         return yield* services.places.boundaries(input.placeIds);
+      }),
+
+      listPlaceMapPins: builder.listPlaceMapPins.effect(function* () {
+        const services = yield* ApiServices;
+        return yield* services.places.mapPins();
       }),
 
       activateCommunity: builder.activateCommunity.use(requireAuth).effect(function* ({

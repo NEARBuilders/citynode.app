@@ -12,7 +12,7 @@ import {
   SparkleIcon,
 } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
 import { Badge, Button, EmptyState } from "@/components";
@@ -38,6 +38,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { placeMapPinsQueryOptions } from "@/lib/queries/places";
 import { CommunityChannels, CommunityUpdates } from "./community-updates";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, EventList } from "./event-list";
@@ -78,6 +79,7 @@ export function DiscoveryExplorer({
 }) {
   const { locale } = useAppLocale();
   const t = useAppTranslation();
+  const go = useNavigate();
   const [mobile, setMobile] = useState(false);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 639px)");
@@ -113,6 +115,7 @@ export function DiscoveryExplorer({
     queryFn: () => api.listDiscovery({}),
     staleTime: 30_000,
   });
+  const catalog = useQuery(placeMapPinsQueryOptions(api));
   const regionItems = [
     { label: t("explore.region.all"), value: ALL_REGIONS },
     ...[...new Set([...(regions.data ?? []).map((node) => node.region), search.region ?? ""])]
@@ -133,6 +136,10 @@ export function DiscoveryExplorer({
   };
   const filtered = !!(search.query || search.region || search.active || search.upcoming);
   const nodes = list.data ?? [];
+  const query = (search.query ?? "").trim().toLowerCase();
+  const places = (catalog.data ?? []).filter((place) =>
+    query ? place.name.toLowerCase().includes(query) || place.slug.includes(query) : true,
+  );
   const basic = selected
     ? undefined
     : [...nodes, ...(regions.data ?? [])].find(
@@ -269,7 +276,15 @@ export function DiscoveryExplorer({
                   </div>
                 }
               >
-                <GeographicMap nodes={nodes} onSelect={select} selectedId={search.node} />
+                <GeographicMap
+                  nodes={nodes}
+                  places={places}
+                  worldCatalog={catalog.isSuccess}
+                  onSelect={select}
+                  onSelectPlace={(slug) => go({ to: "/places/$slug", params: { slug } })}
+                  onOpenCommunity={(slug) => go({ to: "/n/$slug", params: { slug } })}
+                  selectedId={search.node}
+                />
               </Suspense>
             </div>
           ) : null}
