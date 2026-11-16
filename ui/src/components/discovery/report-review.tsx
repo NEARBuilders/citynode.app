@@ -76,15 +76,17 @@ export function ReviewButton({
 export function ReviewRow({
   target,
   reviewedAt,
+  imported = false,
   testId,
 }: {
   target: ReviewTarget;
   reviewedAt: string | null;
+  imported?: boolean;
   testId: string;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3" data-testid={`${testId}-row`}>
-      <ReportStateBadge state={reviewedAt ? "reviewed" : "submitted"} />
+      <ReportStateBadge state={reviewedAt ? "reviewed" : imported ? "imported" : "submitted"} />
       <ReviewButton target={target} reviewed={!!reviewedAt} testId={testId} />
     </div>
   );

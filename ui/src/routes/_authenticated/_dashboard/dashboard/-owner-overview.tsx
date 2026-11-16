@@ -222,6 +222,7 @@ function OwnerEvents({ community }: { community: OwnerCommunity }) {
               event,
               submittedAt: reported.get(event.id)?.submittedAt ?? null,
               reviewedAt: reported.get(event.id)?.reviewedAt ?? null,
+              source: reported.get(event.id)?.source ?? null,
               now,
             }
           : undefined

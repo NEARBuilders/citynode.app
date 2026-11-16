@@ -11,6 +11,7 @@ import {
 import { z } from "zod";
 import {
   discoveryContract,
+  EVENT_REPORT_SOURCES,
   monthlyReportStatsSchema,
   reportMonthSchema,
 } from "./discovery-contract";
@@ -458,6 +459,7 @@ export const AdminEventsSchema = z.object({
       reportSubmittedAt: z.iso.datetime().nullable(),
       reportUpdatedAt: z.iso.datetime().nullable(),
       reportReviewedAt: z.iso.datetime().nullable(),
+      reportSource: z.enum(EVENT_REPORT_SOURCES).nullable(),
       checkIns: AttendanceSummarySchema.nullable(),
     }),
   ),

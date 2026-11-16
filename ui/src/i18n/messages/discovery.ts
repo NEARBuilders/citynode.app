@@ -431,6 +431,12 @@ export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
   "events.startOnboarding": ["Start station", "Iniciar estación", "Lancer une station", "开始站点"],
   "events.submitReport": ["Submit report", "Enviar informe", "Envoyer le rapport", "提交报告"],
   "events.editReport": ["Edit report", "Editar informe", "Modifier le rapport", "编辑报告"],
+  "report.status.imported": [
+    "Imported report",
+    "Informe importado",
+    "Rapport importé",
+    "已导入报告",
+  ],
   "reports.title": ["Reports", "Informes", "Rapports", "报告"],
   "reports.description": [
     "Your monthly report and the events that still need a report.",

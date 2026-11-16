@@ -189,6 +189,12 @@ function EventReportPage() {
           {saved && (
             <>
               {" · "}
+              {saved.source === "import" && (
+                <>
+                  {translate("report.status.imported")}
+                  {" · "}
+                </>
+              )}
               <ReportUpdated
                 updatedAt={saved.updatedAt}
                 reviewedAt={saved.reviewedAt}
@@ -216,6 +222,7 @@ function EventReportPage() {
         <ReviewRow
           target={{ kind: "event", activityId, updatedAt: saved.updatedAt }}
           reviewedAt={saved.reviewedAt}
+          imported={saved.source === "import"}
           testId="report.review"
         />
       )}

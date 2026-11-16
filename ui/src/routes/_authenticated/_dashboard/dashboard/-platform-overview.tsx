@@ -280,6 +280,7 @@ function EventsOverview() {
               event,
               submittedAt: event.reportSubmittedAt,
               reviewedAt: event.reportReviewedAt,
+              source: event.reportSource,
               now,
             }
           : undefined

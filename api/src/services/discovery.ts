@@ -94,6 +94,7 @@ function storedReport(row: typeof eventReports.$inferSelect) {
     activityId: row.activityId,
     formVersion: row.formVersion,
     report: row.report,
+    source: row.source,
     submittedAt: row.submittedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
@@ -1043,6 +1044,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               reportSubmittedAt: eventReports.submittedAt,
               reportUpdatedAt: eventReports.updatedAt,
               reportReviewedAt: eventReports.reviewedAt,
+              reportSource: eventReports.source,
             })
             .from(discoveryActivities)
             .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
@@ -1071,6 +1073,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
           reportSubmittedAt: row.reportSubmittedAt?.toISOString() ?? null,
           reportUpdatedAt: row.reportUpdatedAt?.toISOString() ?? null,
           reportReviewedAt: row.reportReviewedAt?.toISOString() ?? null,
+          reportSource: row.reportSource ?? null,
         }));
       }),
     studio: (context: AuthContext) =>
@@ -1489,6 +1492,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
               nodeId: activity.ownerNodeId,
               formVersion: EVENT_REPORT_FORM_VERSION,
               report: input.report,
+              source: "app",
               submittedBy: userId,
               submittedAt: at,
               updatedBy: userId,
@@ -1517,6 +1521,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
             .select({
               activityId: eventReports.activityId,
               submittedAt: eventReports.submittedAt,
+              source: eventReports.source,
               reviewedAt: eventReports.reviewedAt,
             })
             .from(eventReports)
@@ -1525,6 +1530,7 @@ function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService
         return rows.map((row) => ({
           activityId: row.activityId,
           submittedAt: row.submittedAt.toISOString(),
+          source: row.source,
           reviewedAt: row.reviewedAt?.toISOString() ?? null,
         }));
       }),
