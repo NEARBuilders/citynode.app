@@ -11,7 +11,7 @@ import {
   type EventOnboardingCodeSchema,
   NodeProposalPayloadSchema,
 } from "./contract";
-import { DatabaseLive, DatabaseTag } from "./db/layer";
+import { DatabaseLive } from "./db/layer";
 import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import {
@@ -80,7 +80,7 @@ import {
   type UpstreamTeam,
 } from "./team-join-policy";
 
-class ApiServices extends Context.Service<
+export class ApiServices extends Context.Service<
   ApiServices,
   {
     tenants: TenantsService;
@@ -273,33 +273,6 @@ const authorizeNodeAccess = (
       );
     }
     yield* requireNodeOperationsAccess(context);
-  });
-
-const requireTenantOwnedByOrg = (
-  services: { tenants: TenantsService },
-  tenantId: string,
-  context: NodeAccessContext,
-): NodeEffect<TenantRecord> =>
-  Effect.gen(function* () {
-    const tenant = yield* services.tenants.resolveTenantById(tenantId);
-    if (!tenant) {
-      return yield* Effect.fail(
-        new ORPCError("NOT_FOUND", {
-          message: "Tenant not found",
-          data: { resource: "tenant", resourceId: tenantId },
-        }),
-      );
-    }
-    if (tenant.orgId !== context.organization?.activeOrganizationId) {
-      return yield* Effect.fail(
-        new ORPCError("FORBIDDEN", {
-          message: "This tenant does not belong to your organization",
-          data: {},
-        }),
-      );
-    }
-    yield* requireNodeOperationsAccess(context);
-    return tenant;
   });
 
 const isCommunitySettingsRole = (role: string | null | undefined): boolean =>
@@ -2294,58 +2267,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.nodes.getById(input.nodeId);
       }),
-
-      createNode: builder.createNode
-        .use(requireAuth)
-        .use(requireOrganization)
-        .use(requireNodeOperations)
-        .effect(function* ({ input, context }) {
-          yield* guardNodeKind(null, requestedNodeKind(input));
-          const services = yield* ApiServices;
-          yield* requireTenantOwnedByOrg(services, input.tenantId, context);
-          if (input.parentId) {
-            yield* authorizeParentNode(services, input.parentId, context);
-          }
-          return yield* services.nodes.spawn({
-            kind: input.kind,
-            slug: input.slug,
-            name: input.name,
-            parentId: input.parentId ?? null,
-            tenantId: input.tenantId,
-            ...(input.metadata !== undefined && { metadata: input.metadata }),
-          });
-        }),
-
-      spawnNode: builder.spawnNode
-        .use(requireAuth)
-        .use(requireOrganization)
-        .use(requireNodeOperations)
-        .effect(function* ({ input, context, errors }) {
-          yield* guardNodeKind(null, requestedNodeKind(input));
-          const services = yield* ApiServices;
-          if (!input.tenantId && context.user?.role !== "admin") {
-            return yield* Effect.fail(
-              errors.FORBIDDEN({
-                message: "Standalone nodes can only be spawned by platform admins",
-                data: {},
-              }),
-            );
-          }
-          if (input.tenantId) {
-            yield* requireTenantOwnedByOrg(services, input.tenantId, context);
-          }
-          if (input.parentId) {
-            yield* authorizeParentNode(services, input.parentId, context);
-          }
-          return yield* services.nodes.spawn({
-            ...(input.kind !== undefined && { kind: input.kind }),
-            slug: input.slug,
-            name: input.name,
-            parentId: input.parentId ?? null,
-            ...(input.tenantId !== undefined ? { tenantId: input.tenantId } : {}),
-            ...(input.metadata !== undefined && { metadata: input.metadata }),
-          });
-        }),
 
       updateNode: builder.updateNode
         .use(requireAuth)

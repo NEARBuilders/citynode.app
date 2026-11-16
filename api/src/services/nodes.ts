@@ -94,6 +94,8 @@ export interface NodesService {
     orgId: string;
     activatedBy: string;
     joinCodeId: string;
+    tenantId?: string | null;
+    kind?: NodeKind;
   }): NodeEffect<{ node: NodeRecord; created: boolean }>;
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
   setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
@@ -377,9 +379,10 @@ export const NodesLive = Layer.effect(
                 name: input.name,
                 placeId: input.placeId,
                 orgId: input.orgId,
+                tenantId: input.tenantId ?? null,
                 activatedAt: new Date(),
                 activatedBy: input.activatedBy,
-                metadata: { joinCodeId: input.joinCodeId },
+                metadata: mergeKindMetadata(input.kind, { joinCodeId: input.joinCodeId }),
               })
               .onConflictDoNothing()
               .returning();

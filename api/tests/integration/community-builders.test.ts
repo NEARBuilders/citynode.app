@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -68,17 +68,24 @@ function stubNearbuilders(
 async function spawnNested() {
   const owner = await getPluginClient(daoContext("builders-owner", ORG, "builders-owner.near"));
   const suffix = crypto.randomUUID().slice(0, 8);
-  const state = await owner.spawnNode({
+  const tenant = await owner.createTenant({
+    name: "Builders",
+    accountId: `builders-${suffix}.near`,
+  });
+  const { node: state, place: statePlace } = await activateTestNode({
     kind: "state",
     slug: `testland-${suffix}`,
     name: "Testland",
-    parentId: null,
+    tenantId: tenant.id,
+    orgId: ORG,
   });
-  const city = await owner.spawnNode({
+  const { node: city } = await activateTestNode({
     kind: "city",
     slug: `sample-city-${suffix}`,
     name: "Sample City",
-    parentId: state.id,
+    parentPlaceId: statePlace.id,
+    tenantId: tenant.id,
+    orgId: ORG,
   });
   return { state, city, path: `${state.slug}/${city.slug}` };
 }
