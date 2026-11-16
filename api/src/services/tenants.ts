@@ -309,7 +309,7 @@ export const TenantsLive = Layer.effect(
               ),
             )
             .leftJoin(nodesTable, eq(nodesTable.tenantId, tenantsTable.id))
-              .where(and(...conditions, listedNode)),
+            .where(and(...conditions, listedNode)),
         );
 
         const seen = new Set<string>();
