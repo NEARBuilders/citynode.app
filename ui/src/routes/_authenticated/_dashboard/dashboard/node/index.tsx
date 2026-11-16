@@ -22,7 +22,6 @@ import {
   ImportsWaiting,
   useVisibilityContext,
 } from "@/components/discovery/event-visibility";
-import { EventsToReport } from "@/components/discovery/events-to-report";
 import { TeamStakeCard, useCanSeeTeamStake } from "@/components/team-stake-card";
 import {
   Item,
@@ -41,7 +40,6 @@ import {
   isWaitingImport,
 } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
-import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
 import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
@@ -51,6 +49,8 @@ import {
 } from "@/lib/sputnik-proposals";
 import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
+import { NodeSetupChecklist, useNodeSetupSteps } from "../-node-setup-checklist";
+import { CommunityReports } from "./-community-reports";
 import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
 import { ReturningMembers } from "./-returning-members";
@@ -167,10 +167,6 @@ function NodeOverview() {
     enabled: !!nodeId,
     retry: false,
   });
-  const reportStatuses = useQuery({
-    ...eventReportStatusesQueryOptions(apiClient, nodeId),
-    enabled: canReport && !!nodeId,
-  });
   const listing = useQuery(discoveryNodeQueryOptions(apiClient, nodeId));
   const visibilityContext = useVisibilityContext(nodeId);
   const { now } = visibilityContext;
@@ -196,6 +192,11 @@ function NodeOverview() {
   });
   const showTeamStake = useCanSeeTeamStake(teamStake, { canManage, inFinanceTeam });
   const payoutsRef = useScrollToHash<HTMLDivElement>("payouts");
+  const setupSteps = useNodeSetupSteps({
+    nodeId,
+    organizationId: orgId ?? "",
+    enabled: !!canManage && !!tenant,
+  });
   if (!selectedNode || !summary) return null;
 
   const pendingConfig = pendingConfigQuery.data ?? null;
@@ -343,14 +344,17 @@ function NodeOverview() {
         </Item>
       )}
 
-      <EventsToReport
-        canReport={canReport}
-        ready={!canReport || reportStatuses.isSuccess}
-        nodeId={selectedNode.id}
-        now={now}
-        activities={activities.data ?? []}
-        statuses={reportStatuses.data ?? []}
-      />
+      {tenant && setupSteps?.some((step) => !step.done) && (
+        <NodeSetupChecklist
+          steps={setupSteps}
+          communityName={tenant.name}
+          nodeId={selectedNode.id}
+          tenantId={tenant.id}
+          testId="dashboard-node.setup"
+        />
+      )}
+
+      {canReport && <CommunityReports nodeId={selectedNode.id} now={now} />}
 
       {canManage && (
         <OwnerActions

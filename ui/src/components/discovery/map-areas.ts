@@ -1,8 +1,11 @@
 import type { ApiClient } from "@/app";
 
 type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
-type Boundary = NonNullable<Node["boundary"]>;
+export type Boundary = NonNullable<
+  Awaited<ReturnType<ApiClient["listPlaceBoundaries"]>>[number]["boundary"]
+>;
 export type AreaLatLngs = [number, number][][][];
+export type BoundaryMap = Map<string, Boundary>;
 
 export function boundaryLatLngs(boundary: Boundary, offset = 0): AreaLatLngs {
   const polygons = boundary.type === "Polygon" ? [boundary.coordinates] : boundary.coordinates;
@@ -11,8 +14,11 @@ export function boundaryLatLngs(boundary: Boundary, offset = 0): AreaLatLngs {
   );
 }
 
-export function mapAreas(nodes: Node[]) {
-  return nodes.flatMap((node) => (node.boundary ? [{ node, boundary: node.boundary }] : []));
+export function mapAreas(nodes: Node[], boundaries: BoundaryMap) {
+  return nodes.flatMap((node) => {
+    const boundary = node.placeId ? boundaries.get(node.placeId) : undefined;
+    return boundary ? [{ node, boundary }] : [];
+  });
 }
 
 function extent(points: [number, number][], shift: number) {

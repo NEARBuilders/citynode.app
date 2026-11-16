@@ -1,5 +1,5 @@
 import type { ORPCError } from "@orpc/server";
-import { eq, isNull, type SQL, sql } from "drizzle-orm";
+import { eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -37,10 +37,16 @@ export interface PlaceResolution {
   community: PlaceCommunity | null;
 }
 
+interface PlaceBoundaryRecord {
+  placeId: string;
+  boundary: PlaceBoundary | null;
+}
+
 export interface PlacesService {
   resolve(input: { place: string }): PlaceEffect<PlaceResolution | null>;
   getById(id: string): PlaceEffect<PlaceRecord | null>;
   boundary(id: string): PlaceEffect<PlaceBoundary | null>;
+  boundaries(placeIds: string[]): PlaceEffect<PlaceBoundaryRecord[]>;
   roots(): PlaceEffect<PlaceRecord[]>;
   children(id: string): PlaceEffect<PlaceRecord[]>;
   ancestorIds(id: string): PlaceEffect<string[]>;
@@ -117,6 +123,28 @@ function subtreeQuery(placeId: string): SQL {
       WHERE NOT (p.id = ANY(subtree.path))
     )
     SELECT id FROM subtree ORDER BY depth
+  `;
+}
+
+export function nodeParentEdgesQuery(): SQL {
+  return sql`
+    WITH RECURSIVE climb AS (
+      SELECT n.id AS node_id, p.parent_id AS place_id, ARRAY[p.id] AS path
+      FROM nodes n
+      INNER JOIN places p ON p.id = n.place_id
+      UNION ALL
+      SELECT climb.node_id, p.parent_id, climb.path || p.id
+      FROM climb
+      INNER JOIN places p ON p.id = climb.place_id
+      WHERE NOT EXISTS (SELECT 1 FROM nodes m WHERE m.place_id = climb.place_id)
+        AND NOT (p.id = ANY(climb.path))
+    )
+    SELECT climb.node_id AS id, m.id AS parent_id
+    FROM climb
+    LEFT JOIN nodes m ON m.place_id = climb.place_id
+    WHERE climb.place_id IS NULL OR m.id IS NOT NULL
+    UNION ALL
+    SELECT id, parent_id FROM nodes WHERE place_id IS NULL
   `;
 }
 
@@ -223,6 +251,16 @@ export const PlacesLive = Layer.effect(
           );
           return row?.boundary ?? null;
         }),
+
+      boundaries: (placeIds) =>
+        query(() =>
+          db
+            .select({ id: placesTable.id, boundary: placesTable.boundary })
+            .from(placesTable)
+            .where(inArray(placesTable.id, placeIds)),
+        ).pipe(
+          Effect.map((rows) => rows.map((row) => ({ placeId: row.id, boundary: row.boundary }))),
+        ),
 
       roots: () =>
         query(() => db.select().from(placesTable).where(isNull(placesTable.parentId))).pipe(

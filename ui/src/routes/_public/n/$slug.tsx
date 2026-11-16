@@ -278,7 +278,14 @@ function NodePage() {
       </dl>
 
       <section className="flex flex-col gap-6" data-testid="node-page.events">
-        <SectionHeader title={translate("community.upcoming")} />
+        <SectionHeader
+          title={translate("community.upcoming")}
+          description={
+            <span data-testid="node-page.join-at-event">
+              {translate("community.joinAtEvent", { name: node.name })}
+            </span>
+          }
+        />
         {events.length > 0 ? (
           <EventList events={events} nodeId={node.id} />
         ) : (

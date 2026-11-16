@@ -271,6 +271,7 @@ async function bindCommunityOrganization(
   return organization;
 }
 
+// TODO(remove): legacy apply-flow provisioning, replaced by the Official Application cutover (#520).
 export async function provisionCommunityOrganization(
   auth: AuthClient,
   input: ProvisionInput,
