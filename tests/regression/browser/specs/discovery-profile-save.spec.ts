@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { seedNode, seedTenant } from "../../lib/seed-tenant.mjs";
+import { seedNode, seedPlace, seedTenant } from "../../lib/seed-tenant.mjs";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
 import { injectCookies, loadSeedData } from "../helpers/seeded";
 
@@ -7,15 +7,23 @@ test.describe("discovery profile save → Explore", () => {
   test("saving with Show on Explore publishes the community to list and map", async ({ page }) => {
     const pageErrors = collectErrors(page);
     const unique = `${process.pid}-${Date.now().toString(36)}`;
+    const location = `karachi-${unique}`;
+    await seedPlace({
+      slug: location,
+      name: "Karachi",
+      label: "city",
+      latitude: 24.8607,
+      longitude: 67.0011,
+    });
     const tenant = await seedTenant({
-      subdomain: `karachi-${unique}`,
+      subdomain: location,
       name: `Karachi ${unique}`,
-      accountId: `karachi-${unique}.near`,
+      accountId: `${location}.near`,
       orgId: loadSeedData().orgAID,
     });
     const node = await seedNode({
       tenantId: tenant.id,
-      slug: `karachi-${unique}`,
+      slug: location,
       name: `Karachi Explore ${unique}`,
     });
 
@@ -33,7 +41,7 @@ test.describe("discovery profile save → Explore", () => {
     await page
       .getByTestId("discovery-profile-summary")
       .fill("A community by the sea for builders.");
-    await page.getByTestId("discovery-profile-location").fill("Karachi");
+    await page.getByTestId("discovery-profile-location").fill(location);
     await page.getByTestId("discovery-profile-region").fill("Pakistan");
 
     await page.getByTestId("discovery-profile-add-channel").click();
