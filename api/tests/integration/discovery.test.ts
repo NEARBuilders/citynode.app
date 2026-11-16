@@ -188,6 +188,21 @@ it("saves a discovery profile without calling Nominatim", async () => {
       ),
     ),
   ).toBe(false);
+
+  const moved = await editor.saveDiscoveryProfile({
+    nodeId: node.id,
+    ...profile,
+    location: "Porto",
+    latitude: 24.86,
+    longitude: 67.01,
+    geocodedLocation: uniqueLocation,
+  });
+  expect(moved).toMatchObject({
+    location: "Porto",
+    latitude: null,
+    longitude: null,
+    geocodedLocation: null,
+  });
   vi.unstubAllGlobals();
 });
 

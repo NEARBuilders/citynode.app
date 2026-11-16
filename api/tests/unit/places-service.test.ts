@@ -152,6 +152,16 @@ describe("PlacesService", () => {
     ).toBeNull();
   });
 
+  it("resolve matches a catalog place by id", async () => {
+    const layer = freshLayer();
+    const place = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
+    );
+    const resolved = await runService(layer, ({ places }) => places.resolve({ place: place.id }));
+    expect(resolved?.place.id).toBe(place.id);
+    expect(resolved?.place.slug).toBe("nigeria");
+  });
+
   it("resolve carries community status with member count", async () => {
     const layer = freshLayer();
     const place = await runService(layer, ({ db }) =>

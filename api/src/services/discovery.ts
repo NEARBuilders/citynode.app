@@ -1378,15 +1378,24 @@ function createDiscovery(db: Database, lumaKeys: string) {
         const record = yield* authorize(input.nodeId, context);
         const kind = nodeKindOf(record.node.metadata);
         const place = profilePlace(input, kind);
-        const next: StoredDiscoveryProfile = place
-          ? { ...input, geocodeHint: null }
-          : {
+        const tagged = input.geocodedLocation?.trim() ?? "";
+        const next: StoredDiscoveryProfile = !place
+          ? {
               ...input,
               latitude: null,
               longitude: null,
               geocodedLocation: null,
               geocodeHint: null,
-            };
+            }
+          : tagged && place !== tagged
+            ? {
+                ...input,
+                latitude: null,
+                longitude: null,
+                geocodedLocation: null,
+                geocodeHint: null,
+              }
+            : { ...input, geocodeHint: null };
         yield* Effect.tryPromise(() => adoptCatalogPlace(db, record.node, place, kind)).pipe(
           Effect.ignore,
         );

@@ -12,13 +12,14 @@ export function CommunityMapStatus({ nodeId, testId }: { nodeId: string; testId:
   const translate = useAppTranslation();
   const api = useApiClient();
   const node = useQuery(nodeByIdQueryOptions(api, nodeId));
+  const placeId = node.data?.placeId ?? "";
   const place = useQuery({
-    ...resolvePlaceQueryOptions(api, node.data?.slug ?? ""),
-    enabled: Boolean(node.data?.slug),
+    ...resolvePlaceQueryOptions(api, placeId),
+    enabled: Boolean(placeId),
   });
-  if (!node.isSuccess || !place.isSuccess) return null;
-  if (place.data?.community) return null;
-  const slug = place.data?.place.slug;
+  if (!node.isSuccess || !placeId) return null;
+  if (!place.isSuccess || !place.data || place.data.community) return null;
+  const slug = place.data.place.slug;
   return (
     <Item variant="outline" data-testid={testId} data-state="unactivated">
       <ItemMedia variant="icon">
@@ -28,18 +29,16 @@ export function CommunityMapStatus({ nodeId, testId }: { nodeId: string; testId:
         <p className="text-sm leading-snug font-medium">{translate("community.notOnExplore")}</p>
         <p className="text-sm text-muted-foreground">{translate("community.unactivatedHint")}</p>
       </ItemContent>
-      {slug ? (
-        <ItemActions className="basis-full sm:basis-auto">
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={<Link to="/places/$slug" params={{ slug }} data-testid={`${testId}-action`} />}
-          >
-            {translate("place.startCommunity")}
-          </Button>
-        </ItemActions>
-      ) : null}
+      <ItemActions className="basis-full sm:basis-auto">
+        <Button
+          size="sm"
+          variant="outline"
+          nativeButton={false}
+          render={<Link to="/places/$slug" params={{ slug }} data-testid={`${testId}-action`} />}
+        >
+          {translate("place.startCommunity")}
+        </Button>
+      </ItemActions>
     </Item>
   );
 }

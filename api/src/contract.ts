@@ -202,6 +202,7 @@ export const NodeSchema = z.object({
   kind: NodeKindSchema,
   slug: z.string(),
   name: z.string(),
+  placeId: z.uuid().nullable().optional(),
   parentId: z.string().nullable(),
   tenantId: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()),

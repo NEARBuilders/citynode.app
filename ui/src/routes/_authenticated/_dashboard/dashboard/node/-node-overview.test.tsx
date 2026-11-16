@@ -104,6 +104,7 @@ vi.mock("@/app", () => ({
       slug: "harbor",
       name: "Harbor",
       kind: "city",
+      placeId: "00000000-0000-4000-8000-000000000099",
       parentId: null,
       tenantId: "tenant-1",
       metadata: {},

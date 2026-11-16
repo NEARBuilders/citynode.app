@@ -175,7 +175,9 @@ export const PlacesLive = Layer.effect(
       resolve: (input) =>
         Effect.gen(function* () {
           const candidates = aliasCandidates(input.place);
-          const slugCandidate = input.place.trim().toLowerCase();
+          const raw = input.place.trim();
+          const slugCandidate = raw.toLowerCase();
+          const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
 
           const matched = yield* query(() =>
             db
@@ -200,7 +202,9 @@ export const PlacesLive = Layer.effect(
                 eq(memberCountObservations.organizationId, nodesTable.orgId),
               )
               .where(
-                sql`${placesTable.slug} = ${slugCandidate} OR ${placesTable.id} IN (
+                sql`${placesTable.slug} = ${slugCandidate} OR ${
+                  byId ? sql`${placesTable.id} = ${raw}` : sql`false`
+                } OR ${placesTable.id} IN (
                   SELECT place_id FROM place_aliases WHERE value IN (${sql.join(
                     candidates.map((value) => sql`${value}`),
                     sql`, `,

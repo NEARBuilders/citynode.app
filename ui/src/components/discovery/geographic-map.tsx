@@ -33,21 +33,37 @@ type MapPoint = {
   activated: boolean;
 };
 
-function listedPlaceIds(nodes: Node[]) {
-  return new Set(nodes.map((node) => node.placeId).filter((id): id is string => id !== null));
+function pinCoords(node: Node, places: Map<string, PlacePin>) {
+  const place = node.placeId ? places.get(node.placeId) : undefined;
+  const latitude = node.latitude ?? place?.latitude ?? null;
+  const longitude = node.longitude ?? place?.longitude ?? null;
+  if (latitude === null || longitude === null) return null;
+  return { latitude, longitude };
 }
 
-function toPoints(nodes: Node[], places: PlacePin[]): MapPoint[] {
-  const covered = listedPlaceIds(nodes);
-  const listedNodes = new Set(nodes.map((node) => node.nodeId));
-  const community = nodes.flatMap((node) =>
-    node.latitude !== null && node.longitude !== null
+function coverListed(nodes: Node[], places: Map<string, PlacePin>) {
+  const covered = new Set<string>();
+  const listedNodes = new Set<string>();
+  for (const node of nodes) {
+    if (!pinCoords(node, places)) continue;
+    listedNodes.add(node.nodeId);
+    if (node.placeId) covered.add(node.placeId);
+  }
+  return { covered, listedNodes };
+}
+
+function toPoints(nodes: Node[], places: PlacePin[], listed: Node[]): MapPoint[] {
+  const byId = new Map(places.map((place) => [place.id, place]));
+  const { covered, listedNodes } = coverListed(listed, byId);
+  const community = nodes.flatMap((node) => {
+    const coords = pinCoords(node, byId);
+    return coords
       ? [
           {
             id: node.nodeId,
             name: node.name,
-            latitude: node.latitude,
-            longitude: node.longitude,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
             kind: "community" as const,
             nodeId: node.nodeId,
             slug: node.slug,
@@ -56,8 +72,8 @@ function toPoints(nodes: Node[], places: PlacePin[]): MapPoint[] {
             activated: true,
           },
         ]
-      : [],
-  );
+      : [];
+  });
   const available = places.flatMap((place) =>
     covered.has(place.id) || (place.nodeId && listedNodes.has(place.nodeId))
       ? []
@@ -82,6 +98,7 @@ function toPoints(nodes: Node[], places: PlacePin[]): MapPoint[] {
 export function GeographicMap({
   nodes,
   places,
+  listed,
   worldCatalog,
   onSelect,
   onSelectPlace,
@@ -90,6 +107,7 @@ export function GeographicMap({
 }: {
   nodes: Node[];
   places: PlacePin[];
+  listed?: Node[];
   worldCatalog?: boolean;
   onSelect: (id: string) => void;
   onSelectPlace: (slug: string) => void;
@@ -128,7 +146,7 @@ export function GeographicMap({
   openCommunity.current = onOpenCommunity;
   selected.current = selectedId;
   zoomRef.current = zoom;
-  const points = useMemo(() => toPoints(nodes, places), [nodes, places]);
+  const points = useMemo(() => toPoints(nodes, places, listed ?? nodes), [nodes, places, listed]);
   pointsRef.current = points;
   worldRef.current = worldCatalog === true;
   const [catalog, setCatalog] = useState<Map<string, Boundary | null>>(() => new Map());
@@ -396,10 +414,10 @@ export function GeographicMap({
               }),
             })),
           ];
-          const key = `${next
+          const key = next
             .map((point) => point.id)
             .sort()
-            .join(",")}|${currentBoundaries.size}`;
+            .join(",");
           if (key !== fitted) {
             fitted = key;
             const outlines = new Map(

@@ -55,7 +55,7 @@ async function openOverview(page: Page, organizationId: string, nodeId: string) 
 }
 
 test.describe("community map status", () => {
-  test("Overview tells a manager when the place is not a community yet", async ({
+  test("Overview hides the catalog notice when the community is not linked to a place", async ({
     page,
     browser,
   }) => {
@@ -65,13 +65,10 @@ test.describe("community map status", () => {
     const community = await seedCommunity(ownerCookie, "unactivated");
     await useCookieHeader(page.context(), ownerCookie);
 
-    const status = page.getByTestId("dashboard-node.map-status");
     await openOverview(page, community.orgId, community.nodeId);
-    await expect(status).toHaveAttribute("data-state", "unactivated", { timeout: 15000 });
-    await expect(page.getByTestId("dashboard-node.map-status-action")).toHaveCount(0);
+    await expect(page.getByTestId("dashboard-node.map-status")).toHaveCount(0);
 
     await page.setViewportSize({ width: 360, height: 780 });
-    await expect(status).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
@@ -80,13 +77,7 @@ test.describe("community map status", () => {
 
     await page.goto(`/nodes/${community.nodeId}/content`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await expect(page.getByTestId("content-map-status")).toHaveAttribute(
-      "data-state",
-      "unactivated",
-      {
-        timeout: 15000,
-      },
-    );
+    await expect(page.getByTestId("content-map-status")).toHaveCount(0);
 
     const memberCookie = await signInAnonymously();
     const session = await (await authFetch("/get-session", memberCookie)).json();
