@@ -40,10 +40,15 @@ export async function resolveApplicationCommunity(
   deps: OfficialApplicationDeps,
   application: { placeId?: string; slug: string },
 ): Promise<NodeRecord & { orgId: string }> {
-  const placeId =
-    application.placeId ??
-    (await Effect.runPromise(deps.places.resolve({ place: application.slug })))?.place.id;
-  const node = placeId ? await Effect.runPromise(deps.nodes.getByPlace(placeId)) : null;
+  const place = application.placeId
+    ? await Effect.runPromise(deps.places.getById(application.placeId))
+    : (await Effect.runPromise(deps.places.resolve({ place: application.slug })))?.place;
+  if (application.placeId && place?.slug !== application.slug) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "This application names a different place than it was filed for. Reject it.",
+    });
+  }
+  const node = place ? await Effect.runPromise(deps.nodes.getByPlace(place.id)) : null;
   if (!node?.orgId) {
     throw new ORPCError("PRECONDITION_FAILED", {
       message: "This place has no community yet. Activate it before approving the application.",
@@ -57,18 +62,20 @@ async function ensureReviewerAdmin(
   organizationId: string,
   reviewerUserId: string,
 ) {
-  try {
-    const { members } = await auth.listMembers({ organizationId });
-    const reviewer = members.find((member) => member.userId === reviewerUserId);
-    if (reviewer && managesOrganization(reviewer.role)) return;
-    if (reviewer) {
-      await auth.updateMemberRole({ memberId: reviewer.id, role: "admin", organizationId });
-      return;
-    }
-  } catch (error) {
-    if (!isHidden(error)) throw error;
+  const members = await auth
+    .listMembers({ organizationId })
+    .then((result) => result.members)
+    .catch((error: unknown) => {
+      if (isHidden(error)) return [];
+      throw error;
+    });
+  const reviewer = members.find((member) => member.userId === reviewerUserId);
+  if (reviewer && managesOrganization(reviewer.role)) return;
+  if (reviewer) {
+    await auth.adminUpdateMemberRole({ organizationId, userId: reviewerUserId, role: "admin" });
+    return;
   }
-  await auth.addMember({ userId: reviewerUserId, role: "admin", organizationId });
+  await auth.adminAddMember({ organizationId, userId: reviewerUserId, role: "admin" });
 }
 
 export async function linkOfficialDao(

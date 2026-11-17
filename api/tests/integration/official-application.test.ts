@@ -40,8 +40,8 @@ const orgs = new Map<
 >();
 const calls = {
   linkDao: [] as unknown[],
-  addMember: [] as unknown[],
-  updateMemberRole: [] as unknown[],
+  adminAddMember: [] as unknown[],
+  adminUpdateMemberRole: [] as unknown[],
 };
 
 function application(slug: string, extra: Record<string, unknown> = {}): FakeProposal {
@@ -89,8 +89,11 @@ function authStub(context: { userId?: string }) {
     createOnboardingCode: async (input: { organizationId: string }) => ({
       code: `join-${input.organizationId}`,
     }),
-    addMember: async (input: { userId: string; role: string; organizationId: string }) => {
-      calls.addMember.push(input);
+    adminAddMember: async (input: { userId: string; role: string; organizationId: string }) => {
+      calls.adminAddMember.push(input);
+      if (org(input.organizationId).members.has(input.userId)) {
+        throw new ORPCError("CONFLICT", { message: "Already a member" });
+      }
       org(input.organizationId).members.add(input.userId);
       org(input.organizationId).roles.set(input.userId, input.role);
       return { id: `member-${input.userId}`, ...input };
@@ -106,10 +109,13 @@ function authStub(context: { userId?: string }) {
         })),
       };
     },
-    updateMemberRole: async (input: { memberId: string; role: string; organizationId: string }) => {
-      calls.updateMemberRole.push(input);
-      org(input.organizationId).roles.set(input.memberId.replace(/^member-/, ""), input.role);
-      return { success: true };
+    updateMemberRole: async () => {
+      throw forbidden();
+    },
+    adminUpdateMemberRole: async (input: { userId: string; role: string; organizationId: string }) => {
+      calls.adminUpdateMemberRole.push(input);
+      org(input.organizationId).roles.set(input.userId, input.role);
+      return { id: `member-${input.userId}`, ...input };
     },
     getDao: async ({ organizationId }: { organizationId: string }) => {
       const found = org(organizationId);
@@ -212,6 +218,8 @@ beforeAll(async () => {
       { slug: "kano", name: "Kano", label: "city" },
       { slug: "ibadan", name: "Ibadan", label: "city" },
       { slug: "enugu", name: "Enugu", label: "city" },
+      { slug: "jos", name: "Jos", label: "city" },
+      { slug: "kaduna", name: "Kaduna", label: "city" },
     ]);
   });
   await getPluginClient(undefined, {
@@ -219,7 +227,7 @@ beforeAll(async () => {
     proposals: { client: proposalsStub, router: {} },
   } as never);
   const activator = await getPluginClient(authedContext("activator"));
-  for (const place of ["lagos", "abuja", "ibadan", "enugu"]) {
+  for (const place of ["lagos", "abuja", "ibadan", "enugu", "jos", "kaduna"]) {
     await activator.activateCommunity({ place });
   }
 }, 30_000);
@@ -231,9 +239,16 @@ afterAll(async () => {
 
 beforeEach(() => {
   calls.linkDao.length = 0;
-  calls.addMember.length = 0;
-  calls.updateMemberRole.length = 0;
+  calls.adminAddMember.length = 0;
+  calls.adminUpdateMemberRole.length = 0;
 });
+
+async function placeIdOf(slug: string) {
+  const visitor = await getPluginClient();
+  const resolved = await visitor.resolvePlace({ place: slug });
+  if (!resolved) throw new Error(`missing place ${slug}`);
+  return resolved.place.id;
+}
 
 describe("Official Application approval", () => {
   it("links the applicant's DAO to the activated community and adds the reviewer as admin", async () => {
@@ -251,7 +266,7 @@ describe("Official Application approval", () => {
       daoAccountId: "lagos-test.sputnik-dao.testnet",
       network: "testnet",
     });
-    expect(calls.addMember).toEqual([
+    expect(calls.adminAddMember).toEqual([
       { userId: "reviewer", role: "admin", organizationId: "org-lagos" },
     ]);
     expect(orgs.get("org-lagos")?.metadata).toMatchObject({
@@ -283,11 +298,45 @@ describe("Official Application approval", () => {
       expectedUpdatedAt: savedAt,
     });
 
-    expect(calls.addMember).toEqual([]);
-    expect(calls.updateMemberRole).toEqual([
-      { memberId: "member-member-reviewer", role: "admin", organizationId: "org-enugu" },
+    expect(calls.adminAddMember).toEqual([]);
+    expect(calls.adminUpdateMemberRole).toEqual([
+      { userId: "member-reviewer", role: "admin", organizationId: "org-enugu" },
     ]);
+    expect(orgs.get("org-enugu")?.roles.get("member-reviewer")).toBe("admin");
     expect(orgs.get("org-enugu")?.metadata.daoAccountId).toBe("enugu-test.sputnik-dao.testnet");
+  });
+
+  it("links the community of the application's own place when the payload names it", async () => {
+    proposals.set("kaduna", application("kaduna", { placeId: await placeIdOf("kaduna") }));
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
+    const result = await admin.approveOfficialApplication({
+      proposalId: "prop-kaduna",
+      entityId: "kaduna",
+      expectedUpdatedAt: savedAt,
+    });
+
+    expect(result).toMatchObject({ organizationId: "org-kaduna" });
+    expect(orgs.get("org-kaduna")?.metadata.daoAccountId).toBe("kaduna-test.sputnik-dao.testnet");
+  });
+
+  it("refuses an application whose placeId points at a different place than its slug", async () => {
+    proposals.set("jos", application("jos", { placeId: await placeIdOf("lagos") }));
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+    const lagosDao = orgs.get("org-lagos")?.metadata.daoAccountId;
+
+    await expect(
+      admin.approveOfficialApplication({
+        proposalId: "prop-jos",
+        entityId: "jos",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    expect(calls.linkDao).toEqual([]);
+    expect(orgs.get("org-lagos")?.metadata.daoAccountId).toBe(lagosDao);
+    expect(orgs.get("org-jos")?.metadata.daoAccountId).toBeUndefined();
+    expect(proposals.get("jos")?.reviewStatus).toBe("pending");
   });
 
   it("refuses to approve for a place that has no community yet and changes nothing", async () => {
