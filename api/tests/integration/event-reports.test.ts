@@ -140,8 +140,9 @@ describe("event reports", () => {
     });
     expect(await admin.listEventReportStatuses({ nodeId: node.id })).toHaveLength(1);
     expect(await organizer.listEventReportStatuses({ nodeId: node.id })).toEqual([
-      { activityId: ended.id, submittedAt: saved.submittedAt, reviewedAt: null },
+      { activityId: ended.id, submittedAt: saved.submittedAt, source: "app", reviewedAt: null },
     ]);
+    expect(saved.source).toBe("app");
 
     const edited = await owner.saveEventReport({
       activityId: ended.id,
@@ -209,6 +210,7 @@ describe("event reports", () => {
     );
     const listed = (await admin.getAdminEvents()).events.find((event) => event.id === ended.id);
     expect(listed?.reportReviewedAt).toBe(reviewedAt);
+    expect(listed?.reportSource).toBe("app");
     expect(await owner.listEventReportStatuses({ nodeId: node.id })).toEqual([
       expect.objectContaining({ activityId: ended.id, reviewedAt }),
     ]);

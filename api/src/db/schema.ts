@@ -57,6 +57,8 @@ export const tenantStatus = pgEnum("tenant_status", [
 
 export const validatorRole = pgEnum("validator_role", ["official", "community"]);
 
+export const eventReportSource = pgEnum("event_report_source", ["app", "import"]);
+
 export interface NodeMetadata {
   kind?: string;
   poolAccountId?: string;
@@ -242,6 +244,7 @@ export const eventReports = pgTable("event_reports", {
     .references(() => nodes.id, { onDelete: "cascade" }),
   formVersion: integer("form_version").default(1).notNull(),
   report: jsonb("report").$type<import("../discovery-contract").EventReport>().notNull(),
+  source: eventReportSource("source").default("app").notNull(),
   submittedBy: text("submitted_by").notNull(),
   submittedAt: timestamp("submitted_at", { mode: "date", withTimezone: true })
     .defaultNow()

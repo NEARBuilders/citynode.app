@@ -42,30 +42,29 @@ export function makeStakingPools(
 ): StakingPoolsService {
   const approvals = new Map<string, { approved: boolean; expiresAt: number }>();
   return {
-    isApproved: (accountId, network) =>
-      Effect.gen(function* () {
-        if (!isNearNetwork(network)) {
-          return yield* Effect.fail(new UnsupportedStakingNetwork({ network }));
-        }
-        const key = `${network}:${accountId}`;
-        const cached = approvals.get(key);
-        if (cached && cached.expiresAt > now()) return cached.approved;
-        const approved = yield* Effect.tryPromise({
-          try: () =>
-            viewFunction<boolean>({
-              accountId: whitelists[network],
-              methodName: "is_whitelisted",
-              args: { staking_pool_account_id: accountId },
-              network,
-            }),
-          catch: (cause) => new StakingPoolCheckFailed({ network, cause }),
-        });
-        if (approvals.size >= APPROVAL_CACHE_MAX) {
-          const oldest = approvals.keys().next().value;
-          if (oldest !== undefined) approvals.delete(oldest);
-        }
-        approvals.set(key, { approved: approved === true, expiresAt: now() + APPROVAL_TTL_MS });
-        return approved === true;
-      }),
+    isApproved: Effect.fn("StakingPoolsService.isApproved")(function* (accountId, network) {
+      if (!isNearNetwork(network)) {
+        return yield* Effect.fail(new UnsupportedStakingNetwork({ network }));
+      }
+      const key = `${network}:${accountId}`;
+      const cached = approvals.get(key);
+      if (cached && cached.expiresAt > now()) return cached.approved;
+      const approved = yield* Effect.tryPromise({
+        try: () =>
+          viewFunction<boolean>({
+            accountId: whitelists[network],
+            methodName: "is_whitelisted",
+            args: { staking_pool_account_id: accountId },
+            network,
+          }),
+        catch: (cause) => new StakingPoolCheckFailed({ network, cause }),
+      });
+      if (approvals.size >= APPROVAL_CACHE_MAX) {
+        const oldest = approvals.keys().next().value;
+        if (oldest !== undefined) approvals.delete(oldest);
+      }
+      approvals.set(key, { approved: approved === true, expiresAt: now() + APPROVAL_TTL_MS });
+      return approved === true;
+    }),
   };
 }

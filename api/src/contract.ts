@@ -2,6 +2,7 @@ import "@orpc/openapi/extensions/route";
 import { oc } from "@orpc/contract";
 import {
   BAD_REQUEST,
+  CONFLICT,
   CONNECTION_ERROR,
   FORBIDDEN,
   NOT_FOUND,
@@ -10,6 +11,7 @@ import {
 import { z } from "zod";
 import {
   discoveryContract,
+  EVENT_REPORT_SOURCES,
   monthlyReportStatsSchema,
   reportMonthSchema,
 } from "./discovery-contract";
@@ -449,6 +451,7 @@ export const AdminEventsSchema = z.object({
       reportSubmittedAt: z.iso.datetime().nullable(),
       reportUpdatedAt: z.iso.datetime().nullable(),
       reportReviewedAt: z.iso.datetime().nullable(),
+      reportSource: z.enum(EVENT_REPORT_SOURCES).nullable(),
       checkIns: AttendanceSummarySchema.nullable(),
     }),
   ),
@@ -1052,6 +1055,57 @@ export const contract = oc.router({
     })
     .input(z.object({ placeId: z.uuid() }))
     .output(PlaceBoundarySchema.nullable()),
+
+  listPlaceBoundaries: oc
+    .route({
+      method: "POST",
+      path: "/places/boundaries",
+      summary: "Boundary geometry for many catalog places, keyed by place id",
+      description:
+        "Map views fetch geometry in one round trip. Places without a boundary are omitted — callers treat a missing key as marker-only.",
+    })
+    .input(z.object({ placeIds: z.array(z.uuid()).min(1).max(500) }))
+    .output(z.array(z.object({ placeId: z.uuid(), boundary: PlaceBoundarySchema.nullable() }))),
+
+  activateCommunity: oc
+    .route({
+      method: "POST",
+      path: "/places/activate",
+      summary: "Activate a place into a community",
+      description:
+        "Session required. Idempotent: creates the community's organization and joins the activator as its first member, or returns the existing community untouched. No approval, no DAO proof, no site, no publication — governance arrives later when the community's Official Application is accepted.",
+    })
+    .input(z.object({ place: z.string().min(1) }))
+    .output(
+      z.object({
+        nodeId: z.uuid(),
+        placeId: z.uuid(),
+        slug: z.string(),
+        organizationId: z.string(),
+        joinCode: z.string(),
+        alreadyActivated: z.boolean(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, NOT_FOUND, CONFLICT }),
+
+  joinCommunity: oc
+    .route({
+      method: "POST",
+      path: "/places/{placeId}/join",
+      summary: "Join the community of a place",
+      description:
+        "Session required. Redeems the community's standing join code on behalf of the caller. Returns alreadyMember when the caller already belongs.",
+    })
+    .input(z.object({ placeId: z.uuid() }))
+    .output(
+      z.object({
+        organizationId: z.string(),
+        nodeId: z.uuid(),
+        slug: z.string(),
+        alreadyMember: z.boolean(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, NOT_FOUND, CONFLICT }),
 
   listValidators: oc
     .route({

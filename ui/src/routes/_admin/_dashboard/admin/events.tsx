@@ -365,6 +365,7 @@ function AdminEvents() {
                               activity={event}
                               submittedAt={event.reportSubmittedAt}
                               reviewedAt={event.reportReviewedAt}
+                              source={event.reportSource}
                               now={now}
                             />
                           </Link>

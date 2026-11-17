@@ -3,7 +3,7 @@ import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/
 import { injectCookies } from "../helpers/seeded";
 
 test.describe("docs", () => {
-  test("the overview is the docs home, with its side nav and paths", async ({ page }) => {
+  test("the overview is the docs home, with its tabs and paths", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/docs", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
@@ -27,7 +27,7 @@ test.describe("docs", () => {
     await expect(page.getByTestId("docs.heading")).toBeVisible({ timeout: 15000 });
   });
 
-  test("the side nav moves between Builders and the agent skill", async ({ page }) => {
+  test("the tabs move between Builders and the agent skill", async ({ page }) => {
     await page.goto("/docs", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
@@ -43,17 +43,27 @@ test.describe("docs", () => {
     await expect(page.getByTestId("docs.nav-skill")).toHaveAttribute("aria-current", "page");
   });
 
-  test("at 375px the docs menu is used and lists the guides", async ({ page }) => {
+  test("at 375px the tabs fit without page overflow and the Guides menu lists the guides", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/docs", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
     await expect(page.getByTestId("docs.heading")).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId("docs.nav-menu")).toBeVisible();
-    await expect(page.getByTestId("docs.nav-group-guides")).toBeHidden();
+    await expect(page.getByTestId("docs.tabs")).toBeVisible();
+    await expect(page.getByTestId("docs.nav-skill")).toBeAttached();
     await expect(page.getByTestId("docs.guide-report-each-month")).toBeVisible();
+    const overflow = await page.getByTestId("docs.tabs").evaluate((tabs) => {
+      let widest = 0;
+      for (let node = tabs.parentElement; node; node = node.parentElement) {
+        widest = Math.max(widest, node.scrollWidth - node.clientWidth);
+      }
+      return widest;
+    });
+    expect(overflow).toBeLessThanOrEqual(0);
 
-    await page.getByTestId("docs.nav-menu").click();
+    await page.getByTestId("docs.nav-group-guides").click();
     await expect(page.getByRole("menuitem", { name: "Report each month" })).toBeVisible();
   });
 
@@ -69,5 +79,7 @@ test.describe("docs", () => {
     await expect(page).toHaveURL(/\/docs$/);
     await expect(page.getByTestId("docs.heading")).toBeVisible();
     await expect(page.getByTestId("sidebar-nav-about")).toHaveAttribute("data-active", "");
+    await expect(page.getByTestId("docs.tabs")).toBeVisible();
+    await expect(page.getByTestId("docs.nav-overview")).toHaveAttribute("aria-current", "page");
   });
 });

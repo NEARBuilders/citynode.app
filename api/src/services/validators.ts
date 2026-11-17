@@ -136,41 +136,38 @@ export const ValidatorsLive = Layer.effect(
           }),
         ),
 
-      list: (filter) =>
-        Effect.gen(function* () {
-          const conditions: SQL[] = [];
-          if (filter?.nodeId !== undefined) {
-            conditions.push(eq(validatorsTable.nodeId, filter.nodeId));
-          }
-          if (filter?.role !== undefined) {
-            conditions.push(eq(validatorsTable.role, filter.role));
-          }
-          const rows = yield* query(() =>
-            conditions.length === 0
-              ? db.select().from(validatorsTable)
-              : db
-                  .select()
-                  .from(validatorsTable)
-                  .where(and(...conditions)),
-          );
-          return rows.map(toRecord);
-        }),
+      list: Effect.fn("ValidatorsService.list")(function* (filter) {
+        const conditions: SQL[] = [];
+        if (filter?.nodeId !== undefined) {
+          conditions.push(eq(validatorsTable.nodeId, filter.nodeId));
+        }
+        if (filter?.role !== undefined) {
+          conditions.push(eq(validatorsTable.role, filter.role));
+        }
+        const rows = yield* query(() =>
+          conditions.length === 0
+            ? db.select().from(validatorsTable)
+            : db
+                .select()
+                .from(validatorsTable)
+                .where(and(...conditions)),
+        );
+        return rows.map(toRecord);
+      }),
 
-      listByNode: (nodeId) =>
-        Effect.gen(function* () {
-          const rows = yield* query(() =>
-            db.select().from(validatorsTable).where(eq(validatorsTable.nodeId, nodeId)),
-          );
-          return rows.map(toRecord);
-        }),
+      listByNode: Effect.fn("ValidatorsService.listByNode")(function* (nodeId) {
+        const rows = yield* query(() =>
+          db.select().from(validatorsTable).where(eq(validatorsTable.nodeId, nodeId)),
+        );
+        return rows.map(toRecord);
+      }),
 
-      getById: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db.select().from(validatorsTable).where(eq(validatorsTable.id, id)).limit(1),
-          );
-          return row ? toRecord(row) : null;
-        }),
+      getById: Effect.fn("ValidatorsService.getById")(function* (id) {
+        const [row] = yield* query(() =>
+          db.select().from(validatorsTable).where(eq(validatorsTable.id, id)).limit(1),
+        );
+        return row ? toRecord(row) : null;
+      }),
 
       update: (id, input) =>
         query(() =>
@@ -220,16 +217,15 @@ export const ValidatorsLive = Layer.effect(
           }),
         ),
 
-      delete: (id) =>
-        Effect.gen(function* () {
-          const rows = yield* query(() =>
-            db
-              .delete(validatorsTable)
-              .where(eq(validatorsTable.id, id))
-              .returning({ deletedId: validatorsTable.id }),
-          );
-          return rows.length > 0;
-        }),
+      delete: Effect.fn("ValidatorsService.delete")(function* (id) {
+        const rows = yield* query(() =>
+          db
+            .delete(validatorsTable)
+            .where(eq(validatorsTable.id, id))
+            .returning({ deletedId: validatorsTable.id }),
+        );
+        return rows.length > 0;
+      }),
 
       setDefault: (nodeId, validatorId) =>
         query(() =>
@@ -268,17 +264,16 @@ export const ValidatorsLive = Layer.effect(
           }),
         ),
 
-      resolveByAccountId: (accountId) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .select()
-              .from(validatorsTable)
-              .where(eq(validatorsTable.accountId, accountId))
-              .limit(1),
-          );
-          return row ? toRecord(row) : null;
-        }),
+      resolveByAccountId: Effect.fn("ValidatorsService.resolveByAccountId")(function* (accountId) {
+        const [row] = yield* query(() =>
+          db
+            .select()
+            .from(validatorsTable)
+            .where(eq(validatorsTable.accountId, accountId))
+            .limit(1),
+        );
+        return row ? toRecord(row) : null;
+      }),
 
       nodeIdsWithValidators: (nodeIds) =>
         nodeIds.length === 0

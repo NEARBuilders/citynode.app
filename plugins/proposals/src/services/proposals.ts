@@ -33,7 +33,7 @@ function lifecycleTimedOut(updatedAt: Date | string): boolean {
   return Date.now() - new Date(updatedAt).getTime() >= LIFECYCLE_TIMEOUT_MS;
 }
 
-// Mirrored in SQL by getProposals' lifecycleStatus filter; both use LIFECYCLE_TIMEOUT_MS.
+// KEEP: Mirrored in SQL by getProposals' lifecycleStatus filter; both use LIFECYCLE_TIMEOUT_MS.
 function applyStalled(row: {
   applyStatus: string;
   updatedAt: Date | string;
@@ -271,911 +271,877 @@ export const ProposalServiceLive = Layer.effect(
     const db = yield* DatabaseTag;
 
     return {
-      propose: (input) =>
-        Effect.gen(function* () {
-          const idempotencyKey = input.idempotencyKey;
+      propose: Effect.fn("ProposalService.propose")(function* (input) {
+        const idempotencyKey = input.idempotencyKey;
 
-          if (idempotencyKey) {
-            const [existingSubmission] = yield* Effect.promise(() =>
-              db
-                .select({
-                  proposalId: proposalSubmissions.proposalId,
-                  entityId: proposalSubmissions.entityId,
-                  submittedBy: proposalSubmissions.submittedBy,
-                })
-                .from(proposalSubmissions)
-                .where(
-                  and(
-                    eq(proposalSubmissions.pluginId, input.pluginId),
-                    eq(proposalSubmissions.idempotencyKey, idempotencyKey),
-                  ),
-                )
-                .limit(1),
-            );
-
-            if (existingSubmission?.proposalId) {
-              if (
-                existingSubmission.entityId !== input.entityId ||
-                existingSubmission.submittedBy !== input.actorId
-              ) {
-                return yield* Effect.fail(
-                  new ORPCError("BAD_REQUEST", {
-                    message: "Idempotency key was already used for another submission",
-                  }),
-                );
-              }
-              const existingProposal = yield* Effect.promise(() =>
-                loadProposal(db, input.pluginId, input.entityId),
-              );
-              if (existingProposal) return existingProposal;
-            }
-          }
-
-          const [existing] = yield* Effect.promise(() =>
+        if (idempotencyKey) {
+          const [existingSubmission] = yield* Effect.promise(() =>
             db
-              .select()
-              .from(proposals)
+              .select({
+                proposalId: proposalSubmissions.proposalId,
+                entityId: proposalSubmissions.entityId,
+                submittedBy: proposalSubmissions.submittedBy,
+              })
+              .from(proposalSubmissions)
               .where(
-                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+                and(
+                  eq(proposalSubmissions.pluginId, input.pluginId),
+                  eq(proposalSubmissions.idempotencyKey, idempotencyKey),
+                ),
               )
               .limit(1),
           );
 
-          const proposalId = existing?.id ?? generateId("prop");
-          const now = nextTimestamp(existing?.updatedAt);
-
-          if (existing && input.requireSameActor) {
-            if (existing.createdBy !== input.actorId) {
+          if (existingSubmission?.proposalId) {
+            if (
+              existingSubmission.entityId !== input.entityId ||
+              existingSubmission.submittedBy !== input.actorId
+            ) {
               return yield* Effect.fail(
-                new ORPCError("FORBIDDEN", {
-                  message: "This community application belongs to another applicant",
+                new ORPCError("BAD_REQUEST", {
+                  message: "Idempotency key was already used for another submission",
                 }),
               );
             }
-            const previous = parseJson(existing.payload);
-            const previousOrgId =
-              previous && typeof previous === "object" && "orgId" in previous
-                ? previous.orgId
-                : null;
-            const nextOrgId =
-              input.payload && typeof input.payload === "object" && "orgId" in input.payload
-                ? input.payload.orgId
-                : null;
-            if (previousOrgId && previousOrgId !== nextOrgId) {
-              return yield* Effect.fail(
-                new ORPCError("FORBIDDEN", {
-                  message: "This community application belongs to another organization",
-                }),
-              );
-            }
+            const existingProposal = yield* Effect.promise(() =>
+              loadProposal(db, input.pluginId, input.entityId),
+            );
+            if (existingProposal) return existingProposal;
           }
+        }
 
-          if (
-            existing &&
-            (existing.applyStatus === "applying" || existing.removeStatus === "removing")
-          ) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
+
+        const proposalId = existing?.id ?? generateId("prop");
+        const now = nextTimestamp(existing?.updatedAt);
+
+        if (existing && input.requireSameActor) {
+          if (existing.createdBy !== input.actorId) {
             return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: "A lifecycle action is already in progress",
+              new ORPCError("FORBIDDEN", {
+                message: "This community application belongs to another applicant",
               }),
             );
           }
-
-          if (
-            existing &&
-            input.resubmissionPolicy === "rejected-only" &&
-            existing.reviewStatus !== "rejected"
-          ) {
+          const previous = parseJson(existing.payload);
+          const previousOrgId =
+            previous && typeof previous === "object" && "orgId" in previous ? previous.orgId : null;
+          const nextOrgId =
+            input.payload && typeof input.payload === "object" && "orgId" in input.payload
+              ? input.payload.orgId
+              : null;
+          if (previousOrgId && previousOrgId !== nextOrgId) {
             return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: resubmissionError(
-                  existing.reviewStatus as ReviewStatus,
-                  (existing.removeStatus as RemoveStatus) ?? "not_started",
-                ),
+              new ORPCError("FORBIDDEN", {
+                message: "This community application belongs to another organization",
               }),
             );
           }
+        }
 
-          if (
-            existing &&
-            input.resubmissionPolicy === "rejected-or-removed" &&
-            existing.reviewStatus !== "rejected" &&
-            existing.reviewStatus !== "removed" &&
-            existing.removeStatus !== "removed"
-          ) {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: resubmissionError(
-                  existing.reviewStatus as ReviewStatus,
-                  (existing.removeStatus as RemoveStatus) ?? "not_started",
-                ),
-              }),
-            );
-          }
-
-          const saved = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              if (!existing) {
-                const inserted = await tx
-                  .insert(proposals)
-                  .values({
-                    id: proposalId,
-                    pluginId: input.pluginId,
-                    entityId: input.entityId,
-                    operation: "create",
-                    payload: serialize(input.payload),
-                    schemaVersion: "1",
-                    createdBy: input.actorId,
-                    reviewStatus: "pending",
-                    applyStatus: "not_started",
-                    removeStatus: "not_started",
-                    rejectionReason: null,
-                    applyError: null,
-                    removeError: null,
-                    appliedResourceId: null,
-                    appliedAt: null,
-                    removedAt: null,
-                    createdAt: now,
-                    updatedAt: now,
-                  })
-                  .onConflictDoNothing()
-                  .returning({ id: proposals.id });
-                if (!inserted[0]) return false;
-              } else {
-                const updated = await tx
-                  .update(proposals)
-                  .set({
-                    payload: serialize(input.payload),
-                    reviewStatus: "pending",
-                    applyStatus: "not_started",
-                    removeStatus: "not_started",
-                    rejectionReason: null,
-                    applyError: null,
-                    removeError: null,
-                    appliedResourceId: null,
-                    applySteps: null,
-                    appliedAt: null,
-                    removedAt: null,
-                    updatedAt: now,
-                  })
-                  .where(
-                    and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                  )
-                  .returning({ id: proposals.id });
-                if (!updated[0]) return false;
-              }
-
-              await tx.insert(proposalSubmissions).values({
-                id: generateId("sub"),
-                proposalId,
-                pluginId: input.pluginId,
-                entityId: input.entityId,
-                submittedBy: input.actorId,
-                source: input.source ?? null,
-                idempotencyKey: input.idempotencyKey ?? null,
-                payload: serialize(input.payload),
-                metadata: input.metadata === undefined ? null : serialize(input.metadata),
-                createdAt: now,
-              });
-
-              await appendAudit(
-                tx,
-                proposalId,
-                input.pluginId,
-                input.entityId,
-                "proposed",
-                input.actorId,
-                actorLabel(input.actor, input.source),
-                { source: input.source ?? null, metadata: input.metadata ?? null },
-              );
-              return true;
+        if (
+          existing &&
+          (existing.applyStatus === "applying" || existing.removeStatus === "removing")
+        ) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "A lifecycle action is already in progress",
             }),
           );
+        }
 
-          if (!saved) return yield* Effect.fail(staleProposal());
-
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
-
-      approve: (input) =>
-        Effect.gen(function* () {
-          const [existing] = yield* Effect.promise(() =>
-            db
-              .select()
-              .from(proposals)
-              .where(
-                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-              )
-              .limit(1),
-          );
-
-          if (!existing) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
-            );
-          }
-
-          if (toIsoString(existing.updatedAt) !== input.expectedUpdatedAt) {
-            return yield* Effect.fail(staleProposal());
-          }
-
-          if (existing.reviewStatus === "removed") {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", { message: "Removed proposals cannot be approved" }),
-            );
-          }
-
-          if (existing.applyStatus === "applied") {
-            return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-          }
-
-          const retrying =
-            existing.reviewStatus === "approved" &&
-            (existing.applyStatus === "failed" || applyStalled(existing));
-          if (existing.reviewStatus !== "pending" && !retrying) {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", { message: "Only pending proposals can be approved" }),
-            );
-          }
-
-          const now = nextTimestamp(existing.updatedAt);
-          const updated = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const rows = await tx
-                .update(proposals)
-                .set({
-                  reviewStatus: "approved",
-                  applyStatus: "applying",
-                  rejectionReason: null,
-                  applyError: null,
-                  applyActivityAt: now,
-                  updatedAt: now,
-                })
-                .where(
-                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                )
-                .returning({ id: proposals.id });
-              if (!rows[0]) return false;
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                retrying ? "apply_retried" : "approved",
-                input.actorId,
-                actorLabel(input.actor),
-              );
-              return true;
+        if (
+          existing &&
+          input.resubmissionPolicy === "rejected-only" &&
+          existing.reviewStatus !== "rejected"
+        ) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: resubmissionError(
+                existing.reviewStatus as ReviewStatus,
+                (existing.removeStatus as RemoveStatus) ?? "not_started",
+              ),
             }),
           );
+        }
 
-          if (!updated) return yield* Effect.fail(staleProposal());
-
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
-
-      reject: (input) =>
-        Effect.gen(function* () {
-          const [existing] = yield* Effect.promise(() =>
-            db
-              .select()
-              .from(proposals)
-              .where(
-                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-              )
-              .limit(1),
-          );
-
-          if (!existing) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
-            );
-          }
-
-          if (toIsoString(existing.updatedAt) !== input.expectedUpdatedAt) {
-            return yield* Effect.fail(staleProposal());
-          }
-
-          const canReject =
-            existing.reviewStatus === "pending" ||
-            (existing.reviewStatus === "approved" &&
-              (existing.applyStatus === "not_started" || existing.applyStatus === "failed"));
-          if (!canReject || existing.applyStatus === "applying") {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message:
-                  "Only pending proposals — or approved proposals that were never applied — can be rejected",
-              }),
-            );
-          }
-
-          const now = nextTimestamp(existing.updatedAt);
-          const reason = input.reason?.trim() || null;
-          const updated = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const rows = await tx
-                .update(proposals)
-                .set({
-                  reviewStatus: "rejected",
-                  applyStatus: "not_started",
-                  rejectionReason: reason,
-                  applyError: null,
-                  applySteps: null,
-                  applyActivityAt: null,
-                  updatedAt: now,
-                })
-                .where(
-                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                )
-                .returning({ id: proposals.id });
-              if (!rows[0]) return false;
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                "rejected",
-                input.actorId,
-                actorLabel(input.actor),
-                { reason },
-              );
-              return true;
+        if (
+          existing &&
+          input.resubmissionPolicy === "rejected-or-removed" &&
+          existing.reviewStatus !== "rejected" &&
+          existing.reviewStatus !== "removed" &&
+          existing.removeStatus !== "removed"
+        ) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: resubmissionError(
+                existing.reviewStatus as ReviewStatus,
+                (existing.removeStatus as RemoveStatus) ?? "not_started",
+              ),
             }),
           );
+        }
 
-          if (!updated) return yield* Effect.fail(staleProposal());
-
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
-
-      reopen: (input) =>
-        Effect.gen(function* () {
-          const [existing] = yield* Effect.promise(() =>
-            db
-              .select()
-              .from(proposals)
-              .where(
-                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-              )
-              .limit(1),
-          );
-
-          if (!existing) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
-            );
-          }
-
-          if (toIsoString(existing.updatedAt) !== input.expectedUpdatedAt) {
-            return yield* Effect.fail(staleProposal());
-          }
-
-          if (existing.reviewStatus !== "rejected") {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: "Only rejected proposals can be reopened",
-              }),
-            );
-          }
-
-          const now = nextTimestamp(existing.updatedAt);
-          const updated = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const rows = await tx
-                .update(proposals)
-                .set({
+        const saved = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            if (!existing) {
+              const inserted = await tx
+                .insert(proposals)
+                .values({
+                  id: proposalId,
+                  pluginId: input.pluginId,
+                  entityId: input.entityId,
+                  operation: "create",
+                  payload: serialize(input.payload),
+                  schemaVersion: "1",
+                  createdBy: input.actorId,
                   reviewStatus: "pending",
+                  applyStatus: "not_started",
+                  removeStatus: "not_started",
                   rejectionReason: null,
                   applyError: null,
+                  removeError: null,
+                  appliedResourceId: null,
+                  appliedAt: null,
+                  removedAt: null,
+                  createdAt: now,
                   updatedAt: now,
                 })
-                .where(
-                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                )
+                .onConflictDoNothing()
                 .returning({ id: proposals.id });
-              if (!rows[0]) return false;
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                "reopened",
-                input.actorId,
-                actorLabel(input.actor),
-              );
-              return true;
-            }),
-          );
-
-          if (!updated) return yield* Effect.fail(staleProposal());
-
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
-
-      remove: (input) =>
-        Effect.gen(function* () {
-          const [existing] = yield* Effect.promise(() =>
-            db
-              .select()
-              .from(proposals)
-              .where(
-                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-              )
-              .limit(1),
-          );
-
-          if (!existing) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
-            );
-          }
-
-          if (toIsoString(existing.updatedAt) !== input.expectedUpdatedAt) {
-            return yield* Effect.fail(staleProposal());
-          }
-
-          if (existing.reviewStatus === "removed" && existing.removeStatus === "removed") {
-            return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-          }
-
-          const retrying =
-            existing.removeStatus === "failed" ||
-            (existing.removeStatus === "removing" && lifecycleTimedOut(existing.updatedAt));
-          if (
-            existing.reviewStatus !== "approved" ||
-            existing.applyStatus !== "applied" ||
-            (existing.removeStatus !== "not_started" && !retrying)
-          ) {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: "Only applied proposals can have approval revoked",
-              }),
-            );
-          }
-
-          const now = nextTimestamp(existing.updatedAt);
-          const updated = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const rows = await tx
-                .update(proposals)
-                .set({ removeStatus: "removing", removeError: null, updatedAt: now })
-                .where(
-                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                )
-                .returning({ id: proposals.id });
-              if (!rows[0]) return false;
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                retrying ? "removal_retried" : "approval_revocation_started",
-                input.actorId,
-                actorLabel(input.actor),
-              );
-              return true;
-            }),
-          );
-
-          if (!updated) return yield* Effect.fail(staleProposal());
-
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
-
-      markApplied: (input) =>
-        Effect.gen(function* () {
-          const [existing] = yield* Effect.promise(() =>
-            db
-              .select()
-              .from(proposals)
-              .where(
-                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-              )
-              .limit(1),
-          );
-
-          if (!existing) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
-            );
-          }
-
-          if (
-            toIsoString(existing.updatedAt) !== input.expectedUpdatedAt ||
-            existing.applyStatus !== "applying"
-          ) {
-            return yield* Effect.fail(staleProposal());
-          }
-
-          const now = nextTimestamp(existing.updatedAt);
-          const updated = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const rows = await tx
+              if (!inserted[0]) return false;
+            } else {
+              const updated = await tx
                 .update(proposals)
                 .set({
-                  applyStatus: "applied",
+                  payload: serialize(input.payload),
+                  reviewStatus: "pending",
+                  applyStatus: "not_started",
+                  removeStatus: "not_started",
+                  rejectionReason: null,
                   applyError: null,
-                  appliedResourceId: input.appliedResourceId ?? existing.appliedResourceId,
-                  appliedAt: now,
+                  removeError: null,
+                  appliedResourceId: null,
+                  applySteps: null,
+                  appliedAt: null,
+                  removedAt: null,
                   updatedAt: now,
                 })
                 .where(
                   and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
                 )
                 .returning({ id: proposals.id });
-              if (!rows[0]) return false;
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                "applied",
-                SYSTEM_ACTOR,
-                SYSTEM_ACTOR_LABEL,
-                {
-                  appliedResourceId: input.appliedResourceId ?? existing.appliedResourceId ?? null,
-                },
-              );
-              return true;
+              if (!updated[0]) return false;
+            }
+
+            await tx.insert(proposalSubmissions).values({
+              id: generateId("sub"),
+              proposalId,
+              pluginId: input.pluginId,
+              entityId: input.entityId,
+              submittedBy: input.actorId,
+              source: input.source ?? null,
+              idempotencyKey: input.idempotencyKey ?? null,
+              payload: serialize(input.payload),
+              metadata: input.metadata === undefined ? null : serialize(input.metadata),
+              createdAt: now,
+            });
+
+            await appendAudit(
+              tx,
+              proposalId,
+              input.pluginId,
+              input.entityId,
+              "proposed",
+              input.actorId,
+              actorLabel(input.actor, input.source),
+              { source: input.source ?? null, metadata: input.metadata ?? null },
+            );
+            return true;
+          }),
+        );
+
+        if (!saved) return yield* Effect.fail(staleProposal());
+
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
+
+      approve: Effect.fn("ProposalService.approve")(function* (input) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
+
+        if (!existing) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
+
+        if (toIsoString(existing.updatedAt) !== input.expectedUpdatedAt) {
+          return yield* Effect.fail(staleProposal());
+        }
+
+        if (existing.reviewStatus === "removed") {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", { message: "Removed proposals cannot be approved" }),
+          );
+        }
+
+        if (existing.applyStatus === "applied") {
+          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+        }
+
+        const retrying =
+          existing.reviewStatus === "approved" &&
+          (existing.applyStatus === "failed" || applyStalled(existing));
+        if (existing.reviewStatus !== "pending" && !retrying) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", { message: "Only pending proposals can be approved" }),
+          );
+        }
+
+        const now = nextTimestamp(existing.updatedAt);
+        const updated = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const rows = await tx
+              .update(proposals)
+              .set({
+                reviewStatus: "approved",
+                applyStatus: "applying",
+                rejectionReason: null,
+                applyError: null,
+                applyActivityAt: now,
+                updatedAt: now,
+              })
+              .where(
+                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+              )
+              .returning({ id: proposals.id });
+            if (!rows[0]) return false;
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              retrying ? "apply_retried" : "approved",
+              input.actorId,
+              actorLabel(input.actor),
+            );
+            return true;
+          }),
+        );
+
+        if (!updated) return yield* Effect.fail(staleProposal());
+
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
+
+      reject: Effect.fn("ProposalService.reject")(function* (input) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
+
+        if (!existing) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
+
+        if (toIsoString(existing.updatedAt) !== input.expectedUpdatedAt) {
+          return yield* Effect.fail(staleProposal());
+        }
+
+        const canReject =
+          existing.reviewStatus === "pending" ||
+          (existing.reviewStatus === "approved" &&
+            (existing.applyStatus === "not_started" || existing.applyStatus === "failed"));
+        if (!canReject || existing.applyStatus === "applying") {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message:
+                "Only pending proposals — or approved proposals that were never applied — can be rejected",
             }),
           );
+        }
 
-          if (!updated) return yield* Effect.fail(staleProposal());
+        const now = nextTimestamp(existing.updatedAt);
+        const reason = input.reason?.trim() || null;
+        const updated = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const rows = await tx
+              .update(proposals)
+              .set({
+                reviewStatus: "rejected",
+                applyStatus: "not_started",
+                rejectionReason: reason,
+                applyError: null,
+                applySteps: null,
+                applyActivityAt: null,
+                updatedAt: now,
+              })
+              .where(
+                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+              )
+              .returning({ id: proposals.id });
+            if (!rows[0]) return false;
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              "rejected",
+              input.actorId,
+              actorLabel(input.actor),
+              { reason },
+            );
+            return true;
+          }),
+        );
 
+        if (!updated) return yield* Effect.fail(staleProposal());
+
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
+
+      reopen: Effect.fn("ProposalService.reopen")(function* (input) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
+
+        if (!existing) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
+
+        if (toIsoString(existing.updatedAt) !== input.expectedUpdatedAt) {
+          return yield* Effect.fail(staleProposal());
+        }
+
+        if (existing.reviewStatus !== "rejected") {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "Only rejected proposals can be reopened",
+            }),
+          );
+        }
+
+        const now = nextTimestamp(existing.updatedAt);
+        const updated = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const rows = await tx
+              .update(proposals)
+              .set({
+                reviewStatus: "pending",
+                rejectionReason: null,
+                applyError: null,
+                updatedAt: now,
+              })
+              .where(
+                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+              )
+              .returning({ id: proposals.id });
+            if (!rows[0]) return false;
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              "reopened",
+              input.actorId,
+              actorLabel(input.actor),
+            );
+            return true;
+          }),
+        );
+
+        if (!updated) return yield* Effect.fail(staleProposal());
+
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
+
+      remove: Effect.fn("ProposalService.remove")(function* (input) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
+
+        if (!existing) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
+
+        if (toIsoString(existing.updatedAt) !== input.expectedUpdatedAt) {
+          return yield* Effect.fail(staleProposal());
+        }
+
+        if (existing.reviewStatus === "removed" && existing.removeStatus === "removed") {
           return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
+        }
 
-      markApplyFailed: (input) =>
-        Effect.gen(function* () {
-          const [existing] = yield* Effect.promise(() =>
-            db
+        const retrying =
+          existing.removeStatus === "failed" ||
+          (existing.removeStatus === "removing" && lifecycleTimedOut(existing.updatedAt));
+        if (
+          existing.reviewStatus !== "approved" ||
+          existing.applyStatus !== "applied" ||
+          (existing.removeStatus !== "not_started" && !retrying)
+        ) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "Only applied proposals can have approval revoked",
+            }),
+          );
+        }
+
+        const now = nextTimestamp(existing.updatedAt);
+        const updated = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const rows = await tx
+              .update(proposals)
+              .set({ removeStatus: "removing", removeError: null, updatedAt: now })
+              .where(
+                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+              )
+              .returning({ id: proposals.id });
+            if (!rows[0]) return false;
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              retrying ? "removal_retried" : "approval_revocation_started",
+              input.actorId,
+              actorLabel(input.actor),
+            );
+            return true;
+          }),
+        );
+
+        if (!updated) return yield* Effect.fail(staleProposal());
+
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
+
+      markApplied: Effect.fn("ProposalService.markApplied")(function* (input) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
+
+        if (!existing) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
+
+        if (
+          toIsoString(existing.updatedAt) !== input.expectedUpdatedAt ||
+          existing.applyStatus !== "applying"
+        ) {
+          return yield* Effect.fail(staleProposal());
+        }
+
+        const now = nextTimestamp(existing.updatedAt);
+        const updated = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const rows = await tx
+              .update(proposals)
+              .set({
+                applyStatus: "applied",
+                applyError: null,
+                appliedResourceId: input.appliedResourceId ?? existing.appliedResourceId,
+                appliedAt: now,
+                updatedAt: now,
+              })
+              .where(
+                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+              )
+              .returning({ id: proposals.id });
+            if (!rows[0]) return false;
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              "applied",
+              SYSTEM_ACTOR,
+              SYSTEM_ACTOR_LABEL,
+              {
+                appliedResourceId: input.appliedResourceId ?? existing.appliedResourceId ?? null,
+              },
+            );
+            return true;
+          }),
+        );
+
+        if (!updated) return yield* Effect.fail(staleProposal());
+
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
+
+      markApplyFailed: Effect.fn("ProposalService.markApplyFailed")(function* (input) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
+
+        if (!existing) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
+
+        if (
+          toIsoString(existing.updatedAt) !== input.expectedUpdatedAt ||
+          existing.applyStatus !== "applying"
+        ) {
+          return yield* Effect.fail(staleProposal());
+        }
+
+        const now = nextTimestamp(existing.updatedAt);
+        const updated = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const rows = await tx
+              .update(proposals)
+              .set({
+                applyStatus: "failed",
+                applyError: input.error,
+                updatedAt: now,
+              })
+              .where(
+                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+              )
+              .returning({ id: proposals.id });
+            if (!rows[0]) return false;
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              "apply_failed",
+              SYSTEM_ACTOR,
+              SYSTEM_ACTOR_LABEL,
+              { error: input.error },
+            );
+            return true;
+          }),
+        );
+
+        if (!updated) return yield* Effect.fail(staleProposal());
+
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
+
+      recordApplyStep: Effect.fn("ProposalService.recordApplyStep")(function* (input) {
+        const recordedAt = DateTime.formatIso(yield* DateTime.now);
+        const outcome = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const [existing] = await tx
               .select()
               .from(proposals)
               .where(
                 and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
               )
-              .limit(1),
-          );
-
-          if (!existing) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
-            );
-          }
-
-          if (
-            toIsoString(existing.updatedAt) !== input.expectedUpdatedAt ||
-            existing.applyStatus !== "applying"
-          ) {
-            return yield* Effect.fail(staleProposal());
-          }
-
-          const now = nextTimestamp(existing.updatedAt);
-          const updated = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const rows = await tx
-                .update(proposals)
-                .set({
-                  applyStatus: "failed",
-                  applyError: input.error,
-                  updatedAt: now,
-                })
-                .where(
-                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                )
-                .returning({ id: proposals.id });
-              if (!rows[0]) return false;
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                "apply_failed",
-                SYSTEM_ACTOR,
-                SYSTEM_ACTOR_LABEL,
-                { error: input.error },
-              );
-              return true;
-            }),
-          );
-
-          if (!updated) return yield* Effect.fail(staleProposal());
-
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
-
-      recordApplyStep: (input) =>
-        Effect.gen(function* () {
-          const recordedAt = DateTime.formatIso(yield* DateTime.now);
-          const outcome = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const [existing] = await tx
-                .select()
-                .from(proposals)
-                .where(
-                  and(
-                    eq(proposals.pluginId, input.pluginId),
-                    eq(proposals.entityId, input.entityId),
-                  ),
-                )
-                .limit(1)
-                .for("update");
-              if (!existing) return "missing" as const;
-              if (existing.reviewStatus !== "approved" || existing.applyStatus !== "applying") {
-                return "inactive" as const;
-              }
-              const activityAt = new Date(recordedAt);
-              const steps = parseApplySteps(existing.applySteps);
-              const previous = steps[input.step];
-              const resourceId =
-                input.resourceId ??
-                (input.status === "completed" || previous?.status === input.status
-                  ? previous?.resourceId
-                  : null) ??
-                null;
-              if (
-                previous?.status === "completed" ||
-                (previous?.status === input.status && previous.resourceId === resourceId)
-              ) {
-                await tx
-                  .update(proposals)
-                  .set({ applyActivityAt: activityAt })
-                  .where(eq(proposals.id, existing.id));
-                return "unchanged" as const;
-              }
-              steps[input.step] = { status: input.status, resourceId, recordedAt };
+              .limit(1)
+              .for("update");
+            if (!existing) return "missing" as const;
+            if (existing.reviewStatus !== "approved" || existing.applyStatus !== "applying") {
+              return "inactive" as const;
+            }
+            const activityAt = new Date(recordedAt);
+            const steps = parseApplySteps(existing.applySteps);
+            const previous = steps[input.step];
+            const resourceId =
+              input.resourceId ??
+              (input.status === "completed" || previous?.status === input.status
+                ? previous?.resourceId
+                : null) ??
+              null;
+            if (
+              previous?.status === "completed" ||
+              (previous?.status === input.status && previous.resourceId === resourceId)
+            ) {
               await tx
                 .update(proposals)
-                .set({ applySteps: serialize(steps), applyActivityAt: activityAt })
+                .set({ applyActivityAt: activityAt })
                 .where(eq(proposals.id, existing.id));
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                "apply_step_recorded",
-                input.actorId,
-                actorLabel(input.actor),
-                { step: input.step, status: input.status, resourceId },
-              );
-              return "recorded" as const;
+              return "unchanged" as const;
+            }
+            steps[input.step] = { status: input.status, resourceId, recordedAt };
+            await tx
+              .update(proposals)
+              .set({ applySteps: serialize(steps), applyActivityAt: activityAt })
+              .where(eq(proposals.id, existing.id));
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              "apply_step_recorded",
+              input.actorId,
+              actorLabel(input.actor),
+              { step: input.step, status: input.status, resourceId },
+            );
+            return "recorded" as const;
+          }),
+        );
+
+        if (outcome === "missing") {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
+        if (outcome === "inactive") {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "Setup steps can only be recorded while an approved proposal is applying",
             }),
           );
+        }
 
-          if (outcome === "missing") {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
-            );
-          }
-          if (outcome === "inactive") {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: "Setup steps can only be recorded while an approved proposal is applying",
-              }),
-            );
-          }
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
 
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
+      markRemoved: Effect.fn("ProposalService.markRemoved")(function* (input) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
 
-      markRemoved: (input) =>
-        Effect.gen(function* () {
-          const [existing] = yield* Effect.promise(() =>
-            db
-              .select()
-              .from(proposals)
+        if (!existing) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
+
+        if (
+          toIsoString(existing.updatedAt) !== input.expectedUpdatedAt ||
+          existing.removeStatus !== "removing"
+        ) {
+          return yield* Effect.fail(staleProposal());
+        }
+
+        const now = nextTimestamp(existing.updatedAt);
+        const updated = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const rows = await tx
+              .update(proposals)
+              .set({
+                reviewStatus: "removed",
+                removeStatus: "removed",
+                removeError: null,
+                removedAt: now,
+                updatedAt: now,
+              })
               .where(
-                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
               )
-              .limit(1),
-          );
-
-          if (!existing) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
+              .returning({ id: proposals.id });
+            if (!rows[0]) return false;
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              "approval_revoked",
+              SYSTEM_ACTOR,
+              SYSTEM_ACTOR_LABEL,
             );
-          }
+            return true;
+          }),
+        );
 
-          if (
-            toIsoString(existing.updatedAt) !== input.expectedUpdatedAt ||
-            existing.removeStatus !== "removing"
-          ) {
-            return yield* Effect.fail(staleProposal());
-          }
+        if (!updated) return yield* Effect.fail(staleProposal());
 
-          const now = nextTimestamp(existing.updatedAt);
-          const updated = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const rows = await tx
-                .update(proposals)
-                .set({
-                  reviewStatus: "removed",
-                  removeStatus: "removed",
-                  removeError: null,
-                  removedAt: now,
-                  updatedAt: now,
-                })
-                .where(
-                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                )
-                .returning({ id: proposals.id });
-              if (!rows[0]) return false;
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                "approval_revoked",
-                SYSTEM_ACTOR,
-                SYSTEM_ACTOR_LABEL,
-              );
-              return true;
-            }),
-          );
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
 
-          if (!updated) return yield* Effect.fail(staleProposal());
+      markRemoveFailed: Effect.fn("ProposalService.markRemoveFailed")(function* (input) {
+        const [existing] = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(proposals)
+            .where(
+              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+            )
+            .limit(1),
+        );
 
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
+        if (!existing) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
+        }
 
-      markRemoveFailed: (input) =>
-        Effect.gen(function* () {
-          const [existing] = yield* Effect.promise(() =>
-            db
-              .select()
-              .from(proposals)
+        if (
+          toIsoString(existing.updatedAt) !== input.expectedUpdatedAt ||
+          existing.removeStatus !== "removing"
+        ) {
+          return yield* Effect.fail(staleProposal());
+        }
+
+        const now = nextTimestamp(existing.updatedAt);
+        const updated = yield* Effect.promise(() =>
+          db.transaction(async (tx) => {
+            const rows = await tx
+              .update(proposals)
+              .set({
+                removeStatus: "failed",
+                removeError: input.error,
+                updatedAt: now,
+              })
               .where(
-                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
               )
-              .limit(1),
-          );
-
-          if (!existing) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", { message: "Proposal not found" }),
+              .returning({ id: proposals.id });
+            if (!rows[0]) return false;
+            await appendAudit(
+              tx,
+              existing.id,
+              input.pluginId,
+              input.entityId,
+              "remove_failed",
+              SYSTEM_ACTOR,
+              SYSTEM_ACTOR_LABEL,
+              { error: input.error },
             );
-          }
+            return true;
+          }),
+        );
 
-          if (
-            toIsoString(existing.updatedAt) !== input.expectedUpdatedAt ||
-            existing.removeStatus !== "removing"
-          ) {
-            return yield* Effect.fail(staleProposal());
-          }
+        if (!updated) return yield* Effect.fail(staleProposal());
 
-          const now = nextTimestamp(existing.updatedAt);
-          const updated = yield* Effect.promise(() =>
-            db.transaction(async (tx) => {
-              const rows = await tx
-                .update(proposals)
-                .set({
-                  removeStatus: "failed",
-                  removeError: input.error,
-                  updatedAt: now,
-                })
-                .where(
-                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                )
-                .returning({ id: proposals.id });
-              if (!rows[0]) return false;
-              await appendAudit(
-                tx,
-                existing.id,
-                input.pluginId,
-                input.entityId,
-                "remove_failed",
-                SYSTEM_ACTOR,
-                SYSTEM_ACTOR_LABEL,
-                { error: input.error },
-              );
-              return true;
-            }),
+        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+      }),
+
+      getProposals: Effect.fn("ProposalService.getProposals")(function* (input) {
+        const pageLimit = Math.min(input.limit ?? 50, 100);
+        const offset = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
+
+        const conditions = [] as any[];
+        if (input.pluginId) conditions.push(eq(proposals.pluginId, input.pluginId));
+        if (input.entityId) conditions.push(eq(proposals.entityId, input.entityId));
+        if (input.reviewStatus) conditions.push(eq(proposals.reviewStatus, input.reviewStatus));
+        if (input.lifecycleStatus) {
+          // KEEP: Same stall rule as applyStalled, in SQL so the filtered page is accurate.
+          const lifecycleCutoff = DateTime.toDateUtc(
+            DateTime.makeUnsafe((yield* Clock.currentTimeMillis) - LIFECYCLE_TIMEOUT_MS),
           );
-
-          if (!updated) return yield* Effect.fail(staleProposal());
-
-          return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
-        }),
-
-      getProposals: (input) =>
-        Effect.gen(function* () {
-          const pageLimit = Math.min(input.limit ?? 50, 100);
-          const offset = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
-
-          const conditions = [] as any[];
-          if (input.pluginId) conditions.push(eq(proposals.pluginId, input.pluginId));
-          if (input.entityId) conditions.push(eq(proposals.entityId, input.entityId));
-          if (input.reviewStatus) conditions.push(eq(proposals.reviewStatus, input.reviewStatus));
-          if (input.lifecycleStatus) {
-            // Same stall rule as applyStalled, in SQL so the filtered page is accurate.
-            const lifecycleCutoff = DateTime.toDateUtc(
-              DateTime.makeUnsafe((yield* Clock.currentTimeMillis) - LIFECYCLE_TIMEOUT_MS),
-            );
-            const applyNeedsAction = [
-              eq(proposals.reviewStatus, "pending"),
-              and(eq(proposals.reviewStatus, "approved"), eq(proposals.applyStatus, "failed")),
-              and(
-                eq(proposals.reviewStatus, "approved"),
-                eq(proposals.applyStatus, "applying"),
-                lte(
-                  sql`greatest(${proposals.updatedAt}, coalesce(${proposals.applyActivityAt}, ${proposals.updatedAt}))`,
-                  lifecycleCutoff,
-                ),
+          const applyNeedsAction = [
+            eq(proposals.reviewStatus, "pending"),
+            and(eq(proposals.reviewStatus, "approved"), eq(proposals.applyStatus, "failed")),
+            and(
+              eq(proposals.reviewStatus, "approved"),
+              eq(proposals.applyStatus, "applying"),
+              lte(
+                sql`greatest(${proposals.updatedAt}, coalesce(${proposals.applyActivityAt}, ${proposals.updatedAt}))`,
+                lifecycleCutoff,
               ),
-            ];
-            conditions.push(
-              input.lifecycleStatus === "needs_review"
-                ? or(...applyNeedsAction)
-                : or(
-                    ...applyNeedsAction,
-                    eq(proposals.removeStatus, "failed"),
-                    and(
-                      eq(proposals.removeStatus, "removing"),
-                      lte(proposals.updatedAt, lifecycleCutoff),
-                    ),
+            ),
+          ];
+          conditions.push(
+            input.lifecycleStatus === "needs_review"
+              ? or(...applyNeedsAction)
+              : or(
+                  ...applyNeedsAction,
+                  eq(proposals.removeStatus, "failed"),
+                  and(
+                    eq(proposals.removeStatus, "removing"),
+                    lte(proposals.updatedAt, lifecycleCutoff),
                   ),
-            );
-          }
-          if (input.query) {
-            const pattern = `%${input.query.trim()}%`;
-            conditions.push(
-              or(
-                ilike(proposals.entityId, pattern),
-                ilike(proposals.createdBy, pattern),
-                ilike(proposals.payload, pattern),
-              ),
-            );
-          }
-          const privatePluginIds = input.privatePluginIds ?? [];
-          if (!input.isAdmin && privatePluginIds.length > 0) {
-            const publicProposal = notInArray(proposals.pluginId, privatePluginIds);
-            conditions.push(
-              input.viewerId
-                ? or(
-                    publicProposal,
-                    and(
-                      inArray(proposals.pluginId, privatePluginIds),
-                      eq(proposals.createdBy, input.viewerId),
-                    ),
-                  )
-                : publicProposal,
-            );
-          }
-
-          const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-          const counted = yield* Effect.promise(() => {
-            const countQuery = db.select({ count: count() }).from(proposals);
-            return whereClause ? countQuery.where(whereClause) : countQuery;
-          });
-          const total = counted[0]?.count ?? 0;
-
-          const rows = yield* Effect.promise(() => {
-            const baseQuery = db
-              .select()
-              .from(proposals)
-              .orderBy(desc(proposals.updatedAt))
-              .limit(pageLimit)
-              .offset(offset);
-            return whereClause ? baseQuery.where(whereClause) : baseQuery;
-          });
-
-          const data = yield* Effect.promise(() =>
-            Promise.all(rows.map((row: any) => loadProposal(db, row.pluginId, row.entityId))),
+                ),
           );
-          const filtered = data.filter(Boolean);
-          const nextOffset = offset + pageLimit;
-          const hasMore = nextOffset < total;
+        }
+        if (input.query) {
+          const pattern = `%${input.query.trim()}%`;
+          conditions.push(
+            or(
+              ilike(proposals.entityId, pattern),
+              ilike(proposals.createdBy, pattern),
+              ilike(proposals.payload, pattern),
+            ),
+          );
+        }
+        const privatePluginIds = input.privatePluginIds ?? [];
+        if (!input.isAdmin && privatePluginIds.length > 0) {
+          const publicProposal = notInArray(proposals.pluginId, privatePluginIds);
+          conditions.push(
+            input.viewerId
+              ? or(
+                  publicProposal,
+                  and(
+                    inArray(proposals.pluginId, privatePluginIds),
+                    eq(proposals.createdBy, input.viewerId),
+                  ),
+                )
+              : publicProposal,
+          );
+        }
 
-          return {
-            data: filtered,
-            meta: {
-              total,
-              hasMore,
-              nextCursor: hasMore ? String(nextOffset) : null,
-            },
-          };
-        }),
+        const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+        const counted = yield* Effect.promise(() => {
+          const countQuery = db.select({ count: count() }).from(proposals);
+          return whereClause ? countQuery.where(whereClause) : countQuery;
+        });
+        const total = counted[0]?.count ?? 0;
+
+        const rows = yield* Effect.promise(() => {
+          const baseQuery = db
+            .select()
+            .from(proposals)
+            .orderBy(desc(proposals.updatedAt))
+            .limit(pageLimit)
+            .offset(offset);
+          return whereClause ? baseQuery.where(whereClause) : baseQuery;
+        });
+
+        const data = yield* Effect.promise(() =>
+          Promise.all(rows.map((row: any) => loadProposal(db, row.pluginId, row.entityId))),
+        );
+        const filtered = data.filter(Boolean);
+        const nextOffset = offset + pageLimit;
+        const hasMore = nextOffset < total;
+
+        return {
+          data: filtered,
+          meta: {
+            total,
+            hasMore,
+            nextCursor: hasMore ? String(nextOffset) : null,
+          },
+        };
+      }),
 
       getMyNodeApplications: (actorId) =>
         Effect.promise(async () => {
@@ -1187,181 +1153,176 @@ export const ProposalServiceLive = Layer.effect(
           return Promise.all(rows.map((row) => loadProposal(db, row.pluginId, row.entityId)));
         }),
 
-      getProposalCount: (input) =>
-        Effect.gen(function* () {
-          const [result] = yield* Effect.promise(() =>
-            db
-              .select({ count: count() })
-              .from(proposalSubmissions)
-              .where(
-                and(
-                  eq(proposalSubmissions.pluginId, input.pluginId),
-                  eq(proposalSubmissions.entityId, input.entityId),
-                ),
+      getProposalCount: Effect.fn("ProposalService.getProposalCount")(function* (input) {
+        const [result] = yield* Effect.promise(() =>
+          db
+            .select({ count: count() })
+            .from(proposalSubmissions)
+            .where(
+              and(
+                eq(proposalSubmissions.pluginId, input.pluginId),
+                eq(proposalSubmissions.entityId, input.entityId),
               ),
-          );
+            ),
+        );
 
-          return {
-            pluginId: input.pluginId,
-            entityId: input.entityId,
-            totalCount: result?.count ?? 0,
-          };
-        }),
+        return {
+          pluginId: input.pluginId,
+          entityId: input.entityId,
+          totalCount: result?.count ?? 0,
+        };
+      }),
 
-      getAuditLog: (input) =>
-        Effect.gen(function* () {
-          const limit = Math.min(input.limit ?? 50, 100);
-          const offset = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
-          const whereClause = and(
-            eq(proposalAuditLog.pluginId, input.pluginId),
-            eq(proposalAuditLog.entityId, input.entityId),
-          );
-          const [counted, rows] = yield* Effect.promise(() =>
-            Promise.all([
-              db.select({ count: count() }).from(proposalAuditLog).where(whereClause),
-              db
-                .select()
-                .from(proposalAuditLog)
-                .where(whereClause)
-                .orderBy(desc(proposalAuditLog.createdAt), desc(proposalAuditLog.id))
-                .limit(limit)
-                .offset(offset),
-            ]),
-          );
-          const total = counted[0]?.count ?? 0;
-          const nextOffset = offset + limit;
-          const hasMore = nextOffset < total;
+      getAuditLog: Effect.fn("ProposalService.getAuditLog")(function* (input) {
+        const limit = Math.min(input.limit ?? 50, 100);
+        const offset = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
+        const whereClause = and(
+          eq(proposalAuditLog.pluginId, input.pluginId),
+          eq(proposalAuditLog.entityId, input.entityId),
+        );
+        const [counted, rows] = yield* Effect.promise(() =>
+          Promise.all([
+            db.select({ count: count() }).from(proposalAuditLog).where(whereClause),
+            db
+              .select()
+              .from(proposalAuditLog)
+              .where(whereClause)
+              .orderBy(desc(proposalAuditLog.createdAt), desc(proposalAuditLog.id))
+              .limit(limit)
+              .offset(offset),
+          ]),
+        );
+        const total = counted[0]?.count ?? 0;
+        const nextOffset = offset + limit;
+        const hasMore = nextOffset < total;
 
-          return {
-            data: rows.map((row: any) => ({
+        return {
+          data: rows.map((row: any) => ({
+            id: row.id,
+            pluginId: row.pluginId,
+            entityId: row.entityId,
+            action: row.action,
+            actor: row.actor,
+            actorLabel: row.actorLabel ?? null,
+            details: parseJson(row.details),
+            createdAt: toIsoString(row.createdAt)!,
+          })),
+          meta: {
+            total,
+            hasMore,
+            nextCursor: hasMore ? String(nextOffset) : null,
+          },
+        };
+      }),
+
+      getSubmissions: Effect.fn("ProposalService.getSubmissions")(function* (input) {
+        const limit = Math.min(input.limit ?? 50, 100);
+        const offset = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
+        const whereClause = and(
+          eq(proposalSubmissions.pluginId, input.pluginId),
+          eq(proposalSubmissions.entityId, input.entityId),
+        );
+        const [counted, rows] = yield* Effect.promise(() =>
+          Promise.all([
+            db.select({ count: count() }).from(proposalSubmissions).where(whereClause),
+            db
+              .select()
+              .from(proposalSubmissions)
+              .where(whereClause)
+              .orderBy(desc(proposalSubmissions.createdAt), desc(proposalSubmissions.id))
+              .limit(limit)
+              .offset(offset),
+          ]),
+        );
+        const total = counted[0]?.count ?? 0;
+        const nextOffset = offset + limit;
+        const hasMore = nextOffset < total;
+
+        return {
+          data: rows.map((row: any) => ({
+            id: row.id,
+            pluginId: row.pluginId,
+            entityId: row.entityId,
+            submittedBy: row.submittedBy,
+            source: row.source ?? null,
+            payload: parseJson(row.payload),
+            metadata: parseJson(row.metadata),
+            createdAt: toIsoString(row.createdAt)!,
+          })),
+          meta: {
+            total,
+            hasMore,
+            nextCursor: hasMore ? String(nextOffset) : null,
+          },
+        };
+      }),
+
+      getMySubmission: Effect.fn("ProposalService.getMySubmission")(function* (input) {
+        if (input.submittedBy.length === 0) return { hasSubmitted: false };
+        const [submission] = yield* Effect.promise(() =>
+          db
+            .select({ id: proposalSubmissions.id })
+            .from(proposalSubmissions)
+            .where(
+              and(
+                eq(proposalSubmissions.pluginId, input.pluginId),
+                eq(proposalSubmissions.entityId, input.entityId),
+                inArray(proposalSubmissions.submittedBy, input.submittedBy),
+              ),
+            )
+            .limit(1),
+        );
+        return { hasSubmitted: Boolean(submission) };
+      }),
+
+      getReviewHistory: Effect.fn("ProposalService.getReviewHistory")(function* (input) {
+        const pageLimit = Math.min(input.limit ?? 50, 100);
+        const offset = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
+        const conditions = [inArray(proposalAuditLog.action, ["approved", "rejected"])];
+        if (input.pluginId) conditions.push(eq(proposalAuditLog.pluginId, input.pluginId));
+        const whereClause = and(...conditions);
+
+        const [counted, rows] = yield* Effect.promise(() =>
+          Promise.all([
+            db.select({ count: count() }).from(proposalAuditLog).where(whereClause),
+            db
+              .select()
+              .from(proposalAuditLog)
+              .where(whereClause)
+              .orderBy(desc(proposalAuditLog.createdAt))
+              .limit(pageLimit)
+              .offset(offset),
+          ]),
+        );
+        const total = counted[0]?.count ?? 0;
+        const entries = yield* Effect.promise(() =>
+          Promise.all(
+            rows.map(async (row: any) => ({
               id: row.id,
               pluginId: row.pluginId,
               entityId: row.entityId,
-              action: row.action,
+              action: row.action as "approved" | "rejected",
               actor: row.actor,
               actorLabel: row.actorLabel ?? null,
               details: parseJson(row.details),
               createdAt: toIsoString(row.createdAt)!,
+              proposal: await loadProposal(db, row.pluginId, row.entityId),
             })),
-            meta: {
-              total,
-              hasMore,
-              nextCursor: hasMore ? String(nextOffset) : null,
-            },
-          };
-        }),
+          ),
+        );
+        const data = entries.filter((entry: any) => entry.proposal);
+        const nextOffset = offset + pageLimit;
+        const hasMore = nextOffset < total;
 
-      getSubmissions: (input) =>
-        Effect.gen(function* () {
-          const limit = Math.min(input.limit ?? 50, 100);
-          const offset = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
-          const whereClause = and(
-            eq(proposalSubmissions.pluginId, input.pluginId),
-            eq(proposalSubmissions.entityId, input.entityId),
-          );
-          const [counted, rows] = yield* Effect.promise(() =>
-            Promise.all([
-              db.select({ count: count() }).from(proposalSubmissions).where(whereClause),
-              db
-                .select()
-                .from(proposalSubmissions)
-                .where(whereClause)
-                .orderBy(desc(proposalSubmissions.createdAt), desc(proposalSubmissions.id))
-                .limit(limit)
-                .offset(offset),
-            ]),
-          );
-          const total = counted[0]?.count ?? 0;
-          const nextOffset = offset + limit;
-          const hasMore = nextOffset < total;
-
-          return {
-            data: rows.map((row: any) => ({
-              id: row.id,
-              pluginId: row.pluginId,
-              entityId: row.entityId,
-              submittedBy: row.submittedBy,
-              source: row.source ?? null,
-              payload: parseJson(row.payload),
-              metadata: parseJson(row.metadata),
-              createdAt: toIsoString(row.createdAt)!,
-            })),
-            meta: {
-              total,
-              hasMore,
-              nextCursor: hasMore ? String(nextOffset) : null,
-            },
-          };
-        }),
-
-      getMySubmission: (input) =>
-        Effect.gen(function* () {
-          if (input.submittedBy.length === 0) return { hasSubmitted: false };
-          const [submission] = yield* Effect.promise(() =>
-            db
-              .select({ id: proposalSubmissions.id })
-              .from(proposalSubmissions)
-              .where(
-                and(
-                  eq(proposalSubmissions.pluginId, input.pluginId),
-                  eq(proposalSubmissions.entityId, input.entityId),
-                  inArray(proposalSubmissions.submittedBy, input.submittedBy),
-                ),
-              )
-              .limit(1),
-          );
-          return { hasSubmitted: Boolean(submission) };
-        }),
-
-      getReviewHistory: (input) =>
-        Effect.gen(function* () {
-          const pageLimit = Math.min(input.limit ?? 50, 100);
-          const offset = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
-          const conditions = [inArray(proposalAuditLog.action, ["approved", "rejected"])];
-          if (input.pluginId) conditions.push(eq(proposalAuditLog.pluginId, input.pluginId));
-          const whereClause = and(...conditions);
-
-          const [counted, rows] = yield* Effect.promise(() =>
-            Promise.all([
-              db.select({ count: count() }).from(proposalAuditLog).where(whereClause),
-              db
-                .select()
-                .from(proposalAuditLog)
-                .where(whereClause)
-                .orderBy(desc(proposalAuditLog.createdAt))
-                .limit(pageLimit)
-                .offset(offset),
-            ]),
-          );
-          const total = counted[0]?.count ?? 0;
-          const entries = yield* Effect.promise(() =>
-            Promise.all(
-              rows.map(async (row: any) => ({
-                id: row.id,
-                pluginId: row.pluginId,
-                entityId: row.entityId,
-                action: row.action as "approved" | "rejected",
-                actor: row.actor,
-                actorLabel: row.actorLabel ?? null,
-                details: parseJson(row.details),
-                createdAt: toIsoString(row.createdAt)!,
-                proposal: await loadProposal(db, row.pluginId, row.entityId),
-              })),
-            ),
-          );
-          const data = entries.filter((entry: any) => entry.proposal);
-          const nextOffset = offset + pageLimit;
-          const hasMore = nextOffset < total;
-
-          return {
-            data,
-            meta: {
-              total,
-              hasMore,
-              nextCursor: hasMore ? String(nextOffset) : null,
-            },
-          };
-        }),
+        return {
+          data,
+          meta: {
+            total,
+            hasMore,
+            nextCursor: hasMore ? String(nextOffset) : null,
+          },
+        };
+      }),
     };
   }),
 );

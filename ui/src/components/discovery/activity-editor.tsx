@@ -353,6 +353,7 @@ export function ActivityEditor({
                           activity={a}
                           submittedAt={reported.get(a.id)?.submittedAt}
                           reviewedAt={reported.get(a.id)?.reviewedAt}
+                          source={reported.get(a.id)?.source}
                           now={now}
                         />
                       )}

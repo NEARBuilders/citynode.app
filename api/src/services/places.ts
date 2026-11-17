@@ -1,5 +1,5 @@
 import type { ORPCError } from "@orpc/server";
-import { eq, isNull, type SQL, sql } from "drizzle-orm";
+import { eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -37,10 +37,16 @@ export interface PlaceResolution {
   community: PlaceCommunity | null;
 }
 
+interface PlaceBoundaryRecord {
+  placeId: string;
+  boundary: PlaceBoundary | null;
+}
+
 export interface PlacesService {
   resolve(input: { place: string }): PlaceEffect<PlaceResolution | null>;
   getById(id: string): PlaceEffect<PlaceRecord | null>;
   boundary(id: string): PlaceEffect<PlaceBoundary | null>;
+  boundaries(placeIds: string[]): PlaceEffect<PlaceBoundaryRecord[]>;
   roots(): PlaceEffect<PlaceRecord[]>;
   children(id: string): PlaceEffect<PlaceRecord[]>;
   ancestorIds(id: string): PlaceEffect<string[]>;
@@ -245,6 +251,16 @@ export const PlacesLive = Layer.effect(
           );
           return row?.boundary ?? null;
         }),
+
+      boundaries: (placeIds) =>
+        query(() =>
+          db
+            .select({ id: placesTable.id, boundary: placesTable.boundary })
+            .from(placesTable)
+            .where(inArray(placesTable.id, placeIds)),
+        ).pipe(
+          Effect.map((rows) => rows.map((row) => ({ placeId: row.id, boundary: row.boundary }))),
+        ),
 
       roots: () =>
         query(() => db.select().from(placesTable).where(isNull(placesTable.parentId))).pipe(
