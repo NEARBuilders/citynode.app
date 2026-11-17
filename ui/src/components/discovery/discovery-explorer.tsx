@@ -138,7 +138,8 @@ export function DiscoveryExplorer({
   const nodes = list.data ?? [];
   const query = (search.query ?? "").trim().toLowerCase();
   const scoped = !!(search.region || search.active || search.upcoming);
-  const places = (catalog.data ?? []).filter((place) => {
+  const catalogPlaces = catalog.data ?? [];
+  const placePins = catalogPlaces.filter((place) => {
     if (scoped) return false;
     return query ? place.name.toLowerCase().includes(query) || place.slug.includes(query) : true;
   });
@@ -281,8 +282,9 @@ export function DiscoveryExplorer({
                 <GeographicMap
                   nodes={nodes}
                   listed={regions.data ?? nodes}
-                  places={places}
-                  worldCatalog={catalog.isSuccess}
+                  places={catalogPlaces}
+                  placePins={placePins}
+                  worldCatalog={!filtered}
                   onSelect={select}
                   onSelectPlace={(slug) => go({ to: "/places/$slug", params: { slug } })}
                   onOpenCommunity={(slug) => go({ to: "/n/$slug", params: { slug } })}

@@ -52,8 +52,13 @@ function coverListed(nodes: Node[], places: Map<string, PlacePin>) {
   return { covered, listedNodes };
 }
 
-function toPoints(nodes: Node[], places: PlacePin[], listed: Node[]): MapPoint[] {
-  const byId = new Map(places.map((place) => [place.id, place]));
+function toPoints(
+  nodes: Node[],
+  catalog: PlacePin[],
+  listed: Node[],
+  placePins: PlacePin[],
+): MapPoint[] {
+  const byId = new Map(catalog.map((place) => [place.id, place]));
   const { covered, listedNodes } = coverListed(listed, byId);
   const community = nodes.flatMap((node) => {
     const coords = pinCoords(node, byId);
@@ -74,7 +79,7 @@ function toPoints(nodes: Node[], places: PlacePin[], listed: Node[]): MapPoint[]
         ]
       : [];
   });
-  const available = places.flatMap((place) =>
+  const available = placePins.flatMap((place) =>
     covered.has(place.id) || (place.nodeId && listedNodes.has(place.nodeId))
       ? []
       : [
@@ -87,7 +92,7 @@ function toPoints(nodes: Node[], places: PlacePin[], listed: Node[]): MapPoint[]
             nodeId: place.nodeId ?? undefined,
             slug: place.slug,
             placeId: place.id,
-            location: place.label,
+            location: place.name,
             activated: place.activated,
           },
         ],
@@ -98,6 +103,7 @@ function toPoints(nodes: Node[], places: PlacePin[], listed: Node[]): MapPoint[]
 export function GeographicMap({
   nodes,
   places,
+  placePins,
   listed,
   worldCatalog,
   onSelect,
@@ -107,6 +113,7 @@ export function GeographicMap({
 }: {
   nodes: Node[];
   places: PlacePin[];
+  placePins?: PlacePin[];
   listed?: Node[];
   worldCatalog?: boolean;
   onSelect: (id: string) => void;
@@ -146,7 +153,10 @@ export function GeographicMap({
   openCommunity.current = onOpenCommunity;
   selected.current = selectedId;
   zoomRef.current = zoom;
-  const points = useMemo(() => toPoints(nodes, places, listed ?? nodes), [nodes, places, listed]);
+  const points = useMemo(
+    () => toPoints(nodes, places, listed ?? nodes, placePins ?? places),
+    [nodes, places, listed, placePins],
+  );
   pointsRef.current = points;
   worldRef.current = worldCatalog === true;
   const [catalog, setCatalog] = useState<Map<string, Boundary | null>>(() => new Map());

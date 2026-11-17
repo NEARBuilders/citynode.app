@@ -8,8 +8,10 @@ import {
   type PlaceBoundary,
   placeAliases as placeAliasesTable,
   places as placesTable,
+  tenants as tenantsTable,
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
+import { listedNode } from "./nodes";
 
 export type PlaceEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
@@ -86,6 +88,13 @@ function toPlaceRecord(row: PlaceRow): PlaceRecord {
 function toTimestampIso(value: Date | string | null): string | null {
   if (value instanceof Date) return value.toISOString();
   return value ? String(value) : null;
+}
+
+function listedCommunity(row: {
+  nodeId: string | null;
+  tenantId: string | null;
+}): row is { nodeId: string; tenantId: string } {
+  return Boolean(row.nodeId && row.tenantId);
 }
 
 function aliasCandidates(input: string): string[] {
@@ -193,10 +202,19 @@ export const PlacesLive = Layer.effect(
                 updatedAt: placesTable.updatedAt,
                 nodeId: nodesTable.id,
                 activatedAt: nodesTable.activatedAt,
+                tenantId: tenantsTable.id,
                 memberCount: memberCountObservations.count,
               })
               .from(placesTable)
-              .leftJoin(nodesTable, eq(nodesTable.placeId, placesTable.id))
+              .leftJoin(nodesTable, and(eq(nodesTable.placeId, placesTable.id), listedNode))
+              .leftJoin(
+                tenantsTable,
+                and(
+                  eq(nodesTable.tenantId, tenantsTable.id),
+                  eq(tenantsTable.status, "active"),
+                  isNull(tenantsTable.deletedAt),
+                ),
+              )
               .leftJoin(
                 memberCountObservations,
                 eq(memberCountObservations.organizationId, nodesTable.orgId),
@@ -236,14 +254,13 @@ export const PlacesLive = Layer.effect(
               .where(eq(placeAliasesTable.placeId, place.id)),
           );
 
-          const community: PlaceCommunity | null =
-            row.nodeId && row.activatedAt
-              ? {
-                  nodeId: row.nodeId,
-                  activatedAt: toTimestampIso(row.activatedAt),
-                  memberCount: row.memberCount ?? null,
-                }
-              : null;
+          const community: PlaceCommunity | null = listedCommunity(row)
+            ? {
+                nodeId: row.nodeId,
+                activatedAt: toTimestampIso(row.activatedAt),
+                memberCount: row.memberCount ?? null,
+              }
+            : null;
 
           return { place, aliases: aliasRows.map((a) => a.value), community };
         }),
@@ -289,10 +306,18 @@ export const PlacesLive = Layer.effect(
               longitude: placesTable.longitude,
               label: placesTable.label,
               nodeId: nodesTable.id,
-              activatedAt: nodesTable.activatedAt,
+              tenantId: tenantsTable.id,
             })
             .from(placesTable)
-            .leftJoin(nodesTable, eq(nodesTable.placeId, placesTable.id))
+            .leftJoin(nodesTable, and(eq(nodesTable.placeId, placesTable.id), listedNode))
+            .leftJoin(
+              tenantsTable,
+              and(
+                eq(nodesTable.tenantId, tenantsTable.id),
+                eq(tenantsTable.status, "active"),
+                isNull(tenantsTable.deletedAt),
+              ),
+            )
             .where(and(isNotNull(placesTable.latitude), isNotNull(placesTable.longitude))),
         ).pipe(
           Effect.map((rows) =>
@@ -307,8 +332,8 @@ export const PlacesLive = Layer.effect(
                       latitude: row.latitude,
                       longitude: row.longitude,
                       label: row.label,
-                      activated: Boolean(row.nodeId && row.activatedAt),
-                      nodeId: row.nodeId && row.activatedAt ? row.nodeId : null,
+                      activated: listedCommunity(row),
+                      nodeId: listedCommunity(row) ? row.nodeId : null,
                     },
                   ],
             ),

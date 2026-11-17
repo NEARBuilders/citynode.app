@@ -7,6 +7,7 @@ import { PlaceOutlineMap } from "@/components/discovery/place-outline-map";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
+import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import { placeBoundaryQueryOptions, resolvePlaceQueryOptions } from "@/lib/queries/places";
 import { socialMeta } from "@/lib/social-meta";
@@ -98,7 +99,7 @@ function PlacePage() {
     <PageContainer>
       <header className="flex flex-col gap-6" data-testid="place-page.header">
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          {place.label ? <span>{place.label}</span> : null}
+          {place.label ? <span>{nodeKindLabel(place.label, undefined, translate)}</span> : null}
           <span className="flex min-w-0 items-center gap-1.5">
             <MapPinIcon className="size-4 shrink-0" />
             {place.name}

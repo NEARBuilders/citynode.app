@@ -132,6 +132,7 @@ async function showPlace(slug: string) {
 it("shows an unactivated place with a start-community action", async () => {
   mockApi(null);
   await showPlace("nigeria");
+  expect((await screen.findByTestId("place-page.header")).textContent).toContain("Country");
   expect((await screen.findByTestId("place-page.header")).textContent).toContain("Nigeria");
   expect(screen.getByText("No community yet.")).toBeTruthy();
   expect(screen.getByTestId("place-page.start-community").getAttribute("href")).toBe(

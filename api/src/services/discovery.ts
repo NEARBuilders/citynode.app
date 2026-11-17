@@ -139,14 +139,11 @@ const placeLabelByKind: Record<string, string> = {
   city: "city",
 };
 
-export async function adoptCatalogPlace(
+async function matchCatalogPlace(
   db: Database,
-  node: { id: string; placeId: string | null },
-  place: string,
+  location: string,
   kind: string | null,
-): Promise<void> {
-  const location = place.trim();
-  if (!location || node.placeId !== null) return;
+): Promise<{ id: string } | undefined> {
   const label = kind ? placeLabelByKind[kind] : undefined;
   const [matched] = await db
     .select({ id: placesTable.id })
@@ -157,15 +154,39 @@ export async function adoptCatalogPlace(
           SELECT place_id FROM ${placeAliasesTable} WHERE value = ${location}
         ))`,
         label ? eq(placesTable.label, label) : undefined,
-        sql`NOT EXISTS (SELECT 1 FROM ${nodes} WHERE ${nodes.placeId} = ${placesTable.id})`,
       ),
     )
     .limit(1);
+  return matched;
+}
+
+export async function adoptCatalogPlace(
+  db: Database,
+  node: { id: string; placeId: string | null },
+  place: string,
+  kind: string | null,
+): Promise<void> {
+  const location = place.trim();
+  if (node.placeId !== null) {
+    if (location) {
+      const current = await matchCatalogPlace(db, location, kind);
+      if (current?.id === node.placeId) return;
+    }
+    await db.update(nodes).set({ placeId: null }).where(eq(nodes.id, node.id));
+  }
+  if (!location) return;
+  const matched = await matchCatalogPlace(db, location, kind);
   if (!matched) return;
   await db
     .update(nodes)
     .set({ placeId: matched.id })
-    .where(and(eq(nodes.id, node.id), isNull(nodes.placeId)));
+    .where(
+      and(
+        eq(nodes.id, node.id),
+        isNull(nodes.placeId),
+        sql`NOT EXISTS (SELECT 1 FROM ${nodes} AS taken WHERE taken.place_id = ${matched.id})`,
+      ),
+    );
 }
 
 function createDiscovery(db: Database, lumaKeys: string) {

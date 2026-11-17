@@ -103,16 +103,39 @@ describe("adoptCatalogPlace", () => {
       expect(await nodePlace()).toBe(countryId);
     }));
 
-  it("leaves unknown locations and already-linked nodes alone", () =>
-    run(async ({ db, nodeId, countryId, nodePlace }) => {
+  it("leaves unknown locations unlinked", () =>
+    run(async ({ db, nodeId, nodePlace }) => {
       await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "Atlantis", "country");
       expect(await nodePlace()).toBeNull();
+    }));
 
+  it("keeps the link when the location still matches the adopted place", () =>
+    run(async ({ db, nodeId, countryId, nodePlace }) => {
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
+      await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "India", "country");
+      expect(await nodePlace()).toBe(countryId);
+    }));
+
+  it("relinks when the location matches a free catalog place", () =>
+    run(async ({ db, nodeId, countryId, nodePlace }) => {
+      const [pakistan] = await db
+        .insert(placesTable)
+        .values({ slug: "pakistan", name: "Pakistan", label: "country" })
+        .returning();
       await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
       expect(await nodePlace()).toBe(countryId);
 
       await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "Pakistan", "country");
+      expect(await nodePlace()).toBe(pakistan!.id);
+    }));
+
+  it("clears the link when the location no longer matches a catalog place", () =>
+    run(async ({ db, nodeId, countryId, nodePlace }) => {
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
       expect(await nodePlace()).toBe(countryId);
+
+      await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "Pakistan", "country");
+      expect(await nodePlace()).toBeNull();
     }));
 
   it("only adopts places that match the node kind", () =>
@@ -131,6 +154,35 @@ describe("adoptCatalogPlace", () => {
         placeId: countryId,
       });
       await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
+      expect(await nodePlace()).toBeNull();
+    }));
+
+  it("clears the link when the location is emptied", () =>
+    run(async ({ db, nodeId, countryId, nodePlace }) => {
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
+      expect(await nodePlace()).toBe(countryId);
+
+      await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "  ", "country");
+      expect(await nodePlace()).toBeNull();
+    }));
+
+  it("unlinks when the new location is already taken", () =>
+    run(async ({ db, tenantId, nodeId, countryId, nodePlace }) => {
+      const [pakistan] = await db
+        .insert(placesTable)
+        .values({ slug: "pakistan", name: "Pakistan", label: "country" })
+        .returning();
+      await db.insert(nodesTable).values({
+        slug: `linked-${crypto.randomUUID()}`,
+        name: "Linked",
+        tenantId,
+        parentId: null,
+        placeId: pakistan!.id,
+      });
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
+      expect(await nodePlace()).toBe(countryId);
+
+      await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "Pakistan", "country");
       expect(await nodePlace()).toBeNull();
     }));
 });

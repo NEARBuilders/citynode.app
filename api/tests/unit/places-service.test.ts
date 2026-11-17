@@ -10,6 +10,7 @@ import {
   nodes as nodesTable,
   placeAliases,
   places as placesTable,
+  tenants as tenantsTable,
 } from "@/db/schema";
 import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { PlacesLive, type PlacesService, PlacesTag } from "@/services/places";
@@ -102,6 +103,43 @@ async function insertAlias(
   await db.insert(placeAliases).values({ value, kind, placeId });
 }
 
+async function insertListedNode(
+  db: Database,
+  values: {
+    slug: string;
+    name: string;
+    placeId?: string;
+    orgId?: string;
+    activatedAt?: Date;
+    activatedBy?: string;
+    tenantStatus?: "active" | "pending" | "suspended" | "pending_deletion";
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const [tenant] = await db
+    .insert(tenantsTable)
+    .values({
+      accountId: `${values.slug}-${crypto.randomUUID()}.near`,
+      name: values.name,
+      status: values.tenantStatus ?? "active",
+    })
+    .returning();
+  const [node] = await db
+    .insert(nodesTable)
+    .values({
+      slug: values.slug,
+      name: values.name,
+      placeId: values.placeId,
+      orgId: values.orgId,
+      activatedAt: values.activatedAt,
+      activatedBy: values.activatedBy,
+      tenantId: tenant!.id,
+      metadata: values.metadata ?? {},
+    })
+    .returning();
+  return node!;
+}
+
 describe("PlacesService", () => {
   it("resolve by slug returns the place with aliases and no community", async () => {
     const layer = freshLayer();
@@ -168,7 +206,7 @@ describe("PlacesService", () => {
       insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
     );
     await runService(layer, ({ db }) =>
-      db.insert(nodesTable).values({
+      insertListedNode(db, {
         slug: "nigeria",
         name: "Nigeria",
         placeId: place.id,
@@ -199,7 +237,7 @@ describe("PlacesService", () => {
       insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
     );
     await runService(layer, ({ db }) =>
-      db.insert(nodesTable).values({
+      insertListedNode(db, {
         slug: "nigeria",
         name: "Nigeria",
         placeId: place.id,
@@ -222,6 +260,42 @@ describe("PlacesService", () => {
     );
     await runService(layer, ({ db }) =>
       db.insert(nodesTable).values({ slug: "nigeria", name: "Nigeria", placeId: place.id }),
+    );
+
+    const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
+    expect(resolved?.community).toBeNull();
+  });
+
+  it("resolve treats a listed active node as the place community without activatedAt", async () => {
+    const layer = freshLayer();
+    const place = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
+    );
+    const node = await runService(layer, ({ db }) =>
+      insertListedNode(db, { slug: "nigeria", name: "Nigeria", placeId: place.id }),
+    );
+
+    const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
+    expect(resolved?.community).toEqual({
+      nodeId: node.id,
+      activatedAt: null,
+      memberCount: null,
+    });
+  });
+
+  it("resolve hides a linked community whose tenant is not listed", async () => {
+    const layer = freshLayer();
+    const place = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
+    );
+    await runService(layer, ({ db }) =>
+      insertListedNode(db, {
+        slug: "nigeria",
+        name: "Nigeria",
+        placeId: place.id,
+        activatedAt: new Date("2026-01-15T00:00:00Z"),
+        tenantStatus: "suspended",
+      }),
     );
 
     const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
@@ -356,7 +430,7 @@ describe("PlacesService", () => {
     );
     await runService(layer, ({ db }) => insertPlace(db, { slug: "unpinned", name: "Unpinned" }));
     await runService(layer, ({ db }) =>
-      db.insert(nodesTable).values({
+      insertListedNode(db, {
         slug: "nigeria",
         name: "Nigeria",
         placeId: nigeria.id,
@@ -381,13 +455,70 @@ describe("PlacesService", () => {
     });
   });
 
-  it("mapPins treats a node without activatedAt as available", async () => {
+  it("mapPins treats a node without a listed tenant as available", async () => {
     const layer = freshLayer();
     const ghana = await runService(layer, ({ db }) =>
       insertPlace(db, { slug: "ghana", name: "Ghana", latitude: 7.95, longitude: -1.02 }),
     );
     await runService(layer, ({ db }) =>
       db.insert(nodesTable).values({ slug: "ghana", name: "Ghana", placeId: ghana.id }),
+    );
+
+    const pins = await runService(layer, ({ places }) => places.mapPins());
+    expect(pins).toEqual([
+      expect.objectContaining({ slug: "ghana", activated: false, nodeId: null }),
+    ]);
+  });
+
+  it("mapPins treats a listed active node without activatedAt as activated", async () => {
+    const layer = freshLayer();
+    const ghana = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "ghana", name: "Ghana", latitude: 7.95, longitude: -1.02 }),
+    );
+    const node = await runService(layer, ({ db }) =>
+      insertListedNode(db, { slug: "ghana", name: "Ghana", placeId: ghana.id }),
+    );
+
+    const pins = await runService(layer, ({ places }) => places.mapPins());
+    expect(pins).toEqual([
+      expect.objectContaining({ slug: "ghana", activated: true, nodeId: node.id }),
+    ]);
+  });
+
+  it("mapPins hides a platform node from activated pins", async () => {
+    const layer = freshLayer();
+    const ghana = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "ghana", name: "Ghana", latitude: 7.95, longitude: -1.02 }),
+    );
+    await runService(layer, ({ db }) =>
+      insertListedNode(db, {
+        slug: "ghana",
+        name: "Ghana",
+        placeId: ghana.id,
+        activatedAt: new Date("2026-01-15T00:00:00Z"),
+        metadata: { kind: "platform" },
+      }),
+    );
+
+    const pins = await runService(layer, ({ places }) => places.mapPins());
+    expect(pins).toEqual([
+      expect.objectContaining({ slug: "ghana", activated: false, nodeId: null }),
+    ]);
+  });
+
+  it("mapPins hides a suspended tenant from activated pins", async () => {
+    const layer = freshLayer();
+    const ghana = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "ghana", name: "Ghana", latitude: 7.95, longitude: -1.02 }),
+    );
+    await runService(layer, ({ db }) =>
+      insertListedNode(db, {
+        slug: "ghana",
+        name: "Ghana",
+        placeId: ghana.id,
+        activatedAt: new Date("2026-01-15T00:00:00Z"),
+        tenantStatus: "suspended",
+      }),
     );
 
     const pins = await runService(layer, ({ places }) => places.mapPins());
