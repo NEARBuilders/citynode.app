@@ -111,10 +111,11 @@ export function buildBackfillPlan(inputs: BackfillInputs): BackfillPlan {
 
   const curated: PlaceUpsertRow[] = [];
   const curatedBySlug = new Map<string, PlaceUpsertRow>();
-  // Every place slug this plan links a node to. Two nodes on one place would
-  // trip the unique nodes.place_id index mid-run, so matches only claim free
-  // places and everything else falls back to a curated row.
-  const claimedSlugs = new Set<string>();
+  // Every place slug a node holds, from this plan or an earlier run. Two nodes
+  // on one place would trip the unique nodes.place_id index mid-run, so
+  // matches only claim free places and everything else falls back to a
+  // curated row.
+  const claimedSlugs = new Set<string>(Object.values(linkedPlaceSlugByNodeId));
   const plans = new Map<string, { placeSlug: string; curatedRow: PlaceUpsertRow | null }>();
 
   const resolveParentPlaceSlug = (node: BackfillNode): string | null => {
@@ -165,19 +166,21 @@ export function buildBackfillPlan(inputs: BackfillInputs): BackfillPlan {
     const geo = inputs.geoByNodeId[node.id] ?? null;
     let result: { placeSlug: string; curatedRow: PlaceUpsertRow | null };
 
-    const exact = bySlug.get(node.slug);
+    const free = (place: ExistingPlace | undefined) =>
+      place && !claimedSlugs.has(place.slug) ? place : undefined;
+    const exact = free(bySlug.get(node.slug));
     if (exact) {
       claimedSlugs.add(exact.slug);
       result = { placeSlug: exact.slug, curatedRow: null };
     } else {
       const aliasPlaceId = inputs.aliases.find((alias) => alias.value === node.slug)?.placeId;
-      const aliasPlace = aliasPlaceId ? byId.get(aliasPlaceId) : undefined;
+      const aliasPlace = free(aliasPlaceId ? byId.get(aliasPlaceId) : undefined);
       if (aliasPlace) {
         claimedSlugs.add(aliasPlace.slug);
         result = { placeSlug: aliasPlace.slug, curatedRow: null };
       } else {
         const nameSlug = slugify(node.name);
-        const byName = bySlug.get(nameSlug);
+        const byName = free(bySlug.get(nameSlug));
         if (byName) {
           claimedSlugs.add(byName.slug);
           result = { placeSlug: byName.slug, curatedRow: null };
