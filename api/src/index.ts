@@ -2187,6 +2187,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 community,
                 daoAccountId: application.accountId,
                 reviewerUserId,
+                applicantUserId: application.applicantUserId,
               });
             },
             catch: failure("Could not link the DAO to the community"),

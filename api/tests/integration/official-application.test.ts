@@ -224,6 +224,8 @@ beforeAll(async () => {
       { slug: "enugu", name: "Enugu", label: "city" },
       { slug: "jos", name: "Jos", label: "city" },
       { slug: "kaduna", name: "Kaduna", label: "city" },
+      { slug: "owerri", name: "Owerri", label: "city" },
+      { slug: "calabar", name: "Calabar", label: "city" },
     ]);
   });
   await getPluginClient(undefined, {
@@ -231,7 +233,7 @@ beforeAll(async () => {
     proposals: { client: proposalsStub, router: {} },
   } as never);
   const activator = await getPluginClient(authedContext("activator"));
-  for (const place of ["lagos", "abuja", "ibadan", "enugu", "jos", "kaduna"]) {
+  for (const place of ["lagos", "abuja", "ibadan", "enugu", "jos", "kaduna", "owerri", "calabar"]) {
     await activator.activateCommunity({ place });
   }
 }, 30_000);
@@ -322,6 +324,41 @@ describe("Official Application approval", () => {
 
     expect(result).toMatchObject({ organizationId: "org-kaduna" });
     expect(orgs.get("org-kaduna")?.metadata.daoAccountId).toBe("kaduna-test.sputnik-dao.testnet");
+  });
+
+  it("adds an applicant who isn't a member of the community as its admin", async () => {
+    proposals.set("owerri", application("owerri", { applicantUserId: "applicant-user" }));
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
+    await admin.approveOfficialApplication({
+      proposalId: "prop-owerri",
+      entityId: "owerri",
+      expectedUpdatedAt: savedAt,
+    });
+
+    expect(calls.adminAddMember).toContainEqual({
+      userId: "applicant-user",
+      role: "admin",
+      organizationId: "org-owerri",
+    });
+    expect(orgs.get("org-owerri")?.roles.get("applicant-user")).toBe("admin");
+  });
+
+  it("leaves an applicant who already owns the community as its owner", async () => {
+    proposals.set("calabar", application("calabar", { applicantUserId: "activator" }));
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
+    await admin.approveOfficialApplication({
+      proposalId: "prop-calabar",
+      entityId: "calabar",
+      expectedUpdatedAt: savedAt,
+    });
+
+    expect(orgs.get("org-calabar")?.roles.get("activator")).toBe("owner");
+    expect(calls.adminUpdateMemberRole).toEqual([]);
+    expect(calls.adminAddMember).toEqual([
+      { userId: "reviewer", role: "admin", organizationId: "org-calabar" },
+    ]);
   });
 
   it("refuses an application whose placeId points at a different place than its slug", async () => {

@@ -57,11 +57,7 @@ export async function resolveApplicationCommunity(
   return { ...node, orgId: node.orgId };
 }
 
-async function ensureReviewerAdmin(
-  auth: AuthClient,
-  organizationId: string,
-  reviewerUserId: string,
-) {
+async function ensureOrganizationAdmin(auth: AuthClient, organizationId: string, userId: string) {
   const members = await auth
     .listMembers({ organizationId })
     .then((result) => result.members)
@@ -69,13 +65,13 @@ async function ensureReviewerAdmin(
       if (isHidden(error)) return [];
       throw error;
     });
-  const reviewer = members.find((member) => member.userId === reviewerUserId);
-  if (reviewer && managesOrganization(reviewer.role)) return;
-  if (reviewer) {
-    await auth.adminUpdateMemberRole({ organizationId, userId: reviewerUserId, role: "admin" });
+  const member = members.find((entry) => entry.userId === userId);
+  if (member && managesOrganization(member.role)) return;
+  if (member) {
+    await auth.adminUpdateMemberRole({ organizationId, userId, role: "admin" });
     return;
   }
-  await auth.adminAddMember({ organizationId, userId: reviewerUserId, role: "admin" });
+  await auth.adminAddMember({ organizationId, userId, role: "admin" });
 }
 
 export async function linkOfficialDao(
@@ -85,6 +81,7 @@ export async function linkOfficialDao(
     community: NodeRecord & { orgId: string };
     daoAccountId: string;
     reviewerUserId: string;
+    applicantUserId?: string;
   },
 ): Promise<OfficialDaoLink> {
   const organizationId = input.community.orgId;
@@ -97,9 +94,12 @@ export async function linkOfficialDao(
     }
   };
   refuseOtherDao(officialDaoOf(input.community)?.daoAccountId);
-  await ensureReviewerAdmin(auth, organizationId, input.reviewerUserId);
+  await ensureOrganizationAdmin(auth, organizationId, input.reviewerUserId);
   const linked = await auth.getDao({ organizationId });
   refuseOtherDao(linked.daoAccountId);
+  if (input.applicantUserId && input.applicantUserId !== input.reviewerUserId) {
+    await ensureOrganizationAdmin(auth, organizationId, input.applicantUserId);
+  }
   if (linked.daoAccountId !== input.daoAccountId || linked.daoNetwork !== network) {
     await auth.linkDao({ organizationId, daoAccountId: input.daoAccountId, daoNetwork: network });
   }
