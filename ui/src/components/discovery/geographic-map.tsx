@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
+import { useApiClient } from "@/app";
 import { useAppTranslation } from "@/i18n/runtime";
 import "leaflet/dist/leaflet.css";
-import { boundaryBounds, boundaryLatLngs, mapAreas } from "./map-areas";
+import {
+  type Boundary,
+  type BoundaryMap,
+  boundaryBounds,
+  boundaryLatLngs,
+  mapAreas,
+} from "./map-areas";
 
 type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
 
@@ -18,6 +26,7 @@ export function GeographicMap({
   selectedId?: string;
 }) {
   const translate = useAppTranslation();
+  const api = useApiClient();
   const translation = useRef(translate);
   translation.current = translate;
   const container = useRef<HTMLDivElement>(null);
@@ -25,12 +34,44 @@ export function GeographicMap({
   const select = useRef(onSelect);
   const selected = useRef(selectedId);
   const redraw = useRef<() => void>(undefined);
-  const apply = useRef<(nodes: Node[]) => void>(undefined);
+  const apply = useRef<(nodes: Node[], boundaries: BoundaryMap) => void>(undefined);
   const mapRef = useRef<{ panTo: (latlng: [number, number]) => void } | null>(null);
   const nodesRef = useRef(nodes);
+  const boundariesRef = useRef<BoundaryMap>(new Map());
   select.current = onSelect;
   selected.current = selectedId;
   nodesRef.current = nodes;
+  const [catalog, setCatalog] = useState<Map<string, Boundary | null>>(() => new Map());
+  const missing = useMemo(
+    () =>
+      [...new Set(nodes.map((node) => node.placeId).filter((id): id is string => id !== null))]
+        .filter((id) => !catalog.has(id))
+        .sort(),
+    [nodes, catalog],
+  );
+  const boundariesQuery = useQuery({
+    queryKey: ["place-boundaries", missing.join(",")],
+    queryFn: async () => {
+      const rows = await api.listPlaceBoundaries({ placeIds: missing });
+      const found = new Map(rows.map((row) => [row.placeId, row.boundary] as const));
+      return missing.map((id) => [id, found.get(id) ?? null] as const);
+    },
+    enabled: missing.length > 0,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  useEffect(() => {
+    const fetched = boundariesQuery.data;
+    if (!fetched?.length) return;
+    setCatalog((current) => new Map([...current, ...fetched]));
+  }, [boundariesQuery.data]);
+  const boundaries = useMemo(() => {
+    const map: BoundaryMap = new Map();
+    for (const [placeId, boundary] of catalog) {
+      if (boundary) map.set(placeId, boundary);
+    }
+    return map;
+  }, [catalog]);
+  boundariesRef.current = boundaries;
   // The map is created once and then fed new nodes; rebuilding it on every
   // refetch made it flash and lose the viewport while typing in search.
   useEffect(() => {
@@ -144,13 +185,13 @@ export function GeographicMap({
             marker.bindPopup(list).openPopup();
           });
         };
-        const update = (next: Node[]) => {
+        const update = (next: Node[], currentBoundaries: BoundaryMap) => {
           points = next.flatMap((node) =>
             node.latitude !== null && node.longitude !== null
               ? [{ node, point: L.latLng(node.latitude, node.longitude) }]
               : [],
           );
-          const areas = mapAreas(next);
+          const areas = mapAreas(next, currentBoundaries);
           regions.clearLayers();
           shapes = areas.map(({ node, boundary }) => ({
             nodeId: node.nodeId,
@@ -171,10 +212,10 @@ export function GeographicMap({
           }));
           // Only move the viewport when the result set itself changed, so a
           // background refetch of the same communities leaves it alone.
-          const key = points
+          const key = `${points
             .map((entry) => entry.node.nodeId)
             .sort()
-            .join(",");
+            .join(",")}|${currentBoundaries.size}`;
           if (key !== fitted) {
             fitted = key;
             const outlines = new Map(
@@ -193,8 +234,8 @@ export function GeographicMap({
           draw();
         };
         redraw.current = draw;
-        apply.current = update;
-        update(nodesRef.current);
+        apply.current = (next, currentBoundaries) => update(next, currentBoundaries);
+        update(nodesRef.current, boundariesRef.current);
         map.on("zoomend", draw);
         const observer = new ResizeObserver(() => map.invalidateSize());
         observer.observe(container.current);
@@ -213,8 +254,11 @@ export function GeographicMap({
     };
   }, []);
   useEffect(() => {
-    apply.current?.(nodes);
+    apply.current?.(nodes, boundariesRef.current);
   }, [nodes]);
+  useEffect(() => {
+    if (boundaries.size > 0) apply.current?.(nodesRef.current, boundaries);
+  }, [boundaries]);
   useEffect(() => {
     redraw.current?.();
   }, [translate]);

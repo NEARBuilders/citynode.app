@@ -6,11 +6,6 @@ export const webUrl = z
   .url()
   .max(2000)
   .refine((value) => /^https?:\/\//i.test(value), "Use an HTTP(S) URL");
-const ring = z.array(z.array(z.number()).min(2));
-export const boundarySchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("Polygon"), coordinates: z.array(ring) }),
-  z.object({ type: z.literal("MultiPolygon"), coordinates: z.array(z.array(ring)) }),
-]);
 export const profileSchema = z
   .object({
     nodeId: z.uuid(),
@@ -33,9 +28,7 @@ export const profileSchema = z
     "Confirm the location label",
   );
 export type DiscoveryProfile = z.infer<typeof profileSchema>;
-export type StoredDiscoveryProfile = DiscoveryProfile & {
-  boundary?: z.infer<typeof boundarySchema> | null;
-};
+export type StoredDiscoveryProfile = DiscoveryProfile;
 
 export const EVENT_REPORT_AUDIENCES = [
   "general",
@@ -83,10 +76,14 @@ export type EventReport = z.infer<typeof eventReportSchema>;
 
 export const EVENT_REPORT_FORM_VERSION = 1;
 
+export const EVENT_REPORT_SOURCES = ["app", "import"] as const;
+export type EventReportSource = (typeof EVENT_REPORT_SOURCES)[number];
+
 export const storedEventReportSchema = z.object({
   activityId: z.uuid(),
   formVersion: z.number().int().positive(),
   report: eventReportSchema,
+  source: z.enum(EVENT_REPORT_SOURCES),
   submittedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   reviewedAt: z.iso.datetime().nullable(),
@@ -198,7 +195,7 @@ export const activityInput = activitySchema
       });
   });
 export const discoveryNodeSchema = profileSchema.safeExtend({
-  boundary: boundarySchema.nullable().optional(),
+  placeId: z.uuid().nullable(),
   featured: z.string().nullable(),
   active: z.boolean(),
   activityReason: z.string(),
@@ -395,6 +392,7 @@ export const discoveryContract = {
         z.object({
           activityId: z.uuid(),
           submittedAt: z.iso.datetime(),
+          source: z.enum(EVENT_REPORT_SOURCES),
           reviewedAt: z.iso.datetime().nullable(),
         }),
       ),
