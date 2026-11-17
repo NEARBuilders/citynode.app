@@ -70,15 +70,16 @@ describe("resolveCommunityMembership", () => {
     expect(resolve([personal, harbor], personal.id)).toEqual({ status: "choose", count: 1 });
   });
 
-  it("asks to choose rather than trusting a list that is still refreshing", () => {
-    expect(
+  it("waits for a refreshing list that lacks the selected community instead of picking one", () => {
+    const refreshing = (activeOrganizationId: string | null) =>
       resolveCommunityMembership({
         organizations: [personal, harbor],
-        activeOrganizationId: null,
+        activeOrganizationId,
         userId,
         refreshing: true,
-      }),
-    ).toEqual({ status: "choose", count: 1 });
+      });
+    expect(refreshing(delta.id)).toEqual({ status: "unknown" });
+    expect(refreshing(null)).toEqual({ status: "choose", count: 1 });
   });
 
   it("asks to choose when several communities are visible and none is active", () => {

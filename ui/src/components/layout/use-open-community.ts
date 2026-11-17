@@ -11,7 +11,7 @@ import {
   reportWorkspaceRefreshError,
 } from "@/lib/workspace-synchronization";
 
-export function useOpenSoleCommunity(organizationId: string | null) {
+export function useOpenCommunity(organizationId: string | null) {
   const translate = useAppTranslation();
   const auth = useAuthClient();
   const queryClient = useQueryClient();

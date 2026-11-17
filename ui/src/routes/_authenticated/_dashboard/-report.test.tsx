@@ -57,8 +57,8 @@ vi.mock("@tanstack/react-router", () => ({
   },
 }));
 
-vi.mock("@/components/layout/use-open-sole-community", () => ({
-  useOpenSoleCommunity: (organizationId: string | null) => {
+vi.mock("@/components/layout/use-open-community", () => ({
+  useOpenCommunity: (organizationId: string | null) => {
     harness.opened.push(organizationId);
     return {
       failed: !!organizationId && harness.openFailed,
