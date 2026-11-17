@@ -326,7 +326,8 @@ export const ProposalServiceLive = Layer.effect(
         if (
           existing &&
           input.requireSameActor &&
-          existing.createdBy !== input.actorId
+          existing.createdBy !== input.actorId &&
+          existing.reviewStatus !== "rejected"
         ) {
           return yield* Effect.fail(
             new ORPCError("FORBIDDEN", {
@@ -411,6 +412,7 @@ export const ProposalServiceLive = Layer.effect(
                 .update(proposals)
                 .set({
                   payload: serialize(input.payload),
+                  createdBy: input.requireSameActor ? input.actorId : existing.createdBy,
                   reviewStatus: "pending",
                   applyStatus: "not_started",
                   removeStatus: "not_started",

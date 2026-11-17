@@ -215,14 +215,6 @@ describe.sequential("node applications", () => {
       expectedUpdatedAt: current!.updatedAt,
       reason: "More detail needed",
     });
-    daoPolicy.members = ["alice.near", "bob.near"];
-    await expect(
-      client("bob.near").propose({
-        pluginId: "node",
-        entityId: "chicago",
-        payload: { ...payload, submitterAccountId: "bob.near" },
-      }),
-    ).rejects.toThrow(/another applicant/);
     const revised = await client("alice.near", null).propose({
       pluginId: "node",
       entityId: "chicago",
@@ -250,5 +242,41 @@ describe.sequential("node applications", () => {
       applyStatus: "failed",
       applyError: "Provisioning failed",
     });
+  });
+
+  it("lets another DAO member apply for the place once the earlier application is rejected", async () => {
+    daoPolicy.members = ["alice.near", "bob.near"];
+    const denver = { ...payload, slug: "denver" };
+    const first = await client("alice.near").propose({
+      pluginId: "node",
+      entityId: "denver",
+      payload: denver,
+    });
+    const admin = loaded.createClient({ userId: "admin", user: user("admin", "admin") });
+    await admin.reject({
+      pluginId: "node",
+      entityId: "denver",
+      expectedUpdatedAt: first.data.updatedAt,
+      reason: "Wrong DAO",
+    });
+
+    const takeover = await client("bob.near").propose({
+      pluginId: "node",
+      entityId: "denver",
+      payload: { ...denver, accountId: "bob-dao.sputnik-dao.near" },
+    });
+    expect(takeover.data).toMatchObject({ reviewStatus: "pending", createdBy: "bob.near" });
+    expect(takeover.data.payload).toMatchObject({
+      submitterAccountId: "bob.near",
+      accountId: "bob-dao.sputnik-dao.near",
+    });
+
+    await expect(
+      client("alice.near").propose({ pluginId: "node", entityId: "denver", payload: denver }),
+    ).rejects.toThrow(/another applicant/);
+    const bobs = await client("bob.near").getMyNodeApplications();
+    expect(bobs.data.map((proposal) => proposal.entityId)).toContain("denver");
+    const alices = await client("alice.near").getMyNodeApplications();
+    expect(alices.data.map((proposal) => proposal.entityId)).not.toContain("denver");
   });
 });
