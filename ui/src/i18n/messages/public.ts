@@ -148,6 +148,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Masqué dans Explorer",
     "已在探索页面隐藏",
   ],
+  "community.joinAtEvent": [
+    "Check in at an event to join {name}.",
+    "Haz check-in en un evento para unirte a {name}.",
+    "Enregistrez-vous à un événement pour rejoindre {name}.",
+    "在活动现场签到即可加入{name}。",
+  ],
   "community.joinLinks": [
     "Where people can join",
     "Dónde pueden unirse las personas",

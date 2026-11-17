@@ -2,11 +2,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ORPCError } from "@orpc/server";
+import { eq, sql } from "drizzle-orm";
 import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
-import type { DatabaseError } from "@/db";
-import { DatabaseLive } from "@/db/layer";
+import type { Database, DatabaseError } from "@/db";
+import { DatabaseLive, DatabaseTag } from "@/db/layer";
+import { nodes as nodesTable, placeAliases, places as placesTable } from "@/db/schema";
 import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
 import { createServiceHarness } from "./test-harness";
@@ -27,11 +29,29 @@ function freshLayer(): Layer.Layer<NodesTag | TenantsTag, DatabaseError, never> 
   return Layer.mergeAll(
     NodesLive.pipe(Layer.provide(database)),
     TenantsLive.pipe(Layer.provide(database)),
+    database,
   ).pipe(Layer.provide(Layer.succeed(PluginIdTag, "api"))) as Layer.Layer<
-    NodesTag | TenantsTag,
+    NodesTag | TenantsTag | DatabaseTag,
     DatabaseError,
     never
   >;
+}
+
+async function seedPlace(db: Database, slug: string, parentId?: string | null) {
+  const [row] = await db
+    .insert(placesTable)
+    .values({ slug, name: slug, parentId: parentId ?? null })
+    .onConflictDoUpdate({
+      target: placesTable.slug,
+      set: parentId === undefined ? { slug: sql`excluded.slug` } : { parentId: parentId ?? null },
+    })
+    .returning();
+  if (!row) throw new Error("place insert returned no row");
+  return row;
+}
+
+async function linkNodeToPlace(db: Database, nodeId: string, placeId: string) {
+  await db.update(nodesTable).set({ placeId }).where(eq(nodesTable.id, nodeId));
 }
 
 const MISSING_ID = "00000000-0000-0000-0000-000000000000";
@@ -39,16 +59,17 @@ const MISSING_ID = "00000000-0000-0000-0000-000000000000";
 interface TestServices {
   nodes: NodesService;
   tenants: TenantsService;
+  db: Database;
 }
 
 const { run: runService, squashError: squashServiceError } = createServiceHarness<
   TestServices,
-  NodesTag | TenantsTag,
+  NodesTag | TenantsTag | DatabaseTag,
   DatabaseError,
-  ORPCError<string, unknown>
+  Error
 >(
   Effect.gen(function* () {
-    return { nodes: yield* NodesTag, tenants: yield* TenantsTag };
+    return { nodes: yield* NodesTag, tenants: yield* TenantsTag, db: yield* DatabaseTag };
   }),
 );
 
@@ -63,7 +84,42 @@ function seedTenant(tenants: TenantsService) {
   });
 }
 
+async function seedPlaceWithNode(
+  db: Database,
+  options: { placeSlug: string; placeParentSlug?: string | null; nodeSlug?: string },
+) {
+  const parentPlace = options.placeParentSlug ? await seedPlace(db, options.placeParentSlug) : null;
+  const place = await seedPlace(db, options.placeSlug, parentPlace?.id ?? null);
+  const [node] = await db
+    .insert(nodesTable)
+    .values({
+      slug: options.nodeSlug ?? options.placeSlug,
+      name: options.placeSlug,
+      placeId: place.id,
+      activatedAt: new Date(),
+    })
+    .returning();
+  if (!node) throw new Error("node insert returned no row");
+  await linkNodeToPlace(db, node.id, place.id);
+  return { place, node };
+}
+
 describe("NodesService", () => {
+  it("updates a node without touching the place hierarchy", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const { node } = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "nigeria", nodeSlug: "nigeria" }),
+        );
+
+        const updated = yield* nodes.update(node.id, { name: "Nigeria (renamed)" });
+        expect(updated.name).toBe("Nigeria (renamed)");
+        expect(updated.placeId).toBe(node.placeId);
+      }),
+    );
+  });
+
   it("rejects moving a City Node below its descendant without changing its subtree", async () => {
     const layer = freshLayer();
     const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
@@ -138,6 +194,40 @@ describe("NodesService", () => {
     const updatedA = await runService(layer, ({ nodes }) => nodes.getById(a.id));
     const updatedB = await runService(layer, ({ nodes }) => nodes.getById(b.id));
     expect(updatedA?.parentId === b.id && updatedB?.parentId === a.id).toBe(false);
+  });
+
+  it("rejects self-parent on update", async () => {
+    const layer = freshLayer();
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
+    const node = await runService(layer, ({ nodes }) =>
+      nodes.spawn({
+        kind: "country",
+        slug: "usa",
+        name: "USA",
+        parentId: null,
+        tenantId,
+      }),
+    );
+
+    const error = await squashServiceError(layer, ({ nodes }) =>
+      nodes.update(node.id, { parentId: node.id }),
+    );
+    expect(error).toBeInstanceOf(ORPCError);
+    expect((error as ORPCError<string, unknown>).code).toBe("BAD_REQUEST");
+  });
+
+  it("fails with NOT_FOUND when moving to a missing parent", async () => {
+    const layer = freshLayer();
+    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
+    const node = await runService(layer, ({ nodes }) =>
+      nodes.spawn({ kind: "city", slug: "movable", name: "Movable", parentId: null, tenantId }),
+    );
+
+    const error = await squashServiceError(layer, ({ nodes }) =>
+      nodes.update(node.id, { parentId: MISSING_ID }),
+    );
+    expect(error).toBeInstanceOf(ORPCError);
+    expect((error as ORPCError<string, unknown>).code).toBe("NOT_FOUND");
   });
 
   it("creates and resolves a node by id", async () => {
@@ -268,163 +358,148 @@ describe("NodesService", () => {
     expect((error as ORPCError<string, unknown>).code).toBe("NOT_FOUND");
   });
 
-  it("rejects self-parent on update", async () => {
+  it("listRootNodes lists nodes whose places have no parent", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
-    const node = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "country",
-        slug: "usa",
-        name: "USA",
-        parentId: null,
-        tenantId,
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        yield* Effect.tryPromise(() => seedPlaceWithNode(db, { placeSlug: "usa" }));
+        yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "illinois", placeParentSlug: "usa" }),
+        );
+
+        const roots = yield* nodes.listRootNodes;
+        expect(roots.map((n) => n.slug)).toEqual(["usa"]);
       }),
     );
-
-    const error = await squashServiceError(layer, ({ nodes }) =>
-      nodes.update(node.id, { parentId: node.id }),
-    );
-    expect(error).toBeInstanceOf(ORPCError);
-    expect((error as ORPCError<string, unknown>).code).toBe("BAD_REQUEST");
   });
 
-  it("lists root nodes (parent_id IS NULL)", async () => {
+  it("listSummaries counts children through the places tree", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const usa = yield* Effect.tryPromise(() => seedPlaceWithNode(db, { placeSlug: "usa" }));
+        yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "illinois", placeParentSlug: "usa" }),
+        );
 
-    const usa = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "country",
-        slug: "usa",
-        name: "USA",
-        parentId: null,
-        tenantId,
+        const summaries = yield* nodes.listSummaries({ parentId: null });
+        expect(summaries).toEqual([
+          {
+            node: expect.objectContaining({ slug: "usa", placeId: usa.place.id }),
+            childrenCount: 1,
+            validatorCount: 0,
+          },
+        ]);
       }),
     );
-    await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "state",
-        slug: "illinois",
-        name: "Illinois",
-        parentId: usa.id,
-        tenantId,
-      }),
-    );
-
-    const roots = await runService(layer, ({ nodes }) => nodes.listRootNodes);
-    expect(roots.map((n) => n.slug)).toEqual(["usa"]);
   });
 
-  it("lists node summaries with batched direct-child counts", async () => {
+  it("listChildren returns direct children only, via the places tree", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
-    const usa = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "country",
-        slug: "usa",
-        name: "USA",
-        parentId: null,
-        tenantId,
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const usa = yield* Effect.tryPromise(() => seedPlaceWithNode(db, { placeSlug: "usa" }));
+        const illinois = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "illinois", placeParentSlug: "usa" }),
+        );
+        yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "chicago", placeParentSlug: "illinois" }),
+        );
+
+        const usaChildren = yield* nodes.listChildren(usa.node.id);
+        expect(usaChildren.map((n) => n.slug)).toEqual(["illinois"]);
+
+        const illinoisChildren = yield* nodes.listChildren(illinois.node.id);
+        expect(illinoisChildren.map((n) => n.slug)).toEqual(["chicago"]);
       }),
     );
-    await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "state",
-        slug: "illinois",
-        name: "Illinois",
-        parentId: usa.id,
-        tenantId,
-      }),
-    );
-
-    const summaries = await runService(layer, ({ nodes }) =>
-      nodes.listSummaries({ parentId: null }),
-    );
-
-    expect(summaries).toEqual([
-      {
-        node: usa,
-        childrenCount: 1,
-        validatorCount: 0,
-      },
-    ]);
   });
 
-  it("listChildren returns direct children only", async () => {
+  it("detaching a linked node leaves the shared place hierarchy alone", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const { place, node } = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "kazakhstan", placeParentSlug: "cis" }),
+        );
 
-    const usa = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "country",
-        slug: "usa",
-        name: "USA",
-        parentId: null,
-        tenantId,
+        yield* nodes.update(node.id, { parentId: null });
+
+        const [after] = yield* Effect.tryPromise(() =>
+          db.select().from(placesTable).where(eq(placesTable.id, place.id)),
+        );
+        expect(after?.parentId).toBe(place.parentId);
       }),
     );
-    const illinois = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "state",
-        slug: "illinois",
-        name: "Illinois",
-        parentId: usa.id,
-        tenantId,
-      }),
-    );
-    const chicago = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "city",
-        slug: "chicago",
-        name: "Chicago",
-        parentId: illinois.id,
-        tenantId,
-      }),
-    );
-
-    const usaChildren = await runService(layer, ({ nodes }) => nodes.listChildren(usa.id));
-    expect(usaChildren.map((n) => n.slug)).toEqual(["illinois"]);
-
-    const illinoisChildren = await runService(layer, ({ nodes }) =>
-      nodes.listChildren(illinois.id),
-    );
-    expect(illinoisChildren.map((n) => n.slug)).toEqual(["chicago"]);
-
-    expect(chicago).toBeDefined();
   });
 
-  it("resolveBySlug finds root and child nodes", async () => {
+  it("listSummaries counts child nodes, not catalog places without a community", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const usa = yield* Effect.tryPromise(() => seedPlaceWithNode(db, { placeSlug: "usa" }));
+        yield* Effect.tryPromise(() => seedPlace(db, "texas", usa.place.id));
+        yield* Effect.tryPromise(() => seedPlace(db, "ohio", usa.place.id));
+        yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "illinois", placeParentSlug: "usa" }),
+        );
 
-    const usa = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "country",
-        slug: "usa",
-        name: "USA",
-        parentId: null,
-        tenantId,
+        const [summary] = yield* nodes.listSummaries({ parentId: null });
+        expect(summary?.childrenCount).toBe(1);
       }),
     );
-    await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "state",
-        slug: "illinois",
-        name: "Illinois",
-        parentId: usa.id,
-        tenantId,
+  });
+
+  it("rolls linked nodes up to the nearest ancestor place with a community", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const usa = yield* Effect.tryPromise(() => seedPlaceWithNode(db, { placeSlug: "usa" }));
+        const illinois = yield* Effect.tryPromise(() => seedPlace(db, "illinois", usa.place.id));
+        const chicago = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "chicago", placeParentSlug: "illinois" }),
+        );
+        const kazakhstan = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "kazakhstan", placeParentSlug: "cis" }),
+        );
+
+        expect(illinois.parentId).toBe(usa.place.id);
+        const roots = yield* nodes.listRootNodes;
+        expect(roots.map((n) => n.slug).sort()).toEqual(["kazakhstan", "usa"]);
+        expect((yield* nodes.list({ parentId: null })).map((n) => n.slug).sort()).toEqual([
+          "kazakhstan",
+          "usa",
+        ]);
+        expect((yield* nodes.listChildren(usa.node.id)).map((n) => n.id)).toEqual([
+          chicago.node.id,
+        ]);
+        const summaries = yield* nodes.listSummaries({ parentId: null });
+        expect(summaries.find((s) => s.node.id === usa.node.id)?.childrenCount).toBe(1);
+        expect(summaries.find((s) => s.node.id === kazakhstan.node.id)?.childrenCount).toBe(0);
+        const subtree = yield* nodes.subtreeWithValidators(usa.node.id);
+        expect(subtree.map((n) => n.slug)).toEqual(["usa", "chicago"]);
       }),
     );
+  });
 
-    const root = await runService(layer, ({ nodes }) => nodes.resolveBySlug("usa", null));
-    expect(root?.id).toBe(usa.id);
+  it("resolveBySlug finds nodes by place slug and legacy alias", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const { node } = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "nigeria", nodeSlug: "nigeria-node" }),
+        );
+        yield* Effect.tryPromise(() =>
+          db
+            .insert(placeAliases)
+            .values({ value: "nigeria-node", kind: "legacy", placeId: node.placeId! }),
+        );
 
-    const child = await runService(layer, ({ nodes }) => nodes.resolveBySlug("illinois", usa.id));
-    expect(child?.parentId).toBe(usa.id);
-
-    expect(
-      await runService(layer, ({ nodes }) => nodes.resolveBySlug("illinois", null)),
-    ).toBeNull();
+        expect((yield* nodes.resolveBySlug("nigeria"))?.id).toBe(node.id);
+        expect((yield* nodes.resolveBySlug("nigeria-node"))?.id).toBe(node.id);
+        expect(yield* nodes.resolveBySlug("atlantis")).toBeNull();
+      }),
+    );
   });
 
   it("deletes a node", async () => {
@@ -443,80 +518,6 @@ describe("NodesService", () => {
     expect(await runService(layer, ({ nodes }) => nodes.delete(node.id))).toBe(true);
     expect(await runService(layer, ({ nodes }) => nodes.delete(node.id))).toBe(false);
     expect(await runService(layer, ({ nodes }) => nodes.getById(node.id))).toBeNull();
-  });
-
-  it("resolves unique child slugs, requires a parent for duplicates, and preserves root URLs", async () => {
-    const layer = freshLayer();
-    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
-    const firstParent = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "state",
-        slug: "illinois",
-        name: "Illinois",
-        parentId: null,
-        tenantId,
-      }),
-    );
-    const secondParent = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "state",
-        slug: "missouri",
-        name: "Missouri",
-        parentId: null,
-        tenantId,
-      }),
-    );
-    const firstChild = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "city",
-        slug: "springfield",
-        name: "Springfield",
-        parentId: firstParent.id,
-        tenantId,
-      }),
-    );
-    expect((await runService(layer, ({ nodes }) => nodes.resolveBySlug("springfield")))?.id).toBe(
-      firstChild.id,
-    );
-
-    const secondChild = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "city",
-        slug: "springfield",
-        name: "Springfield",
-        parentId: secondParent.id,
-        tenantId,
-      }),
-    );
-    expect(await runService(layer, ({ nodes }) => nodes.resolveBySlug("springfield"))).toBeNull();
-    expect(
-      (await runService(layer, ({ nodes }) => nodes.resolveBySlug("springfield", firstParent.id)))
-        ?.id,
-    ).toBe(firstChild.id);
-    expect(
-      (await runService(layer, ({ nodes }) => nodes.resolveBySlug("springfield", secondParent.id)))
-        ?.id,
-    ).toBe(secondChild.id);
-    expect(
-      await runService(layer, ({ nodes }) => nodes.resolveBySlug("springfield", null)),
-    ).toBeNull();
-
-    const root = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "city",
-        slug: "springfield",
-        name: "Springfield",
-        parentId: null,
-        tenantId,
-      }),
-    );
-    expect((await runService(layer, ({ nodes }) => nodes.resolveBySlug("springfield")))?.id).toBe(
-      root.id,
-    );
-    expect(
-      (await runService(layer, ({ nodes }) => nodes.resolveBySlug("springfield", secondParent.id)))
-        ?.id,
-    ).toBe(secondChild.id);
   });
 
   it("setBulletin merges into metadata without clobbering other keys", async () => {
@@ -560,44 +561,35 @@ describe("NodesService", () => {
     expect((error as ORPCError<string, unknown>).code).toBe("NOT_FOUND");
   });
 
-  it("list filters by kind and parentId", async () => {
+  it("list filters by kind and by parent node through the places tree", async () => {
     const layer = freshLayer();
-    const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const usa = yield* Effect.tryPromise(() => seedPlaceWithNode(db, { placeSlug: "usa" }));
+        const illinois = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, {
+            placeSlug: "illinois",
+            placeParentSlug: "usa",
+            nodeSlug: "illinois",
+          }),
+        );
+        const newYork = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, {
+            placeSlug: "new-york",
+            placeParentSlug: "usa",
+            nodeSlug: "new-york",
+          }),
+        );
 
-    const usa = await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "country",
-        slug: "usa",
-        name: "USA",
-        parentId: null,
-        tenantId,
+        yield* nodes.update(illinois.node.id, { kind: "state" });
+        yield* nodes.update(newYork.node.id, { kind: "state" });
+
+        const statesUnderUsa = yield* nodes.list({ kind: "state", parentId: usa.node.id });
+        expect(statesUnderUsa.map((n) => n.slug).sort()).toEqual(["illinois", "new-york"]);
+
+        const roots = yield* nodes.list({ parentId: null });
+        expect(roots.map((n) => n.slug)).toEqual(["usa"]);
       }),
     );
-    await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "state",
-        slug: "illinois",
-        name: "Illinois",
-        parentId: usa.id,
-        tenantId,
-      }),
-    );
-    await runService(layer, ({ nodes }) =>
-      nodes.spawn({
-        kind: "state",
-        slug: "ny",
-        name: "New York",
-        parentId: usa.id,
-        tenantId,
-      }),
-    );
-
-    const countries = await runService(layer, ({ nodes }) => nodes.list({ kind: "country" }));
-    expect(countries.map((n) => n.slug)).toEqual(["usa"]);
-
-    const statesUnderUsa = await runService(layer, ({ nodes }) =>
-      nodes.list({ kind: "state", parentId: usa.id }),
-    );
-    expect(statesUnderUsa.map((n) => n.slug).sort()).toEqual(["illinois", "ny"]);
   });
 });

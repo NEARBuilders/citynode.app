@@ -32,6 +32,7 @@ export interface TeamJoinRequestsService {
     organizationId: string,
     viewerUserId: string,
   ): TeamJoinRequestEffect<TeamJoinRequestRecord[]>;
+  listAll(organizationId: string): TeamJoinRequestEffect<TeamJoinRequestRecord[]>;
   get(requestId: string): TeamJoinRequestEffect<TeamJoinRequestRecord | null>;
   create(request: NewTeamJoinRequest): TeamJoinRequestEffect<TeamJoinRequestRecord | null>;
   settle(
@@ -105,6 +106,16 @@ export const TeamJoinRequestsLive = Layer.effect(
                   ),
                 ),
               )
+              .orderBy(teamJoinRequests.createdAt),
+          ),
+        ),
+      listAll: (organizationId) =>
+        query(async () =>
+          withEndorsements(
+            await db
+              .select()
+              .from(teamJoinRequests)
+              .where(eq(teamJoinRequests.organizationId, organizationId))
               .orderBy(teamJoinRequests.createdAt),
           ),
         ),

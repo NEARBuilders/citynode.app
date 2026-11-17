@@ -169,6 +169,7 @@ test.describe("owner event visibility", () => {
       new RegExp(`/nodes/${node.id}/events/${events.ended.id}/report$`),
     );
     await expect(report).not.toHaveAttribute("target", "_blank");
+    await expect(page.getByTestId(`report-status-${events.ended.id}`)).toBeVisible();
     await expect(badge(events.endedImport.id)).toHaveAttribute("data-state", "hiddenImport");
     await expect(
       page.getByTestId(`activity-editor.submit-report-${events.endedImport.id}`),

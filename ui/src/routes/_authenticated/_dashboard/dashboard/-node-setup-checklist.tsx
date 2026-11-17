@@ -7,9 +7,12 @@ import {
   QrCodeIcon,
   UserCircleIcon,
 } from "@phosphor-icons/react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties, ReactElement } from "react";
+import { useApiClient } from "@/app";
 import { Button, SectionHeader } from "@/components";
+import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import {
   Item,
   ItemActions,
@@ -20,7 +23,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
-import type { NodeSetupStep, NodeSetupStepId } from "./-next-steps";
+import { getNodeSetupSteps, type NodeSetupStep, type NodeSetupStepId } from "./-next-steps";
 
 const SETUP_ICONS: Record<NodeSetupStepId, Icon> = {
   map: MapPinIcon,
@@ -29,16 +32,53 @@ const SETUP_ICONS: Record<NodeSetupStepId, Icon> = {
   qr: QrCodeIcon,
 };
 
+export function useNodeSetupSteps({
+  nodeId,
+  organizationId,
+  enabled,
+}: {
+  nodeId: string;
+  organizationId: string;
+  enabled: boolean;
+}): NodeSetupStep[] | null {
+  const apiClient = useApiClient();
+  const active = enabled && !!nodeId;
+  const profile = useQuery({
+    ...discoveryProfileQueryOptions(apiClient, nodeId),
+    enabled: active,
+  });
+  const activities = useQuery({
+    queryKey: ["discovery-activities", nodeId],
+    queryFn: () => apiClient.listDiscoveryActivities({ nodeId }),
+    enabled: active,
+    retry: false,
+  });
+  const onboardingCodes = useQuery({
+    queryKey: ["home-onboarding-codes", organizationId],
+    queryFn: () => apiClient.auth.listOnboardingCodes({ organizationId }),
+    enabled: active && !!organizationId,
+    retry: false,
+  });
+  if (!active || !profile.isSuccess || !activities.isSuccess) return null;
+  return getNodeSetupSteps({
+    profile: profile.data,
+    eventCount: activities.data.length,
+    onboardingCodeCount: onboardingCodes.data?.length ?? 0,
+  });
+}
+
 export function NodeSetupChecklist({
   steps,
   communityName,
   nodeId,
   tenantId,
+  testId = "home-node-setup",
 }: {
   steps: NodeSetupStep[];
   communityName: string;
   nodeId: string;
   tenantId: string;
+  testId?: string;
 }) {
   const translate = useAppTranslation();
   const done = steps.filter((step) => step.done).length;
@@ -61,7 +101,7 @@ export function NodeSetupChecklist({
   };
 
   return (
-    <section className="flex flex-col gap-6" data-testid="home-node-setup">
+    <section className="flex flex-col gap-6" data-testid={testId}>
       <SectionHeader
         title={translate("setup.title", { name: communityName })}
         description={translate("setup.progress", { done, total: steps.length })}
