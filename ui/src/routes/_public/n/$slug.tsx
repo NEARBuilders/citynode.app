@@ -28,6 +28,7 @@ import { nodeDaoQueryOptions } from "@/lib/queries/node-dao";
 import {
   childNodesQueryOptions,
   nodeBySlugQueryOptions,
+  nodeSubtreeQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
 import { socialMeta } from "@/lib/social-meta";
@@ -103,6 +104,11 @@ function NodePage() {
     enabled: !!nodeId,
   });
 
+  const { data: subtree = [] } = useQuery({
+    ...nodeSubtreeQueryOptions(apiClient, nodeId ?? ""),
+    enabled: !!nodeId && children.length > 0,
+  });
+
   const { data: profile } = useQuery(discoveryNodeQueryOptions(apiClient, nodeId ?? ""));
 
   const { data: memberCount } = useQuery({
@@ -144,7 +150,9 @@ function NodePage() {
   }
 
   const validators = staking?.validators ?? [];
-  const validatorNodeIds = new Set(validators.map((v) => v.nodeId));
+  const validatorNodeIds = new Set(
+    subtree.filter((entry) => entry.validators.length > 0).map((entry) => entry.id),
+  );
   const events = profile?.events ?? [];
   const hostname = gateway ? `${node.slug}.${gateway}` : null;
   const siteUrl =
@@ -322,14 +330,7 @@ function NodePage() {
         </section>
       )}
 
-      <NodeStakeSection
-        node={node}
-        children={children}
-        gateway={gateway}
-        validators={validators}
-        sourceNodeId={staking?.sourceNodeId ?? node.id}
-        apiClient={apiClient}
-      />
+      <NodeStakeSection node={node} validators={validators} via={staking?.via ?? null} />
 
       <NearbuildersSection nodeId={node.id} nodeName={node.name} />
     </PageContainer>

@@ -72,7 +72,7 @@ describe("generalized node model", () => {
     });
   });
 
-  it("resolves staking validators through a place subtree", async () => {
+  it("lists a node's own validators and its ancestors", async () => {
     const admin = await getPluginClient(
       daoContext("activate-staking-owner", ORG, "activate-staking.near"),
     );
@@ -105,13 +105,11 @@ describe("generalized node model", () => {
       role: "official",
     });
 
-    const fromChild = await admin.resolveStakingValidators({ nodeId: child.id });
-    expect(fromChild.sourceNodeId).toBe(child.id);
-    expect(fromChild.validators).toHaveLength(1);
-
-    const fromRoot = await admin.resolveStakingValidators({ nodeId: root.id });
-    expect(fromRoot.sourceNodeId).toBe(child.id);
-    expect(fromRoot.validators).toHaveLength(1);
+    expect(await admin.listValidatorsByNode({ nodeId: child.id })).toHaveLength(1);
+    expect(await admin.listValidatorsByNode({ nodeId: root.id })).toEqual([]);
+    expect(await admin.listNodeAncestors({ nodeId: child.id })).toEqual([
+      expect.objectContaining({ id: root.id }),
+    ]);
   });
 
   it("includes tenant-attached activated places in listTenantApps", async () => {

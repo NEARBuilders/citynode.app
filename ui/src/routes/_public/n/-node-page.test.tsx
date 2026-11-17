@@ -115,13 +115,20 @@ function mockApi(
         }
         case "listChildren":
           return Response.json({ json: nodes.filter((entry) => entry.parentId === args.nodeId) });
-        case "resolveStakingValidators": {
+        case "listValidatorsByNode": {
           const node = nodes.find((entry) => entry.id === args.nodeId);
-          const sourceNodeId =
-            node && node.id === ownPoolNodeId ? node.id : (node?.parentId ?? node?.id);
-          return Response.json({
-            json: { sourceNodeId, validators: [{ ...validator, nodeId: sourceNodeId }] },
-          });
+          const ownsPool = !!node && (node.id === ownPoolNodeId || node.parentId === null);
+          return Response.json({ json: ownsPool ? [{ ...validator, nodeId: node.id }] : [] });
+        }
+        case "listNodeAncestors": {
+          const chain = [];
+          let current = nodes.find((entry) => entry.id === args.nodeId);
+          while (current?.parentId) {
+            const parentId: string = current.parentId;
+            current = nodes.find((entry) => entry.id === parentId);
+            if (current) chain.push(current);
+          }
+          return Response.json({ json: chain });
         }
         case "getNodeMemberCount":
           return Response.json({
@@ -251,7 +258,7 @@ it("opens a child node directly and renders its inherited pool and live metrics"
   mockApi();
   await showNode("/n/chicago");
   expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
-  expect(await screen.findByText("Stake inherited from Illinois.")).toBeTruthy();
+  expect(await screen.findByText("Chicago uses the validator from Illinois.")).toBeTruthy();
   expect(await screen.findAllByText("1 NEAR")).toHaveLength(2);
   expect(screen.getByRole("heading", { name: "illinois.poolv1.near" })).toBeTruthy();
   expect(screen.queryByText("Node not found.")).toBeNull();
@@ -322,7 +329,7 @@ it("navigates from a parent to the child's overview with its parent in the URL",
   expect(link.getAttribute("href")).toBe(`/n/chicago?parentId=${parent.id}`);
   fireEvent.click(link);
   expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
-  expect(await screen.findByText("Stake inherited from Illinois.")).toBeTruthy();
+  expect(await screen.findByText("Chicago uses the validator from Illinois.")).toBeTruthy();
 });
 
 it("keeps same-slug cities under different parents separate when navigating", async () => {
@@ -341,7 +348,9 @@ it("keeps same-slug cities under different parents separate when navigating", as
   mockApi([parent, child, otherParent, otherChild]);
   const router = await showNode(`/n/chicago?parentId=${otherParent.id}`);
   expect(await screen.findByRole("heading", { name: "Chicago, Missouri", level: 1 })).toBeTruthy();
-  expect(await screen.findByText("Stake inherited from Missouri.")).toBeTruthy();
+  expect(
+    await screen.findByText("Chicago, Missouri uses the validator from Missouri."),
+  ).toBeTruthy();
   await act(() =>
     router.navigate({
       to: "/n/$slug",
@@ -350,8 +359,16 @@ it("keeps same-slug cities under different parents separate when navigating", as
     }),
   );
   expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
-  expect(await screen.findByText("Stake inherited from Illinois.")).toBeTruthy();
-  expect(screen.queryByText("Stake inherited from Missouri.")).toBeNull();
+  expect(await screen.findByText("Chicago uses the validator from Illinois.")).toBeTruthy();
+  expect(screen.queryByText("Chicago, Missouri uses the validator from Missouri.")).toBeNull();
+});
+
+it("labels the stake page with the ancestor whose pools it shows", async () => {
+  mockApi();
+  await showNode(`/stake?nodeId=${child.id}`);
+  expect(await screen.findByRole("heading", { level: 1, name: /Stake.*Chicago/ })).toBeTruthy();
+  expect((await screen.findByTestId("stake.via")).textContent).toBe("Stake via Illinois");
+  expect(screen.getAllByText("illinois.poolv1.near").length).toBeGreaterThan(0);
 });
 
 it("links the header stake action to the same-origin stake page", async () => {

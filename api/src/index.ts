@@ -2005,7 +2005,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                   ? [activeOrganizationId]
                   : (context.organizations ?? []).map((organization) => organization.id),
               );
-        const stakeable = yield* services.validators.stakeableNodeIds(
+        const stakeable = yield* services.validators.nodeIdsWithValidators(
           apps.flatMap((app) => (app.node ? [app.node.id] : [])),
         );
         return apps.map((app) => ({
@@ -2469,6 +2469,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return yield* services.nodes.listChildren(input.nodeId);
       }),
 
+      listNodeAncestors: builder.listNodeAncestors.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        yield* resolveNodeForAccess(services, input.nodeId);
+        return yield* services.nodes.listAncestors(input.nodeId);
+      }),
+
       getSubtree: builder.getSubtree.effect(function* ({ input, errors }) {
         const services = yield* ApiServices;
         const subtree = yield* services.nodes.subtreeWithValidators(input.nodeId);
@@ -2487,11 +2493,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         const node = yield* resolveNodeForAccess(services, input.nodeId);
 
-        const [children, subtree, validators, stakingValidators] = yield* Effect.all([
+        const [children, subtree, validators] = yield* Effect.all([
           services.nodes.listChildren(input.nodeId),
           services.nodes.subtreeWithValidators(input.nodeId),
           services.validators.listByNode(input.nodeId),
-          services.validators.resolveForStaking(input.nodeId),
         ]);
         const subtreeValidators = subtree.flatMap((entry) => entry.validators);
         const subtreeValidatorCountsByRole = { official: 0, community: 0 };
@@ -2510,7 +2515,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
           validators,
           subtreeValidatorCount: subtreeValidators.length,
           subtreeValidatorCountsByRole,
-          stakingValidators,
           children: children.map(({ id, kind, slug, name }) => ({
             id,
             kind,
@@ -2699,11 +2703,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         const validator = yield* services.validators.resolveByAccountId(input.accountId);
         return validator ?? null;
-      }),
-
-      resolveStakingValidators: builder.resolveStakingValidators.effect(function* ({ input }) {
-        const services = yield* ApiServices;
-        return yield* services.validators.resolveForStaking(input.nodeId);
       }),
 
       getStakingPoolApproval: builder.getStakingPoolApproval.effect(function* ({ input }) {
