@@ -1,7 +1,7 @@
 import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
 import { PageContainer } from "@/components/layout/page-container";
@@ -65,12 +65,14 @@ export function ActivityFormPage({
   title,
   description,
   headerTestId,
+  back,
   children,
 }: {
   nodeId: string;
   title: ReactNode;
   description?: ReactNode;
   headerTestId: string;
+  back?: { link: ReactElement; label: string };
   children: ReactNode;
 }) {
   const translate = useAppTranslation();
@@ -84,11 +86,13 @@ export function ActivityFormPage({
           nativeButton={false}
           data-testid="activity-form.back"
           render={
-            <Link to="/nodes/$nodeId/content" params={{ nodeId }} search={{ tab: "events" }} />
+            back?.link ?? (
+              <Link to="/nodes/$nodeId/content" params={{ nodeId }} search={{ tab: "events" }} />
+            )
           }
         >
           <ArrowLeftIcon />
-          {translate("events.title")}
+          {back?.label ?? translate("events.title")}
         </Button>
         <PageHeader title={title} description={description} headerTestId={headerTestId} />
       </div>

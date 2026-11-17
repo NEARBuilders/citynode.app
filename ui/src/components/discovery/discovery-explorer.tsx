@@ -372,7 +372,7 @@ export function DiscoveryExplorer({
             basic ? (
               <div className="flex flex-col gap-4 px-6 pb-8">
                 <p className="text-sm text-muted-foreground">{t("explore.detail.basic")}</p>
-                {basic.placeSlug && (
+                {basic.placeSlug && basic.joinable && (
                   <Button
                     data-testid="explore-detail-join"
                     nativeButton={false}
@@ -421,7 +421,7 @@ export function DiscoveryExplorer({
               )}
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap gap-2">
-                  {selected.placeSlug && (
+                  {selected.placeSlug && selected.joinable && (
                     <Button
                       data-testid="explore-detail-join"
                       nativeButton={false}

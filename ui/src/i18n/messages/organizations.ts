@@ -123,6 +123,18 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Organisation « {name} » créée",
     "已创建组织“{name}”",
   ],
+  "org.createAction": [
+    "Create organization",
+    "Crear organización",
+    "Créer une organisation",
+    "创建组织",
+  ],
+  "org.createHint": [
+    "Create an organization. You'll be its owner and can invite people.",
+    "Crea una organización. Serás su propietario y podrás invitar a otras personas.",
+    "Créez une organisation. Vous en serez propriétaire et pourrez inviter des personnes.",
+    "创建组织。你将成为所有者并可邀请他人。",
+  ],
   "org.createTeam": ["Create team", "Crear equipo", "Créer une équipe", "创建团队"],
   "org.decline": ["Decline", "Rechazar", "Refuser", "拒绝"],
   "org.declining": ["Declining…", "Rechazando…", "Refus…", "正在拒绝…"],

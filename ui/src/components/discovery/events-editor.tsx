@@ -13,6 +13,7 @@ export function EventsEditor({
   profileLink,
   reviewImports,
   canManage = true,
+  showMapStatus = true,
 }: {
   nodeId: string;
   tenantStatus: TenantStatus | undefined;
@@ -20,12 +21,13 @@ export function EventsEditor({
   profileLink?: ReactElement;
   reviewImports?: boolean;
   canManage?: boolean;
+  showMapStatus?: boolean;
 }) {
   const api = useApiClient();
   const profile = useQuery(discoveryProfileQueryOptions(api, nodeId));
   return (
     <div className="flex flex-col gap-8">
-      {profile.isSuccess && (
+      {showMapStatus && profile.isSuccess && (
         <CommunityMapStatus
           nodeId={nodeId}
           tenantStatus={tenantStatus}

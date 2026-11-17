@@ -7,6 +7,9 @@ import type { PlacesService } from "../services/places";
 
 type AuthClient = ContractRouterClient<authContract>;
 
+const STANDING_JOIN_CODE_MAX_USES = 500;
+const STANDING_JOIN_CODE_LIFETIME_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+
 export interface ActivateCommunityDeps {
   places: PlacesService;
   nodes: NodesService;
@@ -35,64 +38,98 @@ export async function activateCommunity(
   }
   const place = resolution.place;
 
-  const existing = await Effect.runPromise(deps.nodes.getByPlace(place.id));
-  if (existing) {
-    const joinCodeId = (existing.metadata as { joinCodeId?: string } | null)?.joinCodeId;
-    if (!joinCodeId) {
-      throw new ORPCError("CONFLICT", {
-        message: "This community is missing its join code",
-      });
-    }
-    return {
-      nodeId: existing.id,
-      placeId: place.id,
-      slug: place.slug,
-      organizationId: existing.orgId ?? "",
-      joinCode: joinCodeId,
-      alreadyActivated: true,
-    };
+  const existing = await existingActivation(deps, place);
+  if (existing) return existing;
+
+  let organization: { id: string };
+  try {
+    organization = await auth.createOrganization({ name: place.name, slug: place.slug });
+  } catch (error) {
+    if (!(error instanceof ORPCError && error.code === "CONFLICT")) throw error;
+    const raced = await existingActivation(deps, place);
+    if (raced) return raced;
+    throw new ORPCError("CONFLICT", {
+      message: "This community's name is already used by another organization",
+    });
   }
 
-  const organization = await auth
-    .createOrganization({ name: place.name, slug: place.slug })
-    .catch(async (error) => {
-      if (!(error instanceof ORPCError) || error.code !== "CONFLICT") throw error;
-      // The slug is taken — but if it belongs to an organization this caller
-      // owns, an earlier activation died after creating it. Reuse and finish;
-      // only a stranger's name is a real conflict.
-      const mine = await auth.listOrganizations();
-      const owned = mine.find((org) => org.slug === place.slug);
-      if (!owned) {
-        throw new ORPCError("CONFLICT", {
-          message: "This community's name is already used by another organization",
-        });
-      }
-      return owned;
-    });
-
-  const joinCode = await auth.createOnboardingCode({
+  const linked = await linkOrganization(deps, auth, {
+    place,
     organizationId: organization.id,
-    eventId: `join:${place.slug}`,
-    eventName: `Join ${place.name}`,
+    userId: input.userId,
+  }).catch(async (error) => {
+    await auth.deleteOrganization({ organizationId: organization.id }).catch(() => undefined);
+    throw error;
+  });
+
+  if (!linked.created) {
+    await auth.deleteOrganization({ organizationId: organization.id }).catch(() => undefined);
+  }
+
+  return {
+    nodeId: linked.node.id,
+    placeId: place.id,
+    slug: place.slug,
+    organizationId: linked.created ? organization.id : (linked.node.orgId ?? ""),
+    joinCode: linked.joinCode,
+    alreadyActivated: !linked.created,
+  };
+}
+
+async function linkOrganization(
+  deps: ActivateCommunityDeps,
+  auth: AuthClient,
+  input: {
+    place: { id: string; slug: string; name: string };
+    organizationId: string;
+    userId: string;
+  },
+) {
+  const joinCode = await auth.createOnboardingCode({
+    organizationId: input.organizationId,
+    eventId: `join:${input.place.slug}`,
+    eventName: `Join ${input.place.name}`,
+    maxUses: STANDING_JOIN_CODE_MAX_USES,
+    expiresAt: new Date(Date.now() + STANDING_JOIN_CODE_LIFETIME_MS),
   });
 
   const activation = await Effect.runPromise(
     deps.nodes.activateForPlace({
-      placeId: place.id,
-      slug: place.slug,
-      name: place.name,
-      orgId: organization.id,
+      placeId: input.place.id,
+      slug: input.place.slug,
+      name: input.place.name,
+      orgId: input.organizationId,
       activatedBy: input.userId,
       joinCodeId: joinCode.code,
     }),
   );
 
+  const storedJoinCode = (activation.node.metadata as { joinCodeId?: string } | null)?.joinCodeId;
   return {
-    nodeId: activation.node.id,
+    node: activation.node,
+    created: activation.created,
+    joinCode: activation.created ? joinCode.code : (storedJoinCode ?? ""),
+  };
+}
+
+async function existingActivation(
+  deps: ActivateCommunityDeps,
+  place: { id: string; slug: string },
+): Promise<ActivationResult | null> {
+  const existing = await Effect.runPromise(deps.nodes.getByPlace(place.id));
+  if (!existing) return null;
+  const joinCodeId = (existing.metadata as { joinCodeId?: string } | null)?.joinCodeId;
+  if (!joinCodeId) {
+    throw new ORPCError("CONFLICT", {
+      message: "This community is missing its join code",
+    });
+  }
+  return {
+    nodeId: existing.id,
     placeId: place.id,
     slug: place.slug,
-    organizationId: organization.id,
-    joinCode: joinCode.code,
-    alreadyActivated: !activation.created,
+    organizationId: existing.orgId ?? "",
+    joinCode: joinCodeId,
+    alreadyActivated: true,
   };
 }

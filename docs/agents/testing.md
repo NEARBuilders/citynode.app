@@ -35,6 +35,29 @@ seed module is the fix, tracked at retro 2026-10-24.
 | **Integration** — the real oRPC router in-process, auth context injected via headers, DAO checks mocked | `api/tests/integration` | contract behavior: who may do what to which resource, error shapes, transactions |
 | **Regression** — the full composed `bos dev` stack, real browser, real remote auth UI | `tests/regression/browser/specs` | rendered journeys: sessions, SSR/CSR compose, navigation, admin flows |
 
+## When each tier runs
+
+The matrix runs exactly where a decision is made — never everywhere:
+
+| Tier | Where | What runs | Wall time |
+|---|---|---|---|
+| **T0 local** | lefthook hooks (`lefthook.yml`, installed by `pnpm run prepare`) | pre-commit: Biome on staged files · pre-push: `typecheck` + `lint:effect` | seconds |
+| **T1 PR** | `ci.yml` on pull requests | lint/typecheck, path-gated unit suites, ui-only app-load smoke; slow stack suites skip | ~4 min |
+| **T2 gate** | `release.yml` before every npm publish | unit + start regression (parallel planes — `tier: release`) | ~15–20 min |
+| **T2 nightly** | nightly on the main tip (`backcompat-nightly.yml`) via `regression-full.yml` (`tier: nightly`) | the full matrix: unit + dev + start + backcompat + framework, parallel planes (backcompat mode currently broken at boot — see AGENTS.md) | ~25 min |
+
+The gate proves the production artifact (start) and the published-chain
+contract (backcompat). The dev and framework planes pin the `bos dev`
+machinery (source-mode dev server, process death) — app-code changes cannot
+break them, and the start plane's full suite already covers their user
+journeys — so they canary nightly instead of gating every publish.
+
+The slow suites (HTTP stacks, sharded browser matrix, process-death framework
+regression) live in `ci.yml` as `workflow_dispatch`-only jobs for triage, and
+run for real only in T2. Consequence to accept: a journey broken by a UI PR
+surfaces at the nightly (~24h bound) or at the release gate — whichever comes
+first — not on the PR itself.
+
 Choose the lowest layer that pins the behavior. Escalate when the failure you
 are preventing only materializes one layer up (cookie handling, hydration,
 loading states, module loading are things jsdom cannot even reproduce).
@@ -50,6 +73,18 @@ look in `node_modules`):
 - SSR/client construction parity, digest computation, compose-payload schema
   checks, degrade-to-core-only semantics
 - the framework's client machinery: session refresh, MF loader retry chains
+- **the verification spine** ([ADR 0046](../adr/0046-manifest-attribution.md),
+  `GLOSSARY.md` — "verification spine"): each suite pins one layer, so
+  verification regressions have an address —
+
+| Spine layer | Suite (`packages/everything-dev/tests/unit`) | What it pins |
+|---|---|---|
+| bytes ↔ digest | `verify-engine.test.ts` | the `Verifier` engine: SRI fetches, `Verified<T>` branding, the digest cache, the tagged errors |
+| config → manifest → files | `verify-chain.test.ts` | the walker's three depths and per-leg reporting (`pointer`/`entries`/`files`) |
+| config → manifest → files | `manifest-signature.test.ts` | attribution: signing, unregistered keys, rotation, tampered documents, every-depth failure |
+| composition identities | `digest-identity.test.ts` | pointer vs deployment digests and their documented relation |
+| served bytes in the MF pipeline | `federation-integrity.test.ts` | the #642 gate: the loader verifies every registered byte at fetch time |
+| identity wiring | `boot-snapshot-schema.test.ts` · `composition-lockfile-schema.test.ts` | the stored-state planes recomputing `pointerDigest` |
 
 Prove claims about *your* composition state without re-testing the engine:
 `pnpm run verify:runtime-map` diff-checks the generated map against the real
@@ -87,6 +122,55 @@ boundary above; until it lands, this document is the contract.
 - **The stall watchdog** fails after ~120 s of zero test progress: a spec that
   can hang waits explicitly (bounded `waitFor`, assertions with timeout), it
   doesn't spin silently.
+
+## Demo seed — realistic local data and persona fixtures
+
+`pnpm run seed:demo` fills the local databases with six communities that look
+like real usage: Lagos and Lisbon (mature, events and reports since August),
+Nairobi and Buenos Aires (activated this month, setup incomplete), Kraków
+(quiet since September) and Manila (events, no reports). Lagos and Lisbon have
+the month's monthly report in (Lagos reviewed, Lisbon waiting), and some of
+their event reports are reviewed. Dates are relative to the day it runs
+(`--today YYYY-MM-DD` pins them); the monthly reports belong to the month that
+held the day a week before, so `--today 2026-12-03` shows November being
+chased. Ids are deterministic and each
+run deletes and rewrites only demo rows, so it is safe to re-run.
+
+1. In `.env`, set `BETTER_AUTH_SECRET`, `API_DATABASE_URL`, `AUTH_DATABASE_URL`
+   (and `PROPOSALS_DATABASE_URL` if it has its own database) to explicit
+   `pglite:<absolute dir>` or local `postgres://` URLs, and `BASE_URL`. The
+   seed refuses a database on any host other than localhost.
+2. Boot the app once (`pnpm run dev`) so migrations run. With PGlite, stop it
+   before seeding — one process per data dir; the seed refuses while the app
+   answers on `BASE_URL`.
+3. `pnpm run seed:demo`, then start the app again.
+4. `pnpm run seed:demo:login` and open `http://localhost:4599`: each link sets
+   that person's session cookie for `localhost` and redirects into the app.
+
+| Persona | Person | Shows |
+|---|---|---|
+| `platformAdmin` | Nadia Rahman | platform admin, also an admin of Nairobi |
+| `platformAdminOnly` | Omar Haddad | platform admin who runs no community |
+| `ownerMature` | Adaeze Okonkwo | owner of Lagos: events to report, joins, returning members |
+| `organizer` | Tunde Bakare | Lagos events team, not owner |
+| `finance` | Ifeoma Nwosu | Lagos finance team |
+| `member` | Chidi Eze | plain Lagos member who attended most events |
+| `twoCommunities` | Sofia Almeida | on the events team of Lisbon (active) and Lagos, so `/report` asks which |
+| `noCommunity` | Daniel Mensah | signed in, no community |
+| `ownerNew`, `ownerNewWithEvents`, `ownerQuiet`, `ownerNoReports`, `ownerSecondMature` | | owners of Nairobi, Buenos Aires, Kraków, Manila, Lisbon |
+
+The data lives in `tests/regression/fixtures/demo/demo-data.ts` (one entry per
+community; new content is a new field there plus one section function in
+`tests/regression/lib/demo-seed.ts`). Specs import
+`seedDemoCommunities()` and `signInAsDemo(page, seed, "ownerMature")` from
+`tests/regression/browser/helpers/demo.ts`.
+
+`pnpm run screens:capture -- --out <dir> --label <before|after>` signs in as
+each persona and saves `<persona>--<page>--<desktop|mobile>.png` at 1440×900
+and 390×844 (`--base-url`, `--only <persona|page|persona:page,…>`, and
+`--now <ISO date>` to pin the browser clock to a seed date). Its `SHOTS` list in
+`scripts/capture-screens.mjs` is the place to add routes; a route that answers
+404 is skipped and reported in `<label>.json`.
 
 ## Writing a good regression test
 

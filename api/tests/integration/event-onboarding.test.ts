@@ -29,6 +29,7 @@ vi.mock("@/services/dao", () => ({
 type ForwardedCall = { context: unknown; input: Record<string, unknown> };
 
 const forwarded: ForwardedCall[] = [];
+let upstreamOverrides: Record<string, unknown> = {};
 
 const authStub = {
   client: (context: unknown) => ({
@@ -47,6 +48,7 @@ const authStub = {
         expiresAt: input.expiresAt,
         revokedAt: null,
         createdAt: now,
+        ...upstreamOverrides,
       };
     },
   }),
@@ -170,6 +172,21 @@ describe("creating an onboarding code for a Node Event", () => {
     await organizer.createEventOnboardingCode({ eventId: event.id, expiresAt });
 
     expect(forwarded.at(-1)?.input.expiresAt).toEqual(new Date(expiresAt));
+  });
+
+  it("passes on a code without an expiry and names it after the event", async () => {
+    const { org, node, editor } = await organizationNode();
+    const event = await editor.saveDiscoveryActivity(eventInput(node.id));
+    const organizer = await organizerClient(org);
+    upstreamOverrides = { eventName: null, expiresAt: null };
+
+    try {
+      const created = await organizer.createEventOnboardingCode({ eventId: event.id });
+      expect(created.expiresAt).toBeNull();
+      expect(created.eventName).toBe("Builders Night");
+    } finally {
+      upstreamOverrides = {};
+    }
   });
 
   it("refuses an activity that is not an event", async () => {

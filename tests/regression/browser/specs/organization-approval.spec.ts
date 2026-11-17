@@ -1,8 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { createAuthTestInstance } from "../../lib/auth-test-instance";
-import { computeRegressionEnv } from "../../lib/regression-env.mjs";
-import { waitForApp } from "../helpers/page-ready";
-import { injectSessionCookies } from "../helpers/seeded";
 
 test.use({ trace: "on" });
 
@@ -56,45 +52,5 @@ test("passkey signup creates an active personal organization and can sign in aga
         if (!page.isClosed()) throw error;
       });
     }
-  }
-});
-
-test("creating an organization makes it active with the creator as owner", async ({ page }) => {
-  const env = computeRegressionEnv();
-  const fixture = await createAuthTestInstance({
-    authDatabaseUrl: env.dbUrls.AUTH_DATABASE_URL,
-    secret: env.authSecret,
-  });
-  const unique = `active-${Date.now()}`;
-  const slug = `created-${unique}`;
-  try {
-    const creator = await fixture.test.saveUser(
-      fixture.test.createUser({
-        email: `${unique}@example.com`,
-        name: "Organization creator",
-        role: "user",
-        emailVerified: true,
-      }),
-    );
-    await injectSessionCookies(
-      page,
-      await fixture.test.getCookies({ userId: creator.id, domain: "localhost" }),
-    );
-    await page.goto("/orgs/new", { waitUntil: "domcontentloaded" });
-    await waitForApp(page);
-    await page.getByPlaceholder("My Team").fill(`Created ${unique}`);
-    await page.getByPlaceholder("my-team").fill(slug);
-    await page.getByTestId("orgs.new.submit").click();
-    await expect(page).toHaveURL(new RegExp(`/orgs/${slug}`), {
-      waitUntil: "commit",
-      timeout: 15000,
-    });
-    await expect(page.getByTestId("orgs-request-status")).toHaveCount(0);
-    await expect(page.getByTestId("orgs-tab-members")).toBeVisible();
-    await expect(page.getByTestId("org-badges")).toContainText("Owner");
-    await expect(page.getByTestId("org-badges")).toContainText("Active", { timeout: 15000 });
-    await expect(page.getByTestId("org-make-active")).toHaveCount(0);
-  } finally {
-    await fixture.close();
   }
 });

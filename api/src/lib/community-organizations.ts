@@ -91,8 +91,6 @@ async function locateSlugOrganization(
   auth: AuthClient,
   input: {
     slug: string;
-    proposalId: string;
-    proposerUserId?: string;
     recordedOrganizationId?: string;
   },
 ): Promise<OrganizationSummary | null> {
@@ -102,8 +100,7 @@ async function locateSlugOrganization(
     });
     if (recorded?.slug === input.slug) return recorded;
   }
-  const visible = await readOrganization(auth, undefined, input.slug);
-  return visible;
+  return await readOrganization(auth, undefined, input.slug);
 }
 
 async function createCommunityOrganization(
@@ -221,32 +218,17 @@ async function bindCommunityOrganization(
       adopted ? SLUG_CONFLICT : "This organization belongs to another community application",
     );
   }
-  if (summary.status === "rejected") {
-    throw conflict(adopted ? SLUG_CONFLICT : "The existing organization request was rejected");
-  }
-  if (summary.status === "pending" && summary.metadata?.communityProposalId !== input.proposalId) {
-    throw notOwned();
-  }
   const { organization, joined } = await openOrganization(
     auth,
     summary,
     input.reviewerUserId,
     "admin",
   );
-  const proposerMember = organization.members.find((member) => member.userId === proposerUserId);
-  const foreignApplicant =
-    typeof organization.metadata?.communityApplicantId === "string" &&
-    organization.metadata.communityApplicantId !== proposerUserId;
-  const foreignProposal =
-    typeof organization.metadata?.communityProposalId === "string" &&
-    organization.metadata.communityProposalId !== input.proposalId;
-  const foreignOwner = organization.members.some(
-    (member) => member.role === "owner" && member.userId !== proposerUserId,
-  );
   if (
     proposerUserId &&
-    proposerMember?.role !== "owner" &&
-    (foreignApplicant || foreignProposal || foreignOwner)
+    !organization.members.some(
+      (member) => member.userId === proposerUserId && member.role === "owner",
+    )
   ) {
     if (joined) {
       await auth.leaveOrganization({ organizationId: organization.id }).catch(() => undefined);
@@ -254,7 +236,6 @@ async function bindCommunityOrganization(
     throw notOwned();
   }
   await input.onOrganization?.(organization.id);
-
   const metadata = organization.metadata ?? {};
   const stamp = {
     ...applicantMetadata({ ...input, proposerUserId }),
@@ -290,6 +271,7 @@ async function bindCommunityOrganization(
   return organization;
 }
 
+// TODO(remove): legacy apply-flow provisioning, replaced by the Official Application cutover (#520).
 export async function provisionCommunityOrganization(
   auth: AuthClient,
   input: ProvisionInput,
@@ -329,9 +311,6 @@ export async function provisionCommunityOrganization(
       if (!slugStatus.status && isSlugTaken(error)) throw conflict(SLUG_UNREACHABLE);
       throw error;
     }));
-  if (summary.status === "rejected") {
-    throw conflict("The community organization request was rejected");
-  }
   await input.onOrganization?.(summary.id);
   const linked = summary.metadata?.communityLinkedOrg === "true";
   const { organization, joined } = await openOrganization(

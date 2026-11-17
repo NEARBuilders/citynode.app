@@ -29,7 +29,7 @@ afterEach(() => {
   cleanup();
 });
 
-const runtimeConfig = { deploymentFingerprint: "v1" } as never;
+const runtimeConfig = { deploymentDigest: "v1" } as never;
 
 describe("VersionRefreshBanner", () => {
   it("renders nothing before a new version is reported", async () => {
