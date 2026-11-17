@@ -1,14 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import type { ReactNode } from "react";
-import { useApiClient } from "@/app";
-import { Button, LocalDate } from "@/components";
+import { LocalDate } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
-import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
 import type { Proposal } from "@/lib/queries/proposals";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
-import { humanize } from "../-admin-ui";
 
 export function NodeProposalRequest({ proposal }: { proposal: Proposal }) {
   const translate = useAppTranslation();
@@ -36,13 +32,15 @@ export function NodeProposalRequest({ proposal }: { proposal: Proposal }) {
         <Fact label={translate("common.submitted")}>
           <LocalDate value={proposal.createdAt} format="relative" />
         </Fact>
-        <Fact label={translate("common.kind")}>{humanize(application.kind, translate)}</Fact>
-        <Fact label={translate("admin.proposal.parentCommunity")}>
-          {application.parentId ? (
-            <ParentName nodeId={application.parentId} />
-          ) : (
-            translate("admin.proposal.noParent")
-          )}
+        <Fact label={translate("common.community")}>
+          <Link
+            to="/n/$slug"
+            params={{ slug: application.slug }}
+            className="text-foreground hover:underline"
+            data-testid="admin-proposal-community"
+          >
+            {application.name}
+          </Link>
         </Fact>
         <Fact label={translate("admin.proposal.owningDao")} className="sm:col-span-2">
           <span className="font-mono break-all" data-testid="admin-proposal-dao">
@@ -51,43 +49,6 @@ export function NodeProposalRequest({ proposal }: { proposal: Proposal }) {
         </Fact>
       </dl>
     </div>
-  );
-}
-
-function ParentName({ nodeId }: { nodeId: string }) {
-  const translate = useAppTranslation();
-  const apiClient = useApiClient();
-  const parentQuery = useQuery(nodeByIdQueryOptions(apiClient, nodeId));
-  if (parentQuery.isLoading) return <span className="text-muted-foreground">…</span>;
-  if (parentQuery.isError && !parentQuery.data) {
-    return (
-      <span role="alert" className="flex flex-wrap items-center gap-1 text-destructive">
-        {translate("admin.proposal.parentFailed")}
-        <Button
-          variant="link"
-          size="xs"
-          className="h-auto p-0"
-          onClick={() => void parentQuery.refetch()}
-        >
-          {translate("common.retry")}
-        </Button>
-      </span>
-    );
-  }
-  if (!parentQuery.data) {
-    return (
-      <span className="text-muted-foreground">{translate("admin.proposal.parentMissing")}</span>
-    );
-  }
-  return (
-    <Link
-      to="/admin/nodes/$nodeId"
-      params={{ nodeId }}
-      search={{}}
-      className="text-foreground hover:underline"
-    >
-      {parentQuery.data.name}
-    </Link>
   );
 }
 
