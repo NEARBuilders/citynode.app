@@ -129,13 +129,25 @@ describe("adoptCatalogPlace", () => {
       expect(await nodePlace()).toBe(pakistan!.id);
     }));
 
-  it("clears the link when the location no longer matches a catalog place", () =>
+  it("keeps the link when the location does not match a catalog place", () =>
     run(async ({ db, nodeId, countryId, nodePlace }) => {
       await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
       expect(await nodePlace()).toBe(countryId);
 
       await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "Pakistan", "country");
-      expect(await nodePlace()).toBeNull();
+      expect(await nodePlace()).toBe(countryId);
+    }));
+
+  it("keeps the link when the location is a qualified catalog name", () =>
+    run(async ({ db, nodeId, countryId, nodePlace }) => {
+      await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
+      await adoptCatalogPlace(
+        db,
+        { id: nodeId, placeId: countryId },
+        "Jakarta, Indonesia",
+        "country",
+      );
+      expect(await nodePlace()).toBe(countryId);
     }));
 
   it("only adopts places that match the node kind", () =>
@@ -157,16 +169,16 @@ describe("adoptCatalogPlace", () => {
       expect(await nodePlace()).toBeNull();
     }));
 
-  it("clears the link when the location is emptied", () =>
+  it("keeps the link when the location is emptied", () =>
     run(async ({ db, nodeId, countryId, nodePlace }) => {
       await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
       expect(await nodePlace()).toBe(countryId);
 
       await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "  ", "country");
-      expect(await nodePlace()).toBeNull();
+      expect(await nodePlace()).toBe(countryId);
     }));
 
-  it("unlinks when the new location is already taken", () =>
+  it("keeps the link when the new location is already taken", () =>
     run(async ({ db, tenantId, nodeId, countryId, nodePlace }) => {
       const [pakistan] = await db
         .insert(placesTable)
@@ -183,6 +195,6 @@ describe("adoptCatalogPlace", () => {
       expect(await nodePlace()).toBe(countryId);
 
       await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "Pakistan", "country");
-      expect(await nodePlace()).toBeNull();
+      expect(await nodePlace()).toBe(countryId);
     }));
 });

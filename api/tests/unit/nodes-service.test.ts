@@ -502,6 +502,20 @@ describe("NodesService", () => {
     );
   });
 
+  it("resolveBySlug finds a linked node by its own slug when that differs from the place", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const { node } = yield* Effect.tryPromise(() =>
+          seedPlaceWithNode(db, { placeSlug: "nigeria", nodeSlug: "lagos-builders" }),
+        );
+
+        expect((yield* nodes.resolveBySlug("lagos-builders"))?.id).toBe(node.id);
+        expect((yield* nodes.resolveBySlug("nigeria"))?.id).toBe(node.id);
+      }),
+    );
+  });
+
   it("deletes a node", async () => {
     const layer = freshLayer();
     const tenantId = await runService(layer, ({ tenants }) => seedTenant(tenants));

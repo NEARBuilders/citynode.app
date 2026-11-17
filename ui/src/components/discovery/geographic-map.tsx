@@ -435,8 +435,9 @@ export function GeographicMap({
             );
             for (const extra of extraAreas)
               outlines.set(extra.point.id, boundaryBounds(extra.boundary));
+            map.stop();
             if (world) {
-              map.setView([20, 0], 2);
+              map.setView([20, 0], 2, { animate: false });
             } else if (drawn.length) {
               const bounds = L.latLngBounds([]);
               for (const entry of drawn)
@@ -444,10 +445,11 @@ export function GeographicMap({
               map.fitBounds(bounds, {
                 padding: [35, 35],
                 maxZoom: 8,
+                animate: false,
               });
             }
             const focused = drawn.find((entry) => entry.point.nodeId === selected.current);
-            if (focused) map.panTo(focused.latlng);
+            if (focused) map.panTo(focused.latlng, { animate: false });
           }
           draw();
         };

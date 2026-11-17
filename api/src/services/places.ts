@@ -94,8 +94,17 @@ function toTimestampIso(value: Date | string | null): string | null {
 function listedCommunity(row: {
   nodeId: string | null;
   tenantId: string | null;
-}): row is { nodeId: string; tenantId: string } {
-  return Boolean(row.nodeId && row.tenantId);
+  nodeTenantId: string | null;
+  activatedAt: Date | string | null;
+}): row is {
+  nodeId: string;
+  tenantId: string | null;
+  nodeTenantId: string | null;
+  activatedAt: Date | string | null;
+} {
+  if (!row.nodeId) return false;
+  if (row.nodeTenantId == null) return row.activatedAt != null;
+  return row.tenantId != null;
 }
 
 function aliasCandidates(input: string): string[] {
@@ -203,6 +212,7 @@ export const PlacesLive = Layer.effect(
                 updatedAt: placesTable.updatedAt,
                 nodeId: nodesTable.id,
                 nodeSlug: nodesTable.slug,
+                nodeTenantId: nodesTable.tenantId,
                 activatedAt: nodesTable.activatedAt,
                 tenantId: tenantsTable.id,
                 memberCount: memberCountObservations.count,
@@ -310,6 +320,8 @@ export const PlacesLive = Layer.effect(
               label: placesTable.label,
               nodeId: nodesTable.id,
               nodeSlug: nodesTable.slug,
+              nodeTenantId: nodesTable.tenantId,
+              activatedAt: nodesTable.activatedAt,
               tenantId: tenantsTable.id,
             })
             .from(placesTable)

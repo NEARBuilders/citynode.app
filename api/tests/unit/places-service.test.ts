@@ -268,6 +268,32 @@ describe("PlacesService", () => {
     expect(resolved?.community).toBeNull();
   });
 
+  it("resolve treats an activated node without a tenant as the place community", async () => {
+    const layer = freshLayer();
+    const place = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "andorra", name: "Andorra" }),
+    );
+    const [node] = await runService(layer, ({ db }) =>
+      db
+        .insert(nodesTable)
+        .values({
+          slug: "andorra",
+          name: "Andorra",
+          placeId: place.id,
+          activatedAt: new Date("2026-03-01T00:00:00Z"),
+        })
+        .returning(),
+    );
+
+    const resolved = await runService(layer, ({ places }) => places.resolve({ place: "andorra" }));
+    expect(resolved?.community).toEqual({
+      nodeId: node!.id,
+      slug: "andorra",
+      activatedAt: "2026-03-01T00:00:00.000Z",
+      memberCount: null,
+    });
+  });
+
   it("resolve treats a listed active node as the place community without activatedAt", async () => {
     const layer = freshLayer();
     const place = await runService(layer, ({ db }) =>
@@ -456,6 +482,29 @@ describe("PlacesService", () => {
       activated: false,
       nodeId: null,
     });
+  });
+
+  it("mapPins treats an activated node without a tenant as activated", async () => {
+    const layer = freshLayer();
+    const andorra = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "andorra", name: "Andorra", latitude: 42.5, longitude: 1.5 }),
+    );
+    const [node] = await runService(layer, ({ db }) =>
+      db
+        .insert(nodesTable)
+        .values({
+          slug: "andorra",
+          name: "Andorra",
+          placeId: andorra.id,
+          activatedAt: new Date("2026-03-01T00:00:00Z"),
+        })
+        .returning(),
+    );
+
+    const pins = await runService(layer, ({ places }) => places.mapPins());
+    expect(pins).toEqual([
+      expect.objectContaining({ slug: "andorra", activated: true, nodeId: node!.id }),
+    ]);
   });
 
   it("mapPins treats a node without a listed tenant as available", async () => {

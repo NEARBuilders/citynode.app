@@ -167,16 +167,18 @@ export async function adoptCatalogPlace(
   kind: string | null,
 ): Promise<void> {
   const location = place.trim();
-  if (node.placeId !== null) {
-    if (location) {
-      const current = await matchCatalogPlace(db, location, kind);
-      if (current?.id === node.placeId) return;
-    }
-    await db.update(nodes).set({ placeId: null }).where(eq(nodes.id, node.id));
-  }
   if (!location) return;
   const matched = await matchCatalogPlace(db, location, kind);
-  if (!matched) return;
+  if (!matched || matched.id === node.placeId) return;
+  const [taken] = await db
+    .select({ id: nodes.id })
+    .from(nodes)
+    .where(and(eq(nodes.placeId, matched.id), sql`${nodes.id} <> ${node.id}`))
+    .limit(1);
+  if (taken) return;
+  if (node.placeId !== null) {
+    await db.update(nodes).set({ placeId: null }).where(eq(nodes.id, node.id));
+  }
   await db
     .update(nodes)
     .set({ placeId: matched.id })
