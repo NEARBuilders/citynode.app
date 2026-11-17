@@ -94,9 +94,15 @@ export interface NodesService {
     orgId: string;
     activatedBy: string;
     joinCodeId: string;
+    tenantId?: string | null;
+    kind?: NodeKind;
   }): NodeEffect<{ node: NodeRecord; created: boolean }>;
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
   setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
+  recordOfficialDao(
+    id: string,
+    dao: { accountId: string; network: "mainnet" | "testnet" },
+  ): NodeEffect<NodeRecord>;
   delete(id: string): NodeEffect<boolean>;
   listRootNodes: NodeEffect<NodeRecord[]>;
   listChildren(parentId: string): NodeEffect<NodeRecord[]>;
@@ -373,9 +379,10 @@ export const NodesLive = Layer.effect(
                 name: input.name,
                 placeId: input.placeId,
                 orgId: input.orgId,
+                tenantId: input.tenantId ?? null,
                 activatedAt: new Date(),
                 activatedBy: input.activatedBy,
-                metadata: { joinCodeId: input.joinCodeId },
+                metadata: mergeKindMetadata(input.kind, { joinCodeId: input.joinCodeId }),
               })
               .onConflictDoNothing()
               .returning();
@@ -478,6 +485,26 @@ export const NodesLive = Layer.effect(
           bulletin === null || bulletin.trim() === ""
             ? withoutMetadataKey("bulletin")
             : withMetadataKey("bulletin", bulletin);
+        const [row] = yield* query(() =>
+          db
+            .update(nodesTable)
+            .set({ metadata, updatedAt: new Date() })
+            .where(eq(nodesTable.id, id))
+            .returning(),
+        );
+        if (!row) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", {
+              message: "Node not found",
+              data: { resource: "node", resourceId: id },
+            }),
+          );
+        }
+        return toNodeRecord(row);
+      }),
+
+      recordOfficialDao: Effect.fn("NodesService.recordOfficialDao")(function* (id, dao) {
+        const metadata = sql`${nodesTable.metadata} || jsonb_build_object('daoAccountId', ${dao.accountId}::text, 'daoNetwork', ${dao.network}::text)`;
         const [row] = yield* query(() =>
           db
             .update(nodesTable)

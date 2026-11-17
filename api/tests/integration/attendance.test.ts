@@ -1,7 +1,14 @@
 import { ORPCError } from "@orpc/server";
 import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import {
+  activateTestNode,
+  authedContext,
+  daoContext,
+  getPluginClient,
+  orgContext,
+  teardown,
+} from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -121,18 +128,20 @@ async function community(name = "Attendance city") {
   const org = `attendance-${id}`;
   const provisioner = await getPluginClient(daoContext(`prov-${id}`, org, `at-${id}.near`));
   const tenant = await provisioner.createTenant({ name, accountId: `at-${id}.near` });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name,
     slug: `attendance-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   const editor = await getPluginClient(orgContext(`editor-${id}`, org));
-  const popUp = await provisioner.createNode({
+  const { node: popUp } = await activateTestNode({
     name: `${name} pop-up`,
     slug: `attendance-pop-up-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   const organizerId = `organizer-${id}`;
   organizers.add(`${org}:${organizerId}`);

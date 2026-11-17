@@ -11,7 +11,7 @@ import {
   type EventOnboardingCodeSchema,
   NodeProposalPayloadSchema,
 } from "./contract";
-import { DatabaseLive, DatabaseTag } from "./db/layer";
+import { DatabaseLive } from "./db/layer";
 import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import {
@@ -19,6 +19,12 @@ import {
   releaseCommunityOrganization,
 } from "./lib/community-organizations";
 import { ContextSchema } from "./lib/context";
+import {
+  linkOfficialDao,
+  officialDaoOf,
+  parseOfficialApplication,
+  resolveApplicationCommunity,
+} from "./lib/official-application";
 import { createPlatformOrganization, isPlatformOrganization } from "./lib/platform-stations";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { reportMonthWindow } from "./report-month";
@@ -80,7 +86,7 @@ import {
   type UpstreamTeam,
 } from "./team-join-policy";
 
-class ApiServices extends Context.Service<
+export class ApiServices extends Context.Service<
   ApiServices,
   {
     tenants: TenantsService;
@@ -241,13 +247,20 @@ const authorizeNodeAccess = (
 ): NodeEffect<void> =>
   Effect.gen(function* () {
     if (!node.tenantId) {
-      if (context.user?.role !== "admin") {
+      if (context.user?.role === "admin") return;
+      const officialOrgId =
+        options.resource === "validators" && node.orgId && officialDaoOf(node) ? node.orgId : null;
+      if (!officialOrgId || context.organization?.activeOrganizationId !== officialOrgId) {
         return yield* Effect.fail(
           new ORPCError("FORBIDDEN", {
-            message: "Standalone nodes can only be managed by platform admins",
+            message:
+              options.resource === "validators" && node.orgId
+                ? "Validators can be attached once the community is official"
+                : "Standalone nodes can only be managed by platform admins",
           }),
         );
       }
+      yield* requireNodeOperationsAccess(context);
       return;
     }
     const tenant = yield* services.tenants.resolveTenantById(node.tenantId!);
@@ -273,33 +286,6 @@ const authorizeNodeAccess = (
       );
     }
     yield* requireNodeOperationsAccess(context);
-  });
-
-const requireTenantOwnedByOrg = (
-  services: { tenants: TenantsService },
-  tenantId: string,
-  context: NodeAccessContext,
-): NodeEffect<TenantRecord> =>
-  Effect.gen(function* () {
-    const tenant = yield* services.tenants.resolveTenantById(tenantId);
-    if (!tenant) {
-      return yield* Effect.fail(
-        new ORPCError("NOT_FOUND", {
-          message: "Tenant not found",
-          data: { resource: "tenant", resourceId: tenantId },
-        }),
-      );
-    }
-    if (tenant.orgId !== context.organization?.activeOrganizationId) {
-      return yield* Effect.fail(
-        new ORPCError("FORBIDDEN", {
-          message: "This tenant does not belong to your organization",
-          data: {},
-        }),
-      );
-    }
-    yield* requireNodeOperationsAccess(context);
-    return tenant;
   });
 
 const isCommunitySettingsRole = (role: string | null | undefined): boolean =>
@@ -1264,7 +1250,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         const none = { daoAccountId: null, network: null };
         const node = yield* services.nodes.getById(input.nodeId);
-        if (!node?.tenantId) return none;
+        if (!node) return none;
+        const official = officialDaoOf(node);
+        if (official) return official;
+        if (!node.tenantId) return none;
         const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
         if (!tenant || tenant.ownerKind !== "dao") return none;
         return { daoAccountId: tenant.accountId, network: resolveNetwork(tenant.accountId) };
@@ -2111,6 +2100,99 @@ export default createPlugin.withPlugins<PluginsClient>()({
           });
         }),
 
+      approveOfficialApplication: builder.approveOfficialApplication
+        .use(requireAdmin)
+        .effect(function* ({ input, context }) {
+          const proposalsPlugin = plugins.proposals;
+          const authPlugin = plugins.auth;
+          if (!proposalsPlugin || !authPlugin) {
+            return yield* Effect.fail(
+              new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "The proposals or auth plugin is not available",
+              }),
+            );
+          }
+          const reviewerUserId = context.userId ?? context.user?.id ?? "";
+          const reviewerContext = {
+            reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+            userId: reviewerUserId,
+            user: context.user,
+          };
+          const proposalsClient = proposalsPlugin.client(reviewerContext);
+          const auth = authPlugin.client(reviewerContext);
+          const services = yield* ApiServices;
+          const failure = (message: string) => (error: unknown) =>
+            error instanceof ORPCError
+              ? error
+              : new ORPCError("INTERNAL_SERVER_ERROR", { message });
+          const listed = yield* Effect.tryPromise({
+            try: () =>
+              proposalsClient.getProposals({
+                pluginId: "node",
+                entityId: input.entityId,
+                limit: 1,
+              }),
+            catch: failure("Could not load the application"),
+          });
+          const proposal = listed.data.find((item) => item.id === input.proposalId);
+          if (!proposal) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", { message: "Application not found" }),
+            );
+          }
+          if (proposal.updatedAt !== input.expectedUpdatedAt) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", {
+                message: "This proposal changed. Refresh and try again.",
+              }),
+            );
+          }
+          if (
+            proposal.reviewStatus === "rejected" ||
+            proposal.reviewStatus === "removed" ||
+            (proposal.reviewStatus === "approved" && proposal.applyStatus === "applied")
+          ) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", { message: "This application is already decided" }),
+            );
+          }
+          const link = yield* Effect.tryPromise({
+            try: async () => {
+              const application = parseOfficialApplication(proposal.payload, proposal.entityId);
+              const community = await resolveApplicationCommunity(services, application);
+              return linkOfficialDao(services, auth, {
+                community,
+                daoAccountId: application.accountId,
+                reviewerUserId,
+              });
+            },
+            catch: failure("Could not link the DAO to the community"),
+          });
+          const approved =
+            proposal.reviewStatus === "approved" && proposal.applyStatus === "applying"
+              ? proposal
+              : (yield* Effect.tryPromise({
+                  try: () =>
+                    proposalsClient.approve({
+                      pluginId: "node",
+                      entityId: proposal.entityId,
+                      expectedUpdatedAt: proposal.updatedAt,
+                    }),
+                  catch: failure("Could not approve the application"),
+                })).data;
+          yield* Effect.tryPromise({
+            try: () =>
+              proposalsClient.markApplied({
+                pluginId: "node",
+                entityId: proposal.entityId,
+                expectedUpdatedAt: approved.updatedAt,
+                appliedResourceId: link.nodeId,
+              }),
+            catch: failure("Could not record the approval"),
+          });
+          return link;
+        }),
+
       applyCommunityProposal: builder.applyCommunityProposal.effect(function* ({
         input,
         context,
@@ -2294,58 +2376,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const services = yield* ApiServices;
         return yield* services.nodes.getById(input.nodeId);
       }),
-
-      createNode: builder.createNode
-        .use(requireAuth)
-        .use(requireOrganization)
-        .use(requireNodeOperations)
-        .effect(function* ({ input, context }) {
-          yield* guardNodeKind(null, requestedNodeKind(input));
-          const services = yield* ApiServices;
-          yield* requireTenantOwnedByOrg(services, input.tenantId, context);
-          if (input.parentId) {
-            yield* authorizeParentNode(services, input.parentId, context);
-          }
-          return yield* services.nodes.spawn({
-            kind: input.kind,
-            slug: input.slug,
-            name: input.name,
-            parentId: input.parentId ?? null,
-            tenantId: input.tenantId,
-            ...(input.metadata !== undefined && { metadata: input.metadata }),
-          });
-        }),
-
-      spawnNode: builder.spawnNode
-        .use(requireAuth)
-        .use(requireOrganization)
-        .use(requireNodeOperations)
-        .effect(function* ({ input, context, errors }) {
-          yield* guardNodeKind(null, requestedNodeKind(input));
-          const services = yield* ApiServices;
-          if (!input.tenantId && context.user?.role !== "admin") {
-            return yield* Effect.fail(
-              errors.FORBIDDEN({
-                message: "Standalone nodes can only be spawned by platform admins",
-                data: {},
-              }),
-            );
-          }
-          if (input.tenantId) {
-            yield* requireTenantOwnedByOrg(services, input.tenantId, context);
-          }
-          if (input.parentId) {
-            yield* authorizeParentNode(services, input.parentId, context);
-          }
-          return yield* services.nodes.spawn({
-            ...(input.kind !== undefined && { kind: input.kind }),
-            slug: input.slug,
-            name: input.name,
-            parentId: input.parentId ?? null,
-            ...(input.tenantId !== undefined ? { tenantId: input.tenantId } : {}),
-            ...(input.metadata !== undefined && { metadata: input.metadata }),
-          });
-        }),
 
       updateNode: builder.updateNode
         .use(requireAuth)
