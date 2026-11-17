@@ -424,10 +424,10 @@ export function GeographicMap({
               }),
             })),
           ];
-          const key = next
+          const key = `${world ? "world" : "fit"}:${next
             .map((point) => point.id)
             .sort()
-            .join(",");
+            .join(",")}`;
           if (key !== fitted) {
             fitted = key;
             const outlines = new Map(
@@ -435,7 +435,9 @@ export function GeographicMap({
             );
             for (const extra of extraAreas)
               outlines.set(extra.point.id, boundaryBounds(extra.boundary));
-            if (!world && drawn.length) {
+            if (world) {
+              map.setView([20, 0], 2);
+            } else if (drawn.length) {
               const bounds = L.latLngBounds([]);
               for (const entry of drawn)
                 bounds.extend(outlines.get(entry.point.nodeId ?? entry.point.id) ?? entry.latlng);

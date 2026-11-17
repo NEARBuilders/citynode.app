@@ -226,6 +226,7 @@ describe("PlacesService", () => {
     const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
     expect(resolved?.community).toEqual({
       nodeId: expect.any(String),
+      slug: "nigeria",
       activatedAt: "2026-01-15T00:00:00.000Z",
       memberCount: 47,
     });
@@ -248,6 +249,7 @@ describe("PlacesService", () => {
     const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
     expect(resolved?.community).toEqual({
       nodeId: expect.any(String),
+      slug: "nigeria",
       activatedAt: "2026-01-15T00:00:00.000Z",
       memberCount: null,
     });
@@ -272,12 +274,13 @@ describe("PlacesService", () => {
       insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
     );
     const node = await runService(layer, ({ db }) =>
-      insertListedNode(db, { slug: "nigeria", name: "Nigeria", placeId: place.id }),
+      insertListedNode(db, { slug: "lagos-builders", name: "Lagos Builders", placeId: place.id }),
     );
 
     const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
     expect(resolved?.community).toEqual({
       nodeId: node.id,
+      slug: "lagos-builders",
       activatedAt: null,
       memberCount: null,
     });
@@ -467,6 +470,25 @@ describe("PlacesService", () => {
     const pins = await runService(layer, ({ places }) => places.mapPins());
     expect(pins).toEqual([
       expect.objectContaining({ slug: "ghana", activated: false, nodeId: null }),
+    ]);
+  });
+
+  it("mapPins uses the node slug when a listed community occupies a place", async () => {
+    const layer = freshLayer();
+    const ghana = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "ghana", name: "Ghana", latitude: 7.95, longitude: -1.02 }),
+    );
+    await runService(layer, ({ db }) =>
+      insertListedNode(db, { slug: "accra-builders", name: "Accra Builders", placeId: ghana.id }),
+    );
+
+    const pins = await runService(layer, ({ places }) => places.mapPins());
+    expect(pins).toEqual([
+      expect.objectContaining({
+        slug: "accra-builders",
+        activated: true,
+        nodeId: expect.any(String),
+      }),
     ]);
   });
 

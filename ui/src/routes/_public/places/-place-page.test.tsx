@@ -37,7 +37,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mockApi(community: { nodeId: string } | null) {
+function mockApi(community: { nodeId: string; slug: string } | null) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -141,8 +141,8 @@ it("shows an unactivated place with a start-community action", async () => {
 });
 
 it("sends an activated place to its community page", async () => {
-  mockApi({ nodeId: "00000000-0000-4000-8000-000000000011" });
+  mockApi({ nodeId: "00000000-0000-4000-8000-000000000011", slug: "lagos-builders" });
   const router = await showPlace("nigeria");
   await screen.findByTestId("community-redirect");
-  expect(router.state.location.pathname).toBe("/n/nigeria");
+  expect(router.state.location.pathname).toBe("/n/lagos-builders");
 });

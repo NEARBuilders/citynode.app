@@ -224,6 +224,7 @@ export const PlaceSchema = z.object({
 
 export const PlaceCommunitySchema = z.object({
   nodeId: z.uuid(),
+  slug: z.string(),
   activatedAt: z.string().nullable(),
   memberCount: z.number().int().nullable(),
 });

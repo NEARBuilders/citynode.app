@@ -90,7 +90,7 @@ function PlacePage() {
   }
 
   if (resolved.data.community) {
-    return <Navigate to="/n/$slug" params={{ slug: resolved.data.place.slug }} />;
+    return <Navigate to="/n/$slug" params={{ slug: resolved.data.community.slug }} />;
   }
 
   const place = resolved.data.place;

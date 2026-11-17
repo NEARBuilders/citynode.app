@@ -29,6 +29,7 @@ export interface PlaceRecord {
 
 export interface PlaceCommunity {
   nodeId: string;
+  slug: string;
   activatedAt: string | null;
   memberCount: number | null;
 }
@@ -201,6 +202,7 @@ export const PlacesLive = Layer.effect(
                 createdAt: placesTable.createdAt,
                 updatedAt: placesTable.updatedAt,
                 nodeId: nodesTable.id,
+                nodeSlug: nodesTable.slug,
                 activatedAt: nodesTable.activatedAt,
                 tenantId: tenantsTable.id,
                 memberCount: memberCountObservations.count,
@@ -257,6 +259,7 @@ export const PlacesLive = Layer.effect(
           const community: PlaceCommunity | null = listedCommunity(row)
             ? {
                 nodeId: row.nodeId,
+                slug: row.nodeSlug ?? place.slug,
                 activatedAt: toTimestampIso(row.activatedAt),
                 memberCount: row.memberCount ?? null,
               }
@@ -306,6 +309,7 @@ export const PlacesLive = Layer.effect(
               longitude: placesTable.longitude,
               label: placesTable.label,
               nodeId: nodesTable.id,
+              nodeSlug: nodesTable.slug,
               tenantId: tenantsTable.id,
             })
             .from(placesTable)
@@ -327,7 +331,7 @@ export const PlacesLive = Layer.effect(
                 : [
                     {
                       id: row.id,
-                      slug: row.slug,
+                      slug: listedCommunity(row) ? (row.nodeSlug ?? row.slug) : row.slug,
                       name: row.name,
                       latitude: row.latitude,
                       longitude: row.longitude,
