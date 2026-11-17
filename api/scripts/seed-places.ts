@@ -136,6 +136,9 @@ const summary = await Effect.runPromise(
         .innerJoin(placesTable, eq(placesTable.id, placeAliasesTable.placeId))
         .where(and(eq(placeAliasesTable.kind, "geonames"), eq(placesTable.label, "city"))),
     );
+    const existingPlaces = yield* Effect.tryPromise(() =>
+      db.select({ slug: placesTable.slug }).from(placesTable),
+    );
     const catalog = buildPlacesCatalog({
       countryInfo,
       admin1Codes,
@@ -145,6 +148,7 @@ const summary = await Effect.runPromise(
       supranationals: SUPRANATIONALS,
       curatedAliases: CURATED_ALIASES,
       existingCitySlugs,
+      existingPlaceSlugs: existingPlaces.map((place) => place.slug),
     } satisfies SeedSources);
     yield* Effect.tryPromise(() => seedPlacesInto(db, catalog));
     const [counts] = yield* Effect.tryPromise(() =>

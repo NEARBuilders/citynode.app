@@ -36,6 +36,7 @@ export interface SeedSources {
   supranationals: Supranational[];
   curatedAliases: CuratedAlias[];
   existingCitySlugs?: ExistingCitySlug[];
+  existingPlaceSlugs?: string[];
 }
 
 export interface ExistingCitySlug {
@@ -536,6 +537,7 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
     taken.add(existing.slug);
     citySlugByGeonameid.set(existing.geonameid, existing.slug);
   }
+  for (const slug of sources.existingPlaceSlugs ?? []) taken.add(slug);
   for (const city of cities) {
     const slug =
       citySlugByGeonameid.get(city.geonameid) ?? citySlug(city, taken, countryBaseCounts);

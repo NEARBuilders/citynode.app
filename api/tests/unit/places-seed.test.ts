@@ -434,6 +434,30 @@ describe("buildPlacesCatalog", () => {
     expect(catalog.places.find((p) => p.slug === "paris")).toBeUndefined();
   });
 
+  it("never reuses a slug already in the database for a different city", () => {
+    const catalog = buildPlacesCatalog({
+      ...sources(),
+      existingCitySlugs: [{ geonameid: "999", slug: "springfield" }],
+      existingPlaceSlugs: ["springfield", "lagos", "chicago"],
+    });
+    const springfields = catalog.places.filter((p) => p.name === "Springfield").map((p) => p.slug);
+    expect(springfields).toEqual(["us-mo-springfield", "us-ma-springfield", "us-il-springfield"]);
+    expect(catalog.places.find((p) => p.name === "Lagos" && p.label === "city")?.slug).toBe(
+      "ng-la-lagos",
+    );
+    expect(catalog.places.find((p) => p.name === "Chicago")?.slug).toBe("us-chicago");
+    expect(catalog.places.filter((p) => p.slug === "springfield")).toHaveLength(0);
+  });
+
+  it("keeps a city's own slug when that slug is also listed as existing", () => {
+    const catalog = buildPlacesCatalog({
+      ...sources(),
+      existingCitySlugs: [{ geonameid: "4887398", slug: "chicago" }],
+      existingPlaceSlugs: ["chicago"],
+    });
+    expect(catalog.places.find((p) => p.name === "Chicago")?.slug).toBe("chicago");
+  });
+
   it("skips city rows with blank coordinates or a non-numeric id", () => {
     const catalog = buildPlacesCatalog({
       ...sources(),
