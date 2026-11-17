@@ -383,7 +383,7 @@ export function DiscoveryExplorer({
                 )}
                 <div>
                   <Button
-                    variant="outline"
+                    variant={basic.placeSlug && basic.joinable ? "outline" : "default"}
                     nativeButton={false}
                     render={
                       <Link
