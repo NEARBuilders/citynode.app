@@ -147,6 +147,14 @@ export function stakingValidatorsQueryOptions(apiClient: ApiClient, nodeId: stri
   });
 }
 
+export function fetchStakingValidators(
+  queryClient: QueryClient,
+  apiClient: ApiClient,
+  nodeId: string,
+) {
+  return queryClient.fetchQuery(stakingValidatorsQueryOptions(apiClient, nodeId));
+}
+
 export function adminNodeListQueryOptions(
   apiClient: ApiClient,
   scope: AdminNodeListScope,

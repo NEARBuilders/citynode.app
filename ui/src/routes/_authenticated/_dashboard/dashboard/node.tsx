@@ -6,7 +6,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { selectCommunityNode, sortCommunityNodes } from "@/lib/community-node";
 import { pageTitle } from "@/lib/page-title";
 import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
-import { nodeQueryKeys, stakingValidatorsQueryOptions } from "@/lib/queries/nodes";
+import { fetchStakingValidators, nodeQueryKeys } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { canManageCommunity, resolveTeamWorkspace } from "@/lib/team-workspace";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
@@ -94,9 +94,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
 
     const [summary, staking] = await Promise.all([
       context.apiClient.getNodeSummary({ nodeId: selectedNode.id }),
-      context.queryClient.ensureQueryData(
-        stakingValidatorsQueryOptions(context.apiClient, selectedNode.id),
-      ),
+      fetchStakingValidators(context.queryClient, context.apiClient, selectedNode.id),
       context.queryClient.prefetchQuery(
         discoveryNodeQueryOptions(context.apiClient, selectedNode.id),
       ),
