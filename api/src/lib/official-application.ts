@@ -89,13 +89,17 @@ export async function linkOfficialDao(
 ): Promise<OfficialDaoLink> {
   const organizationId = input.community.orgId;
   const network = resolveNetwork(input.daoAccountId);
+  const refuseOtherDao = (daoAccountId: string | null | undefined) => {
+    if (daoAccountId && daoAccountId !== input.daoAccountId) {
+      throw new ORPCError("CONFLICT", {
+        message: `This community is already linked to ${daoAccountId}`,
+      });
+    }
+  };
+  refuseOtherDao(officialDaoOf(input.community)?.daoAccountId);
   await ensureReviewerAdmin(auth, organizationId, input.reviewerUserId);
   const linked = await auth.getDao({ organizationId });
-  if (linked.daoAccountId && linked.daoAccountId !== input.daoAccountId) {
-    throw new ORPCError("CONFLICT", {
-      message: `This community is already linked to ${linked.daoAccountId}`,
-    });
-  }
+  refuseOtherDao(linked.daoAccountId);
   if (linked.daoAccountId !== input.daoAccountId || linked.daoNetwork !== network) {
     await auth.linkDao({ organizationId, daoAccountId: input.daoAccountId, daoNetwork: network });
   }

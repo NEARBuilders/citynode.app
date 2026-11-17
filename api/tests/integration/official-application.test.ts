@@ -112,7 +112,11 @@ function authStub(context: { userId?: string }) {
     updateMemberRole: async () => {
       throw forbidden();
     },
-    adminUpdateMemberRole: async (input: { userId: string; role: string; organizationId: string }) => {
+    adminUpdateMemberRole: async (input: {
+      userId: string;
+      role: string;
+      organizationId: string;
+    }) => {
       calls.adminUpdateMemberRole.push(input);
       org(input.organizationId).roles.set(input.userId, input.role);
       return { id: `member-${input.userId}`, ...input };
@@ -358,7 +362,7 @@ describe("Official Application approval", () => {
   it("refuses to replace a DAO another application already linked", async () => {
     proposals.set("lagos", { ...application("lagos"), id: "prop-lagos-2" });
     proposals.get("lagos")!.payload.accountId = "rival-test.sputnik-dao.testnet";
-    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+    const admin = await getPluginClient(authedContext("second-reviewer", "admin"));
 
     await expect(
       admin.approveOfficialApplication({
@@ -367,6 +371,8 @@ describe("Official Application approval", () => {
         expectedUpdatedAt: savedAt,
       }),
     ).rejects.toThrow(/already linked/);
+    expect(calls.adminAddMember).toEqual([]);
+    expect(orgs.get("org-lagos")?.members.has("second-reviewer")).toBe(false);
     expect(orgs.get("org-lagos")?.metadata.daoAccountId).toBe("lagos-test.sputnik-dao.testnet");
     expect(proposals.get("lagos")?.reviewStatus).toBe("pending");
   });
