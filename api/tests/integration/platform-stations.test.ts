@@ -265,22 +265,6 @@ describe("platform stations", () => {
 
   it("reserves the platform kind for platform stations", async () => {
     const admin = await getPluginClient(orgContext("admin-one", "org-elsewhere", "owner", "admin"));
-    await expect(
-      admin.spawnNode({ kind: "platform", slug: "sneaky", name: "Sneaky" }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(
-      admin.spawnNode({ slug: "sneaky", name: "Sneaky", metadata: { kind: "platform" } }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-
-    const standalone = await admin.spawnNode({
-      kind: "city",
-      slug: "standalone",
-      name: "Standalone",
-    });
-    await expect(
-      admin.updateNode({ nodeId: standalone.id, kind: "platform" }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-
     const { organization } = await admin.getPlatformStations();
     await expect(
       admin.updateNode({ nodeId: organization?.nodeId ?? "", kind: "city" }),

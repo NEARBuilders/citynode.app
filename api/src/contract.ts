@@ -895,42 +895,6 @@ export const contract = oc.router({
     .input(z.object({ nodeId: z.string() }))
     .output(NodeSchema.nullable()),
 
-  createNode: oc
-    .route({ method: "POST", path: "/nodes" })
-    .input(
-      z.object({
-        kind: z.string().min(1),
-        slug: z.string(),
-        name: z.string(),
-        parentId: z.string().nullable().optional(),
-        tenantId: z.string(),
-        metadata: z.record(z.string(), z.unknown()).optional(),
-      }),
-    )
-    .output(NodeSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
-
-  spawnNode: oc
-    .route({
-      method: "POST",
-      path: "/nodes/spawn",
-      summary: "Spawn a node of any kind under a parent",
-      description:
-        "Org-scoped — spawns a node with an optional kind label (geo kinds are legacy labels in metadata), optional tenant attachment, and no kind-validated parentage. parentId is the only hierarchy axis.",
-    })
-    .input(
-      z.object({
-        kind: z.string().min(1).optional(),
-        slug: z.string(),
-        name: z.string(),
-        parentId: z.string().nullable().optional(),
-        tenantId: z.string().optional(),
-        metadata: z.record(z.string(), z.unknown()).optional(),
-      }),
-    )
-    .output(NodeSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
-
   updateNode: oc
     .route({ method: "PATCH", path: "/nodes/{nodeId}" })
     .input(

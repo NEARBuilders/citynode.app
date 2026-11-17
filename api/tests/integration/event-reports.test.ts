@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -69,11 +69,12 @@ async function community() {
   const org = `event-reports-${id}`;
   const provisioner = await getPluginClient(daoContext(`owner-${id}`, org, `eo-${id}.near`));
   const tenant = await provisioner.createTenant({ name: "Organizers", accountId: `eo-${id}.near` });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Organizer city",
     slug: `organizer-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return { id, org, node, owner: await getPluginClient(orgContext(`owner-${id}`, org)) };
 }

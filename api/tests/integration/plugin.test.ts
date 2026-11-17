@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext } from "../setup";
+import { activateTestNode, authedContext, daoContext, getPluginClient, orgContext } from "../setup";
 
 vi.mock("@/services/staking-pools", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/staking-pools")>()),
@@ -62,7 +62,7 @@ describe("API Plugin Integration Tests", () => {
   });
 
   describe("nodes", () => {
-    it("creates a root country node and lists root nodes", async () => {
+    it("activates a root place and lists root nodes", async () => {
       const client = await getPluginClient(
         daoContext("country-holder-1", "country-holder-org-1", "admin-country-1.near"),
       );
@@ -76,13 +76,12 @@ describe("API Plugin Integration Tests", () => {
       const before = await client.listRootNodes();
       expect(before).toEqual([]);
 
-      const created = await client.createNode({
+      const { node: created } = await activateTestNode({
         kind: "country",
         slug: "usa",
         name: "United States",
-        parentId: null,
         tenantId: tenant.id,
-        metadata: { population: 330_000_000 },
+        orgId: "country-holder-org-1",
       });
       expect(created).toMatchObject({
         kind: "country",
@@ -90,7 +89,7 @@ describe("API Plugin Integration Tests", () => {
         name: "United States",
         parentId: null,
         tenantId: tenant.id,
-        metadata: { population: 330_000_000 },
+        placeId: expect.any(String),
       });
 
       const after = await client.listRootNodes();
@@ -127,25 +126,31 @@ describe("API Plugin Integration Tests", () => {
         accountId: "tenant-filter-b.example.near",
         status: "active",
       });
-      const firstNode = await firstClient.createNode({
+      const { node: firstNode } = await activateTestNode({
         kind: "city",
         slug: "tenant-filter-a",
         name: "Tenant Filter A",
-        parentId: null,
         tenantId: firstTenant.id,
+        orgId: "tenant-filter-org-a",
       });
-      await secondClient.createNode({
+      await activateTestNode({
         kind: "city",
         slug: "tenant-filter-b",
         name: "Tenant Filter B",
-        parentId: null,
         tenantId: secondTenant.id,
+        orgId: "tenant-filter-org-b",
       });
 
       const publicClient = await getPluginClient();
       const nodes = await publicClient.listNodes({ tenantId: firstTenant.id });
 
-      expect(nodes).toEqual([firstNode]);
+      expect(nodes).toEqual([
+        expect.objectContaining({
+          id: firstNode.id,
+          slug: "tenant-filter-a",
+          tenantId: firstTenant.id,
+        }),
+      ]);
     });
 
     it("creates a nested node tree (country → state → city)", async () => {
@@ -159,26 +164,28 @@ describe("API Plugin Integration Tests", () => {
         status: "active",
       });
 
-      const usa = await client.createNode({
+      const { place: usaPlace } = await activateTestNode({
         kind: "country",
         slug: "usa-tree",
         name: "USA",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "tree-holder-org-1",
       });
-      const illinois = await client.createNode({
+      const { node: illinois, place: illinoisPlace } = await activateTestNode({
         kind: "state",
         slug: "illinois",
         name: "Illinois",
-        parentId: usa.id,
+        parentPlaceId: usaPlace.id,
         tenantId: tenant.id,
+        orgId: "tree-holder-org-1",
       });
-      const chicago = await client.createNode({
+      const { node: chicago } = await activateTestNode({
         kind: "city",
         slug: "chicago",
         name: "Chicago",
-        parentId: illinois.id,
+        parentPlaceId: illinoisPlace.id,
         tenantId: tenant.id,
+        orgId: "tree-holder-org-1",
       });
 
       const children = await client.listChildren({ nodeId: illinois.id });
@@ -198,26 +205,28 @@ describe("API Plugin Integration Tests", () => {
         accountId: "subtreeholder.example.near",
         status: "active",
       });
-      const country = await client.createNode({
+      const { node: country, place: countryPlace } = await activateTestNode({
         kind: "country",
         slug: "subtree-country",
         name: "Subtree Country",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "subtree-holder-org-1",
       });
-      const state = await client.createNode({
+      const { place: statePlace } = await activateTestNode({
         kind: "state",
         slug: "subtree-state",
         name: "Subtree State",
-        parentId: country.id,
+        parentPlaceId: countryPlace.id,
         tenantId: tenant.id,
+        orgId: "subtree-holder-org-1",
       });
-      const city = await client.createNode({
+      const { node: city } = await activateTestNode({
         kind: "city",
         slug: "subtree-city",
         name: "Subtree City",
-        parentId: state.id,
+        parentPlaceId: statePlace.id,
         tenantId: tenant.id,
+        orgId: "subtree-holder-org-1",
       });
 
       await client.createValidator({
@@ -268,27 +277,28 @@ describe("API Plugin Integration Tests", () => {
         accountId: "summaryholder.example.near",
         status: "active",
       });
-      const country = await client.createNode({
+      const { node: country, place: countryPlace } = await activateTestNode({
         kind: "country",
         slug: "summary-country",
         name: "Summary Country",
-        parentId: null,
         tenantId: tenant.id,
-        metadata: { population: 1_000_000 },
+        orgId: "summary-holder-org-1",
       });
-      const state = await client.createNode({
+      const { node: state, place: statePlace } = await activateTestNode({
         kind: "state",
         slug: "summary-state",
         name: "Summary State",
-        parentId: country.id,
+        parentPlaceId: countryPlace.id,
         tenantId: tenant.id,
+        orgId: "summary-holder-org-1",
       });
-      await client.createNode({
+      await activateTestNode({
         kind: "city",
         slug: "summary-city",
         name: "Summary City",
-        parentId: state.id,
+        parentPlaceId: statePlace.id,
         tenantId: tenant.id,
+        orgId: "summary-holder-org-1",
       });
 
       await client.createValidator({
@@ -306,7 +316,11 @@ describe("API Plugin Integration Tests", () => {
       const publicClient = await getPluginClient();
       const summary = await publicClient.getNodeSummary({ nodeId: country.id });
 
-      expect(summary.node).toEqual(country);
+      expect(summary.node).toMatchObject({
+        id: country.id,
+        slug: "summary-country",
+        kind: "country",
+      });
       expect(summary.childrenCount).toBe(1);
       expect(summary.subtreeNodeCount).toBe(3);
       expect(summary.validators).toEqual([
@@ -342,26 +356,28 @@ describe("API Plugin Integration Tests", () => {
         accountId: "leafsummaryholder.example.near",
         status: "active",
       });
-      const country = await client.createNode({
+      const { place: countryPlace } = await activateTestNode({
         kind: "country",
         slug: "leaf-summary-country",
         name: "Leaf Summary Country",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "leaf-summary-org-1",
       });
-      const state = await client.createNode({
+      const { node: state, place: statePlace } = await activateTestNode({
         kind: "state",
         slug: "leaf-summary-state",
         name: "Leaf Summary State",
-        parentId: country.id,
+        parentPlaceId: countryPlace.id,
         tenantId: tenant.id,
+        orgId: "leaf-summary-org-1",
       });
-      const city = await client.createNode({
+      const { node: city } = await activateTestNode({
         kind: "city",
         slug: "leaf-summary-city",
         name: "Leaf Summary City",
-        parentId: state.id,
+        parentPlaceId: statePlace.id,
         tenantId: tenant.id,
+        orgId: "leaf-summary-org-1",
       });
 
       await client.createValidator({
@@ -430,19 +446,20 @@ describe("API Plugin Integration Tests", () => {
         status: "active",
       });
 
-      const country = await client.createNode({
+      const { node: country, place: countryPlace } = await activateTestNode({
         kind: "country",
         slug: "validatorland",
         name: "Validatorland",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "validator-holder-org-1",
       });
-      const state = await client.createNode({
+      const { node: state } = await activateTestNode({
         kind: "state",
         slug: "val-state",
         name: "Validator State",
-        parentId: country.id,
+        parentPlaceId: countryPlace.id,
         tenantId: tenant.id,
+        orgId: "validator-holder-org-1",
       });
 
       const validator = await client.createValidator({
@@ -479,12 +496,12 @@ describe("API Plugin Integration Tests", () => {
         accountId: "validatorscope.example.near",
         status: "active",
       });
-      const node = await owner.createNode({
+      const { node } = await activateTestNode({
         kind: "country",
         slug: "validator-scope",
         name: "Validator Scope",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "validator-scope-org",
       });
       const validator = await owner.createValidator({
         nodeId: node.id,

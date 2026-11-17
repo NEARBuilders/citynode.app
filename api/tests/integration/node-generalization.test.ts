@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, teardown } from "../setup";
 
 vi.mock("@/services/staking-pools", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/staking-pools")>()),
@@ -16,20 +16,6 @@ vi.mock("@/services/dao", () => ({
 }));
 
 const ORG = "node-generalization-org";
-const OTHER_ORG = "node-generalization-other-org";
-
-function teamContext(userId: string, org: string, areas: string[]) {
-  const base = orgContext(userId, org) as Record<string, unknown>;
-  const team = { id: `team-${userId}`, name: "Node Ops", areas };
-  return {
-    ...base,
-    organization: {
-      ...(base.organization as Record<string, unknown>),
-      teams: [team],
-      activeTeamId: team.id,
-    },
-  };
-}
 
 describe("generalized node model", () => {
   beforeAll(async () => {
@@ -40,188 +26,76 @@ describe("generalized node model", () => {
     await teardown();
   });
 
-  it("spawns a standalone node without a tenant", async () => {
-    const org = await getPluginClient(daoContext("spawn-owner", ORG, "spawn-owner.near"));
+  it("reserves the platform kind on update", async () => {
+    const org = await getPluginClient(
+      daoContext("activate-platform-kind", ORG, "activate-platform.near"),
+    );
     const suffix = crypto.randomUUID().slice(0, 8);
-
-    const node = await org.spawnNode({
-      kind: "org",
-      slug: `spawn-org-${suffix}`,
-      name: "Spawned Org",
-      parentId: null,
+    const tenant = await org.createTenant({
+      name: "Platform Kind",
+      accountId: `activate-platform-${suffix}.near`,
     });
-
-    expect(node).toMatchObject({
-      kind: "org",
-      slug: `spawn-org-${suffix}`,
-      name: "Spawned Org",
-      parentId: null,
-      tenantId: null,
+    const { node } = await activateTestNode({
+      kind: "city",
+      slug: `standalone-${suffix}`,
+      name: "Standalone",
+      tenantId: tenant.id,
+      orgId: ORG,
     });
-
-    const fetched = await org.getNode({ nodeId: node.id });
-    expect(fetched).toMatchObject({ kind: "org", tenantId: null });
+    await expect(org.updateNode({ nodeId: node.id, kind: "platform" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
   });
 
-  it("spawns a node attached to an org-owned tenant", async () => {
-    const org = await getPluginClient(daoContext("spawn-tenant-owner", ORG, "spawn-tenant.near"));
+  it("attaches an activated place to an org-owned tenant", async () => {
+    const org = await getPluginClient(
+      daoContext("activate-tenant-owner", ORG, "activate-tenant.near"),
+    );
     const suffix = crypto.randomUUID().slice(0, 8);
 
     const tenant = await org.createTenant({
-      name: "Spawn Tenant",
-      accountId: `spawn-tenant-${suffix}.near`,
+      name: "Activated Tenant",
+      accountId: `activate-tenant-${suffix}.near`,
     });
-    const node = await org.spawnNode({
+    const { node } = await activateTestNode({
       kind: "community",
-      slug: `spawn-community-${suffix}`,
-      name: "Spawned Community",
-      parentId: null,
+      slug: `activate-community-${suffix}`,
+      name: "Activated Community",
       tenantId: tenant.id,
+      orgId: ORG,
     });
 
-    expect(node).toMatchObject({ kind: "community", tenantId: tenant.id });
-  });
-
-  it("rejects spawning into a tenant owned by another organization", async () => {
-    const owner = await getPluginClient(daoContext("spawn-other-owner", ORG, "spawn-other.near"));
-    const outsider = await getPluginClient(
-      daoContext("spawn-outsider", OTHER_ORG, "spawn-outsider.near"),
-    );
-    const suffix = crypto.randomUUID().slice(0, 8);
-
-    const tenant = await owner.createTenant({
-      name: "Other Org Tenant",
-      accountId: `spawn-other-${suffix}.near`,
-    });
-
-    await expect(
-      outsider.spawnNode({
-        kind: "community",
-        slug: `spawn-hostile-${suffix}`,
-        name: "Hostile Spawn",
-        parentId: null,
-        tenantId: tenant.id,
-      }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
-
-  it("rejects standalone spawns from non-admin org members", async () => {
-    const member = await getPluginClient(teamContext("spawn-member", ORG, ["node-operations"]));
-    await expect(
-      member.spawnNode({
-        kind: "org",
-        slug: `spawn-member-standalone-${crypto.randomUUID().slice(0, 8)}`,
-        name: "Member Standalone Spawn",
-        parentId: null,
-      }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
-
-  it("rejects grafting a child under another organization's node", async () => {
-    const owner = await getPluginClient(daoContext("spawn-graft-owner", ORG, "spawn-graft.near"));
-    const outsider = await getPluginClient(
-      teamContext("spawn-graft-outsider", OTHER_ORG, ["node-operations"]),
-    );
-    const suffix = crypto.randomUUID().slice(0, 8);
-
-    const tenant = await owner.createTenant({
-      name: "Graft Tenant",
-      accountId: `spawn-graft-${suffix}.near`,
-    });
-    const parent = await owner.spawnNode({
-      kind: "org",
-      slug: `spawn-graft-parent-${suffix}`,
-      name: "Graft Parent",
-      parentId: null,
+    expect(node).toMatchObject({
+      kind: "community",
       tenantId: tenant.id,
+      placeId: expect.any(String),
     });
-
-    await expect(
-      outsider.spawnNode({
-        kind: "user",
-        slug: `spawn-graft-child-${suffix}`,
-        name: "Graft Child",
-        parentId: parent.id,
-      }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("rejects unauthenticated spawnNode calls", async () => {
-    const anonymous = await getPluginClient();
-    await expect(
-      anonymous.spawnNode({
-        kind: "org",
-        slug: `spawn-anon-${crypto.randomUUID().slice(0, 8)}`,
-        name: "Anonymous Spawn",
-        parentId: null,
-      }),
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-  });
-
-  it("spawns child nodes under non-geo parents without kind restrictions", async () => {
-    const org = await getPluginClient(daoContext("spawn-tree-owner", ORG, "spawn-tree.near"));
-    const suffix = crypto.randomUUID().slice(0, 8);
-
-    const parent = await org.spawnNode({
-      kind: "zone",
-      slug: `spawn-zone-${suffix}`,
-      name: "Spawned Zone",
-      parentId: null,
-    });
-    const child = await org.spawnNode({
-      kind: "user",
-      slug: `spawn-user-${suffix}`,
-      name: "Spawned User",
-      parentId: parent.id,
-    });
-
-    expect(child).toMatchObject({ kind: "user", parentId: parent.id });
-
-    const children = await org.listChildren({ nodeId: parent.id });
-    expect(children.map((entry) => entry.slug)).toContain(`spawn-user-${suffix}`);
-  });
-
-  it("rejects spawnNode with a missing parent or tenant", async () => {
-    const org = await getPluginClient(daoContext("spawn-missing-owner", ORG, "spawn-missing.near"));
-    const missingId = "00000000-0000-0000-0000-000000000000";
-
-    await expect(
-      org.spawnNode({
-        kind: "org",
-        slug: `spawn-orphan-${crypto.randomUUID().slice(0, 8)}`,
-        name: "Orphan Spawn",
-        parentId: missingId,
-      }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-
-    await expect(
-      org.spawnNode({
-        kind: "org",
-        slug: `spawn-ghost-tenant-${crypto.randomUUID().slice(0, 8)}`,
-        name: "Ghost Tenant Spawn",
-        parentId: null,
-        tenantId: missingId,
-      }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-  });
-
-  it("resolves staking validators through a non-geo subtree", async () => {
+  it("resolves staking validators through a place subtree", async () => {
     const admin = await getPluginClient(
-      daoContext("spawn-staking-owner", ORG, "spawn-staking.near"),
+      daoContext("activate-staking-owner", ORG, "activate-staking.near"),
     );
     const suffix = crypto.randomUUID().slice(0, 8);
+    const tenant = await admin.createTenant({
+      name: "Staking Tenant",
+      accountId: `activate-staking-${suffix}.near`,
+    });
 
-    const root = await admin.spawnNode({
+    const { node: root, place: rootPlace } = await activateTestNode({
       kind: "zone",
       slug: `staking-zone-${suffix}`,
       name: "Staking Zone",
-      parentId: null,
+      tenantId: tenant.id,
+      orgId: ORG,
     });
-    const child = await admin.spawnNode({
+    const { node: child } = await activateTestNode({
       kind: "user",
       slug: `staking-user-${suffix}`,
       name: "Staking User",
-      parentId: root.id,
+      parentPlaceId: rootPlace.id,
+      tenantId: tenant.id,
+      orgId: ORG,
     });
     await admin.createValidator({
       nodeId: child.id,
@@ -240,24 +114,24 @@ describe("generalized node model", () => {
     expect(fromRoot.validators).toHaveLength(1);
   });
 
-  it("includes tenant-attached non-geo nodes in listTenantApps", async () => {
-    const org = await getPluginClient(daoContext("spawn-apps-owner", ORG, "spawn-apps.near"));
+  it("includes tenant-attached activated places in listTenantApps", async () => {
+    const org = await getPluginClient(daoContext("activate-apps-owner", ORG, "activate-apps.near"));
     const suffix = crypto.randomUUID().slice(0, 8);
 
     const tenant = await org.createTenant({
       name: "Apps Tenant",
-      accountId: `spawn-apps-${suffix}.near`,
+      accountId: `activate-apps-${suffix}.near`,
     });
-    await org.spawnNode({
+    await activateTestNode({
       kind: "community",
-      slug: `spawn-apps-node-${suffix}`,
+      slug: `activate-apps-node-${suffix}`,
       name: "Apps Community",
-      parentId: null,
       tenantId: tenant.id,
+      orgId: ORG,
     });
 
     const apps = await org.listTenantApps();
-    const app = apps.find((entry) => entry.accountId === `spawn-apps-${suffix}.near`);
+    const app = apps.find((entry) => entry.accountId === `activate-apps-${suffix}.near`);
     expect(app?.node).toMatchObject({ kind: "community", name: "Apps Community" });
   });
 });
