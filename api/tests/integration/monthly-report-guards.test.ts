@@ -1,7 +1,14 @@
 import { ORPCError } from "@orpc/server";
 import { Effect } from "effect";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import {
+  activateTestNode,
+  authedContext,
+  daoContext,
+  getPluginClient,
+  orgContext,
+  teardown,
+} from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -139,11 +146,12 @@ async function community() {
     name: "Guarded City",
     accountId: `mg-${id}.near`,
   });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Guarded City",
     slug: `guarded-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   vi.setSystemTime(new Date(NOW));
   return {

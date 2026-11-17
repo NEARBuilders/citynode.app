@@ -1,6 +1,13 @@
 import { Effect } from "effect";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import {
+  activateTestNode,
+  authedContext,
+  daoContext,
+  getPluginClient,
+  orgContext,
+  teardown,
+} from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -19,11 +26,12 @@ async function fixture() {
     name: "Discovery city",
     accountId: `d-${id}.near`,
   });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Karachi",
     slug: `karachi-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return {
     node,
@@ -109,8 +117,8 @@ it("lists active communities without a profile as basic entries only", async () 
 });
 
 it("preserves multiple nodes per tenant and validates confirmed coordinates", async () => {
-  const { node, tenant, editor, provisioner, publicClient } = await fixture();
-  const sibling = await provisioner.createNode({
+  const { node, tenant, editor, publicClient } = await fixture();
+  const { node: sibling } = await activateTestNode({
     name: "Online",
     slug: `online-${node.id}`,
     kind: "city",
@@ -237,13 +245,14 @@ it("places a country community from its region without fetching geometry", async
   });
   vi.stubGlobal("fetch", fetchMock);
 
-  const { tenant, provisioner, editor, publicClient } = await fixture();
-  const country = await provisioner.createNode({
+  const { tenant, editor, publicClient } = await fixture();
+  const { node: country } = await activateTestNode({
     name: "Country",
     slug: `country-${tenant.id}`,
     kind: "country",
     tenantId: tenant.id,
   });
+  const countryPlaceId = country.placeId;
   const region = `India-${country.id.slice(0, 8)}`;
   const saved = await editor.saveDiscoveryProfile({
     nodeId: country.id,
@@ -260,7 +269,9 @@ it("places a country community from its region without fetching geometry", async
   expect(url.searchParams.get("polygon_geojson")).toBeNull();
 
   await editor.saveDiscoveryProfile({ ...saved, summary: "Updated" });
-  expect((await publicClient.getDiscoveryNode({ nodeId: country.id }))?.placeId).toBeNull();
+  expect((await publicClient.getDiscoveryNode({ nodeId: country.id }))?.placeId).toBe(
+    countryPlaceId,
+  );
 
   const city = await editor.saveDiscoveryProfile({
     ...saved,
@@ -269,7 +280,7 @@ it("places a country community from its region without fetching geometry", async
   expect(city).toMatchObject({ latitude: 19.07, longitude: 72.87 });
 
   await editor.saveDiscoveryProfile({ ...saved, location: "", region });
-  const state = await provisioner.createNode({
+  const { node: state } = await activateTestNode({
     name: "State",
     slug: `state-${tenant.id}`,
     kind: "state",
@@ -301,9 +312,9 @@ it("exposes the catalog place link on discovery nodes", async () => {
   await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile });
 
   const listed = await publicClient.listDiscovery({ query: node.name });
-  expect(listed.map((entry) => entry.placeId)).toContain(null);
+  expect(listed.map((entry) => entry.placeId)).toContain(node.placeId);
   const detail = await publicClient.getDiscoveryNode({ nodeId: node.id });
-  expect(detail?.placeId).toBeNull();
+  expect(detail?.placeId).toBe(node.placeId);
   expect(detail).not.toHaveProperty("boundary");
 
   await expect(
