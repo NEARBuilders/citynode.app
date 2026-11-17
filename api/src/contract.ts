@@ -125,13 +125,6 @@ export const ValidatorSchema = z.object({
 
 export type Validator = z.infer<typeof ValidatorSchema>;
 
-export const StakingValidatorsSchema = z.object({
-  validators: z.array(ValidatorSchema),
-  sourceNodeId: z.string(),
-});
-
-export type StakingValidators = z.infer<typeof StakingValidatorsSchema>;
-
 export const TenantSchema = z.object({
   id: z.string(),
   accountId: z.string(),
@@ -286,7 +279,6 @@ export const NodeSummarySchema = z.object({
     official: z.number().int().nonnegative(),
     community: z.number().int().nonnegative(),
   }),
-  stakingValidators: StakingValidatorsSchema,
   children: z.array(
     z.object({
       id: z.string(),
@@ -728,9 +720,7 @@ export const contract = oc.router({
     .output(
       z.array(
         TenantAppSchema.extend({
-          stakeable: z
-            .boolean()
-            .describe("Whether the community or an ancestor or descendant has a validator"),
+          stakeable: z.boolean().describe("Whether the community has its own validator"),
         }),
       ),
     ),
@@ -994,6 +984,18 @@ export const contract = oc.router({
     .input(z.object({ nodeId: z.string() }))
     .output(z.array(NodeSchema)),
 
+  listNodeAncestors: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/ancestors",
+      summary: "List a node's ancestor communities, nearest first",
+      description:
+        "Public — follows the same parent edges as listChildren up from the node: the nearest ancestor place with a community, or the legacy parent for nodes without a place.",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(z.array(NodeSchema))
+    .errors({ NOT_FOUND }),
+
   getSubtree: oc
     .route({
       method: "GET",
@@ -1010,7 +1012,7 @@ export const contract = oc.router({
       method: "GET",
       path: "/nodes/{nodeId}/summary",
       summary: "Get an aggregated node summary",
-      description: "Public — returns node structure, validator totals, and staking resolution.",
+      description: "Public — returns node structure and validator totals.",
     })
     .input(z.object({ nodeId: z.string() }))
     .output(NodeSummarySchema)
@@ -1152,17 +1154,6 @@ export const contract = oc.router({
     })
     .input(z.object({ accountId: z.string() }))
     .output(ValidatorSchema.nullable()),
-
-  resolveStakingValidators: oc
-    .route({
-      method: "GET",
-      path: "/validators/staking/{nodeId}",
-      summary: "Resolve validators for staking from a node (subtree + ancestor walk-up)",
-      description:
-        "Returns the validators that should be used for staking from this node. First searches the node's subtree (self + descendants). If empty, walks up parent_id until validators are found.",
-    })
-    .input(z.object({ nodeId: z.string() }))
-    .output(StakingValidatorsSchema),
 
   getStakingPoolApproval: oc
     .route({
