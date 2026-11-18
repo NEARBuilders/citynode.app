@@ -21,6 +21,13 @@ export const MEMBER_WALLET_ID = passkeyWalletManifest.id;
 
 const MEMBER_STORAGE_PREFIX = "member-connect:";
 
+const PASSKEY_WALLET_ACCOUNT = /^0s[0-9a-f]{40}$/;
+
+// KEEP: mirrors better-near-auth's isDeterministicAccountId, whose root export also pulls in server code.
+export function isPasskeyWalletAccount(accountId: string | null): accountId is string {
+  return !!accountId && PASSKEY_WALLET_ACCOUNT.test(accountId);
+}
+
 export interface MemberWalletExecutor {
   connect(): Promise<string | null>;
   getConnectedAccountId(): Promise<string | null>;
