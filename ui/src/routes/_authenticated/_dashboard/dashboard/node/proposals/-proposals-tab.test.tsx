@@ -90,7 +90,6 @@ function application(id: string, reviewStatus: "pending" | "approved") {
   return {
     id,
     reviewStatus,
-    applyStatus: "not_started",
     payload: { name: `Sub community ${id}` },
     createdAt: at,
     updatedAt: at,

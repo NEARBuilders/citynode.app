@@ -9,7 +9,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { z } from "zod";
 import { buildTenantUrl, getGatewayId, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { ChannelLinks, CommunityUpdates } from "@/components/discovery/community-updates";
@@ -28,6 +27,7 @@ import { nodeDaoQueryOptions } from "@/lib/queries/node-dao";
 import {
   childNodesQueryOptions,
   nodeBySlugQueryOptions,
+  nodeSubtreeQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
 import { socialMeta } from "@/lib/social-meta";
@@ -35,15 +35,11 @@ import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
 export const Route = createFileRoute("/_public/n/$slug")({
-  validateSearch: z.object({ parentId: z.uuid().optional() }),
-  loaderDeps: ({ search }) => ({ parentId: search.parentId }),
-  loader: async ({ params, context, deps: { parentId } }) => {
+  loader: async ({ params, context }) => {
     const { queryClient, apiClient, runtimeConfig } = context;
     const slug = params.slug;
 
-    const node = await queryClient.ensureQueryData(
-      nodeBySlugQueryOptions(apiClient, slug, parentId),
-    );
+    const node = await queryClient.ensureQueryData(nodeBySlugQueryOptions(apiClient, slug));
 
     if (node) {
       await Promise.all([
@@ -53,7 +49,7 @@ export const Route = createFileRoute("/_public/n/$slug")({
       ]);
     }
 
-    return { slug, parentId, runtimeConfig, nodeName: node?.name ?? null };
+    return { slug, runtimeConfig, nodeName: node?.name ?? null };
   },
   head: ({ loaderData, match, params }) => {
     const locale = resolveAppLocale(undefined, match.context.locale);
@@ -83,13 +79,11 @@ export const Route = createFileRoute("/_public/n/$slug")({
 
 function NodePage() {
   const translate = useAppTranslation();
-  const { slug, parentId, runtimeConfig } = Route.useLoaderData();
+  const { slug, runtimeConfig } = Route.useLoaderData();
   const apiClient = useApiClient();
   const gateway = getGatewayId(runtimeConfig);
 
-  const { data: node, isLoading: nodeLoading } = useQuery(
-    nodeBySlugQueryOptions(apiClient, slug, parentId),
-  );
+  const { data: node, isLoading: nodeLoading } = useQuery(nodeBySlugQueryOptions(apiClient, slug));
 
   const nodeId = node?.id;
 
@@ -101,6 +95,11 @@ function NodePage() {
   const { data: staking } = useQuery({
     ...stakingValidatorsQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
+  });
+
+  const { data: subtree = [] } = useQuery({
+    ...nodeSubtreeQueryOptions(apiClient, nodeId ?? ""),
+    enabled: !!nodeId && children.length > 0,
   });
 
   const { data: profile } = useQuery(discoveryNodeQueryOptions(apiClient, nodeId ?? ""));
@@ -144,7 +143,9 @@ function NodePage() {
   }
 
   const validators = staking?.validators ?? [];
-  const validatorNodeIds = new Set(validators.map((v) => v.nodeId));
+  const validatorNodeIds = new Set(
+    subtree.filter((entry) => entry.validators.length > 0).map((entry) => entry.id),
+  );
   const events = profile?.events ?? [];
   const hostname = gateway ? `${node.slug}.${gateway}` : null;
   const siteUrl =
@@ -229,7 +230,6 @@ function NodePage() {
                   <Link
                     to="/n/$slug/proposals"
                     params={{ slug: node.slug }}
-                    search={{ parentId }}
                     data-testid="node-page.proposals"
                   />
                 }
@@ -322,14 +322,7 @@ function NodePage() {
         </section>
       )}
 
-      <NodeStakeSection
-        node={node}
-        children={children}
-        gateway={gateway}
-        validators={validators}
-        sourceNodeId={staking?.sourceNodeId ?? node.id}
-        apiClient={apiClient}
-      />
+      <NodeStakeSection node={node} validators={validators} via={staking?.via ?? null} />
 
       <NearbuildersSection nodeId={node.id} nodeName={node.name} />
     </PageContainer>

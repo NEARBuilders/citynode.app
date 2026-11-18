@@ -289,7 +289,7 @@ describe("TenantPublishedConfig", () => {
     mockChain({ policy: policy(["alice.near"]) });
     renderSection({ activation: { isPending: false, onActivate } });
 
-    await expectBlocked("Make this community's organization active to publish changes.");
+    await expectBlocked("Make this community active to publish changes.");
     expect((screen.getByTestId("tenant-published-config-title") as HTMLInputElement).disabled).toBe(
       false,
     );

@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
 import { SectionHeader } from "@/components/layout/section-header";
-import { useOpenSoleCommunity } from "@/components/layout/use-open-sole-community";
+import { useOpenCommunity } from "@/components/layout/use-open-community";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -59,7 +59,7 @@ function ReportPage() {
   const chosen = listed.data ? chooseReportCommunity(listed.data.communities, requested) : null;
   const switching = !!chosen && chosen.organizationId !== auth.activeOrganizationId;
   const isPlatformAdmin = auth.user?.role === "admin";
-  const opening = useOpenSoleCommunity(switching ? chosen.organizationId : null);
+  const opening = useOpenCommunity(switching ? chosen.organizationId : null);
 
   const header = (
     <PageHeader

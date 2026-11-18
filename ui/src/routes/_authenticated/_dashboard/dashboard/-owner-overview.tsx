@@ -222,6 +222,7 @@ function OwnerEvents({ community }: { community: OwnerCommunity }) {
               event,
               submittedAt: reported.get(event.id)?.submittedAt ?? null,
               reviewedAt: reported.get(event.id)?.reviewedAt ?? null,
+              source: reported.get(event.id)?.source ?? null,
               now,
             }
           : undefined
@@ -278,7 +279,9 @@ function OwnerEventTitle({
   context: VisibilityContext;
 }) {
   const className = "min-w-0 truncate hover:underline";
-  return eventTitleLink(eventVisibility(event, context), true) === "activity" ? (
+  const link = eventTitleLink(eventVisibility(event, context), !!event.ownerNodeId);
+  if (!link) return <span className="min-w-0 truncate">{event.title}</span>;
+  return link === "activity" ? (
     <Link to="/activity/$activityId" params={{ activityId: event.id }} className={className}>
       {event.title}
     </Link>

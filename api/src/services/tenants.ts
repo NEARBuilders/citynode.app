@@ -1,21 +1,18 @@
 import { randomBytes } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, isNull, not, notLike, or, sql } from "drizzle-orm";
+import { and, eq, inArray, not, notLike, or } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer } from "effect";
-import type { z } from "zod";
-import type { ReleasedCommunitySchema } from "../contract";
-import type { Database } from "../db/index";
 import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
   nodes as nodesTable,
+  places as placesTable,
   type tenantStatus,
   tenants as tenantsTable,
-  validators as validatorsTable,
 } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
-import { listedNode, nodeKindOf } from "./nodes";
+import { listedNode, nodeKindOf, nodeNameSql, nodeSlugSql } from "./nodes";
 
 export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
 
@@ -101,25 +98,6 @@ export interface CreateBindingInput {
   isPrimary?: boolean;
 }
 
-export interface ApplyNodeProposalInput {
-  kind: "country" | "state" | "city";
-  name: string;
-  slug: string;
-  parentId: string | null;
-  orgId: string;
-  accountId: string;
-  hostname: string;
-  poolAccountId?: string;
-  proposalId?: string;
-}
-
-export type ProposalResourceInput = Pick<
-  ApplyNodeProposalInput,
-  "proposalId" | "accountId" | "orgId"
->;
-
-export type ReleaseNodeProposalResult = z.infer<typeof ReleasedCommunitySchema>;
-
 export interface TenantsService {
   listAllTenants: TenantEffect<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): TenantEffect<TenantRecord[]>;
@@ -134,8 +112,6 @@ export interface TenantsService {
   setPrimaryBinding(tenantId: string, bindingId: string): TenantEffect<TenantBindingRecord>;
   resolveBindingByHostname(hostname: string): TenantEffect<TenantBindingRecord | null>;
   createTenant(input: TenantInput): TenantEffect<TenantRecord>;
-  applyNodeProposal(input: ApplyNodeProposalInput): TenantEffect<{ nodeId: string }>;
-  releaseNodeProposal(input: { proposalId: string }): TenantEffect<ReleaseNodeProposalResult>;
   updateTenant(
     id: string,
     input: Partial<
@@ -158,47 +134,6 @@ export class TenantsTag extends Context.Service<TenantsTag, TenantsService>()("a
 
 type TenantRow = typeof tenantsTable.$inferSelect;
 type BindingRow = typeof domainBindingsTable.$inferSelect;
-async function findLinkedProposalNode(
-  db: Pick<Database, "select">,
-  proposalId: string,
-): Promise<string | null> {
-  const linked = await db
-    .select({ id: nodesTable.id })
-    .from(nodesTable)
-    .where(
-      and(
-        sql`${nodesTable.metadata}->>'communityProposalId' = ${proposalId}`,
-        not(isNull(nodesTable.tenantId)),
-      ),
-    )
-    .limit(1);
-  return linked[0]?.id ?? null;
-}
-
-/** Resumes onto the proposal's node, or onto a legacy one matched by its DAO and organization. */
-async function findProposalNode(
-  db: Pick<Database, "select">,
-  input: ProposalResourceInput,
-): Promise<string | null> {
-  if (!input.proposalId) return null;
-  const linked = await findLinkedProposalNode(db, input.proposalId);
-  if (linked) return linked;
-  const owned = await db
-    .select({ id: nodesTable.id })
-    .from(nodesTable)
-    .innerJoin(tenantsTable, eq(nodesTable.tenantId, tenantsTable.id))
-    .where(
-      and(
-        eq(tenantsTable.accountId, input.accountId),
-        eq(tenantsTable.orgId, input.orgId),
-        eq(tenantsTable.ownerKind, "dao"),
-        isNull(tenantsTable.deletedAt),
-      ),
-    )
-    .limit(1);
-  return owned[0]?.id ?? null;
-}
-
 function toTenantRecord(row: TenantRow): TenantRecord {
   return {
     id: row.id,
@@ -264,82 +199,82 @@ export const TenantsLive = Layer.effect(
         Effect.map((rows) => rows.map(toTenantRecord)),
       ),
 
-      listTenantsByOwnerUserId: (ownerUserId) =>
-        Effect.gen(function* () {
+      listTenantsByOwnerUserId: Effect.fn("TenantsService.listTenantsByOwnerUserId")(
+        function* (ownerUserId) {
           const rows = yield* query(() =>
             db.select().from(tenantsTable).where(eq(tenantsTable.ownerUserId, ownerUserId)),
           );
           return rows.map(toTenantRecord);
-        }),
+        },
+      ),
 
-      listTenantsByOrgIds: (orgIds) =>
-        Effect.gen(function* () {
-          if (orgIds.length === 0) return [];
-          const rows = yield* query(() =>
-            db.select().from(tenantsTable).where(inArray(tenantsTable.orgId, orgIds)),
-          );
-          return rows.map(toTenantRecord);
-        }),
+      listTenantsByOrgIds: Effect.fn("TenantsService.listTenantsByOrgIds")(function* (orgIds) {
+        if (orgIds.length === 0) return [];
+        const rows = yield* query(() =>
+          db.select().from(tenantsTable).where(inArray(tenantsTable.orgId, orgIds)),
+        );
+        return rows.map(toTenantRecord);
+      }),
 
-      listTenantApps: (organizationIds) =>
-        Effect.gen(function* () {
-          if (organizationIds?.length === 0) return [];
-          const conditions = [eq(tenantsTable.status, "active")];
-          if (organizationIds) {
-            conditions.push(inArray(tenantsTable.orgId, organizationIds));
-          }
-          const rows = yield* query(() =>
-            db
-              .select({
-                accountId: tenantsTable.accountId,
-                name: tenantsTable.name,
-                status: tenantsTable.status,
-                ownerKind: tenantsTable.ownerKind,
-                createdAt: tenantsTable.createdAt,
-                hostname: domainBindingsTable.hostname,
-                nodeId: nodesTable.id,
-                nodeSlug: nodesTable.slug,
-                nodeMetadata: nodesTable.metadata,
-                nodeName: nodesTable.name,
-              })
-              .from(tenantsTable)
-              .leftJoin(
-                domainBindingsTable,
-                and(
-                  eq(domainBindingsTable.tenantId, tenantsTable.id),
-                  eq(domainBindingsTable.isPrimary, true),
-                ),
-              )
-              .leftJoin(nodesTable, eq(nodesTable.tenantId, tenantsTable.id))
-              .where(and(...conditions, listedNode)),
-          );
+      listTenantApps: Effect.fn("TenantsService.listTenantApps")(function* (organizationIds) {
+        if (organizationIds?.length === 0) return [];
+        const conditions = [eq(tenantsTable.status, "active")];
+        if (organizationIds) {
+          conditions.push(inArray(tenantsTable.orgId, organizationIds));
+        }
+        const rows = yield* query(() =>
+          db
+            .select({
+              accountId: tenantsTable.accountId,
+              name: tenantsTable.name,
+              status: tenantsTable.status,
+              ownerKind: tenantsTable.ownerKind,
+              createdAt: tenantsTable.createdAt,
+              hostname: domainBindingsTable.hostname,
+              nodeId: nodesTable.id,
+              nodeSlug: nodeSlugSql,
+              nodeMetadata: nodesTable.metadata,
+              nodeName: nodeNameSql,
+            })
+            .from(tenantsTable)
+            .leftJoin(
+              domainBindingsTable,
+              and(
+                eq(domainBindingsTable.tenantId, tenantsTable.id),
+                eq(domainBindingsTable.isPrimary, true),
+              ),
+            )
+            .leftJoin(nodesTable, eq(nodesTable.tenantId, tenantsTable.id))
+            .leftJoin(placesTable, eq(placesTable.id, nodesTable.placeId))
+            .where(and(...conditions, listedNode)),
+        );
 
-          const seen = new Set<string>();
-          const apps: TenantAppRecord[] = [];
-          for (const row of rows) {
-            if (seen.has(row.accountId)) continue;
-            seen.add(row.accountId);
-            apps.push({
-              accountId: row.accountId,
-              name: row.name,
-              status: row.status,
-              ownerKind: (row.ownerKind ?? "platform") as TenantOwnerKind,
-              hostname: row.hostname ?? null,
-              node:
-                row.nodeId && row.nodeSlug && row.nodeName
-                  ? {
-                      id: row.nodeId,
-                      slug: row.nodeSlug,
-                      kind: nodeKindOf(row.nodeMetadata),
-                      name: row.nodeName,
-                    }
-                  : null,
-              createdAt:
-                row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
-            });
-          }
-          return apps;
-        }),
+        const seen = new Set<string>();
+        const apps: TenantAppRecord[] = [];
+        for (const row of rows) {
+          if (seen.has(row.accountId)) continue;
+          seen.add(row.accountId);
+          apps.push({
+            accountId: row.accountId,
+            name: row.name,
+            status: row.status,
+            ownerKind: (row.ownerKind ?? "platform") as TenantOwnerKind,
+            hostname: row.hostname ?? null,
+            node:
+              row.nodeId && row.nodeSlug && row.nodeName
+                ? {
+                    id: row.nodeId,
+                    slug: row.nodeSlug,
+                    kind: nodeKindOf(row.nodeMetadata),
+                    name: row.nodeName,
+                  }
+                : null,
+            createdAt:
+              row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+          });
+        }
+        return apps;
+      }),
 
       listBindings: query(() =>
         db
@@ -362,69 +297,68 @@ export const TenantsLive = Layer.effect(
           ),
       ),
 
-      listBindingsForTenant: (tenantId) =>
-        Effect.gen(function* () {
+      listBindingsForTenant: Effect.fn("TenantsService.listBindingsForTenant")(
+        function* (tenantId) {
           const rows = yield* query(() =>
             db.select().from(domainBindingsTable).where(eq(domainBindingsTable.tenantId, tenantId)),
           );
           return rows.map(toBindingRecord);
-        }),
+        },
+      ),
 
-      createBinding: (input) =>
-        Effect.gen(function* () {
-          const tenant = yield* query(() =>
-            db
-              .select({ id: tenantsTable.id })
-              .from(tenantsTable)
-              .where(eq(tenantsTable.id, input.tenantId))
-              .limit(1),
+      createBinding: Effect.fn("TenantsService.createBinding")(function* (input) {
+        const tenant = yield* query(() =>
+          db
+            .select({ id: tenantsTable.id })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, input.tenantId))
+            .limit(1),
+        );
+        if (tenant.length === 0) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", {
+              message: "Tenant not found",
+              data: { resource: "tenant", resourceId: input.tenantId },
+            }),
           );
-          if (tenant.length === 0) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", {
-                message: "Tenant not found",
-                data: { resource: "tenant", resourceId: input.tenantId },
-              }),
-            );
-          }
+        }
 
-          const autoVerified =
-            !input.hostname.includes(".") || isGatewayZoneHostname(input.hostname);
-          const verifiedAt = autoVerified ? yield* DateTime.nowAsDate : null;
-          const rows = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .insert(domainBindingsTable)
-                .values({
-                  tenantId: input.tenantId,
-                  hostname: input.hostname,
-                  isPrimary: input.isPrimary ?? false,
-                  isVerified: autoVerified,
-                  verifiedAt,
-                  verificationToken: generateVerificationToken(),
+        const autoVerified = !input.hostname.includes(".") || isGatewayZoneHostname(input.hostname);
+        const verifiedAt = autoVerified ? yield* DateTime.nowAsDate : null;
+        const rows = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .insert(domainBindingsTable)
+              .values({
+                tenantId: input.tenantId,
+                hostname: input.hostname,
+                isPrimary: input.isPrimary ?? false,
+                isVerified: autoVerified,
+                verifiedAt,
+                verificationToken: generateVerificationToken(),
+              })
+              .returning(),
+          catch: (error) =>
+            isUniqueViolation(error)
+              ? new ORPCError("CONFLICT", {
+                  message: "Hostname already in use",
+                  data: { hostname: input.hostname },
                 })
-                .returning(),
-            catch: (error) =>
-              isUniqueViolation(error)
-                ? new ORPCError("CONFLICT", {
-                    message: "Hostname already in use",
-                    data: { hostname: input.hostname },
-                  })
-                : toOrpcError(error),
-          });
-          const [row] = rows;
-          if (!row) {
-            return yield* Effect.fail(
-              new ORPCError("INTERNAL_SERVER_ERROR", {
-                message: "Domain binding creation failed",
-              }),
-            );
-          }
-          return toBindingRecord(row);
-        }),
+              : toOrpcError(error),
+        });
+        const [row] = rows;
+        if (!row) {
+          return yield* Effect.fail(
+            new ORPCError("INTERNAL_SERVER_ERROR", {
+              message: "Domain binding creation failed",
+            }),
+          );
+        }
+        return toBindingRecord(row);
+      }),
 
-      verifyCustomDomain: (tenantId, bindingId) =>
-        Effect.gen(function* () {
+      verifyCustomDomain: Effect.fn("TenantsService.verifyCustomDomain")(
+        function* (tenantId, bindingId) {
           const [binding] = yield* query(() =>
             db
               .select()
@@ -485,30 +419,30 @@ export const TenantsLive = Layer.effect(
           }
 
           return toBindingRecord(row);
-        }),
+        },
+      ),
 
-      deleteBinding: (tenantId, bindingId) =>
-        Effect.gen(function* () {
-          const rows = yield* query(() =>
-            db
-              .delete(domainBindingsTable)
-              .where(
-                and(
-                  eq(domainBindingsTable.id, bindingId),
-                  eq(domainBindingsTable.tenantId, tenantId),
-                ),
-              )
-              .returning({ id: domainBindingsTable.id }),
+      deleteBinding: Effect.fn("TenantsService.deleteBinding")(function* (tenantId, bindingId) {
+        const rows = yield* query(() =>
+          db
+            .delete(domainBindingsTable)
+            .where(
+              and(
+                eq(domainBindingsTable.id, bindingId),
+                eq(domainBindingsTable.tenantId, tenantId),
+              ),
+            )
+            .returning({ id: domainBindingsTable.id }),
+        );
+        if (rows.length === 0) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", {
+              message: "Domain binding not found for tenant",
+              data: { resource: "domainBinding", resourceId: bindingId, tenantId },
+            }),
           );
-          if (rows.length === 0) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", {
-                message: "Domain binding not found for tenant",
-                data: { resource: "domainBinding", resourceId: bindingId, tenantId },
-              }),
-            );
-          }
-        }),
+        }
+      }),
 
       setPrimaryBinding: (tenantId, bindingId) =>
         query(() =>
@@ -556,8 +490,8 @@ export const TenantsLive = Layer.effect(
           }),
         ),
 
-      resolveBindingByHostname: (hostname) =>
-        Effect.gen(function* () {
+      resolveBindingByHostname: Effect.fn("TenantsService.resolveBindingByHostname")(
+        function* (hostname) {
           const [row] = yield* query(() =>
             db
               .select()
@@ -566,49 +500,49 @@ export const TenantsLive = Layer.effect(
               .limit(1),
           );
           return row ? toBindingRecord(row) : null;
-        }),
+        },
+      ),
 
-      createTenant: (input) =>
-        Effect.gen(function* () {
-          const rows = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .insert(tenantsTable)
-                .values({
-                  name: input.name,
-                  accountId: input.accountId,
-                  orgId: input.orgId,
-                  ...(input.status !== undefined && { status: input.status }),
-                  ...(input.ownerKind !== undefined && { ownerKind: input.ownerKind }),
-                  ...(input.allowUiOverrides !== undefined && {
-                    allowUiOverrides: input.allowUiOverrides,
-                  }),
-                  ...(input.allowBackendOverrides !== undefined && {
-                    allowBackendOverrides: input.allowBackendOverrides,
-                  }),
-                  ...(input.allowSsr !== undefined && { allowSsr: input.allowSsr }),
+      createTenant: Effect.fn("TenantsService.createTenant")(function* (input) {
+        const rows = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .insert(tenantsTable)
+              .values({
+                name: input.name,
+                accountId: input.accountId,
+                orgId: input.orgId,
+                ...(input.status !== undefined && { status: input.status }),
+                ...(input.ownerKind !== undefined && { ownerKind: input.ownerKind }),
+                ...(input.allowUiOverrides !== undefined && {
+                  allowUiOverrides: input.allowUiOverrides,
+                }),
+                ...(input.allowBackendOverrides !== undefined && {
+                  allowBackendOverrides: input.allowBackendOverrides,
+                }),
+                ...(input.allowSsr !== undefined && { allowSsr: input.allowSsr }),
+              })
+              .onConflictDoNothing({ target: tenantsTable.accountId })
+              .returning(),
+          catch: (error) =>
+            isUniqueViolation(error)
+              ? new ORPCError("CONFLICT", {
+                  message: "Tenant with this accountId already exists",
+                  data: { accountId: input.accountId },
                 })
-                .onConflictDoNothing({ target: tenantsTable.accountId })
-                .returning(),
-            catch: (error) =>
-              isUniqueViolation(error)
-                ? new ORPCError("CONFLICT", {
-                    message: "Tenant with this accountId already exists",
-                    data: { accountId: input.accountId },
-                  })
-                : toOrpcError(error),
-          });
-          const [row] = rows;
-          if (!row) {
-            return yield* Effect.fail(
-              new ORPCError("CONFLICT", {
-                message: "Tenant with this accountId already exists",
-                data: { accountId: input.accountId },
-              }),
-            );
-          }
-          return toTenantRecord(row);
-        }),
+              : toOrpcError(error),
+        });
+        const [row] = rows;
+        if (!row) {
+          return yield* Effect.fail(
+            new ORPCError("CONFLICT", {
+              message: "Tenant with this accountId already exists",
+              data: { accountId: input.accountId },
+            }),
+          );
+        }
+        return toTenantRecord(row);
+      }),
 
       spawnTenant: (input) =>
         query(() =>
@@ -674,280 +608,92 @@ export const TenantsLive = Layer.effect(
           }),
         ),
 
-      releaseNodeProposal: (input) =>
-        Effect.tryPromise({
-          try: () =>
-            db.transaction(async (tx): Promise<ReleaseNodeProposalResult> => {
-              // Only a node this proposal created; never the legacy DAO-and-organization match.
-              const nodeId = await findLinkedProposalNode(tx, input.proposalId);
-              if (!nodeId) return { released: false, keptReason: "not_found" };
-              const [node] = await tx
-                .select({ tenantId: nodesTable.tenantId })
-                .from(nodesTable)
-                .where(eq(nodesTable.id, nodeId))
-                .limit(1);
-              if (!node?.tenantId) return { released: false, keptReason: "not_found" };
-              const [children, tenantNodes] = await Promise.all([
-                tx
-                  .select({ id: nodesTable.id })
-                  .from(nodesTable)
-                  .where(eq(nodesTable.parentId, nodeId))
-                  .limit(1),
-                tx
-                  .select({ id: nodesTable.id })
-                  .from(nodesTable)
-                  .where(eq(nodesTable.tenantId, node.tenantId))
-                  .limit(2),
-              ]);
-              if (children.length > 0 || tenantNodes.length > 1) {
-                return { released: false, keptReason: "in_use" };
-              }
-              await tx.delete(tenantsTable).where(eq(tenantsTable.id, node.tenantId));
-              return { released: true, keptReason: null };
+      updateTenant: Effect.fn("TenantsService.updateTenant")(function* (id, input) {
+        const [row] = yield* query(() =>
+          db
+            .update(tenantsTable)
+            .set({ ...input, updatedAt: new Date() })
+            .where(eq(tenantsTable.id, id))
+            .returning(),
+        );
+
+        if (!row) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", {
+              message: "Tenant not found",
+              data: { resource: "tenant", resourceId: id },
             }),
-          catch: toOrpcError,
-        }),
-
-      applyNodeProposal: (input) =>
-        Effect.tryPromise({
-          try: async () => {
-            try {
-              return await db.transaction(async (tx) => {
-                const proposalNodeId = await findProposalNode(tx, input);
-                if (proposalNodeId) {
-                  return { nodeId: proposalNodeId };
-                }
-                const [existingTenant, existingNode, existingBinding] = await Promise.all([
-                  tx
-                    .select()
-                    .from(tenantsTable)
-                    .where(eq(tenantsTable.accountId, input.accountId))
-                    .limit(1),
-                  tx.select().from(nodesTable).where(eq(nodesTable.slug, input.slug)).limit(1),
-                  tx
-                    .select()
-                    .from(domainBindingsTable)
-                    .where(eq(domainBindingsTable.hostname, input.hostname))
-                    .limit(1),
-                ]);
-
-                if (existingTenant.length > 0) {
-                  throw new ORPCError("CONFLICT", {
-                    message: "Tenant with this accountId already exists",
-                    data: { accountId: input.accountId },
-                  });
-                }
-                if (existingNode.length > 0) {
-                  throw new ORPCError("CONFLICT", {
-                    message: "Node slug already exists",
-                    data: { slug: input.slug },
-                  });
-                }
-                if (existingBinding.length > 0) {
-                  throw new ORPCError("CONFLICT", {
-                    message: "Hostname already in use",
-                    data: { hostname: input.hostname },
-                  });
-                }
-
-                let parentKind: string | null = null;
-                if (input.parentId) {
-                  const [parent] = await tx
-                    .select({ metadata: nodesTable.metadata })
-                    .from(nodesTable)
-                    .where(eq(nodesTable.id, input.parentId))
-                    .limit(1);
-                  if (!parent) {
-                    throw new ORPCError("NOT_FOUND", {
-                      message: "Parent node not found",
-                      data: { resource: "node", resourceId: input.parentId },
-                    });
-                  }
-                  parentKind = nodeKindOf(parent.metadata);
-                }
-
-                const parentIsValid =
-                  (input.kind === "country" && input.parentId === null) ||
-                  (input.kind === "state" && parentKind === "country") ||
-                  (input.kind === "city" &&
-                    (input.parentId === null ||
-                      parentKind === "country" ||
-                      parentKind === "state"));
-                if (!parentIsValid) {
-                  throw new ORPCError("BAD_REQUEST", { message: "Invalid parent for node kind" });
-                }
-
-                const [tenant] = await tx
-                  .insert(tenantsTable)
-                  .values({
-                    name: input.name,
-                    accountId: input.accountId,
-                    orgId: input.orgId,
-                    status: "active",
-                    ownerKind: "dao",
-                  })
-                  .returning({ id: tenantsTable.id });
-                if (!tenant) {
-                  throw new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Tenant creation failed",
-                  });
-                }
-
-                const [node] = await tx
-                  .insert(nodesTable)
-                  .values({
-                    slug: input.slug,
-                    name: input.name,
-                    parentId: input.parentId,
-                    tenantId: tenant.id,
-                    metadata: {
-                      kind: input.kind,
-                      ...(input.proposalId ? { communityProposalId: input.proposalId } : {}),
-                      ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
-                    },
-                  })
-                  .returning({ id: nodesTable.id });
-                if (!node) {
-                  throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Node creation failed" });
-                }
-
-                if (input.poolAccountId) {
-                  await tx.insert(validatorsTable).values({
-                    nodeId: node.id,
-                    accountId: input.poolAccountId,
-                    network: "mainnet",
-                    protocol: "near",
-                    role: "official",
-                    isDefault: true,
-                    metadata: {},
-                  });
-                }
-
-                const [binding] = await tx
-                  .insert(domainBindingsTable)
-                  .values({
-                    tenantId: tenant.id,
-                    hostname: input.hostname,
-                    isPrimary: true,
-                    isVerified: !input.hostname.includes("."),
-                    verifiedAt: input.hostname.includes(".") ? null : new Date(),
-                    verificationToken: generateVerificationToken(),
-                  })
-                  .returning({ id: domainBindingsTable.id });
-                if (!binding) {
-                  throw new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Domain binding creation failed",
-                  });
-                }
-
-                return { nodeId: node.id };
-              });
-            } catch (error) {
-              if (input.proposalId && isUniqueViolation(error)) {
-                const nodeId = await findProposalNode(db, input);
-                if (nodeId) return { nodeId };
-              }
-              throw error;
-            }
-          },
-          catch: (error) =>
-            isUniqueViolation(error)
-              ? new ORPCError("CONFLICT", { message: "Node proposal resources already exist" })
-              : toOrpcError(error),
-        }),
-
-      updateTenant: (id, input) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .update(tenantsTable)
-              .set({ ...input, updatedAt: new Date() })
-              .where(eq(tenantsTable.id, id))
-              .returning(),
           );
+        }
 
-          if (!row) {
-            return yield* Effect.fail(
-              new ORPCError("NOT_FOUND", {
-                message: "Tenant not found",
-                data: { resource: "tenant", resourceId: id },
-              }),
-            );
-          }
+        return toTenantRecord(row);
+      }),
 
-          return toTenantRecord(row);
-        }),
+      softDeleteTenant: Effect.fn("TenantsService.softDeleteTenant")(function* (id) {
+        const [row] = yield* query(() =>
+          db
+            .update(tenantsTable)
+            .set({ status: "pending_deletion", deletedAt: new Date(), updatedAt: new Date() })
+            .where(eq(tenantsTable.id, id))
+            .returning(),
+        );
+        return row ? toTenantRecord(row) : null;
+      }),
 
-      softDeleteTenant: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .update(tenantsTable)
-              .set({ status: "pending_deletion", deletedAt: new Date(), updatedAt: new Date() })
-              .where(eq(tenantsTable.id, id))
-              .returning(),
-          );
-          return row ? toTenantRecord(row) : null;
-        }),
+      suspendTenant: Effect.fn("TenantsService.suspendTenant")(function* (id) {
+        const [row] = yield* query(() =>
+          db
+            .update(tenantsTable)
+            .set({ status: "suspended", updatedAt: new Date() })
+            .where(eq(tenantsTable.id, id))
+            .returning(),
+        );
+        return row ? toTenantRecord(row) : null;
+      }),
 
-      suspendTenant: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .update(tenantsTable)
-              .set({ status: "suspended", updatedAt: new Date() })
-              .where(eq(tenantsTable.id, id))
-              .returning(),
-          );
-          return row ? toTenantRecord(row) : null;
-        }),
+      reactivateTenant: Effect.fn("TenantsService.reactivateTenant")(function* (id) {
+        const [row] = yield* query(() =>
+          db
+            .update(tenantsTable)
+            .set({ status: "active", updatedAt: new Date() })
+            .where(eq(tenantsTable.id, id))
+            .returning(),
+        );
+        return row ? toTenantRecord(row) : null;
+      }),
 
-      reactivateTenant: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db
-              .update(tenantsTable)
-              .set({ status: "active", updatedAt: new Date() })
-              .where(eq(tenantsTable.id, id))
-              .returning(),
-          );
-          return row ? toTenantRecord(row) : null;
-        }),
-
-      resolveTenantByAccountId: (accountId) =>
-        Effect.gen(function* () {
+      resolveTenantByAccountId: Effect.fn("TenantsService.resolveTenantByAccountId")(
+        function* (accountId) {
           const [row] = yield* query(() =>
             db.select().from(tenantsTable).where(eq(tenantsTable.accountId, accountId)).limit(1),
           );
           return row ? toTenantRecord(row) : null;
-        }),
+        },
+      ),
 
-      resolveTenantById: (id) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db.select().from(tenantsTable).where(eq(tenantsTable.id, id)).limit(1),
-          );
-          return row ? toTenantRecord(row) : null;
-        }),
+      resolveTenantById: Effect.fn("TenantsService.resolveTenantById")(function* (id) {
+        const [row] = yield* query(() =>
+          db.select().from(tenantsTable).where(eq(tenantsTable.id, id)).limit(1),
+        );
+        return row ? toTenantRecord(row) : null;
+      }),
 
-      resolveTenantByOrgId: (orgId) =>
-        Effect.gen(function* () {
-          const [row] = yield* query(() =>
-            db.select().from(tenantsTable).where(eq(tenantsTable.orgId, orgId)).limit(1),
-          );
-          return row ? toTenantRecord(row) : null;
-        }),
+      resolveTenantByOrgId: Effect.fn("TenantsService.resolveTenantByOrgId")(function* (orgId) {
+        const [row] = yield* query(() =>
+          db.select().from(tenantsTable).where(eq(tenantsTable.orgId, orgId)).limit(1),
+        );
+        return row ? toTenantRecord(row) : null;
+      }),
 
-      deleteTenantById: (id) =>
-        Effect.gen(function* () {
-          const rows = yield* query(() =>
-            db
-              .delete(tenantsTable)
-              .where(eq(tenantsTable.id, id))
-              .returning({ deletedId: tenantsTable.id }),
-          );
-          return rows.length > 0;
-        }),
+      deleteTenantById: Effect.fn("TenantsService.deleteTenantById")(function* (id) {
+        const rows = yield* query(() =>
+          db
+            .delete(tenantsTable)
+            .where(eq(tenantsTable.id, id))
+            .returning({ deletedId: tenantsTable.id }),
+        );
+        return rows.length > 0;
+      }),
     };
 
     return service;

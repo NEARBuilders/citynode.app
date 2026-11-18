@@ -1,4 +1,4 @@
-import type { ApplyStatus, ReviewStatus } from "./dashboard/node/proposals/-proposal-summary";
+import type { ReviewStatus } from "./dashboard/node/proposals/-proposal-summary";
 
 export const applyStepIds = ["near", "dao", "details"] as const;
 
@@ -25,9 +25,6 @@ export function resolveApplySteps(
   };
 }
 
-export function applicationInProgress(application: {
-  reviewStatus: ReviewStatus;
-  applyStatus: ApplyStatus;
-}) {
-  return application.reviewStatus !== "approved" || application.applyStatus !== "applied";
+export function applicationInProgress(application: { reviewStatus: ReviewStatus }) {
+  return application.reviewStatus !== "approved";
 }

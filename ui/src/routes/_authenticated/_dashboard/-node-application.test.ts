@@ -3,158 +3,112 @@ import type { ApiClient } from "@/app";
 import {
   buildNodeProposalPayload,
   canSubmitNodeApplication,
-  generateNodeApplicationSlug,
   nodeApplicationSchema,
   parseNodeProposalPayload,
   proposeNodeApplication,
 } from "./-node-application";
 
-describe("node application", () => {
-  it("requires the correct parent for each node kind", () => {
-    const base = {
-      name: "Chicago",
-      slug: "chicago",
-      motivation: "I want to operate a node for the local community.",
-    };
+const chicago = {
+  id: "22222222-2222-4222-8222-222222222222",
+  slug: "chicago",
+  name: "Chicago",
+};
+const identity = {
+  daoAccountId: "chicago.sputnik-dao.near",
+  submitterAccountId: "applicant.near",
+};
+const values = { motivation: "I want to operate a node for the local community." };
 
-    expect(
-      nodeApplicationSchema.safeParse({ ...base, kind: "country", parentId: null }).success,
-    ).toBe(true);
-    expect(
-      nodeApplicationSchema.safeParse({ ...base, kind: "state", parentId: null }).success,
-    ).toBe(false);
-    expect(
-      nodeApplicationSchema.safeParse({ ...base, kind: "city", parentId: "state-id" }).success,
-    ).toBe(true);
-    expect(nodeApplicationSchema.safeParse({ ...base, kind: "city", parentId: null }).success).toBe(
-      true,
-    );
-    expect(
-      nodeApplicationSchema.safeParse({ ...base, kind: "country", parentId: "country-id" }).success,
-    ).toBe(false);
+describe("official application", () => {
+  it("only asks the applicant for their motivation", () => {
+    expect(nodeApplicationSchema.safeParse(values).success).toBe(true);
+    expect(nodeApplicationSchema.safeParse({ motivation: " " }).success).toBe(false);
   });
 
-  it("always derives the slug from the node name", () => {
-    expect(generateNodeApplicationSlug("Chicago")).toBe("chicago");
-    expect(generateNodeApplicationSlug("Chicago Heights")).toBe("chicago-heights");
-  });
-
-  it("builds the agreed node proposal payload", () => {
-    expect(
-      buildNodeProposalPayload(
-        {
-          kind: "city",
-          parentId: "state-id",
-          name: "Chicago",
-          slug: "chicago",
-          motivation: "I want to operate a node for the local community.",
-        },
-        {
-          daoAccountId: "chicago.sputnik-dao.near",
-          submitterAccountId: "applicant.near",
-        },
-      ),
-    ).toEqual({
-      kind: "city",
-      parentId: "state-id",
+  it("builds the payload from the chosen place", () => {
+    expect(buildNodeProposalPayload(values, chicago, identity)).toEqual({
+      placeId: chicago.id,
       name: "Chicago",
       slug: "chicago",
-      motivation: "I want to operate a node for the local community.",
+      motivation: values.motivation,
       accountId: "chicago.sputnik-dao.near",
       submitterAccountId: "applicant.near",
     });
   });
 
-  it("rejects malformed stored proposal payloads", () => {
-    expect(() => parseNodeProposalPayload({ kind: "city", slug: "Chicago" })).toThrow();
-  });
-
-  it("submits the exact node proposal envelope", async () => {
-    const propose = vi.fn().mockResolvedValue({ data: { id: "proposal-id" } });
-    await proposeNodeApplication(
-      { proposals: { propose } } as unknown as ApiClient,
-      {
+  it("still reads applications saved before the cutover", () => {
+    expect(
+      parseNodeProposalPayload({
         kind: "city",
-        parentId: "state-id",
+        parentId: null,
         name: "Chicago",
         slug: "chicago",
-        motivation: "I want to operate a node for the local community.",
-      },
-      {
-        daoAccountId: "chicago.sputnik-dao.near",
-        submitterAccountId: "applicant.near",
-      },
-    );
+        motivation: "Old application",
+        accountId: "chicago.sputnik-dao.near",
+      }).slug,
+    ).toBe("chicago");
+    expect(() => parseNodeProposalPayload({ slug: "Chicago" })).toThrow();
+  });
 
+  it("proposes for an active community without activating it again", async () => {
+    const propose = vi.fn().mockResolvedValue({ data: { id: "proposal-id" } });
+    const activateCommunity = vi.fn();
+    await proposeNodeApplication(
+      { proposals: { propose }, activateCommunity } as unknown as ApiClient,
+      values,
+      { ...chicago, activated: true },
+      identity,
+    );
+    expect(activateCommunity).not.toHaveBeenCalled();
     expect(propose).toHaveBeenCalledWith({
       pluginId: "node",
       entityId: "chicago",
       source: "/apply",
       idempotencyKey: expect.any(String),
-      payload: {
-        kind: "city",
-        parentId: "state-id",
-        name: "Chicago",
-        slug: "chicago",
-        motivation: "I want to operate a node for the local community.",
-        accountId: "chicago.sputnik-dao.near",
-        submitterAccountId: "applicant.near",
-      },
+      payload: buildNodeProposalPayload(values, chicago, identity),
     });
   });
 
-  it("requires identity, valid values, and an available hostname before submission", () => {
-    const values = {
-      kind: "country" as const,
-      parentId: null,
-      name: "Canada",
-      slug: "canada",
-      motivation: "I want to operate a country node.",
+  it("activates the place before proposing when it has no community", async () => {
+    const propose = vi.fn().mockResolvedValue({ data: { id: "proposal-id" } });
+    const activateCommunity = vi.fn().mockResolvedValue({});
+    await proposeNodeApplication(
+      { proposals: { propose }, activateCommunity } as unknown as ApiClient,
+      values,
+      { ...chicago, activated: false },
+      identity,
+    );
+    expect(activateCommunity).toHaveBeenCalledWith({ place: "chicago" });
+    expect(activateCommunity.mock.invocationCallOrder[0]).toBeLessThan(
+      propose.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("does not propose when activation fails", async () => {
+    const propose = vi.fn();
+    const activateCommunity = vi.fn().mockRejectedValue(new Error("Unknown place"));
+    await expect(
+      proposeNodeApplication(
+        { proposals: { propose }, activateCommunity } as unknown as ApiClient,
+        values,
+        { ...chicago, activated: false },
+        identity,
+      ),
+    ).rejects.toThrow("Unknown place");
+    expect(propose).not.toHaveBeenCalled();
+  });
+
+  it("requires a place, a verified DAO and a NEAR account before submission", () => {
+    const ready = {
+      values,
+      place: chicago,
+      daoAccountId: "chicago.sputnik-dao.near",
+      submitterAccountId: "applicant.near",
     };
-    expect(
-      canSubmitNodeApplication({
-        values,
-        daoAccountId: "chicago.sputnik-dao.near",
-        submitterAccountId: "applicant.near",
-        hostnameAvailable: true,
-        organizationSlugAvailable: true,
-      }),
-    ).toBe(true);
-    expect(
-      canSubmitNodeApplication({
-        values,
-        daoAccountId: null,
-        submitterAccountId: "applicant.near",
-        hostnameAvailable: true,
-        organizationSlugAvailable: true,
-      }),
-    ).toBe(false);
-    expect(
-      canSubmitNodeApplication({
-        values,
-        daoAccountId: "chicago.sputnik-dao.near",
-        submitterAccountId: null,
-        hostnameAvailable: true,
-        organizationSlugAvailable: true,
-      }),
-    ).toBe(false);
-    expect(
-      canSubmitNodeApplication({
-        values,
-        daoAccountId: "chicago.sputnik-dao.near",
-        submitterAccountId: "applicant.near",
-        hostnameAvailable: false,
-        organizationSlugAvailable: true,
-      }),
-    ).toBe(false);
-    expect(
-      canSubmitNodeApplication({
-        values,
-        daoAccountId: "chicago.sputnik-dao.near",
-        submitterAccountId: "applicant.near",
-        hostnameAvailable: true,
-        organizationSlugAvailable: false,
-      }),
-    ).toBe(false);
+    expect(canSubmitNodeApplication(ready)).toBe(true);
+    expect(canSubmitNodeApplication({ ...ready, place: null })).toBe(false);
+    expect(canSubmitNodeApplication({ ...ready, daoAccountId: null })).toBe(false);
+    expect(canSubmitNodeApplication({ ...ready, submitterAccountId: null })).toBe(false);
+    expect(canSubmitNodeApplication({ ...ready, submitting: true })).toBe(false);
   });
 });

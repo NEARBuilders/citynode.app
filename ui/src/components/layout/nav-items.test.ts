@@ -341,6 +341,7 @@ describe("breadcrumbs", () => {
       crumbsFor("/nodes/abc/content", { tab: "onboarding" }).map((crumb) => crumb.label),
     ).toEqual(["My community", "Stations"]);
     expect(labels("/tenant/t1")).toEqual(["My community", "Community settings"]);
+    expect(labels("/places/nigeria")).toEqual(["Explore", "Nigeria"]);
     expect(labels("/settings/profile")).toEqual(["Settings", "Your profile"]);
     expect(labels("/settings/api-keys")).toEqual(["Settings", "API keys"]);
     expect(labels("/admin/tenants")).toEqual(["Admin", "Platform", "Domains"]);
@@ -354,7 +355,7 @@ describe("breadcrumbs", () => {
       crumbsFor("/orgs/acme", { orgName: (slug) => (slug === "acme" ? "Acme Co" : undefined) }),
     ).toEqual([
       { label: "My community", to: "/dashboard/node" },
-      { label: "Organizations", to: "/orgs" },
+      { label: "Communities", to: "/orgs" },
       { label: "Acme Co" },
     ]);
   });
@@ -380,6 +381,6 @@ describe("breadcrumbs", () => {
   });
 
   it("links parent crumbs", () => {
-    expect(crumbsFor("/orgs/new")[1]).toEqual({ label: "Organizations", to: "/orgs" });
+    expect(crumbsFor("/orgs/new")[1]).toEqual({ label: "Communities", to: "/orgs" });
   });
 });

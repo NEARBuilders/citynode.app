@@ -127,8 +127,6 @@ export default createPlugin({
             pluginId: proposal.pluginId,
             entityId: proposal.entityId,
             reviewStatus: proposal.reviewStatus,
-            applyStatus: proposal.applyStatus,
-            removeStatus: proposal.removeStatus,
             submissionCount: proposal.submissionCount,
             timestamp,
           }),
@@ -252,59 +250,6 @@ export default createPlugin({
           actor: context.user ?? undefined,
         });
         yield* publishProposalEvent("reopened", result);
-        return { data: result };
-      }),
-
-      remove: builder.remove.use(requireAdmin).effect(function* ({ input, context }) {
-        const proposal = yield* ProposalService;
-        const result = yield* proposal.remove({
-          ...input,
-          actorId: context.userId!,
-          actor: context.user ?? undefined,
-        });
-        yield* publishProposalEvent("removed", result);
-        return { data: result };
-      }),
-
-      markApplied: builder.markApplied.use(requireAdmin).effect(function* ({ input }) {
-        const proposal = yield* ProposalService;
-        const result = yield* proposal.markApplied(input);
-        yield* publishProposalEvent("applied", result);
-        return { data: result };
-      }),
-
-      markApplyFailed: builder.markApplyFailed.use(requireAdmin).effect(function* ({ input }) {
-        const proposal = yield* ProposalService;
-        const result = yield* proposal.markApplyFailed(input);
-        yield* publishProposalEvent("apply_failed", result);
-        return { data: result };
-      }),
-
-      recordApplyStep: builder.recordApplyStep.use(requireAdmin).effect(function* ({
-        input,
-        context,
-      }) {
-        const proposal = yield* ProposalService;
-        const result = yield* proposal.recordApplyStep({
-          ...input,
-          actorId: context.userId!,
-          actor: context.user ?? undefined,
-        });
-        yield* publishProposalEvent("apply_step_recorded", result);
-        return { data: result };
-      }),
-
-      markRemoved: builder.markRemoved.use(requireAdmin).effect(function* ({ input }) {
-        const proposal = yield* ProposalService;
-        const result = yield* proposal.markRemoved(input);
-        yield* publishProposalEvent("removed", result);
-        return { data: result };
-      }),
-
-      markRemoveFailed: builder.markRemoveFailed.use(requireAdmin).effect(function* ({ input }) {
-        const proposal = yield* ProposalService;
-        const result = yield* proposal.markRemoveFailed(input);
-        yield* publishProposalEvent("remove_failed", result);
         return { data: result };
       }),
 

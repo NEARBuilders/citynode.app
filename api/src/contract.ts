@@ -2,6 +2,7 @@ import "@orpc/openapi/extensions/route";
 import { oc } from "@orpc/contract";
 import {
   BAD_REQUEST,
+  CONFLICT,
   CONNECTION_ERROR,
   FORBIDDEN,
   NOT_FOUND,
@@ -10,6 +11,7 @@ import {
 import { z } from "zod";
 import {
   discoveryContract,
+  EVENT_REPORT_SOURCES,
   monthlyReportStatsSchema,
   reportMonthSchema,
 } from "./discovery-contract";
@@ -29,51 +31,20 @@ export const GeoNodeKindSchema = z.enum(["country", "state", "city"]);
 
 export const NodeKindSchema = z.string().nullable();
 
-export const NodeProposalPayloadSchema = z
-  .object({
-    kind: GeoNodeKindSchema,
-    name: z.string().trim().min(1),
-    slug: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9-]+$/),
-    parentId: z.string().nullable(),
-    orgId: z.string().min(1).optional(),
-    motivation: z.string().trim().min(1),
-    accountId: z.string().min(1),
-    submitterAccountId: z.string().min(1).optional(),
-    applicantUserId: z.string().min(1).optional(),
-  })
-  .superRefine((value, context) => {
-    if (value.kind === "country" && value.parentId !== null) {
-      context.addIssue({
-        code: "custom",
-        path: ["parentId"],
-        message: "Country cannot have a parent",
-      });
-    }
-    if (value.kind === "state" && !value.parentId) {
-      context.addIssue({
-        code: "custom",
-        path: ["parentId"],
-        message: "Parent is required",
-      });
-    }
-  });
-
-export type NodeProposalPayload = z.infer<typeof NodeProposalPayloadSchema>;
-
-/** Setup steps recorded on an approved community application, in the order they run. */
-export const CommunitySetupStepSchema = z.enum(["organization", "community", "publication"]);
-
-export type CommunitySetupStep = z.infer<typeof CommunitySetupStepSchema>;
-
-const ReleaseKeptReasonSchema = z.enum(["not_found", "in_use"]);
-
-export const ReleasedCommunitySchema = z.object({
-  released: z.boolean(),
-  keptReason: ReleaseKeptReasonSchema.nullable(),
+export const OfficialApplicationPayloadSchema = z.object({
+  placeId: z.uuid().optional(),
+  name: z.string().trim().min(1),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/),
+  motivation: z.string().trim().min(1),
+  accountId: z.string().min(1),
+  submitterAccountId: z.string().min(1).optional(),
+  applicantUserId: z.string().min(1).optional(),
 });
+
+export type OfficialApplicationPayload = z.infer<typeof OfficialApplicationPayloadSchema>;
 
 export const EventOnboardingCodeSchema = z.object({
   id: z.string(),
@@ -107,13 +78,6 @@ export const ValidatorSchema = z.object({
 });
 
 export type Validator = z.infer<typeof ValidatorSchema>;
-
-export const StakingValidatorsSchema = z.object({
-  validators: z.array(ValidatorSchema),
-  sourceNodeId: z.string(),
-});
-
-export type StakingValidators = z.infer<typeof StakingValidatorsSchema>;
 
 export const TenantSchema = z.object({
   id: z.string(),
@@ -200,6 +164,7 @@ export const NodeSchema = z.object({
   kind: NodeKindSchema,
   slug: z.string(),
   name: z.string(),
+  placeId: z.uuid().nullable().optional(),
   parentId: z.string().nullable(),
   tenantId: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()),
@@ -221,6 +186,7 @@ export const PlaceSchema = z.object({
 
 export const PlaceCommunitySchema = z.object({
   nodeId: z.uuid(),
+  slug: z.string(),
   activatedAt: z.string().nullable(),
   memberCount: z.number().int().nullable(),
 });
@@ -229,6 +195,17 @@ export const PlaceResolutionSchema = z.object({
   place: PlaceSchema,
   aliases: z.array(z.string()),
   community: PlaceCommunitySchema.nullable(),
+});
+
+export const PlaceMapPinSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  name: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+  label: z.string().nullable(),
+  activated: z.boolean(),
+  nodeId: z.uuid().nullable(),
 });
 
 export const PlaceBoundarySchema = z.discriminatedUnion("type", [
@@ -269,7 +246,6 @@ export const NodeSummarySchema = z.object({
     official: z.number().int().nonnegative(),
     community: z.number().int().nonnegative(),
   }),
-  stakingValidators: StakingValidatorsSchema,
   children: z.array(
     z.object({
       id: z.string(),
@@ -411,6 +387,7 @@ export const TeamJoinRequestSchema = z.object({
   canDecide: z.boolean(),
   createdAt: z.iso.datetime(),
   decidedAt: z.iso.datetime().nullable(),
+  dismissedAt: z.iso.datetime().nullable(),
 });
 
 export const TeamJoinBoardSchema = z.object({
@@ -457,6 +434,7 @@ export const AdminEventsSchema = z.object({
       reportSubmittedAt: z.iso.datetime().nullable(),
       reportUpdatedAt: z.iso.datetime().nullable(),
       reportReviewedAt: z.iso.datetime().nullable(),
+      reportSource: z.enum(EVENT_REPORT_SOURCES).nullable(),
       checkIns: AttendanceSummarySchema.nullable(),
     }),
   ),
@@ -710,9 +688,7 @@ export const contract = oc.router({
     .output(
       z.array(
         TenantAppSchema.extend({
-          stakeable: z
-            .boolean()
-            .describe("Whether the community or an ancestor or descendant has a validator"),
+          stakeable: z.boolean().describe("Whether the community has its own validator"),
         }),
       ),
     ),
@@ -801,31 +777,14 @@ export const contract = oc.router({
     )
     .errors({ UNAUTHORIZED, BAD_REQUEST }),
 
-  applyNodeProposal: oc
-    .route({ method: "POST", path: "/nodes/proposals/apply" })
-    .input(
-      NodeProposalPayloadSchema.safeExtend({
-        orgId: z.string().min(1),
-        submitterAccountId: z.string().min(1),
-        hostname: z.string().min(1),
-        poolAccountId: z.string().min(1).optional(),
-      }),
-    )
-    .output(z.object({ nodeId: z.string() }))
-    .errors({
-      UNAUTHORIZED,
-      FORBIDDEN,
-      BAD_REQUEST,
-      NOT_FOUND,
-      CONNECTION_ERROR,
-      CONFLICT: {
-        status: 409,
-        message: "Node proposal resources already exist",
-      },
-    }),
-
-  releaseCommunityProposal: oc
-    .route({ method: "POST", path: "/nodes/community-proposals/release" })
+  approveOfficialApplication: oc
+    .route({
+      method: "POST",
+      path: "/nodes/official-applications/approve",
+      summary: "Approve an Official Application and link its DAO to the community",
+      description:
+        "Platform admin — links the applicant's Sputnik DAO to the activated community's organization and marks the application approved. Nothing else about the community changes; a failed approval leaves the application pending.",
+    })
     .input(
       z.object({
         proposalId: z.string().min(1),
@@ -835,31 +794,19 @@ export const contract = oc.router({
     )
     .output(
       z.object({
-        community: ReleasedCommunitySchema,
-        organization: z.object({
-          released: z.boolean(),
-          keptReason: z.enum([...ReleaseKeptReasonSchema.options, "existing"]).nullable(),
-        }),
+        nodeId: z.string(),
+        organizationId: z.string(),
+        daoAccountId: z.string(),
+        network: z.enum(["mainnet", "testnet"]),
       }),
     )
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
-
-  applyCommunityProposal: oc
-    .route({ method: "POST", path: "/nodes/community-proposals/apply" })
-    .input(
-      z.object({
-        proposalId: z.string().min(1),
-        entityId: z.string().min(1),
-        hostname: z.string().min(1),
-      }),
-    )
-    .output(z.object({ nodeId: z.string(), applicantInvited: z.boolean() }))
     .errors({
       UNAUTHORIZED,
       FORBIDDEN,
       BAD_REQUEST,
       NOT_FOUND,
-      CONFLICT: { status: 409, message: "Community resources conflict" },
+      CONFLICT: { status: 409, message: "The community is linked to another DAO" },
+      PRECONDITION_FAILED: { status: 412, message: "The place has no community yet" },
     }),
 
   listNodes: oc
@@ -892,51 +839,12 @@ export const contract = oc.router({
     .input(z.object({ nodeId: z.string() }))
     .output(NodeSchema.nullable()),
 
-  createNode: oc
-    .route({ method: "POST", path: "/nodes" })
-    .input(
-      z.object({
-        kind: z.string().min(1),
-        slug: z.string(),
-        name: z.string(),
-        parentId: z.string().nullable().optional(),
-        tenantId: z.string(),
-        metadata: z.record(z.string(), z.unknown()).optional(),
-      }),
-    )
-    .output(NodeSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
-
-  spawnNode: oc
-    .route({
-      method: "POST",
-      path: "/nodes/spawn",
-      summary: "Spawn a node of any kind under a parent",
-      description:
-        "Org-scoped — spawns a node with an optional kind label (geo kinds are legacy labels in metadata), optional tenant attachment, and no kind-validated parentage. parentId is the only hierarchy axis.",
-    })
-    .input(
-      z.object({
-        kind: z.string().min(1).optional(),
-        slug: z.string(),
-        name: z.string(),
-        parentId: z.string().nullable().optional(),
-        tenantId: z.string().optional(),
-        metadata: z.record(z.string(), z.unknown()).optional(),
-      }),
-    )
-    .output(NodeSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
-
   updateNode: oc
     .route({ method: "PATCH", path: "/nodes/{nodeId}" })
     .input(
       z.object({
         nodeId: z.string(),
         kind: z.string().min(1).optional(),
-        slug: z.string().optional(),
-        name: z.string().optional(),
-        parentId: z.string().nullable().optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
@@ -980,6 +888,18 @@ export const contract = oc.router({
     .input(z.object({ nodeId: z.string() }))
     .output(z.array(NodeSchema)),
 
+  listNodeAncestors: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/ancestors",
+      summary: "List a node's ancestor communities, nearest first",
+      description:
+        "Public — follows the same parent edges as listChildren up from the node: the nearest ancestor place with a community, or the legacy parent for nodes without a place.",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(z.array(NodeSchema))
+    .errors({ NOT_FOUND }),
+
   getSubtree: oc
     .route({
       method: "GET",
@@ -996,7 +916,7 @@ export const contract = oc.router({
       method: "GET",
       path: "/nodes/{nodeId}/summary",
       summary: "Get an aggregated node summary",
-      description: "Public — returns node structure, validator totals, and staking resolution.",
+      description: "Public — returns node structure and validator totals.",
     })
     .input(z.object({ nodeId: z.string() }))
     .output(NodeSummarySchema)
@@ -1007,7 +927,6 @@ export const contract = oc.router({
     .input(
       z.object({
         slug: z.string(),
-        parentId: z.string().nullable().optional(),
       }),
     )
     .output(NodeSchema.nullable()),
@@ -1051,6 +970,68 @@ export const contract = oc.router({
     .input(z.object({ placeId: z.uuid() }))
     .output(PlaceBoundarySchema.nullable()),
 
+  listPlaceBoundaries: oc
+    .route({
+      method: "POST",
+      path: "/places/boundaries",
+      summary: "Boundary geometry for many catalog places, keyed by place id",
+      description:
+        "Map views fetch geometry in one round trip. Places without a boundary are omitted — callers treat a missing key as marker-only.",
+    })
+    .input(z.object({ placeIds: z.array(z.uuid()).min(1).max(500) }))
+    .output(z.array(z.object({ placeId: z.uuid(), boundary: PlaceBoundarySchema.nullable() }))),
+
+  listPlaceMapPins: oc
+    .route({
+      method: "GET",
+      path: "/places/map",
+      summary: "Pins for every catalog place that has coordinates",
+      description:
+        "Public, session-free. Pins only — no boundary payloads. activated is true when the place has a live community.",
+    })
+    .input(z.object({}))
+    .output(z.array(PlaceMapPinSchema)),
+
+  activateCommunity: oc
+    .route({
+      method: "POST",
+      path: "/places/activate",
+      summary: "Activate a place into a community",
+      description:
+        "Session required. Idempotent: creates the community's organization and joins the activator as its first member, or returns the existing community untouched. No approval, no DAO proof, no site, no publication — governance arrives later when the community's Official Application is accepted.",
+    })
+    .input(z.object({ place: z.string().min(1) }))
+    .output(
+      z.object({
+        nodeId: z.uuid(),
+        placeId: z.uuid(),
+        slug: z.string(),
+        organizationId: z.string(),
+        joinCode: z.string(),
+        alreadyActivated: z.boolean(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, NOT_FOUND, CONFLICT }),
+
+  joinCommunity: oc
+    .route({
+      method: "POST",
+      path: "/places/{placeId}/join",
+      summary: "Join the community of a place",
+      description:
+        "Session required. Redeems the community's standing join code on behalf of the caller. Returns alreadyMember when the caller already belongs.",
+    })
+    .input(z.object({ placeId: z.uuid() }))
+    .output(
+      z.object({
+        organizationId: z.string(),
+        nodeId: z.uuid(),
+        slug: z.string(),
+        alreadyMember: z.boolean(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, NOT_FOUND, CONFLICT }),
+
   listValidators: oc
     .route({
       method: "GET",
@@ -1087,17 +1068,6 @@ export const contract = oc.router({
     })
     .input(z.object({ accountId: z.string() }))
     .output(ValidatorSchema.nullable()),
-
-  resolveStakingValidators: oc
-    .route({
-      method: "GET",
-      path: "/validators/staking/{nodeId}",
-      summary: "Resolve validators for staking from a node (subtree + ancestor walk-up)",
-      description:
-        "Returns the validators that should be used for staking from this node. First searches the node's subtree (self + descendants). If empty, walks up parent_id until validators are found.",
-    })
-    .input(z.object({ nodeId: z.string() }))
-    .output(StakingValidatorsSchema),
 
   getStakingPoolApproval: oc
     .route({
@@ -1245,7 +1215,7 @@ export const contract = oc.router({
       path: "/nodes/{nodeId}/dao",
       summary: "Get the Node DAO that owns a community",
       description:
-        "Public — the Sputnik DAO recorded as the community's tenant owner, read live, with its network. Null when a person or the platform owns the community.",
+        "Public — the Sputnik DAO linked to the community: the DAO an approved Official Application linked to its organization, or the legacy tenant owner. Null when the community is not official.",
     })
     .input(z.object({ nodeId: z.string() }))
     .output(NodeDaoSchema),
@@ -1491,6 +1461,18 @@ export const contract = oc.router({
     .input(z.object({ requestId: z.uuid(), decision: z.enum(["approve", "decline"]) }))
     .output(TeamJoinRequestSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONNECTION_ERROR, ...TEAM_JOIN_CONFLICT }),
+
+  dismissTeamJoinRequest: oc
+    .route({
+      method: "POST",
+      path: "/members/teams/requests/{requestId}/dismiss",
+      summary: "Dismiss the decision on your own team request",
+      description:
+        "Requester only. Hides an approved or declined request from Home on every device; approved requests also leave the requester's list.",
+    })
+    .input(z.object({ requestId: z.uuid() }))
+    .output(TeamJoinRequestSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, ...TEAM_JOIN_CONFLICT }),
 });
 
 export type ContractType = typeof contract;

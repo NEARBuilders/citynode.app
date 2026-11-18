@@ -4,6 +4,7 @@ import type { ApiClient } from "@/app";
 import {
   adminNodeListQueryOptions,
   childNodesQueryOptions,
+  fetchStakingValidators,
   invalidateNodeQueries,
   nodeQueryKeys,
   rootNodesQueryOptions,
@@ -16,7 +17,7 @@ describe("node query options", () => {
     expect(nodeQueryKeys.children("country-1")).toEqual(["nodes", "list", "children", "country-1"]);
     expect(nodeQueryKeys.children("country-2")).not.toEqual(nodeQueryKeys.children("country-1"));
     expect(nodeQueryKeys.tenant("tenant-1")).toEqual(["nodes", "list", "tenant", "tenant-1"]);
-    expect(nodeQueryKeys.bySlug("chicago", null)).not.toEqual(nodeQueryKeys.bySlug("chicago"));
+    expect(nodeQueryKeys.bySlug("chicago")).toEqual(["nodes", "detail", "slug", "chicago"]);
   });
 
   it("delegates root, child, and tenant lists to the API client", async () => {
@@ -99,5 +100,24 @@ describe("node query options", () => {
       true,
     );
     expect(queryClient.getQueryState(["unrelated"])?.isInvalidated).toBe(false);
+  });
+
+  it("reloads staking validators after node queries are invalidated", async () => {
+    const pool = (id: string) => ({ id, accountId: `${id}.poolv1.near`, isDefault: true });
+    const listValidatorsByNode = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([pool("first")]);
+    const listNodeAncestors = vi.fn().mockResolvedValue([]);
+    const apiClient = { listValidatorsByNode, listNodeAncestors } as unknown as ApiClient;
+    const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+
+    const before = await fetchStakingValidators(queryClient, apiClient, "city-1");
+    await invalidateNodeQueries(queryClient);
+    const after = await fetchStakingValidators(queryClient, apiClient, "city-1");
+
+    expect(before.validators).toEqual([]);
+    expect(after.validators.map((validator) => validator.id)).toEqual(["first"]);
+    expect(listValidatorsByNode).toHaveBeenCalledTimes(2);
   });
 });

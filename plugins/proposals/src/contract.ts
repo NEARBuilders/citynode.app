@@ -5,20 +5,10 @@ import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "every-plugin/er
 import { z } from "zod";
 
 const ReviewStatus = z.enum(["pending", "approved", "rejected", "removed"]);
-const ApplyStatus = z.enum(["not_started", "applying", "applied", "failed"]);
-const RemoveStatus = z.enum(["not_started", "removing", "removed", "failed"]);
-const ApplyStepName = z.string().regex(/^[a-z][a-z0-9_-]{0,49}$/);
-const ApplyStepStatus = z.enum(["started", "waiting", "completed"]);
 const ExpectedProposalVersion = z.object({
   pluginId: z.string(),
   entityId: z.string(),
   expectedUpdatedAt: z.iso.datetime(),
-});
-
-export const ApplyStepSchema = z.object({
-  status: ApplyStepStatus,
-  resourceId: z.string().nullable(),
-  recordedAt: z.iso.datetime(),
 });
 
 export const ProposalSchema = z.object({
@@ -30,17 +20,8 @@ export const ProposalSchema = z.object({
   schemaVersion: z.string(),
   createdBy: z.string(),
   reviewStatus: ReviewStatus,
-  applyStatus: ApplyStatus,
-  removeStatus: RemoveStatus,
   rejectionReason: z.string().nullable(),
-  applyError: z.string().nullable(),
-  removeError: z.string().nullable(),
-  appliedResourceId: z.string().nullable(),
-  applySteps: z.record(z.string(), ApplyStepSchema),
-  applyTimedOut: z.boolean(),
   submissionCount: z.number().int().nonnegative(),
-  appliedAt: z.iso.datetime().nullable(),
-  removedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -77,41 +58,24 @@ export const ProposalEventSchema = z.object({
   pluginId: z.string(),
   entityId: z.string(),
   reviewStatus: ReviewStatus,
-  applyStatus: ApplyStatus,
-  removeStatus: RemoveStatus,
   submissionCount: z.number().int().nonnegative(),
   timestamp: z.iso.datetime(),
 });
 
-export const NodeApplicationPayloadSchema = z
-  .object({
-    kind: z.enum(["country", "state", "city"]),
-    parentId: z.string().nullable(),
-    name: z.string().trim().min(1),
-    slug: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9-]+$/),
-    motivation: z.string().trim().min(1),
-    orgId: z.string().min(1).optional(),
-    accountId: z
-      .string()
-      .regex(/^(?=.{2,64}$)[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-_][a-z0-9]+)*)*$/),
-    submitterAccountId: z.string().optional(),
-    applicantUserId: z.string().optional(),
-  })
-  .superRefine((value, context) => {
-    if (value.kind === "country" && value.parentId !== null) {
-      context.addIssue({
-        code: "custom",
-        path: ["parentId"],
-        message: "Country cannot have a parent",
-      });
-    }
-    if (value.kind === "state" && !value.parentId) {
-      context.addIssue({ code: "custom", path: ["parentId"], message: "Parent is required" });
-    }
-  });
+export const NodeApplicationPayloadSchema = z.object({
+  placeId: z.uuid(),
+  name: z.string().trim().min(1),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/),
+  motivation: z.string().trim().min(1),
+  accountId: z
+    .string()
+    .regex(/^(?=.{2,64}$)[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-_][a-z0-9]+)*)*$/),
+  submitterAccountId: z.string().optional(),
+  applicantUserId: z.string().optional(),
+});
 
 export const contract = oc.router({
   propose: oc
@@ -159,77 +123,6 @@ export const contract = oc.router({
     .output(z.object({ data: ProposalSchema }))
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
 
-  remove: oc
-    .route({ method: "DELETE", path: "/v1/proposals/{pluginId}/{entityId}" })
-    .input(ExpectedProposalVersion)
-    .output(z.object({ data: ProposalSchema }))
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
-
-  markApplied: oc
-    .route({ method: "POST", path: "/v1/internal/proposals/{pluginId}/{entityId}/applied" })
-    .input(
-      z.object({
-        pluginId: z.string(),
-        entityId: z.string(),
-        expectedUpdatedAt: z.iso.datetime(),
-        appliedResourceId: z.string().optional(),
-      }),
-    )
-    .output(z.object({ data: ProposalSchema }))
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
-
-  markApplyFailed: oc
-    .route({ method: "POST", path: "/v1/internal/proposals/{pluginId}/{entityId}/apply-failed" })
-    .input(
-      z.object({
-        pluginId: z.string(),
-        entityId: z.string(),
-        expectedUpdatedAt: z.iso.datetime(),
-        error: z.string().max(4000),
-      }),
-    )
-    .output(z.object({ data: ProposalSchema }))
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
-
-  recordApplyStep: oc
-    .route({ method: "POST", path: "/v1/internal/proposals/{pluginId}/{entityId}/apply-steps" })
-    .input(
-      z.object({
-        pluginId: z.string(),
-        entityId: z.string(),
-        step: ApplyStepName,
-        status: ApplyStepStatus,
-        resourceId: z.string().min(1).max(255).optional(),
-      }),
-    )
-    .output(z.object({ data: ProposalSchema }))
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
-
-  markRemoved: oc
-    .route({ method: "POST", path: "/v1/internal/proposals/{pluginId}/{entityId}/removed" })
-    .input(
-      z.object({
-        pluginId: z.string(),
-        entityId: z.string(),
-        expectedUpdatedAt: z.iso.datetime(),
-      }),
-    )
-    .output(z.object({ data: ProposalSchema }))
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
-
-  markRemoveFailed: oc
-    .route({ method: "POST", path: "/v1/internal/proposals/{pluginId}/{entityId}/remove-failed" })
-    .input(
-      z.object({
-        pluginId: z.string(),
-        entityId: z.string(),
-        expectedUpdatedAt: z.iso.datetime(),
-        error: z.string().max(4000),
-      }),
-    )
-    .output(z.object({ data: ProposalSchema }))
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
-
   getProposals: oc
     .route({ method: "GET", path: "/v1/proposals" })
     .input(
@@ -237,7 +130,6 @@ export const contract = oc.router({
         pluginId: z.string().optional(),
         entityId: z.string().optional(),
         reviewStatus: ReviewStatus.optional(),
-        lifecycleStatus: z.enum(["actionable", "needs_review"]).optional(),
         query: z.string().trim().min(1).max(200).optional(),
         limit: z.number().int().min(1).max(100).optional(),
         cursor: z.string().optional(),

@@ -38,7 +38,7 @@ export const places = pgTable(
   }),
 );
 
-export const placeAliasKind = pgEnum("place_alias_kind", ["geonames", "iso", "legacy"]);
+export const placeAliasKind = pgEnum("place_alias_kind", ["geonames", "iso", "legacy", "curated"]);
 
 export const placeAliases = pgTable("place_aliases", {
   value: text("value").primaryKey(),
@@ -56,6 +56,8 @@ export const tenantStatus = pgEnum("tenant_status", [
 ]);
 
 export const validatorRole = pgEnum("validator_role", ["official", "community"]);
+
+export const eventReportSource = pgEnum("event_report_source", ["app", "import"]);
 
 export interface NodeMetadata {
   kind?: string;
@@ -84,9 +86,6 @@ export const nodes = pgTable(
   "nodes",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    slug: text("slug").notNull(),
-    name: text("name").notNull(),
-    parentId: uuid("parent_id").references((): AnyPgColumn => nodes.id, { onDelete: "set null" }),
     tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
     placeId: uuid("place_id").references((): AnyPgColumn => places.id),
     orgId: text("org_id"),
@@ -97,11 +96,6 @@ export const nodes = pgTable(
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    parentSlugIdx: uniqueIndex("nodes_parent_slug_idx")
-      .on(table.parentId, table.slug)
-      .where(sql`parent_id IS NOT NULL`),
-    rootSlugIdx: uniqueIndex("nodes_root_slug_idx").on(table.slug).where(sql`parent_id IS NULL`),
-    parentIdx: index("nodes_parent_idx").on(table.parentId),
     tenantIdx: index("nodes_tenant_idx").on(table.tenantId),
     placeIdx: uniqueIndex("nodes_place_idx").on(table.placeId).where(sql`place_id IS NOT NULL`),
   }),
@@ -176,13 +170,13 @@ export const discoveryActivities = pgTable(
   "discovery_activities",
   {
     id: uuid("id").primaryKey(),
-    ownerNodeId: uuid("owner_node_id")
-      .notNull()
-      .references(() => nodes.id, { onDelete: "cascade" }),
+    ownerNodeId: uuid("owner_node_id").references(() => nodes.id, { onDelete: "cascade" }),
+    placeId: uuid("place_id").references(() => places.id, { onDelete: "set null" }),
     canonicalUrl: text("canonical_url").notNull(),
-    data: jsonb("data").$type<import("../discovery-contract").DiscoveryActivity>().notNull(),
+    data: jsonb("data").$type<import("../discovery-contract").PublicActivity>().notNull(),
   },
   (table) => ({
+    placeIdx: index("discovery_activities_place_idx").on(table.placeId),
     manualUrl: uniqueIndex("discovery_manual_url")
       .on(table.canonicalUrl)
       .where(sql`${table.data}->'luma' IS NULL`),
@@ -242,6 +236,7 @@ export const eventReports = pgTable("event_reports", {
     .references(() => nodes.id, { onDelete: "cascade" }),
   formVersion: integer("form_version").default(1).notNull(),
   report: jsonb("report").$type<import("../discovery-contract").EventReport>().notNull(),
+  source: eventReportSource("source").default("app").notNull(),
   submittedBy: text("submitted_by").notNull(),
   submittedAt: timestamp("submitted_at", { mode: "date", withTimezone: true })
     .defaultNow()
@@ -286,9 +281,6 @@ export const discoveryLumaConnections = pgTable("discovery_luma_connections", {
     .references(() => nodes.id, { onDelete: "cascade" }),
   calendarId: text("calendar_id").notNull(),
   calendarName: text("calendar_name").notNull(),
-  syncedAt: timestamp("synced_at", { withTimezone: true }).notNull(),
-  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull(),
-  error: text("error"),
 });
 
 export const memberDirectoryOptIns = pgTable("member_directory_opt_ins", {
@@ -376,6 +368,7 @@ export const teamJoinRequests = pgTable(
     decidedByUserId: text("decided_by_user_id"),
     decidedAt: timestamp("decided_at", { mode: "date", withTimezone: true }),
     closedReason: teamJoinRequestClosedReason("closed_reason"),
+    dismissedAt: timestamp("dismissed_at", { mode: "date", withTimezone: true }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },

@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  applyStatusLabel,
-  proposalTitle,
-  reviewStatusBadge,
-  sortProposals,
-} from "./-proposal-summary";
+import { proposalTitle, reviewStatusBadge, sortProposals } from "./-proposal-summary";
 
 describe("node proposal summary", () => {
   it("titles a proposal by its name, then its changed fields", () => {
@@ -19,8 +14,6 @@ describe("node proposal summary", () => {
   it("maps statuses to readable badges", () => {
     expect(reviewStatusBadge("pending")).toEqual({ label: "Awaiting review", variant: "warning" });
     expect(reviewStatusBadge("rejected").variant).toBe("destructive");
-    expect(applyStatusLabel("not_started")).toBeNull();
-    expect(applyStatusLabel("applied")).toBe("Live");
   });
 
   it("lists pending proposals first, newest first", () => {

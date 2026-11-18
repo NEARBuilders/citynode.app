@@ -1,5 +1,5 @@
-import type { ORPCError } from "@orpc/server";
-import { eq, isNull, type SQL, sql } from "drizzle-orm";
+import { ORPCError } from "@orpc/server";
+import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -8,8 +8,10 @@ import {
   type PlaceBoundary,
   placeAliases as placeAliasesTable,
   places as placesTable,
+  tenants as tenantsTable,
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
+import { listedNode } from "./nodes";
 
 export type PlaceEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
@@ -27,6 +29,7 @@ export interface PlaceRecord {
 
 export interface PlaceCommunity {
   nodeId: string;
+  slug: string;
   activatedAt: string | null;
   memberCount: number | null;
 }
@@ -37,10 +40,34 @@ export interface PlaceResolution {
   community: PlaceCommunity | null;
 }
 
+export interface PlaceMapPin {
+  id: string;
+  slug: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  label: string | null;
+  activated: boolean;
+  nodeId: string | null;
+}
+
+interface PlaceBoundaryRecord {
+  placeId: string;
+  boundary: PlaceBoundary | null;
+}
+
 export interface PlacesService {
   resolve(input: { place: string }): PlaceEffect<PlaceResolution | null>;
+  create(input: {
+    slug: string;
+    name: string;
+    parentId?: string | null;
+    label?: string | null;
+  }): PlaceEffect<PlaceRecord>;
   getById(id: string): PlaceEffect<PlaceRecord | null>;
   boundary(id: string): PlaceEffect<PlaceBoundary | null>;
+  boundaries(placeIds: string[]): PlaceEffect<PlaceBoundaryRecord[]>;
+  mapPins(): PlaceEffect<PlaceMapPin[]>;
   roots(): PlaceEffect<PlaceRecord[]>;
   children(id: string): PlaceEffect<PlaceRecord[]>;
   ancestorIds(id: string): PlaceEffect<string[]>;
@@ -68,6 +95,22 @@ function toPlaceRecord(row: PlaceRow): PlaceRecord {
 function toTimestampIso(value: Date | string | null): string | null {
   if (value instanceof Date) return value.toISOString();
   return value ? String(value) : null;
+}
+
+function listedCommunity(row: {
+  nodeId: string | null;
+  tenantId: string | null;
+  nodeTenantId: string | null;
+  activatedAt: Date | string | null;
+}): row is {
+  nodeId: string;
+  tenantId: string | null;
+  nodeTenantId: string | null;
+  activatedAt: Date | string | null;
+} {
+  if (!row.nodeId) return false;
+  if (row.nodeTenantId == null) return row.activatedAt != null;
+  return row.tenantId != null;
 }
 
 function aliasCandidates(input: string): string[] {
@@ -138,8 +181,27 @@ export function nodeParentEdgesQuery(): SQL {
     LEFT JOIN nodes m ON m.place_id = climb.place_id
     WHERE climb.place_id IS NULL OR m.id IS NOT NULL
     UNION ALL
-    SELECT id, parent_id FROM nodes WHERE place_id IS NULL
+    SELECT id, NULL::uuid AS parent_id FROM nodes WHERE place_id IS NULL
   `;
+}
+
+export async function readNodeParents(
+  db: { execute: (q: SQL) => Promise<unknown> },
+  nodeIds: string[],
+): Promise<Map<string, string | null>> {
+  if (nodeIds.length === 0) return new Map();
+  const result = await db.execute(sql`
+    SELECT id, parent_id FROM (${nodeParentEdgesQuery()}) edges
+    WHERE id IN (${sql.join(
+      nodeIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+  `);
+  const rows = ((result as { rows?: unknown }).rows ?? result) as Array<{
+    id: string;
+    parent_id: string | null;
+  }>;
+  return new Map(Array.isArray(rows) ? rows.map((row) => [row.id, row.parent_id]) : []);
 }
 
 async function readIds(db: { execute: (q: SQL) => Promise<unknown> }, q: SQL): Promise<string[]> {
@@ -157,7 +219,9 @@ export const PlacesLive = Layer.effect(
       resolve: (input) =>
         Effect.gen(function* () {
           const candidates = aliasCandidates(input.place);
-          const slugCandidate = input.place.trim().toLowerCase();
+          const raw = input.place.trim();
+          const slugCandidate = raw.toLowerCase();
+          const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
 
           const matched = yield* query(() =>
             db
@@ -172,23 +236,36 @@ export const PlacesLive = Layer.effect(
                 createdAt: placesTable.createdAt,
                 updatedAt: placesTable.updatedAt,
                 nodeId: nodesTable.id,
+                nodeTenantId: nodesTable.tenantId,
                 activatedAt: nodesTable.activatedAt,
+                tenantId: tenantsTable.id,
                 memberCount: memberCountObservations.count,
               })
               .from(placesTable)
-              .leftJoin(nodesTable, eq(nodesTable.placeId, placesTable.id))
+              .leftJoin(nodesTable, and(eq(nodesTable.placeId, placesTable.id), listedNode))
+              .leftJoin(
+                tenantsTable,
+                and(
+                  eq(nodesTable.tenantId, tenantsTable.id),
+                  eq(tenantsTable.status, "active"),
+                  isNull(tenantsTable.deletedAt),
+                ),
+              )
               .leftJoin(
                 memberCountObservations,
                 eq(memberCountObservations.organizationId, nodesTable.orgId),
               )
               .where(
-                sql`${placesTable.slug} = ${slugCandidate} OR ${placesTable.id} IN (
+                sql`${placesTable.slug} = ${slugCandidate} OR ${
+                  byId ? sql`${placesTable.id} = ${raw}` : sql`false`
+                } OR ${placesTable.id} IN (
                   SELECT place_id FROM place_aliases WHERE value IN (${sql.join(
                     candidates.map((value) => sql`${value}`),
                     sql`, `,
                   )})
                 )`,
               )
+              .orderBy(sql`(${placesTable.slug} = ${slugCandidate}) DESC`)
               .limit(1),
           );
           const row = matched[0];
@@ -214,16 +291,37 @@ export const PlacesLive = Layer.effect(
               .where(eq(placeAliasesTable.placeId, place.id)),
           );
 
-          const community: PlaceCommunity | null =
-            row.nodeId && row.activatedAt
-              ? {
-                  nodeId: row.nodeId,
-                  activatedAt: toTimestampIso(row.activatedAt),
-                  memberCount: row.memberCount ?? null,
-                }
-              : null;
+          const community: PlaceCommunity | null = listedCommunity(row)
+            ? {
+                nodeId: row.nodeId,
+                slug: place.slug,
+                activatedAt: toTimestampIso(row.activatedAt),
+                memberCount: row.memberCount ?? null,
+              }
+            : null;
 
           return { place, aliases: aliasRows.map((a) => a.value), community };
+        }),
+
+      create: (input) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db
+              .insert(placesTable)
+              .values({
+                slug: input.slug,
+                name: input.name,
+                parentId: input.parentId ?? null,
+                label: input.label ?? null,
+              })
+              .returning(),
+          );
+          if (!row) {
+            return yield* Effect.fail(
+              new ORPCError("INTERNAL_SERVER_ERROR", { message: "Place creation failed" }),
+            );
+          }
+          return toPlaceRecord(row);
         }),
 
       getById: (id) =>
@@ -245,6 +343,63 @@ export const PlacesLive = Layer.effect(
           );
           return row?.boundary ?? null;
         }),
+
+      boundaries: (placeIds) =>
+        query(() =>
+          db
+            .select({ id: placesTable.id, boundary: placesTable.boundary })
+            .from(placesTable)
+            .where(inArray(placesTable.id, placeIds)),
+        ).pipe(
+          Effect.map((rows) => rows.map((row) => ({ placeId: row.id, boundary: row.boundary }))),
+        ),
+
+      mapPins: () =>
+        query(() =>
+          db
+            .select({
+              id: placesTable.id,
+              slug: placesTable.slug,
+              name: placesTable.name,
+              latitude: placesTable.latitude,
+              longitude: placesTable.longitude,
+              label: placesTable.label,
+              nodeId: nodesTable.id,
+              nodeTenantId: nodesTable.tenantId,
+              activatedAt: nodesTable.activatedAt,
+              tenantId: tenantsTable.id,
+            })
+            .from(placesTable)
+            .leftJoin(nodesTable, and(eq(nodesTable.placeId, placesTable.id), listedNode))
+            .leftJoin(
+              tenantsTable,
+              and(
+                eq(nodesTable.tenantId, tenantsTable.id),
+                eq(tenantsTable.status, "active"),
+                isNull(tenantsTable.deletedAt),
+              ),
+            )
+            .where(and(isNotNull(placesTable.latitude), isNotNull(placesTable.longitude))),
+        ).pipe(
+          Effect.map((rows) =>
+            rows.flatMap((row) =>
+              row.latitude === null || row.longitude === null
+                ? []
+                : [
+                    {
+                      id: row.id,
+                      slug: row.slug,
+                      name: row.name,
+                      latitude: row.latitude,
+                      longitude: row.longitude,
+                      label: row.label,
+                      activated: listedCommunity(row),
+                      nodeId: listedCommunity(row) ? row.nodeId : null,
+                    },
+                  ],
+            ),
+          ),
+        ),
 
       roots: () =>
         query(() => db.select().from(placesTable).where(isNull(placesTable.parentId))).pipe(

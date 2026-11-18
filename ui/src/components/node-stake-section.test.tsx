@@ -66,110 +66,33 @@ function show(props: Partial<ComponentProps<typeof NodeStakeSection>> = {}) {
   clients.push(client);
   return render(
     <QueryClientProvider client={client}>
-      <NodeStakeSection
-        node={node}
-        children={[]}
-        gateway="citynode.app"
-        validators={[]}
-        sourceNodeId={node.id}
-        apiClient={{
-          getNode: vi.fn().mockResolvedValue(source),
-          getSubtree: vi.fn().mockResolvedValue([{ ...node, validators: [] }]),
-        }}
-        {...props}
-      />
+      <NodeStakeSection node={node} validators={[]} via={null} {...props} />
     </QueryClientProvider>,
   );
 }
 
 describe("public node staking", () => {
-  it("does not claim that an empty resolver result is an owned pool", () => {
+  it("shows no stake link when neither the node nor an ancestor has a validator", () => {
     show();
     expect(screen.getByText("This node doesn't run a validator yet.")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Stake to Illinois" })).toBeNull();
+    expect(screen.queryByTestId("node-stake-link")).toBeNull();
   });
 
-  it("keeps the own stake link and shows every resolved pool, including grandchildren", () => {
-    show({
-      validators: [
-        validator,
-        { ...validator, id: "grandchild", nodeId: "grandchild", accountId: "grandchild.pool" },
-      ],
-    });
+  it("links to the node's own pools", () => {
+    show({ validators: [validator] });
+    expect(screen.getByText("Back Illinois by staking NEAR to its validator.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Stake to Illinois" }).getAttribute("href")).toBe(
       "/stake?nodeId=state",
     );
     expect(screen.getByRole("heading", { name: "pool.example" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "grandchild.pool" })).toBeTruthy();
   });
 
-  it("names ancestor inheritance and keeps pools from multiple ancestors", async () => {
-    show({
-      validators: [
-        { ...validator, nodeId: "country" },
-        { ...validator, id: "ancestor-2", nodeId: "other-ancestor", accountId: "ancestor.pool" },
-      ],
-      sourceNodeId: "country",
-    });
-    expect(await screen.findByText(/Stake inherited from USA/)).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "ancestor.pool" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Stake to USA" }).getAttribute("href")).toBe(
-      "/stake?nodeId=country",
+  it("labels an ancestor's pools with the ancestor's name", () => {
+    show({ validators: [{ ...validator, nodeId: "country" }], via: source });
+    expect(screen.getByText("Illinois uses the validator from USA.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Stake via USA" }).getAttribute("href")).toBe(
+      "/stake?nodeId=state",
     );
-  });
-
-  it("keeps child stake links and does not mislabel a child as an ancestor", async () => {
-    const child = {
-      ...node,
-      id: "city",
-      name: "Chicago",
-      slug: "chicago",
-      kind: "city" as const,
-      parentId: "state",
-    };
-    show({
-      children: [child],
-      validators: [{ ...validator, nodeId: "city" }],
-      sourceNodeId: "city",
-      apiClient: {
-        getNode: vi.fn().mockResolvedValue(child),
-        getSubtree: vi.fn().mockResolvedValue([
-          { ...node, validators: [] },
-          { ...child, validators: [validator] },
-        ]),
-      },
-    });
-    expect(screen.getByRole("link", { name: /Chicago/ }).getAttribute("href")).toBe(
-      "/stake?nodeId=city",
-    );
-    expect(await screen.findByText(/Pools across this node and its descendants/)).toBeTruthy();
-    expect(screen.queryByText(/Stake inherited/)).toBeNull();
-  });
-
-  it("shows a grandchild-only pool even when no direct child owns a validator", async () => {
-    const grandchild = {
-      ...node,
-      id: "grandchild",
-      name: "Chicago",
-      slug: "chicago",
-      kind: "city" as const,
-      parentId: "child",
-    };
-    show({
-      children: [{ ...node, id: "child", parentId: node.id }],
-      validators: [{ ...validator, nodeId: "grandchild" }],
-      sourceNodeId: "grandchild",
-      apiClient: {
-        getNode: vi.fn().mockResolvedValue(grandchild),
-        getSubtree: vi.fn().mockResolvedValue([
-          { ...node, validators: [] },
-          { ...grandchild, validators: [validator] },
-        ]),
-      },
-    });
-    expect(await screen.findByRole("link", { name: "Stake to Chicago" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "pool.example" })).toBeTruthy();
-    expect(screen.queryByText(/Stake inherited/)).toBeNull();
-    expect(screen.queryByText(/doesn't run a validator yet/)).toBeNull();
   });
 });

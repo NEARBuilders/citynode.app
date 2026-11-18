@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useApiClient } from "@/app";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { LocalDate } from "@/components/local-date";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import {
@@ -13,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useClientValue } from "@/hooks";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 
 export function LumaImport({
@@ -51,6 +51,7 @@ export function LumaImport({
     },
   });
   const connection = calendars.data?.connection;
+  const origin = useClientValue(() => window.location.origin, "");
   const importLines = refresh.data
     ? describeImport(refresh.data, translate, locale.startsWith("zh") ? "" : " ")
     : [];
@@ -112,16 +113,12 @@ export function LumaImport({
             </SelectContent>
           </Select>
           {connection && (
-            <FieldDescription role="status">
-              {refresh.isPending ? (
-                translate("calendar.loadingEvents")
-              ) : (
-                <>
-                  {translate("common.updated")}
-                  <LocalDate value={connection.syncedAt} format="relative" />
-                  {connection.error ? translate("calendar.lastUpdateFailed") : ""}
-                </>
-              )}
+            <FieldDescription role="status" data-testid="luma-import.webhook">
+              {refresh.isPending
+                ? translate("calendar.loadingEvents")
+                : translate("calendar.webhookHint", {
+                    url: `${origin}${connection.webhookPath}`,
+                  })}
             </FieldDescription>
           )}
         </Field>
@@ -189,10 +186,7 @@ function describeImport(
     ...(result.skipped ? [translate("calendar.skippedEvents", { count: result.skipped })] : []),
   ];
   const lines = result.imported
-    ? [
-        `${translate("calendar.imported", { count: result.imported })}${separator}${translate("events.importsWaitingHint")}`,
-        ...existing,
-      ]
+    ? [translate("calendar.imported", { count: result.imported }), ...existing]
     : existing.map((line, index) =>
         index === 0 ? `${translate("calendar.noNewEvents")}${separator}${line}` : line,
       );

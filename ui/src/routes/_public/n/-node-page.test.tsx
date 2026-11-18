@@ -9,7 +9,7 @@ import {
   RouterProvider,
   redirect,
 } from "@tanstack/react-router";
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { Near } from "near-kit";
 import { afterEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -106,22 +106,25 @@ function mockApi(
       const method = url.pathname.split("/").at(-1);
       switch (method) {
         case "resolveNodeBySlug": {
-          const node = nodes.find(
-            (entry) =>
-              entry.slug === args.slug &&
-              (args.parentId === undefined || entry.parentId === args.parentId),
-          );
+          const node = nodes.find((entry) => entry.slug === args.slug);
           return Response.json({ json: node ?? null });
         }
         case "listChildren":
           return Response.json({ json: nodes.filter((entry) => entry.parentId === args.nodeId) });
-        case "resolveStakingValidators": {
+        case "listValidatorsByNode": {
           const node = nodes.find((entry) => entry.id === args.nodeId);
-          const sourceNodeId =
-            node && node.id === ownPoolNodeId ? node.id : (node?.parentId ?? node?.id);
-          return Response.json({
-            json: { sourceNodeId, validators: [{ ...validator, nodeId: sourceNodeId }] },
-          });
+          const ownsPool = !!node && (node.id === ownPoolNodeId || node.parentId === null);
+          return Response.json({ json: ownsPool ? [{ ...validator, nodeId: node.id }] : [] });
+        }
+        case "listNodeAncestors": {
+          const chain = [];
+          let current = nodes.find((entry) => entry.id === args.nodeId);
+          while (current?.parentId) {
+            const parentId: string = current.parentId;
+            current = nodes.find((entry) => entry.id === parentId);
+            if (current) chain.push(current);
+          }
+          return Response.json({ json: chain });
         }
         case "getNodeMemberCount":
           return Response.json({
@@ -251,7 +254,7 @@ it("opens a child node directly and renders its inherited pool and live metrics"
   mockApi();
   await showNode("/n/chicago");
   expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
-  expect(await screen.findByText("Stake inherited from Illinois.")).toBeTruthy();
+  expect(await screen.findByText("Chicago uses the validator from Illinois.")).toBeTruthy();
   expect(await screen.findAllByText("1 NEAR")).toHaveLength(2);
   expect(screen.getByRole("heading", { name: "illinois.poolv1.near" })).toBeTruthy();
   expect(screen.queryByText("Node not found.")).toBeNull();
@@ -287,71 +290,14 @@ it.each([
   expect(screen.queryByTestId("stake.sign-in")).toBeNull();
 });
 
-it("carries a duplicate city's identity from its overview into the staking page", async () => {
-  const otherParent = {
-    ...parent,
-    id: "00000000-0000-4000-8000-000000000003",
-    slug: "missouri",
-    name: "Missouri",
-  };
-  const otherChild = {
-    ...child,
-    id: "00000000-0000-4000-8000-000000000004",
-    parentId: otherParent.id,
-    name: "Chicago, Missouri",
-  };
-  mockApi([parent, child, otherParent, otherChild], otherChild.id);
-  const router = await showNode(`/n/chicago?parentId=${otherParent.id}`);
-  const link = await screen.findByRole("link", { name: "Stake to Chicago, Missouri" });
-  const destination = new URL(link.getAttribute("href") ?? "", "http://localhost");
-  expect(destination.searchParams.get("nodeId")).toBe(otherChild.id);
-  await act(async () => {
-    router.history.push(`${destination.pathname}${destination.search}`);
-    await router.load();
-  });
-  expect(
-    await screen.findByRole("heading", { level: 1, name: /Stake.*Chicago, Missouri/ }),
-  ).toBeTruthy();
-  expect(screen.queryByText("Node not found.")).toBeNull();
-});
-
-it("navigates from a parent to the child's overview with its parent in the URL", async () => {
+it("navigates from a parent to the child's overview by its place slug", async () => {
   mockApi();
   await showNode("/n/illinois");
   const link = await screen.findByRole("link", { name: /Chicago chicago.citynode.app/ });
-  expect(link.getAttribute("href")).toBe(`/n/chicago?parentId=${parent.id}`);
+  expect(link.getAttribute("href")).toBe("/n/chicago");
   fireEvent.click(link);
   expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
-  expect(await screen.findByText("Stake inherited from Illinois.")).toBeTruthy();
-});
-
-it("keeps same-slug cities under different parents separate when navigating", async () => {
-  const otherParent = {
-    ...parent,
-    id: "00000000-0000-4000-8000-000000000003",
-    slug: "missouri",
-    name: "Missouri",
-  };
-  const otherChild = {
-    ...child,
-    id: "00000000-0000-4000-8000-000000000004",
-    parentId: otherParent.id,
-    name: "Chicago, Missouri",
-  };
-  mockApi([parent, child, otherParent, otherChild]);
-  const router = await showNode(`/n/chicago?parentId=${otherParent.id}`);
-  expect(await screen.findByRole("heading", { name: "Chicago, Missouri", level: 1 })).toBeTruthy();
-  expect(await screen.findByText("Stake inherited from Missouri.")).toBeTruthy();
-  await act(() =>
-    router.navigate({
-      to: "/n/$slug",
-      params: { slug: "chicago" },
-      search: { parentId: parent.id },
-    }),
-  );
-  expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
-  expect(await screen.findByText("Stake inherited from Illinois.")).toBeTruthy();
-  expect(screen.queryByText("Stake inherited from Missouri.")).toBeNull();
+  expect(await screen.findByText("Chicago uses the validator from Illinois.")).toBeTruthy();
 });
 
 it("links the header stake action to the same-origin stake page", async () => {

@@ -1,3 +1,4 @@
+import "@orpc/openapi/extensions/route";
 import { oc } from "@orpc/contract";
 import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
 import { z } from "zod";
@@ -6,11 +7,6 @@ export const webUrl = z
   .url()
   .max(2000)
   .refine((value) => /^https?:\/\//i.test(value), "Use an HTTP(S) URL");
-const ring = z.array(z.array(z.number()).min(2));
-export const boundarySchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("Polygon"), coordinates: z.array(ring) }),
-  z.object({ type: z.literal("MultiPolygon"), coordinates: z.array(z.array(ring)) }),
-]);
 export const profileSchema = z
   .object({
     nodeId: z.uuid(),
@@ -33,9 +29,7 @@ export const profileSchema = z
     "Confirm the location label",
   );
 export type DiscoveryProfile = z.infer<typeof profileSchema>;
-export type StoredDiscoveryProfile = DiscoveryProfile & {
-  boundary?: z.infer<typeof boundarySchema> | null;
-};
+export type StoredDiscoveryProfile = DiscoveryProfile;
 
 export const EVENT_REPORT_AUDIENCES = [
   "general",
@@ -83,10 +77,14 @@ export type EventReport = z.infer<typeof eventReportSchema>;
 
 export const EVENT_REPORT_FORM_VERSION = 1;
 
+export const EVENT_REPORT_SOURCES = ["app", "import"] as const;
+export type EventReportSource = (typeof EVENT_REPORT_SOURCES)[number];
+
 export const storedEventReportSchema = z.object({
   activityId: z.uuid(),
   formVersion: z.number().int().positive(),
   report: eventReportSchema,
+  source: z.enum(EVENT_REPORT_SOURCES),
   submittedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   reviewedAt: z.iso.datetime().nullable(),
@@ -145,13 +143,14 @@ export const communityBuildersSchema = z.object({
 export const activitySchema = z.object({
   id: z.uuid(),
   ownerNodeId: z.uuid(),
+  placeId: z.uuid().nullable().optional(),
   luma: z
     .object({
       calendarId: z.string(),
       eventId: z.string(),
-      syncedAt: z.iso.datetime(),
-      available: z.boolean(),
-      hidden: z.boolean().optional(),
+      placeMatch: z.enum(["coordinate", "address", "manual", "none"]).optional(),
+      venueKey: z.string().optional(),
+      removed: z.boolean().optional(),
     })
     .optional(),
   nodeIds: z.array(z.uuid()).min(1).max(30),
@@ -178,8 +177,24 @@ export const activitySchema = z.object({
   status: z.enum(["draft", "published", "cancelled"]),
 });
 export type DiscoveryActivity = z.infer<typeof activitySchema>;
+export const publicActivitySchema = activitySchema.extend({
+  ownerNodeId: z.uuid().nullable(),
+  nodeIds: z.array(z.uuid()),
+});
+export type PublicActivity = z.infer<typeof publicActivitySchema>;
+export const nodeActivitySchema = activitySchema.extend({ ownerNodeId: z.uuid().nullable() });
+export type NodeActivity = z.infer<typeof nodeActivitySchema>;
+export const lumaTriageEventSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  url: webUrl,
+  venue: z.string(),
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  timezone: z.string(),
+});
 export const activityInput = activitySchema
-  .omit({ id: true, luma: true })
+  .omit({ id: true, luma: true, placeId: true })
   .extend({ id: z.uuid().optional() })
   .superRefine((v, ctx) => {
     if (!v.nodeIds.includes(v.ownerNodeId))
@@ -198,13 +213,15 @@ export const activityInput = activitySchema
       });
   });
 export const discoveryNodeSchema = profileSchema.safeExtend({
-  boundary: boundarySchema.nullable().optional(),
+  placeId: z.uuid().nullable(),
+  placeSlug: z.string().nullable(),
+  joinable: z.boolean(),
   featured: z.string().nullable(),
   active: z.boolean(),
   activityReason: z.string(),
   upcoming: z.boolean(),
-  events: z.array(activitySchema),
-  updates: z.array(activitySchema),
+  events: z.array(publicActivitySchema),
+  updates: z.array(publicActivitySchema),
   name: z.string(),
   slug: z.string(),
   parentId: z.string().nullable(),
@@ -259,12 +276,7 @@ export const discoveryContract = {
         calendars: z.array(z.object({ id: z.string(), name: z.string(), url: webUrl })),
         unavailableCount: z.number(),
         connection: z
-          .object({
-            calendarId: z.string(),
-            calendarName: z.string(),
-            syncedAt: z.iso.datetime(),
-            error: z.string().nullable(),
-          })
+          .object({ calendarId: z.string(), calendarName: z.string(), webhookPath: z.string() })
           .nullable(),
       }),
     )
@@ -273,6 +285,33 @@ export const discoveryContract = {
     .input(z.object({ nodeId: z.uuid() }))
     .output(z.object({ disconnected: z.boolean() }))
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  receiveLumaWebhook: oc
+    .route({ method: "POST", path: "/webhooks/luma" })
+    .input(z.unknown())
+    .output(z.object({ result: z.enum(["associated", "unmatched", "removed", "ignored"]) }))
+    .errors({ UNAUTHORIZED, NOT_FOUND, BAD_REQUEST }),
+  receiveLumaCalendarWebhook: oc
+    .route({ method: "POST", path: "/webhooks/luma/{calendarId}" })
+    .input(z.object({ calendarId: z.string().min(1).max(200) }).loose())
+    .output(z.object({ result: z.enum(["associated", "unmatched", "removed", "ignored"]) }))
+    .errors({ UNAUTHORIZED, NOT_FOUND, BAD_REQUEST }),
+  listDiscoveryLumaTriage: oc
+    .output(z.object({ events: z.array(lumaTriageEventSchema) }))
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+  associateDiscoveryLumaEvent: oc
+    .input(z.object({ activityId: z.uuid(), placeId: z.uuid() }))
+    .output(publicActivitySchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  backfillDiscoveryLumaPlaceEvents: oc
+    .output(
+      z.object({
+        imported: z.number(),
+        updated: z.number(),
+        unmatched: z.number(),
+        skipped: z.number(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
   importDiscoveryLuma: oc
     .input(z.object({ nodeId: z.uuid(), calendarId: z.string().min(1).max(200) }))
     .output(
@@ -283,10 +322,6 @@ export const discoveryContract = {
         skipped: z.number(),
       }),
     )
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
-  setDiscoveryLumaVisibility: oc
-    .input(z.object({ nodeId: z.uuid(), activityId: z.uuid(), show: z.boolean() }))
-    .output(activitySchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
   trackDiscovery: oc
     .input(measurementInput)
@@ -372,7 +407,7 @@ export const discoveryContract = {
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
   listDiscoveryActivities: oc
     .input(z.object({ nodeId: z.uuid() }))
-    .output(z.array(activitySchema))
+    .output(z.array(nodeActivitySchema))
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   getEventReport: oc
     .input(z.object({ activityId: z.uuid() }))
@@ -395,6 +430,7 @@ export const discoveryContract = {
         z.object({
           activityId: z.uuid(),
           submittedAt: z.iso.datetime(),
+          source: z.enum(EVENT_REPORT_SOURCES),
           reviewedAt: z.iso.datetime().nullable(),
         }),
       ),
@@ -441,7 +477,9 @@ export const discoveryContract = {
       }),
     )
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
-  getDiscoveryActivity: oc.input(z.object({ id: z.uuid() })).output(activitySchema.nullable()),
+  getDiscoveryActivity: oc
+    .input(z.object({ id: z.uuid() }))
+    .output(publicActivitySchema.nullable()),
   listDiscovery: oc
     .input(
       z.object({

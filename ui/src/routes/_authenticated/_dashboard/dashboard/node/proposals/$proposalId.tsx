@@ -5,7 +5,7 @@ import { useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, SectionHeader, Skeleton } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
 import { nodeProposalsQueryOptions } from "./-node-proposals-query";
-import { applyStatusLabel, proposalTitle, reviewStatusBadge } from "./-proposal-summary";
+import { proposalTitle, reviewStatusBadge } from "./-proposal-summary";
 
 export const Route = createFileRoute(
   "/_authenticated/_dashboard/dashboard/node/proposals/$proposalId",
@@ -77,7 +77,6 @@ function NodeProposalDetail() {
   }
 
   const badge = reviewStatusBadge(proposal.reviewStatus, translate);
-  const applied = applyStatusLabel(proposal.applyStatus, translate);
   const payload = (proposal.payload ?? {}) as Record<string, unknown>;
   const motivation = typeof payload.motivation === "string" ? payload.motivation : null;
 
@@ -97,7 +96,6 @@ function NodeProposalDetail() {
         />
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={badge.variant}>{badge.label}</Badge>
-          {applied && <Badge variant="outline">{applied}</Badge>}
         </div>
       </div>
       {motivation && (

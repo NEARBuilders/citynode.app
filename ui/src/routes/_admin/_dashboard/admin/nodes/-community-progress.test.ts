@@ -42,14 +42,9 @@ describe("community events", () => {
   });
 
   it("leaves out events the public feed hides", () => {
-    const luma = { calendarId: "c", eventId: "e", syncedAt: "2026-10-01T00:00:00Z" };
     const { upcoming } = splitCommunityEvents(
       [
         event("listed", "2026-11-01T18:00:00Z"),
-        event("hidden", "2026-11-01T18:00:00Z", {
-          luma: { ...luma, available: true, hidden: true },
-        }),
-        event("withdrawn", "2026-11-01T18:00:00Z", { luma: { ...luma, available: false } }),
         event("scheduled", "2026-11-01T18:00:00Z", { publishedAt: "2026-10-28T00:00:00Z" }),
       ],
       now,

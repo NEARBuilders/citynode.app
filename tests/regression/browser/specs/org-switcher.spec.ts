@@ -60,7 +60,7 @@ test.describe("orgSwitcher", () => {
     await verifyAuthenticated(page);
     await page.getByTestId("org-switcher").click();
     await expect(page.getByTestId("org-switcher-retry")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole("menuitem", { name: "No organizations yet" })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "No communities yet" })).toHaveCount(0);
     await page.unroute("**/api/rpc/auth/listOrganizations**");
     await page.getByTestId("org-switcher-retry").click();
     await expect(page.getByTestId("org-switcher-retry")).toBeHidden();

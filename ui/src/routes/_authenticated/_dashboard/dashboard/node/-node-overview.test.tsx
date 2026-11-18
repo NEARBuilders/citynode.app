@@ -60,7 +60,7 @@ vi.mock("@tanstack/react-router", () => ({
   }: {
     children?: ReactNode;
     to?: string;
-    params?: { accountId?: string; activityId?: string; nodeId?: string };
+    params?: { accountId?: string; activityId?: string; nodeId?: string; slug?: string };
     hash?: string;
     "data-testid"?: string;
   }) => {
@@ -71,7 +71,9 @@ vi.mock("@tanstack/react-router", () => ({
           ? `/activity/${params?.activityId}`
           : to === "/nodes/$nodeId/events/$activityId/edit"
             ? `/nodes/${params?.nodeId}/events/${params?.activityId}/edit`
-            : `/dashboard${hash ? `#${hash}` : ""}`;
+            : to === "/places/$slug"
+              ? `/places/${params?.slug}`
+              : `/dashboard${hash ? `#${hash}` : ""}`;
     return (
       <a href={href} data-testid={testId}>
         {children}
@@ -97,6 +99,33 @@ vi.mock("@/app", () => ({
     listEventReportStatuses: () => harness.reportStatuses(),
     listMonthlyReportStatuses: () => harness.monthlyStatuses(),
     getDiscoveryNode: () => harness.listing(),
+    getNode: async ({ nodeId }: { nodeId: string }) => ({
+      id: nodeId,
+      slug: "harbor",
+      name: "Harbor",
+      kind: "city",
+      placeId: "00000000-0000-4000-8000-000000000099",
+      parentId: null,
+      tenantId: "tenant-1",
+      metadata: {},
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }),
+    resolvePlace: async () => ({
+      place: {
+        id: "00000000-0000-4000-8000-000000000099",
+        slug: "harbor",
+        name: "Harbor",
+        parentId: null,
+        latitude: null,
+        longitude: null,
+        label: "city",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      aliases: [],
+      community: null,
+    }),
     getMemberDirectoryOptIn: async () =>
       harness.memberDirectory.readOptIn
         ? harness.memberDirectory.readOptIn()
@@ -251,21 +280,20 @@ function renderOverview({
     summary: {
       validators: [],
       children: [],
-      stakingValidators: {
-        sourceNodeId: "node-1",
-        validators: [
-          {
-            id: "validator-1",
-            accountId: POOL,
-            network,
-            protocol: "near",
-            isDefault: true,
-            role: "member",
-          },
-        ],
-      },
     },
-    stakingSourceNode: null,
+    staking: {
+      via: null,
+      validators: [
+        {
+          id: "validator-1",
+          accountId: POOL,
+          network,
+          protocol: "near",
+          isDefault: true,
+          role: "member",
+        },
+      ],
+    },
     tenant: {
       orgId: "org-1",
       accountId: "example.citynode.near",
@@ -936,6 +964,7 @@ function visibleOverviewOrder() {
 
 const upcomingEvent = {
   id: "event-launch",
+  ownerNodeId: "node-1",
   kind: "event",
   title: "Launch Night",
   status: "published",
@@ -969,8 +998,11 @@ describe("node overview member layout", () => {
     stubChain();
     renderOverview({ nearAccount: "owner.near", canManage: true, tenantStatus: "active" });
     const notice = await screen.findByTestId("dashboard-node.map-status");
-    expect(notice.textContent).toContain("Hidden from Explore");
-    expect(notice.textContent).toContain("Visitors can't find your community");
+    expect(notice.textContent).toContain("Not on Explore");
+    expect(notice.textContent).toContain("This place isn't a community on the map yet.");
+    expect(screen.getByTestId("dashboard-node.map-status-action").getAttribute("href")).toBe(
+      "/places/harbor",
+    );
   });
 
   it("opens a live upcoming event on its activity page", async () => {

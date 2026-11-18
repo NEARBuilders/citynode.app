@@ -6,7 +6,7 @@ import { createDatabaseDriver } from "@/db/index";
 import { loadMigrations, migrate } from "@/db/migrate";
 import { discoveryActivities, nodes, tenants } from "@/db/schema";
 import pluginDevConfig from "../../plugin.dev";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 const databaseDir = await vi.hoisted(async () => {
   const { mkdtempSync } = await import("node:fs");
@@ -82,11 +82,12 @@ async function organizationNode() {
   const org = `event-onboarding-${id}`;
   const provisioner = await getPluginClient(daoContext(`prov-${id}`, org, `eo-${id}.near`));
   const tenant = await provisioner.createTenant({ name: "Event city", accountId: `eo-${id}.near` });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Event city",
     slug: `event-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return { org, node, editor: await getPluginClient(orgContext(`editor-${id}`, org)) };
 }
@@ -114,8 +115,6 @@ async function seedEventOnNodeWithoutOrganization() {
     const [node] = await driver.db
       .insert(nodes)
       .values({
-        slug: "solo-city",
-        name: "Solo city",
         tenantId: tenant!.id,
         metadata: { kind: "city" },
       })
@@ -218,7 +217,7 @@ describe("creating an onboarding code for a Node Event", () => {
       organizer.createEventOnboardingCode({ eventId: orphanEventId }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      message: expect.stringMatching(/no organization/i),
+      message: expect.stringMatching(/no community/i),
     });
   });
 
@@ -230,7 +229,7 @@ describe("creating an onboarding code for a Node Event", () => {
 
     await expect(outsider.createEventOnboardingCode({ eventId: event.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: expect.stringMatching(/another organization/i),
+      message: expect.stringMatching(/another community/i),
     });
     expect(forwarded).toHaveLength(before);
   });

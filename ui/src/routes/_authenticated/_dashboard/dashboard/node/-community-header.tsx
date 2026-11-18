@@ -111,8 +111,8 @@ export function CommunityHeader({
   });
   const ownCommunity = !!node?.tenantId && activeTenant.data?.id === node.tenantId;
   const organizationSlug = useQuery({
-    ...organizationsQueryOptions(api),
-    enabled: ownCommunity,
+    ...organizationsQueryOptions(api, auth?.user?.id),
+    enabled: ownCommunity && !!auth?.user?.id,
     select: (organizations) =>
       organizations.find((organization) => organization.id === activeOrganizationId)?.slug ?? null,
   }).data;
@@ -236,13 +236,7 @@ export function CommunityHeader({
                 <Button
                   variant="outline"
                   nativeButton={false}
-                  render={
-                    <Link
-                      to="/n/$slug"
-                      params={{ slug: listing.data.slug }}
-                      search={{ parentId: listing.data.parentId ?? undefined }}
-                    />
-                  }
+                  render={<Link to="/n/$slug" params={{ slug: listing.data.slug }} />}
                   data-testid="community-header.public-page"
                 >
                   {translate("dashboard.openPublicPage")}

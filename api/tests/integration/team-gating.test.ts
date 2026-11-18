@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext } from "../setup";
+import { activateTestNode, authedContext, daoContext, getPluginClient, orgContext } from "../setup";
 
 vi.mock("@/services/staking-pools", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/staking-pools")>()),
@@ -19,7 +19,7 @@ const ORG = "team-gating-org";
 
 const TEAM_DENIED = {
   code: "FORBIDDEN",
-  message: "Ask an organization owner or admin to add you to a team with node-operations.",
+  message: "Ask a community owner or admin to add you to a team with node-operations.",
   data: { requiredPermissions: ["node-operations"] },
 };
 
@@ -60,22 +60,14 @@ async function seedNode(org = ORG) {
     name: "Gating",
     accountId: `gating-${suffix}.near`,
   });
-  return owner.createNode({
+  const { node } = await activateTestNode({
     name: "Gating",
     kind: "country",
     slug: `gating-${suffix}`,
     tenantId: tenant.id,
+    orgId: org,
   });
-}
-
-function childNodeInput(name: string, slugPrefix: string, tenantId: string, parentId: string) {
-  return {
-    name,
-    kind: "city",
-    slug: `${slugPrefix}-${crypto.randomUUID().slice(0, 8)}`,
-    tenantId,
-    parentId,
-  };
+  return node;
 }
 
 async function seedValidator(nodeId: string) {
@@ -96,9 +88,9 @@ describe("team area gating on node operations", () => {
     const validator = await seedValidator(node.id);
     const client = await getPluginClient(authedContext("outside-platform-admin", "admin"));
 
-    await expect(client.updateNode({ nodeId: node.id, name: "Platform" })).resolves.toMatchObject({
-      name: "Platform",
-    });
+    await expect(
+      client.updateNode({ nodeId: node.id, metadata: { note: "Platform" } }),
+    ).resolves.toMatchObject({ metadata: { note: "Platform" } });
     await expect(client.setDefaultValidator({ validatorId: validator.id })).resolves.toBeTruthy();
   });
 
@@ -106,7 +98,9 @@ describe("team area gating on node operations", () => {
     const node = await seedNode();
     const client = await getPluginClient(authedContext("orgless-user"));
 
-    await expect(client.updateNode({ nodeId: node.id, name: "Nope" })).rejects.toMatchObject({
+    await expect(
+      client.updateNode({ nodeId: node.id, metadata: { note: "Nope" } }),
+    ).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
@@ -116,73 +110,6 @@ describe("team area gating on node operations", () => {
     const client = await getPluginClient();
 
     await expect(client.getNode({ nodeId: node.id })).resolves.toMatchObject({ id: node.id });
-  });
-});
-
-describe("node parent authorization", () => {
-  it("rejects moving a node under another organization's node", async () => {
-    const node = await seedNode();
-    const foreign = await seedNode("team-gating-foreign-org");
-    const owner = await getPluginClient(teamContext("parent-owner", { orgRole: "owner" }));
-
-    await expect(owner.updateNode({ nodeId: node.id, parentId: foreign.id })).rejects.toMatchObject(
-      { code: "FORBIDDEN" },
-    );
-    await expect(owner.getNode({ nodeId: node.id })).resolves.toMatchObject({ parentId: null });
-  });
-
-  it("rejects creating a node under another organization's node", async () => {
-    const node = await seedNode();
-    const foreign = await seedNode("team-gating-foreign-org");
-    const owner = await getPluginClient(teamContext("create-parent-owner", { orgRole: "owner" }));
-
-    await expect(
-      owner.createNode(childNodeInput("Squatter", "squatter", node.tenantId!, foreign.id)),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
-
-  it("still allows a parent the caller's organization owns", async () => {
-    const parent = await seedNode();
-    const node = await seedNode();
-    const owner = await getPluginClient(teamContext("own-parent-owner", { orgRole: "owner" }));
-
-    await expect(owner.updateNode({ nodeId: node.id, parentId: parent.id })).resolves.toMatchObject(
-      { parentId: parent.id },
-    );
-    await expect(
-      owner.createNode(childNodeInput("Child", "own-child", parent.tenantId!, parent.id)),
-    ).resolves.toMatchObject({ parentId: parent.id });
-  });
-  it("lets the node's owner detach it to the root", async () => {
-    const parent = await seedNode();
-    const node = await seedNode();
-    const owner = await getPluginClient(teamContext("detach-owner", { orgRole: "owner" }));
-
-    await owner.updateNode({ nodeId: node.id, parentId: parent.id });
-    await expect(owner.updateNode({ nodeId: node.id, parentId: null })).resolves.toMatchObject({
-      parentId: null,
-    });
-  });
-
-  it("does not re-check an unchanged parent the caller cannot manage", async () => {
-    const foreign = await seedNode("team-gating-foreign-org");
-    const tenantNode = await seedNode();
-    const platformAdmin = await getPluginClient(
-      teamContext("reparent-platform-admin", { orgRole: "owner", userRole: "admin" }),
-    );
-    const child = await platformAdmin.createNode(
-      childNodeInput("Linked City", "linked", tenantNode.tenantId!, foreign.id),
-    );
-    const owner = await getPluginClient(
-      teamContext("unchanged-parent-owner", { orgRole: "owner" }),
-    );
-
-    await expect(
-      owner.updateNode({ nodeId: child.id, parentId: foreign.id, name: "Linked City (renamed)" }),
-    ).resolves.toMatchObject({ parentId: foreign.id, name: "Linked City (renamed)" });
-    await expect(
-      owner.updateNode({ nodeId: tenantNode.id, parentId: foreign.id }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 
@@ -278,23 +205,9 @@ describe("node-operations through any team the member belongs to", () => {
     rolesOnly?: boolean;
   }> = [
     {
-      name: "createNode",
-      run: (client, { node }) =>
-        client.createNode(childNodeInput("Child", "matrix-create", node.tenantId!, node.id)),
-    },
-    {
-      name: "spawnNode",
-      run: (client, { node }) =>
-        client.spawnNode({
-          name: "Spawned",
-          slug: `matrix-spawn-${crypto.randomUUID().slice(0, 8)}`,
-          tenantId: node.tenantId!,
-          parentId: node.id,
-        }),
-    },
-    {
       name: "updateNode",
-      run: (client, { node }) => client.updateNode({ nodeId: node.id, name: "Renamed" }),
+      run: (client, { node }) =>
+        client.updateNode({ nodeId: node.id, metadata: { note: "Renamed" } }),
     },
     {
       name: "setNodeBulletin",
@@ -436,24 +349,16 @@ describe("node-operations through any team the member belongs to", () => {
     const client = await getPluginClient(unrelatedOrgOpsMember("unrelated-ops"));
 
     await expect(
-      client.updateNode({ nodeId: fixture.node.id, name: "Hijacked" }),
+      client.updateNode({ nodeId: fixture.node.id, metadata: { note: "Hijacked" } }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "This node does not belong to your organization",
+      message: "This node does not belong to your community",
     });
     await expect(
       client.setDefaultValidator({ validatorId: fixture.validatorId }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "This node's validators do not belong to your organization",
-    });
-    await expect(
-      client.createNode(
-        childNodeInput("Child", "unrelated", fixture.node.tenantId!, fixture.node.id),
-      ),
-    ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      message: "This tenant does not belong to your organization",
+      message: "This node's validators do not belong to your community",
     });
   });
 });

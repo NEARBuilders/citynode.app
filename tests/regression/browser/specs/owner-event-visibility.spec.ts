@@ -36,18 +36,18 @@ async function seedEventStates(nodeId: string) {
       status: "draft",
       ...eventWindow(4),
     }),
-    hiddenImport: await seedDiscoveryActivity({
+    lumaImport: await seedDiscoveryActivity({
       nodeId,
       title: "Imported meetup",
-      status: "draft",
-      luma: { available: true, hidden: true },
+      status: "published",
+      luma: {},
       ...eventWindow(5),
     }),
     removed: await seedDiscoveryActivity({
       nodeId,
       title: "Withdrawn meetup",
       status: "draft",
-      luma: { available: false, hidden: false },
+      luma: { removed: true },
       ...eventWindow(6),
     }),
     scheduled: await seedDiscoveryActivity({
@@ -72,8 +72,8 @@ async function seedEventStates(nodeId: string) {
     endedImport: await seedDiscoveryActivity({
       nodeId,
       title: "Ended import",
-      status: "draft",
-      luma: { available: true, hidden: true },
+      status: "published",
+      luma: {},
       ...eventWindow(-2),
     }),
   };
@@ -122,42 +122,29 @@ test.describe("owner event visibility", () => {
     ).toBeVisible({ timeout: 15000 });
     await page.waitForURL(new RegExp(`/nodes/${node.id}/content`), { waitUntil: "commit" });
 
-    await expect(page.getByTestId("content-map-status")).toHaveAttribute("data-state", "hidden", {
-      timeout: 15000,
-    });
+    await expect(page.getByTestId("content.heading")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("content-map-status")).toHaveCount(0);
     const badge = (id: string) => page.getByTestId(`event-visibility-${id}`);
     await expect(badge(events.live.id)).toHaveAttribute("data-state", "published");
     await expect(badge(events.draft.id)).toHaveAttribute("data-state", "draft");
-    await expect(badge(events.hiddenImport.id)).toHaveAttribute("data-state", "hiddenImport");
-    await expect(badge(events.removed.id)).toHaveAttribute("data-state", "removed");
-    await expect(badge(events.removed.id)).toHaveText("Removed from Luma");
+    await expect(badge(events.lumaImport.id)).toHaveAttribute("data-state", "published");
+    await expect(badge(events.removed.id)).toHaveAttribute("data-state", "draft");
     await expect(badge(events.scheduled.id)).toHaveAttribute("data-state", "published");
     await expect(badge(events.cancelled.id)).toHaveAttribute("data-state", "cancelled");
-
-    const waiting = page.getByTestId("activity-editor.imports-waiting");
-    await expect(waiting).toContainText("1 imported event waiting");
-    await page.getByTestId("activity-editor.imports-waiting-review").click();
-    await page.waitForURL(/review=imports/, { waitUntil: "commit" });
-    await expect(page.getByTestId("activity-editor.reviewing-imports")).toBeVisible();
-    await expect(badge(events.hiddenImport.id)).toBeVisible();
-    await expect(badge(events.draft.id)).toHaveCount(0);
-    await page.getByTestId(`activity-editor.luma-visibility-${events.hiddenImport.id}`).click();
-    await expect(page.getByText("Shown on the calendar")).toBeVisible({ timeout: 15000 });
-    await page.getByTestId("activity-editor.show-all").click();
-    await expect(badge(events.draft.id)).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId("activity-editor.imports-waiting")).toHaveCount(0);
+    await expect(
+      page.getByTestId(`activity-editor.luma-visibility-${events.lumaImport.id}`),
+    ).toHaveCount(0);
 
     await seedDiscoveryProfile({ nodeId: node.id, published: true });
     await openEvents(page, node.id);
-    await expect(page.getByTestId("content-map-status")).toHaveAttribute("data-state", "noPin", {
-      timeout: 15000,
-    });
+    await expect(page.getByTestId("content.heading")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("content-map-status")).toHaveCount(0);
     await expect(badge(events.live.id)).toHaveAttribute("data-state", "live", { timeout: 15000 });
-    await expect(badge(events.hiddenImport.id)).toHaveAttribute("data-state", "live");
+    await expect(badge(events.lumaImport.id)).toHaveAttribute("data-state", "live");
     await expect(badge(events.draft.id)).toHaveAttribute("data-state", "draft");
     await expect(badge(events.scheduled.id)).toHaveAttribute("data-state", "scheduled");
     await expect(badge(events.cancelled.id)).toHaveAttribute("data-state", "cancelled");
-    await expect(badge(events.removed.id)).toHaveAttribute("data-state", "removed");
+    await expect(badge(events.removed.id)).toHaveAttribute("data-state", "draft");
 
     await page.getByTestId("activity-editor.tab-past").click();
     await expect(badge(events.ended.id)).toHaveAttribute("data-state", "ended", {
@@ -170,23 +157,15 @@ test.describe("owner event visibility", () => {
     );
     await expect(report).not.toHaveAttribute("target", "_blank");
     await expect(page.getByTestId(`report-status-${events.ended.id}`)).toBeVisible();
-    await expect(badge(events.endedImport.id)).toHaveAttribute("data-state", "hiddenImport");
+    await expect(badge(events.endedImport.id)).toHaveAttribute("data-state", "ended");
     await expect(
       page.getByTestId(`activity-editor.submit-report-${events.endedImport.id}`),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await page.getByTestId("activity-editor.tab-upcoming").click();
 
     await badge(events.live.id).click();
     await page.waitForURL(new RegExp(`/activity/${events.live.id}`), { waitUntil: "commit" });
     await expect(page.getByText("Published meetup").first()).toBeVisible({ timeout: 15000 });
-
-    const waitingImport = await seedDiscoveryActivity({
-      nodeId: node.id,
-      title: "Waiting import",
-      status: "draft",
-      luma: { available: true, hidden: true },
-      ...eventWindow(2),
-    });
 
     await page.context().clearCookies();
     await page.goto(`/activity/${events.live.id}`, { waitUntil: "domcontentloaded" });
@@ -198,9 +177,8 @@ test.describe("owner event visibility", () => {
     const listed = (id: string) => page.getByTestId(`discovery-activity-detail-${id}`);
     const expectPublicList = async () => {
       await expect(listed(events.live.id)).toBeVisible({ timeout: 15000 });
-      await expect(listed(events.hiddenImport.id)).toBeVisible();
+      await expect(listed(events.lumaImport.id)).toBeVisible();
       await expect(listed(events.draft.id)).toHaveCount(0);
-      await expect(listed(waitingImport.id)).toHaveCount(0);
       await expect(listed(events.scheduled.id)).toHaveCount(0);
       await expect(listed(events.cancelled.id)).toHaveCount(0);
       await expect(listed(events.removed.id)).toHaveCount(0);
@@ -232,16 +210,14 @@ test.describe("owner event visibility", () => {
 
     await page.goto(`/dashboard/node?nodeId=${node.id}`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await expect(page.getByTestId("dashboard-node.stat-events").locator("dd")).toHaveText("1", {
+    await expect(page.getByTestId("dashboard-node.stat-events").locator("dd")).toHaveText("2", {
       timeout: 15000,
     });
     const badge = (id: string) => page.getByTestId(`event-visibility-${id}`);
     await expect(badge(events.live.id)).toHaveAttribute("data-state", "live");
     await expect(badge(events.draft.id)).toHaveAttribute("data-state", "draft");
-    await expect(badge(events.hiddenImport.id)).toHaveAttribute("data-state", "hiddenImport");
-    await expect(page.getByTestId("dashboard-node.imports-waiting")).toContainText(
-      "1 imported event waiting",
-    );
+    await expect(badge(events.lumaImport.id)).toHaveAttribute("data-state", "live");
+    await expect(page.getByTestId("dashboard-node.imports-waiting")).toHaveCount(0);
 
     await page.getByTestId("dashboard-node.add-event").click();
     await page.waitForURL(new RegExp(`/nodes/${node.id}/events/new`), { waitUntil: "commit" });

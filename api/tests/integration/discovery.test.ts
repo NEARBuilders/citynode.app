@@ -1,6 +1,13 @@
 import { Effect } from "effect";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import {
+  activateTestNode,
+  authedContext,
+  daoContext,
+  getPluginClient,
+  orgContext,
+  teardown,
+} from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -19,11 +26,12 @@ async function fixture() {
     name: "Discovery city",
     accountId: `d-${id}.near`,
   });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Karachi",
     slug: `karachi-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return {
     node,
@@ -109,8 +117,8 @@ it("lists active communities without a profile as basic entries only", async () 
 });
 
 it("preserves multiple nodes per tenant and validates confirmed coordinates", async () => {
-  const { node, tenant, editor, provisioner, publicClient } = await fixture();
-  const sibling = await provisioner.createNode({
+  const { node, tenant, editor, publicClient } = await fixture();
+  const { node: sibling } = await activateTestNode({
     name: "Online",
     slug: `online-${node.id}`,
     kind: "city",
@@ -134,17 +142,14 @@ it("preserves multiple nodes per tenant and validates confirmed coordinates", as
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
 
-it("derives coordinates from location via Nominatim and skips when already geocoded", async () => {
+it("saves a discovery profile without calling Nominatim", async () => {
   const realFetch = globalThis.fetch;
   const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (!url.includes("nominatim.openstreetmap.org")) {
-      return realFetch(input, init);
+    if (url.includes("nominatim.openstreetmap.org")) {
+      throw new Error("Nominatim should not run on the discovery-profile save path");
     }
-    if (url.includes("Unavailable-")) {
-      return new Response("[]", { status: 503, headers: { "Content-Type": "application/json" } });
-    }
-    return Response.json([{ lat: "24.86", lon: "67.01" }]);
+    return realFetch(input, init);
   });
   vi.stubGlobal("fetch", fetchMock);
 
@@ -159,37 +164,18 @@ it("derives coordinates from location via Nominatim and skips when already geoco
     geocodedLocation: null,
   });
   expect(saved).toMatchObject({
-    latitude: 24.86,
-    longitude: 67.01,
-    geocodedLocation: uniqueLocation,
+    location: uniqueLocation,
+    latitude: null,
+    longitude: null,
     geocodeHint: null,
   });
   expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toMatchObject({
-    latitude: 24.86,
-    longitude: 67.01,
-  });
-  expect(
-    fetchMock.mock.calls.some(([input]) =>
-      (typeof input === "string" ? input : input instanceof URL ? input.href : input.url).includes(
-        "nominatim",
-      ),
-    ),
-  ).toBe(true);
-  const nominatimCall = fetchMock.mock.calls.find(([input]) =>
-    (typeof input === "string" ? input : input instanceof URL ? input.href : input.url).includes(
-      "nominatim",
-    ),
-  );
-  expect(nominatimCall?.[1]?.headers).toMatchObject({
-    "User-Agent": expect.stringContaining("citynode.app/discovery-geocode"),
+    location: uniqueLocation,
+    latitude: null,
+    longitude: null,
   });
 
-  const nominatimCallsBeforeSkip = fetchMock.mock.calls.filter(([input]) =>
-    (typeof input === "string" ? input : input instanceof URL ? input.href : input.url).includes(
-      "nominatim",
-    ),
-  ).length;
-  const skipped = await editor.saveDiscoveryProfile({
+  const withPin = await editor.saveDiscoveryProfile({
     nodeId: node.id,
     ...profile,
     location: uniqueLocation,
@@ -197,68 +183,46 @@ it("derives coordinates from location via Nominatim and skips when already geoco
     longitude: 67.01,
     geocodedLocation: uniqueLocation,
   });
-  expect(skipped).toMatchObject({
+  expect(withPin).toMatchObject({
     latitude: 24.86,
     longitude: 67.01,
     geocodedLocation: uniqueLocation,
+    geocodeHint: null,
   });
   expect(
-    fetchMock.mock.calls.filter(([input]) =>
+    fetchMock.mock.calls.some(([input]) =>
       (typeof input === "string" ? input : input instanceof URL ? input.href : input.url).includes(
         "nominatim",
       ),
     ),
-  ).toHaveLength(nominatimCallsBeforeSkip);
+  ).toBe(false);
 
-  const failed = await editor.saveDiscoveryProfile({
+  const moved = await editor.saveDiscoveryProfile({
     nodeId: node.id,
     ...profile,
-    location: `Unavailable-${node.id.slice(0, 8)}`,
+    location: "Porto",
+    latitude: 24.86,
+    longitude: 67.01,
+    geocodedLocation: uniqueLocation,
+  });
+  expect(moved).toMatchObject({
+    location: "Porto",
     latitude: null,
     longitude: null,
     geocodedLocation: null,
   });
-  expect(failed).toMatchObject({
-    latitude: null,
-    longitude: null,
-    geocodeHint: "unavailable",
-  });
   vi.unstubAllGlobals();
 });
 
-it("places a country community from its region and keeps its outline", async () => {
-  const realFetch = globalThis.fetch;
-  const outline = [
-    [
-      [68, 8],
-      [97, 8],
-      [97, 35],
-      [68, 8],
-    ],
-  ];
-  const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (!url.includes("nominatim.openstreetmap.org")) return realFetch(input, init);
-    if (url.includes("Mumbai-"))
-      return Response.json([{ lat: "19.07", lon: "72.87", addresstype: "city" }]);
-    return Response.json([
-      {
-        lat: "22.35",
-        lon: "78.66",
-        addresstype: "country",
-        geojson: { type: "Polygon", coordinates: outline },
-      },
-    ]);
-  });
-  vi.stubGlobal("fetch", fetchMock);
-
-  const { tenant, provisioner, editor, publicClient } = await fixture();
-  const country = await provisioner.createNode({
+it("keeps a country community on its catalog place without a manual pin", async () => {
+  const { tenant, editor, publicClient } = await fixture();
+  const { node: country } = await activateTestNode({
     name: "Country",
     slug: `country-${tenant.id}`,
     kind: "country",
     tenantId: tenant.id,
   });
+  const countryPlaceId = country.placeId;
   const region = `India-${country.id.slice(0, 8)}`;
   const saved = await editor.saveDiscoveryProfile({
     nodeId: country.id,
@@ -268,24 +232,22 @@ it("places a country community from its region and keeps its outline", async () 
     latitude: null,
     longitude: null,
   });
-  expect(saved).toMatchObject({ latitude: 22.35, longitude: 78.66, geocodedLocation: region });
+  expect(saved).toMatchObject({ latitude: null, longitude: null, region });
   expect(saved).not.toHaveProperty("boundary");
-  const outlineOf = async (nodeId: string) =>
-    (await publicClient.getDiscoveryNode({ nodeId }))?.boundary ?? null;
-  expect(await outlineOf(country.id)).toEqual({ type: "Polygon", coordinates: outline });
+  expect((await publicClient.getDiscoveryNode({ nodeId: country.id }))?.placeId).toBe(
+    countryPlaceId,
+  );
 
-  await editor.saveDiscoveryProfile({ ...saved, summary: "Updated" });
-  expect(await outlineOf(country.id)).toEqual({ type: "Polygon", coordinates: outline });
-
-  const city = await editor.saveDiscoveryProfile({
+  const withPin = await editor.saveDiscoveryProfile({
     ...saved,
     location: `Mumbai-${country.id.slice(0, 8)}`,
+    latitude: 19.07,
+    longitude: 72.87,
   });
-  expect(city).toMatchObject({ latitude: 19.07, longitude: 72.87 });
-  expect(await outlineOf(country.id)).toBeNull();
+  expect(withPin).toMatchObject({ latitude: 19.07, longitude: 72.87 });
 
   await editor.saveDiscoveryProfile({ ...saved, location: "", region });
-  const state = await provisioner.createNode({
+  const { node: state } = await activateTestNode({
     name: "State",
     slug: `state-${tenant.id}`,
     kind: "state",
@@ -300,72 +262,34 @@ it("places a country community from its region and keeps its outline", async () 
     longitude: null,
   });
   expect(stateSaved).toMatchObject({ latitude: null, longitude: null });
-  expect(await outlineOf(state.id)).toBeNull();
 
   const cleared = await editor.saveDiscoveryProfile({
-    ...saved,
+    ...withPin,
     location: "",
     region: "",
     latitude: null,
     longitude: null,
   });
   expect(cleared).toMatchObject({ latitude: null, longitude: null });
-  expect(await outlineOf(country.id)).toBeNull();
-  vi.unstubAllGlobals();
 });
 
-it("adds an outline to an older country community and keeps its pin if the lookup fails", async () => {
-  const realFetch = globalThis.fetch;
-  const outline = [
-    [
-      [33, -5],
-      [42, -5],
-      [42, 5],
-      [33, -5],
-    ],
-  ];
-  let outage = true;
-  const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (!url.includes("nominatim.openstreetmap.org")) return realFetch(input, init);
-    if (outage) return new Response("[]", { status: 503 });
-    return Response.json([
-      {
-        lat: "0.17",
-        lon: "37.9",
-        addresstype: "country",
-        geojson: { type: "Polygon", coordinates: outline },
-      },
-    ]);
-  });
-  vi.stubGlobal("fetch", fetchMock);
+it("exposes the catalog place link on discovery nodes", async () => {
+  const { node, editor, publicClient } = await fixture();
+  await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile });
 
-  const { tenant, provisioner, editor, publicClient } = await fixture();
-  const country = await provisioner.createNode({
-    name: "Country",
-    slug: `legacy-country-${tenant.id}`,
-    kind: "country",
-    tenantId: tenant.id,
-  });
-  const location = `Kenya-${country.id.slice(0, 8)}`;
-  const legacy = {
-    nodeId: country.id,
-    ...profile,
-    location,
-    latitude: 0.17,
-    longitude: 37.9,
-    geocodedLocation: location,
-  };
-  const kept = await editor.saveDiscoveryProfile(legacy);
-  expect(kept).toMatchObject({ latitude: 0.17, longitude: 37.9, geocodeHint: null });
+  const listed = await publicClient.listDiscovery({ query: node.name });
+  expect(listed.map((entry) => entry.placeId)).toContain(node.placeId);
+  const detail = await publicClient.getDiscoveryNode({ nodeId: node.id });
+  expect(detail?.placeId).toBe(node.placeId);
+  expect(listed.find((item) => item.nodeId === node.id)).toMatchObject({ joinable: true });
+  expect(detail).toMatchObject({ joinable: true });
+  expect(detail?.placeSlug).toEqual(expect.any(String));
+  expect(detail).not.toHaveProperty("boundary");
 
-  outage = false;
-  await editor.saveDiscoveryProfile(legacy);
-  expect((await publicClient.getDiscoveryNode({ nodeId: country.id }))?.boundary).toEqual({
-    type: "Polygon",
-    coordinates: outline,
-  });
-  vi.unstubAllGlobals();
+  await expect(
+    publicClient.listPlaceBoundaries({ placeIds: [crypto.randomUUID()] }),
+  ).resolves.toEqual([]);
+  expect(await publicClient.listPlaceMapPins({})).toEqual([]);
 });
 
 it("publishes attributed activity, shares events and removes cancelled evidence", async () => {

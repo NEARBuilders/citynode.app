@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { ReportStatusBadge } from "@/components/discovery/report-status-badge";
+import { type ReportSource, ReportStatusBadge } from "@/components/discovery/report-status-badge";
 import {
   Item,
   ItemActions,
@@ -69,6 +69,7 @@ export function OverviewEventRow({
     event: { id: string; startsAt: string | null; endsAt: string | null };
     submittedAt: string | null | undefined;
     reviewedAt?: string | null;
+    source?: ReportSource | null;
     now: number;
   };
 }) {
@@ -88,6 +89,7 @@ export function OverviewEventRow({
               activity={report.event}
               submittedAt={report.submittedAt}
               reviewedAt={report.reviewedAt}
+              source={report.source}
               now={report.now}
             />
           </Link>

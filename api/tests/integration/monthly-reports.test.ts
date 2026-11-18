@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { Effect } from "effect";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -198,11 +198,12 @@ async function community(name = "Harbor City", startedAt = new Date("2026-10-01T
   vi.setSystemTime(startedAt);
   const provisioner = await getPluginClient(daoContext(`prov-${id}`, org, `mr-${id}.near`));
   const tenant = await provisioner.createTenant({ name, accountId: `mr-${id}.near` });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name,
     slug: `monthly-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   vi.setSystemTime(resume);
   roles.set(`${org}:owner-${id}`, "owner");
@@ -584,7 +585,7 @@ describe("monthly reports", () => {
   });
 
   it("keeps one report per community, whichever of its nodes it is opened from", async () => {
-    const city = await community("Harbor City");
+    const city = await community("Zulu Harbor");
     const platformAdmin = await admin();
     const reported = month(-1);
     await city.owner.saveMonthlyReport({
@@ -594,14 +595,14 @@ describe("monthly reports", () => {
     });
 
     vi.setSystemTime(new Date("2026-10-01T12:00:00.000Z"));
-    const first = await city.provisioner.createNode({
+    const { node: first } = await activateTestNode({
       name: "Aardvark Harbor",
       slug: `monthly-aardvark-${city.id}`,
       kind: "city",
       tenantId: city.tenant.id,
+      orgId: city.org,
     });
     vi.setSystemTime(new Date(NOW));
-    await city.provisioner.updateNode({ nodeId: city.node.id, name: "Zulu Harbor" });
 
     for (const nodeId of [first.id, city.node.id]) {
       expect(
@@ -690,11 +691,12 @@ describe("monthly reports", () => {
     const organized = await community("Alder Town");
     const joined = await community("Birch Bay");
     const suspended = await community("Cedar Cove");
-    const pier = await owned.provisioner.createNode({
+    const { node: pier } = await activateTestNode({
       name: "Zeta Pier",
       slug: `monthly-pier-${owned.id}`,
       kind: "city",
       tenantId: owned.tenant.id,
+      orgId: owned.org,
     });
     await (
       await getPluginClient(orgContext(`admin-${suspended.id}`, suspended.org, "admin"))

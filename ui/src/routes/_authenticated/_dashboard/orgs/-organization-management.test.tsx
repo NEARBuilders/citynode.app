@@ -167,10 +167,10 @@ afterEach(() => {
 describe("organization management controls", () => {
   it("shows owner edit/delete controls and keeps member self-removal forbidden", async () => {
     renderOverview({ canDelete: true });
-    await openMenu("Organization actions");
+    await openMenu("Community actions");
     expect(screen.getByRole("menuitem", { name: "Edit details" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Delete organization" })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: "Leave organization" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Delete community" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Leave community" })).toBeNull();
 
     cleanup();
     render(
@@ -204,10 +204,10 @@ describe("organization management controls", () => {
 
   it("gives non-owner members leave access without owner edit/delete controls", async () => {
     renderOverview({ canDelete: false });
-    await openMenu("Organization actions");
-    expect(screen.getByRole("menuitem", { name: "Leave organization" })).toBeTruthy();
+    await openMenu("Community actions");
+    expect(screen.getByRole("menuitem", { name: "Leave community" })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: "Edit details" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: "Delete organization" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Delete community" })).toBeNull();
   });
 
   it("confirms before deleting the organization", async () => {
@@ -228,11 +228,11 @@ describe("organization management controls", () => {
         org={organization}
       />,
     );
-    await openMenu("Organization actions");
-    fireEvent.click(screen.getByRole("menuitem", { name: "Delete organization" }));
+    await openMenu("Community actions");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete community" }));
     expect(onDelete).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete organization" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete community" }));
     expect(onDelete).toHaveBeenCalledOnce();
   });
 

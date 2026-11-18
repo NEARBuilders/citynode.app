@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -69,11 +69,12 @@ async function community() {
   const org = `events-organizers-${id}`;
   const provisioner = await getPluginClient(daoContext(`owner-${id}`, org, `eo-${id}.near`));
   const tenant = await provisioner.createTenant({ name: "Organizers", accountId: `eo-${id}.near` });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Organizer city",
     slug: `organizer-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return { id, org, node, owner: await getPluginClient(orgContext(`owner-${id}`, org)) };
 }
@@ -259,17 +260,7 @@ describe("events-area organizers", () => {
       await organizer.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-organizers" }),
     ).toMatchObject({ imported: 1 });
     const [imported] = await organizer.listDiscoveryActivities({ nodeId: node.id });
-    expect(imported).toMatchObject({ status: "draft", luma: { hidden: true } });
-    await expect(
-      member.setDiscoveryLumaVisibility({ nodeId: node.id, activityId: imported!.id, show: true }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(
-      await organizer.setDiscoveryLumaVisibility({
-        nodeId: node.id,
-        activityId: imported!.id,
-        show: true,
-      }),
-    ).toMatchObject({ status: "published", luma: { hidden: false } });
+    expect(imported).toMatchObject({ status: "published", luma: { calendarId: "cal-organizers" } });
 
     await expect(organizer.disconnectDiscoveryLuma({ nodeId: node.id })).rejects.toMatchObject({
       code: "FORBIDDEN",

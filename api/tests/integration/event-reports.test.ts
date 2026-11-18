@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -69,11 +69,12 @@ async function community() {
   const org = `event-reports-${id}`;
   const provisioner = await getPluginClient(daoContext(`owner-${id}`, org, `eo-${id}.near`));
   const tenant = await provisioner.createTenant({ name: "Organizers", accountId: `eo-${id}.near` });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Organizer city",
     slug: `organizer-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return { id, org, node, owner: await getPluginClient(orgContext(`owner-${id}`, org)) };
 }
@@ -140,8 +141,9 @@ describe("event reports", () => {
     });
     expect(await admin.listEventReportStatuses({ nodeId: node.id })).toHaveLength(1);
     expect(await organizer.listEventReportStatuses({ nodeId: node.id })).toEqual([
-      { activityId: ended.id, submittedAt: saved.submittedAt, reviewedAt: null },
+      { activityId: ended.id, submittedAt: saved.submittedAt, source: "app", reviewedAt: null },
     ]);
+    expect(saved.source).toBe("app");
 
     const edited = await owner.saveEventReport({
       activityId: ended.id,
@@ -209,6 +211,7 @@ describe("event reports", () => {
     );
     const listed = (await admin.getAdminEvents()).events.find((event) => event.id === ended.id);
     expect(listed?.reportReviewedAt).toBe(reviewedAt);
+    expect(listed?.reportSource).toBe("app");
     expect(await owner.listEventReportStatuses({ nodeId: node.id })).toEqual([
       expect.objectContaining({ activityId: ended.id, reviewedAt }),
     ]);

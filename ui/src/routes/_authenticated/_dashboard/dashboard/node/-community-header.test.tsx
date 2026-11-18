@@ -33,7 +33,10 @@ vi.mock("@tanstack/react-router", () => ({
     );
   }),
   useNavigate: () => vi.fn(),
-  useRouteContext: () => ({ auth: { activeOrganizationId: "org-1" }, runtimeConfig: {} }),
+  useRouteContext: () => ({
+    auth: { activeOrganizationId: "org-1", user: { id: "user-1" } },
+    runtimeConfig: {},
+  }),
 }));
 
 const node = {
@@ -99,7 +102,7 @@ describe("CommunityHeader organization link", () => {
     renderHeader();
     const link = await screen.findByTestId("community-header.organization");
     await waitFor(() => expect(link.getAttribute("href")).toBe("/orgs/chicago-builders"));
-    expect(link.textContent).toContain("Organization");
+    expect(link.textContent).toContain("Community");
 
     cleanup();
     harness.authContext = {
@@ -130,11 +133,11 @@ describe("CommunityHeader organization link", () => {
 });
 
 describe("CommunityHeader public page link", () => {
-  it("opens a child community's public page with its parent in the URL", async () => {
+  it("opens a child community's public page by its place slug", async () => {
     harness.listing = { slug: "chicago", parentId: node.parentId };
     renderHeader();
     const link = await screen.findByTestId("community-header.public-page");
-    expect(link.getAttribute("href")).toBe(`/n/chicago?parentId=${node.parentId}`);
+    expect(link.getAttribute("href")).toBe("/n/chicago");
     expect(link.textContent).toContain("Open public page");
     expect(screen.getByTestId("community-header.view-explore")).toBeTruthy();
   });

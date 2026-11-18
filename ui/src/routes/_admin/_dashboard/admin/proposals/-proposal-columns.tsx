@@ -5,13 +5,7 @@ import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage, useAppTranslation } from "@/i18n/runtime";
 import type { Proposal } from "@/lib/queries/proposals";
 import { humanize } from "../-admin-ui";
-import {
-  proposalNeedsAction,
-  proposalReviewStatusVariant,
-  proposalSetupStatus,
-  proposalTitle,
-  proposalTypeLabel,
-} from "./-proposal-review";
+import { proposalReviewStatusVariant, proposalTitle, proposalTypeLabel } from "./-proposal-review";
 
 export function ProposalLink({ proposal, className }: { proposal: Proposal; className?: string }) {
   const translate = useAppTranslation();
@@ -28,21 +22,13 @@ export function ProposalLink({ proposal, className }: { proposal: Proposal; clas
 }
 
 export function ProposalStatusCell({ proposal, t }: { proposal: Proposal; t: AppTranslator }) {
-  const setup = proposalSetupStatus(proposal, t);
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <Badge
-        variant={proposalReviewStatusVariant(proposal.reviewStatus)}
-        data-testid="admin-proposal-status"
-      >
-        {humanize(proposal.reviewStatus, t)}
-      </Badge>
-      {setup && (
-        <Badge variant={setup.variant} data-testid="admin-proposal-setup-status">
-          {setup.label}
-        </Badge>
-      )}
-    </span>
+    <Badge
+      variant={proposalReviewStatusVariant(proposal.reviewStatus)}
+      data-testid="admin-proposal-status"
+    >
+      {humanize(proposal.reviewStatus, t)}
+    </Badge>
   );
 }
 
@@ -102,7 +88,7 @@ export function createProposalColumns(
       header: "",
       cell: ({ row }) => (
         <Button
-          variant={proposalNeedsAction(row.original) ? "outline" : "ghost"}
+          variant={row.original.reviewStatus === "pending" ? "outline" : "ghost"}
           size="sm"
           nativeButton={false}
           render={
@@ -113,11 +99,7 @@ export function createProposalColumns(
             />
           }
         >
-          {row.original.reviewStatus === "pending"
-            ? t("common.review")
-            : proposalNeedsAction(row.original)
-              ? t("admin.proposal.resume")
-              : t("common.view")}
+          {row.original.reviewStatus === "pending" ? t("common.review") : t("common.view")}
         </Button>
       ),
     },
