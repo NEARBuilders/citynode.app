@@ -4,7 +4,7 @@ export type CaseActivity = {
   publishedAt: string;
   startsAt: string;
   endsAt: string;
-  luma?: { available: boolean; hidden?: boolean };
+  luma?: boolean;
 };
 
 export type EventVisibilityCase = {
@@ -14,15 +14,7 @@ export type EventVisibilityCase = {
   community: { tenantActive: boolean; profilePublished: boolean };
   now: string;
   expected: {
-    uiState:
-      | "live"
-      | "scheduled"
-      | "published"
-      | "draft"
-      | "hiddenImport"
-      | "removed"
-      | "cancelled"
-      | "ended";
+    uiState: "live" | "scheduled" | "published" | "draft" | "cancelled" | "ended";
     onEventPage: boolean;
     inLists: boolean;
   };
@@ -66,18 +58,18 @@ export const eventVisibilityCases: EventVisibilityCase[] = [
     expected: { uiState: "draft", onEventPage: false, inLists: false },
   },
   {
-    name: "hidden import",
-    activity: { ...upcoming, status: "draft", luma: { available: true, hidden: true } },
+    name: "luma import",
+    activity: { ...upcoming, luma: true },
     community: publicCommunity,
     now,
-    expected: { uiState: "hiddenImport", onEventPage: false, inLists: false },
+    expected: { uiState: "live", onEventPage: true, inLists: true },
   },
   {
-    name: "removed import",
-    activity: { ...upcoming, status: "draft", luma: { available: false, hidden: false } },
+    name: "withdrawn luma import",
+    activity: { ...upcoming, status: "draft", luma: true },
     community: publicCommunity,
     now,
-    expected: { uiState: "removed", onEventPage: false, inLists: false },
+    expected: { uiState: "draft", onEventPage: false, inLists: false },
   },
   {
     name: "cancelled",
@@ -110,13 +102,6 @@ export const eventVisibilityCases: EventVisibilityCase[] = [
     community: { tenantActive: false, profilePublished: true },
     now,
     expected: { uiState: "published", onEventPage: false, inLists: false },
-  },
-  {
-    name: "legacy luma without hidden",
-    activity: { ...upcoming, luma: { available: true } },
-    community: publicCommunity,
-    now,
-    expected: { uiState: "live", onEventPage: true, inLists: true },
   },
   {
     name: "fourth upcoming event",

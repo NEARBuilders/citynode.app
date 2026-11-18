@@ -260,17 +260,7 @@ describe("events-area organizers", () => {
       await organizer.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-organizers" }),
     ).toMatchObject({ imported: 1 });
     const [imported] = await organizer.listDiscoveryActivities({ nodeId: node.id });
-    expect(imported).toMatchObject({ status: "draft", luma: { hidden: true } });
-    await expect(
-      member.setDiscoveryLumaVisibility({ nodeId: node.id, activityId: imported!.id, show: true }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(
-      await organizer.setDiscoveryLumaVisibility({
-        nodeId: node.id,
-        activityId: imported!.id,
-        show: true,
-      }),
-    ).toMatchObject({ status: "published", luma: { hidden: false } });
+    expect(imported).toMatchObject({ status: "published", luma: { calendarId: "cal-organizers" } });
 
     await expect(organizer.disconnectDiscoveryLuma({ nodeId: node.id })).rejects.toMatchObject({
       code: "FORBIDDEN",

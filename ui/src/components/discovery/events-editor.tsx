@@ -4,25 +4,18 @@ import { CommunityMapStatus } from "./community-map-status";
 export function EventsEditor({
   nodeId,
   canOnboard,
-  reviewImports,
   canManage = true,
   showMapStatus = true,
 }: {
   nodeId: string;
   canOnboard?: boolean;
-  reviewImports?: boolean;
   canManage?: boolean;
   showMapStatus?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-8">
       {showMapStatus && <CommunityMapStatus nodeId={nodeId} testId="content-map-status" />}
-      <ActivityEditor
-        nodeId={nodeId}
-        reviewImports={reviewImports}
-        canPost={canManage}
-        canOnboard={canOnboard}
-      />
+      <ActivityEditor nodeId={nodeId} canPost={canManage} canOnboard={canOnboard} />
     </div>
   );
 }

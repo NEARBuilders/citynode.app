@@ -405,22 +405,22 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "已跳过 {count, plural, other {# 个活动}}，因为{count, plural, other {这些活动}}已在你的社区中。",
   ],
   "calendar.withdrawnEvents": [
-    "{count, plural, one {# event is} other {# events are}} no longer public on this Luma calendar, so {count, plural, one {it was} other {they were}} hidden.",
-    "{count, plural, one {# evento ya no es público} other {# eventos ya no son públicos}} en este calendario de Luma, así que {count, plural, one {se ocultó} other {se ocultaron}}.",
-    "{count, plural, one {# événement n'est plus public} other {# événements ne sont plus publics}} sur ce calendrier Luma, {count, plural, one {il a donc été masqué} other {ils ont donc été masqués}}.",
-    "{count, plural, other {# 个活动}}已不再在此 Luma 日历上公开，因此{count, plural, other {已被隐藏}}。",
+    "{count, plural, one {# event is} other {# events are}} no longer public on this Luma calendar, so {count, plural, one {it was} other {they were}} removed.",
+    "{count, plural, one {# evento ya no es público} other {# eventos ya no son públicos}} en este calendario de Luma, así que {count, plural, one {se quitó} other {se quitaron}}.",
+    "{count, plural, one {# événement n'est plus public} other {# événements ne sont plus publics}} sur ce calendrier Luma, {count, plural, one {il a donc été retiré} other {ils ont donc été retirés}}.",
+    "{count, plural, other {# 个活动}}已不再在此 Luma 日历上公开，因此{count, plural, other {已被移除}}。",
+  ],
+  "calendar.webhookHint": [
+    "New and changed events arrive from Luma once this calendar's webhook points to {url}.",
+    "Los eventos nuevos y los cambios llegan desde Luma cuando el webhook de este calendario apunta a {url}.",
+    "Les nouveaux événements et les modifications arrivent depuis Luma une fois que le webhook de ce calendrier pointe vers {url}.",
+    "此日历的 webhook 指向 {url} 后，新活动和修改会从 Luma 自动同步过来。",
   ],
   "calendar.nothingChanged": [
     "No new events found.",
     "No se encontraron eventos nuevos.",
     "Aucun nouvel événement trouvé.",
     "未找到新活动。",
-  ],
-  "calendar.lastUpdateFailed": [
-    " · last update failed",
-    " · última actualización fallida",
-    " · échec de la dernière mise à jour",
-    " · 上次更新失败",
   ],
   "calendar.loadError": [
     "Couldn't load calendars. Try again in a moment.",

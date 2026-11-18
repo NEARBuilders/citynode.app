@@ -492,9 +492,6 @@ describe("Luma place association", () => {
           luma: {
             calendarId: "cal-chicago",
             eventId: "evt-chicago",
-            syncedAt: "2026-11-01T12:00:00.000Z",
-            available: true,
-            hidden: false,
           },
         },
       });
@@ -628,5 +625,263 @@ describe("Luma place association", () => {
     } finally {
       temp.cleanup();
     }
+  });
+});
+
+describe("Luma triage and place-event reports", () => {
+  const admin = { userId: "admin", user: { role: "admin" } } as never;
+  const owner = (organizationId: string) =>
+    ({
+      userId: "chicago-owner",
+      user: { role: "user" },
+      organization: { activeOrganizationId: organizationId, member: { role: "owner" } },
+    }) as never;
+  const report = {
+    format: "irl" as const,
+    socialLinks: ["https://example.com/post"],
+    focus: "crypto" as const,
+    audiences: ["developers" as const],
+    audienceOther: "",
+    theme: "A hands-on build night",
+    attendees: 42,
+    slideLinks: [],
+    kpis: ["40 attendees", "12 new members", ""] as [string, string, string],
+    wentWell: "Great energy",
+    improvements: "Start on time",
+    talentAfter: "Follow-up office hours",
+    talentDuring: "Mentors at each table",
+    materialsNeeded: "",
+    hadPartners: false,
+    partners: "",
+    nextActions: "Plan the next meetup",
+    insights: "",
+    mediaLinks: [],
+  };
+  const online = (overrides: Record<string, unknown> = {}) =>
+    lumaEvent({
+      id: "evt-online",
+      name: "Online call",
+      url: "https://luma.com/online-call",
+      location_type: "zoom",
+      coordinate: null,
+      geo_address_json: null,
+      ...overrides,
+    });
+
+  it("lists unmatched events for admins and keeps a manual place until the venue changes", async () => {
+    const layer = freshLayer();
+    const ids = await run(layer, ({ db }) => seed(db));
+    await run(layer, async ({ discovery, db }) => {
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(signed({ type: "event.created", data: online() })),
+      );
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(signed({ type: "event.created", data: lumaEvent() })),
+      );
+      await expect(
+        Effect.runPromise(
+          discovery.lumaTriage({ userId: "someone", user: { role: "user" } } as never),
+        ),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      const triage = await Effect.runPromise(discovery.lumaTriage(admin));
+      expect(triage.events.map((event) => event.title)).toEqual(["Online call"]);
+      const [unmatched] = triage.events;
+
+      await expect(
+        Effect.runPromise(
+          discovery.associateLumaEvent(
+            { activityId: unmatched!.id, placeId: ids.places.chicago },
+            owner("org-x"),
+          ),
+        ),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(
+        Effect.runPromise(
+          discovery.associateLumaEvent(
+            { activityId: unmatched!.id, placeId: crypto.randomUUID() },
+            admin,
+          ),
+        ),
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(
+        await Effect.runPromise(
+          discovery.associateLumaEvent(
+            { activityId: unmatched!.id, placeId: ids.places.chicago },
+            admin,
+          ),
+        ),
+      ).toMatchObject({ placeId: ids.places.chicago, luma: { placeMatch: "manual" } });
+      expect((await Effect.runPromise(discovery.lumaTriage(admin))).events).toEqual([]);
+      expect((await eventIdsFor(discovery, ids.nodes.chicago)).sort()).toEqual([
+        "Chicago builders night",
+        "Online call",
+      ]);
+      expect(await eventIdsFor(discovery, ids.nodes.usa)).toContain("Online call");
+      expect(await eventIdsFor(discovery, ids.nodes.nyc)).toEqual([]);
+
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(
+          signed({ type: "event.updated", data: online({ name: "Online call (renamed)" }) }),
+        ),
+      );
+      const [kept] = await db
+        .select()
+        .from(discoveryActivities)
+        .where(eq(discoveryActivities.id, unmatched!.id));
+      expect(kept).toMatchObject({
+        placeId: ids.places.chicago,
+        data: { title: "Online call (renamed)", luma: { placeMatch: "manual" } },
+      });
+
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(
+          signed({
+            type: "event.updated",
+            data: online({
+              location_type: "offline",
+              coordinate: { latitude: 40.71, longitude: -74 },
+              geo_address_json: { city: "New York", region: "New York", country: "United States" },
+            }),
+          }),
+        ),
+      );
+      const [moved] = await db
+        .select()
+        .from(discoveryActivities)
+        .where(eq(discoveryActivities.id, unmatched!.id));
+      expect(moved).toMatchObject({
+        placeId: ids.places.nyc,
+        data: { luma: { placeMatch: "coordinate" } },
+      });
+
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(signed({ type: "event.updated", data: online() })),
+      );
+      expect((await Effect.runPromise(discovery.lumaTriage(admin))).events).toHaveLength(1);
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(signed({ type: "event.canceled", data: online() })),
+      );
+      expect((await Effect.runPromise(discovery.lumaTriage(admin))).events).toEqual([]);
+    });
+  });
+
+  it("lets the place's community report a main-calendar event and keeps the report", async () => {
+    const layer = freshLayer();
+    const ids = await run(layer, ({ db }) => seed(db));
+    const past = lumaEvent({
+      id: "evt-past",
+      name: "Past Chicago meetup",
+      start_at: "2026-01-10T23:00:00Z",
+      end_at: "2026-01-11T01:00:00Z",
+      created_at: "2025-12-01T12:00:00Z",
+    });
+    await run(layer, async ({ discovery, db }) => {
+      await db.update(tenants).set({ orgId: "org-chicago" }).where(eq(tenants.name, "chicago"));
+      await db.update(tenants).set({ orgId: "org-usa" }).where(eq(tenants.name, "usa"));
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(signed({ type: "event.created", data: past })),
+      );
+      const [row] = await db.select().from(discoveryActivities);
+      const chicagoEvents = await Effect.runPromise(
+        discovery.activities(ids.nodes.chicago, owner("org-chicago")),
+      );
+      expect(chicagoEvents).toEqual([
+        expect.objectContaining({ id: row!.id, ownerNodeId: null, nodeIds: [ids.nodes.chicago] }),
+      ]);
+      expect(
+        await Effect.runPromise(discovery.activities(ids.nodes.usa, owner("org-usa"))),
+      ).toEqual([]);
+
+      await expect(
+        Effect.runPromise(
+          discovery.saveEventReport({ activityId: row!.id, report }, owner("org-usa")),
+        ),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      const saved = await Effect.runPromise(
+        discovery.saveEventReport({ activityId: row!.id, report }, owner("org-chicago")),
+      );
+      expect(saved).toMatchObject({ activityId: row!.id, report: { attendees: 42 } });
+      expect(
+        await Effect.runPromise(discovery.eventReport(row!.id, owner("org-chicago"))),
+      ).toMatchObject({ canEdit: true, report: { activityId: row!.id } });
+      expect(
+        await Effect.runPromise(
+          discovery.eventReportStatuses(ids.nodes.chicago, owner("org-chicago")),
+        ),
+      ).toEqual([expect.objectContaining({ activityId: row!.id })]);
+      const adminEvents = await Effect.runPromise(discovery.adminEvents(admin));
+      expect(adminEvents).toEqual([
+        expect.objectContaining({
+          id: row!.id,
+          nodeId: ids.nodes.chicago,
+          nodeName: "chicago",
+          organizationId: "org-chicago",
+          reportSubmittedAt: saved.submittedAt,
+        }),
+      ]);
+
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(
+          signed({ type: "event.updated", data: { ...past, visibility: "private" } }),
+        ),
+      );
+      const [kept] = await db.select().from(discoveryActivities);
+      expect(kept).toMatchObject({ id: row!.id, data: { status: "draft" } });
+      expect(await Effect.runPromise(discovery.activity(row!.id))).toBeNull();
+      expect(await Effect.runPromise(discovery.adminEvents(admin))).toEqual([]);
+      expect(
+        await Effect.runPromise(discovery.activities(ids.nodes.chicago, owner("org-chicago"))),
+      ).toEqual([expect.objectContaining({ id: row!.id, status: "draft" })]);
+
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(
+          signed({
+            type: "event.updated",
+            data: {
+              ...past,
+              coordinate: { latitude: 40.71, longitude: -74 },
+              geo_address_json: { city: "New York", region: "New York", country: "United States" },
+            },
+          }),
+        ),
+      );
+      const [back] = await db.select().from(discoveryActivities);
+      expect(back).toMatchObject({ placeId: ids.places.nyc, data: { status: "published" } });
+      expect(
+        await Effect.runPromise(discovery.activities(ids.nodes.chicago, owner("org-chicago"))),
+      ).toEqual([expect.objectContaining({ id: row!.id, status: "published" })]);
+      expect(
+        await Effect.runPromise(discovery.eventReport(row!.id, owner("org-chicago"))),
+      ).toMatchObject({ canEdit: true });
+      expect(await Effect.runPromise(discovery.adminEvents(admin))).toEqual([
+        expect.objectContaining({ id: row!.id, nodeId: ids.nodes.chicago }),
+      ]);
+    });
+  });
+
+  it("skips inactive communities when choosing who reports a main-calendar event", async () => {
+    const layer = freshLayer();
+    const ids = await run(layer, ({ db }) => seed(db));
+    const past = lumaEvent({
+      id: "evt-suspended",
+      name: "Past meetup under a suspended city",
+      start_at: "2026-01-10T23:00:00Z",
+      end_at: "2026-01-11T01:00:00Z",
+      created_at: "2025-12-01T12:00:00Z",
+    });
+    await run(layer, async ({ discovery, db }) => {
+      await db.update(tenants).set({ status: "suspended" }).where(eq(tenants.name, "chicago"));
+      await db.update(tenants).set({ orgId: "org-usa" }).where(eq(tenants.name, "usa"));
+      await Effect.runPromise(
+        discovery.receiveLumaWebhook(signed({ type: "event.created", data: past })),
+      );
+      const [row] = await db.select().from(discoveryActivities);
+      expect(
+        await Effect.runPromise(discovery.activities(ids.nodes.usa, owner("org-usa"))),
+      ).toEqual([expect.objectContaining({ id: row!.id })]);
+      expect(await Effect.runPromise(discovery.adminEvents(admin))).toEqual([
+        expect.objectContaining({ id: row!.id, nodeId: ids.nodes.usa }),
+      ]);
+    });
   });
 });

@@ -20,19 +20,23 @@ type PlaceOption = ApplicationPlace;
 
 const LEVEL_LABELS = ["apply.place.country", "apply.place.region", "apply.place.city"] as const;
 
-function PlaceLevel({
+export function PlaceLevel({
   level,
   options,
   value,
   onChange,
+  idPrefix = "application-place",
+  testIdPrefix = "apply.place",
 }: {
   level: number;
   options: PlaceOption[];
   value: string | null;
   onChange: (place: PlaceOption) => void;
+  idPrefix?: string;
+  testIdPrefix?: string;
 }) {
   const t = useAppTranslation();
-  const id = `application-place-${level}`;
+  const id = `${idPrefix}-${level}`;
   const sorted = [...options].sort((left, right) => left.name.localeCompare(right.name));
   const label = t(LEVEL_LABELS[Math.min(level, LEVEL_LABELS.length - 1)]);
   return (
@@ -46,7 +50,7 @@ function PlaceLevel({
           if (place) onChange(place);
         }}
       >
-        <SelectTrigger id={id} className="w-full" data-testid={`apply.place-${level}`}>
+        <SelectTrigger id={id} className="w-full" data-testid={`${testIdPrefix}-${level}`}>
           <SelectValue placeholder={t("apply.place.choose")} />
         </SelectTrigger>
         <SelectContent>
@@ -61,21 +65,14 @@ function PlaceLevel({
   );
 }
 
-function ChildLevel({
-  level,
+export function ChildLevel({
   parentId,
-  value,
-  onChange,
-}: {
-  level: number;
-  parentId: string;
-  value: string | null;
-  onChange: (place: PlaceOption) => void;
-}) {
+  ...level
+}: Omit<Parameters<typeof PlaceLevel>[0], "options"> & { parentId: string }) {
   const apiClient = useApiClient();
   const { data: children = [] } = useQuery(placeChildrenQueryOptions(apiClient, parentId));
   if (children.length === 0) return null;
-  return <PlaceLevel level={level} options={children} value={value} onChange={onChange} />;
+  return <PlaceLevel {...level} options={children} />;
 }
 
 export function ApplyPlaceFields({
