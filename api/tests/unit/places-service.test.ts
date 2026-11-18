@@ -166,6 +166,20 @@ describe("PlacesService", () => {
     expect(resolved?.community).toBeNull();
   });
 
+  it("resolve prefers an exact slug over another place's alias", async () => {
+    const layer = freshLayer();
+    const bolivia = await runService(layer, ({ db }) =>
+      insertPlace(db, { slug: "bolivia", name: "Bolivia", label: "country" }),
+    );
+    await runService(layer, ({ db }) => insertAlias(db, "BO", "iso", bolivia.id));
+    await runService(layer, ({ db }) => insertPlace(db, { slug: "bo", name: "Bo", label: "city" }));
+
+    const resolved = await runService(layer, ({ places }) => places.resolve({ place: "bo" }));
+    expect(resolved?.place.slug).toBe("bo");
+    const byIso = await runService(layer, ({ places }) => places.resolve({ place: "BOL" }));
+    expect(byIso).toBeNull();
+  });
+
   it("resolve accepts geonames and iso aliases, bare or prefixed", async () => {
     const layer = freshLayer();
     const place = await runService(layer, ({ db }) =>

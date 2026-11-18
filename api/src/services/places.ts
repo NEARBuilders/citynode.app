@@ -265,6 +265,7 @@ export const PlacesLive = Layer.effect(
                   )})
                 )`,
               )
+              .orderBy(sql`(${placesTable.slug} = ${slugCandidate}) DESC`)
               .limit(1),
           );
           const row = matched[0];
