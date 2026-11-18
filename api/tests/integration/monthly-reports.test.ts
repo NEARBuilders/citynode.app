@@ -585,7 +585,7 @@ describe("monthly reports", () => {
   });
 
   it("keeps one report per community, whichever of its nodes it is opened from", async () => {
-    const city = await community("Harbor City");
+    const city = await community("Zulu Harbor");
     const platformAdmin = await admin();
     const reported = month(-1);
     await city.owner.saveMonthlyReport({
@@ -603,7 +603,6 @@ describe("monthly reports", () => {
       orgId: city.org,
     });
     vi.setSystemTime(new Date(NOW));
-    await city.provisioner.updateNode({ nodeId: city.node.id, name: "Zulu Harbor" });
 
     for (const nodeId of [first.id, city.node.id]) {
       expect(

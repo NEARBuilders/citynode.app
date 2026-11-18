@@ -44,7 +44,6 @@ export default App({
   // variables/secrets are authored here (child-wins merge over the parent).
   auth: {
     variables: {
-      organizationMembershipLimit: 1000,
       // Joined screen after an onboarding code (everything-dev #662): "Visit
       // {community}" plus its channels. The default next/home/explore links fit.
       onboard: {

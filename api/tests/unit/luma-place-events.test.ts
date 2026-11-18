@@ -143,10 +143,7 @@ async function seed(db: Database) {
       .insert(tenants)
       .values({ accountId: `${slug}.near`, name: slug })
       .returning();
-    const [node] = await db
-      .insert(nodes)
-      .values({ slug, name: slug, tenantId: tenant!.id, placeId })
-      .returning();
+    const [node] = await db.insert(nodes).values({ tenantId: tenant!.id, placeId }).returning();
     await db.insert(discoveryProfiles).values({
       nodeId: node!.id,
       data: {
@@ -814,7 +811,7 @@ describe("Luma triage and place-event reports", () => {
         expect.objectContaining({
           id: row!.id,
           nodeId: ids.nodes.chicago,
-          nodeName: "chicago",
+          nodeName: "Chicago",
           organizationId: "org-chicago",
           reportSubmittedAt: saved.submittedAt,
         }),

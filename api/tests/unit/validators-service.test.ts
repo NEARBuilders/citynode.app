@@ -68,9 +68,6 @@ describe("ValidatorsService", () => {
       });
       const node = yield* svc.nodes.spawn({
         kind: "city",
-        slug: "test-city",
-        name: "Test City",
-        parentId: null,
         tenantId: tenant.id,
       });
       return node.id;
@@ -159,18 +156,12 @@ describe("ValidatorsService", () => {
     const nodeA = await runService(layer, ({ nodes }) =>
       nodes.spawn({
         kind: "city",
-        slug: "city-a",
-        name: "City A",
-        parentId: null,
         tenantId: tenant.id,
       }),
     );
     const nodeB = await runService(layer, ({ nodes }) =>
       nodes.spawn({
         kind: "city",
-        slug: "city-b",
-        name: "City B",
-        parentId: null,
         tenantId: tenant.id,
       }),
     );
@@ -244,18 +235,12 @@ describe("ValidatorsService", () => {
     const nodeA = await runService(layer, ({ nodes }) =>
       nodes.spawn({
         kind: "city",
-        slug: "city-a",
-        name: "City A",
-        parentId: null,
         tenantId: tenant.id,
       }),
     );
     const nodeB = await runService(layer, ({ nodes }) =>
       nodes.spawn({
         kind: "city",
-        slug: "city-b",
-        name: "City B",
-        parentId: null,
         tenantId: tenant.id,
       }),
     );
@@ -339,13 +324,11 @@ describe("ValidatorsService", () => {
           orgId: "org-1",
         }),
       );
-      const spawn = (kind: "country" | "state" | "city", slug: string, parentId: string | null) =>
-        runService(layer, ({ nodes }) =>
-          nodes.spawn({ kind, slug, name: slug, parentId, tenantId: tenant.id }),
-        );
-      const country = await spawn("country", "testland", null);
-      const state = await spawn("state", "north", country.id);
-      const city = await spawn("city", "alpha", state.id);
+      const spawn = (kind: "country" | "state" | "city") =>
+        runService(layer, ({ nodes }) => nodes.spawn({ kind, tenantId: tenant.id }));
+      const country = await spawn("country");
+      const state = await spawn("state");
+      const city = await spawn("city");
       await runService(layer, ({ validators }) =>
         validators.create({ nodeId: state.id, accountId: "valState.near" }),
       );

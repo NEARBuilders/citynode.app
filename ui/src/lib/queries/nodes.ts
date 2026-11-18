@@ -33,13 +33,7 @@ export const nodeQueryKeys = {
     [...nodeQueryKeys.lists(), "admin", scope, kind] as const,
   details: () => [...nodeQueryKeys.all, "detail"] as const,
   byId: (nodeId: string) => [...nodeQueryKeys.details(), "id", nodeId] as const,
-  bySlug: (slug: string, parentId?: string | null) =>
-    [
-      ...nodeQueryKeys.details(),
-      "slug",
-      slug,
-      parentId === undefined ? "any" : (parentId ?? "root"),
-    ] as const,
+  bySlug: (slug: string) => [...nodeQueryKeys.details(), "slug", slug] as const,
   adminDetail: (nodeId: string) => [...nodeQueryKeys.details(), "admin", nodeId] as const,
   validators: (nodeId: string) => [...nodeQueryKeys.details(), nodeId, "validators"] as const,
   subtree: (nodeId: string) => [...nodeQueryKeys.details(), nodeId, "subtree"] as const,
@@ -86,17 +80,10 @@ export function nodeByIdQueryOptions(apiClient: ApiClient, nodeId: string) {
   });
 }
 
-export function nodeBySlugQueryOptions(
-  apiClient: ApiClient,
-  slug: string,
-  parentId?: string | null,
-) {
+export function nodeBySlugQueryOptions(apiClient: ApiClient, slug: string) {
   return queryOptions({
-    queryKey: nodeQueryKeys.bySlug(slug, parentId),
-    queryFn: () =>
-      parentId === undefined
-        ? apiClient.resolveNodeBySlug({ slug })
-        : apiClient.resolveNodeBySlug({ slug, parentId }),
+    queryKey: nodeQueryKeys.bySlug(slug),
+    queryFn: () => apiClient.resolveNodeBySlug({ slug }),
     staleTime: NODE_STALE_TIME,
   });
 }

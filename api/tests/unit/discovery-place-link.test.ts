@@ -59,15 +59,7 @@ function run<A>(body: (ctx: Ctx) => Promise<A>): Promise<A> {
           .values({ value: aliasValue, kind: "geonames", placeId: country!.id }),
       );
       const [node] = yield* Effect.tryPromise(() =>
-        db
-          .insert(nodesTable)
-          .values({
-            slug: `community-${crypto.randomUUID()}`,
-            name: "Community",
-            tenantId: tenant!.id,
-            parentId: null,
-          })
-          .returning(),
+        db.insert(nodesTable).values({ tenantId: tenant!.id }).returning(),
       );
       const nodePlace = async (): Promise<string | null> => {
         const [row] = await db
@@ -116,7 +108,7 @@ describe("adoptCatalogPlace", () => {
       expect(await nodePlace()).toBe(countryId);
     }));
 
-  it("relinks when the location matches a free catalog place", () =>
+  it("keeps a community on its place when the location names another free place", () =>
     run(async ({ db, nodeId, countryId, nodePlace }) => {
       const [pakistan] = await db
         .insert(placesTable)
@@ -126,7 +118,8 @@ describe("adoptCatalogPlace", () => {
       expect(await nodePlace()).toBe(countryId);
 
       await adoptCatalogPlace(db, { id: nodeId, placeId: countryId }, "Pakistan", "country");
-      expect(await nodePlace()).toBe(pakistan!.id);
+      expect(await nodePlace()).toBe(countryId);
+      expect(pakistan).toBeDefined();
     }));
 
   it("keeps the link when the location does not match a catalog place", () =>
@@ -158,13 +151,7 @@ describe("adoptCatalogPlace", () => {
 
   it("skips places already linked to another node without failing", () =>
     run(async ({ db, tenantId, nodeId, countryId, nodePlace }) => {
-      await db.insert(nodesTable).values({
-        slug: `linked-${crypto.randomUUID()}`,
-        name: "Linked",
-        tenantId,
-        parentId: null,
-        placeId: countryId,
-      });
+      await db.insert(nodesTable).values({ tenantId, placeId: countryId });
       await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
       expect(await nodePlace()).toBeNull();
     }));
@@ -184,13 +171,7 @@ describe("adoptCatalogPlace", () => {
         .insert(placesTable)
         .values({ slug: "pakistan", name: "Pakistan", label: "country" })
         .returning();
-      await db.insert(nodesTable).values({
-        slug: `linked-${crypto.randomUUID()}`,
-        name: "Linked",
-        tenantId,
-        parentId: null,
-        placeId: pakistan!.id,
-      });
+      await db.insert(nodesTable).values({ tenantId, placeId: pakistan!.id });
       await adoptCatalogPlace(db, { id: nodeId, placeId: null }, "India", "country");
       expect(await nodePlace()).toBe(countryId);
 

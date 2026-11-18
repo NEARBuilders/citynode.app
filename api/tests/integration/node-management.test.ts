@@ -47,19 +47,22 @@ describe("platform node management", () => {
     await expect(publicClient.listTenants()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     expect(await (await getPluginClient(authedContext())).listTenants()).toEqual([]);
 
-    await expect(outsider.updateNode({ nodeId: node.id, name: "Changed" })).rejects.toMatchObject({
+    await expect(
+      outsider.updateNode({ nodeId: node.id, metadata: { note: "Changed" } }),
+    ).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
     await expect(
-      (await getPluginClient(authedContext())).updateNode({ nodeId: node.id, name: "Changed" }),
+      (await getPluginClient(authedContext())).updateNode({
+        nodeId: node.id,
+        metadata: { note: "Changed" },
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     const updated = await admin.updateNode({
       nodeId: node.id,
-      name: "Chicago City",
       metadata: { description: "Community node", population: 2700000 },
     });
     expect(updated).toMatchObject({
-      name: "Chicago City",
       metadata: { description: "Community node", population: 2700000 },
     });
 

@@ -1,6 +1,36 @@
 # City Node
 
-A node in the City Node network — a self-referencing tree where `parentId` is the only hierarchy axis and any kind of community (geo, org, user, zone root) is the same shape. Geographic nodes are owned by a node DAO and optionally backed by a staking pool; the kind label lives in node metadata.
+Communities start from Places. Anyone can activate a Place from the Gazetteer, which creates its Node and its community; governance (DAO, stake, site, publication) is an upgrade the community applies for. Hierarchy is the places tree: a Node has no name, slug or parent of its own. "City Node" is brand copy for a community that runs a validator; user-facing copy says community and place, never organization.
+
+## Places and communities
+
+**Gazetteer**:
+The catalog of Places (countries, subdivisions and cities from GeoNames, plus curated additions) and the only source of names, slugs, coordinates and hierarchy.
+_Avoid_: node tree, map data
+
+**Place**:
+One Gazetteer entry: a unique slug, a name, an optional parent Place, coordinates and an optional boundary. It exists whether or not anyone has started a community there.
+_Avoid_: node, city node, location (that's a discovery profile's free text)
+
+**Community**:
+The people around one Place, with members, teams and events. In code it is an auth organization; users only ever see "community".
+_Avoid_: organization (internal only), org, city node
+
+**Node**:
+The association between one Place and the community that runs there: the place link, the community link, its Activation time and community metadata. Its name and slug are its Place's, and its parent is the Node of the nearest ancestor Place that has one. The one place-less Node is the hidden platform node behind platform stations.
+_Avoid_: City Node (brand copy), place, tenant, node tree
+
+**Activation**:
+Starting a community at a Place: it creates the Node and the community and makes the activator its first member. Anyone signed in can do it, with no approval; it is the only way a community's Node is created.
+_Avoid_: approval, provisioning, spawning a node
+
+**Official Application**:
+A community's request to become an official City Node, which platform admins review. Approval links its Sputnik DAO and unlocks governance (DAO, stake, site, publication). Activation never needs one.
+_Avoid_: node proposal, provisioning saga, apply (the old flow)
+
+**Tenant**:
+The website a community runs (or a person's personal site): its account, domains and published config. The Node points at its Tenant (`nodes.tenant_id`) and the Tenant never points back. A site is optional for a community and a personal site has no Node, so the optional link lives on the Node.
+_Avoid_: organization, site owner, node
 
 ## Language
 
@@ -100,7 +130,7 @@ _Avoid_: event admin, host
 The deterministic NEAR account derived from a member's passkey public key, linked to their user at onboarding; it exists as an address before it is activated on-chain.
 _Avoid_: passkey account, embedded wallet, smart wallet
 
-**Activation**:
+**Wallet Activation**:
 The first request a Passkey Wallet sends, which carries the wallet contract's state-init and so makes the wallet live on-chain, at no cost to the member. A Passkey Wallet has no access keys: every request is a `w_execute_signed` call checked against the passkey signature, so any sender can relay it, including the first one.
 _Avoid_: funding (that's the Sponsor topping up a key), creation
 

@@ -6,13 +6,21 @@ import { config as loadEnv } from "dotenv";
 import { eq } from "drizzle-orm";
 import { resolveDatabaseUrl, workspaceIdentityFromModuleUrl } from "everything-dev/db";
 import { createDatabaseDriver } from "../src/db";
-import { discoveryActivities, eventReports, memberDirectoryOptIns, nodes } from "../src/db/schema";
+import {
+  discoveryActivities,
+  eventReports,
+  memberDirectoryOptIns,
+  nodes,
+  places,
+  tenants,
+} from "../src/db/schema";
 import {
   type ImportEventCandidate,
   importReportValues,
   parseCsv,
   planGoogleFormImport,
 } from "../src/lib/import-google-form-reports";
+import { nodeNameSql } from "../src/services/nodes";
 
 loadEnv({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.env") });
 
@@ -73,10 +81,12 @@ async function main() {
         id: discoveryActivities.id,
         data: discoveryActivities.data,
         nodeId: nodes.id,
-        nodeName: nodes.name,
+        nodeName: nodeNameSql,
       })
       .from(discoveryActivities)
-      .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId));
+      .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
+      .leftJoin(places, eq(places.id, nodes.placeId))
+      .leftJoin(tenants, eq(tenants.id, nodes.tenantId));
 
     const events: ImportEventCandidate[] = activityRows
       .filter((row) => row.data.kind === "event")

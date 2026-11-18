@@ -127,8 +127,6 @@ async function insertListedNode(
   const [node] = await db
     .insert(nodesTable)
     .values({
-      slug: values.slug,
-      name: values.name,
       placeId: values.placeId,
       orgId: values.orgId,
       activatedAt: values.activatedAt,
@@ -260,9 +258,7 @@ describe("PlacesService", () => {
     const place = await runService(layer, ({ db }) =>
       insertPlace(db, { slug: "nigeria", name: "Nigeria" }),
     );
-    await runService(layer, ({ db }) =>
-      db.insert(nodesTable).values({ slug: "nigeria", name: "Nigeria", placeId: place.id }),
-    );
+    await runService(layer, ({ db }) => db.insert(nodesTable).values({ placeId: place.id }));
 
     const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
     expect(resolved?.community).toBeNull();
@@ -277,8 +273,6 @@ describe("PlacesService", () => {
       db
         .insert(nodesTable)
         .values({
-          slug: "andorra",
-          name: "Andorra",
           placeId: place.id,
           activatedAt: new Date("2026-03-01T00:00:00Z"),
         })
@@ -306,7 +300,7 @@ describe("PlacesService", () => {
     const resolved = await runService(layer, ({ places }) => places.resolve({ place: "nigeria" }));
     expect(resolved?.community).toEqual({
       nodeId: node.id,
-      slug: "lagos-builders",
+      slug: "nigeria",
       activatedAt: null,
       memberCount: null,
     });
@@ -493,8 +487,6 @@ describe("PlacesService", () => {
       db
         .insert(nodesTable)
         .values({
-          slug: "andorra",
-          name: "Andorra",
           placeId: andorra.id,
           activatedAt: new Date("2026-03-01T00:00:00Z"),
         })
@@ -512,9 +504,7 @@ describe("PlacesService", () => {
     const ghana = await runService(layer, ({ db }) =>
       insertPlace(db, { slug: "ghana", name: "Ghana", latitude: 7.95, longitude: -1.02 }),
     );
-    await runService(layer, ({ db }) =>
-      db.insert(nodesTable).values({ slug: "ghana", name: "Ghana", placeId: ghana.id }),
-    );
+    await runService(layer, ({ db }) => db.insert(nodesTable).values({ placeId: ghana.id }));
 
     const pins = await runService(layer, ({ places }) => places.mapPins());
     expect(pins).toEqual([
@@ -522,7 +512,7 @@ describe("PlacesService", () => {
     ]);
   });
 
-  it("mapPins uses the node slug when a listed community occupies a place", async () => {
+  it("mapPins links a listed community through its place slug", async () => {
     const layer = freshLayer();
     const ghana = await runService(layer, ({ db }) =>
       insertPlace(db, { slug: "ghana", name: "Ghana", latitude: 7.95, longitude: -1.02 }),
@@ -534,7 +524,7 @@ describe("PlacesService", () => {
     const pins = await runService(layer, ({ places }) => places.mapPins());
     expect(pins).toEqual([
       expect.objectContaining({
-        slug: "accra-builders",
+        slug: "ghana",
         activated: true,
         nodeId: expect.any(String),
       }),

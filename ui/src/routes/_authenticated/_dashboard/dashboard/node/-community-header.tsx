@@ -236,13 +236,7 @@ export function CommunityHeader({
                 <Button
                   variant="outline"
                   nativeButton={false}
-                  render={
-                    <Link
-                      to="/n/$slug"
-                      params={{ slug: listing.data.slug }}
-                      search={{ parentId: listing.data.parentId ?? undefined }}
-                    />
-                  }
+                  render={<Link to="/n/$slug" params={{ slug: listing.data.slug }} />}
                   data-testid="community-header.public-page"
                 >
                   {translate("dashboard.openPublicPage")}

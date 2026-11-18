@@ -1,10 +1,4 @@
-import {
-  PencilSimpleIcon,
-  PlusIcon,
-  ShieldCheckIcon,
-  StarIcon,
-  TrashIcon,
-} from "@phosphor-icons/react";
+import { PlusIcon, ShieldCheckIcon, StarIcon, TrashIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -367,24 +361,10 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
 export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidatorsProps) {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
-  const queryClient = useQueryClient();
-  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
-  const [nodeName, setNodeName] = useState("");
 
   const { data: nodes = [] } = useQuery({
     ...tenantNodesQueryOptions(apiClient, tenantId),
     enabled: !!tenantId,
-  });
-
-  const renameMutation = useMutation({
-    mutationFn: async ({ nodeId, name }: { nodeId: string; name: string }) =>
-      apiClient.updateNode({ nodeId, name }),
-    onSuccess: () => {
-      toast.success(translate("tenant.nodeRenamed"));
-      setRenamingNodeId(null);
-      void invalidateNodeQueries(queryClient);
-    },
-    onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
   return (
@@ -395,54 +375,15 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
       ) : (
         nodes.map((node) => (
           <div key={node.id} className="flex flex-col gap-3">
-            {renamingNodeId === node.id ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!nodeName.trim()) return;
-                  renameMutation.mutate({ nodeId: node.id, name: nodeName.trim() });
-                }}
-                className="flex max-w-md flex-wrap gap-2"
-              >
-                <Input
-                  id={`node-name-${node.id}`}
-                  aria-label={translate("tenant.nodeName")}
-                  value={nodeName}
-                  onChange={(e) => setNodeName(e.target.value)}
-                  autoFocus
-                  className="min-w-0 flex-1"
-                />
-                <Button type="submit" disabled={renameMutation.isPending}>
-                  {translate("common.save")}
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => setRenamingNodeId(null)}>
-                  {translate("common.cancel")}
-                </Button>
-              </form>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-medium text-foreground">{node.name}</h3>
-                <Badge variant="outline">
-                  {presentationLabel(node.kind ?? "member", translate)}
-                </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-lg font-medium text-foreground">{node.name}</h3>
+              <Badge variant="outline">{presentationLabel(node.kind ?? "member", translate)}</Badge>
+              {node.slug !== node.id && (
                 <span className="font-mono text-sm break-all text-muted-foreground">
                   {node.slug}
                 </span>
-                {canManage && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={translate("common.renameNamed", { name: node.name ?? "" })}
-                    onClick={() => {
-                      setNodeName(node.name);
-                      setRenamingNodeId(node.id);
-                    }}
-                  >
-                    <PencilSimpleIcon />
-                  </Button>
-                )}
-              </div>
-            )}
+              )}
+            </div>
             <NodeSection nodeId={node.id} canManage={canManage} />
           </div>
         ))

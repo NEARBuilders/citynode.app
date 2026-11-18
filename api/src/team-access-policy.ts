@@ -56,7 +56,7 @@ export function canUseTeamArea(
 
 export function teamAreaForbidden(areas: readonly FeatureArea[]): ORPCError<"FORBIDDEN", unknown> {
   return new ORPCError("FORBIDDEN", {
-    message: `Ask an organization owner or admin to add you to a team with ${areas.join(" or ")}.`,
+    message: `Ask a community owner or admin to add you to a team with ${areas.join(" or ")}.`,
     data: { requiredPermissions: [...areas] },
   });
 }

@@ -6,26 +6,24 @@ import { parseNodeMetadata } from "./-node-management";
 type Node = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["node"];
 
 export interface CommunityDraft {
-  name: string;
   description: string;
   metadata: string;
   profile: DiscoveryProfile | null;
 }
 
-export type CommunityDraftField = "name" | "metadata" | "profile";
+export type CommunityDraftField = "metadata" | "profile";
 
 export type CommunitySavePlan =
   | { ok: false; field: CommunityDraftField; issue: AppMessageId }
   | {
       ok: true;
-      node?: { nodeId: string; name: string; metadata: Record<string, unknown> };
+      node?: { nodeId: string; metadata: Record<string, unknown> };
       profile?: DiscoveryProfile;
     };
 
 export function communityDraftFrom(node: Node, profile: DiscoveryProfile | null): CommunityDraft {
   const { description, ...additional } = node.metadata;
   return {
-    name: node.name,
     description: typeof description === "string" ? description : "",
     metadata: JSON.stringify(additional, null, 2),
     profile,
@@ -37,8 +35,6 @@ export function planCommunitySave(
   initial: CommunityDraft,
   draft: CommunityDraft,
 ): CommunitySavePlan {
-  const name = draft.name.trim();
-  if (!name) return { ok: false, field: "name", issue: "admin.community.nameRequired" };
   let metadata: Record<string, unknown>;
   try {
     metadata = parseNodeMetadata(draft.metadata, draft.description);
@@ -50,14 +46,12 @@ export function planCommunitySave(
     if (issue) return { ok: false, field: "profile", issue };
   }
   const nodeChanged =
-    name !== initial.name ||
-    draft.description.trim() !== initial.description.trim() ||
-    draft.metadata !== initial.metadata;
+    draft.description.trim() !== initial.description.trim() || draft.metadata !== initial.metadata;
   const profileChanged =
     !!draft.profile && JSON.stringify(draft.profile) !== JSON.stringify(initial.profile);
   return {
     ok: true,
-    ...(nodeChanged ? { node: { nodeId, name, metadata } } : {}),
+    ...(nodeChanged ? { node: { nodeId, metadata } } : {}),
     ...(profileChanged && draft.profile ? { profile: draft.profile } : {}),
   };
 }

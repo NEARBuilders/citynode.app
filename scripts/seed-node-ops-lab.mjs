@@ -160,7 +160,8 @@ async function loadHarbor() {
     const t = byAccount.rows[0];
     if (!t) throw new Error("Harbor Demo tenant missing — expected harbor-demo.testnet");
     const node = await client.query(
-      `SELECT id, slug, name FROM nodes WHERE tenant_id = $1 ORDER BY created_at ASC LIMIT 1`,
+      `SELECT n.id, p.slug, p.name FROM nodes n LEFT JOIN places p ON p.id = n.place_id
+       WHERE n.tenant_id = $1 ORDER BY n.created_at ASC LIMIT 1`,
       [t.id],
     );
     if (!node.rows[0]) throw new Error("Harbor Demo node missing");
