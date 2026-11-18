@@ -315,6 +315,9 @@ it("exposes the catalog place link on discovery nodes", async () => {
   expect(listed.map((entry) => entry.placeId)).toContain(node.placeId);
   const detail = await publicClient.getDiscoveryNode({ nodeId: node.id });
   expect(detail?.placeId).toBe(node.placeId);
+  expect(listed.find((item) => item.nodeId === node.id)).toMatchObject({ joinable: true });
+  expect(detail).toMatchObject({ joinable: true });
+  expect(detail?.placeSlug).toEqual(expect.any(String));
   expect(detail).not.toHaveProperty("boundary");
 
   await expect(
