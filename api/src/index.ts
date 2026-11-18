@@ -20,6 +20,7 @@ import {
 } from "./lib/community-organizations";
 import { ContextSchema } from "./lib/context";
 import {
+  grantApplicantAdmin,
   linkOfficialDao,
   officialDaoOf,
   parseOfficialApplication,
@@ -2193,9 +2194,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
               new ORPCError("BAD_REQUEST", { message: "This application is already decided" }),
             );
           }
+          const application = yield* Effect.try({
+            try: () => parseOfficialApplication(proposal.payload, proposal.entityId),
+            catch: failure("Could not read the application"),
+          });
           const link = yield* Effect.tryPromise({
             try: async () => {
-              const application = parseOfficialApplication(proposal.payload, proposal.entityId);
               const community = await resolveApplicationCommunity(services, application);
               return linkOfficialDao(services, auth, {
                 community,
@@ -2217,6 +2221,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
                     }),
                   catch: failure("Could not approve the application"),
                 })).data;
+          yield* Effect.tryPromise({
+            try: () =>
+              grantApplicantAdmin(auth, {
+                organizationId: link.organizationId,
+                applicantUserId: application.applicantUserId,
+                reviewerUserId,
+              }),
+            catch: failure("Could not make the applicant an admin"),
+          });
           yield* Effect.tryPromise({
             try: () =>
               proposalsClient.markApplied({

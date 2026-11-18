@@ -34,6 +34,7 @@ type FakeProposal = {
 };
 
 const proposals = new Map<string, FakeProposal>();
+const failingApprovals = new Set<string>();
 const orgs = new Map<
   string,
   { metadata: Record<string, unknown>; members: Set<string>; roles: Map<string, string> }
@@ -173,6 +174,9 @@ function proposalsStub(context: { user?: { role?: string | null } }) {
     }),
     approve: async (input: { entityId: string; expectedUpdatedAt: string }) => {
       requireAdmin();
+      if (failingApprovals.has(input.entityId)) {
+        throw new ORPCError("BAD_REQUEST", { message: "stale" });
+      }
       return bump(find(input.entityId, input.expectedUpdatedAt), {
         reviewStatus: "approved",
         applyStatus: "applying",
@@ -224,6 +228,9 @@ beforeAll(async () => {
       { slug: "enugu", name: "Enugu", label: "city" },
       { slug: "jos", name: "Jos", label: "city" },
       { slug: "kaduna", name: "Kaduna", label: "city" },
+      { slug: "owerri", name: "Owerri", label: "city" },
+      { slug: "calabar", name: "Calabar", label: "city" },
+      { slug: "warri", name: "Warri", label: "city" },
     ]);
   });
   await getPluginClient(undefined, {
@@ -231,7 +238,17 @@ beforeAll(async () => {
     proposals: { client: proposalsStub, router: {} },
   } as never);
   const activator = await getPluginClient(authedContext("activator"));
-  for (const place of ["lagos", "abuja", "ibadan", "enugu", "jos", "kaduna"]) {
+  for (const place of [
+    "lagos",
+    "abuja",
+    "ibadan",
+    "enugu",
+    "jos",
+    "kaduna",
+    "owerri",
+    "calabar",
+    "warri",
+  ]) {
     await activator.activateCommunity({ place });
   }
 }, 30_000);
@@ -322,6 +339,62 @@ describe("Official Application approval", () => {
 
     expect(result).toMatchObject({ organizationId: "org-kaduna" });
     expect(orgs.get("org-kaduna")?.metadata.daoAccountId).toBe("kaduna-test.sputnik-dao.testnet");
+  });
+
+  it("adds an applicant who isn't a member of the community as its admin", async () => {
+    proposals.set("owerri", application("owerri", { applicantUserId: "applicant-user" }));
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
+    await admin.approveOfficialApplication({
+      proposalId: "prop-owerri",
+      entityId: "owerri",
+      expectedUpdatedAt: savedAt,
+    });
+
+    expect(calls.adminAddMember).toContainEqual({
+      userId: "applicant-user",
+      role: "admin",
+      organizationId: "org-owerri",
+    });
+    expect(orgs.get("org-owerri")?.roles.get("applicant-user")).toBe("admin");
+  });
+
+  it("doesn't make the applicant an admin when the approval itself fails", async () => {
+    proposals.set("warri", application("warri", { applicantUserId: "raced-applicant" }));
+    failingApprovals.add("warri");
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
+    await expect(
+      admin.approveOfficialApplication({
+        proposalId: "prop-warri",
+        entityId: "warri",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).rejects.toThrow();
+
+    expect(orgs.get("org-warri")?.members.has("raced-applicant")).toBe(false);
+    expect(calls.adminAddMember).not.toContainEqual(
+      expect.objectContaining({ userId: "raced-applicant" }),
+    );
+    expect(proposals.get("warri")?.reviewStatus).toBe("pending");
+    failingApprovals.delete("warri");
+  });
+
+  it("leaves an applicant who already owns the community as its owner", async () => {
+    proposals.set("calabar", application("calabar", { applicantUserId: "activator" }));
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
+    await admin.approveOfficialApplication({
+      proposalId: "prop-calabar",
+      entityId: "calabar",
+      expectedUpdatedAt: savedAt,
+    });
+
+    expect(orgs.get("org-calabar")?.roles.get("activator")).toBe("owner");
+    expect(calls.adminUpdateMemberRole).toEqual([]);
+    expect(calls.adminAddMember).toEqual([
+      { userId: "reviewer", role: "admin", organizationId: "org-calabar" },
+    ]);
   });
 
   it("refuses an application whose placeId points at a different place than its slug", async () => {
