@@ -214,7 +214,7 @@ describe("bulletin attribution", () => {
     expect(await storedPublisher(layer, node.id)).toBeNull();
   });
 
-  it("attributes a bulletin a node is created with, and nothing for a blank one", async () => {
+  it("never attributes a bulletin a node is created with", async () => {
     const layer = freshLayer();
     const created = await run(layer, ({ nodes, tenants }) =>
       Effect.gen(function* () {
@@ -223,25 +223,15 @@ describe("bulletin attribution", () => {
           accountId: "test.example.near",
           orgId: "org-1",
         });
-        const withBulletin = yield* nodes.spawn({
+        return yield* nodes.spawn({
           kind: "city",
           tenantId: tenant.id,
           metadata: { bulletin: "Welcome" },
-          publisher: ADA,
         });
-        const blank = yield* nodes.spawn({
-          kind: "city",
-          tenantId: tenant.id,
-          metadata: { bulletin: "   " },
-          publisher: ADA,
-        });
-        return { withBulletin, blank };
       }),
     );
-    expect(created.withBulletin.bulletinPublisherName).toBe("Ada");
-    expect(created.withBulletin.bulletinPublishedAt).not.toBeNull();
-    expect(await storedPublisher(layer, created.withBulletin.id)).toBe("user-ada");
-    expect(created.blank.bulletinPublishedAt).toBeNull();
-    expect(created.blank.bulletinPublisherName).toBeNull();
+    expect(created.bulletinPublishedAt).toBeNull();
+    expect(created.bulletinPublisherName).toBeNull();
+    expect(await storedPublisher(layer, created.id)).toBeNull();
   });
 });

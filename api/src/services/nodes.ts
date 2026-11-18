@@ -44,7 +44,6 @@ export interface NodeSpawnInput {
   kind?: NodeKind;
   tenantId?: string | null;
   metadata?: Record<string, unknown>;
-  publisher?: BulletinPublisher;
 }
 
 export interface NodeUpdateInput {
@@ -183,15 +182,15 @@ function bulletinOf(metadata: Record<string, unknown> | undefined): string | nul
 
 function bulletinAttribution(
   bulletin: string | null,
-  publisher: BulletinPublisher | undefined,
+  publisher: BulletinPublisher,
   publishedAt: Date,
 ) {
   return bulletin === null
     ? { bulletinPublishedAt: null, bulletinPublishedBy: null, bulletinPublisherName: null }
     : {
         bulletinPublishedAt: publishedAt,
-        bulletinPublishedBy: publisher?.userId ?? null,
-        bulletinPublisherName: publisher?.name ?? null,
+        bulletinPublishedBy: publisher.userId,
+        bulletinPublisherName: publisher.name,
       };
 }
 
@@ -345,14 +344,12 @@ export const NodesLive = Layer.effect(
           }
         }
 
-        const publishedAt = yield* DateTime.nowAsDate;
         const [row] = yield* query(() =>
           db
             .insert(nodesTable)
             .values({
               tenantId: input.tenantId ?? null,
               metadata: mergeKindMetadata(input.kind, withoutOfficialDao(input.metadata)),
-              ...bulletinAttribution(bulletinOf(input.metadata), input.publisher, publishedAt),
             })
             .returning(),
         );
