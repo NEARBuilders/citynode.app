@@ -53,9 +53,7 @@ test.describe("community events", () => {
     await page.waitForURL(new RegExp(`/nodes/${node.id}/content`), { waitUntil: "commit" });
 
     await expect(page.getByTestId("content.heading")).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId("content-map-status")).toHaveAttribute("data-state", "hidden", {
-      timeout: 15000,
-    });
+    await expect(page.getByTestId("content-map-status")).toHaveCount(0);
     await expect(page.getByTestId("discovery-new-event")).toBeVisible({ timeout: 15000 });
 
     expectNoHydrationFailure(pageErrors);
@@ -73,7 +71,7 @@ test.describe("community events", () => {
     await waitForApp(page);
 
     await expect(page.getByTestId("discovery-new-event")).toBeVisible({ timeout: 15000 });
-    expect(await page.getByTestId("content-map-status").isVisible()).toBe(true);
+    await expect(page.getByTestId("content-map-status")).toHaveCount(0);
 
     expectNoHydrationFailure(pageErrors);
   });

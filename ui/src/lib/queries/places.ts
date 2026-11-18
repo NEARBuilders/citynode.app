@@ -33,3 +33,20 @@ export function placeResolutionQueryOptions(apiClient: ApiClient, place: string)
     staleTime: 30_000,
   });
 }
+
+export function placeMapPinsQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: [...placeQueryKeys.all, "map-pins"] as const,
+    queryFn: () => api.listPlaceMapPins({}),
+    staleTime: 60_000,
+  });
+}
+
+export function placeBoundaryQueryOptions(api: ApiClient, placeId: string) {
+  return queryOptions({
+    queryKey: [...placeQueryKeys.all, "boundary", placeId] as const,
+    queryFn: () => api.getPlaceBoundary({ placeId }),
+    enabled: placeId.length > 0,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}

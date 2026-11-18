@@ -210,6 +210,7 @@ export const NodeSchema = z.object({
   kind: NodeKindSchema,
   slug: z.string(),
   name: z.string(),
+  placeId: z.uuid().nullable().optional(),
   parentId: z.string().nullable(),
   tenantId: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()),
@@ -231,6 +232,7 @@ export const PlaceSchema = z.object({
 
 export const PlaceCommunitySchema = z.object({
   nodeId: z.uuid(),
+  slug: z.string(),
   activatedAt: z.string().nullable(),
   memberCount: z.number().int().nullable(),
 });
@@ -239,6 +241,17 @@ export const PlaceResolutionSchema = z.object({
   place: PlaceSchema,
   aliases: z.array(z.string()),
   community: PlaceCommunitySchema.nullable(),
+});
+
+export const PlaceMapPinSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  name: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+  label: z.string().nullable(),
+  activated: z.boolean(),
+  nodeId: z.uuid().nullable(),
 });
 
 export const PlaceBoundarySchema = z.discriminatedUnion("type", [
@@ -1077,6 +1090,17 @@ export const contract = oc.router({
     })
     .input(z.object({ placeIds: z.array(z.uuid()).min(1).max(500) }))
     .output(z.array(z.object({ placeId: z.uuid(), boundary: PlaceBoundarySchema.nullable() }))),
+
+  listPlaceMapPins: oc
+    .route({
+      method: "GET",
+      path: "/places/map",
+      summary: "Pins for every catalog place that has coordinates",
+      description:
+        "Public, session-free. Pins only — no boundary payloads. activated is true when the place has a live community.",
+    })
+    .input(z.object({}))
+    .output(z.array(PlaceMapPinSchema)),
 
   activateCommunity: oc
     .route({

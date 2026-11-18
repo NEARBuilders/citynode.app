@@ -55,12 +55,7 @@ import {
 } from "../report-month";
 import { resolveTeamAccess } from "../team-access-policy";
 import { memberDisplayName } from "../team-join-policy";
-import {
-  type GeocodeService,
-  GeocodeTag,
-  profilePlace,
-  shouldGeocodeProfile,
-} from "./discovery-geocode";
+import { profilePlace } from "./discovery-geocode";
 import { createLumaCalendars, describeLumaFailure, type LumaEvent } from "./discovery-luma";
 import { lumaWebhookSchema, verifyLumaWebhook } from "./luma-webhook";
 import { hasJoinCode, listedNode, nodeKindOf, PLATFORM_NODE_KIND } from "./nodes";
@@ -150,14 +145,11 @@ const placeLabelByKind: Record<string, string> = {
   city: "city",
 };
 
-export async function adoptCatalogPlace(
+async function matchCatalogPlace(
   db: Database,
-  node: { id: string; placeId: string | null },
-  place: string,
+  location: string,
   kind: string | null,
-): Promise<void> {
-  const location = place.trim();
-  if (!location || node.placeId !== null) return;
+): Promise<{ id: string } | undefined> {
   const label = kind ? placeLabelByKind[kind] : undefined;
   const [matched] = await db
     .select({ id: placesTable.id })
@@ -168,15 +160,41 @@ export async function adoptCatalogPlace(
           SELECT place_id FROM ${placeAliasesTable} WHERE value = ${location}
         ))`,
         label ? eq(placesTable.label, label) : undefined,
-        sql`NOT EXISTS (SELECT 1 FROM ${nodes} WHERE ${nodes.placeId} = ${placesTable.id})`,
       ),
     )
     .limit(1);
-  if (!matched) return;
+  return matched;
+}
+
+export async function adoptCatalogPlace(
+  db: Database,
+  node: { id: string; placeId: string | null },
+  place: string,
+  kind: string | null,
+): Promise<void> {
+  const location = place.trim();
+  if (!location) return;
+  const matched = await matchCatalogPlace(db, location, kind);
+  if (!matched || matched.id === node.placeId) return;
+  const [taken] = await db
+    .select({ id: nodes.id })
+    .from(nodes)
+    .where(and(eq(nodes.placeId, matched.id), sql`${nodes.id} <> ${node.id}`))
+    .limit(1);
+  if (taken) return;
+  if (node.placeId !== null) {
+    await db.update(nodes).set({ placeId: null }).where(eq(nodes.id, node.id));
+  }
   await db
     .update(nodes)
     .set({ placeId: matched.id })
-    .where(and(eq(nodes.id, node.id), isNull(nodes.placeId)));
+    .where(
+      and(
+        eq(nodes.id, node.id),
+        isNull(nodes.placeId),
+        sql`NOT EXISTS (SELECT 1 FROM ${nodes} AS taken WHERE taken.place_id = ${matched.id})`,
+      ),
+    );
 }
 
 function lumaVenue(event: LumaEvent) {
@@ -205,7 +223,7 @@ export interface DiscoveryConfig {
 const PLACE_TREE_TTL_MS = 5 * 60_000;
 const PLACE_MATCHER_TTL_MS = 10 * 60_000;
 
-function createDiscovery(db: Database, config: DiscoveryConfig, geocode: GeocodeService) {
+function createDiscovery(db: Database, config: DiscoveryConfig) {
   const luma = createLumaCalendars(config.lumaKeys ?? "");
   const lumaMainCalendarId = config.lumaMainCalendarId?.trim() ?? "";
   const lumaWebhookSecrets = (config.lumaWebhookSecrets ?? "")
@@ -1704,55 +1722,26 @@ function createDiscovery(db: Database, config: DiscoveryConfig, geocode: Geocode
       context: AuthContext,
     ) {
       const record = yield* authorize(input.nodeId, context);
-      const [existing] = yield* query(() =>
-        db.select().from(discoveryProfiles).where(eq(discoveryProfiles.nodeId, input.nodeId)),
-      );
-      const previous = existing?.data;
-      const geocodedLocation =
-        input.geocodedLocation !== undefined
-          ? input.geocodedLocation
-          : (previous?.geocodedLocation ?? null);
       const kind = nodeKindOf(record.node.metadata);
       const place = profilePlace(input, kind);
-      const stale = shouldGeocodeProfile({
-        location: place,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        geocodedLocation,
-      });
-      let next: StoredDiscoveryProfile = {
-        ...input,
-        geocodedLocation,
-        geocodeHint: null,
-      };
-      if (!place) {
-        next = {
-          ...next,
-          latitude: null,
-          longitude: null,
-          geocodedLocation: null,
-          geocodeHint: null,
-        };
-      } else if (stale) {
-        const geocoded = yield* geocode.geocode(place);
-        if (geocoded.ok) {
-          next = {
-            ...next,
-            latitude: geocoded.latitude,
-            longitude: geocoded.longitude,
-            geocodedLocation: place,
-            geocodeHint: null,
-          };
-        } else {
-          next = {
-            ...next,
+      const tagged = input.geocodedLocation?.trim() ?? "";
+      const next: StoredDiscoveryProfile = !place
+        ? {
+            ...input,
             latitude: null,
             longitude: null,
             geocodedLocation: null,
-            geocodeHint: geocoded.reason === "not_found" ? "not_found" : "unavailable",
-          };
-        }
-      }
+            geocodeHint: null,
+          }
+        : tagged && place !== tagged
+          ? {
+              ...input,
+              latitude: null,
+              longitude: null,
+              geocodedLocation: null,
+              geocodeHint: null,
+            }
+          : { ...input, geocodeHint: null };
       yield* Effect.tryPromise(() => adoptCatalogPlace(db, record.node, place, kind)).pipe(
         Effect.ignore,
       );
@@ -2156,7 +2145,7 @@ export const DiscoveryLive = (config: DiscoveryConfig = {}) =>
   Layer.effect(
     DiscoveryTag,
     Effect.gen(function* () {
-      const service = createDiscovery(yield* DatabaseTag, config, yield* GeocodeTag);
+      const service = createDiscovery(yield* DatabaseTag, config);
       yield* Effect.forkScoped(
         service.syncDueLuma.pipe(Effect.ignore, Effect.repeat(Schedule.spaced("60 seconds"))),
       );
