@@ -610,7 +610,13 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           ? [event.reportNodeId]
           : tree.rollupNodeIds(event.data),
     );
-    const ids = [...new Set(candidates.flat())];
+    const ids = [
+      ...new Set(
+        events.flatMap((event, index) =>
+          event.data.ownerNodeId || event.reportNodeId ? [] : candidates[index]!,
+        ),
+      ),
+    ];
     const active = ids.length
       ? yield* query(() =>
           db
