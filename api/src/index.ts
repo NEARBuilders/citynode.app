@@ -32,7 +32,6 @@ import { AttendanceLive, type AttendanceService, AttendanceTag } from "./service
 import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService, MonthlyExternalStats } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
-import { GeocodeLive } from "./services/discovery-geocode";
 import {
   MemberDirectoryLive,
   type MemberDirectoryService,
@@ -455,14 +454,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             lumaKeys: config.secrets.LUMA_CALENDAR_API_KEYS,
             lumaMainCalendarId: config.variables.lumaMainCalendarId,
             lumaWebhookSecrets: config.secrets.LUMA_WEBHOOK_SECRETS,
-          }).pipe(
-            Layer.provide(
-              GeocodeLive({
-                domain: config.variables.domain,
-                repository: config.variables.repository,
-              }),
-            ),
-          ),
+          }),
           StorageLive,
           MemberDirectoryLive,
           AttendanceLive,
@@ -2576,6 +2568,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listPlaceBoundaries: builder.listPlaceBoundaries.effect(function* ({ input }) {
         const services = yield* ApiServices;
         return yield* services.places.boundaries(input.placeIds);
+      }),
+
+      listPlaceMapPins: builder.listPlaceMapPins.effect(function* () {
+        const services = yield* ApiServices;
+        return yield* services.places.mapPins();
       }),
 
       activateCommunity: builder.activateCommunity.use(requireAuth).effect(function* ({

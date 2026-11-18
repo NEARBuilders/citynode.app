@@ -341,6 +341,7 @@ describe("breadcrumbs", () => {
       crumbsFor("/nodes/abc/content", { tab: "onboarding" }).map((crumb) => crumb.label),
     ).toEqual(["My community", "Stations"]);
     expect(labels("/tenant/t1")).toEqual(["My community", "Community settings"]);
+    expect(labels("/places/nigeria")).toEqual(["Explore", "Nigeria"]);
     expect(labels("/settings/profile")).toEqual(["Settings", "Your profile"]);
     expect(labels("/settings/api-keys")).toEqual(["Settings", "API keys"]);
     expect(labels("/admin/tenants")).toEqual(["Admin", "Platform", "Domains"]);

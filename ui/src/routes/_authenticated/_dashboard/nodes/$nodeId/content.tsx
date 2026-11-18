@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
 import { PageContainer } from "@/components";
 import { activitiesQueryOptions } from "@/components/discovery/activity-form";
@@ -146,14 +146,8 @@ function CommunityContent() {
         <EventsEditor
           nodeId={nodeId}
           showMapStatus={!isPlatformNode(node)}
-          tenantStatus={tenant.data?.status}
           canManage={canManage}
           canOnboard={canOnboard}
-          profileLink={
-            tenantId && canManage ? (
-              <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
-            ) : undefined
-          }
         />
       )}
     </PageContainer>

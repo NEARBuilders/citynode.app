@@ -174,6 +174,27 @@ async function withApiTable(table, run) {
   }
 }
 
+export async function seedPlace(input) {
+  const { slug, name, label = "city", latitude = null, longitude = null } = input;
+  if (!slug) throw new Error("seedPlace requires slug");
+  if (!name) throw new Error("seedPlace requires name");
+  if ((latitude === null) !== (longitude === null)) {
+    throw new Error("seedPlace requires both coordinates or neither");
+  }
+  return withApiTable("places", async (client) => {
+    const existing = await client.query("SELECT id FROM places WHERE slug = $1 LIMIT 1", [slug]);
+    if (existing.rows.length > 0) {
+      return { id: existing.rows[0].id, slug, name, reused: true };
+    }
+    const id = randomId();
+    await client.query(
+      "INSERT INTO places (id, slug, name, label, latitude, longitude) VALUES ($1, $2, $3, $4, $5, $6)",
+      [id, slug, name, label, latitude, longitude],
+    );
+    return { id, slug, name, reused: false };
+  });
+}
+
 export async function seedDiscoveryProfile(input) {
   const { nodeId, published, latitude = null, longitude = null } = input;
   if (!nodeId) throw new Error("seedDiscoveryProfile requires nodeId");

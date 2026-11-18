@@ -17,6 +17,12 @@ export const discoveryMessages = createMessageCatalogs(["en", "es", "fr", "zh"],
     "{count, plural, one {# communauté} other {# communautés}} près de {location}",
     "{count, plural, other {{location} 附近有 # 个社区}}",
   ],
+  "explore.places.near": [
+    "{count, plural, one {# place} other {# places}} near {location}",
+    "{count, plural, one {# lugar} other {# lugares}} cerca de {location}",
+    "{count, plural, one {# lieu} other {# lieux}} près de {location}",
+    "{count, plural, other {{location} 附近有 # 个地点}}",
+  ],
   "directory.curatorsOnly": [
     "Directory is for curators",
     "El directorio es para curadores",

@@ -583,7 +583,7 @@ export const NodesLive = Layer.effect(
         const row = rows[0];
         if (row) return toNodeRecord(row.node);
 
-        const conditions: SQL[] = [eq(nodesTable.slug, slug), isNull(nodesTable.placeId)];
+        const conditions: SQL[] = [eq(nodesTable.slug, slug)];
         if (parentId === null) {
           conditions.push(isNull(nodesTable.parentId));
         } else if (parentId !== undefined) {

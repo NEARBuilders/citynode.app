@@ -94,24 +94,6 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Lien d’inscription renseigné",
     "已设置加入链接",
   ],
-  "community.hidden": [
-    "Hidden from Explore",
-    "Oculta en Explorar",
-    "Masquée dans Explorer",
-    "已从探索页面隐藏",
-  ],
-  "community.hiddenHint": [
-    "Published events show up once your profile is public.",
-    "Los eventos publicados aparecen cuando tu perfil es público.",
-    "Les événements publiés apparaissent lorsque votre profil est public.",
-    "资料公开后，已发布活动才会显示。",
-  ],
-  "community.hiddenMapHint": [
-    "Visitors can't find your community or its events yet.",
-    "Los visitantes aún no pueden encontrar tu comunidad ni sus eventos.",
-    "Les visiteurs ne peuvent pas encore trouver votre communauté ni ses événements.",
-    "访客暂时无法找到你的社区及其活动。",
-  ],
   "community.historyDraft": [
     "Saved as a draft",
     "Guardado como borrador",
@@ -228,17 +210,11 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Absente d’Explorer",
     "未在探索页面显示",
   ],
-  "community.notOnMap": [
-    "On Explore, but not on the map",
-    "En Explorar, pero no en el mapa",
-    "Dans Explorer, mais absente de la carte",
-    "已在探索页面显示，但未标记在地图上",
-  ],
-  "community.notOnMapHint": [
-    "Add a location so visitors can find you on the map.",
-    "Añade una ubicación para que los visitantes te encuentren en el mapa.",
-    "Ajoutez un lieu pour que les visiteurs vous trouvent sur la carte.",
-    "添加地点，方便访客在地图上找到你。",
+  "community.unactivatedHint": [
+    "This place isn't a community on the map yet.",
+    "Este lugar aún no es una comunidad en el mapa.",
+    "Ce lieu n’est pas encore une communauté sur la carte.",
+    "此地尚未成为地图上的社区。",
   ],
   "community.offMap": [
     "Not on the map",
@@ -1003,6 +979,40 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Impossible de charger les builders et projets de NEAR Builders pour le moment.",
     "暂时无法从 NEAR Builders 加载开发者和项目。",
   ],
+  "place.boundary": ["Map", "Mapa", "Carte", "地图"],
+  "place.loading": ["Loading place", "Cargando lugar", "Chargement du lieu", "正在加载地点"],
+  "place.missingNamed": [
+    "{slug} isn’t in the catalog.",
+    "{slug} no está en el catálogo.",
+    "{slug} n’est pas dans le catalogue.",
+    "目录中没有 {slug}。",
+  ],
+  "place.noCommunity": [
+    "No community yet.",
+    "Aún no hay comunidad.",
+    "Pas encore de communauté.",
+    "这里还没有社区。",
+  ],
+  "place.noCommunityNamed": [
+    "No community in {name} yet. Start one to meet nearby and take part in NEAR governance.",
+    "Aún no hay comunidad en {name}. Crea una para reunirte cerca y participar en la gobernanza de NEAR.",
+    "Pas encore de communauté à {name}. Créez-en une pour vous retrouver près de chez vous et participer à la gouvernance NEAR.",
+    "{name} 还没有社区。创建一个，方便附近的人见面并参与 NEAR 治理。",
+  ],
+  "place.notFound": ["Place not found", "Lugar no encontrado", "Lieu introuvable", "未找到地点"],
+  "place.notFoundDescription": [
+    "This place isn’t in the catalog.",
+    "Este lugar no está en el catálogo.",
+    "Ce lieu n’est pas dans le catalogue.",
+    "此地不在目录中。",
+  ],
+  "place.startCommunity": [
+    "Start this community",
+    "Crear esta comunidad",
+    "Créer cette communauté",
+    "创建此社区",
+  ],
+  "place.title": ["Place", "Lugar", "Lieu", "地点"],
   "payout.stepUnstake": [
     "Step 1 of 2 · Unstake from the pool (a treasury vote)",
     "Paso 1 de 2 · Retirar del pool (votación de la tesorería)",
