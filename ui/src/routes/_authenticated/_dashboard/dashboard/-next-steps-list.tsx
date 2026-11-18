@@ -6,6 +6,7 @@ import {
   type Icon,
   NetworkIcon,
   RocketLaunchIcon,
+  UserPlusIcon,
   UsersThreeIcon,
   WalletIcon,
 } from "@phosphor-icons/react";
@@ -29,6 +30,7 @@ const STEP_ICONS: Record<NextStepId, Icon> = {
   "start-community": RocketLaunchIcon,
   "open-community": NetworkIcon,
   payouts: WalletIcon,
+  "team-requests": UserPlusIcon,
   stake: CoinsIcon,
   explore: CompassIcon,
 };
@@ -49,6 +51,8 @@ function stepLink(step: NextStep) {
       return <Link to="/dashboard/node" />;
     case "payouts":
       return <Link to="/dashboard/node" hash="payouts" />;
+    case "team-requests":
+      return <Link to="/dashboard/node" hash="teams" />;
     case "stake":
       return <Link to="/stake" />;
     case "explore":

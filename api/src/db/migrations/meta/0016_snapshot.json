@@ -1,6 +1,6 @@
 {
-  "id": "d4b1dabb-b251-4fa5-82bd-be2ed5b8c583",
-  "prevId": "76df3771-5b48-4c67-a15d-561beeabdeb3",
+  "id": "d5cf352f-f2c1-4981-830a-04604e1822f7",
+  "prevId": "8342449b-9c83-4ac4-b4e1-1ba4a550158c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1591,6 +1591,12 @@
           "name": "closed_reason",
           "type": "team_join_request_closed_reason",
           "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dismissed_at": {
+          "name": "dismissed_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
