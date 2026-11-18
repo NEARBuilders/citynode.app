@@ -1,12 +1,17 @@
 import "./test-env";
 import { createServer } from "node:http";
+import { Readable } from "node:stream";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { ContractRouterClient } from "@orpc/contract";
+import { OpenAPIHandler } from "@orpc/openapi/node";
 import { RPCHandler } from "@orpc/server/node";
+import { type Context, Effect } from "effect";
 import { createPluginRuntime } from "every-plugin";
 import type { contract } from "@/contract";
-import Plugin from "@/index";
+import Plugin, { ApiServices } from "@/index";
+import type { NodeRecord } from "@/services/nodes";
+import type { PlaceRecord } from "@/services/places";
 import pluginDevConfig from "../plugin.dev";
 
 const TEST_PLUGIN_ID = pluginDevConfig.pluginId;
@@ -27,6 +32,7 @@ export const runtime = createPluginRuntime({
 let server: ReturnType<typeof createServer> | null = null;
 let baseUrl = "";
 let port = 0;
+let effectContext: Context.Context<ApiServices> | undefined;
 
 export async function getPluginClient(
   context?: Record<string, unknown>,
@@ -35,7 +41,9 @@ export async function getPluginClient(
   if (!server) {
     const { router, initialized } = await runtime.usePlugin(TEST_PLUGIN_ID, TEST_CONFIG, plugins);
     const rpcHandler = new RPCHandler(router);
-    const effectContext = initialized.effectContext;
+    const apiHandler = new OpenAPIHandler(router);
+    effectContext = initialized.effectContext as Context.Context<ApiServices>;
+    const requestEffectContext = initialized.effectContext;
 
     server = createServer(async (req, res) => {
       const url = new URL(req.url!, baseUrl);
@@ -51,7 +59,30 @@ export async function getPluginClient(
 
         const result = await rpcHandler.handle(req, res, {
           prefix: "/rpc",
-          context: { ...requestContext, "effect/context": effectContext },
+          context: { ...requestContext, "effect/context": requestEffectContext },
+        });
+        if (result.matched) return;
+      }
+
+      if (url.pathname.startsWith("/api/")) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        const rawBody = Buffer.concat(chunks).toString("utf8");
+        const reqHeaders = new Headers();
+        for (const [key, value] of Object.entries(req.headers))
+          if (typeof value === "string") reqHeaders.set(key, value);
+        const replay = Object.assign(Readable.from([Buffer.from(rawBody)]), {
+          method: req.method,
+          url: req.url,
+          headers: req.headers,
+        });
+        const result = await apiHandler.handle(replay as unknown as typeof req, res, {
+          prefix: "/api",
+          context: {
+            reqHeaders,
+            getRawBody: async () => rawBody,
+            "effect/context": requestEffectContext,
+          },
         });
         if (result.matched) return;
       }
@@ -89,6 +120,52 @@ export async function getPluginClient(
 
   const client: ContractRouterClient<typeof contract> = createORPCClient(link);
   return client;
+}
+
+export function getPluginBaseUrl() {
+  return baseUrl;
+}
+
+export async function activateTestNode(input: {
+  slug: string;
+  name?: string;
+  kind?: string;
+  tenantId?: string | null;
+  orgId?: string;
+  parentPlaceId?: string | null;
+  label?: string | null;
+}): Promise<{ node: NodeRecord; place: PlaceRecord }> {
+  await getPluginClient();
+  if (!effectContext) {
+    throw new Error("Plugin services are not initialized");
+  }
+  const name = input.name ?? input.slug;
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const services = yield* ApiServices;
+      const place = yield* services.places.create({
+        slug: input.slug,
+        name,
+        parentId: input.parentPlaceId ?? null,
+        label: input.label ?? null,
+      });
+      const { node: activated } = yield* services.nodes.activateForPlace({
+        placeId: place.id,
+        slug: input.slug,
+        name,
+        orgId: input.orgId ?? `org-${input.slug}`,
+        activatedBy: "test-activator",
+        joinCodeId: `join-${input.slug}`,
+        tenantId: input.tenantId,
+        kind: input.kind,
+      });
+      if (!input.parentPlaceId) return { node: activated, place };
+      const parent = yield* services.nodes.getByPlace(input.parentPlaceId);
+      if (!parent) return { node: activated, place };
+      const node = yield* services.nodes.update(activated.id, { parentId: parent.id });
+      return { node, place };
+    }).pipe(Effect.provide(effectContext)),
+  );
 }
 
 export function authedContext(userId = "user-1", userRole?: string): Record<string, unknown> {
@@ -136,6 +213,7 @@ export async function teardown() {
     });
     server = null;
   }
+  effectContext = undefined;
   await runtime.shutdown();
 }
 

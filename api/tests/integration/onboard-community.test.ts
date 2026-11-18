@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -19,16 +19,18 @@ async function fixture() {
     name: "Onboard city",
     accountId: `o-${id}.near`,
   });
-  const node = await provisioner.createNode({
+  const { node, place } = await activateTestNode({
     name: "Lisbon",
     slug: `lisbon-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return {
     id,
     org,
     node,
+    place,
     tenant,
     provisioner,
     editor: await getPluginClient(orgContext(id, org)),
@@ -74,13 +76,14 @@ describe("the joined screen's community for an organization", () => {
   });
 
   it("picks the community's first node by name and keeps a child node's parent", async () => {
-    const { id, org, node, tenant, provisioner, publicClient } = await fixture();
-    const child = await provisioner.createNode({
+    const { id, org, node, place, tenant, publicClient } = await fixture();
+    const { node: child } = await activateTestNode({
       name: "Alfama",
       slug: `alfama-${id}`,
       kind: "city",
       tenantId: tenant.id,
-      parentId: node.id,
+      orgId: org,
+      parentPlaceId: place.id,
     });
     expect((await publicClient.getOnboardCommunity({ organizationId: org })).href).toBe(
       `/n/${child.slug}?parentId=${node.id}`,

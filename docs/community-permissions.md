@@ -62,8 +62,8 @@ through an onboarding code, is refused and told to ask an owner or admin to add
 them to a team with that area. Individual routes still
 enforce their own authentication and organization checks.
 
-Node operations follow this rule. Node edits (`createNode`, `spawnNode`,
-`updateNode`, `setNodeBulletin`, `deleteNode`) and validator edits
+Node operations follow this rule. Node edits (`updateNode`,
+`setNodeBulletin`, `deleteNode`) and validator edits
 (`createValidator`, `updateValidator`, `setDefaultValidator`, `deleteValidator`)
 are open to platform admins, the node's organization owners and admins, and
 members of any of that organization's teams granted `node-operations`. A grant in

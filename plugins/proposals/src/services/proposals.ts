@@ -323,28 +323,17 @@ export const ProposalServiceLive = Layer.effect(
         const proposalId = existing?.id ?? generateId("prop");
         const now = nextTimestamp(existing?.updatedAt);
 
-        if (existing && input.requireSameActor) {
-          if (existing.createdBy !== input.actorId) {
-            return yield* Effect.fail(
-              new ORPCError("FORBIDDEN", {
-                message: "This community application belongs to another applicant",
-              }),
-            );
-          }
-          const previous = parseJson(existing.payload);
-          const previousOrgId =
-            previous && typeof previous === "object" && "orgId" in previous ? previous.orgId : null;
-          const nextOrgId =
-            input.payload && typeof input.payload === "object" && "orgId" in input.payload
-              ? input.payload.orgId
-              : null;
-          if (previousOrgId && previousOrgId !== nextOrgId) {
-            return yield* Effect.fail(
-              new ORPCError("FORBIDDEN", {
-                message: "This community application belongs to another organization",
-              }),
-            );
-          }
+        if (
+          existing &&
+          input.requireSameActor &&
+          existing.createdBy !== input.actorId &&
+          existing.reviewStatus !== "rejected"
+        ) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
+              message: "This community application belongs to another applicant",
+            }),
+          );
         }
 
         if (
@@ -423,6 +412,7 @@ export const ProposalServiceLive = Layer.effect(
                 .update(proposals)
                 .set({
                   payload: serialize(input.payload),
+                  createdBy: input.requireSameActor ? input.actorId : existing.createdBy,
                   reviewStatus: "pending",
                   applyStatus: "not_started",
                   removeStatus: "not_started",

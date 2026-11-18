@@ -92,7 +92,7 @@ export function OrganizationOverview({
               <Button
                 variant="outline"
                 nativeButton={false}
-                render={<Link to="/apply" search={{ org: startCommunitySlug }} />}
+                render={<Link to="/apply" search={{}} />}
                 data-testid="org-start-community"
               >
                 <RocketLaunchIcon />

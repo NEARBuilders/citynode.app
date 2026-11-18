@@ -65,7 +65,6 @@ test.describe("admin progress and needs action", () => {
     const application = await seedNodeProposal({
       slug: `${unique}-apply`,
       name: `Applicant ${unique}`,
-      parentId: node.id,
       submitterAccountId: "applicant.near",
     });
     await injectAdminCookies(page);
@@ -120,7 +119,12 @@ test.describe("admin progress and needs action", () => {
     });
     await waitForApp(page);
     const request = page.getByTestId("admin-proposal-request");
-    await expect(request).toContainText(`Renamed ${unique}`, { timeout: 15000 });
+    await expect(page.getByTestId("admin-proposal-community")).toHaveText(`Applicant ${unique}`, {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId("admin-proposal-dao")).toHaveText(
+      `${unique}-apply.sputnik-dao.near`,
+    );
     await expect(request).toContainText("applicant.near");
     await expect(request).not.toContainText(node.id);
     await expect(page.getByTestId("admin-proposal-approve")).toBeInViewport();

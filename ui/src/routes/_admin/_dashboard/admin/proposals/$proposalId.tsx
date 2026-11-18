@@ -1,23 +1,21 @@
 import { GavelIcon } from "@phosphor-icons/react";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { getAccount, getGatewayId, useApiClient } from "@/app";
+import { useApiClient } from "@/app";
 import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from "@/components";
 import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
-import { useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import type { Proposal } from "@/lib/queries/proposals";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
-import { findOpenTenantConfigProposal, publishDaoTenantConfig } from "@/lib/tenant-deploy";
 import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
 import { ApplicationProgressList } from "@/routes/_authenticated/_dashboard/-application-progress-list";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 import { BackLink } from "../-admin-ui";
-import { approveAndApplyProposal, keptResources, rejectProposal } from "./-proposal-application";
+import { approveProposal, rejectProposal } from "./-proposal-application";
 import {
   adminProposalDetailQueryOptions,
   proposalCanBeRejected,
@@ -66,16 +64,7 @@ function ProposalDetailPage() {
   const navigate = Route.useNavigate();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
-  const { runtimeConfig } = Route.useRouteContext();
-  const gatewayId = getGatewayId(runtimeConfig);
-  const baseAccount = getAccount(runtimeConfig);
-  const daoConnection = useDaoConnection();
   const [rejectionReason, setRejectionReason] = useState("");
-  const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
-  const handleDaoVerified = useCallback(
-    ({ daoAccountId }: { daoAccountId: string }) => setVerifiedDaoAccountId(daoAccountId),
-    [],
-  );
   const proposalQueryKey = proposalReviewQueryKeys.detail(proposalId, pluginId, entityId);
   const applyingHere = useIsMutating({ mutationKey: proposalQueryKey }) > 0;
   const proposalQuery = useQuery({
@@ -84,15 +73,6 @@ function ProposalDetailPage() {
     refetchIntervalInBackground: true,
   });
   const reviewHistoryQuery = useQuery(proposalReviewHistoryQueryOptions(apiClient, pluginId));
-
-  useEffect(() => {
-    if (
-      verifiedDaoAccountId &&
-      (daoConnection.status !== "connected" || verifiedDaoAccountId !== daoConnection.daoAccountId)
-    ) {
-      setVerifiedDaoAccountId(null);
-    }
-  }, [daoConnection.daoAccountId, daoConnection.status, verifiedDaoAccountId]);
 
   const reviewMutation = useMutation({
     mutationKey: proposalQueryKey,
@@ -105,53 +85,25 @@ function ProposalDetailPage() {
       action: "approve" | "reject";
       reason?: string;
     }) => {
-      if (!gatewayId) {
-        throw new Error(
-          "Runtime configuration is missing the gateway id — this deployment is misconfigured",
-        );
-      }
       if (action === "reject") {
         const rejected = await rejectProposal({
           apiClient,
           proposal,
           reason: reason?.trim() ?? "",
         });
-        return { action, proposal: rejected.proposal, kept: keptResources(rejected.released) };
+        return { action, proposal: rejected };
       }
-
-      const reviewedProposal = await approveAndApplyProposal({
-        apiClient,
-        proposal,
-        gatewayId,
-        baseAccount,
-        publishTenantConfig: (input) => publishDaoTenantConfig(apiClient, input),
-        findOpenTenantConfigProposal,
-        onProposalChange: (nextProposal) =>
-          queryClient.setQueryData(proposalQueryKey, nextProposal),
-        onApplicantInvited: () => {
-          toast.info(translate("admin.proposal.applicantInvited"));
-        },
-      });
-      return { action, proposal: reviewedProposal, kept: [] };
+      const approved = await approveProposal({ apiClient, proposal });
+      queryClient.setQueryData(proposalQueryKey, approved);
+      return { action, proposal: approved };
     },
-    onSuccess: async ({ action, proposal, kept }) => {
+    onSuccess: async ({ action, proposal }) => {
       toast.success(
         action === "reject"
           ? translate("admin.proposalRejected")
-          : proposal.applyStatus === "applied"
-            ? translate("admin.proposalApprovedCreated")
+          : proposal.pluginId === "node"
+            ? translate("admin.proposalApprovedOfficial")
             : translate("admin.proposalApproved"),
-        kept.length > 0
-          ? {
-              description: translate(
-                kept.length === 2
-                  ? "admin.proposal.keptBoth"
-                  : kept[0] === "organization"
-                    ? "admin.proposal.keptOrganization"
-                    : "admin.proposal.keptCommunity",
-              ),
-            }
-          : undefined,
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),
@@ -213,16 +165,9 @@ function ProposalDetailPage() {
   const proposal = proposalQuery.data;
   const isPending = proposal.reviewStatus === "pending";
   const isRetry = communitySetupNeedsAttention(proposal);
-  const publicationRecorded = proposal.applySteps.publication?.status === "completed";
   const parsedNodePayload =
     proposal.pluginId === "node" ? nodeProposalPayloadSchema.safeParse(proposal.payload) : null;
   const proposalDaoAccountId = parsedNodePayload?.success ? parsedNodePayload.data.accountId : null;
-  const daoIsVerified =
-    proposal.pluginId !== "node" ||
-    (!!proposalDaoAccountId &&
-      daoConnection.status === "connected" &&
-      daoConnection.daoAccountId === proposalDaoAccountId &&
-      verifiedDaoAccountId === proposalDaoAccountId);
 
   return (
     <>
@@ -255,12 +200,8 @@ function ProposalDetailPage() {
                 isRetry={isRetry}
                 canReject={proposalCanBeRejected(proposal)}
                 applyError={proposal.applyError}
-                isNodeProposal={proposal.pluginId === "node"}
-                proposalDaoAccountId={proposalDaoAccountId}
-                daoIsVerified={daoIsVerified || (isRetry && publicationRecorded)}
                 rejectionReason={rejectionReason}
                 isReviewing={reviewMutation.isPending}
-                onDaoVerified={handleDaoVerified}
                 onRejectionReasonChange={(event) => setRejectionReason(event.target.value)}
                 onApprove={() => reviewMutation.mutate({ proposal, action: "approve" })}
                 onReject={() =>
