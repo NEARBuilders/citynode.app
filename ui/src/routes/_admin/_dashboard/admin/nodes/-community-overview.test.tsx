@@ -13,9 +13,11 @@ vi.mock("@/app", () => ({
   useApiClient: () => mocks.apiClient,
 }));
 
-type Summary = Parameters<typeof CommunityStats>[0]["summary"];
+type Props = Parameters<typeof CommunityStats>[0];
 
-function summary(overrides: { tenantId?: string | null; validators?: number } = {}): Summary {
+function summary(
+  overrides: { tenantId?: string | null; validators?: number; via?: string } = {},
+): Props {
   const node = {
     id: "11111111-1111-4111-8111-111111111111",
     name: "Lahore",
@@ -26,16 +28,14 @@ function summary(overrides: { tenantId?: string | null; validators?: number } = 
     metadata: {},
   };
   return {
-    node,
-    children: [],
-    validators: [],
-    stakingValidators: {
-      sourceNodeId: node.id,
+    summary: { node, children: [], validators: [] },
+    staking: {
       validators: Array.from({ length: overrides.validators ?? 1 }, (_, i) => ({
         id: `v${i}`,
       })),
+      via: overrides.via ? { ...node, id: "parent", name: overrides.via } : null,
     },
-  } as unknown as Summary;
+  } as unknown as Props;
 }
 
 function api({
@@ -61,11 +61,11 @@ function api({
   return client;
 }
 
-function renderStats(value: Summary) {
+function renderStats(value: Props) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CommunityStats summary={value} />
+      <CommunityStats {...value} />
     </QueryClientProvider>,
   );
 }
@@ -160,6 +160,15 @@ describe("community stats", () => {
     ).toBeTruthy();
     expect(client.listDiscoveryActivities).not.toHaveBeenCalled();
     expect(client.auth.getOnboardingStats).not.toHaveBeenCalled();
+  });
+
+  it("labels validators that come from an ancestor", () => {
+    api();
+    renderStats(summary({ via: "Pakistan" }));
+
+    expect(
+      within(screen.getByTestId("admin-node.stat-staking")).getByText("Via Pakistan"),
+    ).toBeTruthy();
   });
 
   it("explains missing joins when the site has no organization", async () => {

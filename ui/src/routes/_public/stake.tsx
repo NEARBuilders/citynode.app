@@ -98,10 +98,6 @@ function getStakeTitle(
   return t("common.stake");
 }
 
-function hasInheritedValidator(node: Node | undefined, sourceNodeId: string | null | undefined) {
-  return !!node && !!sourceNodeId && sourceNodeId !== node.id;
-}
-
 function getSlugFromHostname(): string | null {
   if (typeof window === "undefined") return null;
   const host = window.location.hostname;
@@ -164,11 +160,6 @@ function StakePage() {
     enabled: !!nodeId,
   });
   const validators = useMemo(() => staking?.validators ?? [], [staking?.validators]);
-  const isInherited = hasInheritedValidator(node, staking?.sourceNodeId);
-  const { data: sourceNode } = useQuery({
-    ...nodeByIdQueryOptions(apiClient, staking?.sourceNodeId ?? ""),
-    enabled: isInherited,
-  });
   const { data: children = [] } = useQuery({
     ...childNodesQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId && validators.length === 0,
@@ -267,14 +258,13 @@ function StakePage() {
           </>
         }
         childNodes={children}
-        isInherited={isInherited}
         node={node}
         nodeLoading={nodeLoading}
         onSelectValidator={setSelectedValidatorId}
         selectedValidatorId={selectedValidator?.id ?? null}
-        sourceNode={sourceNode}
         stakingLoading={stakingLoading}
         validators={validators}
+        via={staking?.via ?? null}
       />
     </PageContainer>
   );

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext } from "../setup";
+import { activateTestNode, authedContext, daoContext, getPluginClient, orgContext } from "../setup";
 
 vi.mock("@/services/staking-pools", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/staking-pools")>()),
@@ -29,11 +29,12 @@ describe("platform node management", () => {
     const admin = await getPluginClient(adminContext);
     const outsider = await getPluginClient(orgContext("outsider", "other-org"));
     const tenant = await owner.createTenant({ name: "Chicago", accountId: "managed-chicago.near" });
-    const node = await owner.createNode({
+    const { node } = await activateTestNode({
       name: "Chicago",
       kind: "country",
       slug: "managed-chicago",
       tenantId: tenant.id,
+      orgId: "managed-org",
     });
 
     expect(await admin.listTenants()).toEqual(

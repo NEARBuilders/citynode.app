@@ -1,6 +1,13 @@
 import { Effect } from "effect";
 import { afterAll, afterEach, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import {
+  activateTestNode,
+  authedContext,
+  daoContext,
+  getPluginClient,
+  orgContext,
+  teardown,
+} from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -60,11 +67,12 @@ it("imports Luma events hidden and lets org admins show or hide them across sync
   });
   const provisioner = await getPluginClient(daoContext("luma-owner", "luma-org", "luma.near"));
   const tenant = await provisioner.createTenant({ name: "Luma node", accountId: "luma.near" });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Luma city",
     slug: "luma-city",
     kind: "city",
     tenantId: tenant.id,
+    orgId: "luma-org",
   });
   const editor = await getPluginClient(orgContext("luma-owner", "luma-org"));
   await editor.saveDiscoveryProfile({
@@ -198,11 +206,12 @@ it("imports Luma events hidden and lets org admins show or hide them across sync
     luma: { available: true },
   });
   expect(final.find((a) => a.title === "Manual meetup")).toMatchObject({ status: "published" });
-  const otherNode = await provisioner.createNode({
+  const { node: otherNode } = await activateTestNode({
     name: "Second Luma city",
     slug: "second-luma-city",
     kind: "city",
     tenantId: tenant.id,
+    orgId: "luma-org",
   });
   await editor.importDiscoveryLuma({ nodeId: otherNode.id, calendarId: "cal-fixture" });
   expect(await editor.listDiscoveryActivities({ nodeId: otherNode.id })).toEqual(
@@ -269,11 +278,12 @@ it("logs why a background Luma sync failed on the server", async () => {
     name: "Luma failing node",
     accountId: "luma-fail.near",
   });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Luma failing city",
     slug: "luma-failing-city",
     kind: "city",
     tenantId: tenant.id,
+    orgId: "luma-fail-org",
   });
   const editor = await getPluginClient(orgContext("luma-fail-owner", "luma-fail-org"));
   await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-failing" });

@@ -500,24 +500,6 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "stake.fee": ["Fee", "Comisión", "Commission", "手续费"],
   "stake.howMuch": ["How much?", "¿Cuánto?", "Quel montant ?", "质押多少？"],
-  "stake.inheritedFrom": [
-    "Stake inherited from {name}.",
-    "El stake se hereda de {name}.",
-    "Le staking provient de {name}.",
-    "质押继承自 {name}。",
-  ],
-  "stake.inheritedNamed": [
-    "{name} doesn't run its own validator. Stake to a community that does.",
-    "{name} no opera su propio validador. Haz stake en una comunidad que sí lo haga.",
-    "{name} n’exploite pas son propre validateur. Misez auprès d’une communauté qui en possède un.",
-    "{name}没有自己的验证节点。请选择运行验证节点的社区进行质押。",
-  ],
-  "stake.inheritedValidator": [
-    "{community} uses the validator from {parent}",
-    "{community} usa el validador de {parent}",
-    "{community} utilise le validateur de {parent}",
-    "{community} 使用 {parent} 的验证节点",
-  ],
   "stake.inheritsValidator": [
     "{community} uses the validator from {source}.",
     "{community} usa el validador de {source}.",
@@ -580,12 +562,6 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Aún no hay comunidades en las que delegar",
     "Aucune communauté disponible pour le staking",
     "暂无可质押的社区",
-  ],
-  "stake.nodePoolsHint": [
-    "Pools across this node and its descendants.",
-    "Pools de este nodo y sus comunidades dependientes.",
-    "Pools de ce nœud et de ses communautés associées.",
-    "此节点及其下属社区的质押池。",
   ],
   "stake.noValidator": [
     "This node doesn't run a validator yet.",
@@ -897,6 +873,12 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Pide a un miembro del DAO en trezu.app",
     "Demandez à un membre de la DAO sur trezu.app",
     "在 trezu.app 联系 DAO 成员",
+  ],
+  "stake.viaNamed": [
+    "Stake via {name}",
+    "Haz stake a través de {name}",
+    "Staking via {name}",
+    "通过 {name} 质押",
   ],
   "stake.voteTrezu": [
     "Vote on trezu.app",
