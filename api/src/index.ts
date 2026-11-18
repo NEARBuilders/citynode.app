@@ -30,7 +30,7 @@ import {
   MemberDirectoryTag,
 } from "./services/member-directory";
 import { communityPath, createNearbuilders } from "./services/nearbuilders";
-import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
+import type { BulletinPublisher, NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag, nodeKindOf, PLATFORM_NODE_KIND } from "./services/nodes";
 import type { PlacesService } from "./services/places";
 import { PlacesLive, PlacesTag } from "./services/places";
@@ -205,6 +205,22 @@ type NodeAccessContext = NonNullable<TeamAccessContext> & {
         activeOrganizationId: string | null;
       })
     | null;
+};
+
+type ViewerContext = {
+  userId?: string | null;
+  user?: { id?: string; name?: string | null; isAnonymous?: boolean | null } | null;
+};
+
+const bulletinPublisherOf = (context: ViewerContext): BulletinPublisher => ({
+  userId: context.userId ?? context.user?.id ?? null,
+  name: memberDisplayName(context.user?.name),
+});
+
+const nodeForViewer = (context: ViewerContext) => {
+  const signedIn = !!context.user && context.user.isAnonymous !== true;
+  return (node: NodeRecord): NodeRecord =>
+    signedIn ? node : { ...node, bulletinPublisherName: null };
 };
 
 const requireNodeOperationsAccess = (context: NodeAccessContext): NodeEffect<void> =>
@@ -2064,7 +2080,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listNodes: builder.listNodes.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        return yield* services.nodes.list({
+        const nodes = yield* services.nodes.list({
           includePlatform:
             context.user?.role === "admin" &&
             (input.kind !== undefined || input.tenantId !== undefined),
@@ -2072,20 +2088,24 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...(input.parentId !== undefined && { parentId: input.parentId }),
           ...(input.tenantId !== undefined && { tenantId: input.tenantId }),
         });
+        return nodes.map(nodeForViewer(context));
       }),
 
       listNodeSummaries: builder.listNodeSummaries.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        return yield* services.nodes.listSummaries({
+        const summaries = yield* services.nodes.listSummaries({
           includePlatform: context.user?.role === "admin" && input.kind !== undefined,
           ...(input.scope === "roots" && { parentId: null }),
           ...(input.kind !== undefined && { kind: input.kind }),
         });
+        const present = nodeForViewer(context);
+        return summaries.map((summary) => ({ ...summary, node: present(summary.node) }));
       }),
 
-      getNode: builder.getNode.effect(function* ({ input }) {
+      getNode: builder.getNode.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        return yield* services.nodes.getById(input.nodeId);
+        const node = yield* services.nodes.getById(input.nodeId);
+        return node && nodeForViewer(context)(node);
       }),
 
       updateNode: builder.updateNode
@@ -2115,7 +2135,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
             adminBypassOrg: true,
             resource: "node",
           });
-          return yield* services.nodes.setBulletin(input.nodeId, input.bulletin);
+          return yield* services.nodes.setBulletin(
+            input.nodeId,
+            input.bulletin,
+            bulletinPublisherOf(context),
+          );
         }),
 
       deleteNode: builder.deleteNode
@@ -2141,20 +2165,23 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return { success: true as const };
         }),
 
-      listRootNodes: builder.listRootNodes.effect(function* () {
+      listRootNodes: builder.listRootNodes.effect(function* ({ context }) {
         const services = yield* ApiServices;
-        return yield* services.nodes.listRootNodes;
+        const nodes = yield* services.nodes.listRootNodes;
+        return nodes.map(nodeForViewer(context));
       }),
 
-      listChildren: builder.listChildren.effect(function* ({ input }) {
+      listChildren: builder.listChildren.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        return yield* services.nodes.listChildren(input.nodeId);
+        const nodes = yield* services.nodes.listChildren(input.nodeId);
+        return nodes.map(nodeForViewer(context));
       }),
 
-      listNodeAncestors: builder.listNodeAncestors.effect(function* ({ input }) {
+      listNodeAncestors: builder.listNodeAncestors.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         yield* resolveNodeForAccess(services, input.nodeId);
-        return yield* services.nodes.listAncestors(input.nodeId);
+        const ancestors = yield* services.nodes.listAncestors(input.nodeId);
+        return ancestors.map(nodeForViewer(context));
       }),
 
       getSubtree: builder.getSubtree.effect(function* ({ input, errors }) {
@@ -2171,7 +2198,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return subtree;
       }),
 
-      getNodeSummary: builder.getNodeSummary.effect(function* ({ input }) {
+      getNodeSummary: builder.getNodeSummary.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const node = yield* resolveNodeForAccess(services, input.nodeId);
 
@@ -2191,7 +2218,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
 
         return {
-          node,
+          node: nodeForViewer(context)(node),
           childrenCount: children.length,
           subtreeNodeCount: subtree.length,
           validators,
@@ -2206,9 +2233,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
-      resolveNodeBySlug: builder.resolveNodeBySlug.effect(function* ({ input }) {
+      resolveNodeBySlug: builder.resolveNodeBySlug.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        return yield* services.nodes.resolveBySlug(input.slug);
+        const node = yield* services.nodes.resolveBySlug(input.slug);
+        return node && nodeForViewer(context)(node);
       }),
 
       resolvePlace: builder.resolvePlace.effect(function* ({ input }) {

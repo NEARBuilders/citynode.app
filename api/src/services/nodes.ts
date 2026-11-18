@@ -29,8 +29,15 @@ export interface NodeRecord {
   parentId: string | null;
   tenantId: string | null;
   metadata: Record<string, unknown>;
+  bulletinPublishedAt: string | null;
+  bulletinPublisherName: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BulletinPublisher {
+  userId: string | null;
+  name: string | null;
 }
 
 export interface NodeSpawnInput {
@@ -90,7 +97,11 @@ export interface NodesService {
     kind?: NodeKind;
   }): NodeEffect<{ node: NodeRecord; created: boolean }>;
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
-  setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
+  setBulletin(
+    id: string,
+    bulletin: string | null,
+    publisher: BulletinPublisher,
+  ): NodeEffect<NodeRecord>;
   recordOfficialDao(
     id: string,
     dao: { accountId: string; network: "mainnet" | "testnet" },
@@ -143,6 +154,8 @@ function toNodeRecord(row: NodeIdentityRow, parentId: string | null): NodeRecord
     parentId,
     tenantId: row.node.tenantId,
     metadata: metadata as Record<string, unknown>,
+    bulletinPublishedAt: row.node.bulletinPublishedAt?.toISOString() ?? null,
+    bulletinPublisherName: row.node.bulletinPublisherName,
     createdAt: toIso(row.node.createdAt),
     updatedAt: toIso(row.node.updatedAt),
   };
@@ -160,6 +173,53 @@ function mergeKindMetadata(
     ...metadata,
     ...(kind !== undefined && { kind }),
   } as NodeMetadata;
+}
+
+function bulletinOf(metadata: Record<string, unknown> | undefined): string | null {
+  const bulletin = metadata?.bulletin;
+  return typeof bulletin === "string" && bulletin.trim() !== "" ? bulletin : null;
+}
+
+function bulletinAttribution(
+  bulletin: string | null,
+  publisher: BulletinPublisher,
+  publishedAt: Date,
+) {
+  return bulletin === null
+    ? { bulletinPublishedAt: null, bulletinPublishedBy: null, bulletinPublisherName: null }
+    : {
+        bulletinPublishedAt: publishedAt,
+        bulletinPublishedBy: publisher.userId,
+        bulletinPublisherName: publisher.name,
+      };
+}
+
+function bulletinTextUnchanged(bulletin: string | null): SQL {
+  return sql`${nodesTable.metadata}->>'bulletin' IS NOT DISTINCT FROM ${bulletin}::text`;
+}
+
+function bulletinAttributionKeptIfUnchanged(bulletin: string | null) {
+  const unchanged = bulletinTextUnchanged(bulletin);
+  return {
+    bulletinPublishedAt: sql`CASE WHEN ${unchanged} THEN ${nodesTable.bulletinPublishedAt} END`,
+    bulletinPublishedBy: sql`CASE WHEN ${unchanged} THEN ${nodesTable.bulletinPublishedBy} END`,
+    bulletinPublisherName: sql`CASE WHEN ${unchanged} THEN ${nodesTable.bulletinPublisherName} END`,
+  };
+}
+
+function bulletinAttributionOnChange(
+  bulletin: string | null,
+  publisher: BulletinPublisher,
+  publishedAt: Date,
+) {
+  const fresh = bulletinAttribution(bulletin, publisher, publishedAt);
+  if (bulletin === null) return fresh;
+  const keep = sql`${nodesTable.bulletinPublishedAt} IS NOT NULL AND ${bulletinTextUnchanged(bulletin)}`;
+  return {
+    bulletinPublishedAt: sql`CASE WHEN ${keep} THEN ${nodesTable.bulletinPublishedAt} ELSE ${publishedAt.toISOString()}::timestamptz END`,
+    bulletinPublishedBy: sql`CASE WHEN ${keep} THEN ${nodesTable.bulletinPublishedBy} ELSE ${fresh.bulletinPublishedBy}::text END`,
+    bulletinPublisherName: sql`CASE WHEN ${keep} THEN ${nodesTable.bulletinPublisherName} ELSE ${fresh.bulletinPublisherName}::text END`,
+  };
 }
 
 function withMetadataKey(key: string, value: string): SQL {
@@ -422,6 +482,7 @@ export const NodesLive = Layer.effect(
               ? sql`${replacement}::jsonb`
               : replaceMetadataKeepingKind(replacement),
           );
+          Object.assign(patch, bulletinAttributionKeptIfUnchanged(bulletinOf(input.metadata)));
         } else if (input.kind !== undefined) {
           patch.metadata = withMetadataKey("kind", input.kind);
         }
@@ -432,15 +493,21 @@ export const NodesLive = Layer.effect(
         return yield* readUpdated(rows, id);
       }),
 
-      setBulletin: Effect.fn("NodesService.setBulletin")(function* (id, bulletin) {
+      setBulletin: Effect.fn("NodesService.setBulletin")(function* (id, bulletin, publisher) {
+        const published = bulletin === null || bulletin.trim() === "" ? null : bulletin;
         const metadata =
-          bulletin === null || bulletin.trim() === ""
+          published === null
             ? withoutMetadataKey("bulletin")
-            : withMetadataKey("bulletin", bulletin);
+            : withMetadataKey("bulletin", published);
+        const now = yield* DateTime.nowAsDate;
         const rows = yield* query(() =>
           db
             .update(nodesTable)
-            .set({ metadata, updatedAt: new Date() })
+            .set({
+              metadata,
+              ...bulletinAttributionOnChange(published, publisher, now),
+              updatedAt: now,
+            })
             .where(eq(nodesTable.id, id))
             .returning(),
         );

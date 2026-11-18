@@ -190,8 +190,13 @@ function Home() {
     !!ownerCommunity && !loading && pending.length === 0 && firstStep?.id === "save-account";
   const listedSteps = safetyFirst ? laterSteps : steps;
   const setupLeft = !!ownerCommunity && !!setupSteps && setupSteps.some((step) => !step.done);
-  const bulletinCard = typeof bulletin === "string" && bulletin.trim() && (
-    <Bulletin content={bulletin} />
+  const bulletinCard = typeof bulletin === "string" && bulletin.trim() && node && (
+    <Bulletin
+      content={bulletin}
+      communityName={node.name}
+      publisherName={node.bulletinPublisherName}
+      publishedAt={node.bulletinPublishedAt}
+    />
   );
 
   const firstName = user?.isAnonymous ? null : user?.name?.split(" ")[0];

@@ -330,8 +330,21 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "De nouvelles fonctionnalités arrivent bientôt…",
     "更多功能即将推出…",
   ],
+  "bulletin.posted": ["Posted", "Publicado", "Publié", "发布于"],
+  "bulletin.postedBy": [
+    "Posted by {name}",
+    "Publicado por {name}",
+    "Publié par {name}",
+    "{name} 发布",
+  ],
   "bulletin.save": ["Save bulletin", "Guardar anuncio", "Enregistrer l'annonce", "保存公告"],
   "bulletin.title": ["Bulletin", "Novedades", "Actualités", "公告"],
+  "bulletin.titleNamed": [
+    "Bulletin · {name}",
+    "Novedades · {name}",
+    "Actualités · {name}",
+    "公告 · {name}",
+  ],
   "calendar.choose": [
     "Choose a calendar",
     "Elige un calendario",

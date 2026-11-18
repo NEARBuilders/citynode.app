@@ -75,8 +75,14 @@ beforeAll(async () => {
         .returning({ id: placesTable.id });
       await driver.db.execute(sql`
         INSERT INTO nodes (id, slug, name, tenant_id, place_id, metadata)
-        VALUES (${node.id}, ${node.slug}, ${node.name}, ${node.tenantId}, ${place!.id},
-          ${JSON.stringify(node.metadata ?? {})}::jsonb)
+        VALUES (
+          ${node.id}::uuid,
+          ${node.slug},
+          ${node.name},
+          ${node.tenantId}::uuid,
+          ${place!.id}::uuid,
+          ${JSON.stringify(node.metadata ?? {})}::jsonb
+        )
       `);
     }
 
