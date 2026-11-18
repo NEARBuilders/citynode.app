@@ -149,20 +149,14 @@ export async function activateTestNode(input: {
         parentId: input.parentPlaceId ?? null,
         label: input.label ?? null,
       });
-      const { node: activated } = yield* services.nodes.activateForPlace({
+      const { node } = yield* services.nodes.activateForPlace({
         placeId: place.id,
-        slug: input.slug,
-        name,
         orgId: input.orgId ?? `org-${input.slug}`,
         activatedBy: "test-activator",
         joinCodeId: `join-${input.slug}`,
         tenantId: input.tenantId,
         kind: input.kind,
       });
-      if (!input.parentPlaceId) return { node: activated, place };
-      const parent = yield* services.nodes.getByPlace(input.parentPlaceId);
-      if (!parent) return { node: activated, place };
-      const node = yield* services.nodes.update(activated.id, { parentId: parent.id });
       return { node, place };
     }).pipe(Effect.provide(effectContext)),
   );

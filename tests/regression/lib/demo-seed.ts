@@ -156,6 +156,7 @@ interface PlannedCommunity {
   organizationId: string;
   tenantId: string;
   nodeId: string;
+  placeId: string;
   accountId: string;
   ownerUserId: string;
   members: PlannedMember[];
@@ -298,6 +299,7 @@ function planCommunity(
 ): PlannedCommunity {
   const organizationId = demoOrganizationId(key);
   const nodeId = demoUuid(`node:${key}`);
+  const placeId = demoUuid(`place:${key}`);
   const owner = def.people.find((person) => person.role === "owner");
   if (!owner) throw new Error(`demo community ${key} has no owner`);
   const ownerUserId = demoUserId(owner.person);
@@ -408,6 +410,7 @@ function planCommunity(
     organizationId,
     tenantId: demoUuid(`tenant:${key}`),
     nodeId,
+    placeId,
     accountId: `${key}.${DEMO_ACCOUNT_SUFFIX}`,
     ownerUserId,
     members,
@@ -671,10 +674,16 @@ async function seedApi(client: SqlClient, plan: DemoPlan) {
       created_at: createdAt,
       updated_at: activatedAt,
     });
+    const place = await client.query(
+      `INSERT INTO places (id, slug, name, latitude, longitude, label) VALUES ($1, $2, $3, $4, $5, 'city')
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name,
+         latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude
+       RETURNING id`,
+      [community.placeId, def.slug, def.nodeName, def.latitude, def.longitude],
+    );
     await insert(client, "nodes", {
       id: community.nodeId,
-      slug: def.slug,
-      name: def.nodeName,
+      place_id: place.rows[0].id,
       tenant_id: community.tenantId,
       org_id: community.organizationId,
       activated_at: activatedAt,

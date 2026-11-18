@@ -252,7 +252,7 @@ describe("organization page tabs", () => {
     await showOrganization(`/orgs/${SLUG}?tab=invitations`, mocked);
     expect(await screen.findByTestId("orgs-role-error")).toBeTruthy();
     expect(
-      screen.getByText("Couldn't check your role in this organization.", { exact: false }),
+      screen.getByText("Couldn't check your role in this community.", { exact: false }),
     ).toBeTruthy();
     expectNoRestrictedTabs();
     expect(mocked.api.listInvitations).not.toHaveBeenCalled();

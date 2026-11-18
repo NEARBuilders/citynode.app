@@ -18,7 +18,6 @@ export interface NodeDirectoryNode {
   name: string;
   slug: string;
   kind: string | null;
-  parentId?: string | null;
   hostname?: string | null;
 }
 
@@ -113,12 +112,7 @@ export function NodeDirectory({
         return (
           <li key={node.id}>
             {linkTo === "/n/$slug" ? (
-              <Link
-                to="/n/$slug"
-                params={{ slug: node.slug }}
-                search={{ parentId: node.parentId ?? undefined }}
-                className={className}
-              >
+              <Link to="/n/$slug" params={{ slug: node.slug }} className={className}>
                 {content}
               </Link>
             ) : linkTo ? (

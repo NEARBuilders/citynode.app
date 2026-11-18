@@ -191,7 +191,7 @@ describe("API Plugin Integration Tests", () => {
       const children = await client.listChildren({ nodeId: illinois.id });
       expect(children.map((c) => c.slug)).toEqual(["chicago"]);
 
-      const resolved = await client.resolveNodeBySlug({ slug: "chicago", parentId: illinois.id });
+      const resolved = await client.resolveNodeBySlug({ slug: "chicago" });
       expect(resolved?.id).toBe(chicago.id);
     });
 
@@ -510,15 +510,15 @@ describe("API Plugin Integration Tests", () => {
 
       await expect(
         outsider.createValidator({ nodeId: node.id, accountId: "intruder.near" }),
-      ).rejects.toThrow("This node's validators do not belong to your organization");
+      ).rejects.toThrow("This node's validators do not belong to your community");
       await expect(
         outsider.updateValidator({ validatorId: validator.id, role: "community" }),
-      ).rejects.toThrow("This node's validators do not belong to your organization");
+      ).rejects.toThrow("This node's validators do not belong to your community");
       await expect(outsider.deleteValidator({ validatorId: validator.id })).rejects.toThrow(
-        "This node's validators do not belong to your organization",
+        "This node's validators do not belong to your community",
       );
       await expect(outsider.setDefaultValidator({ validatorId: validator.id })).rejects.toThrow(
-        "This node's validators do not belong to your organization",
+        "This node's validators do not belong to your community",
       );
     });
   });

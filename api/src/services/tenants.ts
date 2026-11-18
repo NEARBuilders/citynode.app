@@ -7,11 +7,12 @@ import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
   nodes as nodesTable,
+  places as placesTable,
   type tenantStatus,
   tenants as tenantsTable,
 } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
-import { listedNode, nodeKindOf } from "./nodes";
+import { listedNode, nodeKindOf, nodeNameSql, nodeSlugSql } from "./nodes";
 
 export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
 
@@ -231,9 +232,9 @@ export const TenantsLive = Layer.effect(
               createdAt: tenantsTable.createdAt,
               hostname: domainBindingsTable.hostname,
               nodeId: nodesTable.id,
-              nodeSlug: nodesTable.slug,
+              nodeSlug: nodeSlugSql,
               nodeMetadata: nodesTable.metadata,
-              nodeName: nodesTable.name,
+              nodeName: nodeNameSql,
             })
             .from(tenantsTable)
             .leftJoin(
@@ -244,6 +245,7 @@ export const TenantsLive = Layer.effect(
               ),
             )
             .leftJoin(nodesTable, eq(nodesTable.tenantId, tenantsTable.id))
+            .leftJoin(placesTable, eq(placesTable.id, nodesTable.placeId))
             .where(and(...conditions, listedNode)),
         );
 

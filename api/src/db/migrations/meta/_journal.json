@@ -127,6 +127,13 @@
       "when": 1795025038628,
       "tag": "0017_backfill-node-dao",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795025762503,
+      "tag": "0018_drop-legacy-node-identity",
+      "breakpoints": true
     }
   ]
 }

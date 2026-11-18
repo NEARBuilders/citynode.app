@@ -409,7 +409,6 @@ export function DiscoveryExplorer({
                       <Link
                         to="/n/$slug"
                         params={{ slug: basic.slug }}
-                        search={{ parentId: basic.parentId ?? undefined }}
                         data-testid="explore-open-community"
                       />
                     }
@@ -456,7 +455,6 @@ export function DiscoveryExplorer({
                       <Link
                         to="/n/$slug"
                         params={{ slug: selected.slug }}
-                        search={{ parentId: selected.parentId ?? undefined }}
                         data-testid="explore-open-community"
                       />
                     }

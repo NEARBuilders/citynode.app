@@ -20,7 +20,7 @@ export async function createPlatformOrganization(
 ): Promise<{ id: string; name: string; slug: string }> {
   const slugStatus = await auth.checkSlug({ slug: input.slug });
   if (!slugStatus.status) {
-    throw conflict("That slug is already used by another organization");
+    throw conflict("That address is already used by another community");
   }
   const organization = await auth.createOrganization({
     name: input.name,

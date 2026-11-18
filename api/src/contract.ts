@@ -845,9 +845,6 @@ export const contract = oc.router({
       z.object({
         nodeId: z.string(),
         kind: z.string().min(1).optional(),
-        slug: z.string().optional(),
-        name: z.string().optional(),
-        parentId: z.string().nullable().optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
@@ -930,7 +927,6 @@ export const contract = oc.router({
     .input(
       z.object({
         slug: z.string(),
-        parentId: z.string().nullable().optional(),
       }),
     )
     .output(NodeSchema.nullable()),

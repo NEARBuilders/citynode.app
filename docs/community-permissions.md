@@ -1,12 +1,11 @@
 # Community permissions
 
-Community settings are available only to the community's organization owners and
-admins, personal tenant owners, and platform admins. The server filters
+Community settings are available only to the community's owners and admins, personal tenant owners, and platform admins. The server filters
 `listTenants` accordingly and checks the same policy for private binding reads and
 binding changes. The `/tenant/$tenantId` route checks a fresh server response
 before loading the settings page. The community's published config (homepage and
-node config) is edited in that same Community settings page; the organization page
-links owners and admins there (switching to the organization first when it is not
+node config) is edited in that same Community settings page; the community page
+links owners and admins there (switching to the community first when it is not
 active), and the retired `?tab=homepage` / `?tab=node-config` URLs redirect there
 for them and to the Members tab for everyone else.
 Public community discovery, staking, and hostname resolution remain available;
@@ -16,17 +15,17 @@ community sites.
 
 ## Role matrix
 
-| Action | Public / outsider | Org member | Org admin | Org owner | Platform admin |
+| Action | Public / outsider | Member | Community admin | Community owner | Platform admin |
 | --- | --- | --- | --- | --- | --- |
 | Discover communities and read public content | Yes | Yes | Yes | Yes | Yes |
-| Open community settings / read private bindings | No | No | Own active org | Own active org | All |
-| Manage organization teams and area assignments | No | No | Own org | Own org | Requires org membership through Better Auth |
-| Rename community / change UI, backend, SSR permissions | No | No | No | Own active org | Requires the active org owner role |
-| Suspend / reactivate community | No | No | Own active org | No (existing admin-only middleware) | Requires the active org admin role |
-| Delete community | No | No | No | Own active org | Requires the active org owner role |
-| Edit homepage or publish config | No | No | Own org, with required signing authority | Own org, with required signing authority | With required signing authority |
-| Submit and edit Event Reports and Monthly Reports | No | Own active org, on a team with the events area | Own active org | Own active org | No (reads every community's reports) |
-| Read Event Reports and Monthly Reports | No | Own active org, on a team with the events area | Own active org | Own active org | All |
+| Open community settings / read private bindings | No | No | Own active community | Own active community | All |
+| Manage teams and area assignments | No | No | Own community | Own community | Requires community membership through Better Auth |
+| Rename community / change UI, backend, SSR permissions | No | No | No | Own active community | Requires the active community owner role |
+| Suspend / reactivate community | No | No | Own active community | No (existing admin-only middleware) | Requires the active community admin role |
+| Delete community | No | No | No | Own active community | Requires the active community owner role |
+| Edit homepage or publish config | No | No | Own community, with required signing authority | Own community, with required signing authority | With required signing authority |
+| Submit and edit Event Reports and Monthly Reports | No | Own active community, on a team with the events area | Own active community | Own active community | No (reads every community's reports) |
+| Read Event Reports and Monthly Reports | No | Own active community, on a team with the events area | Own active community | Own active community | All |
 | Mark Event Reports and Monthly Reports Reviewed | No | No | No | No | All |
 
 Visibility of the settings page is enforced by role and cannot be toggled for
@@ -43,30 +42,32 @@ authority over a DAO or NEAR account.
 | Treasury | Finance (`finance`), Stake (`stake`) |
 | Community | Events (`events`) |
 
-Approval creates these teams in the same transaction that activates the org.
-Migration `0011_default-community-teams` provisions already-active organizations;
+Approval creates these teams in the same transaction that activates the community.
+Migration `0011_default-community-teams` (auth plugin) provisions already-active communities;
 the Community teams it created also store a `things` grant, which is ignored now
 that `things` is no longer a feature area.
-Activation also repairs active organizations that have not yet been provisioned.
-Personal organizations (whose slug is their user's ID), pending requests, and
+Activation also repairs active communities that have not yet been provisioned.
+Personal workspaces (whose slug is their user's ID), pending requests, and
 rejected requests are excluded. Existing teams with the same name are preserved,
 including their areas and membership. Teams start empty; admins explicitly assign
 members. A provisioning timestamp prevents duplicate creation and preserves later
 renames, area changes, and deletions across repeated activation.
 
-Owners, org admins, and platform admins bypass feature-area restrictions. On the
+Owners, community admins, and platform admins bypass feature-area restrictions. On the
 server, a regular member may use an area when any team they belong to in the
-active organization is assigned it, whatever team is active; the active team
+active community is assigned it, whatever team is active; the active team
 never narrows API access. A member with no such team, for example one who joined
 through an onboarding code, is refused and told to ask an owner or admin to add
 them to a team with that area. Individual routes still
-enforce their own authentication and organization checks.
+enforce their own authentication and community checks.
 
 Node operations follow this rule. Node edits (`updateNode`,
 `setNodeBulletin`, `deleteNode`) and validator edits
 (`createValidator`, `updateValidator`, `setDefaultValidator`, `deleteValidator`)
-are open to platform admins, the node's organization owners and admins, and
-members of any of that organization's teams granted `node-operations`. A grant in
-another organization never reaches a node outside it, and organization API keys
-cannot make these edits. `deleteNode` also requires the org admin role. Feature
+are open to platform admins, the node's community owners and admins, and
+members of any of that community's teams granted `node-operations`. A grant in
+another community never reaches a node outside it, and community API keys
+cannot make these edits. `deleteNode` also requires the community admin role.
+`updateNode` changes kind and metadata only: a node's name, slug and parent come
+from its place. Feature
 areas never grant community settings access, regardless of team membership.

@@ -86,9 +86,6 @@ export const nodes = pgTable(
   "nodes",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    slug: text("slug").notNull(),
-    name: text("name").notNull(),
-    parentId: uuid("parent_id").references((): AnyPgColumn => nodes.id, { onDelete: "set null" }),
     tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
     placeId: uuid("place_id").references((): AnyPgColumn => places.id),
     orgId: text("org_id"),
@@ -99,11 +96,6 @@ export const nodes = pgTable(
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    parentSlugIdx: uniqueIndex("nodes_parent_slug_idx")
-      .on(table.parentId, table.slug)
-      .where(sql`parent_id IS NOT NULL`),
-    rootSlugIdx: uniqueIndex("nodes_root_slug_idx").on(table.slug).where(sql`parent_id IS NULL`),
-    parentIdx: index("nodes_parent_idx").on(table.parentId),
     tenantIdx: index("nodes_tenant_idx").on(table.tenantId),
     placeIdx: uniqueIndex("nodes_place_idx").on(table.placeId).where(sql`place_id IS NOT NULL`),
   }),

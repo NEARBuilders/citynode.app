@@ -270,8 +270,8 @@ const authorizeNodeAccess = (
         new ORPCError("FORBIDDEN", {
           message:
             options.resource === "validators"
-              ? "This node's validators do not belong to your organization"
-              : "This node does not belong to your organization",
+              ? "This node's validators do not belong to your community"
+              : "This node does not belong to your community",
         }),
       );
     }
@@ -327,14 +327,14 @@ const authorizedTenant = (
     if (!activeOrgId || tenant.orgId !== activeOrgId) {
       return yield* Effect.fail(
         new ORPCError("FORBIDDEN", {
-          message: "You are not a member of this tenant's organization",
+          message: "You are not a member of this site's community",
         }),
       );
     }
     if (!isCommunitySettingsRole(context.organization?.member?.role)) {
       return yield* Effect.fail(
         new ORPCError("FORBIDDEN", {
-          message: "Community settings require an organization owner or admin",
+          message: "Community settings require a community owner or admin",
         }),
       );
     }
@@ -353,27 +353,6 @@ const authorizedNodeForValidators = (
       resource: "validators",
     });
     return node;
-  });
-
-const authorizeParentNode = (
-  services: { nodes: NodesService; tenants: TenantsService },
-  parentId: string,
-  context: NodeAccessContext,
-): NodeEffect<void> =>
-  Effect.gen(function* () {
-    const parent = yield* services.nodes.getById(parentId);
-    if (!parent) {
-      return yield* Effect.fail(
-        new ORPCError("NOT_FOUND", {
-          message: "Parent node not found",
-          data: { resource: "node", resourceId: parentId },
-        }),
-      );
-    }
-    yield* authorizeNodeAccess(services, parent, context, {
-      adminBypassOrg: true,
-      resource: "node",
-    });
   });
 
 export default createPlugin.withPlugins<PluginsClient>()({
@@ -560,7 +539,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const auth = yield* memberAuthClient(context);
         const organization = yield* callAuth(
           () => auth.getOrganizationForAdmin({ organizationId }),
-          "Could not read the platform organization",
+          "Could not read the platform community",
         );
         if (!organization) return { account, organization: null };
         const role = yield* callAuth(
@@ -572,7 +551,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 throw error;
               },
             ),
-          "Could not read your role in the platform organization",
+          "Could not read your role in the platform community",
         );
         return {
           account,
@@ -1011,7 +990,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return yield* Effect.fail(
             errors.BAD_REQUEST({
               message:
-                "This event's node has no organization, so there is nothing for attendees to join",
+                "This event's node has no community, so there is nothing for attendees to join",
               data: {},
             }),
           );
@@ -1020,7 +999,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return yield* Effect.fail(
             errors.FORBIDDEN({
               message:
-                "This event belongs to another organization than your active one — switch organizations to onboard for it",
+                "This event belongs to another community than your active one — switch communities to onboard for it",
               data: {},
             }),
           );
@@ -1188,7 +1167,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       getOnboardCommunity: builder.getOnboardCommunity.effect(function* ({ input }) {
         const services = yield* ApiServices;
         const notFound = () =>
-          new ORPCError("NOT_FOUND", { message: "No City Node for this organization" });
+          new ORPCError("NOT_FOUND", { message: "No City Node for this community" });
         const tenant = yield* services.tenants.resolveTenantByOrgId(input.organizationId);
         if (!tenant || tenant.status !== "active") return yield* Effect.fail(notFound());
         const [node] = (yield* services.nodes.list({ tenantId: tenant.id })).sort(
@@ -1454,7 +1433,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const tenantOrganization = tenantOrganizationId
             ? yield* callAuth(
                 () => auth.getOrganizationForAdmin({ organizationId: tenantOrganizationId }),
-                "Could not read the platform organization",
+                "Could not read the platform community",
               )
             : null;
           if (tenant && (!tenantOrganization || !isPlatformOrganization(tenantOrganization))) {
@@ -1476,27 +1455,22 @@ export default createPlugin.withPlugins<PluginsClient>()({
               );
             }
           }
-          if (yield* services.nodes.resolveBySlug(input.slug, null)) {
-            return yield* Effect.fail(
-              errors.CONFLICT({ message: "A node already uses that slug" }),
-            );
-          }
           const previousActiveOrganizationId = context.organization?.activeOrganizationId ?? null;
           const organizationId =
             tenantOrganization?.id ??
             (yield* callAuth(
               () => createPlatformOrganization(auth, { name: input.name, slug: input.slug }),
-              "Could not create the platform organization",
+              "Could not create the platform community",
             )).id;
           if (!tenantOrganization) {
             yield* callAuth(
               () => auth.setActiveOrganization({ organizationId: previousActiveOrganizationId }),
-              "Could not restore your active organization",
+              "Could not restore your active community",
             ).pipe(
               Effect.tapError(() =>
                 callAuth(
                   () => auth.deleteOrganization({ organizationId }),
-                  "Could not remove the unused platform organization",
+                  "Could not remove the unused platform community",
                 ).pipe(Effect.ignore),
               ),
             );
@@ -1516,15 +1490,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 Effect.tapError(() =>
                   callAuth(
                     () => auth.deleteOrganization({ organizationId }),
-                    "Could not remove the unused platform organization",
+                    "Could not remove the unused platform community",
                   ).pipe(Effect.ignore),
                 ),
               ));
           yield* services.nodes.spawn({
             kind: PLATFORM_NODE_KIND,
-            slug: input.slug,
-            name: input.name,
-            parentId: null,
             tenantId: stationsTenant.id,
           });
           return yield* readPlatformStations(context);
@@ -1545,7 +1516,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const organizationId = current.organization.id;
           yield* callAuth(
             () => auth.addMember({ userId: context.userId, role: "admin", organizationId }),
-            "Could not add you to the platform organization",
+            "Could not add you to the platform community",
           );
           return yield* readPlatformStations(context);
         }),
@@ -2128,14 +2099,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
             resource: "node",
           });
           yield* guardNodeKind(node.kind, requestedNodeKind(input));
-          if (input.parentId && input.parentId !== node.parentId) {
-            yield* authorizeParentNode(services, input.parentId, context);
-          }
           return yield* services.nodes.update(input.nodeId, {
             ...(input.kind !== undefined && { kind: input.kind }),
-            ...(input.slug !== undefined && { slug: input.slug }),
-            ...(input.name !== undefined && { name: input.name }),
-            ...(input.parentId !== undefined && { parentId: input.parentId }),
             ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
         }),
@@ -2243,10 +2208,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       resolveNodeBySlug: builder.resolveNodeBySlug.effect(function* ({ input }) {
         const services = yield* ApiServices;
-        return yield* services.nodes.resolveBySlug(
-          input.slug,
-          input.parentId === undefined ? undefined : input.parentId,
-        );
+        return yield* services.nodes.resolveBySlug(input.slug);
       }),
 
       resolvePlace: builder.resolvePlace.effect(function* ({ input }) {

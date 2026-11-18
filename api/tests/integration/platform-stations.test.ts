@@ -183,7 +183,7 @@ describe("platform stations", () => {
     expect(organization).toMatchObject({ metadata: { platformStations: "true" } });
 
     const node = await admin.getNode({ nodeId: setUp.organization?.nodeId ?? "" });
-    expect(node).toMatchObject({ kind: "platform", slug: "city-nodes", parentId: null });
+    expect(node).toMatchObject({ kind: "platform", name: "City Nodes", parentId: null });
 
     await expect(
       admin.setUpPlatformStations({ name: "City Nodes", slug: "city-nodes-2" }),

@@ -26,7 +26,6 @@ type Translate = ReturnType<typeof useAppTranslation>;
 
 export interface NodeDaoTarget {
   slug: string;
-  parentId?: string;
 }
 
 interface ResolvedNodeDao {
@@ -43,7 +42,7 @@ export function NodeDaoGate({
 }) {
   const translate = useAppTranslation();
   const apiClient = useApiClient();
-  const nodeQuery = useQuery(nodeBySlugQueryOptions(apiClient, target.slug, target.parentId));
+  const nodeQuery = useQuery(nodeBySlugQueryOptions(apiClient, target.slug));
   const node = nodeQuery.data;
   const daoQuery = useQuery({
     ...nodeDaoQueryOptions(apiClient, node?.id ?? ""),
@@ -100,7 +99,6 @@ export function NodeDaoGate({
         <Link
           to="/n/$slug"
           params={{ slug: node.slug }}
-          search={{ parentId: target.parentId }}
           data-testid="dao-proposals.back-to-community"
         />
       }
@@ -137,13 +135,7 @@ export function NodeDaoGate({
   );
 }
 
-export function DaoProposalList({
-  node,
-  daoAccountId,
-  target,
-}: ResolvedNodeDao & {
-  target: NodeDaoTarget;
-}) {
+export function DaoProposalList({ node, daoAccountId }: ResolvedNodeDao) {
   const translate = useAppTranslation();
   const pages = useInfiniteQuery(daoProposalPagesQueryOptions(daoAccountId));
   const proposals = pages.data?.pages.flatMap((page) => page.proposals) ?? [];
@@ -173,7 +165,6 @@ export function DaoProposalList({
               <Link
                 to="/n/$slug/proposals/$proposalId"
                 params={{ slug: node.slug, proposalId: String(proposal.id) }}
-                search={{ parentId: target.parentId }}
                 className="flex flex-col gap-2 rounded-2xl border border-border p-4 transition-colors hover:bg-muted"
                 data-testid="dao-proposals.item"
               >
@@ -224,8 +215,7 @@ export function DaoProposalDetail({
   node,
   daoAccountId,
   proposalId,
-  target,
-}: ResolvedNodeDao & { proposalId: number | null; target: NodeDaoTarget }) {
+}: ResolvedNodeDao & { proposalId: number | null }) {
   const translate = useAppTranslation();
   const query = useQuery({
     ...daoProposalQueryOptions(daoAccountId, proposalId ?? -1),
@@ -244,7 +234,6 @@ export function DaoProposalDetail({
         <Link
           to="/n/$slug/proposals"
           params={{ slug: node.slug }}
-          search={{ parentId: target.parentId }}
           data-testid="dao-proposals.all"
         />
       }

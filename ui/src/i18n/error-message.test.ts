@@ -54,7 +54,7 @@ describe("localized action failures", () => {
     const failure = {
       code: "FORBIDDEN",
       status: 403,
-      message: "Ask an organization owner to add you to a team with node-operations.",
+      message: "Ask a community owner to add you to a team with node-operations.",
       data: { requiredPermissions: ["node-operations"] },
     };
     const messages = APP_LOCALES.map((locale) => {

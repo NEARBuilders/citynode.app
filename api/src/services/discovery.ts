@@ -59,8 +59,16 @@ import { memberDisplayName } from "../team-join-policy";
 import { profilePlace } from "./discovery-geocode";
 import { createLumaCalendars, type LumaEvent } from "./discovery-luma";
 import { lumaWebhookSchema, verifyLumaWebhook } from "./luma-webhook";
-import { hasJoinCode, listedNode, nodeKindOf, PLATFORM_NODE_KIND } from "./nodes";
+import {
+  hasJoinCode,
+  listedNode,
+  nodeKindOf,
+  nodeNameSql,
+  nodeSlugSql,
+  PLATFORM_NODE_KIND,
+} from "./nodes";
 import { createPlaceMatcher, type PlaceMatcher } from "./place-match";
+import { readNodeParents } from "./places";
 
 const EVENTS_AREA: FeatureArea = "events";
 
@@ -172,18 +180,15 @@ export async function adoptCatalogPlace(
   kind: string | null,
 ): Promise<void> {
   const location = place.trim();
-  if (!location) return;
+  if (!location || node.placeId !== null) return;
   const matched = await matchCatalogPlace(db, location, kind);
-  if (!matched || matched.id === node.placeId) return;
+  if (!matched) return;
   const [taken] = await db
     .select({ id: nodes.id })
     .from(nodes)
     .where(and(eq(nodes.placeId, matched.id), sql`${nodes.id} <> ${node.id}`))
     .limit(1);
   if (taken) return;
-  if (node.placeId !== null) {
-    await db.update(nodes).set({ placeId: null }).where(eq(nodes.id, node.id));
-  }
   await db
     .update(nodes)
     .set({ placeId: matched.id })
@@ -568,7 +573,13 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     if (ids?.length === 0) return [];
     return yield* query(() =>
       db
-        .select({ profile: discoveryProfiles.data, node: nodes, placeSlug: placesTable.slug })
+        .select({
+          profile: discoveryProfiles.data,
+          node: nodes,
+          placeSlug: placesTable.slug,
+          slug: nodeSlugSql,
+          name: nodeNameSql,
+        })
         .from(discoveryProfiles)
         .innerJoin(nodes, eq(discoveryProfiles.nodeId, nodes.id))
         .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
@@ -581,6 +592,14 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
             ids ? inArray(nodes.id, ids) : undefined,
           ),
         ),
+    ).pipe(
+      Effect.map((rows) =>
+        rows.map(({ profile, node, placeSlug, slug, name }) => ({
+          profile,
+          placeSlug,
+          node: { ...node, slug, name },
+        })),
+      ),
     );
   });
 
@@ -791,14 +810,20 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     );
     const featureLabels = new Map(features.map((f) => [f.nodeId, f.label]));
     const day = 86_400_000;
-    return rows
-      .filter(
-        ({ profile, node }) =>
-          profile.published &&
-          (!input.query ||
-            `${node.name} ${profile.location}`.toLowerCase().includes(input.query.toLowerCase())) &&
-          (!input.region || profile.region === input.region),
-      )
+    const matching = rows.filter(
+      ({ profile, node }) =>
+        profile.published &&
+        (!input.query ||
+          `${node.name} ${profile.location}`.toLowerCase().includes(input.query.toLowerCase())) &&
+        (!input.region || profile.region === input.region),
+    );
+    const parents = yield* query(() =>
+      readNodeParents(
+        db,
+        matching.map(({ node }) => node.id),
+      ),
+    );
+    return matching
       .map(({ profile, node, placeSlug }) => {
         const content = byNode.get(node.id) ?? [];
         const events = content
@@ -828,7 +853,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           updates: updates.slice(0, 3),
           name: node.name,
           slug: node.slug,
-          parentId: node.parentId,
+          parentId: parents.get(node.id) ?? null,
           placeId: node.placeId,
           placeSlug: placeSlug ?? null,
           joinable: hasJoinCode(node.metadata),
@@ -849,17 +874,23 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     if (input.region || input.active || input.upcoming) return listed;
     const rows = yield* query(() =>
       db
-        .select({ node: nodes, placeSlug: placesTable.slug })
+        .select({ node: nodes, placeSlug: placesTable.slug, slug: nodeSlugSql, name: nodeNameSql })
         .from(nodes)
         .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
         .leftJoin(placesTable, eq(placesTable.id, nodes.placeId))
         .leftJoin(discoveryProfiles, eq(discoveryProfiles.nodeId, nodes.id))
         .where(and(eq(tenants.status, "active"), listedNode, isNull(discoveryProfiles.nodeId))),
     );
+    const parents = yield* query(() =>
+      readNodeParents(
+        db,
+        rows.map(({ node }) => node.id),
+      ),
+    );
     const search = input.query?.toLowerCase();
     const basic = rows
-      .filter(({ node }) => !search || node.name.toLowerCase().includes(search))
-      .map(({ node, placeSlug }) => ({
+      .filter(({ name }) => !search || name.toLowerCase().includes(search))
+      .map(({ node, placeSlug, slug, name }) => ({
         nodeId: node.id,
         summary: "",
         location: "",
@@ -874,9 +905,9 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
         activityReason: "Quiet lately",
         events: [],
         updates: [],
-        name: node.name,
-        slug: node.slug,
-        parentId: node.parentId,
+        name,
+        slug,
+        parentId: parents.get(node.id) ?? null,
         placeId: node.placeId,
         placeSlug: placeSlug ?? null,
         joinable: hasJoinCode(node.metadata),
@@ -1568,7 +1599,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
             id: discoveryActivities.id,
             data,
             nodeId: nodes.id,
-            nodeName: nodes.name,
+            nodeName: nodeNameSql,
             nodeMetadata: nodes.metadata,
             organizationId: tenants.orgId,
             reportSubmittedAt: eventReports.submittedAt,
@@ -1579,6 +1610,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           .from(discoveryActivities)
           .innerJoin(nodes, eq(nodes.id, discoveryActivities.ownerNodeId))
           .innerJoin(tenants, eq(tenants.id, nodes.tenantId))
+          .leftJoin(placesTable, eq(placesTable.id, nodes.placeId))
           .leftJoin(eventReports, eq(eventReports.activityId, discoveryActivities.id))
           .where(
             and(
@@ -1620,12 +1652,13 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
             db
               .select({
                 nodeId: nodes.id,
-                nodeName: nodes.name,
+                nodeName: nodeNameSql,
                 nodeMetadata: nodes.metadata,
                 organizationId: tenants.orgId,
               })
               .from(nodes)
               .innerJoin(tenants, eq(tenants.id, nodes.tenantId))
+              .leftJoin(placesTable, eq(placesTable.id, nodes.placeId))
               .where(
                 and(
                   inArray(nodes.id, [...new Set(placedNodeIds.values())]),
@@ -2242,13 +2275,14 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
             organizationId: tenants.orgId,
             name: tenants.name,
             nodeId: nodes.id,
-            nodeName: nodes.name,
+            nodeName: nodeNameSql,
             startedAt: sql<Date>`coalesce(${nodes.activatedAt}, ${nodes.createdAt})`.mapWith(
               (value: string | Date) => new Date(value),
             ),
           })
           .from(tenants)
           .innerJoin(nodes, eq(nodes.tenantId, tenants.id))
+          .leftJoin(placesTable, eq(placesTable.id, nodes.placeId))
           .where(
             and(
               eq(tenants.status, "active"),

@@ -176,6 +176,6 @@ describe("community stats", () => {
     renderStats(summary());
 
     const redeemed = screen.getByTestId("admin-node.stat-redeemed");
-    await waitFor(() => expect(within(redeemed).getByText("No organization yet")).toBeTruthy());
+    await waitFor(() => expect(within(redeemed).getByText("Not open to members yet")).toBeTruthy());
   });
 });

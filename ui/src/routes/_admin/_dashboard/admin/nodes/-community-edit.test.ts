@@ -21,7 +21,6 @@ const profile = {
 describe("community draft", () => {
   it("splits the admin note out of the metadata JSON", () => {
     const draft = communityDraftFrom(node, profile);
-    expect(draft.name).toBe("Testville");
     expect(draft.description).toBe("Internal note");
     expect(JSON.parse(draft.metadata)).toEqual({ population: 1200, tags: ["city"] });
     expect(draft.profile).toBe(profile);
@@ -35,14 +34,13 @@ describe("planning the merged save", () => {
     expect(planCommunitySave(nodeId, initial, { ...initial })).toEqual({ ok: true });
   });
 
-  it("saves only the details when only the name changed", () => {
-    const plan = planCommunitySave(nodeId, initial, { ...initial, name: " Testville North " });
+  it("saves only the details when only the admin note changed", () => {
+    const plan = planCommunitySave(nodeId, initial, { ...initial, description: "New note" });
     expect(plan).toEqual({
       ok: true,
       node: {
         nodeId,
-        name: "Testville North",
-        metadata: { population: 1200, tags: ["city"], description: "Internal note" },
+        metadata: { population: 1200, tags: ["city"], description: "New note" },
       },
     });
   });
@@ -64,16 +62,8 @@ describe("planning the merged save", () => {
     });
     expect(plan).toEqual({
       ok: true,
-      node: { nodeId, name: "Testville", metadata: { population: 1200, tags: ["city"] } },
+      node: { nodeId, metadata: { population: 1200, tags: ["city"] } },
       profile: next,
-    });
-  });
-
-  it("flags a missing name", () => {
-    expect(planCommunitySave(nodeId, initial, { ...initial, name: "  " })).toEqual({
-      ok: false,
-      field: "name",
-      issue: "admin.community.nameRequired",
     });
   });
 
@@ -103,15 +93,15 @@ describe("planning the merged save", () => {
   it("leaves the profile alone when it could not be loaded", () => {
     const withoutProfile = communityDraftFrom(node, null);
     expect(
-      planCommunitySave(nodeId, withoutProfile, { ...withoutProfile, name: "Renamed" }),
-    ).toMatchObject({ ok: true, node: { name: "Renamed" } });
+      planCommunitySave(nodeId, withoutProfile, { ...withoutProfile, description: "Renamed" }),
+    ).toMatchObject({ ok: true, node: { metadata: { description: "Renamed" } } });
   });
 });
 
 describe("running the merged save", () => {
   const plan = {
     ok: true as const,
-    node: { nodeId, name: "Testville", metadata: {} },
+    node: { nodeId, metadata: {} },
     profile,
   };
 

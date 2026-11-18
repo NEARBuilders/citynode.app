@@ -49,7 +49,7 @@ export async function activateCommunity(
     const raced = await existingActivation(deps, place);
     if (raced) return raced;
     throw new ORPCError("CONFLICT", {
-      message: "This community's name is already used by another organization",
+      message: "This community's name is already used by another community",
     });
   }
 
@@ -96,8 +96,6 @@ async function linkOrganization(
   const activation = await Effect.runPromise(
     deps.nodes.activateForPlace({
       placeId: input.place.id,
-      slug: input.place.slug,
-      name: input.place.name,
       orgId: input.organizationId,
       activatedBy: input.userId,
       joinCodeId: joinCode.code,

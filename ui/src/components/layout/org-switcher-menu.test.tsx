@@ -37,6 +37,6 @@ it("lists organizations and all organizations without a New organization item", 
   expect(await screen.findByTestId("org-switcher-item-org-1")).toBeTruthy();
   expect(screen.getByTestId("org-switcher-all").getAttribute("href")).toBe("/orgs");
   expect(screen.queryByTestId("org-switcher-new")).toBeNull();
-  expect(screen.queryByText("New organization")).toBeNull();
+  expect(screen.queryByText("New community")).toBeNull();
   expect(document.querySelector('a[href="/orgs/new"]')).toBeNull();
 });

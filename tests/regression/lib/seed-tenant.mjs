@@ -131,19 +131,25 @@ export async function seedNode(input) {
     await client.query(`SET search_path TO "${schema}", public`);
 
     const existing = await client.query(
-      parentId
-        ? "SELECT id FROM nodes WHERE parent_id = $1 AND slug = $2 LIMIT 1"
-        : "SELECT id FROM nodes WHERE parent_id IS NULL AND slug = $1 LIMIT 1",
-      parentId ? [parentId, slug] : [slug],
+      "SELECT n.id FROM nodes n INNER JOIN places p ON p.id = n.place_id WHERE p.slug = $1 LIMIT 1",
+      [slug],
     );
     if (existing.rows.length > 0) {
       return { id: existing.rows[0].id, slug, name, tenantId, reused: true };
     }
 
+    const parentPlace = parentId
+      ? (await client.query("SELECT place_id FROM nodes WHERE id = $1", [parentId])).rows[0]
+          ?.place_id
+      : null;
+    const place = await client.query(
+      "INSERT INTO places (slug, name, parent_id) VALUES ($1, $2, $3) ON CONFLICT (slug) DO UPDATE SET slug = EXCLUDED.slug RETURNING id",
+      [slug, name, parentPlace ?? null],
+    );
     const id = randomId();
     await client.query(
-      "INSERT INTO nodes (id, slug, name, parent_id, tenant_id, metadata) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
-      [id, slug, name, parentId, tenantId, JSON.stringify({ kind })],
+      "INSERT INTO nodes (id, place_id, tenant_id, activated_at, metadata) VALUES ($1, $2, $3, now(), $4::jsonb)",
+      [id, place.rows[0].id, tenantId, JSON.stringify({ kind })],
     );
     return { id, slug, name, tenantId, reused: false };
   } finally {
