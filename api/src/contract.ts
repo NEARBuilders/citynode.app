@@ -31,40 +31,6 @@ export const GeoNodeKindSchema = z.enum(["country", "state", "city"]);
 
 export const NodeKindSchema = z.string().nullable();
 
-export const NodeProposalPayloadSchema = z
-  .object({
-    kind: GeoNodeKindSchema,
-    name: z.string().trim().min(1),
-    slug: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9-]+$/),
-    parentId: z.string().nullable(),
-    orgId: z.string().min(1).optional(),
-    motivation: z.string().trim().min(1),
-    accountId: z.string().min(1),
-    submitterAccountId: z.string().min(1).optional(),
-    applicantUserId: z.string().min(1).optional(),
-  })
-  .superRefine((value, context) => {
-    if (value.kind === "country" && value.parentId !== null) {
-      context.addIssue({
-        code: "custom",
-        path: ["parentId"],
-        message: "Country cannot have a parent",
-      });
-    }
-    if (value.kind === "state" && !value.parentId) {
-      context.addIssue({
-        code: "custom",
-        path: ["parentId"],
-        message: "Parent is required",
-      });
-    }
-  });
-
-export type NodeProposalPayload = z.infer<typeof NodeProposalPayloadSchema>;
-
 export const OfficialApplicationPayloadSchema = z.object({
   placeId: z.uuid().optional(),
   name: z.string().trim().min(1),
@@ -79,18 +45,6 @@ export const OfficialApplicationPayloadSchema = z.object({
 });
 
 export type OfficialApplicationPayload = z.infer<typeof OfficialApplicationPayloadSchema>;
-
-/** Setup steps recorded on an approved community application, in the order they run. */
-export const CommunitySetupStepSchema = z.enum(["organization", "community", "publication"]);
-
-export type CommunitySetupStep = z.infer<typeof CommunitySetupStepSchema>;
-
-const ReleaseKeptReasonSchema = z.enum(["not_found", "in_use"]);
-
-export const ReleasedCommunitySchema = z.object({
-  released: z.boolean(),
-  keptReason: ReleaseKeptReasonSchema.nullable(),
-});
 
 export const EventOnboardingCodeSchema = z.object({
   id: z.string(),
@@ -823,49 +777,6 @@ export const contract = oc.router({
     )
     .errors({ UNAUTHORIZED, BAD_REQUEST }),
 
-  applyNodeProposal: oc
-    .route({ method: "POST", path: "/nodes/proposals/apply" })
-    .input(
-      NodeProposalPayloadSchema.safeExtend({
-        orgId: z.string().min(1),
-        submitterAccountId: z.string().min(1),
-        hostname: z.string().min(1),
-        poolAccountId: z.string().min(1).optional(),
-      }),
-    )
-    .output(z.object({ nodeId: z.string() }))
-    .errors({
-      UNAUTHORIZED,
-      FORBIDDEN,
-      BAD_REQUEST,
-      NOT_FOUND,
-      CONNECTION_ERROR,
-      CONFLICT: {
-        status: 409,
-        message: "Node proposal resources already exist",
-      },
-    }),
-
-  releaseCommunityProposal: oc
-    .route({ method: "POST", path: "/nodes/community-proposals/release" })
-    .input(
-      z.object({
-        proposalId: z.string().min(1),
-        entityId: z.string().min(1),
-        expectedUpdatedAt: z.iso.datetime(),
-      }),
-    )
-    .output(
-      z.object({
-        community: ReleasedCommunitySchema,
-        organization: z.object({
-          released: z.boolean(),
-          keptReason: z.enum([...ReleaseKeptReasonSchema.options, "existing"]).nullable(),
-        }),
-      }),
-    )
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
-
   approveOfficialApplication: oc
     .route({
       method: "POST",
@@ -896,24 +807,6 @@ export const contract = oc.router({
       NOT_FOUND,
       CONFLICT: { status: 409, message: "The community is linked to another DAO" },
       PRECONDITION_FAILED: { status: 412, message: "The place has no community yet" },
-    }),
-
-  applyCommunityProposal: oc
-    .route({ method: "POST", path: "/nodes/community-proposals/apply" })
-    .input(
-      z.object({
-        proposalId: z.string().min(1),
-        entityId: z.string().min(1),
-        hostname: z.string().min(1),
-      }),
-    )
-    .output(z.object({ nodeId: z.string(), applicantInvited: z.boolean() }))
-    .errors({
-      UNAUTHORIZED,
-      FORBIDDEN,
-      BAD_REQUEST,
-      NOT_FOUND,
-      CONFLICT: { status: 409, message: "Community resources conflict" },
     }),
 
   listNodes: oc

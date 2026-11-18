@@ -127,12 +127,11 @@ export function buildCommunityProgressRows<T extends JoinsTenant, N extends Prog
 export type NeedsActionProposal = Pick<
   Proposal,
   "id" | "pluginId" | "entityId" | "reviewStatus" | "createdAt"
-> & { title: string; setupNeedsAttention: boolean };
+> & { title: string };
 
 export type NeedsActionItem =
   | { kind: "application"; proposal: NeedsActionProposal }
   | { kind: "moreApplications"; count: number }
-  | { kind: "setup"; proposal: NeedsActionProposal }
   | { kind: "relayer" }
   | { kind: "staking"; nodeId: string; name: string }
   | { kind: "stakingMany"; count: number }
@@ -261,11 +260,6 @@ export function deriveNeedsAction({
   overdueReports?: number;
 }): NeedsActionItem[] {
   const items: NeedsActionItem[] = [];
-  for (const proposal of proposals) {
-    if (proposal.reviewStatus !== "pending" && proposal.setupNeedsAttention) {
-      items.push({ kind: "setup", proposal });
-    }
-  }
   const applications = proposals
     .filter((proposal) => proposal.reviewStatus === "pending")
     .slice(0, APPLICATION_ITEMS_LIMIT);

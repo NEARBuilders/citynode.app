@@ -155,8 +155,6 @@ export interface DemoProposal {
   submitter: string;
   daysAgo: number;
   reviewStatus: "pending" | "approved";
-  applyStatus: "not_started" | "failed";
-  applyError?: string;
 }
 
 export const DEMO_EMAIL_DOMAIN = "demo.citynode.test";
@@ -842,7 +840,6 @@ export const DEMO_PROPOSALS: DemoProposal[] = [
     submitter: "kwame.demo.citynode.testnet",
     daysAgo: 2,
     reviewStatus: "pending",
-    applyStatus: "not_started",
   },
   {
     key: "cape-town",
@@ -853,8 +850,6 @@ export const DEMO_PROPOSALS: DemoProposal[] = [
     submitter: "thandi.demo.citynode.testnet",
     daysAgo: 15,
     reviewStatus: "approved",
-    applyStatus: "failed",
-    applyError: "The community account could not be created: the DAO factory call ran out of gas.",
   },
 ];
 

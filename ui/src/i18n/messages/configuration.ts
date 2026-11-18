@@ -272,7 +272,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "L’intégrité de {label} ne correspond pas — le hash du bundle est {hash}",
     "{label} 的完整性不匹配，资源包哈希为 {hash}",
   ],
-  "tenant.live": ["Live", "Publicado", "En ligne", "已上线"],
   "tenant.makeDefault": ["Make default", "Usar por defecto", "Définir par défaut", "设为默认"],
   "tenant.newValidatorRole": [
     "New validator role",

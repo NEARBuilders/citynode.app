@@ -22,6 +22,10 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
     new URL("../db/migrations/0003_apply_steps.sql", import.meta.url),
     "utf8",
   );
+  const dropLifecycleSource = await readFile(
+    new URL("../db/migrations/0004_drop_apply_lifecycle.sql", import.meta.url),
+    "utf8",
+  );
   return {
     default: [
       {
@@ -37,6 +41,15 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
         hash: "node-application-apply-steps-test",
         tag: "node-application-apply-steps-test",
         sql: applyStepsSource
+          .split("--> statement-breakpoint")
+          .map((statement) => statement.trim()),
+      },
+      {
+        idx: 4,
+        when: 1794700800000,
+        hash: "node-application-drop-apply-lifecycle-test",
+        tag: "node-application-drop-apply-lifecycle-test",
+        sql: dropLifecycleSource
           .split("--> statement-breakpoint")
           .map((statement) => statement.trim()),
       },
@@ -225,22 +238,14 @@ describe.sequential("node applications", () => {
     expect(revised.data.createdBy).toBe("alice.near");
     expect(revised.data.submissionCount).toBe(2);
 
-    const approved = await admin.approve({
+    await admin.approve({
       pluginId: "node",
       entityId: "chicago",
       expectedUpdatedAt: revised.data.updatedAt,
     });
-    await admin.markApplyFailed({
-      pluginId: "node",
-      entityId: "chicago",
-      expectedUpdatedAt: approved.data.updatedAt,
-      error: "Provisioning failed",
-    });
     const afterReload = await client("alice.near").getMyNodeApplications();
     expect(afterReload.data.find((proposal) => proposal.entityId === "chicago")).toMatchObject({
       reviewStatus: "approved",
-      applyStatus: "failed",
-      applyError: "Provisioning failed",
     });
   });
 

@@ -164,6 +164,18 @@ function withoutMetadataKey(key: string): SQL {
   return sql`${nodesTable.metadata} - ${key}::text`;
 }
 
+function withoutOfficialDao(
+  metadata: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!metadata) return metadata;
+  const { daoAccountId: _daoAccountId, daoNetwork: _daoNetwork, ...rest } = metadata;
+  return rest;
+}
+
+function keepingOfficialDao(next: SQL): SQL {
+  return sql`${next} || jsonb_strip_nulls(jsonb_build_object('daoAccountId', ${nodesTable.metadata} -> 'daoAccountId', 'daoNetwork', ${nodesTable.metadata} -> 'daoNetwork'))`;
+}
+
 function replaceMetadataKeepingKind(replacement: string): SQL {
   return sql`${replacement}::jsonb || CASE WHEN ${nodesTable.metadata} ? 'kind' THEN jsonb_build_object('kind', ${nodesTable.metadata} -> 'kind') ELSE '{}'::jsonb END`;
 }
@@ -271,7 +283,7 @@ export const NodesLive = Layer.effect(
               name: input.name,
               parentId: input.parentId,
               tenantId: input.tenantId ?? null,
-              metadata: mergeKindMetadata(input.kind, input.metadata),
+              metadata: mergeKindMetadata(input.kind, withoutOfficialDao(input.metadata)),
             })
             .returning(),
         );
@@ -411,11 +423,14 @@ export const NodesLive = Layer.effect(
         if (input.name !== undefined) patch.name = input.name;
         if (input.metadata !== undefined) {
           const kind = input.kind ?? nodeKindOf(input.metadata) ?? undefined;
-          const replacement = JSON.stringify(mergeKindMetadata(kind, input.metadata));
-          patch.metadata =
+          const replacement = JSON.stringify(
+            mergeKindMetadata(kind, withoutOfficialDao(input.metadata)),
+          );
+          patch.metadata = keepingOfficialDao(
             kind !== undefined
               ? sql`${replacement}::jsonb`
-              : replaceMetadataKeepingKind(replacement);
+              : replaceMetadataKeepingKind(replacement),
+          );
         } else if (input.kind !== undefined) {
           patch.metadata = withMetadataKey("kind", input.kind);
         }

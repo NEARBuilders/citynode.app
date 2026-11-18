@@ -38,14 +38,11 @@ describe("apply stepper", () => {
 
 describe("application in progress", () => {
   it.each([
-    ["pending", "not_started", true],
-    ["approved", "not_started", true],
-    ["approved", "applying", true],
-    ["approved", "failed", true],
-    ["rejected", "not_started", true],
-    ["approved", "applied", false],
-    ["removed", "not_started", true],
-  ] as const)("treats %s/%s as in progress: %s", (reviewStatus, applyStatus, expected) => {
-    expect(applicationInProgress({ reviewStatus, applyStatus })).toBe(expected);
+    ["pending", true],
+    ["rejected", true],
+    ["removed", true],
+    ["approved", false],
+  ] as const)("treats %s as in progress: %s", (reviewStatus, expected) => {
+    expect(applicationInProgress({ reviewStatus })).toBe(expected);
   });
 });

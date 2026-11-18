@@ -16,10 +16,6 @@ import {
 import { useAppTranslation } from "@/i18n/runtime";
 
 interface ProposalReviewActionsProps {
-  isPending: boolean;
-  isRetry?: boolean;
-  canReject?: boolean;
-  applyError?: string | null;
   rejectionReason: string;
   isReviewing: boolean;
   onRejectionReasonChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
@@ -28,10 +24,6 @@ interface ProposalReviewActionsProps {
 }
 
 export function ProposalReviewActions({
-  isPending,
-  isRetry = false,
-  canReject = true,
-  applyError,
   rejectionReason,
   isReviewing,
   onRejectionReasonChange,
@@ -40,42 +32,25 @@ export function ProposalReviewActions({
 }: ProposalReviewActionsProps) {
   const translate = useAppTranslation();
   const [rejecting, setRejecting] = useState(false);
-  if (!isPending && !isRetry) return null;
 
   return (
     <div className="flex flex-col gap-6" data-testid="admin-proposal-decision">
-      <h2 className="text-xl font-semibold">
-        {isRetry ? translate("admin.proposal.retryApply") : translate("admin.proposal.decision")}
-      </h2>
-      {isRetry && applyError && (
-        <p className="text-sm wrap-anywhere text-destructive" role="alert">
-          {applyError}
-        </p>
-      )}
-      {isRetry && (
-        <p className="text-sm text-muted-foreground">{translate("admin.proposal.resumeHint")}</p>
-      )}
+      <h2 className="text-xl font-semibold">{translate("admin.proposal.decision")}</h2>
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <Button onClick={onApprove} disabled={isReviewing} data-testid="admin-proposal-approve">
             <CheckIcon />
-            {isReviewing
-              ? translate(isRetry ? "admin.proposal.resuming" : "admin.proposal.approving")
-              : isRetry
-                ? translate("admin.proposal.resume")
-                : translate("common.approve")}
+            {isReviewing ? translate("admin.proposal.approving") : translate("common.approve")}
           </Button>
-          {canReject && (
-            <Button
-              variant="ghost"
-              onClick={() => setRejecting(true)}
-              disabled={isReviewing}
-              data-testid="admin-proposal-reject"
-            >
-              {translate("common.reject")}
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            onClick={() => setRejecting(true)}
+            disabled={isReviewing}
+            data-testid="admin-proposal-reject"
+          >
+            {translate("common.reject")}
+          </Button>
         </div>
       </div>
 

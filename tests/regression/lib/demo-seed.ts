@@ -853,9 +853,6 @@ async function seedProposals(client: SqlClient, plan: DemoPlan) {
       payload,
       created_by: proposal.submitter,
       review_status: proposal.reviewStatus,
-      apply_status: proposal.applyStatus,
-      apply_error: proposal.applyError ?? null,
-      apply_activity_at: proposal.applyStatus === "failed" ? new Date(at.getTime() + DAY) : null,
       created_at: at,
       updated_at: proposal.reviewStatus === "pending" ? at : new Date(at.getTime() + DAY),
     });
