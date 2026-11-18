@@ -28,7 +28,6 @@ import { adminNodeListQueryOptions, communityEventStatsQueryOptions } from "@/li
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
-import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
 import {
   APPLICATION_ITEMS_LIMIT,
   buildCommunityProgressRows,
@@ -42,7 +41,6 @@ import {
   awaitingReviewQueryOptions,
   proposalTitle,
   proposalTypeLabel,
-  stalledSetupsQueryOptions,
 } from "./proposals/-proposal-review";
 
 export function usePlatformStatus() {
@@ -50,7 +48,6 @@ export function usePlatformStatus() {
   const apiClient = useApiClient();
   const awaitingQuery = useQuery(awaitingReviewQueryOptions(apiClient, APPLICATION_ITEMS_LIMIT));
   const relayerQuery = useRelayerInfoQuery();
-  const setupsQuery = useQuery(stalledSetupsQueryOptions(apiClient));
   const progress = useCommunityProgress();
   const eventsQuery = useQuery(adminEventsQueryOptions(apiClient));
   const now = useNow(60_000);
@@ -72,14 +69,12 @@ export function usePlatformStatus() {
     now,
   });
 
-  const setups = (setupsQuery.data?.data ?? []).filter(communitySetupNeedsAttention);
   const awaiting = awaitingQuery.data?.data ?? [];
   const reviewTotal = awaitingQuery.data?.meta.total ?? 0;
   const relayer = relayerQuery.data;
   const relayerNeedsFunding = !!relayer?.accountId && relayer.enabled === false;
   const relayerFailed = relayerQuery.isError && !relayer;
   const sources = [
-    setupsQuery,
     awaitingQuery,
     { ...relayerQuery, isError: relayerFailed },
     eventsQuery,
@@ -88,14 +83,13 @@ export function usePlatformStatus() {
 
   const items = deriveNeedsAction({
     pendingReviewCount: reviewTotal,
-    proposals: [...setups, ...awaiting].map((proposal) => ({
+    proposals: awaiting.map((proposal) => ({
       id: proposal.id,
       pluginId: proposal.pluginId,
       entityId: proposal.entityId,
       reviewStatus: proposal.reviewStatus,
       title: proposalTitle(proposal, translate),
       createdAt: proposal.createdAt,
-      setupNeedsAttention: communitySetupNeedsAttention(proposal),
     })),
     relayerNeedsFunding,
     communities: progress.rows,
@@ -155,7 +149,7 @@ export function useCommunityProgress() {
 }
 
 export function needsActionKey(item: NeedsActionItem) {
-  if (item.kind === "setup" || item.kind === "application") {
+  if (item.kind === "application") {
     return `${item.kind}-${item.proposal.id}`;
   }
   if (item.kind === "staking") return `staking-${item.nodeId}`;
@@ -234,18 +228,6 @@ function NeedsActionLinkRow({
     link: ReactElement;
   } = (() => {
     switch (item.kind) {
-      case "setup":
-        return {
-          title: translate("admin.action.setupNamed", { name: item.proposal.title }),
-          description: translate("admin.action.setupHint"),
-          link: (
-            <Link
-              to="/admin/proposals/$proposalId"
-              params={{ proposalId: item.proposal.id }}
-              search={{ pluginId: item.proposal.pluginId, entityId: item.proposal.entityId }}
-            />
-          ),
-        };
       case "relayer":
         return {
           title: translate("admin.relayer.needsFunding"),

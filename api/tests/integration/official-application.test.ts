@@ -27,8 +27,6 @@ type FakeProposal = {
   entityId: string;
   createdBy: string;
   reviewStatus: string;
-  applyStatus: string;
-  appliedResourceId: string | null;
   updatedAt: string;
   payload: Record<string, unknown>;
 };
@@ -51,8 +49,6 @@ function application(slug: string, extra: Record<string, unknown> = {}): FakePro
     entityId: slug,
     createdBy: "applicant.testnet",
     reviewStatus: "pending",
-    applyStatus: "not_started",
-    appliedResourceId: null,
     updatedAt: savedAt,
     payload: {
       name: slug,
@@ -173,21 +169,7 @@ function proposalsStub(context: { user?: { role?: string | null } }) {
     }),
     approve: async (input: { entityId: string; expectedUpdatedAt: string }) => {
       requireAdmin();
-      return bump(find(input.entityId, input.expectedUpdatedAt), {
-        reviewStatus: "approved",
-        applyStatus: "applying",
-      });
-    },
-    markApplied: async (input: {
-      entityId: string;
-      expectedUpdatedAt: string;
-      appliedResourceId?: string;
-    }) => {
-      requireAdmin();
-      return bump(find(input.entityId, input.expectedUpdatedAt), {
-        applyStatus: "applied",
-        appliedResourceId: input.appliedResourceId ?? null,
-      });
+      return bump(find(input.entityId, input.expectedUpdatedAt), { reviewStatus: "approved" });
     },
   };
 }
@@ -277,11 +259,7 @@ describe("Official Application approval", () => {
       daoAccountId: "lagos-test.sputnik-dao.testnet",
       daoNetwork: "testnet",
     });
-    expect(proposals.get("lagos")).toMatchObject({
-      reviewStatus: "approved",
-      applyStatus: "applied",
-      appliedResourceId: result.nodeId,
-    });
+    expect(proposals.get("lagos")).toMatchObject({ reviewStatus: "approved" });
 
     const visitor = await getPluginClient();
     expect(await visitor.getNodeDao({ nodeId: result.nodeId })).toEqual({
@@ -377,12 +355,11 @@ describe("Official Application approval", () => {
     expect(proposals.get("lagos")?.reviewStatus).toBe("pending");
   });
 
-  it("finishes a legacy application that was approved but never finished setting up", async () => {
-    proposals.set("abuja", {
-      ...application("abuja", { kind: "city", parentId: null, orgId: "legacy-org" }),
-      reviewStatus: "approved",
-      applyStatus: "failed",
-    });
+  it("approves a legacy application whose old setup never finished and was reopened", async () => {
+    proposals.set(
+      "abuja",
+      application("abuja", { kind: "city", parentId: null, orgId: "legacy-org" }),
+    );
     const admin = await getPluginClient(authedContext("reviewer", "admin"));
 
     await admin.approveOfficialApplication({
@@ -391,16 +368,22 @@ describe("Official Application approval", () => {
       expectedUpdatedAt: savedAt,
     });
 
-    expect(proposals.get("abuja")).toMatchObject({
-      reviewStatus: "approved",
-      applyStatus: "applied",
-    });
+    expect(proposals.get("abuja")?.reviewStatus).toBe("approved");
     expect(orgs.get("org-abuja")?.metadata.daoAccountId).toBe("abuja-test.sputnik-dao.testnet");
   });
 
-  it("refuses stale, rejected and non-admin approvals", async () => {
+  it("refuses stale, decided and non-admin approvals", async () => {
     proposals.set("ibadan", { ...application("ibadan"), reviewStatus: "rejected" });
     const admin = await getPluginClient(authedContext("reviewer", "admin"));
+    await expect(
+      admin.approveOfficialApplication({
+        proposalId: "prop-ibadan",
+        entityId: "ibadan",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).rejects.toThrow(/already decided/);
+
+    proposals.set("ibadan", { ...application("ibadan"), reviewStatus: "approved" });
     await expect(
       admin.approveOfficialApplication({
         proposalId: "prop-ibadan",

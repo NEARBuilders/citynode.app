@@ -193,12 +193,7 @@ function ApplyPage() {
           typeof existingPayload?.name === "string" ? existingPayload.name : selectedPlace?.name
         }
         reviewStatus={existingApplication?.reviewStatus ?? "pending"}
-        applyStatus={existingApplication?.applyStatus ?? "not_started"}
         rejectionReason={existingApplication?.rejectionReason ?? null}
-        progress={existingApplication}
-        daoAccountId={
-          typeof existingPayload?.accountId === "string" ? existingPayload.accountId : null
-        }
         onRevise={
           existingApplication?.reviewStatus === "rejected" && !submittedProposalId
             ? () => {

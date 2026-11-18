@@ -21,7 +21,7 @@ function proposal(pluginId: string) {
 }
 
 function client() {
-  const decided = { ...proposal("node"), reviewStatus: "approved", applyStatus: "applied" };
+  const decided = { ...proposal("node"), reviewStatus: "approved" };
   return {
     approveOfficialApplication: vi.fn().mockResolvedValue({
       nodeId: "node-id",
@@ -54,7 +54,7 @@ describe("approving an Official Application", () => {
       expectedUpdatedAt: "2026-09-03T00:00:00.000Z",
     });
     expect(apiClient.proposals.approve).not.toHaveBeenCalled();
-    expect(result.applyStatus).toBe("applied");
+    expect(result.reviewStatus).toBe("approved");
   });
 
   it("names a DAO conflict instead of a raw error", async () => {

@@ -8,7 +8,7 @@ import { createDatabaseDriver } from "../db/index";
 import { loadMigrations, migrate } from "../db/migrate";
 
 describe("proposals migrations", () => {
-  it("upgrades legacy proposals before current lifecycle queries run", async () => {
+  it("upgrades legacy proposals and reopens setups that never finished", async () => {
     const driver = await createDatabaseDriver(":memory:", "plugin_proposals");
     try {
       await driver.db.execute(
@@ -44,8 +44,10 @@ describe("proposals migrations", () => {
       );
       await driver.db.execute(
         sql.raw(`
-        INSERT INTO proposals (id, plugin_id, entity_id, payload, created_by)
-        VALUES ('proposal-pakistan', 'node', 'pakistan', '{}', 'applicant')
+        INSERT INTO proposals (id, plugin_id, entity_id, payload, created_by, review_status, apply_status)
+        VALUES ('proposal-pakistan', 'node', 'pakistan', '{}', 'applicant', 'pending', 'not_started'),
+          ('proposal-lahore', 'node', 'lahore', '{}', 'applicant', 'approved', 'applying'),
+          ('proposal-karachi', 'node', 'karachi', '{}', 'applicant', 'approved', 'applied')
       `),
       );
 
@@ -73,21 +75,33 @@ describe("proposals migrations", () => {
 
       const result = await driver.db.execute(
         sql.raw(`
-        SELECT id, plugin_id, entity_id, operation, payload, schema_version, created_by,
-          review_status, apply_status, remove_status, rejection_reason, apply_error,
-          remove_error, applied_resource_id, applied_at, removed_at, created_at, updated_at
-        FROM proposals
-        WHERE plugin_id = 'node' AND entity_id = 'pakistan'
-        LIMIT 1
+        SELECT id, operation, review_status FROM proposals WHERE plugin_id = 'node' ORDER BY id
       `),
       );
       const rows = (result as { rows?: unknown[] }).rows ?? (result as unknown[]);
       expect(rows).toEqual([
+        expect.objectContaining({ id: "proposal-karachi", review_status: "approved" }),
+        expect.objectContaining({ id: "proposal-lahore", review_status: "pending" }),
         expect.objectContaining({
           id: "proposal-pakistan",
           operation: "create",
-          remove_status: "not_started",
+          review_status: "pending",
         }),
+      ]);
+
+      const columns = await driver.db.execute(
+        sql.raw(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'proposals' AND (column_name LIKE 'appl%' OR column_name LIKE 'remove%')
+      `),
+      );
+      expect((columns as { rows?: unknown[] }).rows ?? columns).toEqual([]);
+
+      const audit = await driver.db.execute(
+        sql.raw(`SELECT proposal_id, action, actor FROM proposal_audit_log`),
+      );
+      expect((audit as { rows?: unknown[] }).rows ?? audit).toEqual([
+        { proposal_id: "proposal-lahore", action: "reopened", actor: "system" },
       ]);
 
       await driver.db.execute(

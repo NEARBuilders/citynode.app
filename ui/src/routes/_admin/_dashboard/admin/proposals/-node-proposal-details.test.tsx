@@ -3,10 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { translateEnglishAppMessage } from "@/i18n/runtime";
 import { render } from "@/i18n/test-render";
 import type { Proposal } from "@/lib/queries/proposals";
 import { NodeProposalRequest } from "./-node-proposal-details";
-import { ProposalStatusBadges } from "./-proposal-summary";
+import { ProposalStatusCell } from "./-proposal-columns";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -41,18 +42,9 @@ function proposal(payload: Record<string, unknown>): Proposal {
       ...payload,
     },
     reviewStatus: "pending",
-    applyStatus: "not_started",
     operation: "create",
     schemaVersion: "1",
-    removeStatus: "not_started",
-    removeError: null,
-    appliedResourceId: null,
-    applySteps: {},
-    applyTimedOut: false,
-    appliedAt: null,
-    applyError: null,
     rejectionReason: null,
-    removedAt: null,
     createdBy: "user-1",
     submissionCount: 1,
     createdAt: "2026-09-10T00:00:00.000Z",
@@ -82,31 +74,13 @@ describe("application request summary", () => {
     expect(screen.getByTestId("admin-proposal-community").textContent).toBe("Denver");
   });
 
-  it("shows whether an approved application was applied", () => {
+  it("shows an approved application as approved", () => {
     render(
-      <ProposalStatusBadges
-        proposal={{
-          ...proposal({}),
-          reviewStatus: "approved",
-          applyStatus: "applied",
-        }}
+      <ProposalStatusCell
+        proposal={{ ...proposal({}), reviewStatus: "approved" }}
+        t={translateEnglishAppMessage}
       />,
     );
     expect(screen.getByTestId("admin-proposal-status").textContent).toBe("Approved");
-    expect(screen.getByTestId("admin-proposal-apply-status").textContent).toBe("Applied");
-  });
-
-  it("leaves the apply badge off when a setup status already explains it", () => {
-    render(
-      <ProposalStatusBadges
-        proposal={{
-          ...proposal({}),
-          reviewStatus: "approved",
-          applyStatus: "failed",
-        }}
-      />,
-    );
-    expect(screen.getByTestId("admin-proposal-setup-status")).toBeTruthy();
-    expect(screen.queryByTestId("admin-proposal-apply-status")).toBeNull();
   });
 });

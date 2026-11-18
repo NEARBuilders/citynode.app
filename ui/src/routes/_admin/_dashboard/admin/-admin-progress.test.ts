@@ -114,14 +114,13 @@ describe("buildCommunityProgressRows", () => {
 });
 
 describe("deriveNeedsAction", () => {
-  const setup: NeedsActionProposal = {
+  const pending: NeedsActionProposal = {
     id: "p1",
     pluginId: "node",
     entityId: "karachi",
-    reviewStatus: "approved" as const,
+    reviewStatus: "pending" as const,
     title: "Karachi",
     createdAt: "2026-10-20T00:00:00.000Z",
-    setupNeedsAttention: true,
   };
 
   it("returns nothing when every source is clear", () => {
@@ -135,17 +134,11 @@ describe("deriveNeedsAction", () => {
     ).toEqual([]);
   });
 
-  it("lists failed setups, applications, relayer funding and unstaked communities", () => {
-    const pending = {
-      ...setup,
-      id: "p2",
-      reviewStatus: "pending" as const,
-      setupNeedsAttention: false,
-    };
+  it("lists applications, relayer funding and unstaked communities", () => {
     expect(
       deriveNeedsAction({
         pendingReviewCount: 1,
-        proposals: [setup, pending],
+        proposals: [pending],
         relayerNeedsFunding: true,
         communities: [
           { node: { id: "berlin", name: "Berlin" }, staking: "none" },
@@ -153,7 +146,6 @@ describe("deriveNeedsAction", () => {
         ],
       }),
     ).toEqual([
-      { kind: "setup", proposal: setup },
       { kind: "application", proposal: pending },
       { kind: "relayer" },
       { kind: "staking", nodeId: "berlin", name: "Berlin" },
@@ -161,15 +153,13 @@ describe("deriveNeedsAction", () => {
   });
 
   it("lists the first applications and counts the rest", () => {
-    const pending = Array.from({ length: APPLICATION_ITEMS_LIMIT + 2 }, (_, index) => ({
-      ...setup,
+    const applications = Array.from({ length: APPLICATION_ITEMS_LIMIT + 2 }, (_, index) => ({
+      ...pending,
       id: `p${index}`,
-      reviewStatus: "pending" as const,
-      setupNeedsAttention: false,
     }));
     const items = deriveNeedsAction({
       pendingReviewCount: APPLICATION_ITEMS_LIMIT + 4,
-      proposals: pending,
+      proposals: applications,
       relayerNeedsFunding: false,
       communities: [],
     });

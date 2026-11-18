@@ -36,6 +36,10 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
     new URL("../db/migrations/0003_apply_steps.sql", import.meta.url),
     "utf8",
   );
+  const dropLifecycleSource = await readFile(
+    new URL("../db/migrations/0004_drop_apply_lifecycle.sql", import.meta.url),
+    "utf8",
+  );
   return {
     default: [
       {
@@ -58,6 +62,15 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
         hash: "proposals-apply-steps-test",
         tag: "proposals-apply-steps-test",
         sql: applyStepsSource
+          .split("--> statement-breakpoint")
+          .map((statement) => statement.trim()),
+      },
+      {
+        idx: 4,
+        when: 1794700800000,
+        hash: "proposals-drop-apply-lifecycle-test",
+        tag: "proposals-drop-apply-lifecycle-test",
+        sql: dropLifecycleSource
           .split("--> statement-breakpoint")
           .map((statement) => statement.trim()),
       },
@@ -141,16 +154,6 @@ describe.sequential("Proposals plugin", () => {
       user: testUser("user-bob", "member"),
       allowPrivateSubmission: true,
       resubmissionPolicy: "rejected-only",
-    });
-  }
-
-  function restorableAliceClient() {
-    return loaded.createClient({
-      userId: "user-alice",
-      near: testNear("alice.near"),
-      user: testUser("user-alice", "member"),
-      allowPrivateSubmission: true,
-      resubmissionPolicy: "rejected-or-removed",
     });
   }
 
@@ -355,56 +358,23 @@ describe.sequential("Proposals plugin", () => {
       entityId: input.entityId,
       expectedUpdatedAt: resubmitted.data.updatedAt,
     });
-    const applied = await adminClient().markApplied({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: approved.data.updatedAt,
-      appliedResourceId: input.entityId,
-    });
     await expect(
       aliceClient().propose({ ...input, idempotencyKey: "approved-revision" }),
     ).rejects.toThrow("This proposal is already approved");
-
-    const removing = await adminClient().remove({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: applied.data.updatedAt,
-    });
-    await adminClient().markRemoved({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: removing.data.updatedAt,
-    });
-    const removalAudit = await adminClient().getAuditLog({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-    });
-    expect(removalAudit.data).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          action: "approval_revocation_started",
-          actor: "admin",
-          actorLabel: "admin",
-        }),
-      ]),
-    );
     await expect(
-      aliceClient().propose({ ...input, idempotencyKey: "removed-revision" }),
-    ).rejects.toThrow("Removed proposals cannot be resubmitted");
-
-    const restored = await restorableAliceClient().propose({
-      ...input,
-      payload: { roles: ["Maintainer"] },
-      idempotencyKey: "restored-revision",
-    });
-    expect(restored.data).toMatchObject({
-      reviewStatus: "pending",
-      applyStatus: "not_started",
-      removeStatus: "not_started",
-      appliedResourceId: null,
-      removedAt: null,
-      payload: { roles: ["Maintainer"] },
-    });
+      adminClient().reject({
+        pluginId: input.pluginId,
+        entityId: input.entityId,
+        expectedUpdatedAt: approved.data.updatedAt,
+      }),
+    ).rejects.toThrow("Only pending proposals can be rejected");
+    await expect(
+      adminClient().approve({
+        pluginId: input.pluginId,
+        entityId: input.entityId,
+        expectedUpdatedAt: approved.data.updatedAt,
+      }),
+    ).rejects.toThrow("Only pending proposals can be approved");
   });
 
   it("lets admins reopen rejected proposals and records the action", async () => {
@@ -483,534 +453,6 @@ describe.sequential("Proposals plugin", () => {
     ).rejects.toThrow("This proposal changed");
   });
 
-  it("lets admins clean up approved proposals that were never applied", async () => {
-    const input = {
-      pluginId: "nearcatalog",
-      entityId: "claim:alice.near:cleanup-project",
-      payload: { roles: ["Developer"] },
-      idempotencyKey: "cleanup-project",
-    };
-
-    const proposed = await aliceClient().propose(input);
-    const approved = await adminClient().approve({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: proposed.data.updatedAt,
-    });
-
-    await expect(
-      adminClient().reject({
-        pluginId: input.pluginId,
-        entityId: input.entityId,
-        expectedUpdatedAt: approved.data.updatedAt,
-      }),
-    ).rejects.toThrow("never applied");
-
-    const failed = await adminClient().markApplyFailed({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: approved.data.updatedAt,
-      error: "Tenant with this accountId already exists",
-    });
-
-    const rejected = await adminClient().reject({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: failed.data.updatedAt,
-      reason: "cleanup — superseded application",
-    });
-    expect(rejected.data.reviewStatus).toBe("rejected");
-    expect(rejected.data.rejectionReason).toBe("cleanup — superseded application");
-
-    const reopened = await adminClient().reopen({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: rejected.data.updatedAt,
-    });
-    expect(reopened.data.reviewStatus).toBe("pending");
-
-    const reapproved = await adminClient().approve({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: reopened.data.updatedAt,
-    });
-    const applied = await adminClient().markApplied({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: reapproved.data.updatedAt,
-      appliedResourceId: input.entityId,
-    });
-
-    await expect(
-      adminClient().reject({
-        pluginId: input.pluginId,
-        entityId: input.entityId,
-        expectedUpdatedAt: applied.data.updatedAt,
-      }),
-    ).rejects.toThrow("never applied");
-  });
-
-  it("includes pending and failed lifecycle records in the actionable queue", async () => {
-    const applyInput = {
-      pluginId: "builders",
-      entityId: "failed-application.near",
-      payload: { name: "Failed Application" },
-      idempotencyKey: "failed-application",
-    };
-    const proposedApply = await aliceClient().propose(applyInput);
-    const approvedApply = await adminClient().approve({
-      pluginId: applyInput.pluginId,
-      entityId: applyInput.entityId,
-      expectedUpdatedAt: proposedApply.data.updatedAt,
-    });
-    await adminClient().markApplyFailed({
-      pluginId: applyInput.pluginId,
-      entityId: applyInput.entityId,
-      expectedUpdatedAt: approvedApply.data.updatedAt,
-      error: "Publish failed",
-    });
-
-    const removeInput = {
-      pluginId: "builders",
-      entityId: "failed-removal.near",
-      payload: { name: "Failed Removal" },
-      idempotencyKey: "failed-removal",
-    };
-    const proposedRemove = await aliceClient().propose(removeInput);
-    const approvedRemove = await adminClient().approve({
-      pluginId: removeInput.pluginId,
-      entityId: removeInput.entityId,
-      expectedUpdatedAt: proposedRemove.data.updatedAt,
-    });
-    const appliedRemove = await adminClient().markApplied({
-      pluginId: removeInput.pluginId,
-      entityId: removeInput.entityId,
-      expectedUpdatedAt: approvedRemove.data.updatedAt,
-      appliedResourceId: removeInput.entityId,
-    });
-    const removing = await adminClient().remove({
-      pluginId: removeInput.pluginId,
-      entityId: removeInput.entityId,
-      expectedUpdatedAt: appliedRemove.data.updatedAt,
-    });
-    await adminClient().markRemoveFailed({
-      pluginId: removeInput.pluginId,
-      entityId: removeInput.entityId,
-      expectedUpdatedAt: removing.data.updatedAt,
-      error: "Removal failed",
-    });
-
-    const actionable = await adminClient().getProposals({
-      pluginId: "builders",
-      lifecycleStatus: "actionable",
-      limit: 100,
-    });
-
-    expect(actionable.data.map((proposal) => proposal.entityId)).toEqual(
-      expect.arrayContaining(["public-builder.near", applyInput.entityId, removeInput.entityId]),
-    );
-    expect(
-      actionable.data.every(
-        (proposal) =>
-          proposal.reviewStatus === "pending" ||
-          proposal.applyStatus === "failed" ||
-          proposal.removeStatus === "failed",
-      ),
-    ).toBe(true);
-  });
-
-  it("makes stalled lifecycle operations actionable and retryable", async () => {
-    const startedAt = Date.now();
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(startedAt);
-
-    try {
-      const applyInput = {
-        pluginId: "builders",
-        entityId: "stalled-application.near",
-        payload: { name: "Stalled Application" },
-        idempotencyKey: "stalled-application",
-      };
-      const proposedApply = await aliceClient().propose(applyInput);
-      const applying = await adminClient().approve({
-        pluginId: applyInput.pluginId,
-        entityId: applyInput.entityId,
-        expectedUpdatedAt: proposedApply.data.updatedAt,
-      });
-
-      const removeInput = {
-        pluginId: "builders",
-        entityId: "stalled-removal.near",
-        payload: { name: "Stalled Removal" },
-        idempotencyKey: "stalled-removal",
-      };
-      const proposedRemove = await aliceClient().propose(removeInput);
-      const approvedRemove = await adminClient().approve({
-        pluginId: removeInput.pluginId,
-        entityId: removeInput.entityId,
-        expectedUpdatedAt: proposedRemove.data.updatedAt,
-      });
-      const appliedRemove = await adminClient().markApplied({
-        pluginId: removeInput.pluginId,
-        entityId: removeInput.entityId,
-        expectedUpdatedAt: approvedRemove.data.updatedAt,
-        appliedResourceId: removeInput.entityId,
-      });
-      const removing = await adminClient().remove({
-        pluginId: removeInput.pluginId,
-        entityId: removeInput.entityId,
-        expectedUpdatedAt: appliedRemove.data.updatedAt,
-      });
-
-      const active = await adminClient().getProposals({
-        pluginId: "builders",
-        lifecycleStatus: "actionable",
-        limit: 100,
-      });
-      expect(active.data.map((proposal) => proposal.entityId)).not.toContain(applyInput.entityId);
-      expect(active.data.map((proposal) => proposal.entityId)).not.toContain(removeInput.entityId);
-      await expect(
-        adminClient().approve({
-          pluginId: applyInput.pluginId,
-          entityId: applyInput.entityId,
-          expectedUpdatedAt: applying.data.updatedAt,
-        }),
-      ).rejects.toThrow("Only pending proposals can be approved");
-      await expect(
-        adminClient().remove({
-          pluginId: removeInput.pluginId,
-          entityId: removeInput.entityId,
-          expectedUpdatedAt: removing.data.updatedAt,
-        }),
-      ).rejects.toThrow("Only applied proposals can have approval revoked");
-
-      vi.setSystemTime(startedAt + 5 * 60 * 1000 + 10);
-
-      const stalled = await adminClient().getProposals({
-        pluginId: "builders",
-        lifecycleStatus: "actionable",
-        limit: 100,
-      });
-      expect(stalled.data.map((proposal) => proposal.entityId)).toEqual(
-        expect.arrayContaining([applyInput.entityId, removeInput.entityId]),
-      );
-
-      const retriedApply = await adminClient().approve({
-        pluginId: applyInput.pluginId,
-        entityId: applyInput.entityId,
-        expectedUpdatedAt: applying.data.updatedAt,
-      });
-      const retriedRemoval = await adminClient().remove({
-        pluginId: removeInput.pluginId,
-        entityId: removeInput.entityId,
-        expectedUpdatedAt: removing.data.updatedAt,
-      });
-
-      expect(retriedApply.data.applyStatus).toBe("applying");
-      expect(retriedApply.data.updatedAt).not.toBe(applying.data.updatedAt);
-      expect(retriedRemoval.data.removeStatus).toBe("removing");
-      expect(retriedRemoval.data.updatedAt).not.toBe(removing.data.updatedAt);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("keeps recorded setup steps across failed applies and retries", async () => {
-    const input = {
-      pluginId: "builders",
-      entityId: "resumable-application.near",
-      payload: { name: "Resumable Application" },
-      idempotencyKey: "resumable-application",
-    };
-    const step = { pluginId: input.pluginId, entityId: input.entityId };
-    const proposed = await aliceClient().propose(input);
-
-    await expect(
-      adminClient().recordApplyStep({ ...step, step: "organization", status: "completed" }),
-    ).rejects.toThrow("Setup steps can only be recorded while an approved proposal is applying");
-
-    const applying = await adminClient().approve({
-      ...step,
-      expectedUpdatedAt: proposed.data.updatedAt,
-    });
-    await expect(
-      aliceClient().recordApplyStep({ ...step, step: "organization", status: "completed" }),
-    ).rejects.toThrow();
-
-    const organization = await adminClient().recordApplyStep({
-      ...step,
-      step: "organization",
-      status: "completed",
-      resourceId: "org-1",
-    });
-    expect(organization.data.updatedAt).toBe(applying.data.updatedAt);
-    expect(organization.data.applySteps.organization).toMatchObject({
-      status: "completed",
-      resourceId: "org-1",
-    });
-
-    await adminClient().recordApplyStep({
-      ...step,
-      step: "publication",
-      status: "waiting",
-      resourceId: "7",
-    });
-    const downgraded = await adminClient().recordApplyStep({
-      ...step,
-      step: "organization",
-      status: "waiting",
-    });
-    expect(downgraded.data.applySteps.organization?.status).toBe("completed");
-
-    const failed = await adminClient().markApplyFailed({
-      ...step,
-      expectedUpdatedAt: applying.data.updatedAt,
-      error: "DAO vote pending",
-    });
-    await expect(
-      adminClient().recordApplyStep({ ...step, step: "community", status: "completed" }),
-    ).rejects.toThrow("Setup steps can only be recorded while an approved proposal is applying");
-
-    const retries = await Promise.allSettled([
-      adminClient().approve({ ...step, expectedUpdatedAt: failed.data.updatedAt }),
-      adminClient().approve({ ...step, expectedUpdatedAt: failed.data.updatedAt }),
-    ]);
-    expect(retries.filter((retry) => retry.status === "fulfilled")).toHaveLength(1);
-    const retried = retries.find((retry) => retry.status === "fulfilled")!.value.data;
-    expect(retried.applyStatus).toBe("applying");
-    expect(retried.applySteps).toMatchObject({
-      organization: { status: "completed", resourceId: "org-1" },
-      publication: { status: "waiting", resourceId: "7" },
-    });
-
-    await adminClient().recordApplyStep({
-      ...step,
-      step: "publication",
-      status: "completed",
-    });
-    const repeated = await adminClient().recordApplyStep({
-      ...step,
-      step: "publication",
-      status: "completed",
-    });
-    expect(repeated.data.applySteps.publication).toMatchObject({
-      status: "completed",
-      resourceId: "7",
-    });
-    const audit = await adminClient().getAuditLog({ ...step, limit: 100 });
-    expect(audit.data.filter((entry) => entry.action === "apply_step_recorded")).toHaveLength(3);
-
-    const applied = await adminClient().markApplied({
-      ...step,
-      expectedUpdatedAt: retried.updatedAt,
-      appliedResourceId: "node-1",
-    });
-    expect(applied.data.applyStatus).toBe("applied");
-    expect(Object.keys(applied.data.applySteps)).toEqual(["organization", "publication"]);
-  });
-
-  it("clears recorded setup steps when a rejected proposal is revised", async () => {
-    const input = {
-      pluginId: "builders",
-      entityId: "revised-setup.near",
-      payload: { name: "Revised Setup" },
-      idempotencyKey: "revised-setup",
-    };
-    const step = { pluginId: input.pluginId, entityId: input.entityId };
-    const proposed = await aliceClient().propose(input);
-    const applying = await adminClient().approve({
-      ...step,
-      expectedUpdatedAt: proposed.data.updatedAt,
-    });
-    await adminClient().recordApplyStep({ ...step, step: "organization", status: "completed" });
-    const failed = await adminClient().markApplyFailed({
-      ...step,
-      expectedUpdatedAt: applying.data.updatedAt,
-      error: "Tenant creation failed",
-    });
-    await adminClient().reject({
-      ...step,
-      expectedUpdatedAt: failed.data.updatedAt,
-      reason: "Choose another slug",
-    });
-
-    const revised = await aliceClient().propose({ ...input, idempotencyKey: "revised-setup-2" });
-    expect(revised.data.reviewStatus).toBe("pending");
-    expect(revised.data.applySteps).toEqual({});
-  });
-
-  it("reports when an applying proposal has stalled", async () => {
-    const startedAt = Date.now();
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(startedAt);
-    try {
-      const input = {
-        pluginId: "builders",
-        entityId: "timed-out-application.near",
-        payload: { name: "Timed Out" },
-        idempotencyKey: "timed-out-application",
-      };
-      const proposed = await aliceClient().propose(input);
-      const applying = await adminClient().approve({
-        pluginId: input.pluginId,
-        entityId: input.entityId,
-        expectedUpdatedAt: proposed.data.updatedAt,
-      });
-      expect(applying.data.applyTimedOut).toBe(false);
-
-      vi.setSystemTime(startedAt + 5 * 60 * 1000 + 10);
-      const listed = await adminClient().getProposals({
-        pluginId: input.pluginId,
-        entityId: input.entityId,
-      });
-      expect(listed.data[0]?.applyTimedOut).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("keeps a run that is still recording progress out of the stalled queue", async () => {
-    const startedAt = Date.now();
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(startedAt);
-    try {
-      const input = {
-        pluginId: "builders",
-        entityId: "slow-signature.near",
-        payload: { name: "Slow Signature" },
-        idempotencyKey: "slow-signature",
-      };
-      const step = { pluginId: input.pluginId, entityId: input.entityId };
-      const proposed = await aliceClient().propose(input);
-      const applying = await adminClient().approve({
-        ...step,
-        expectedUpdatedAt: proposed.data.updatedAt,
-      });
-
-      vi.setSystemTime(startedAt + 4 * 60 * 1000);
-      await adminClient().recordApplyStep({ ...step, step: "publication", status: "started" });
-      vi.setSystemTime(startedAt + 8 * 60 * 1000);
-      const heartbeat = await adminClient().recordApplyStep({
-        ...step,
-        step: "publication",
-        status: "started",
-      });
-      expect(heartbeat.data.updatedAt).toBe(applying.data.updatedAt);
-
-      vi.setSystemTime(startedAt + 12 * 60 * 1000);
-      const running = await adminClient().getProposals({
-        ...step,
-        lifecycleStatus: "needs_review",
-      });
-      expect(running.data).toHaveLength(0);
-      await expect(
-        adminClient().approve({ ...step, expectedUpdatedAt: applying.data.updatedAt }),
-      ).rejects.toThrow("Only pending proposals can be approved");
-
-      vi.setSystemTime(startedAt + 13 * 60 * 1000 + 10);
-      const stalled = await adminClient().getProposals({
-        ...step,
-        lifecycleStatus: "needs_review",
-      });
-      expect(stalled.data[0]?.applyTimedOut).toBe(true);
-      const resumed = await adminClient().approve({
-        ...step,
-        expectedUpdatedAt: applying.data.updatedAt,
-      });
-      expect(resumed.data.applyStatus).toBe("applying");
-      expect(resumed.data.applyTimedOut).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("credits recorded setup steps to the admin who ran them", async () => {
-    const input = {
-      pluginId: "builders",
-      entityId: "credited-step.near",
-      payload: { name: "Credited Step" },
-      idempotencyKey: "credited-step",
-    };
-    const step = { pluginId: input.pluginId, entityId: input.entityId };
-    const proposed = await aliceClient().propose(input);
-    await adminClient().approve({ ...step, expectedUpdatedAt: proposed.data.updatedAt });
-    await adminClient().recordApplyStep({ ...step, step: "publication", status: "completed" });
-
-    const audit = await adminClient().getAuditLog({ ...step, limit: 100 });
-    const recorded = audit.data.find((entry) => entry.action === "apply_step_recorded");
-    expect(recorded).toMatchObject({ actor: "admin", actorLabel: "admin" });
-  });
-
-  it("limits the review queue to applications an admin can act on", async () => {
-    const removalInput = {
-      pluginId: "builders",
-      entityId: "failed-removal-review.near",
-      payload: { name: "Failed Removal" },
-      idempotencyKey: "failed-removal-review",
-    };
-    const removal = { pluginId: removalInput.pluginId, entityId: removalInput.entityId };
-    const proposed = await aliceClient().propose(removalInput);
-    const approved = await adminClient().approve({
-      ...removal,
-      expectedUpdatedAt: proposed.data.updatedAt,
-    });
-    const applied = await adminClient().markApplied({
-      ...removal,
-      expectedUpdatedAt: approved.data.updatedAt,
-    });
-    const removing = await adminClient().remove({
-      ...removal,
-      expectedUpdatedAt: applied.data.updatedAt,
-    });
-    await adminClient().markRemoveFailed({
-      ...removal,
-      expectedUpdatedAt: removing.data.updatedAt,
-      error: "Could not remove",
-    });
-
-    const review = await adminClient().getProposals({
-      pluginId: "builders",
-      lifecycleStatus: "needs_review",
-      limit: 100,
-    });
-    const actionable = await adminClient().getProposals({
-      pluginId: "builders",
-      lifecycleStatus: "actionable",
-      limit: 100,
-    });
-    expect(review.data.map((proposal) => proposal.entityId)).not.toContain(removal.entityId);
-    expect(actionable.data.map((proposal) => proposal.entityId)).toContain(removal.entityId);
-    expect(review.data.every((proposal) => proposal.removeStatus !== "failed")).toBe(true);
-  });
-
-  it("clears recorded setup steps when an application is rejected", async () => {
-    const input = {
-      pluginId: "builders",
-      entityId: "rejected-setup.near",
-      payload: { name: "Rejected Setup" },
-      idempotencyKey: "rejected-setup",
-    };
-    const step = { pluginId: input.pluginId, entityId: input.entityId };
-    const proposed = await aliceClient().propose(input);
-    const applying = await adminClient().approve({
-      ...step,
-      expectedUpdatedAt: proposed.data.updatedAt,
-    });
-    await adminClient().recordApplyStep({ ...step, step: "organization", status: "completed" });
-    const failed = await adminClient().markApplyFailed({
-      ...step,
-      expectedUpdatedAt: applying.data.updatedAt,
-      error: "Tenant creation failed",
-    });
-    const rejected = await adminClient().reject({
-      ...step,
-      expectedUpdatedAt: failed.data.updatedAt,
-      reason: "Duplicate community",
-    });
-    expect(rejected.data.applySteps).toEqual({});
-    expect(rejected.data.applyTimedOut).toBe(false);
-  });
-
   it("provides admins with reviewer history", async () => {
     const input = {
       pluginId: "builders",
@@ -1020,16 +462,10 @@ describe.sequential("Proposals plugin", () => {
     };
 
     const proposed = await aliceClient().propose(input);
-    const approved = await adminClient().approve({
+    await adminClient().approve({
       pluginId: input.pluginId,
       entityId: input.entityId,
       expectedUpdatedAt: proposed.data.updatedAt,
-    });
-    await adminClient().markApplied({
-      pluginId: input.pluginId,
-      entityId: input.entityId,
-      expectedUpdatedAt: approved.data.updatedAt,
-      appliedResourceId: input.entityId,
     });
 
     const audit = await adminClient().getAuditLog({
@@ -1037,9 +473,9 @@ describe.sequential("Proposals plugin", () => {
       entityId: input.entityId,
     });
     expect(audit.data[0]).toMatchObject({
-      action: "applied",
-      actor: "system",
-      actorLabel: "System",
+      action: "approved",
+      actor: "admin",
+      actorLabel: "admin",
     });
 
     await expect(aliceClient().getReviewHistory({ pluginId: "builders" })).rejects.toThrow(

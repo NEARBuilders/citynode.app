@@ -118,7 +118,6 @@ export async function linkOfficialDao(
 }
 
 export function officialDaoOf(node: NodeRecord) {
-  if (node.tenantId || !node.orgId) return null;
   const { daoAccountId, daoNetwork } = node.metadata as {
     daoAccountId?: unknown;
     daoNetwork?: unknown;
