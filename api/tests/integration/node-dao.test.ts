@@ -125,6 +125,42 @@ describe("public Node DAO", () => {
     });
   });
 
+  it("ignores a DAO set through node metadata", async () => {
+    const id = crypto.randomUUID().slice(0, 8);
+    const dao = `nd-${id}.sputnik-dao.near`;
+    const owner = await getPluginClient(daoContext(`dao-owner-${id}`, `dao-org-${id}`, dao));
+    const tenant = await owner.createTenant({ name: "DAO city", accountId: dao });
+    const { node } = await activateTestNode({
+      name: "DAO city",
+      slug: `dao-meta-${id}`,
+      kind: "city",
+      tenantId: tenant.id,
+      orgId: `dao-org-${id}`,
+    });
+
+    const updated = await owner.updateNode({
+      nodeId: node.id,
+      metadata: { daoAccountId: "other.sputnik-dao.near", daoNetwork: "mainnet", note: "x" },
+    });
+
+    expect(updated.metadata).toMatchObject({ note: "x" });
+    expect(updated.metadata.daoAccountId).toBeUndefined();
+    expect(await (await getPluginClient()).getNodeDao({ nodeId: node.id })).toEqual({
+      daoAccountId: null,
+      network: null,
+    });
+  });
+
+  it("keeps the recorded DAO when node metadata is replaced", async () => {
+    const admin = await getPluginClient(daoContext("platform-admin", "platform-org", "admin.near"));
+    await admin.updateNode({ nodeId: ids.linked, metadata: { description: "Renamed" } });
+
+    expect(await (await getPluginClient()).getNodeDao({ nodeId: ids.linked })).toEqual({
+      daoAccountId: "new-city.sputnik-dao.near",
+      network: "mainnet",
+    });
+  });
+
   it("has no DAO for an unknown community", async () => {
     expect(await (await getPluginClient()).getNodeDao({ nodeId: crypto.randomUUID() })).toEqual({
       daoAccountId: null,
