@@ -94,6 +94,14 @@ describe("bulletin attribution through the API", () => {
     const published = await ada.setNodeBulletin({ nodeId: node.id, bulletin: "Hackathon" });
 
     const visitor = await getPluginClient();
+    const { node: child } = await activateTestNode({
+      name: "Brooklyn",
+      kind: "city",
+      slug: `brooklyn-${crypto.randomUUID().slice(0, 8)}`,
+      tenantId: tenant.id,
+      orgId: ORG,
+      parentPlaceId: node.placeId,
+    });
     const reads = [
       await visitor.getNode({ nodeId: node.id }),
       (await visitor.listNodes({ tenantId: tenant.id })).find(({ id }) => id === node.id),
@@ -103,6 +111,7 @@ describe("bulletin attribution through the API", () => {
       (await visitor.listNodeSummaries({ scope: "roots" })).find(
         (summary) => summary.node.id === node.id,
       )?.node,
+      (await visitor.listNodeAncestors({ nodeId: child.id })).find(({ id }) => id === node.id),
     ];
     for (const read of reads) {
       expect(read).toMatchObject({

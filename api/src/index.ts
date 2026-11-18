@@ -2538,10 +2538,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return nodes.map(nodeForViewer(context));
       }),
 
-      listNodeAncestors: builder.listNodeAncestors.effect(function* ({ input }) {
+      listNodeAncestors: builder.listNodeAncestors.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         yield* resolveNodeForAccess(services, input.nodeId);
-        return yield* services.nodes.listAncestors(input.nodeId);
+        const ancestors = yield* services.nodes.listAncestors(input.nodeId);
+        return ancestors.map(nodeForViewer(context));
       }),
 
       getSubtree: builder.getSubtree.effect(function* ({ input, errors }) {
