@@ -33,7 +33,10 @@ vi.mock("@tanstack/react-router", () => ({
     );
   }),
   useNavigate: () => vi.fn(),
-  useRouteContext: () => ({ auth: { activeOrganizationId: "org-1" }, runtimeConfig: {} }),
+  useRouteContext: () => ({
+    auth: { activeOrganizationId: "org-1", user: { id: "user-1" } },
+    runtimeConfig: {},
+  }),
 }));
 
 const node = {

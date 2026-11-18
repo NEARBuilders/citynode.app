@@ -48,10 +48,6 @@ describe("home next steps", () => {
     expect(ids({ membership: "unknown" })).toEqual(["stake", "explore"]);
   });
 
-  it("opens the community it is opening for a returning member", () => {
-    expect(ids({ membership: "open", community: harbor })).toEqual(["open-community", "stake"]);
-  });
-
   it("suggests Explore before Start a community when the active organization has no community", () => {
     expect(ids({})).toEqual(["explore", "start-community", "stake"]);
   });

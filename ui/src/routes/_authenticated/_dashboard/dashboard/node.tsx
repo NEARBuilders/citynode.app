@@ -21,7 +21,10 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
   }),
   beforeLoad: async ({ context, search }) => {
     const activeOrganizationId = context.auth.activeOrganizationId;
-    const organizationsQuery = { ...organizationsQueryOptions(context.apiClient), retry: false };
+    const organizationsQuery = {
+      ...organizationsQueryOptions(context.apiClient, context.auth.user?.id),
+      retry: false,
+    };
     const cached = await context.queryClient
       .ensureQueryData(organizationsQuery)
       .catch(() => undefined);

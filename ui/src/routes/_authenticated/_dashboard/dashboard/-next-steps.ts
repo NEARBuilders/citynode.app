@@ -20,7 +20,7 @@ export interface NextStepsState {
   isAnonymous: boolean;
   hasPasskey: boolean;
   hasNear: boolean;
-  membership: "unknown" | "none" | "open" | "choose" | "active";
+  membership: "unknown" | "none" | "choose" | "active";
   communityCount: number;
   community: { name: string; tenantId: string } | null;
   canManageCommunity: boolean;
@@ -52,9 +52,7 @@ export function getNextSteps(
   };
   const offersStartCommunity =
     !state.community &&
-    (state.membership === "none"
-      ? !state.isAdmin
-      : state.membership === "open" || state.membership === "active");
+    (state.membership === "none" ? !state.isAdmin : state.membership === "active");
 
   if (offersStartCommunity) {
     steps.push(explore, startCommunityStep(t));
