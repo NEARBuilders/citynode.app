@@ -2,15 +2,13 @@ import type { ApiClient } from "@/app";
 
 export type CommunityEvent = Pick<
   Awaited<ReturnType<ApiClient["listDiscoveryActivities"]>>[number],
-  "kind" | "status" | "publishedAt" | "startsAt" | "endsAt" | "luma"
+  "kind" | "status" | "publishedAt" | "startsAt" | "endsAt"
 >;
 
 function isListedEvent(activity: CommunityEvent, now: number) {
   return (
     activity.kind === "event" &&
     activity.status === "published" &&
-    !activity.luma?.hidden &&
-    activity.luma?.available !== false &&
     Date.parse(activity.publishedAt) <= now
   );
 }

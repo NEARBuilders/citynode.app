@@ -49,10 +49,10 @@ async function connectCalendar(counts: Partial<ImportResult>) {
 }
 
 describe("LumaImport", () => {
-  it("tells the owner how many events were imported and that they stay hidden", async () => {
+  it("tells the owner how many events were imported", async () => {
     const lines = await connectCalendar({ imported: 3 });
     expect(api.importDiscoveryLuma).toHaveBeenCalledWith({ nodeId: "node-1", calendarId: "cal-1" });
-    expect(lines).toEqual(["Imported 3 events. Imported events stay hidden until you show them."]);
+    expect(lines).toEqual(["Imported 3 events."]);
   });
 
   it("says when only already imported events were updated", async () => {
@@ -61,9 +61,9 @@ describe("LumaImport", () => {
     ]);
   });
 
-  it("explains events hidden because they are no longer on the calendar", async () => {
+  it("explains events removed because they are no longer on the calendar", async () => {
     expect(await connectCalendar({ withdrawn: 2 })).toEqual([
-      "2 events are no longer public on this Luma calendar, so they were hidden.",
+      "2 events are no longer public on this Luma calendar, so they were removed.",
     ]);
   });
 
@@ -79,10 +79,10 @@ describe("LumaImport", () => {
 
   it("stacks one line per non-zero count", async () => {
     expect(await connectCalendar({ imported: 1, updated: 4, withdrawn: 1, skipped: 2 })).toEqual([
-      "Imported 1 event. Imported events stay hidden until you show them.",
+      "Imported 1 event.",
       "Updated 4 events already imported.",
       "2 events were skipped because they're already on your community.",
-      "1 event is no longer public on this Luma calendar, so it was hidden.",
+      "1 event is no longer public on this Luma calendar, so it was removed.",
     ]);
   });
 
@@ -93,8 +93,7 @@ describe("LumaImport", () => {
       connection: {
         calendarId: "cal-1",
         calendarName: "City Events",
-        syncedAt: new Date().toISOString(),
-        error: null,
+        webhookPath: "/api/webhooks/luma/cal-1",
       },
       unavailableCount: 0,
     };
@@ -140,8 +139,7 @@ describe("LumaImport disconnect", () => {
       connection: {
         calendarId: "cal-1",
         calendarName: "City Events",
-        syncedAt: new Date().toISOString(),
-        error: null,
+        webhookPath: "/api/webhooks/luma/cal-1",
       },
       unavailableCount: 0,
     });

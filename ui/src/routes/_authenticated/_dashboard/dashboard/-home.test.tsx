@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OrgSwitcherMenuContent } from "@/components/layout/org-switcher-menu";
 import { useIdentity } from "@/components/layout/use-identity";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { render } from "@/i18n/test-render";
+import { organizationQueryKeys } from "@/lib/queries/organizations";
 import { Route as HomeRoute } from "./index";
 import { Route as CommunityRoute } from "./node";
 
@@ -23,9 +24,18 @@ const harness = vi.hoisted(() => ({
   organizationsFail: false,
   tenants: { "org-1": "Example Community" } as Record<string, string>,
   nodes: [] as { id: string; name: string; metadata: Record<string, unknown> }[],
+  nodesByTenant: {} as Record<
+    string,
+    { id: string; name: string; metadata: Record<string, unknown> }[]
+  >,
   authContext: null as unknown,
+  authContextFail: false,
   attendance: { events: [], unclassified: [], communities: [] } as Record<string, unknown>,
   attendanceReads: [] as string[],
+  passkeys: [{ id: "passkey-1" }] as { id: string }[],
+  teamRequests: [] as Record<string, unknown>[],
+  dismissed: [] as string[],
+  navigations: [] as unknown[],
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -54,7 +64,12 @@ vi.mock("@tanstack/react-router", () => ({
   Outlet: () => null,
   useRouterState: () => "/dashboard",
   useNavigate: () => async () => {},
-  useRouter: () => ({ invalidate: async () => {}, navigate: async () => {} }),
+  useRouter: () => ({
+    invalidate: async () => {},
+    navigate: async (target: unknown) => {
+      harness.navigations.push(target);
+    },
+  }),
 }));
 
 const api = {
@@ -64,21 +79,48 @@ const api = {
       return harness.organizations;
     },
     listUserInvitations: async () => [],
-    getContext: async () => harness.authContext,
+    getContext: async () => {
+      if (harness.authContextFail) throw new Error("context unavailable");
+      return harness.authContext;
+    },
+    listOnboardingCodes: async () => [],
+    getOnboardingStats: async ({ month }: { month: string }) => ({
+      month,
+      totals: { redeemed: 0, newMembers: 0 },
+      organizations: [],
+    }),
   },
+  getDiscoveryProfile: async () => null,
+  listDiscoveryActivities: async () => [],
   resolveTenantByOrgId: async ({ orgId }: { orgId: string }) => {
     const name = harness.tenants[orgId];
     if (!name) throw new Error("no tenant");
     return { id: `tenant-${orgId}`, orgId, name };
   },
-  listNodes: async () => harness.nodes,
+  listNodes: async ({ tenantId }: { tenantId: string }) =>
+    harness.nodesByTenant[tenantId] ?? harness.nodes,
+  listEventReportStatuses: async () => [],
+  listMonthlyReportStatuses: async () => [],
+  getMonthlyReport: async () => ({ stats: null }),
   getNodeSummary: async () => ({
-    stakingValidators: { sourceNodeId: "", validators: [] },
     validators: [],
     children: [],
   }),
   getNode: async () => null,
+  listValidatorsByNode: async () => [],
+  listNodeAncestors: async () => [],
   getDiscoveryNode: async () => null,
+  getTeamJoinBoard: async () => ({
+    canReview: true,
+    teams: [],
+    requests: harness.teamRequests.filter(
+      (request) => !harness.dismissed.includes(String(request.id)),
+    ),
+  }),
+  dismissTeamJoinRequest: async ({ requestId }: { requestId: string }) => {
+    harness.dismissed.push(requestId);
+    return { id: requestId };
+  },
   getMyAttendance: async (input: { organizationId?: string }) => {
     harness.attendanceReads.push(input.organizationId ?? "all");
     return harness.attendance;
@@ -90,6 +132,8 @@ const session = () => ({
   session: { activeOrganizationId: harness.activeOrganizationId },
 });
 
+const setActiveTeam = vi.fn(async (_: { teamId: string | null }) => ({ error: null }));
+
 const setActive = vi.fn(async ({ organizationId }: { organizationId: string }) => {
   harness.activeOrganizationId = organizationId;
   return { error: null };
@@ -100,8 +144,8 @@ vi.mock("@/app", () => ({
   sessionQueryOptions: () => ({ queryKey: ["session"], queryFn: async () => session() }),
   clearAuthenticatedQueries: async () => {},
   useAuthClient: () => ({
-    passkey: { listUserPasskeys: async () => ({ data: [{ id: "passkey-1" }] }) },
-    organization: { setActive, setActiveTeam: async () => ({ error: null }) },
+    passkey: { listUserPasskeys: async () => ({ data: harness.passkeys }) },
+    organization: { setActive, setActiveTeam },
     getSession: async () => ({ data: session(), error: null }),
     near: { getProfile: async () => ({ data: null }), disconnect: async () => {} },
   }),
@@ -110,6 +154,9 @@ vi.mock("@/app", () => ({
 }));
 
 vi.mock("@/lib/use-near-account", () => ({ useNearAccount: () => null }));
+vi.mock("@/lib/use-relayer", () => ({
+  useRelayerInfoQuery: () => ({ data: null, isLoading: false, isError: false }),
+}));
 
 const clients: QueryClient[] = [];
 
@@ -122,10 +169,17 @@ afterEach(() => {
   harness.organizationsFail = false;
   harness.tenants = { "org-1": "Example Community" };
   harness.nodes = [];
+  harness.nodesByTenant = {};
   setActive.mockClear();
+  setActiveTeam.mockClear();
+  harness.navigations.length = 0;
   harness.authContext = null;
+  harness.authContextFail = false;
   harness.attendance = { events: [], unclassified: [], communities: [] };
   harness.attendanceReads.length = 0;
+  harness.passkeys = [{ id: "passkey-1" }];
+  harness.teamRequests = [];
+  harness.dismissed.length = 0;
 });
 
 function Switcher() {
@@ -137,8 +191,10 @@ function Switcher() {
   );
 }
 
-function renderHome({ withSwitcher = false } = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderHome({
+  withSwitcher = false,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+} = {}) {
   clients.push(client);
   const Home = (HomeRoute as unknown as { options: { component: ComponentType } }).options
     .component;
@@ -156,8 +212,10 @@ function stepIds() {
   ].map((step) => step.getAttribute("data-testid")?.replace("home-step-", ""));
 }
 
-async function loadCommunity(nodeId?: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+async function loadCommunity(
+  nodeId?: string,
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   clients.push(queryClient);
   const beforeLoad = (
     CommunityRoute as unknown as {
@@ -314,14 +372,14 @@ const harbor = { id: "org-harbor", name: "Harbor", slug: "harbor", status: "acti
 const delta = { id: "org-delta", name: "Delta", slug: "delta", status: "active" };
 
 describe("Home without a community", () => {
-  it("leads a new user whose only organization is personal with Start a community", async () => {
+  it("leads a new user whose only organization is personal with Explore, then Start a community", async () => {
     harness.user = member;
     harness.activeOrganizationId = personal.id;
     harness.organizations = [personal];
     renderHome();
 
     expect(await screen.findByTestId("home-step-start-community")).toBeTruthy();
-    expect(stepIds()).toEqual(["start-community", "stake", "explore"]);
+    expect(stepIds()).toEqual(["explore", "start-community", "stake"]);
     expect(screen.queryByText(/choose an organization/i)).toBeNull();
     expect(screen.queryByText(/organization/i)).toBeNull();
   });
@@ -340,16 +398,32 @@ describe("Home without a community", () => {
     expect(setActive).not.toHaveBeenCalled();
   });
 
-  it("opens the only community for a member who signed in again", async () => {
+  it("asks a member who signed in again to choose even their only community", async () => {
     harness.user = member;
     harness.activeOrganizationId = null;
     harness.organizations = [personal, harbor];
     harness.tenants = { [harbor.id]: "Harbor" };
+    harness.nodes = [node("node-a", "Harbor")];
     renderHome();
 
-    const open = await screen.findByTestId("home-step-open-community");
-    expect(open.textContent).toContain("Open Harbor");
-    expect(stepIds()).toEqual(["open-community", "stake"]);
+    const choose = await screen.findByTestId("home-step-choose-org");
+    expect(choose.textContent).toContain("You belong to 1 community.");
+    expect(screen.queryByText("Bulletin for Harbor node-a")).toBeNull();
+    expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it("asks a member of several communities to choose without opening any", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = null;
+    harness.organizations = [personal, harbor, delta];
+    harness.tenants = { [harbor.id]: "Harbor", [delta.id]: "Delta" };
+    harness.nodes = [node("node-a", "Harbor")];
+    renderHome();
+
+    const choose = await screen.findByTestId("home-step-choose-org");
+    expect(choose.textContent).toContain("You belong to 2 communities.");
+    expect(screen.queryByText("Bulletin for Harbor node-a")).toBeNull();
+    expect(setActive).not.toHaveBeenCalled();
   });
 
   it("gives a Finance team member the payouts step", async () => {
@@ -382,14 +456,15 @@ describe("Home without a community", () => {
     expect(stepIds()).toEqual(["open-community", "stake"]);
   });
 
-  it("keeps a platform admin's steps without a Start a community step", async () => {
+  it("opens a platform admin's Home with the platform overview, not a launch step", async () => {
     harness.user = { ...member, role: "admin" };
     harness.activeOrganizationId = personal.id;
     harness.organizations = [personal];
     renderHome();
 
-    expect(await screen.findByTestId("home-step-launch-node")).toBeTruthy();
-    expect(stepIds()).toEqual(["launch-node", "admin", "stake", "explore"]);
+    expect(await screen.findByTestId("home-admin-overview")).toBeTruthy();
+    expect(await screen.findByTestId("home-step-stake")).toBeTruthy();
+    expect(stepIds()).toEqual(["stake", "explore"]);
   });
 
   it("offers a retry instead of a false Start a community when organizations fail", async () => {
@@ -405,6 +480,181 @@ describe("Home without a community", () => {
     harness.organizations = [personal];
     fireEvent.click(screen.getByTestId("home-organizations-retry"));
     expect(await screen.findByTestId("home-step-start-community")).toBeTruthy();
+  });
+});
+
+describe("Home with cached memberships", () => {
+  const nyc = { id: "org-nyc", name: "NYC", slug: "nyc", status: "active" };
+  const cachedClient = (userId: string, organizations: unknown[]) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(organizationQueryKeys.list(userId), organizations, { updatedAt: 0 });
+    return client;
+  };
+
+  it("never shows another community's bulletin when the membership refresh fails", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = null;
+    harness.organizationsFail = true;
+    harness.tenants = { [nyc.id]: "NYC" };
+    harness.nodes = [node("node-nyc", "Hackathon")];
+    renderHome({ client: cachedClient(member.id, [personal, nyc]) });
+
+    expect(await screen.findByTestId("home-step-choose-org")).toBeTruthy();
+    expect(screen.queryByText("Bulletin for Hackathon node-nyc")).toBeNull();
+    expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it("keeps the selected community while a stale list refreshes", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = harbor.id;
+    harness.organizations = [personal, nyc, harbor];
+    harness.tenants = { [nyc.id]: "NYC", [harbor.id]: "Harbor" };
+    harness.nodesByTenant = {
+      [`tenant-${nyc.id}`]: [node("node-nyc", "Hackathon")],
+      [`tenant-${harbor.id}`]: [node("node-harbor", "Harbor")],
+    };
+    renderHome({ client: cachedClient(member.id, [personal, nyc]) });
+
+    expect(await screen.findByText("Bulletin for Harbor node-harbor")).toBeTruthy();
+    expect((await screen.findByTestId("home-step-open-community")).textContent).toContain(
+      "Open Harbor",
+    );
+    expect(screen.queryByText("Bulletin for Hackathon node-nyc")).toBeNull();
+    expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it("ignores memberships cached for a previous account", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = null;
+    harness.organizationsFail = true;
+    harness.tenants = { [nyc.id]: "NYC" };
+    harness.nodes = [node("node-nyc", "Hackathon")];
+    renderHome({ client: cachedClient("user-previous", [nyc]) });
+
+    expect(
+      await screen.findByTestId("home-organizations-retry", {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    expect(stepIds()).not.toContain("choose-org");
+    expect(screen.queryByText("Bulletin for Hackathon node-nyc")).toBeNull();
+    expect(setActive).not.toHaveBeenCalled();
+  });
+});
+
+describe("who sees the community overview on Home", () => {
+  const inHarbor = (organization: unknown, user: Record<string, unknown> = member) => {
+    harness.user = user;
+    harness.activeOrganizationId = harbor.id;
+    harness.organizations = [personal, harbor];
+    harness.tenants = { [harbor.id]: "Harbor" };
+    harness.nodes = [node("node-h", "Harbor")];
+    harness.authContext = { organization };
+  };
+  const owner = { member: { role: "owner" }, teams: [] };
+  const follows = (first: HTMLElement, second: HTMLElement) =>
+    Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it("leads an owner's Home with the overview, then a setup line instead of the checklist", async () => {
+    inHarbor(owner);
+    renderHome();
+
+    const overview = await screen.findByTestId("home-owner.overview");
+    expect(screen.getByTestId("home.heading").textContent).toContain(
+      "How Harbor is doing this month",
+    );
+    const setup = await screen.findByTestId("home-owner.setup");
+    expect(setup.textContent).toContain("Get Harbor running");
+    expect(setup.textContent).toContain("0 of 4 done");
+    expect(screen.getByTestId("home-owner.setup-open").getAttribute("href")).toBe(
+      "/dashboard/node",
+    );
+    expect(screen.queryByTestId("home-node-setup")).toBeNull();
+    expect(screen.queryByTestId("home-setup-map")).toBeNull();
+    const steps = await screen.findByTestId("home-next-steps");
+    expect(follows(overview, setup)).toBe(true);
+    expect(follows(setup, steps)).toBe(true);
+    expect(stepIds()).toEqual(["open-community", "payouts", "stake"]);
+    expect(follows(steps, screen.getByText("Bulletin for Harbor node-h"))).toBe(true);
+  });
+
+  it("gives an events-team organizer the overview without the setup line", async () => {
+    inHarbor({
+      member: { role: "member" },
+      teams: [{ id: "team-events", name: "Events", areas: ["events"] }],
+      activeTeamId: null,
+    });
+    renderHome();
+
+    expect(await screen.findByTestId("home-owner.overview")).toBeTruthy();
+    expect(await screen.findByTestId("home-owner.reports-list")).toBeTruthy();
+    expect(stepIds()).toEqual(["open-community", "stake"]);
+    expect(screen.queryByTestId("home-owner.setup")).toBeNull();
+  });
+
+  it("leaves Home unchanged for Finance-only members and plain members", async () => {
+    inHarbor({
+      member: { role: "member" },
+      teams: [{ id: "team-finance", name: "Finance", areas: ["finance"] }],
+      activeTeamId: null,
+    });
+    renderHome();
+    expect(await screen.findByTestId("home-step-payouts")).toBeTruthy();
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+    expect(stepIds()[0]).toBe("open-community");
+
+    cleanup();
+    inHarbor({ member: { role: "member" }, teams: [] });
+    renderHome();
+    expect(await screen.findByTestId("home-step-open-community")).toBeTruthy();
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+    expect(screen.getByTestId("home.heading").textContent).toContain("Pick up where you left off.");
+  });
+
+  it("shows a retry, not the member Home, when the viewer's role can't be read", async () => {
+    inHarbor(owner);
+    harness.authContextFail = true;
+    renderHome();
+
+    const error = await screen.findByTestId("home.auth-context-error");
+    expect(error.textContent).toContain("Couldn't check your role");
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+
+    harness.authContextFail = false;
+    fireEvent.click(within(error).getByRole("button"));
+    expect(await screen.findByTestId("home-owner.overview")).toBeTruthy();
+    expect(screen.queryByTestId("home.auth-context-error")).toBeNull();
+  });
+
+  it("shows no overview to someone without a community", async () => {
+    harness.user = member;
+    harness.activeOrganizationId = personal.id;
+    harness.organizations = [personal];
+    harness.authContext = { organization: owner };
+    renderHome();
+    expect(await screen.findByTestId("home-step-start-community")).toBeTruthy();
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+  });
+
+  it("gives a platform admin who owns a community the platform overview only, with My community", async () => {
+    inHarbor(owner, { ...member, role: "admin" });
+    renderHome();
+
+    expect(await screen.findByTestId("home-admin-overview")).toBeTruthy();
+    const open = await screen.findByTestId("home-step-open-community");
+    expect(open.querySelector("a")?.getAttribute("href")).toBe("/dashboard/node");
+    expect(screen.queryByTestId("home-owner.overview")).toBeNull();
+    expect(screen.queryByTestId("home-owner.setup")).toBeNull();
+  });
+
+  it("keeps account safety featured above the overview", async () => {
+    inHarbor(owner, { ...member, isAnonymous: true });
+    harness.passkeys = [];
+    renderHome();
+
+    const safety = await screen.findByTestId("home-owner.account-safety");
+    expect(safety.querySelector("[data-testid=home-step-save-account]")).toBeTruthy();
+    expect(follows(safety, await screen.findByTestId("home-owner.overview"))).toBe(true);
+    await screen.findByTestId("home-next-steps");
+    expect(stepIds()).toEqual(["open-community", "payouts", "stake"]);
   });
 });
 
@@ -430,14 +680,27 @@ describe("community switcher and Home", () => {
 });
 
 describe("My community without a valid active community", () => {
-  it("opens the only community instead of No community yet", async () => {
+  it("asks to choose the only community instead of opening it", async () => {
     harness.activeOrganizationId = null;
     harness.organizations = [personal, harbor];
     harness.tenants = { [harbor.id]: "Harbor" };
     harness.nodes = [node("node-a", "Harbor")];
     const result = await loadCommunity();
-    expect(result.tenant?.orgId).toBe(harbor.id);
-    expect(result.selectedNode?.id).toBe("node-a");
+    expect(result.emptyReason).toBe("choose");
+    expect(result.communityCount).toBe(1);
+    expect(result.tenant).toBeNull();
+  });
+
+  it("ignores memberships cached for a previous account", async () => {
+    harness.activeOrganizationId = null;
+    harness.organizations = [personal];
+    harness.tenants = { [harbor.id]: "Harbor" };
+    harness.nodes = [node("node-a", "Harbor")];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(organizationQueryKeys.list("user-previous"), [harbor]);
+    const result = await loadCommunity(undefined, queryClient);
+    expect(result.emptyReason).toBe("no-org");
+    expect(result.tenant).toBeNull();
   });
 
   it("asks to choose when a personal organization is active", async () => {
@@ -461,7 +724,7 @@ describe("My community without a valid active community", () => {
     harness.nodes = [node("node-a", "Delta")];
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     clients.push(queryClient);
-    queryClient.setQueryData(["organizations"], [personal, harbor]);
+    queryClient.setQueryData(organizationQueryKeys.list("user-1"), [personal, harbor]);
     const beforeLoad = (
       CommunityRoute as unknown as {
         options: { beforeLoad: (args: unknown) => Promise<{ tenant: { orgId: string } | null }> };
@@ -499,5 +762,158 @@ describe("My community without a valid active community", () => {
       search: {},
     });
     expect(result.tenant?.orgId).toBe(harbor.id);
+  });
+});
+
+function teamRequest(overrides: Record<string, unknown>) {
+  return {
+    id: "request-1",
+    teamId: "team-events",
+    teamName: "Events Team",
+    teamAreas: ["events"],
+    requesterName: "Someone",
+    isMine: false,
+    status: "pending",
+    closedReason: null,
+    endorsementCount: 0,
+    endorsedByMe: false,
+    canEndorse: false,
+    canDecide: false,
+    createdAt: "2026-11-01T10:00:00.000Z",
+    decidedAt: null,
+    dismissedAt: null,
+    ...overrides,
+  };
+}
+
+function inCommunity(role: "owner" | "admin" | "member") {
+  harness.user = member;
+  harness.activeOrganizationId = "org-1";
+  harness.organizations = [{ id: "org-1", name: "Example Community", slug: "example" }];
+  harness.nodes = [node("node-a", "Berlin")];
+  harness.authContext = { organization: { member: { role }, teams: [] } };
+}
+
+describe("Home for people who decide team requests", () => {
+  it.each([
+    "owner",
+    "admin",
+  ] as const)("shows an %s the waiting requests once, in the owner overview", async (role) => {
+    inCommunity(role);
+    harness.teamRequests = [
+      teamRequest({ id: "request-1", canDecide: true }),
+      teamRequest({ id: "request-2", canDecide: true }),
+      teamRequest({ id: "request-3", status: "closed" }),
+    ];
+    renderHome();
+
+    const waiting = await screen.findByTestId("home-owner.team-requests");
+    expect(waiting.textContent).toContain("2");
+    expect(screen.queryByTestId("home-step-team-requests")).toBeNull();
+  });
+
+  it("leads a platform admin with the waiting requests", async () => {
+    inCommunity("member");
+    harness.user = { ...member, role: "admin" };
+    harness.teamRequests = [
+      teamRequest({ id: "request-1", canDecide: true }),
+      teamRequest({ id: "request-2", canDecide: true }),
+      teamRequest({ id: "request-3", status: "closed" }),
+    ];
+    renderHome();
+
+    const step = await screen.findByTestId("home-step-team-requests");
+    expect(step.textContent).toContain("2 team requests waiting");
+    expect(step.textContent).toContain("Example Community");
+    expect(step.querySelector("a")?.getAttribute("href")).toBe("/dashboard/node");
+    expect(stepIds()[0]).toBe("team-requests");
+  });
+
+  it("shows a plain member no reviewer step for requests they can only see", async () => {
+    inCommunity("member");
+    harness.teamRequests = [teamRequest({ canEndorse: true })];
+    renderHome();
+
+    await screen.findByTestId("home-step-open-community");
+    expect(screen.queryByTestId("home-step-team-requests")).toBeNull();
+  });
+});
+
+describe("Home for a member whose team request was decided", () => {
+  it("points an approved member at the newly available area until they dismiss it", async () => {
+    inCommunity("member");
+    harness.teamRequests = [
+      teamRequest({ id: "request-approved", isMine: true, status: "approved" }),
+    ];
+    renderHome();
+
+    const update = await screen.findByTestId("home-team-update-request-approved");
+    expect(update.textContent).toContain("You joined Events Team");
+    expect(screen.getByTestId("home-team-update-open-request-approved").getAttribute("href")).toBe(
+      "/nodes/$nodeId/content",
+    );
+
+    fireEvent.click(screen.getByTestId("home-team-update-dismiss-request-approved"));
+    await waitFor(() => expect(screen.queryByTestId("home-team-updates")).toBeNull());
+    expect(harness.dismissed).toEqual(["request-approved"]);
+  });
+
+  it("switches to the approved team before opening its area when another team is selected", async () => {
+    inCommunity("member");
+    harness.authContext = {
+      organization: {
+        member: { role: "member" },
+        activeTeamId: "team-finance",
+        teams: [
+          { id: "team-finance", name: "Finance Team", areas: ["finance"] },
+          { id: "team-events", name: "Events Team", areas: ["events"] },
+        ],
+      },
+    };
+    harness.teamRequests = [
+      teamRequest({ id: "request-approved", isMine: true, status: "approved" }),
+    ];
+    renderHome();
+
+    fireEvent.click(await screen.findByTestId("home-team-update-open-request-approved"));
+    await waitFor(() =>
+      expect(harness.navigations).toEqual([
+        expect.objectContaining({ to: "/nodes/$nodeId/content", search: { tab: "events" } }),
+      ]),
+    );
+    expect(setActiveTeam).toHaveBeenCalledWith({ teamId: "team-events" });
+  });
+
+  it("opens the area directly when no other team is selected", async () => {
+    inCommunity("member");
+    harness.teamRequests = [
+      teamRequest({ id: "request-approved", isMine: true, status: "approved" }),
+    ];
+    renderHome();
+
+    fireEvent.click(await screen.findByTestId("home-team-update-open-request-approved"));
+    expect(setActiveTeam).not.toHaveBeenCalled();
+    expect(harness.navigations).toEqual([]);
+  });
+
+  it("tells a declined member without a link, and skips dismissed or pending requests", async () => {
+    inCommunity("member");
+    harness.teamRequests = [
+      teamRequest({ id: "request-declined", isMine: true, status: "declined" }),
+      teamRequest({
+        id: "request-seen",
+        isMine: true,
+        status: "declined",
+        dismissedAt: "2026-11-02T10:00:00.000Z",
+      }),
+      teamRequest({ id: "request-pending", isMine: true }),
+    ];
+    renderHome();
+
+    const update = await screen.findByTestId("home-team-update-request-declined");
+    expect(update.textContent).toContain("Your request to join Events Team was declined");
+    expect(screen.queryByTestId("home-team-update-open-request-declined")).toBeNull();
+    expect(screen.queryByTestId("home-team-update-request-seen")).toBeNull();
+    expect(screen.queryByTestId("home-team-update-request-pending")).toBeNull();
   });
 });

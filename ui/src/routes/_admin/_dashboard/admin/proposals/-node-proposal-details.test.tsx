@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
@@ -8,15 +8,20 @@ import type { Proposal } from "@/lib/queries/proposals";
 import { NodeProposalRequest } from "./-node-proposal-details";
 import { ProposalStatusBadges } from "./-proposal-summary";
 
-const getNode = vi.fn(async ({ nodeId }: { nodeId: string }) => {
-  if (nodeId === "flaky") throw new Error("network down");
-  return nodeId === "usa" ? { id: "usa", name: "United States" } : null;
-});
-
-vi.mock("@/app", () => ({ useApiClient: () => ({ getNode }) }));
-
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children: ReactNode }) => <a href="/">{children}</a>,
+  Link: ({
+    children,
+    params,
+    "data-testid": testId,
+  }: {
+    children: ReactNode;
+    params?: { slug?: string };
+    "data-testid"?: string;
+  }) => (
+    <a href={`/n/${params?.slug ?? ""}`} data-testid={testId}>
+      {children}
+    </a>
+  ),
 }));
 
 afterEach(cleanup);
@@ -27,7 +32,7 @@ function proposal(payload: Record<string, unknown>): Proposal {
     pluginId: "node",
     entityId: String(payload.slug),
     payload: {
-      kind: "city",
+      placeId: "33333333-3333-4333-8333-333333333333",
       name: "Denver",
       slug: "denver",
       motivation: "Monthly meetups",
@@ -65,41 +70,23 @@ function renderRequest(value: Proposal) {
 }
 
 describe("application request summary", () => {
-  it("names who asked, the parent community and the DAO without raw ids", async () => {
-    renderRequest(proposal({ parentId: "usa" }));
-    expect(await screen.findByText("United States")).toBeTruthy();
+  it("names who asked, the community and the DAO to link", () => {
+    renderRequest(proposal({}));
     expect(screen.getByText("alice.near")).toBeTruthy();
+    expect(screen.getByTestId("admin-proposal-community").getAttribute("href")).toBe("/n/denver");
     expect(screen.getByTestId("admin-proposal-dao").textContent).toBe("denver.sputnik-dao.near");
-    expect(screen.queryByText("usa")).toBeNull();
   });
 
-  it("explains that a country has no parent", () => {
-    renderRequest(proposal({ kind: "country", parentId: null }));
-    expect(screen.getByText("None — this is a country")).toBeTruthy();
-    expect(getNode).not.toHaveBeenCalledWith({ nodeId: null });
+  it("still shows an application saved before the cutover", () => {
+    renderRequest(proposal({ placeId: undefined, kind: "city", parentId: "usa" }));
+    expect(screen.getByTestId("admin-proposal-community").textContent).toBe("Denver");
   });
 
-  it("says when the parent community no longer exists", async () => {
-    renderRequest(proposal({ parentId: "gone" }));
-    expect(await screen.findByText("Parent community not found")).toBeTruthy();
-  });
-
-  it("reports a failed parent lookup as an error with retry, not as a missing parent", async () => {
-    renderRequest(proposal({ parentId: "flaky" }));
-    expect(await screen.findByText("Couldn't load the parent community.")).toBeTruthy();
-    expect(screen.queryByText("Parent community not found")).toBeNull();
-    const calls = getNode.mock.calls.length;
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await vi.waitFor(() => expect(getNode.mock.calls.length).toBeGreaterThan(calls));
-  });
-});
-
-describe("application status badges", () => {
   it("shows whether an approved application was applied", () => {
     render(
       <ProposalStatusBadges
         proposal={{
-          ...proposal({ parentId: "usa" }),
+          ...proposal({}),
           reviewStatus: "approved",
           applyStatus: "applied",
         }}
@@ -113,7 +100,7 @@ describe("application status badges", () => {
     render(
       <ProposalStatusBadges
         proposal={{
-          ...proposal({ parentId: "usa" }),
+          ...proposal({}),
           reviewStatus: "approved",
           applyStatus: "failed",
         }}

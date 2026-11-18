@@ -1,15 +1,14 @@
 import { CalendarDotsIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Trans } from "everything-dev/ui/i18n";
 import { useApiClient } from "@/app";
 import {
+  type Activity,
   ActivityForm,
   ActivityFormPage,
   activitiesQueryOptions,
 } from "@/components/discovery/activity-form";
 import { EmptyState } from "@/components/empty-state";
-import { LocalDate } from "@/components/local-date";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
@@ -44,7 +43,9 @@ function EditActivity() {
   const { nodeId, activityId } = Route.useParams();
   const api = useApiClient();
   const list = useQuery(activitiesQueryOptions(api, nodeId));
-  const activity = list.data?.find((item) => item.id === activityId);
+  const activity = list.data?.find(
+    (item): item is Activity => item.id === activityId && item.ownerNodeId !== null,
+  );
 
   if (list.isPending) {
     return (
@@ -108,19 +109,11 @@ function EditActivity() {
       nodeId={nodeId}
       title={isEvent ? translate("events.edit") : translate("events.editPost")}
       description={
-        imported ? (
-          <>
-            <Trans
-              id="events.importedDate"
-              components={{ date: <LocalDate value={imported.syncedAt} format="relative" /> }}
-            />
-            {!imported.available && translate("event.noLongerPublic")}
-          </>
-        ) : isEvent ? (
-          translate("events.formDescription")
-        ) : (
-          translate("events.postDescription")
-        )
+        imported
+          ? translate("events.lumaSynced")
+          : isEvent
+            ? translate("events.formDescription")
+            : translate("events.postDescription")
       }
       headerTestId="activity-form.heading"
     >

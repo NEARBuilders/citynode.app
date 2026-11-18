@@ -1,25 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuthRequestContext } from "@/lib/auth";
-import { formatRemaining, isOnboardingOrganizer, onboardingCodeState } from "./onboarding-codes";
-
-const NOW = Date.parse("2026-11-12T00:00:00.000Z");
-
-function code(
-  overrides: Partial<{
-    expiresAt: Date | null;
-    revokedAt: Date | null;
-    usedCount: number;
-    maxUses: number;
-  }> = {},
-) {
-  return {
-    expiresAt: new Date(NOW + 86_400_000),
-    revokedAt: null,
-    usedCount: 0,
-    maxUses: 10,
-    ...overrides,
-  };
-}
+import { isOnboardingOrganizer, onboardingCodeState } from "./onboarding-codes";
 
 function contextFor({
   userRole = "user",
@@ -72,17 +53,32 @@ describe("isOnboardingOrganizer", () => {
 });
 
 describe("onboardingCodeState", () => {
-  it("keeps a future expiry active", () => {
-    expect(onboardingCodeState(code(), NOW)).toBe("active");
+  const hour = 3_600_000;
+  const now = Date.parse("2026-11-12T00:00:00.000Z");
+  const code = (overrides: Partial<Parameters<typeof onboardingCodeState>[0]> = {}) => ({
+    expiresAt: new Date(now + hour),
+    revokedAt: null,
+    usedCount: 0,
+    maxUses: 10,
+    ...overrides,
   });
 
-  it("treats a missing expiry as expired", () => {
-    expect(onboardingCodeState(code({ expiresAt: null }), NOW)).toBe("expired");
+  it("treats a code without an expiry as never expiring", () => {
+    expect(onboardingCodeState(code({ expiresAt: null }), now)).toBe("active");
+    expect(onboardingCodeState(code({ expiresAt: null }), now + 10_000 * 86_400_000)).toBe(
+      "active",
+    );
   });
-});
 
-describe("formatRemaining", () => {
-  it("shows expired when the timestamp is missing", () => {
-    expect(formatRemaining(null, NOW)).toBe("Expired");
+  it("still closes a code without an expiry when it is revoked or used up", () => {
+    expect(onboardingCodeState(code({ expiresAt: null, revokedAt: new Date(now) }), now)).toBe(
+      "revoked",
+    );
+    expect(onboardingCodeState(code({ expiresAt: null, usedCount: 10 }), now)).toBe("used-up");
+  });
+
+  it("expires a dated code once its time passes", () => {
+    expect(onboardingCodeState(code(), now)).toBe("active");
+    expect(onboardingCodeState(code(), now + 2 * hour)).toBe("expired");
   });
 });

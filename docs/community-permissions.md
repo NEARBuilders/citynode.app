@@ -25,6 +25,9 @@ community sites.
 | Suspend / reactivate community | No | No | Own active org | No (existing admin-only middleware) | Requires the active org admin role |
 | Delete community | No | No | No | Own active org | Requires the active org owner role |
 | Edit homepage or publish config | No | No | Own org, with required signing authority | Own org, with required signing authority | With required signing authority |
+| Submit and edit Event Reports and Monthly Reports | No | Own active org, on a team with the events area | Own active org | Own active org | No (reads every community's reports) |
+| Read Event Reports and Monthly Reports | No | Own active org, on a team with the events area | Own active org | Own active org | All |
+| Mark Event Reports and Monthly Reports Reviewed | No | No | No | No | All |
 
 Visibility of the settings page is enforced by role and cannot be toggled for
 regular members. Owners manage community naming and override permissions; admins
@@ -59,8 +62,8 @@ through an onboarding code, is refused and told to ask an owner or admin to add
 them to a team with that area. Individual routes still
 enforce their own authentication and organization checks.
 
-Node operations follow this rule. Node edits (`createNode`, `spawnNode`,
-`updateNode`, `setNodeBulletin`, `deleteNode`) and validator edits
+Node operations follow this rule. Node edits (`updateNode`,
+`setNodeBulletin`, `deleteNode`) and validator edits
 (`createValidator`, `updateValidator`, `setDefaultValidator`, `deleteValidator`)
 are open to platform admins, the node's organization owners and admins, and
 members of any of that organization's teams granted `node-operations`. A grant in

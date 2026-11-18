@@ -1,0 +1,6 @@
+ALTER TABLE "discovery_luma_connections" DROP COLUMN IF EXISTS "synced_at";--> statement-breakpoint
+ALTER TABLE "discovery_luma_connections" DROP COLUMN IF EXISTS "next_attempt_at";--> statement-breakpoint
+ALTER TABLE "discovery_luma_connections" DROP COLUMN IF EXISTS "error";--> statement-breakpoint
+DELETE FROM "discovery_activities" AS a WHERE a."data"->'luma'->>'available' = 'false' AND NOT EXISTS (SELECT 1 FROM "event_reports" AS r WHERE r."activity_id" = a."id");--> statement-breakpoint
+UPDATE "discovery_activities" AS a SET "data" = jsonb_set(a."data", '{status}', '"published"') WHERE a."owner_node_id" IS NOT NULL AND a."data"->'luma' ?| array['hidden', 'available', 'syncedAt'] AND a."data"->>'status' = 'draft' AND a."data"->'luma'->>'available' IS DISTINCT FROM 'false' AND NOT EXISTS (SELECT 1 FROM "discovery_history" AS h WHERE h."target_id" = a."id"::text AND h."action" = 'moderation: unpublish');--> statement-breakpoint
+UPDATE "discovery_activities" SET "data" = jsonb_set("data", '{luma}', ("data"->'luma') - 'hidden' - 'available' - 'syncedAt' || CASE WHEN "data"->'luma'->>'available' = 'false' THEN '{"removed": true}'::jsonb ELSE '{}'::jsonb END) WHERE "data"->'luma' ?| array['hidden', 'available', 'syncedAt'];

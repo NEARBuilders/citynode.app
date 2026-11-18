@@ -57,7 +57,7 @@ export function withProfileLocation(profile: DiscoveryProfile, location: string)
     ...(trimmed
       ? stillMatchesGeocode
         ? {}
-        : { geocodedLocation: null, geocodeHint: null }
+        : { latitude: null, longitude: null, geocodedLocation: null, geocodeHint: null }
       : {
           latitude: null,
           longitude: null,

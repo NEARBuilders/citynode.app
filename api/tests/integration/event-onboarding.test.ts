@@ -6,7 +6,7 @@ import { createDatabaseDriver } from "@/db/index";
 import { loadMigrations, migrate } from "@/db/migrate";
 import { discoveryActivities, nodes, tenants } from "@/db/schema";
 import pluginDevConfig from "../../plugin.dev";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 const databaseDir = await vi.hoisted(async () => {
   const { mkdtempSync } = await import("node:fs");
@@ -29,6 +29,7 @@ vi.mock("@/services/dao", () => ({
 type ForwardedCall = { context: unknown; input: Record<string, unknown> };
 
 const forwarded: ForwardedCall[] = [];
+let upstreamOverrides: Record<string, unknown> = {};
 
 const authStub = {
   client: (context: unknown) => ({
@@ -47,6 +48,7 @@ const authStub = {
         expiresAt: input.expiresAt,
         revokedAt: null,
         createdAt: now,
+        ...upstreamOverrides,
       };
     },
   }),
@@ -80,11 +82,12 @@ async function organizationNode() {
   const org = `event-onboarding-${id}`;
   const provisioner = await getPluginClient(daoContext(`prov-${id}`, org, `eo-${id}.near`));
   const tenant = await provisioner.createTenant({ name: "Event city", accountId: `eo-${id}.near` });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Event city",
     slug: `event-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return { org, node, editor: await getPluginClient(orgContext(`editor-${id}`, org)) };
 }
@@ -170,6 +173,21 @@ describe("creating an onboarding code for a Node Event", () => {
     await organizer.createEventOnboardingCode({ eventId: event.id, expiresAt });
 
     expect(forwarded.at(-1)?.input.expiresAt).toEqual(new Date(expiresAt));
+  });
+
+  it("passes on a code without an expiry and names it after the event", async () => {
+    const { org, node, editor } = await organizationNode();
+    const event = await editor.saveDiscoveryActivity(eventInput(node.id));
+    const organizer = await organizerClient(org);
+    upstreamOverrides = { eventName: null, expiresAt: null };
+
+    try {
+      const created = await organizer.createEventOnboardingCode({ eventId: event.id });
+      expect(created.expiresAt).toBeNull();
+      expect(created.eventName).toBe("Builders Night");
+    } finally {
+      upstreamOverrides = {};
+    }
   });
 
   it("refuses an activity that is not an event", async () => {

@@ -19,10 +19,8 @@ import {
 import {
   discoveryNodeQueryOptions,
   EventVisibilityBadge,
-  ImportsWaiting,
   useVisibilityContext,
 } from "@/components/discovery/event-visibility";
-import { EventsToReport } from "@/components/discovery/events-to-report";
 import { TeamStakeCard, useCanSeeTeamStake } from "@/components/team-stake-card";
 import {
   Item,
@@ -34,14 +32,8 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
-import {
-  type EventTitleLink,
-  eventTitleLink,
-  eventVisibility,
-  isWaitingImport,
-} from "@/lib/event-visibility";
+import { type EventTitleLink, eventTitleLink, eventVisibility } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
-import { eventReportStatusesQueryOptions } from "@/lib/queries/event-reports";
 import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import {
@@ -51,6 +43,8 @@ import {
 } from "@/lib/sputnik-proposals";
 import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../tenant/-published-config-section";
+import { NodeSetupChecklist, useNodeSetupSteps } from "../-node-setup-checklist";
+import { CommunityReports } from "./-community-reports";
 import { MemberDirectory } from "./-member-directory";
 import { OwnerActions } from "./-owner-actions";
 import { ReturningMembers } from "./-returning-members";
@@ -140,7 +134,7 @@ function NodeOverview() {
     nodes,
     selectedNode,
     summary,
-    stakingSourceNode,
+    staking,
     tenant,
     auth,
     canManage,
@@ -167,10 +161,6 @@ function NodeOverview() {
     enabled: !!nodeId,
     retry: false,
   });
-  const reportStatuses = useQuery({
-    ...eventReportStatusesQueryOptions(apiClient, nodeId),
-    enabled: canReport && !!nodeId,
-  });
   const listing = useQuery(discoveryNodeQueryOptions(apiClient, nodeId));
   const visibilityContext = useVisibilityContext(nodeId);
   const { now } = visibilityContext;
@@ -192,24 +182,25 @@ function NodeOverview() {
     daoAccountId: daoQuery.data?.daoAccountId,
     tenantAccountId: tenant?.accountId,
     tenantOwnerKind: tenant?.ownerKind,
-    validators: summary?.stakingValidators.validators ?? [],
+    validators: staking?.validators ?? [],
   });
   const showTeamStake = useCanSeeTeamStake(teamStake, { canManage, inFinanceTeam });
   const payoutsRef = useScrollToHash<HTMLDivElement>("payouts");
-  if (!selectedNode || !summary) return null;
+  const setupSteps = useNodeSetupSteps({
+    nodeId,
+    organizationId: orgId ?? "",
+    enabled: !!canManage && !!tenant,
+  });
+  if (!selectedNode || !summary || !staking) return null;
 
   const pendingConfig = pendingConfigQuery.data ?? null;
 
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
-  const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
   const upcoming = upcomingEvents(activities.data ?? [], now);
   const liveCount =
     visibilityContext.communityPublic === null
       ? null
       : upcoming.filter((event) => eventVisibility(event, visibilityContext) === "live").length;
-  const waitingCount = (activities.data ?? []).filter((event) =>
-    isWaitingImport(event, now),
-  ).length;
 
   const bulletin = selectedNode.metadata?.bulletin;
   const updates = listing.data?.updates ?? [];
@@ -269,9 +260,9 @@ function NodeOverview() {
           <Stat
             label={translate("common.staking")}
             value={
-              summary.stakingValidators.validators.length === 0
+              staking.validators.length === 0
                 ? "—"
-                : stakingIsInherited
+                : staking.via
                   ? translate("dashboard.stakingInherited")
                   : translate("dashboard.stakingOwn")
             }
@@ -302,20 +293,7 @@ function NodeOverview() {
       </div>
 
       {canManage && (
-        <CommunityMapStatus
-          nodeId={selectedNode.id}
-          tenantStatus={tenant?.status}
-          testId="dashboard-node.map-status"
-          settingsLink={
-            tenant ? (
-              <Link
-                to="/tenant/$tenantId"
-                params={{ tenantId: tenant.id }}
-                search={{ nodeId: selectedNode.id }}
-              />
-            ) : undefined
-          }
-        />
+        <CommunityMapStatus nodeId={selectedNode.id} testId="dashboard-node.map-status" />
       )}
 
       {daoOwned && canManage && pendingConfig && tenant && (
@@ -350,14 +328,17 @@ function NodeOverview() {
         </Item>
       )}
 
-      <EventsToReport
-        canReport={canReport}
-        ready={!canReport || reportStatuses.isSuccess}
-        nodeId={selectedNode.id}
-        now={now}
-        activities={activities.data ?? []}
-        statuses={reportStatuses.data ?? []}
-      />
+      {tenant && setupSteps?.some((step) => !step.done) && (
+        <NodeSetupChecklist
+          steps={setupSteps}
+          communityName={tenant.name}
+          nodeId={selectedNode.id}
+          tenantId={tenant.id}
+          testId="dashboard-node.setup"
+        />
+      )}
+
+      {canReport && <CommunityReports nodeId={selectedNode.id} now={now} />}
 
       {canManage && (
         <OwnerActions
@@ -390,17 +371,6 @@ function NodeOverview() {
             ) : undefined
           }
         />
-        <ImportsWaiting
-          count={waitingCount}
-          testId="dashboard-node.imports-waiting"
-          link={
-            <Link
-              to="/nodes/$nodeId/content"
-              params={{ nodeId: selectedNode.id }}
-              search={{ tab: "events", review: "imports" }}
-            />
-          }
-        />
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {activities.isError
@@ -423,7 +393,7 @@ function NodeOverview() {
                       nodeId={selectedNode.id}
                       link={eventTitleLink(
                         eventVisibility(event, visibilityContext),
-                        canManage || canOrganize,
+                        !!event.ownerNodeId && (canManage || canOrganize),
                       )}
                     />
                     <EventVisibilityBadge activity={event} context={visibilityContext} />
@@ -496,22 +466,16 @@ function NodeOverview() {
         <SectionHeader
           title={translate("common.validators")}
           description={
-            stakingIsInherited
-              ? translate("stake.sourceNamed", {
-                  name: stakingSourceNode?.name ?? translate("dashboard.parentFallback"),
-                })
+            staking.via
+              ? translate("stake.sourceNamed", { name: staking.via.name })
               : translate("dashboard.stakeHintDirect")
           }
         />
-        {summary.stakingValidators.validators.length === 0 && summary.validators.length === 0 ? (
+        {staking.validators.length === 0 && summary.validators.length === 0 ? (
           <p className="text-sm text-muted-foreground">{translate("tenant.noValidators")}</p>
         ) : (
           <NodeValidatorTable
-            validators={
-              summary.stakingValidators.validators.length > 0
-                ? summary.stakingValidators.validators
-                : summary.validators
-            }
+            validators={staking.validators.length > 0 ? staking.validators : summary.validators}
           />
         )}
       </section>

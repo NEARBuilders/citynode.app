@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, orgContext } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, orgContext } from "../setup";
 
 vi.mock("@/services/staking-pools", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/staking-pools")>()),
@@ -31,11 +31,12 @@ async function seedCommunity() {
     name: "New York City",
     accountId: `bulletin-${suffix}.near`,
   });
-  const node = await owner.createNode({
+  const { node } = await activateTestNode({
     name: "New York City",
     kind: "city",
     slug: `bulletin-${suffix}`,
     tenantId: tenant.id,
+    orgId: ORG,
   });
   return { tenant, node };
 }
@@ -74,8 +75,8 @@ describe("bulletin attribution through the API", () => {
     expect(published.bulletinPublisherName).toBeNull();
   });
 
-  it("attributes bulletins written through createNode to the session, and never through updateNode", async () => {
-    const { tenant, node } = await seedCommunity();
+  it("never attributes a bulletin written through updateNode", async () => {
+    const { node } = await seedCommunity();
     const grace = await getPluginClient(managerContext("bulletin-grace", "Grace Hopper"));
 
     const updated = await grace.updateNode({
@@ -85,20 +86,6 @@ describe("bulletin attribution through the API", () => {
     expect(updated.metadata.bulletin).toBe("Hackathon");
     expect(updated.bulletinPublisherName).toBeNull();
     expect(updated.bulletinPublishedAt).toBeNull();
-
-    const created = await grace.createNode({
-      name: "Brooklyn",
-      kind: "city",
-      slug: `brooklyn-${crypto.randomUUID().slice(0, 8)}`,
-      tenantId: tenant.id,
-      parentId: node.id,
-      metadata: { bulletin: "Welcome", bulletinPublishedAt: "2000-01-01T00:00:00.000Z" },
-    });
-    expect(created.bulletinPublisherName).toBe("Grace Hopper");
-    expect(created.bulletinPublishedAt).not.toBe("2000-01-01T00:00:00.000Z");
-    expect(Date.parse(created.bulletinPublishedAt ?? "")).toBeGreaterThan(
-      Date.parse("2020-01-01T00:00:00.000Z"),
-    );
   });
 
   it("shows the publisher name only to signed-in readers", async () => {

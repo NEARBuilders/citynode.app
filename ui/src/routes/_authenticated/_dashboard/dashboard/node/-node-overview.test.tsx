@@ -9,6 +9,7 @@ import type { ApiClient } from "@/app";
 import { render } from "@/i18n/test-render";
 import type { AuthRequestContext } from "@/lib/auth";
 import { memberDirectoryChannelName } from "@/lib/queries/member-directory";
+import { utcMonth } from "@/lib/queries/onboarding-joins";
 import { requireTeamArea } from "@/lib/team-workspace";
 import { Route } from "./index";
 
@@ -24,6 +25,8 @@ const harness = vi.hoisted(() => ({
   attendanceCalls: [] as string[],
   activities: (() => Promise.resolve([])) as (input: { nodeId: string }) => Promise<unknown>,
   reportStatuses: (() => Promise.resolve([])) as () => Promise<unknown>,
+  monthlyStatuses: (() =>
+    Promise.resolve({ firstMonth: "2026-11", statuses: [] })) as () => Promise<unknown>,
   listOnboardingCodes: (() => Promise.resolve([])) as (input: unknown) => Promise<unknown>,
   getOnboardingStatus: (() => Promise.resolve({ joined: [] })) as (
     input: unknown,
@@ -57,7 +60,7 @@ vi.mock("@tanstack/react-router", () => ({
   }: {
     children?: ReactNode;
     to?: string;
-    params?: { accountId?: string; activityId?: string; nodeId?: string };
+    params?: { accountId?: string; activityId?: string; nodeId?: string; slug?: string };
     hash?: string;
     "data-testid"?: string;
   }) => {
@@ -68,7 +71,9 @@ vi.mock("@tanstack/react-router", () => ({
           ? `/activity/${params?.activityId}`
           : to === "/nodes/$nodeId/events/$activityId/edit"
             ? `/nodes/${params?.nodeId}/events/${params?.activityId}/edit`
-            : `/dashboard${hash ? `#${hash}` : ""}`;
+            : to === "/places/$slug"
+              ? `/places/${params?.slug}`
+              : `/dashboard${hash ? `#${hash}` : ""}`;
     return (
       <a href={href} data-testid={testId}>
         {children}
@@ -92,7 +97,35 @@ vi.mock("@/app", () => ({
     },
     listDiscoveryActivities: (input: { nodeId: string }) => harness.activities(input),
     listEventReportStatuses: () => harness.reportStatuses(),
+    listMonthlyReportStatuses: () => harness.monthlyStatuses(),
     getDiscoveryNode: () => harness.listing(),
+    getNode: async ({ nodeId }: { nodeId: string }) => ({
+      id: nodeId,
+      slug: "harbor",
+      name: "Harbor",
+      kind: "city",
+      placeId: "00000000-0000-4000-8000-000000000099",
+      parentId: null,
+      tenantId: "tenant-1",
+      metadata: {},
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }),
+    resolvePlace: async () => ({
+      place: {
+        id: "00000000-0000-4000-8000-000000000099",
+        slug: "harbor",
+        name: "Harbor",
+        parentId: null,
+        latitude: null,
+        longitude: null,
+        label: "city",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      aliases: [],
+      community: null,
+    }),
     getMemberDirectoryOptIn: async () =>
       harness.memberDirectory.readOptIn
         ? harness.memberDirectory.readOptIn()
@@ -152,6 +185,7 @@ vi.mock("@/lib/dao-connect", () => ({
 const clients: QueryClient[] = [];
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   harness.hash = "";
   harness.memberDirectory.optedIn = false;
@@ -163,6 +197,7 @@ afterEach(() => {
   harness.listing = () => Promise.resolve(null);
   harness.activities = () => Promise.resolve([]);
   harness.reportStatuses = () => Promise.resolve([]);
+  harness.monthlyStatuses = () => Promise.resolve({ firstMonth: "2026-11", statuses: [] });
   harness.listOnboardingCodes = () => Promise.resolve([]);
   harness.getOnboardingStatus = () => Promise.resolve({ joined: [] });
   harness.attendanceCalls.length = 0;
@@ -226,7 +261,7 @@ function renderOverview({
   canOrganize = false,
   network = "mainnet",
   tenantStatus,
-  selectedNode = { id: "node-1", metadata: {} },
+  selectedNode = { id: "node-1", name: "Harbor", metadata: {} },
 }: {
   nearAccount: string | null;
   canManage?: boolean;
@@ -239,26 +274,28 @@ function renderOverview({
   harness.nearAccount = nearAccount;
   harness.routeContext = {
     runtimeConfig: {},
-    nodes: [{ id: "node-1" }, { id: "node-2" }],
+    nodes: [
+      { id: "node-1", name: "Harbor" },
+      { id: "node-2", name: "Harbor pop-up" },
+    ],
     selectedNode,
     summary: {
       validators: [],
       children: [],
-      stakingValidators: {
-        sourceNodeId: "node-1",
-        validators: [
-          {
-            id: "validator-1",
-            accountId: POOL,
-            network,
-            protocol: "near",
-            isDefault: true,
-            role: "member",
-          },
-        ],
-      },
     },
-    stakingSourceNode: null,
+    staking: {
+      via: null,
+      validators: [
+        {
+          id: "validator-1",
+          accountId: POOL,
+          network,
+          protocol: "near",
+          isDefault: true,
+          role: "member",
+        },
+      ],
+    },
     tenant: {
       orgId: "org-1",
       accountId: "example.citynode.near",
@@ -944,7 +981,7 @@ const overviewSections = [
   "dashboard-node.stat-events",
   "dashboard-node.map-status",
   "dashboard-node.pending-config-proposal",
-  "dashboard-node.events-to-report",
+  "dashboard-node.reports",
   "dashboard-node.owner-actions",
   "dashboard-node.coming-up",
   "dashboard-node.updates",
@@ -966,6 +1003,7 @@ function visibleOverviewOrder() {
 
 const upcomingEvent = {
   id: "event-launch",
+  ownerNodeId: "node-1",
   kind: "event",
   title: "Launch Night",
   status: "published",
@@ -999,8 +1037,11 @@ describe("node overview member layout", () => {
     stubChain();
     renderOverview({ nearAccount: "owner.near", canManage: true, tenantStatus: "active" });
     const notice = await screen.findByTestId("dashboard-node.map-status");
-    expect(notice.textContent).toContain("Hidden from Explore");
-    expect(notice.textContent).toContain("Visitors can't find your community");
+    expect(notice.textContent).toContain("Not on Explore");
+    expect(notice.textContent).toContain("This place isn't a community on the map yet.");
+    expect(screen.getByTestId("dashboard-node.map-status-action").getAttribute("href")).toBe(
+      "/places/harbor",
+    );
   });
 
   it("opens a live upcoming event on its activity page", async () => {
@@ -1054,7 +1095,7 @@ describe("node overview member layout", () => {
     await screen.findByTestId("dashboard-node.attendance-event");
     expect(screen.queryByTestId("dashboard-node.map-status")).toBeNull();
     expect(screen.queryByTestId("dashboard-node.owner-actions")).toBeNull();
-    expect(screen.queryByTestId("dashboard-node.events-to-report")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.reports")).toBeNull();
     expect(visibleOverviewOrder()).toEqual([
       "dashboard-node.stat-events",
       "dashboard-node.coming-up",
@@ -1078,14 +1119,14 @@ describe("node overview member layout", () => {
       tenantStatus: "active",
     });
     await screen.findByTestId("dashboard-node.owner-actions");
-    await screen.findByTestId("dashboard-node.events-to-report");
+    await screen.findByTestId("dashboard-node.reports");
     await screen.findByTestId("dashboard-node.updates");
     await screen.findByTestId("dashboard-node.team-stake");
     await screen.findByTestId("dashboard-node.attendance-event");
     expect(visibleOverviewOrder()).toEqual([
       "dashboard-node.stat-events",
       "dashboard-node.map-status",
-      "dashboard-node.events-to-report",
+      "dashboard-node.reports",
       "dashboard-node.owner-actions",
       "dashboard-node.coming-up",
       "dashboard-node.updates",
@@ -1125,7 +1166,7 @@ describe("node overview events to report", () => {
     await waitFor(() =>
       expect(client.getQueryState(["discovery-activities", "node-1"])?.status).toBe("success"),
     );
-    expect(screen.queryByTestId("dashboard-node.events-to-report")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.reports")).toBeNull();
     expect(screen.queryByText("Report Night")).toBeNull();
   });
 
@@ -1139,7 +1180,43 @@ describe("node overview events to report", () => {
     harness.reportStatuses = () =>
       Promise.resolve([{ activityId: "event-done", submittedAt: "2020-01-02T00:00:00.000Z" }]);
     renderOverview({ nearAccount: null, canOrganize: true });
-    expect(await screen.findByTestId("dashboard-node.report-event-missing")).toBeTruthy();
+    expect(
+      await screen.findByTestId("dashboard-node.reports-list-event-event-missing"),
+    ).toBeTruthy();
     expect(screen.queryByText("Already Reported")).toBeNull();
+  });
+
+  it("shows an organizer this month's and last month's monthly reports with their status", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-10T12:00:00.000Z"));
+    stubChain();
+    harness.monthlyStatuses = () =>
+      Promise.resolve({
+        firstMonth: "2026-11",
+        statuses: [{ month: utcMonth(-1), submittedAt: "2026-12-01T00:00:00.000Z" }],
+      });
+    renderOverview({ nearAccount: null, canOrganize: true });
+    const last = await screen.findByTestId(`dashboard-node.reports-list-month-${utcMonth(-1)}`);
+    expect(last.textContent).toContain("Report in");
+    expect(
+      screen.getByTestId(`dashboard-node.reports-list-month-${utcMonth(0)}-open`).textContent,
+    ).toBe("Start report");
+  });
+
+  it("shows a load error with Retry instead of an empty list", async () => {
+    stubChain();
+    let calls = 0;
+    harness.monthlyStatuses = () => {
+      calls += 1;
+      return calls === 1
+        ? Promise.reject(new Error("offline"))
+        : Promise.resolve({ firstMonth: "2026-11", statuses: [] });
+    };
+    renderOverview({ nearAccount: null, canOrganize: true });
+    await screen.findByTestId("dashboard-node.reports-error");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(
+      await screen.findByTestId(`dashboard-node.reports-list-month-${utcMonth(0)}`),
+    ).toBeTruthy();
   });
 });

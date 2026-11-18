@@ -5,4 +5,5 @@ export {
   useMediaQuery,
   useNow,
   usePrefersDarkMode,
+  useSeenOnce,
 } from "./use-client";

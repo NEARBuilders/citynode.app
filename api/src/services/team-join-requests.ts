@@ -1,5 +1,5 @@
 import type { ORPCError } from "@orpc/server";
-import { and, eq, gte, inArray, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, or } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import { teamJoinEndorsements, teamJoinRequests } from "../db/schema";
@@ -32,6 +32,7 @@ export interface TeamJoinRequestsService {
     organizationId: string,
     viewerUserId: string,
   ): TeamJoinRequestEffect<TeamJoinRequestRecord[]>;
+  listAll(organizationId: string): TeamJoinRequestEffect<TeamJoinRequestRecord[]>;
   get(requestId: string): TeamJoinRequestEffect<TeamJoinRequestRecord | null>;
   create(request: NewTeamJoinRequest): TeamJoinRequestEffect<TeamJoinRequestRecord | null>;
   settle(
@@ -43,6 +44,7 @@ export interface TeamJoinRequestsService {
     closures: ReadonlyArray<{ id: string; reason: TeamJoinClosedReason }>,
   ): TeamJoinRequestEffect<void>;
   endorse(requestId: string, endorserUserId: string): TeamJoinRequestEffect<void>;
+  dismiss(requestId: string, requesterUserId: string): TeamJoinRequestEffect<boolean>;
 }
 
 export class TeamJoinRequestsTag extends Context.Service<
@@ -108,6 +110,16 @@ export const TeamJoinRequestsLive = Layer.effect(
               .orderBy(teamJoinRequests.createdAt),
           ),
         ),
+      listAll: (organizationId) =>
+        query(async () =>
+          withEndorsements(
+            await db
+              .select()
+              .from(teamJoinRequests)
+              .where(eq(teamJoinRequests.organizationId, organizationId))
+              .orderBy(teamJoinRequests.createdAt),
+          ),
+        ),
       get: (requestId) =>
         query(async () => {
           const rows = await db
@@ -167,6 +179,23 @@ export const TeamJoinRequestsLive = Layer.effect(
             .insert(teamJoinEndorsements)
             .values({ requestId, endorserUserId })
             .onConflictDoNothing();
+        }),
+      dismiss: (requestId, requesterUserId) =>
+        query(async () => {
+          const now = new Date();
+          const rows = await db
+            .update(teamJoinRequests)
+            .set({ dismissedAt: now, updatedAt: now })
+            .where(
+              and(
+                eq(teamJoinRequests.id, requestId),
+                eq(teamJoinRequests.requesterUserId, requesterUserId),
+                inArray(teamJoinRequests.status, ["approved", "declined"]),
+                isNull(teamJoinRequests.dismissedAt),
+              ),
+            )
+            .returning({ id: teamJoinRequests.id });
+          return rows.length > 0;
         }),
     };
 

@@ -411,6 +411,33 @@ describe("closing requests that can no longer be approved", () => {
       (await as("member")).requestToJoinTeam({ organizationId, teamId: communityTeam }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
+
+  it("shows platform admins each community's team requests without membership", async () => {
+    const { organizationId, ops, communityTeam } = community();
+    await (await as("member")).requestToJoinTeam({ organizationId, teamId: ops });
+    const decided = await (await as("other")).requestToJoinTeam({
+      organizationId,
+      teamId: communityTeam,
+    });
+    await (await as("owner")).decideTeamJoinRequest({
+      requestId: decided.id,
+      decision: "approve",
+    });
+
+    const admin = await as("platform-admin", "admin");
+    const result = await admin.getCommunityTeamRequests({ organizationId });
+    expect(result.teams).toEqual([
+      expect.objectContaining({ teamName: "Community", teamAreas: ["events"], approved: 1 }),
+      expect.objectContaining({ teamName: "Operations", pending: 1, approved: 0 }),
+    ]);
+    expect(result.pending).toEqual([
+      expect.objectContaining({ teamName: "Operations", requesterName: "New Member" }),
+    ]);
+
+    await expect(
+      (await as("outsider")).getCommunityTeamRequests({ organizationId }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });
 
 describe("team board upstream cost", () => {
@@ -436,5 +463,62 @@ describe("team board upstream cost", () => {
     expect(board.requests).toEqual([
       expect.objectContaining({ status: "pending", requesterName: "New Member" }),
     ]);
+  });
+});
+
+describe("dismissing a decided request", () => {
+  it("keeps an approved request on the requester's board until they dismiss it", async () => {
+    const { organizationId, ops } = community();
+    const member = await as("member");
+    const request = await member.requestToJoinTeam({ organizationId, teamId: ops });
+    await (await as("owner")).decideTeamJoinRequest({
+      requestId: request.id,
+      decision: "approve",
+    });
+    expect((await member.getTeamJoinBoard({ organizationId })).requests).toEqual([
+      expect.objectContaining({ id: request.id, status: "approved", dismissedAt: null }),
+    ]);
+    const dismissed = await member.dismissTeamJoinRequest({ requestId: request.id });
+    expect(dismissed.dismissedAt).toEqual(expect.any(String));
+    expect((await member.getTeamJoinBoard({ organizationId })).requests).toEqual([]);
+  });
+
+  it("keeps a dismissed declined request on the board with its dismissal time", async () => {
+    const { organizationId, ops } = community();
+    const member = await as("member");
+    const request = await member.requestToJoinTeam({ organizationId, teamId: ops });
+    await (await as("owner")).decideTeamJoinRequest({
+      requestId: request.id,
+      decision: "decline",
+    });
+    await member.dismissTeamJoinRequest({ requestId: request.id });
+    expect((await member.getTeamJoinBoard({ organizationId })).requests).toEqual([
+      expect.objectContaining({
+        id: request.id,
+        status: "declined",
+        dismissedAt: expect.any(String),
+      }),
+    ]);
+    await expect(member.dismissTeamJoinRequest({ requestId: request.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+  });
+
+  it("refuses pending requests and anyone but the requester", async () => {
+    const { organizationId, ops } = community();
+    const request = await (await as("member")).requestToJoinTeam({ organizationId, teamId: ops });
+    await expect(
+      (await as("member")).dismissTeamJoinRequest({ requestId: request.id }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await (await as("owner")).decideTeamJoinRequest({
+      requestId: request.id,
+      decision: "decline",
+    });
+    await expect(
+      (await as("owner")).dismissTeamJoinRequest({ requestId: request.id }),
+    ).rejects.toMatchObject({ code: expect.stringMatching(/FORBIDDEN|NOT_FOUND/) });
+    await expect(
+      (await as("steward")).dismissTeamJoinRequest({ requestId: request.id }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

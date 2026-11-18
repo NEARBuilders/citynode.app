@@ -1,11 +1,7 @@
 import { Clock, Context, Duration, Effect, Layer, Ref, Semaphore } from "effect";
 
-export type CountryBoundary =
-  | { type: "Polygon"; coordinates: number[][][] }
-  | { type: "MultiPolygon"; coordinates: number[][][][] };
-
 export type GeocodeResult =
-  | { ok: true; latitude: number; longitude: number; boundary?: CountryBoundary }
+  | { ok: true; latitude: number; longitude: number }
   | { ok: false; reason: "not_found" | "unavailable" };
 
 export type GeocodeIdentity = {
@@ -16,7 +12,6 @@ export type GeocodeIdentity = {
 type CacheEntry = {
   latitude: number;
   longitude: number;
-  boundary?: CountryBoundary;
   expiresAt: number;
 };
 
@@ -30,7 +25,6 @@ type NominatimRow = {
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const MIN_INTERVAL = Duration.millis(1100);
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const BOUNDARY_TOLERANCE = "0.05";
 
 function normalizeLocation(location: string) {
   return location.trim().replace(/\s+/g, " ").toLowerCase();
@@ -42,17 +36,6 @@ function clampLatitude(value: number) {
 
 function clampLongitude(value: number) {
   return Math.min(180, Math.max(-180, value));
-}
-
-export function countryBoundary(row: NominatimRow): CountryBoundary | undefined {
-  const shape = row.geojson;
-  if (row.addresstype !== "country" || !shape || !Array.isArray(shape.coordinates))
-    return undefined;
-  if (shape.type === "Polygon")
-    return { type: "Polygon", coordinates: shape.coordinates as number[][][] };
-  if (shape.type === "MultiPolygon")
-    return { type: "MultiPolygon", coordinates: shape.coordinates as number[][][][] };
-  return undefined;
 }
 
 export function profilePlace(profile: { location: string; region: string }, kind: string | null) {
@@ -96,68 +79,64 @@ export const GeocodeLive = (identity: GeocodeIdentity) =>
               ok: true as const,
               latitude: cached.latitude,
               longitude: cached.longitude,
-              ...(cached.boundary ? { boundary: cached.boundary } : {}),
             };
           }),
         );
 
-      const lookupNominatim = (location: string, key: string) =>
-        Effect.gen(function* () {
-          const last = yield* Ref.get(lastRequestAt);
-          const now = yield* Clock.currentTimeMillis;
-          const waitMs = Math.max(0, Duration.toMillis(MIN_INTERVAL) - (now - last));
-          if (waitMs > 0) yield* Effect.sleep(Duration.millis(waitMs));
-          yield* Ref.set(lastRequestAt, yield* Clock.currentTimeMillis);
+      const lookupNominatim = Effect.fn("GeocodeService.lookupNominatim")(function* (
+        location: string,
+        key: string,
+      ) {
+        const last = yield* Ref.get(lastRequestAt);
+        const now = yield* Clock.currentTimeMillis;
+        const waitMs = Math.max(0, Duration.toMillis(MIN_INTERVAL) - (now - last));
+        if (waitMs > 0) yield* Effect.sleep(Duration.millis(waitMs));
+        yield* Ref.set(lastRequestAt, yield* Clock.currentTimeMillis);
 
-          const url = new URL(NOMINATIM_URL);
-          url.searchParams.set("q", location.trim());
-          url.searchParams.set("format", "json");
-          url.searchParams.set("limit", "1");
-          url.searchParams.set("polygon_geojson", "1");
-          url.searchParams.set("polygon_threshold", BOUNDARY_TOLERANCE);
+        const url = new URL(NOMINATIM_URL);
+        url.searchParams.set("q", location.trim());
+        url.searchParams.set("format", "json");
+        url.searchParams.set("limit", "1");
 
-          const result = yield* Effect.tryPromise({
-            try: async (): Promise<GeocodeResult> => {
-              const response = await runFetch(url, {
-                headers: {
-                  Accept: "application/json",
-                  "User-Agent": userAgent,
-                },
-                signal: AbortSignal.timeout(8_000),
-              });
-              if (!response.ok) return { ok: false, reason: "unavailable" };
-              const rows = (await response.json()) as NominatimRow[];
-              const first = rows[0];
-              const latitude = first?.lat !== undefined ? Number(first.lat) : Number.NaN;
-              const longitude = first?.lon !== undefined ? Number(first.lon) : Number.NaN;
-              if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-                return { ok: false, reason: "not_found" };
-              }
-              const boundary = countryBoundary(first ?? {});
-              return {
-                ok: true,
-                latitude: clampLatitude(latitude),
-                longitude: clampLongitude(longitude),
-                ...(boundary ? { boundary } : {}),
-              };
-            },
-            catch: (): GeocodeResult => ({ ok: false, reason: "unavailable" }),
-          }).pipe(Effect.catch((error) => Effect.succeed(error)));
-
-          if (result.ok) {
-            yield* Ref.update(cache, (entries) => {
-              const next = new Map(entries);
-              next.set(key, {
-                latitude: result.latitude,
-                longitude: result.longitude,
-                boundary: result.boundary,
-                expiresAt: Date.now() + CACHE_TTL_MS,
-              });
-              return next;
+        const result = yield* Effect.tryPromise({
+          try: async (): Promise<GeocodeResult> => {
+            const response = await runFetch(url, {
+              headers: {
+                Accept: "application/json",
+                "User-Agent": userAgent,
+              },
+              signal: AbortSignal.timeout(8_000),
             });
-          }
-          return result;
-        });
+            if (!response.ok) return { ok: false, reason: "unavailable" };
+            const rows = (await response.json()) as NominatimRow[];
+            const first = rows[0];
+            const latitude = first?.lat !== undefined ? Number(first.lat) : Number.NaN;
+            const longitude = first?.lon !== undefined ? Number(first.lon) : Number.NaN;
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+              return { ok: false, reason: "not_found" };
+            }
+            return {
+              ok: true,
+              latitude: clampLatitude(latitude),
+              longitude: clampLongitude(longitude),
+            };
+          },
+          catch: (): GeocodeResult => ({ ok: false, reason: "unavailable" }),
+        }).pipe(Effect.catch((error) => Effect.succeed(error)));
+
+        if (result.ok) {
+          yield* Ref.update(cache, (entries) => {
+            const next = new Map(entries);
+            next.set(key, {
+              latitude: result.latitude,
+              longitude: result.longitude,
+              expiresAt: Date.now() + CACHE_TTL_MS,
+            });
+            return next;
+          });
+        }
+        return result;
+      });
 
       const geocode = Effect.fn("geocodeLocation")(function* (location: string) {
         const key = normalizeLocation(location);

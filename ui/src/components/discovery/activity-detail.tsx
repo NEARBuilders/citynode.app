@@ -36,7 +36,9 @@ export function ActivityDetail({
     refetchInterval: 30_000,
   });
   const selectedNode =
-    node && activity.data?.nodeIds.includes(node) ? node : activity.data?.ownerNodeId;
+    node && activity.data?.nodeIds.includes(node)
+      ? node
+      : (activity.data?.ownerNodeId ?? activity.data?.nodeIds[0]);
   const host = useQuery({
     queryKey: ["discovery-node", selectedNode],
     queryFn: () => api.getDiscoveryNode({ nodeId: selectedNode! }),
@@ -172,6 +174,11 @@ export function ActivityDetail({
             <ArrowUpRightIcon />
           </Button>
         </div>
+        {isEvent && !cancelled && host.data && (
+          <p className="text-sm text-muted-foreground" data-testid="activity.join-at-event">
+            {translate("community.joinAtEvent", { name: host.data.name })}
+          </p>
+        )}
       </header>
 
       {data.summary && (
@@ -185,7 +192,9 @@ export function ActivityDetail({
 
       {host.data && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold">{translate("activity.hostedBy")}</h2>
+          <h2 className="text-xl font-semibold">
+            {translate(data.ownerNodeId ? "activity.hostedBy" : "activity.happeningIn")}
+          </h2>
           <Link
             to="/n/$slug"
             params={{ slug: host.data.slug }}

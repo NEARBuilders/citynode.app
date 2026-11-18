@@ -1,18 +1,8 @@
-import { ArrowUpRightIcon, CalendarDotsIcon } from "@phosphor-icons/react";
+import { ArrowUpRightIcon } from "@phosphor-icons/react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { ReactElement } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemMedia,
-  ItemTitle,
-} from "@/components/ui/item";
 import { useNow } from "@/hooks";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
@@ -31,8 +21,6 @@ const badges: Record<
   scheduled: { label: "events.scheduled", variant: "secondary" },
   published: { label: "events.published", variant: "secondary" },
   draft: { label: "events.draft", variant: "secondary" },
-  hiddenImport: { label: "events.hiddenImport", variant: "warning" },
-  removed: { label: "events.removedLuma", variant: "destructive" },
   cancelled: { label: "events.cancelled", variant: "destructive" },
   ended: { label: "events.ended", variant: "secondary" },
 };
@@ -83,42 +71,5 @@ export function EventVisibilityBadge({
     <Badge variant={variant} data-testid={testId} data-state={state}>
       {translate(label)}
     </Badge>
-  );
-}
-
-export function ImportsWaiting({
-  count,
-  link,
-  testId,
-}: {
-  count: number;
-  link?: ReactElement;
-  testId: string;
-}) {
-  const translate = useAppTranslation();
-  if (count === 0) return null;
-  return (
-    <Item variant="outline" data-testid={testId}>
-      <ItemMedia variant="icon">
-        <CalendarDotsIcon />
-      </ItemMedia>
-      <ItemContent className="min-w-0">
-        <ItemTitle>{translate("events.importsWaiting", { count })}</ItemTitle>
-        <ItemDescription>{translate("events.importsWaitingHint")}</ItemDescription>
-      </ItemContent>
-      {link && (
-        <ItemActions>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={link}
-            data-testid={`${testId}-review`}
-          >
-            {translate("common.review")}
-          </Button>
-        </ItemActions>
-      )}
-    </Item>
   );
 }

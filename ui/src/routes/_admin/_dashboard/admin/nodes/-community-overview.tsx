@@ -1,9 +1,17 @@
 import { CaretRightIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Trans } from "everything-dev/ui/i18n";
 import type { ReactNode } from "react";
 import { useApiClient } from "@/app";
-import { Button, InfoRow, NodeValidatorTable, SectionHeader, Skeleton } from "@/components";
+import {
+  Button,
+  InfoRow,
+  LocalDate,
+  NodeValidatorTable,
+  SectionHeader,
+  Skeleton,
+} from "@/components";
 import { EventDate } from "@/components/discovery/event-onboarding";
 import {
   Item,
@@ -18,6 +26,8 @@ import { useNow } from "@/hooks/use-client";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
+import { communityEngagementQueryOptions } from "@/lib/queries/engagement";
+import type { StakingValidators } from "@/lib/queries/nodes";
 import { onboardingJoinsQueryOptions, utcMonth } from "@/lib/queries/onboarding-joins";
 import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import { Disclosure, ListSkeleton, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
@@ -110,6 +120,12 @@ function useCommunityProgress(node: CommunityNode) {
     tenant: tenantQuery,
     joins: joinsQuery,
   });
+  const engagementQuery = useQuery(communityEngagementQueryOptions(apiClient));
+  const engagement = communityJoinsState({
+    hasSite: !!tenantId,
+    tenant: tenantQuery,
+    joins: engagementQuery,
+  });
 
   return {
     events,
@@ -118,6 +134,10 @@ function useCommunityProgress(node: CommunityNode) {
     hasSite: !!tenantId,
     retryEvents: () => void eventsQuery.refetch(),
     retryJoins: () => void (tenantQuery.isError ? tenantQuery.refetch() : joinsQuery.refetch()),
+    engagement,
+    orgId,
+    retryEngagement: () =>
+      void (tenantQuery.isError ? tenantQuery.refetch() : engagementQuery.refetch()),
   };
 }
 
@@ -151,10 +171,10 @@ function ProgressStat<V>({
 
 export function CommunityStats({
   summary,
-  sourceName,
+  staking,
 }: {
   summary: NodeSummary;
-  sourceName?: string;
+  staking: StakingValidators;
 }) {
   const translate = useAppTranslation();
   const { node } = summary;
@@ -162,8 +182,7 @@ export function CommunityStats({
   const noJoinsHint = progress.hasSite
     ? translate("admin.community.noOrganization")
     : translate("admin.community.noSite");
-  const stakingCount = summary.stakingValidators.validators.length;
-  const stakingInherited = summary.stakingValidators.sourceNodeId !== node.id;
+  const stakingCount = staking.validators.length;
 
   return (
     <StatGrid>
@@ -200,16 +219,57 @@ export function CommunityStats({
         onRetry={progress.retryJoins}
         testId="admin-node.stat-new-members"
       />
+      <ProgressStat
+        label={translate("admin.progress.members")}
+        state={progress.engagement}
+        render={({ communities }) => {
+          const memberCount = communities.find(
+            (row) => row.organizationId === progress.orgId,
+          )?.memberCount;
+          return memberCount?.count != null && memberCount.observedAt
+            ? {
+                value: memberCount.count,
+                hint: (
+                  <Trans
+                    id="admin.community.membersSeen"
+                    components={{
+                      date: <LocalDate value={memberCount.observedAt} format="relative" />,
+                    }}
+                  />
+                ),
+              }
+            : { value: "—", hint: translate("admin.community.membersNotSeen") };
+        }}
+        unavailableHint={noJoinsHint}
+        onRetry={progress.retryEngagement}
+        testId="admin-node.stat-members"
+      />
+      <ProgressStat
+        label={translate("admin.progress.returning")}
+        state={progress.engagement}
+        render={({ communities }) => {
+          const checkIns = communities.find(
+            (row) => row.organizationId === progress.orgId,
+          )?.checkIns;
+          return checkIns
+            ? {
+                value: checkIns.returning,
+                hint: translate("admin.community.returningOf", { count: checkIns.people }),
+              }
+            : { value: "—", hint: translate("admin.community.checkInsNotSynced") };
+        }}
+        unavailableHint={noJoinsHint}
+        onRetry={progress.retryEngagement}
+        testId="admin-node.stat-returning"
+      />
       <StatFigure
         label={translate("admin.community.stakingValidators")}
         value={stakingCount}
         hint={
           stakingCount === 0
             ? translate("admin.community.stakingNone")
-            : stakingInherited
-              ? translate("admin.community.stakingFrom", {
-                  name: sourceName ?? summary.stakingValidators.sourceNodeId,
-                })
+            : staking.via
+              ? translate("admin.community.stakingFrom", { name: staking.via.name })
               : translate("admin.community.stakingOwn")
         }
         tone={stakingCount === 0 ? "attention" : "default"}
@@ -221,10 +281,10 @@ export function CommunityStats({
 
 export function CommunityOverview({
   summary,
-  sourceName,
+  staking,
 }: {
   summary: NodeSummary;
-  sourceName?: string;
+  staking: StakingValidators;
 }) {
   const translate = useAppTranslation();
   const { node } = summary;
@@ -232,11 +292,10 @@ export function CommunityOverview({
   const attention = communityAttention({
     hasSite: progress.hasSite,
     tenant: progress.tenant,
-    stakingValidators: summary.stakingValidators.validators.length,
+    stakingValidators: staking.validators.length,
     upcomingEvents:
       progress.events.status === "ready" ? progress.events.value.upcoming.length : undefined,
   });
-  const resolvedElsewhere = summary.stakingValidators.sourceNodeId !== node.id;
   const description =
     typeof node.metadata.description === "string" ? node.metadata.description : null;
 
@@ -278,12 +337,9 @@ export function CommunityOverview({
                 variant="ghost"
                 size="sm"
                 nativeButton={false}
+                data-testid="admin-node.all-events"
                 render={
-                  <Link
-                    to="/nodes/$nodeId/content"
-                    params={{ nodeId: node.id }}
-                    search={{ tab: "events" }}
-                  />
+                  <Link to="/admin/events" search={{ when: "upcoming", community: node.id }} />
                 }
               >
                 {translate("admin.community.allEvents")}
@@ -305,20 +361,18 @@ export function CommunityOverview({
         <SectionHeader
           title={translate("common.staking")}
           description={
-            resolvedElsewhere
-              ? translate("admin.validatorSourceNamed", {
-                  name: sourceName ?? summary.stakingValidators.sourceNodeId,
-                })
+            staking.via
+              ? translate("admin.validatorSourceNamed", { name: staking.via.name })
               : translate("admin.community.stakingHint")
           }
         />
-        {summary.stakingValidators.validators.length === 0 ? (
+        {staking.validators.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {translate("admin.community.noStakeValidators")}
           </p>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-border">
-            <NodeValidatorTable validators={summary.stakingValidators.validators} />
+            <NodeValidatorTable validators={staking.validators} />
           </div>
         )}
       </section>

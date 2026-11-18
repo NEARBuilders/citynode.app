@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
 import { PageContainer } from "@/components";
 import { activitiesQueryOptions } from "@/components/discovery/activity-form";
@@ -8,6 +8,7 @@ import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { EventsEditor } from "@/components/discovery/events-editor";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import { resolveAppLocale, translateAppMessage } from "@/i18n/runtime";
+import { isPlatformNode } from "@/lib/node-kind";
 import { isOnboardingOrganizer } from "@/lib/onboarding-codes";
 import { pageTitle } from "@/lib/page-title";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
@@ -19,7 +20,7 @@ import {
 } from "../../dashboard/node/-community-header";
 
 type ContentTab = "events" | "onboarding" | "bulletin";
-type ContentSearch = { tab?: ContentTab; review?: "imports" };
+type ContentSearch = { tab?: ContentTab };
 
 const TABS: readonly ContentTab[] = ["events", "onboarding", "bulletin"];
 const ownersOnly = { to: "/dashboard", search: { restricted: "owners" } } as const;
@@ -33,7 +34,6 @@ function defaultContentTab(canOrganize: boolean, canOperate: boolean): ContentTa
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
   validateSearch: (search: Record<string, unknown>): ContentSearch => ({
     ...(TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {}),
-    ...(search.review === "imports" ? { review: "imports" as const } : {}),
   }),
   beforeLoad: ({ context, params, search }) => {
     const canManage = context.canManageCommunity;
@@ -106,7 +106,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
 
 function CommunityContent() {
   const { nodeId } = Route.useParams();
-  const { tab: searchTab, review } = Route.useSearch();
+  const { tab: searchTab } = Route.useSearch();
   const {
     auth,
     canManageCommunity,
@@ -115,7 +115,8 @@ function CommunityContent() {
   } = Route.useRouteContext();
   const tab = searchTab ?? defaultContentTab(canOrganize, canOperate);
   const api = useApiClient();
-  const tenantId = useQuery(nodeByIdQueryOptions(api, nodeId)).data?.tenantId;
+  const node = useQuery(nodeByIdQueryOptions(api, nodeId)).data;
+  const tenantId = node?.tenantId;
   const tenant = useQuery(tenantByIdQueryOptions(api, tenantId ?? ""));
   const authContext = useQuery(
     communityAuthContextQueryOptions(api, auth.activeOrganizationId ?? null),
@@ -144,15 +145,9 @@ function CommunityContent() {
       ) : (
         <EventsEditor
           nodeId={nodeId}
-          reviewImports={review === "imports"}
-          tenantStatus={tenant.data?.status}
+          showMapStatus={!isPlatformNode(node)}
           canManage={canManage}
           canOnboard={canOnboard}
-          profileLink={
-            tenantId && canManage ? (
-              <Link to="/tenant/$tenantId" params={{ tenantId }} search={{ nodeId }} />
-            ) : undefined
-          }
         />
       )}
     </PageContainer>

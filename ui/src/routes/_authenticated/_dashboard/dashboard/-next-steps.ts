@@ -6,10 +6,11 @@ export type NextStepId =
   | "start-community"
   | "open-community"
   | "payouts"
-  | "launch-node"
-  | "admin"
+  | "team-requests"
   | "stake"
   | "explore";
+
+export const MAX_NEXT_STEPS = 5;
 
 export interface NextStep {
   id: NextStepId;
@@ -22,13 +23,14 @@ export interface NextStepsState {
   isAnonymous: boolean;
   hasPasskey: boolean;
   hasNear: boolean;
-  membership: "unknown" | "none" | "open" | "choose" | "active";
+  membership: "unknown" | "none" | "choose" | "active";
   communityCount: number;
   community: { name: string; tenantId: string } | null;
   canManageCommunity: boolean;
   canOrganizeEvents: boolean;
   inFinanceTeam: boolean;
   isAdmin: boolean;
+  teamRequestsWaiting?: number;
 }
 
 export function getNextSteps(
@@ -46,30 +48,18 @@ export function getNextSteps(
     });
   }
 
-  if (state.isAdmin) {
-    steps.push({
-      id: "launch-node",
-      title: t("dashboard.launchNode"),
-      description: t("dashboard.launchNodeHint"),
-      actionLabel: t("dashboard.launchNode"),
-    });
-    steps.push({
-      id: "admin",
-      title: t("dashboard.adminQueue"),
-      description: t("dashboard.adminQueueHint"),
-      actionLabel: t("common.openAdmin"),
-    });
-  }
+  const explore: NextStep = {
+    id: "explore",
+    title: t("dashboard.explore"),
+    description: t("dashboard.exploreHint"),
+    actionLabel: t("common.explore"),
+  };
+  const offersStartCommunity =
+    !state.community &&
+    (state.membership === "none" ? !state.isAdmin : state.membership === "active");
 
-  if (state.membership === "none") {
-    if (!state.isAdmin) {
-      steps.push({
-        id: "start-community",
-        title: t("dashboard.startCommunity"),
-        description: t("dashboard.startCommunityHint"),
-        actionLabel: t("dashboard.startCommunity"),
-      });
-    }
+  if (offersStartCommunity) {
+    steps.push(explore, startCommunityStep(t));
   } else if (state.membership === "choose") {
     steps.push({
       id: "choose-org",
@@ -77,8 +67,8 @@ export function getNextSteps(
       description: t("dashboard.communityCount", { count: state.communityCount }),
       actionLabel: t("common.choose"),
     });
-  } else if (state.membership !== "unknown") {
-    steps.push(...communitySteps(state, t));
+  } else if (state.community && state.membership !== "unknown") {
+    steps.push(...communitySteps(state.community, state, t));
   }
 
   steps.push({
@@ -88,29 +78,27 @@ export function getNextSteps(
     actionLabel: t("common.stake"),
   });
 
-  if (!state.community) {
-    steps.push({
-      id: "explore",
-      title: t("dashboard.explore"),
-      description: t("dashboard.exploreHint"),
-      actionLabel: t("common.explore"),
-    });
+  if (!state.community && !offersStartCommunity) {
+    steps.push(explore);
   }
 
-  return steps;
+  return steps.slice(0, MAX_NEXT_STEPS);
 }
 
-function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
-  if (!state.community) {
-    return [
-      {
-        id: "start-community",
-        title: t("dashboard.startCommunity"),
-        description: t("dashboard.startCommunityHint"),
-        actionLabel: t("dashboard.startCommunity"),
-      },
-    ];
-  }
+function startCommunityStep(t: AppTranslator): NextStep {
+  return {
+    id: "start-community",
+    title: t("dashboard.startCommunity"),
+    description: t("dashboard.startCommunityHint"),
+    actionLabel: t("dashboard.startCommunity"),
+  };
+}
+
+function communitySteps(
+  community: NonNullable<NextStepsState["community"]>,
+  state: NextStepsState,
+  t: AppTranslator,
+): NextStep[] {
   const payouts: NextStep[] =
     state.canManageCommunity || state.inFinanceTeam
       ? [
@@ -122,21 +110,33 @@ function communitySteps(state: NextStepsState, t: AppTranslator): NextStep[] {
           },
         ]
       : [];
+  const teamRequests: NextStep[] = state.teamRequestsWaiting
+    ? [
+        {
+          id: "team-requests",
+          title: t("teamRequests.homeTitle", { count: state.teamRequestsWaiting }),
+          description: t("teamRequests.homeHint", { name: community.name }),
+          actionLabel: t("common.open"),
+        },
+      ]
+    : [];
   if (state.canManageCommunity || state.canOrganizeEvents || state.isAdmin) {
     return [
+      ...teamRequests,
       {
         id: "open-community",
         title: t("dashboard.openCommunity"),
-        description: t("dashboard.communityTasks", { name: state.community.name }),
+        description: t("dashboard.communityTasks", { name: community.name }),
         actionLabel: t("common.open"),
       },
       ...payouts,
     ];
   }
   return [
+    ...teamRequests,
     {
       id: "open-community",
-      title: t("dashboard.openCommunityNamed", { name: state.community.name }),
+      title: t("dashboard.openCommunityNamed", { name: community.name }),
       description: t("dashboard.memberCommunityHint"),
       actionLabel: t("common.open"),
     },

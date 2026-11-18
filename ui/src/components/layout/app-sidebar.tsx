@@ -32,7 +32,6 @@ import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
 import { SidebarTeamSwitcher } from "./sidebar-team-switcher";
 import { useClearStaleTeam } from "./use-clear-stale-team";
 import { useIdentity } from "./use-identity";
-import { useOpenSoleCommunity } from "./use-open-sole-community";
 import { useSwitchTeam } from "./use-switch-team";
 import { useTeamWorkspace } from "./use-team-workspace";
 
@@ -47,7 +46,6 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
   const {
     user,
     communities,
-    membership,
     activeOrgId,
     isOrganizationsLoading,
     organizationsError,
@@ -56,7 +54,6 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
   const { data: workspace } = useTeamWorkspace(!!user);
   const switchTeam = useSwitchTeam();
   useClearStaleTeam(workspace?.staleActiveTeamId ?? null);
-  useOpenSoleCommunity(membership.status === "open" ? membership.organization.id : null);
   const tab = useRouterState({
     select: (s) => {
       const value = (s.location.search as { tab?: unknown }).tab;
@@ -175,7 +172,14 @@ function SidebarNavLeaf({ item, pathname, search }: NavItemProps) {
   );
 }
 
-function SidebarNavSubItem({ item, pathname, search }: NavItemProps) {
+function SidebarNavSubItem(props: NavItemProps) {
+  if (props.item.children && props.item.children.length > 0) {
+    return <SidebarNavSubGroup {...props} />;
+  }
+  return <SidebarNavSubLeaf {...props} />;
+}
+
+function SidebarNavSubLeaf({ item, pathname, search }: NavItemProps) {
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton
@@ -192,6 +196,51 @@ function SidebarNavSubItem({ item, pathname, search }: NavItemProps) {
         <span>{item.label}</span>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
+  );
+}
+
+function SidebarNavSubGroup({ item, pathname, search }: NavItemProps) {
+  const active = isNavItemActive(item, pathname, search);
+  const [open, setOpen] = useState(active);
+  const slug = navSlug(item);
+
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+
+  return (
+    <CollapsiblePrimitive.Root
+      className="group/subcollapsible"
+      open={open}
+      onOpenChange={setOpen}
+      render={<SidebarMenuSubItem />}
+    >
+      <CollapsiblePrimitive.Trigger
+        render={
+          <SidebarMenuSubButton
+            render={<button type="button" />}
+            isActive={active && !open}
+            className="w-full"
+            data-testid={`sidebar-nav-${slug}`}
+          />
+        }
+      >
+        <span>{item.label}</span>
+        <CaretRightIcon className="ml-auto transition-transform duration-200 group-data-open/subcollapsible:rotate-90" />
+      </CollapsiblePrimitive.Trigger>
+      <CollapsiblePrimitive.Panel className="h-(--collapsible-panel-height) overflow-hidden transition-all duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
+        <SidebarMenuSub>
+          {(item.children ?? []).map((child) => (
+            <SidebarNavSubLeaf
+              key={`${child.label}-${child.to}`}
+              item={child}
+              pathname={pathname}
+              search={search}
+            />
+          ))}
+        </SidebarMenuSub>
+      </CollapsiblePrimitive.Panel>
+    </CollapsiblePrimitive.Root>
   );
 }
 

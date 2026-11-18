@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { boundaryBounds, boundaryLatLngs, mapAreas } from "./map-areas";
+import {
+  boundaryBounds,
+  boundaryLatLngs,
+  mapAreas,
+  showsMapAreas,
+  simplifyBoundary,
+} from "./map-areas";
 
 const square = [
   [
@@ -10,8 +16,8 @@ const square = [
   ],
 ];
 
-function node(boundary: Parameters<typeof boundaryLatLngs>[0] | null) {
-  return { nodeId: crypto.randomUUID(), boundary } as Parameters<typeof mapAreas>[0][number];
+function node(placeId: string | null) {
+  return { nodeId: crypto.randomUUID(), placeId } as Parameters<typeof mapAreas>[0][number];
 }
 
 describe("boundaryLatLngs", () => {
@@ -35,12 +41,36 @@ describe("boundaryLatLngs", () => {
   });
 });
 
+describe("showsMapAreas", () => {
+  it("keeps pins-only at world zoom and draws areas from region zoom", () => {
+    expect(showsMapAreas(2)).toBe(false);
+    expect(showsMapAreas(4)).toBe(false);
+    expect(showsMapAreas(5)).toBe(true);
+  });
+});
+
+describe("simplifyBoundary", () => {
+  it("thins a dense ring at region zoom and keeps it whole when close in", () => {
+    const ring = Array.from({ length: 17 }, (_, index) => [70 + index, 10]);
+    ring.push(ring[0]!);
+    const dense = { type: "Polygon" as const, coordinates: [ring] };
+    expect(simplifyBoundary(dense, 5).coordinates[0]?.length).toBeLessThan(ring.length);
+    expect(simplifyBoundary(dense, 8).coordinates[0]).toHaveLength(ring.length);
+  });
+});
+
 describe("mapAreas", () => {
-  it("keeps only communities with a country outline", () => {
-    const country = node({ type: "Polygon", coordinates: square });
-    expect(mapAreas([country, node(null)]).map((area) => area.node.nodeId)).toEqual([
-      country.nodeId,
+  it("keeps only communities whose linked place has geometry", () => {
+    const placeId = crypto.randomUUID();
+    const linked = node(placeId);
+    const boundaries: Parameters<typeof mapAreas>[1] = new Map([
+      [placeId, { type: "Polygon" as const, coordinates: square }],
     ]);
+    expect(
+      mapAreas([linked, node(null), node(crypto.randomUUID())], boundaries).map(
+        (area) => area.node.nodeId,
+      ),
+    ).toEqual([linked.nodeId]);
   });
 });
 

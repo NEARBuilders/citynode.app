@@ -1,0 +1,40 @@
+# Report each month
+
+Community owners and organizers send one short report a month from City Node, plus a report for each event once it has ended.
+
+## Where to start
+
+Open [your reports](/report). Sign in if City Node asks, and pick your community if you run more than one. The page shows this month's report, last month's while you can still edit it, and every ended event that still needs a report. Each one is a click away.
+
+Only owners and members of a team with the Events area can report. If the page says reports come from owners and organizers, ask your community's owner to add you to that team.
+
+## What the monthly report asks
+
+City Node fills in the month's numbers for you:
+
+- **Events held:** published events that started that month and have ended.
+- **Check-ins:** people checked in at your events that month with your QR codes.
+- **Joins** and **new members:** people who joined your community with your codes that month, and how many of them were new to City Node.
+
+The numbers are saved with your report when you submit it, so they don't change afterwards.
+
+Then write what happened in one open field, as short or as long as you like. There's no list of questions. Useful things to mention:
+
+- highlights, and what people built or learned
+- people, partners and venues who helped
+- what didn't work and what you'll try next
+- what you need from the platform team
+
+## When it's due
+
+Monthly reports start with November 2026, or with the month your community started if that is later. Send the report for a month by the end of the following month. Your Home shows this month's and last month's report until they are in. Until the following month ends you can reopen the report and change it; after that it's read-only.
+
+## Event reports
+
+Each ended event has its own report with a few set questions. Open it from [your reports](/report) or from **My community**. After you save an event report or a monthly report, City Node takes you back to your reports so the next one is a click away.
+
+## Who reads it
+
+You, your community's other owners and organizers, and the City Node platform team. Nobody else can see it.
+
+The platform team reads each report and marks it **Reviewed**, which you'll see on [your reports](/report) and on the report itself. They don't send comments back through City Node. If you change a report after it was reviewed, it goes back to them to read again.

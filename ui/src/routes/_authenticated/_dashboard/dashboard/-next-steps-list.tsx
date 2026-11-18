@@ -5,9 +5,8 @@ import {
   FingerprintIcon,
   type Icon,
   NetworkIcon,
-  PlusCircleIcon,
   RocketLaunchIcon,
-  ShieldCheckIcon,
+  UserPlusIcon,
   UsersThreeIcon,
   WalletIcon,
 } from "@phosphor-icons/react";
@@ -31,8 +30,7 @@ const STEP_ICONS: Record<NextStepId, Icon> = {
   "start-community": RocketLaunchIcon,
   "open-community": NetworkIcon,
   payouts: WalletIcon,
-  "launch-node": PlusCircleIcon,
-  admin: ShieldCheckIcon,
+  "team-requests": UserPlusIcon,
   stake: CoinsIcon,
   explore: CompassIcon,
 };
@@ -53,10 +51,8 @@ function stepLink(step: NextStep) {
       return <Link to="/dashboard/node" />;
     case "payouts":
       return <Link to="/dashboard/node" hash="payouts" />;
-    case "launch-node":
-      return <Link to="/apply" />;
-    case "admin":
-      return <Link to="/admin/proposals" />;
+    case "team-requests":
+      return <Link to="/dashboard/node" hash="teams" />;
     case "stake":
       return <Link to="/stake" />;
     case "explore":
@@ -102,12 +98,20 @@ function StepRow({ step }: StepProps) {
   );
 }
 
-export function NextStepsList({ steps, primary }: { steps: NextStep[]; primary: boolean }) {
+export function NextStepsList({
+  steps,
+  primary,
+  testId = "home-next-steps",
+}: {
+  steps: NextStep[];
+  primary: boolean;
+  testId?: string;
+}) {
   const [first, ...rest] = steps;
   const featured = primary && first ? first : null;
   const rows = featured ? rest : steps;
   return (
-    <ItemGroup data-testid="home-next-steps">
+    <ItemGroup data-testid={testId}>
       {featured && <FeaturedStep step={featured} />}
       {rows.map((step) => (
         <StepRow key={step.id} step={step} />

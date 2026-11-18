@@ -12,7 +12,7 @@ import {
   SparkleIcon,
 } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
 import { Badge, Button, EmptyState } from "@/components";
@@ -38,6 +38,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
+import { placeMapPinsQueryOptions } from "@/lib/queries/places";
 import { CommunityChannels, CommunityUpdates } from "./community-updates";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, EventList } from "./event-list";
@@ -78,6 +79,7 @@ export function DiscoveryExplorer({
 }) {
   const { locale } = useAppLocale();
   const t = useAppTranslation();
+  const go = useNavigate();
   const [mobile, setMobile] = useState(false);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 639px)");
@@ -113,6 +115,7 @@ export function DiscoveryExplorer({
     queryFn: () => api.listDiscovery({}),
     staleTime: 30_000,
   });
+  const catalog = useQuery(placeMapPinsQueryOptions(api));
   const regionItems = [
     { label: t("explore.region.all"), value: ALL_REGIONS },
     ...[...new Set([...(regions.data ?? []).map((node) => node.region), search.region ?? ""])]
@@ -133,6 +136,13 @@ export function DiscoveryExplorer({
   };
   const filtered = !!(search.query || search.region || search.active || search.upcoming);
   const nodes = list.data ?? [];
+  const query = (search.query ?? "").trim().toLowerCase();
+  const scoped = !!(search.region || search.active || search.upcoming);
+  const catalogPlaces = catalog.data ?? [];
+  const placePins = catalogPlaces.filter((place) => {
+    if (scoped) return false;
+    return query ? place.name.toLowerCase().includes(query) || place.slug.includes(query) : true;
+  });
   const basic = selected
     ? undefined
     : [...nodes, ...(regions.data ?? [])].find(
@@ -269,7 +279,17 @@ export function DiscoveryExplorer({
                   </div>
                 }
               >
-                <GeographicMap nodes={nodes} onSelect={select} selectedId={search.node} />
+                <GeographicMap
+                  nodes={nodes}
+                  listed={regions.data ?? nodes}
+                  places={catalogPlaces}
+                  placePins={placePins}
+                  worldCatalog={!filtered}
+                  onSelect={select}
+                  onSelectPlace={(slug) => go({ to: "/places/$slug", params: { slug } })}
+                  onOpenCommunity={(slug) => go({ to: "/n/$slug", params: { slug } })}
+                  selectedId={search.node}
+                />
               </Suspense>
             </div>
           ) : null}
@@ -372,8 +392,18 @@ export function DiscoveryExplorer({
             basic ? (
               <div className="flex flex-col gap-4 px-6 pb-8">
                 <p className="text-sm text-muted-foreground">{t("explore.detail.basic")}</p>
+                {basic.placeSlug && basic.joinable && (
+                  <Button
+                    data-testid="explore-detail-join"
+                    nativeButton={false}
+                    render={<Link to="/join" search={{ place: basic.placeSlug }} />}
+                  >
+                    {t("explore.detail.join")}
+                  </Button>
+                )}
                 <div>
                   <Button
+                    variant={basic.placeSlug && basic.joinable ? "outline" : "default"}
                     nativeButton={false}
                     render={
                       <Link
@@ -411,6 +441,15 @@ export function DiscoveryExplorer({
               )}
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap gap-2">
+                  {selected.placeSlug && selected.joinable && (
+                    <Button
+                      data-testid="explore-detail-join"
+                      nativeButton={false}
+                      render={<Link to="/join" search={{ place: selected.placeSlug }} />}
+                    >
+                      {t("explore.detail.join")}
+                    </Button>
+                  )}
                   <Button
                     nativeButton={false}
                     render={

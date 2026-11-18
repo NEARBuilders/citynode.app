@@ -1,14 +1,6 @@
 import type { AppMessageId } from "@/i18n/catalogs";
 
-export type EventVisibility =
-  | "live"
-  | "scheduled"
-  | "published"
-  | "draft"
-  | "hiddenImport"
-  | "removed"
-  | "cancelled"
-  | "ended";
+export type EventVisibility = "live" | "scheduled" | "published" | "draft" | "cancelled" | "ended";
 
 export type VisibilityActivity = {
   kind: "event" | "social";
@@ -16,7 +8,6 @@ export type VisibilityActivity = {
   publishedAt: string;
   startsAt: string | null;
   endsAt: string | null;
-  luma?: { available: boolean; hidden?: boolean };
 };
 
 export type VisibilityContext = {
@@ -28,9 +19,6 @@ export function eventVisibility(
   activity: VisibilityActivity,
   { communityPublic, now }: VisibilityContext,
 ): EventVisibility | null {
-  if (activity.luma?.available === false) return "removed";
-  if (activity.luma && (activity.luma.hidden === true || activity.status === "draft"))
-    return "hiddenImport";
   if (activity.status === "draft") return "draft";
   if (activity.status === "cancelled") return "cancelled";
   if (hasEnded(activity, now)) return "ended";
@@ -57,8 +45,6 @@ const saveConfirmations: Record<EventVisibility, AppMessageId> = {
   published: "events.savedCommunityHidden",
   cancelled: "events.savedCancelled",
   draft: "events.savedDraft",
-  hiddenImport: "events.savedDraft",
-  removed: "events.savedDraft",
   ended: "events.savedEnded",
 };
 
@@ -79,11 +65,4 @@ export function saveConfirmation(
 function hasEnded(activity: VisibilityActivity, now: number) {
   const boundary = activity.endsAt ?? activity.startsAt;
   return activity.kind === "event" && !!boundary && Date.parse(boundary) < now;
-}
-
-export function isWaitingImport(activity: VisibilityActivity, now: number) {
-  if (activity.kind !== "event" || !activity.luma || activity.luma.available === false)
-    return false;
-  if (activity.luma.hidden !== true && activity.status !== "draft") return false;
-  return !hasEnded(activity, now);
 }

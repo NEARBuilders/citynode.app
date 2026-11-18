@@ -173,11 +173,16 @@ function StationRow({
       <ItemContent>
         <ItemTitle>{code.eventName}</ItemTitle>
         <ItemDescription>
-          {translate("station.joinedCount", {
-            used: code.usedCount,
-            max: code.maxUses,
-            time: formatRemaining(code.expiresAt, Date.now(), translate, locale),
-          })}
+          {code.expiresAt
+            ? translate("station.joinedCount", {
+                used: code.usedCount,
+                max: code.maxUses,
+                time: formatRemaining(code.expiresAt, Date.now(), translate, locale),
+              })
+            : translate("station.joinedCountNoExpiry", {
+                used: code.usedCount,
+                max: code.maxUses,
+              })}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -344,7 +349,10 @@ export function EventOnboardingPanel({
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
-  const events = upcomingEvents(activities.data ?? [], now);
+  const events = upcomingEvents(
+    (activities.data ?? []).filter((activity) => activity.ownerNodeId),
+    now,
+  );
   const nodeEventIds = new Set((activities.data ?? []).map((activity) => activity.id));
   const nodeCodes = (codes.data ?? []).filter(
     (code) => !code.eventId || nodeEventIds.has(code.eventId),

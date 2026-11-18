@@ -2,77 +2,54 @@ import { z } from "zod";
 import type { ApiClient } from "@/app";
 import type { AppTranslator } from "@/i18n/catalogs";
 import { translateEnglishAppMessage } from "@/i18n/runtime";
-import { generateSlug } from "@/lib/slug";
-
-export const nodeApplicationKinds = ["country", "state", "city"] as const;
 
 const nearAccountIdPattern =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
 
-function createNodeApplicationFields(t: AppTranslator) {
-  return {
-    kind: z.enum(nodeApplicationKinds),
-    parentId: z.string().nullable(),
-    name: z.string().trim().min(1, t("application.nameRequired")),
-    slug: z
-      .string()
-      .min(1, t("application.slugRequired"))
-      .regex(/^[a-z0-9-]+$/, t("application.slugInvalid")),
-    motivation: z.string().trim().min(1, t("application.motivationRequired")),
-  };
-}
-const nodeApplicationFields = createNodeApplicationFields(translateEnglishAppMessage);
-
-function validateParent(
-  value: { kind: (typeof nodeApplicationKinds)[number]; parentId: string | null },
-  context: z.RefinementCtx,
-  t: AppTranslator = translateEnglishAppMessage,
-) {
-  if (value.kind === "country" && value.parentId !== null) {
-    context.addIssue({
-      code: "custom",
-      path: ["parentId"],
-      message: t("application.countryParentError"),
-    });
-  }
-  if (value.kind === "state" && !value.parentId) {
-    context.addIssue({ code: "custom", path: ["parentId"], message: t("application.parentError") });
-  }
-}
-
 export function createNodeApplicationSchema(t: AppTranslator) {
-  return z
-    .object(createNodeApplicationFields(t))
-    .superRefine((value, context) => validateParent(value, context, t));
+  return z.object({
+    motivation: z.string().trim().min(1, t("application.motivationRequired")),
+  });
 }
 export const nodeApplicationSchema = createNodeApplicationSchema(translateEnglishAppMessage);
 
-export const nodeProposalPayloadSchema = z
-  .object({
-    ...nodeApplicationFields,
-    orgId: z.string().min(1).optional(),
-    accountId: z.string().regex(nearAccountIdPattern),
-    submitterAccountId: z.string().regex(nearAccountIdPattern).optional(),
-  })
-  .superRefine(validateParent);
+export const nodeProposalPayloadSchema = z.object({
+  placeId: z.string().optional(),
+  name: z.string().trim().min(1),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/),
+  motivation: z.string().trim().min(1),
+  accountId: z.string().regex(nearAccountIdPattern),
+  submitterAccountId: z.string().regex(nearAccountIdPattern).optional(),
+});
 
 export type NodeApplicationValues = z.infer<typeof nodeApplicationSchema>;
 export type NodeProposalPayload = z.infer<typeof nodeProposalPayloadSchema>;
 
-export function generateNodeApplicationSlug(value: string) {
-  return generateSlug(value);
+export interface ApplicationPlace {
+  id: string;
+  slug: string;
+  name: string;
 }
 
 export function buildNodeProposalPayload(
   values: NodeApplicationValues,
-  identity: { orgId?: string; daoAccountId: string; submitterAccountId: string },
-): NodeProposalPayload {
-  return nodeProposalPayloadSchema.parse({
-    ...values,
-    ...(identity.orgId ? { orgId: identity.orgId } : {}),
-    accountId: identity.daoAccountId,
-    submitterAccountId: identity.submitterAccountId,
-  });
+  place: ApplicationPlace,
+  identity: { daoAccountId: string; submitterAccountId: string },
+): NodeProposalPayload & { placeId: string } {
+  return {
+    ...nodeProposalPayloadSchema.parse({
+      placeId: place.id,
+      name: place.name,
+      slug: place.slug,
+      motivation: values.motivation,
+      accountId: identity.daoAccountId,
+      submitterAccountId: identity.submitterAccountId,
+    }),
+    placeId: place.id,
+  };
 }
 
 export function parseNodeProposalPayload(payload: unknown): NodeProposalPayload {
@@ -81,38 +58,34 @@ export function parseNodeProposalPayload(payload: unknown): NodeProposalPayload 
 
 export function canSubmitNodeApplication({
   values,
+  place,
   daoAccountId,
   submitterAccountId,
-  hostnameAvailable,
-  organizationSlugAvailable,
-  preflightLoading = false,
   submitting = false,
 }: {
   values: NodeApplicationValues;
+  place: ApplicationPlace | null;
   daoAccountId: string | null;
   submitterAccountId: string | null;
-  hostnameAvailable: boolean;
-  organizationSlugAvailable: boolean;
-  preflightLoading?: boolean;
   submitting?: boolean;
 }) {
   return (
+    !!place &&
     !!daoAccountId &&
     !!submitterAccountId &&
     nodeApplicationSchema.safeParse(values).success &&
-    hostnameAvailable &&
-    organizationSlugAvailable &&
-    !preflightLoading &&
     !submitting
   );
 }
 
-export function proposeNodeApplication(
+export async function proposeNodeApplication(
   apiClient: ApiClient,
   values: NodeApplicationValues,
-  identity: { orgId?: string; daoAccountId: string; submitterAccountId: string },
+  place: ApplicationPlace & { activated: boolean },
+  identity: { daoAccountId: string; submitterAccountId: string },
 ) {
-  const payload = buildNodeProposalPayload(values, identity);
+  if (!place.activated) await apiClient.activateCommunity({ place: place.slug });
+  const payload = buildNodeProposalPayload(values, place, identity);
   return apiClient.proposals.propose({
     pluginId: "node",
     entityId: payload.slug,

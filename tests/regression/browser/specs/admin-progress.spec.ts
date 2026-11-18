@@ -15,7 +15,7 @@ const DAY = 86_400_000;
 test.use({ trace: "on" });
 
 test.describe("admin progress and needs action", () => {
-  test("an admin follows a community from the overview to its page and reviews an application", async ({
+  test("an admin follows a community from Home to its page and reviews an application", async ({
     page,
   }) => {
     const pageErrors = collectErrors(page);
@@ -65,14 +65,13 @@ test.describe("admin progress and needs action", () => {
     const application = await seedNodeProposal({
       slug: `${unique}-apply`,
       name: `Applicant ${unique}`,
-      parentId: node.id,
       submitterAccountId: "applicant.near",
     });
     await injectAdminCookies(page);
 
-    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await expect(page.getByTestId("admin.section.manage")).toBeInViewport({ timeout: 15000 });
+    await expect(page.getByTestId("home-admin-overview")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("admin.stat.tenants")).toHaveCount(0);
 
     const applicationItem = page.getByTestId(`admin-needs-action-application-${application.id}`);
@@ -80,6 +79,7 @@ test.describe("admin progress and needs action", () => {
 
     const row = page.getByTestId(`admin-progress-row-${node.id}`);
     if (!(await row.isVisible())) await page.getByTestId("admin-progress-toggle").click();
+    await row.scrollIntoViewIfNeeded();
     await expect(row.getByTestId("admin-progress-events")).toHaveText("1 upcoming · 1 past", {
       timeout: 15000,
     });
@@ -111,7 +111,7 @@ test.describe("admin progress and needs action", () => {
     );
     await expect(page.getByTestId("admin-node.heading")).toContainText(`Renamed ${unique}`);
 
-    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
     await page.getByTestId(`admin-needs-action-application-${application.id}`).click();
     await page.waitForURL(new RegExp(`/admin/proposals/${application.id}`), {
@@ -119,7 +119,12 @@ test.describe("admin progress and needs action", () => {
     });
     await waitForApp(page);
     const request = page.getByTestId("admin-proposal-request");
-    await expect(request).toContainText(`Renamed ${unique}`, { timeout: 15000 });
+    await expect(page.getByTestId("admin-proposal-community")).toHaveText(`Applicant ${unique}`, {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId("admin-proposal-dao")).toHaveText(
+      `${unique}-apply.sputnik-dao.near`,
+    );
     await expect(request).toContainText("applicant.near");
     await expect(request).not.toContainText(node.id);
     await expect(page.getByTestId("admin-proposal-approve")).toBeInViewport();
