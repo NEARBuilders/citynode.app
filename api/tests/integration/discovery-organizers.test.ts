@@ -133,7 +133,7 @@ describe("events-area organizers", () => {
     }
   });
 
-  it("lets an events-team member connect Luma, see hidden imports, approve them, but not disconnect", async () => {
+  it("lets an events-team member connect Luma and see its events, but not disconnect", async () => {
     stubLuma();
     const { id, org, node } = await community();
     const organizer = await getPluginClient(memberWithTeam(`organizer-${id}`, org, ["events"]));
@@ -145,14 +145,7 @@ describe("events-area organizers", () => {
       await organizer.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-organizers" }),
     ).toMatchObject({ imported: 1 });
     const [imported] = await organizer.listDiscoveryActivities({ nodeId: node.id });
-    expect(imported).toMatchObject({ status: "draft", luma: { hidden: true } });
-    expect(
-      await organizer.setDiscoveryLumaVisibility({
-        nodeId: node.id,
-        activityId: imported!.id,
-        show: true,
-      }),
-    ).toMatchObject({ status: "published", luma: { hidden: false } });
+    expect(imported).toMatchObject({ status: "published", luma: { calendarId: "cal-organizers" } });
     await expect(organizer.disconnectDiscoveryLuma({ nodeId: node.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
@@ -199,6 +192,7 @@ describe("events-area organizers", () => {
       eventInput(node.id, { title: "Open night", status: "published" }),
     );
     await owner.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-organizers" });
+    const imported = (await owner.listDiscoveryActivities({ nodeId: node.id })).find((a) => a.luma);
     const members = [
       await getPluginClient(orgContext(`plain-${id}`, org, "member")),
       await getPluginClient(memberWithTeam(`treasury-${id}`, org, ["finance", "stake"])),
@@ -208,8 +202,8 @@ describe("events-area organizers", () => {
     ];
     for (const member of members) {
       expect(
-        (await member.listDiscoveryActivities({ nodeId: node.id })).map((event) => event.id),
-      ).toEqual([published.id]);
+        (await member.listDiscoveryActivities({ nodeId: node.id })).map((event) => event.id).sort(),
+      ).toEqual([published.id, imported!.id].sort());
       await expect(member.saveDiscoveryActivity(eventInput(node.id))).rejects.toMatchObject({
         code: "FORBIDDEN",
       });

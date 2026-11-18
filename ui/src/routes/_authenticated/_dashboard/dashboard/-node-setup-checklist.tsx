@@ -62,7 +62,7 @@ export function useNodeSetupSteps({
   if (!active || !profile.isSuccess || !activities.isSuccess) return null;
   return getNodeSetupSteps({
     profile: profile.data,
-    eventCount: activities.data.length,
+    eventCount: activities.data.filter((activity) => activity.ownerNodeId).length,
     onboardingCodeCount: onboardingCodes.data?.length ?? 0,
   });
 }

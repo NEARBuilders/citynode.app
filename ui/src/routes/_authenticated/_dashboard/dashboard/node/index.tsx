@@ -19,7 +19,6 @@ import {
 import {
   discoveryNodeQueryOptions,
   EventVisibilityBadge,
-  ImportsWaiting,
   useVisibilityContext,
 } from "@/components/discovery/event-visibility";
 import { TeamStakeCard, useCanSeeTeamStake } from "@/components/team-stake-card";
@@ -33,12 +32,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
-import {
-  type EventTitleLink,
-  eventTitleLink,
-  eventVisibility,
-  isWaitingImport,
-} from "@/lib/event-visibility";
+import { type EventTitleLink, eventTitleLink, eventVisibility } from "@/lib/event-visibility";
 import { presentationLabel } from "@/lib/presentation-label";
 import { onboardingRedemptionsQueryOptions } from "@/lib/queries/onboarding-joins";
 import { resolveTeamAccountId, resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
@@ -207,9 +201,6 @@ function NodeOverview() {
     visibilityContext.communityPublic === null
       ? null
       : upcoming.filter((event) => eventVisibility(event, visibilityContext) === "live").length;
-  const waitingCount = (activities.data ?? []).filter((event) =>
-    isWaitingImport(event, now),
-  ).length;
 
   const bulletin = selectedNode.metadata?.bulletin;
   const updates = listing.data?.updates ?? [];
@@ -373,17 +364,6 @@ function NodeOverview() {
             ) : undefined
           }
         />
-        <ImportsWaiting
-          count={waitingCount}
-          testId="dashboard-node.imports-waiting"
-          link={
-            <Link
-              to="/nodes/$nodeId/content"
-              params={{ nodeId: selectedNode.id }}
-              search={{ tab: "events", review: "imports" }}
-            />
-          }
-        />
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {activities.isError
@@ -406,7 +386,7 @@ function NodeOverview() {
                       nodeId={selectedNode.id}
                       link={eventTitleLink(
                         eventVisibility(event, visibilityContext),
-                        canManage || canOrganize,
+                        !!event.ownerNodeId && (canManage || canOrganize),
                       )}
                     />
                     <EventVisibilityBadge activity={event} context={visibilityContext} />

@@ -245,7 +245,6 @@ export async function seedDiscoveryActivity(input) {
           luma: {
             calendarId: "cal-regression",
             eventId: `evt-${id}`,
-            syncedAt: new Date().toISOString(),
             ...luma,
           },
         }

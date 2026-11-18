@@ -71,6 +71,7 @@ describe("ActivityEditor", () => {
     api.listDiscoveryActivities.mockResolvedValue([
       {
         id: "e1",
+        ownerNodeId: "n1",
         kind: "event",
         status: "published",
         title: "Launch Night",

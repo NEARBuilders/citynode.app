@@ -349,7 +349,10 @@ export function EventOnboardingPanel({
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });
 
-  const events = upcomingEvents(activities.data ?? [], now);
+  const events = upcomingEvents(
+    (activities.data ?? []).filter((activity) => activity.ownerNodeId),
+    now,
+  );
   const nodeEventIds = new Set((activities.data ?? []).map((activity) => activity.id));
   const nodeCodes = (codes.data ?? []).filter(
     (code) => !code.eventId || nodeEventIds.has(code.eventId),
