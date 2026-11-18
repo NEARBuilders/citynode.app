@@ -302,22 +302,16 @@ describe("apply route submission", () => {
   });
 
   it.each([
-    ["pending", "not_started", "Awaiting review"],
-    ["approved", "applying", "Applying"],
-    ["rejected", "not_started", "Rejected"],
-    ["approved", "failed", "Apply failed"],
-    ["removed", "not_started", "Removed"],
-  ])("shows %s/%s application status after reload", async (reviewStatus, applyStatus, expected) => {
+    ["pending", "Awaiting review"],
+    ["rejected", "Rejected"],
+    ["removed", "Removed"],
+  ])("shows a %s application's status after reload", async (reviewStatus, expected) => {
     harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
       data: [
         {
           id: "existing-1",
           reviewStatus,
-          applyStatus,
           rejectionReason: reviewStatus === "rejected" ? "More detail needed" : null,
-          applySteps: {},
-          applyTimedOut: false,
-          appliedAt: null,
           payload: { name: "Chicago" },
         },
       ],
@@ -326,7 +320,6 @@ describe("apply route submission", () => {
     expect((await screen.findByTestId("apply.current-status")).textContent).toBe(expected);
     expect(screen.getByText("existing-1")).toBeTruthy();
     expect(screen.queryByTestId("apply.submit")).toBeNull();
-    expect(screen.queryByTestId("apply.progress") !== null).toBe(reviewStatus === "approved");
     if (reviewStatus === "rejected") {
       expect(screen.getByText("More detail needed")).toBeTruthy();
       fireEvent.click(screen.getByTestId("apply.revise"));
@@ -334,26 +327,17 @@ describe("apply route submission", () => {
     }
   });
 
-  const application = (
-    id: string,
-    reviewStatus: string,
-    applyStatus: string,
-    createdAt: string,
-  ) => ({
+  const application = (id: string, reviewStatus: string, createdAt: string) => ({
     id,
     reviewStatus,
-    applyStatus,
     rejectionReason: null,
-    applySteps: {},
-    applyTimedOut: false,
-    appliedAt: null,
     createdAt,
     payload: { name: id },
   });
 
-  it("opens a fresh form when the latest application is live", async () => {
+  it("opens a fresh form when the latest application is approved", async () => {
     harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
-      data: [application("live-1", "approved", "applied", "2026-09-10T00:00:00.000Z")],
+      data: [application("live-1", "approved", "2026-09-10T00:00:00.000Z")],
     });
     await renderApply();
     expect(screen.getByTestId("apply.steps")).toBeTruthy();
@@ -363,8 +347,8 @@ describe("apply route submission", () => {
   it("picks the latest application by submission time, not last update", async () => {
     harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
       data: [
-        application("live-1", "approved", "applied", "2026-09-01T00:00:00.000Z"),
-        application("pending-2", "pending", "not_started", "2026-09-10T00:00:00.000Z"),
+        application("live-1", "approved", "2026-09-01T00:00:00.000Z"),
+        application("pending-2", "pending", "2026-09-10T00:00:00.000Z"),
       ],
     });
     await renderApply();
@@ -372,24 +356,24 @@ describe("apply route submission", () => {
     expect(screen.getByText("pending-2", { selector: "p.font-mono" })).toBeTruthy();
   });
 
-  it("does not let an older rejected application hide a newer live one", async () => {
+  it("does not let an older rejected application hide a newer approved one", async () => {
     harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
       data: [
-        application("rejected-1", "rejected", "not_started", "2026-09-01T00:00:00.000Z"),
-        application("live-2", "approved", "applied", "2026-09-10T00:00:00.000Z"),
+        application("rejected-1", "rejected", "2026-09-01T00:00:00.000Z"),
+        application("live-2", "approved", "2026-09-10T00:00:00.000Z"),
       ],
     });
     await renderApply();
     expect(screen.getByTestId("apply.steps")).toBeTruthy();
   });
 
-  it("shows a live application's status when opened from its status link", async () => {
+  it("shows an approved application's status when opened from its status link", async () => {
     harness.search = { application: "live-1" };
     harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
-      data: [application("live-1", "approved", "applied", "2026-09-10T00:00:00.000Z")],
+      data: [application("live-1", "approved", "2026-09-10T00:00:00.000Z")],
     });
     await renderApply();
-    expect((await screen.findByTestId("apply.current-status")).textContent).toBe("Live");
+    expect((await screen.findByTestId("apply.current-status")).textContent).toBe("Approved");
     fireEvent.click(screen.getByTestId("apply.new"));
     expect(screen.getByTestId("apply.steps")).toBeTruthy();
   });
@@ -408,49 +392,6 @@ describe("apply route submission", () => {
     );
     expect(screen.getByTestId("apply.loading")).toBeTruthy();
     expect(screen.queryByTestId("apply.steps")).toBeNull();
-  });
-
-  it("shows the applicant which setup step is waiting on their DAO", async () => {
-    harness.apiClient?.proposals.getMyNodeApplications.mockResolvedValue({
-      data: [
-        {
-          id: "existing-1",
-          reviewStatus: "approved",
-          applyStatus: "failed",
-          rejectionReason: null,
-          applyTimedOut: false,
-          appliedAt: null,
-          applySteps: {
-            organization: {
-              status: "completed",
-              resourceId: "org",
-              recordedAt: "2026-09-10T00:01:00.000Z",
-            },
-            community: {
-              status: "completed",
-              resourceId: "node",
-              recordedAt: "2026-09-10T00:02:00.000Z",
-            },
-            publication: {
-              status: "waiting",
-              resourceId: "12",
-              recordedAt: "2026-09-10T00:03:00.000Z",
-            },
-          },
-          payload: { name: "Chicago", accountId: "chicago.sputnik-dao.near" },
-        },
-      ],
-    });
-    await renderApply();
-    const publication = await screen.findByTestId("application-progress-publication");
-    expect(publication.getAttribute("data-state")).toBe("waiting");
-    expect(screen.getByTestId("application-progress-community").getAttribute("data-state")).toBe(
-      "done",
-    );
-    expect(screen.queryByText("node")).toBeNull();
-    expect(screen.getByTestId("application-progress-dao-vote").getAttribute("href")).toBe(
-      "https://trezu.app/chicago.sputnik-dao.near/requests",
-    );
   });
 
   it.each([

@@ -5,19 +5,10 @@ import { buildScopedContext, createPlugin } from "every-plugin";
 import { createAuthMiddleware } from "everything-dev/api";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { z } from "zod";
-import {
-  type CommunitySetupStep,
-  contract,
-  type EventOnboardingCodeSchema,
-  NodeProposalPayloadSchema,
-} from "./contract";
+import { contract, type EventOnboardingCodeSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
-import {
-  provisionCommunityOrganization,
-  releaseCommunityOrganization,
-} from "./lib/community-organizations";
 import { ContextSchema } from "./lib/context";
 import {
   grantApplicantAdmin,
@@ -38,7 +29,6 @@ import {
   type MemberDirectoryService,
   MemberDirectoryTag,
 } from "./services/member-directory";
-import { resolveNetwork } from "./services/near-rpc";
 import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { BulletinPublisher, NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag, nodeKindOf, PLATFORM_NODE_KIND } from "./services/nodes";
@@ -506,99 +496,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
       createAuthMiddleware<AuthContext>(builder);
     const requireNodeOperations = createRequireTeamArea(builder)("node-operations");
-    const resolveProposalOrganization = builder.middleware(
-      async ({ context, next }, input: { orgId: string }) => {
-        const authPlugin = plugins.auth;
-        if (!authPlugin) {
-          throw new ORPCError("INTERNAL_SERVER_ERROR", {
-            message: "The auth plugin is not available",
-          });
-        }
-        const organization = await authPlugin
-          .client({ reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()) })
-          .getOrganizationForAdmin({ organizationId: input.orgId });
-        const organizationContext: NonNullable<AuthContext["organization"]> = {
-          activeOrganizationId: organization?.id ?? null,
-          organization,
-          member: null,
-          isPersonal: false,
-          hasOrganization: !!organization,
-          teams: [],
-          activeTeamId: null,
-        };
-        return next({
-          context: {
-            organization: organizationContext,
-          },
-        });
-      },
-    );
-
-    const approvedCommunityProposal = (
-      context: {
-        reqHeaders?: ConstructorParameters<typeof Headers>[0];
-        userId?: string | null;
-        user?: AuthContext["user"];
-      },
-      input: { proposalId: string; entityId: string },
-    ) =>
-      Effect.gen(function* () {
-        const proposalsPlugin = plugins.proposals;
-        const authPlugin = plugins.auth;
-        if (!proposalsPlugin || !authPlugin) {
-          return yield* Effect.fail(
-            new ORPCError("INTERNAL_SERVER_ERROR", {
-              message: "The proposals or auth plugin is not available",
-            }),
-          );
-        }
-        const reqHeaders = Object.fromEntries(new Headers(context.reqHeaders).entries());
-        // In-process plugin clients need the verified reviewer context; headers alone are not rehydrated.
-        const reviewerContext = {
-          reqHeaders,
-          userId: context.userId ?? context.user?.id,
-          user: context.user,
-        };
-        const proposalsClient = proposalsPlugin.client(reviewerContext);
-        const listed = yield* Effect.tryPromise({
-          try: () =>
-            proposalsClient.getProposals({
-              pluginId: "node",
-              entityId: input.entityId,
-              limit: 1,
-            }),
-          catch: (error) =>
-            error instanceof ORPCError
-              ? error
-              : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: "Could not load the approved application",
-                }),
-        });
-        const proposal = listed.data.find((item) => item.id === input.proposalId);
-        if (!proposal) {
-          return yield* Effect.fail(
-            new ORPCError("NOT_FOUND", { message: "Application not found" }),
-          );
-        }
-        if (proposal.reviewStatus !== "approved") {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", { message: "The application is not approved" }),
-          );
-        }
-        const parsed = NodeProposalPayloadSchema.safeParse(proposal.payload);
-        if (!parsed.success || parsed.data.slug !== proposal.entityId) {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", { message: "Invalid saved community application" }),
-          );
-        }
-        return {
-          proposal,
-          payload: parsed.data,
-          proposalsClient,
-          auth: authPlugin.client(reviewerContext),
-        };
-      });
-
     const memberAuthClient = (context: {
       reqHeaders?: ConstructorParameters<typeof Headers>[0];
       userId: string;
@@ -1301,12 +1198,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const none = { daoAccountId: null, network: null };
         const node = yield* services.nodes.getById(input.nodeId);
         if (!node) return none;
-        const official = officialDaoOf(node);
-        if (official) return official;
-        if (!node.tenantId) return none;
-        const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
-        if (!tenant || tenant.ownerKind !== "dao") return none;
-        return { daoAccountId: tenant.accountId, network: resolveNetwork(tenant.accountId) };
+        return officialDaoOf(node) ?? none;
       }),
 
       getOnboardCommunity: builder.getOnboardCommunity.effect(function* ({ input }) {
@@ -2127,49 +2019,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
-      applyNodeProposal: builder.applyNodeProposal
-        .use(requireAdmin)
-        .use(resolveProposalOrganization)
-        .use(requireOrganization)
-        .effect(function* ({ input }) {
-          const services = yield* ApiServices;
-          yield* validateAccountId(input.accountId);
-          yield* validateAccountId(input.submitterAccountId);
-          if (input.poolAccountId) {
-            yield* requireApprovedStakingPool(services.stakingPools, {
-              accountId: input.poolAccountId,
-              network: "mainnet",
-              protocol: "near",
-            });
-          }
-          yield* validateHostname(input.hostname);
-          const result = yield* verifyDaoMembership({
-            daoAccountId: input.accountId,
-            memberAccountId: input.submitterAccountId,
-          });
-          if (!result.isMember) {
-            return yield* Effect.fail(
-              new ORPCError("FORBIDDEN", {
-                message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
-                data: {
-                  daoAccountId: input.accountId,
-                  submitterAccountId: input.submitterAccountId,
-                },
-              }),
-            );
-          }
-          return yield* services.tenants.applyNodeProposal({
-            kind: input.kind,
-            name: input.name,
-            slug: input.slug,
-            parentId: input.parentId,
-            orgId: input.orgId,
-            accountId: input.accountId,
-            hostname: input.hostname.toLowerCase(),
-            ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
-          });
-        }),
-
       approveOfficialApplication: builder.approveOfficialApplication
         .use(requireAdmin)
         .effect(function* ({ input, context }) {
@@ -2217,11 +2066,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               }),
             );
           }
-          if (
-            proposal.reviewStatus === "rejected" ||
-            proposal.reviewStatus === "removed" ||
-            (proposal.reviewStatus === "approved" && proposal.applyStatus === "applied")
-          ) {
+          if (proposal.reviewStatus !== "pending") {
             return yield* Effect.fail(
               new ORPCError("BAD_REQUEST", { message: "This application is already decided" }),
             );
@@ -2241,18 +2086,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
             },
             catch: failure("Could not link the DAO to the community"),
           });
-          const approved =
-            proposal.reviewStatus === "approved" && proposal.applyStatus === "applying"
-              ? proposal
-              : (yield* Effect.tryPromise({
-                  try: () =>
-                    proposalsClient.approve({
-                      pluginId: "node",
-                      entityId: proposal.entityId,
-                      expectedUpdatedAt: proposal.updatedAt,
-                    }),
-                  catch: failure("Could not approve the application"),
-                })).data;
+          yield* Effect.tryPromise({
+            try: () =>
+              proposalsClient.approve({
+                pluginId: "node",
+                entityId: proposal.entityId,
+                expectedUpdatedAt: proposal.updatedAt,
+              }),
+            catch: failure("Could not approve the application"),
+          });
           yield* Effect.tryPromise({
             try: () =>
               grantApplicantAdmin(auth, {
@@ -2262,175 +2104,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               }),
             catch: failure("Could not make the applicant an admin"),
           });
-          yield* Effect.tryPromise({
-            try: () =>
-              proposalsClient.markApplied({
-                pluginId: "node",
-                entityId: proposal.entityId,
-                expectedUpdatedAt: approved.updatedAt,
-                appliedResourceId: link.nodeId,
-              }),
-            catch: failure("Could not record the approval"),
-          });
           return link;
-        }),
-
-      applyCommunityProposal: builder.applyCommunityProposal.effect(function* ({
-        input,
-        context,
-        errors,
-      }) {
-        if (!context.userId && !context.user?.id) {
-          return yield* Effect.fail(
-            errors.UNAUTHORIZED({
-              message: "Authentication required",
-              data: { apiKeyProvided: Boolean(context.apiKey) },
-            }),
-          );
-        }
-        if (context.user?.role !== "admin") {
-          return yield* Effect.fail(
-            errors.FORBIDDEN({ message: "Platform admin required", data: {} }),
-          );
-        }
-        const { proposal, payload, proposalsClient, auth } = yield* approvedCommunityProposal(
-          context,
-          input,
-        );
-        if (proposal.applyStatus !== "applying") {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", {
-              message: "Approve or retry the application before applying it",
-            }),
-          );
-        }
-        const writeStep = (
-          step: CommunitySetupStep,
-          status: "started" | "completed",
-          resourceId: string,
-        ) =>
-          proposalsClient.recordApplyStep({
-            pluginId: "node",
-            entityId: proposal.entityId,
-            step,
-            status,
-            resourceId,
-          });
-        const recordStep = (step: CommunitySetupStep, resourceId: string) =>
-          Effect.tryPromise({
-            try: () => writeStep(step, "completed", resourceId),
-            catch: (error) =>
-              error instanceof ORPCError
-                ? error
-                : new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Could not record the application's setup progress",
-                  }),
-          });
-        if (payload.submitterAccountId && payload.submitterAccountId !== proposal.createdBy) {
-          return yield* Effect.fail(
-            new ORPCError("CONFLICT", {
-              message: "Saved applicant identity does not match the proposer",
-            }),
-          );
-        }
-        yield* validateAccountId(payload.accountId);
-        yield* validateAccountId(proposal.createdBy);
-        yield* validateHostname(input.hostname);
-        if (!input.hostname.toLowerCase().startsWith(`${payload.slug}.`)) {
-          return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", { message: "Hostname does not match the community slug" }),
-          );
-        }
-        const organization = yield* Effect.tryPromise({
-          try: () =>
-            provisionCommunityOrganization(auth, {
-              proposalId: proposal.id,
-              name: payload.name,
-              slug: payload.slug,
-              ...(payload.applicantUserId ? { proposerUserId: payload.applicantUserId } : {}),
-              applicantAccountId: proposal.createdBy,
-              reviewerUserId: context.userId ?? context.user?.id ?? "",
-              ...(payload.orgId && payload.applicantUserId ? { legacyOrgId: payload.orgId } : {}),
-              ...(proposal.applySteps.organization?.resourceId
-                ? { recordedOrganizationId: proposal.applySteps.organization.resourceId }
-                : {}),
-              onOrganization: (organizationId) =>
-                writeStep("organization", "started", organizationId),
-            }),
-          catch: (error) =>
-            error instanceof ORPCError
-              ? error
-              : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: "Could not provision the community organization",
-                }),
-        });
-        yield* recordStep("organization", organization.id);
-        const services = yield* ApiServices;
-        const community = yield* services.tenants.applyNodeProposal({
-          kind: payload.kind,
-          name: payload.name,
-          slug: payload.slug,
-          parentId: payload.parentId,
-          orgId: organization.id,
-          accountId: payload.accountId,
-          hostname: input.hostname.toLowerCase(),
-          proposalId: proposal.id,
-        });
-        yield* recordStep("community", community.nodeId);
-        return { ...community, applicantInvited: organization.applicantInvited };
-      }),
-
-      releaseCommunityProposal: builder.releaseCommunityProposal
-        .use(requireAdmin)
-        .effect(function* ({ input, context }) {
-          const { proposal, payload, auth } = yield* approvedCommunityProposal(context, input);
-          // Refuse if another admin resumed the setup after this admin loaded it.
-          if (proposal.updatedAt !== input.expectedUpdatedAt) {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: "This proposal changed. Refresh and try again.",
-              }),
-            );
-          }
-          if (proposal.applyStatus !== "failed") {
-            return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", {
-                message: "Only an application whose setup failed can have its resources removed",
-              }),
-            );
-          }
-          const services = yield* ApiServices;
-          const community = yield* services.tenants.releaseNodeProposal({
-            proposalId: proposal.id,
-          });
-          if (payload.orgId && payload.applicantUserId) {
-            return {
-              community,
-              organization: { released: false, keptReason: "existing" as const },
-            };
-          }
-          const recordedOrgId = proposal.applySteps.organization?.resourceId;
-          if (!recordedOrgId) {
-            return {
-              community,
-              organization: { released: false, keptReason: "not_found" as const },
-            };
-          }
-          const organization = yield* Effect.tryPromise({
-            try: () =>
-              releaseCommunityOrganization(auth, {
-                organizationId: recordedOrgId,
-                proposalId: proposal.id,
-                reviewerUserId: context.userId ?? context.user?.id ?? "",
-              }),
-            catch: (error) =>
-              error instanceof ORPCError
-                ? error
-                : new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Could not remove the community organization",
-                  }),
-          });
-          return { community, organization };
         }),
 
       listNodes: builder.listNodes.effect(function* ({ input, context }) {

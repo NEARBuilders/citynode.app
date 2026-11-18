@@ -1,18 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, isNull, not, notLike, or, sql } from "drizzle-orm";
+import { and, eq, inArray, not, notLike, or } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer } from "effect";
-import type { z } from "zod";
-import type { ReleasedCommunitySchema } from "../contract";
-import type { Database } from "../db/index";
 import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
   nodes as nodesTable,
   type tenantStatus,
   tenants as tenantsTable,
-  validators as validatorsTable,
 } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
 import { listedNode, nodeKindOf } from "./nodes";
@@ -101,25 +97,6 @@ export interface CreateBindingInput {
   isPrimary?: boolean;
 }
 
-export interface ApplyNodeProposalInput {
-  kind: "country" | "state" | "city";
-  name: string;
-  slug: string;
-  parentId: string | null;
-  orgId: string;
-  accountId: string;
-  hostname: string;
-  poolAccountId?: string;
-  proposalId?: string;
-}
-
-export type ProposalResourceInput = Pick<
-  ApplyNodeProposalInput,
-  "proposalId" | "accountId" | "orgId"
->;
-
-export type ReleaseNodeProposalResult = z.infer<typeof ReleasedCommunitySchema>;
-
 export interface TenantsService {
   listAllTenants: TenantEffect<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): TenantEffect<TenantRecord[]>;
@@ -134,8 +111,6 @@ export interface TenantsService {
   setPrimaryBinding(tenantId: string, bindingId: string): TenantEffect<TenantBindingRecord>;
   resolveBindingByHostname(hostname: string): TenantEffect<TenantBindingRecord | null>;
   createTenant(input: TenantInput): TenantEffect<TenantRecord>;
-  applyNodeProposal(input: ApplyNodeProposalInput): TenantEffect<{ nodeId: string }>;
-  releaseNodeProposal(input: { proposalId: string }): TenantEffect<ReleaseNodeProposalResult>;
   updateTenant(
     id: string,
     input: Partial<
@@ -158,46 +133,6 @@ export class TenantsTag extends Context.Service<TenantsTag, TenantsService>()("a
 
 type TenantRow = typeof tenantsTable.$inferSelect;
 type BindingRow = typeof domainBindingsTable.$inferSelect;
-async function findLinkedProposalNode(
-  db: Pick<Database, "select">,
-  proposalId: string,
-): Promise<string | null> {
-  const linked = await db
-    .select({ id: nodesTable.id })
-    .from(nodesTable)
-    .where(
-      and(
-        sql`${nodesTable.metadata}->>'communityProposalId' = ${proposalId}`,
-        not(isNull(nodesTable.tenantId)),
-      ),
-    )
-    .limit(1);
-  return linked[0]?.id ?? null;
-}
-
-async function findProposalNode(
-  db: Pick<Database, "select">,
-  input: ProposalResourceInput,
-): Promise<string | null> {
-  if (!input.proposalId) return null;
-  const linked = await findLinkedProposalNode(db, input.proposalId);
-  if (linked) return linked;
-  const owned = await db
-    .select({ id: nodesTable.id })
-    .from(nodesTable)
-    .innerJoin(tenantsTable, eq(nodesTable.tenantId, tenantsTable.id))
-    .where(
-      and(
-        eq(tenantsTable.accountId, input.accountId),
-        eq(tenantsTable.orgId, input.orgId),
-        eq(tenantsTable.ownerKind, "dao"),
-        isNull(tenantsTable.deletedAt),
-      ),
-    )
-    .limit(1);
-  return owned[0]?.id ?? null;
-}
-
 function toTenantRecord(row: TenantRow): TenantRecord {
   return {
     id: row.id,
@@ -670,188 +605,6 @@ export const TenantsLive = Layer.effect(
             return { tenant: toTenantRecord(tenant), binding: toBindingRecord(binding) };
           }),
         ),
-
-      releaseNodeProposal: (input) =>
-        Effect.tryPromise({
-          try: () =>
-            db.transaction(async (tx): Promise<ReleaseNodeProposalResult> => {
-              // KEEP: Only a node this proposal created; never the legacy DAO-and-organization match.
-              const nodeId = await findLinkedProposalNode(tx, input.proposalId);
-              if (!nodeId) return { released: false, keptReason: "not_found" };
-              const [node] = await tx
-                .select({ tenantId: nodesTable.tenantId })
-                .from(nodesTable)
-                .where(eq(nodesTable.id, nodeId))
-                .limit(1);
-              if (!node?.tenantId) return { released: false, keptReason: "not_found" };
-              const [children, tenantNodes] = await Promise.all([
-                tx
-                  .select({ id: nodesTable.id })
-                  .from(nodesTable)
-                  .where(eq(nodesTable.parentId, nodeId))
-                  .limit(1),
-                tx
-                  .select({ id: nodesTable.id })
-                  .from(nodesTable)
-                  .where(eq(nodesTable.tenantId, node.tenantId))
-                  .limit(2),
-              ]);
-              if (children.length > 0 || tenantNodes.length > 1) {
-                return { released: false, keptReason: "in_use" };
-              }
-              await tx.delete(tenantsTable).where(eq(tenantsTable.id, node.tenantId));
-              return { released: true, keptReason: null };
-            }),
-          catch: toOrpcError,
-        }),
-
-      applyNodeProposal: (input) =>
-        Effect.tryPromise({
-          try: async () => {
-            try {
-              return await db.transaction(async (tx) => {
-                const proposalNodeId = await findProposalNode(tx, input);
-                if (proposalNodeId) {
-                  return { nodeId: proposalNodeId };
-                }
-                const [existingTenant, existingNode, existingBinding] = await Promise.all([
-                  tx
-                    .select()
-                    .from(tenantsTable)
-                    .where(eq(tenantsTable.accountId, input.accountId))
-                    .limit(1),
-                  tx.select().from(nodesTable).where(eq(nodesTable.slug, input.slug)).limit(1),
-                  tx
-                    .select()
-                    .from(domainBindingsTable)
-                    .where(eq(domainBindingsTable.hostname, input.hostname))
-                    .limit(1),
-                ]);
-
-                if (existingTenant.length > 0) {
-                  throw new ORPCError("CONFLICT", {
-                    message: "Tenant with this accountId already exists",
-                    data: { accountId: input.accountId },
-                  });
-                }
-                if (existingNode.length > 0) {
-                  throw new ORPCError("CONFLICT", {
-                    message: "Node slug already exists",
-                    data: { slug: input.slug },
-                  });
-                }
-                if (existingBinding.length > 0) {
-                  throw new ORPCError("CONFLICT", {
-                    message: "Hostname already in use",
-                    data: { hostname: input.hostname },
-                  });
-                }
-
-                let parentKind: string | null = null;
-                if (input.parentId) {
-                  const [parent] = await tx
-                    .select({ metadata: nodesTable.metadata })
-                    .from(nodesTable)
-                    .where(eq(nodesTable.id, input.parentId))
-                    .limit(1);
-                  if (!parent) {
-                    throw new ORPCError("NOT_FOUND", {
-                      message: "Parent node not found",
-                      data: { resource: "node", resourceId: input.parentId },
-                    });
-                  }
-                  parentKind = nodeKindOf(parent.metadata);
-                }
-
-                const parentIsValid =
-                  (input.kind === "country" && input.parentId === null) ||
-                  (input.kind === "state" && parentKind === "country") ||
-                  (input.kind === "city" &&
-                    (input.parentId === null ||
-                      parentKind === "country" ||
-                      parentKind === "state"));
-                if (!parentIsValid) {
-                  throw new ORPCError("BAD_REQUEST", { message: "Invalid parent for node kind" });
-                }
-
-                const [tenant] = await tx
-                  .insert(tenantsTable)
-                  .values({
-                    name: input.name,
-                    accountId: input.accountId,
-                    orgId: input.orgId,
-                    status: "active",
-                    ownerKind: "dao",
-                  })
-                  .returning({ id: tenantsTable.id });
-                if (!tenant) {
-                  throw new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Tenant creation failed",
-                  });
-                }
-
-                const [node] = await tx
-                  .insert(nodesTable)
-                  .values({
-                    slug: input.slug,
-                    name: input.name,
-                    parentId: input.parentId,
-                    tenantId: tenant.id,
-                    metadata: {
-                      kind: input.kind,
-                      ...(input.proposalId ? { communityProposalId: input.proposalId } : {}),
-                      ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
-                    },
-                  })
-                  .returning({ id: nodesTable.id });
-                if (!node) {
-                  throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Node creation failed" });
-                }
-
-                if (input.poolAccountId) {
-                  await tx.insert(validatorsTable).values({
-                    nodeId: node.id,
-                    accountId: input.poolAccountId,
-                    network: "mainnet",
-                    protocol: "near",
-                    role: "official",
-                    isDefault: true,
-                    metadata: {},
-                  });
-                }
-
-                const [binding] = await tx
-                  .insert(domainBindingsTable)
-                  .values({
-                    tenantId: tenant.id,
-                    hostname: input.hostname,
-                    isPrimary: true,
-                    isVerified: !input.hostname.includes("."),
-                    verifiedAt: input.hostname.includes(".") ? null : new Date(),
-                    verificationToken: generateVerificationToken(),
-                  })
-                  .returning({ id: domainBindingsTable.id });
-                if (!binding) {
-                  throw new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Domain binding creation failed",
-                  });
-                }
-
-                return { nodeId: node.id };
-              });
-            } catch (error) {
-              if (input.proposalId && isUniqueViolation(error)) {
-                const nodeId = await findProposalNode(db, input);
-                if (nodeId) return { nodeId };
-              }
-              throw error;
-            }
-          },
-          catch: (error) =>
-            isUniqueViolation(error)
-              ? new ORPCError("CONFLICT", { message: "Node proposal resources already exist" })
-              : toOrpcError(error),
-        }),
 
       updateTenant: Effect.fn("TenantsService.updateTenant")(function* (id, input) {
         const [row] = yield* query(() =>

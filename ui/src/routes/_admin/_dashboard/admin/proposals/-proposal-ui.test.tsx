@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/i18n/test-render";
 import type { Proposal } from "@/lib/queries/proposals";
-import { ApplicationProgressList } from "@/routes/_authenticated/_dashboard/-application-progress-list";
 import { createProposalColumns } from "./-proposal-columns";
 import { normalizeProposalReviewFilter, ProposalReviewFilters } from "./-proposal-filters";
 import { ProposalListState } from "./-proposal-list-state";
@@ -26,18 +25,9 @@ const proposal: Proposal = {
   entityId: "node-1",
   payload: {},
   reviewStatus: "pending",
-  applyStatus: "not_started",
   operation: "create",
   schemaVersion: "1",
-  removeStatus: "not_started",
-  removeError: null,
-  appliedResourceId: null,
-  applySteps: {},
-  applyTimedOut: false,
-  appliedAt: null,
-  applyError: null,
   rejectionReason: null,
-  removedAt: null,
   createdBy: "user-1",
   submissionCount: 1,
   createdAt: "2026-09-10T00:00:00.000Z",
@@ -105,7 +95,6 @@ describe("proposal review UI seams", () => {
     const onReject = vi.fn();
     const onRejectionReasonChange = vi.fn();
     const props = {
-      isPending: true,
       isReviewing: false,
       onRejectionReasonChange,
       onApprove,
@@ -133,7 +122,6 @@ describe("proposal review UI seams", () => {
     const onApprove = vi.fn();
     render(
       <ProposalReviewActions
-        isPending
         rejectionReason=""
         isReviewing={false}
         onRejectionReasonChange={vi.fn()}
@@ -148,78 +136,18 @@ describe("proposal review UI seams", () => {
     expect(onApprove).toHaveBeenCalledOnce();
   });
 
-  it("lets an admin retry a failed application and shows the recorded error", () => {
-    const onApprove = vi.fn();
-    render(
-      <ProposalReviewActions
-        isPending={false}
-        isRetry
-        applyError="User closed the window"
-        rejectionReason=""
-        isReviewing={false}
-        onRejectionReasonChange={vi.fn()}
-        onApprove={onApprove}
-        onReject={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole("alert").textContent).toBe("User closed the window");
-    expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
-    expect(screen.getByText(/links its DAO to the activated community/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
-    expect(onApprove).toHaveBeenCalledOnce();
-  });
-
-  it("offers only Resume for a stalled setup that is still applying", () => {
-    const onApprove = vi.fn();
-    render(
-      <ProposalReviewActions
-        isPending={false}
-        isRetry
-        canReject={false}
-        rejectionReason=""
-        isReviewing={false}
-        onRejectionReasonChange={vi.fn()}
-        onApprove={onApprove}
-        onReject={vi.fn()}
-      />,
-    );
-
-    expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
-    expect(onApprove).toHaveBeenCalledOnce();
-  });
-
-  it("lists failed and stalled setups with a resume action", () => {
-    const failed: Proposal = {
+  it("reviews pending proposals and only views decided ones", () => {
+    const approved: Proposal = {
       ...proposal,
-      id: "proposal-failed",
-      entityId: "failed-community",
+      id: "proposal-approved",
+      entityId: "approved-community",
       reviewStatus: "approved",
-      applyStatus: "failed",
-      applyError: "Tenant creation failed",
-    };
-    const stalled: Proposal = {
-      ...proposal,
-      id: "proposal-stalled",
-      entityId: "stalled-community",
-      reviewStatus: "approved",
-      applyStatus: "applying",
-      applyTimedOut: true,
-    };
-    const waiting: Proposal = {
-      ...failed,
-      id: "proposal-waiting",
-      entityId: "waiting-community",
-      applySteps: {
-        publication: { status: "waiting", resourceId: "4", recordedAt: "2026-09-10T00:05:00.000Z" },
-      },
     };
     render(
       <ProposalListState
-        activeFilter="pending"
+        activeFilter="all"
         columns={createProposalColumns()}
-        proposals={[proposal, failed, stalled, waiting]}
+        proposals={[proposal, approved]}
         isLoading={false}
         isError={false}
         onRetry={vi.fn()}
@@ -229,58 +157,10 @@ describe("proposal review UI seams", () => {
     );
 
     const table = screen.getByTestId("admin-proposals-table");
-    expect(table.textContent).toContain("Setup failed");
-    expect(table.textContent).toContain("Setup stalled");
-    expect(table.textContent).toContain("Waiting for DAO vote");
-    expect(
-      Array.from(table.querySelectorAll("a")).filter((link) => link.textContent === "Resume"),
-    ).toHaveLength(3);
-    expect(
-      Array.from(table.querySelectorAll("a")).filter((link) => link.textContent === "Review"),
-    ).toHaveLength(1);
-  });
-
-  it("shows each recorded setup step and the open DAO vote", () => {
-    render(
-      <ApplicationProgressList
-        proposal={{
-          reviewStatus: "approved",
-          applyStatus: "failed",
-          applyTimedOut: false,
-          appliedAt: null,
-          applySteps: {
-            organization: {
-              status: "completed",
-              resourceId: "community-proposal-1",
-              recordedAt: "2026-09-10T00:01:00.000Z",
-            },
-            community: {
-              status: "completed",
-              resourceId: "node-uuid",
-              recordedAt: "2026-09-10T00:02:00.000Z",
-            },
-            publication: {
-              status: "waiting",
-              resourceId: "4",
-              recordedAt: "2026-09-10T00:03:00.000Z",
-            },
-          },
-        }}
-        daoAccountId="dao.sputnik-dao.near"
-        showResources
-      />,
-    );
-
-    const state = (id: string) =>
-      screen.getByTestId(`application-progress-${id}`).getAttribute("data-state");
-    expect(state("approval")).toBe("done");
-    expect(state("organization")).toBe("done");
-    expect(state("community")).toBe("done");
-    expect(state("publication")).toBe("waiting");
-    expect(state("complete")).toBe("upcoming");
-    expect(screen.getByText("community-proposal-1")).toBeTruthy();
-    const vote = screen.getByTestId("application-progress-dao-vote");
-    expect(vote.getAttribute("href")).toBe("https://trezu.app/dao.sputnik-dao.near/requests");
-    expect(vote.textContent).toContain("#4");
+    const links = Array.from(table.querySelectorAll("a")).map((link) => link.textContent);
+    expect(links.filter((label) => label === "Review")).toHaveLength(1);
+    expect(links.filter((label) => label === "View")).toHaveLength(1);
+    expect(links).not.toContain("Resume");
+    expect(table.textContent).not.toContain("Setup");
   });
 });

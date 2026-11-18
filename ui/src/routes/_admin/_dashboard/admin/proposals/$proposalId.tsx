@@ -1,5 +1,5 @@
 import { GavelIcon } from "@phosphor-icons/react";
-import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -11,14 +11,11 @@ import { pageTitle } from "@/lib/page-title";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import type { Proposal } from "@/lib/queries/proposals";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
-import { communitySetupNeedsAttention } from "@/routes/_authenticated/_dashboard/-application-progress";
-import { ApplicationProgressList } from "@/routes/_authenticated/_dashboard/-application-progress-list";
-import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 import { BackLink } from "../-admin-ui";
 import { approveProposal, rejectProposal } from "./-proposal-application";
+import { ProposalStatusCell } from "./-proposal-columns";
 import {
   adminProposalDetailQueryOptions,
-  proposalCanBeRejected,
   proposalReviewHistoryQueryOptions,
   proposalReviewQueryKeys,
   proposalTitle,
@@ -26,12 +23,7 @@ import {
 } from "./-proposal-review";
 import { ProposalReviewActions } from "./-proposal-review-actions";
 import { ProposalReviewHistory } from "./-proposal-review-history";
-import {
-  ProposalOutcome,
-  ProposalRequest,
-  ProposalStatusBadges,
-  ProposalTechnicalDetails,
-} from "./-proposal-summary";
+import { ProposalOutcome, ProposalRequest, ProposalTechnicalDetails } from "./-proposal-summary";
 
 type ProposalDetailSearch = { pluginId?: string; entityId?: string };
 
@@ -66,12 +58,9 @@ function ProposalDetailPage() {
   const queryClient = useQueryClient();
   const [rejectionReason, setRejectionReason] = useState("");
   const proposalQueryKey = proposalReviewQueryKeys.detail(proposalId, pluginId, entityId);
-  const applyingHere = useIsMutating({ mutationKey: proposalQueryKey }) > 0;
-  const proposalQuery = useQuery({
-    ...adminProposalDetailQueryOptions(apiClient, proposalId, pluginId, entityId),
-    refetchInterval: applyingHere ? 2000 : false,
-    refetchIntervalInBackground: true,
-  });
+  const proposalQuery = useQuery(
+    adminProposalDetailQueryOptions(apiClient, proposalId, pluginId, entityId),
+  );
   const reviewHistoryQuery = useQuery(proposalReviewHistoryQueryOptions(apiClient, pluginId));
 
   const reviewMutation = useMutation({
@@ -164,10 +153,6 @@ function ProposalDetailPage() {
 
   const proposal = proposalQuery.data;
   const isPending = proposal.reviewStatus === "pending";
-  const isRetry = communitySetupNeedsAttention(proposal);
-  const parsedNodePayload =
-    proposal.pluginId === "node" ? nodeProposalPayloadSchema.safeParse(proposal.payload) : null;
-  const proposalDaoAccountId = parsedNodePayload?.success ? parsedNodePayload.data.accountId : null;
 
   return (
     <>
@@ -177,7 +162,7 @@ function ProposalDetailPage() {
         description={
           <span className="flex flex-wrap items-center gap-3">
             {proposalTypeLabel(proposal.pluginId, translate)}
-            <ProposalStatusBadges proposal={proposal} />
+            <ProposalStatusCell proposal={proposal} t={translate} />
           </span>
         }
         headerTestId="admin-proposal.heading"
@@ -194,12 +179,8 @@ function ProposalDetailPage() {
             <ProposalRequest proposal={proposal} />
           </section>
           <div className="flex min-w-0 flex-col gap-8">
-            {isPending || isRetry ? (
+            {isPending ? (
               <ProposalReviewActions
-                isPending={isPending}
-                isRetry={isRetry}
-                canReject={proposalCanBeRejected(proposal)}
-                applyError={proposal.applyError}
                 rejectionReason={rejectionReason}
                 isReviewing={reviewMutation.isPending}
                 onRejectionReasonChange={(event) => setRejectionReason(event.target.value)}
@@ -214,13 +195,6 @@ function ProposalDetailPage() {
               />
             ) : (
               <ProposalOutcome proposal={proposal} />
-            )}
-            {proposal.pluginId === "node" && (
-              <ApplicationProgressList
-                proposal={proposal}
-                daoAccountId={proposalDaoAccountId}
-                showResources
-              />
             )}
           </div>
         </CardContent>

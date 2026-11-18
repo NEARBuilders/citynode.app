@@ -4,7 +4,6 @@ import {
   adminProposalDetailQueryOptions,
   adminProposalListQueryOptions,
   parseProposalReviewFilter,
-  proposalCanBeRejected,
   proposalReviewHistoryQueryOptions,
   proposalReviewQueryKeys,
   proposalReviewStatusVariant,
@@ -70,19 +69,6 @@ describe("proposal review status variants", () => {
     expect(proposalReviewStatusVariant("approved")).toBe("success");
     expect(proposalReviewStatusVariant("rejected")).toBe("destructive");
     expect(proposalReviewStatusVariant("removed")).toBe("outline");
-  });
-});
-
-describe("proposal rejection", () => {
-  it("rejects pending proposals and failed setups but not a stalled one that is still applying", () => {
-    expect(proposalCanBeRejected({ reviewStatus: "pending", applyStatus: "not_started" })).toBe(
-      true,
-    );
-    expect(proposalCanBeRejected({ reviewStatus: "approved", applyStatus: "failed" })).toBe(true);
-    expect(proposalCanBeRejected({ reviewStatus: "approved", applyStatus: "applying" })).toBe(
-      false,
-    );
-    expect(proposalCanBeRejected({ reviewStatus: "approved", applyStatus: "applied" })).toBe(false);
   });
 });
 

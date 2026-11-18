@@ -1,32 +1,9 @@
-import { CheckCircleIcon, WarningCircleIcon, XCircleIcon } from "@phosphor-icons/react";
-import { Badge, InfoRow, LocalDate } from "@/components";
+import { CheckCircleIcon, XCircleIcon } from "@phosphor-icons/react";
+import { InfoRow, LocalDate } from "@/components";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { Proposal } from "@/lib/queries/proposals";
 import { Disclosure, humanize, RawJson, RawJsonDisclosure } from "../-admin-ui";
 import { NodeProposalRequest } from "./-node-proposal-details";
-import { ProposalStatusCell } from "./-proposal-columns";
-import { proposalSetupStatus } from "./-proposal-review";
-
-export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
-  const translate = useAppTranslation();
-  const showApply =
-    proposal.reviewStatus === "approved" &&
-    !proposalSetupStatus(proposal, translate) &&
-    proposal.applyStatus !== "not_started";
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <ProposalStatusCell proposal={proposal} t={translate} />
-      {showApply && (
-        <Badge
-          variant={proposal.applyStatus === "applied" ? "success" : "outline"}
-          data-testid="admin-proposal-apply-status"
-        >
-          {humanize(proposal.applyStatus, translate)}
-        </Badge>
-      )}
-    </span>
-  );
-}
 
 export function ProposalRequest({ proposal }: { proposal: Proposal }) {
   return proposal.pluginId === "node" ? (
@@ -99,22 +76,6 @@ export function ProposalOutcome({ proposal }: { proposal: Proposal }) {
         <p className="text-sm whitespace-pre-wrap text-muted-foreground">
           {proposal.rejectionReason}
         </p>
-      )}
-      {proposal.appliedResourceId && (
-        <InfoRow
-          label={translate("admin.proposal.resource")}
-          value={proposal.appliedResourceId}
-          mono
-        />
-      )}
-      {proposal.applyError && (
-        <div className="flex items-start gap-2 text-sm text-destructive" role="alert">
-          <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
-          <span className="min-w-0 wrap-anywhere">
-            {translate("proposal.applyFailedDescription")}
-            <span className="mt-1 block">{proposal.applyError}</span>
-          </span>
-        </div>
       )}
     </div>
   );

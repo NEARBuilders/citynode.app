@@ -4,42 +4,26 @@ import { cn } from "cn";
 import { PageContainer } from "@/components";
 import { Button } from "@/components/ui/button";
 import { useAppTranslation } from "@/i18n/runtime";
-import type { ApplicationProgressInput } from "./-application-progress";
-import { ApplicationProgressList } from "./-application-progress-list";
-import {
-  type ApplyStatus,
-  applyStatusLabel,
-  type ReviewStatus,
-  reviewStatusBadge,
-} from "./dashboard/node/proposals/-proposal-summary";
+import { type ReviewStatus, reviewStatusBadge } from "./dashboard/node/proposals/-proposal-summary";
 
 export function ApplySubmitted({
   proposalId,
   name,
   reviewStatus,
-  applyStatus,
   rejectionReason,
-  progress,
-  daoAccountId,
   onRevise,
   onApplyAgain,
 }: {
   proposalId: string;
   name?: string;
   reviewStatus: ReviewStatus;
-  applyStatus: ApplyStatus;
   rejectionReason: string | null;
-  progress?: ApplicationProgressInput;
-  daoAccountId?: string | null;
   onRevise?: () => void;
   onApplyAgain?: () => void;
 }) {
   const t = useAppTranslation();
-  const status =
-    applyStatus === "failed"
-      ? t("label.applyFailed")
-      : (applyStatusLabel(applyStatus, t) ?? reviewStatusBadge(reviewStatus, t).label);
-  const failed = reviewStatus === "rejected" || applyStatus === "failed";
+  const status = reviewStatusBadge(reviewStatus, t).label;
+  const failed = reviewStatus === "rejected";
   const pending = reviewStatus === "pending";
   return (
     <PageContainer variant="narrow">
@@ -79,14 +63,6 @@ export function ApplySubmitted({
           </p>
           {rejectionReason && <p className="text-sm text-muted-foreground">{rejectionReason}</p>}
         </div>
-        {progress?.reviewStatus === "approved" && (
-          <div
-            className="w-full max-w-sm rounded-lg border border-border p-5"
-            data-testid="apply.progress"
-          >
-            <ApplicationProgressList proposal={progress} daoAccountId={daoAccountId ?? null} />
-          </div>
-        )}
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
           <Button
             nativeButton={false}

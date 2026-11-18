@@ -124,8 +124,15 @@
     {
       "idx": 17,
       "version": "7",
+      "when": 1795025038628,
+      "tag": "0017_backfill-node-dao",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
       "when": 1795100000000,
-      "tag": "0017_bulletin-attribution",
+      "tag": "0018_bulletin-attribution",
       "breakpoints": true
     }
   ]
