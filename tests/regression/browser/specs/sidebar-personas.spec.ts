@@ -18,8 +18,11 @@ const nav = (page: Page, slug: string) => page.getByTestId(`sidebar-nav-${slug}`
 
 async function openSidebar(page: Page, mobile: boolean) {
   if (!mobile) return;
+  await expect(page.locator('[data-slot="sidebar-wrapper"] [data-slot="sheet"]')).toBeAttached({
+    timeout: 15000,
+  });
   await page.locator('[data-sidebar="trigger"]').first().click();
-  await expect(page.locator('[data-mobile="true"]').first()).toBeVisible();
+  await expect(page.locator('[data-mobile="true"]').first()).toBeVisible({ timeout: 15000 });
 }
 
 async function expectTopLevel(page: Page, shown: string[], hidden: string[]) {

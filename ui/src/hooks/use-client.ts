@@ -16,7 +16,11 @@ export function useClientValue<T>(clientValue: () => T, serverValue: T): T {
 
 export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
-    emptySubscribe,
+    (onStoreChange) => {
+      const media = window.matchMedia(query);
+      media.addEventListener("change", onStoreChange);
+      return () => media.removeEventListener("change", onStoreChange);
+    },
     () => window.matchMedia(query).matches,
     () => false,
   );
