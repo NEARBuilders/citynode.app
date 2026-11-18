@@ -25,7 +25,8 @@ type ReportActivity = VisibilityActivity & {
   id: string;
   title: string;
   venue: string;
-  ownerNodeId?: string;
+  ownerNodeId?: string | null;
+  nodeIds?: readonly string[];
 };
 
 export function useReportChecklist(nodeId: string, nodeIds: readonly string[] = [nodeId]) {
@@ -138,7 +139,10 @@ export function ReportChecklist({
                 <ItemTitle className="flex-wrap">
                   <Link
                     to="/nodes/$nodeId/events/$activityId/report"
-                    params={{ nodeId: event.ownerNodeId ?? nodeId, activityId: event.id }}
+                    params={{
+                      nodeId: event.ownerNodeId ?? event.nodeIds?.[0] ?? nodeId,
+                      activityId: event.id,
+                    }}
                     className="hover:underline"
                     data-testid={`${testId}-event-${event.id}`}
                   >
@@ -161,7 +165,10 @@ export function ReportChecklist({
                   render={
                     <Link
                       to="/nodes/$nodeId/events/$activityId/report"
-                      params={{ nodeId: event.ownerNodeId ?? nodeId, activityId: event.id }}
+                      params={{
+                        nodeId: event.ownerNodeId ?? event.nodeIds?.[0] ?? nodeId,
+                        activityId: event.id,
+                      }}
                     />
                   }
                 >

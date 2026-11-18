@@ -935,6 +935,7 @@ function visibleOverviewOrder() {
 
 const upcomingEvent = {
   id: "event-launch",
+  ownerNodeId: "node-1",
   kind: "event",
   title: "Launch Night",
   status: "published",

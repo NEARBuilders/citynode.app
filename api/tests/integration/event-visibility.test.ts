@@ -57,12 +57,7 @@ async function seedCases() {
           timezone: "UTC",
           venue: "Online",
           status: activity.status,
-          luma: activity.luma && {
-            ...activity.luma,
-            calendarId: "cal-visibility",
-            eventId: `evt-${id}`,
-            syncedAt: new Date().toISOString(),
-          },
+          luma: activity.luma ? { calendarId: "cal-visibility", eventId: `evt-${id}` } : undefined,
         },
       });
       return id;

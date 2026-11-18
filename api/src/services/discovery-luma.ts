@@ -28,7 +28,7 @@ const pageSchema = z.object({
   next_cursor: z.string().optional(),
 });
 
-export function describeLumaFailure(error: unknown): string {
+function describeLumaFailure(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
   return error.cause === undefined
     ? error.message

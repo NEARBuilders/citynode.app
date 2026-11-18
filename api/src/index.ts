@@ -944,6 +944,29 @@ export default createPlugin.withPlugins<PluginsClient>()({
           rawBody,
         });
       }),
+      receiveLumaCalendarWebhook: builder.receiveLumaCalendarWebhook.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const rawBody = yield* Effect.promise(() => context.getRawBody?.() ?? Promise.resolve(""));
+        return yield* services.discovery.receiveLumaWebhook({
+          signature: context.reqHeaders?.get("webhook-signature") ?? null,
+          rawBody,
+          calendarId: input.calendarId,
+        });
+      }),
+      listDiscoveryLumaTriage: builder.listDiscoveryLumaTriage.effect(function* ({ context }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.lumaTriage(context);
+      }),
+      associateDiscoveryLumaEvent: builder.associateDiscoveryLumaEvent.effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        return yield* services.discovery.associateLumaEvent(input, context);
+      }),
       backfillDiscoveryLumaPlaceEvents: builder.backfillDiscoveryLumaPlaceEvents.effect(function* ({
         context,
       }) {
@@ -953,13 +976,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
       importDiscoveryLuma: builder.importDiscoveryLuma.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         return yield* services.discovery.importLuma(input, context);
-      }),
-      setDiscoveryLumaVisibility: builder.setDiscoveryLumaVisibility.effect(function* ({
-        input,
-        context,
-      }) {
-        const services = yield* ApiServices;
-        return yield* services.discovery.setLumaVisibility(input, context);
       }),
       saveDiscoveryActivity: builder.saveDiscoveryActivity.effect(function* ({ input, context }) {
         const services = yield* ApiServices;

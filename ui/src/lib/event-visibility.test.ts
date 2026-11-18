@@ -3,7 +3,6 @@ import { eventVisibilityCases } from "../../../api/tests/fixtures/event-visibili
 import {
   eventTitleLink,
   eventVisibility,
-  isWaitingImport,
   saveConfirmation,
   type VisibilityActivity,
 } from "./event-visibility";
@@ -16,7 +15,6 @@ const event: VisibilityActivity = {
   startsAt: "2026-10-05T18:00:00Z",
   endsAt: "2026-10-05T20:00:00Z",
 };
-const luma = { available: true, hidden: true };
 const visible = { communityPublic: true, now };
 
 describe("eventVisibility", () => {
@@ -31,15 +29,6 @@ describe("eventVisibility", () => {
   it("names why an owner's event is not public", () => {
     expect(eventVisibility({ ...event, status: "draft" }, visible)).toBe("draft");
     expect(eventVisibility({ ...event, status: "cancelled" }, visible)).toBe("cancelled");
-    expect(eventVisibility({ ...event, status: "draft", luma }, visible)).toBe("hiddenImport");
-    expect(eventVisibility({ ...event, luma }, visible)).toBe("hiddenImport");
-    expect(
-      eventVisibility(
-        { ...event, status: "draft", luma: { available: false, hidden: false } },
-        visible,
-      ),
-    ).toBe("removed");
-    expect(eventVisibility({ ...event, luma: { ...luma, hidden: false } }, visible)).toBe("live");
   });
 
   it("names states that don't depend on the community while its status is unknown", () => {
@@ -47,7 +36,6 @@ describe("eventVisibility", () => {
     expect(eventVisibility(event, unknown)).toBeNull();
     expect(eventVisibility({ ...event, status: "draft" }, unknown)).toBe("draft");
     expect(eventVisibility({ ...event, status: "cancelled" }, unknown)).toBe("cancelled");
-    expect(eventVisibility({ ...event, luma }, unknown)).toBe("hiddenImport");
     expect(eventVisibility({ ...event, endsAt: "2026-09-30T00:00:00Z" }, unknown)).toBe("ended");
   });
 
@@ -78,7 +66,7 @@ describe("eventVisibility against the server's public rules", () => {
     if (expected.uiState === "live") expect(expected.onEventPage).toBe(true);
     if (expected.uiState === "live" && !expected.inLists)
       expect(earlierEvents?.length ?? 0).toBeGreaterThanOrEqual(3);
-    if (["scheduled", "published", "draft", "hiddenImport", "removed"].includes(expected.uiState))
+    if (["scheduled", "published", "draft"].includes(expected.uiState))
       expect(expected.onEventPage || expected.inLists).toBe(false);
     if (["cancelled", "ended"].includes(expected.uiState)) expect(expected.inLists).toBe(false);
   });
@@ -94,7 +82,6 @@ describe("eventTitleLink", () => {
     expect(eventTitleLink("draft", true)).toBe("edit");
     expect(eventTitleLink("scheduled", true)).toBe("edit");
     expect(eventTitleLink("published", true)).toBe("edit");
-    expect(eventTitleLink("hiddenImport", true)).toBe("edit");
     expect(eventTitleLink(null, true)).toBe("edit");
   });
 
@@ -135,19 +122,5 @@ describe("saveConfirmation", () => {
   it("falls back to a plain confirmation when the community's status is unknown", () => {
     expect(saveConfirmation(event, unknown)).toBe("events.saved");
     expect(saveConfirmation({ ...event, status: "draft" }, unknown)).toBe("events.savedDraft");
-  });
-});
-
-describe("isWaitingImport", () => {
-  it("counts hidden imports that are still public on Luma and have not ended", () => {
-    expect(isWaitingImport({ ...event, status: "draft", luma }, now)).toBe(true);
-    expect(isWaitingImport({ ...event, luma: { ...luma, hidden: false } }, now)).toBe(false);
-    expect(isWaitingImport({ ...event, status: "draft", luma: { available: false } }, now)).toBe(
-      false,
-    );
-    expect(
-      isWaitingImport({ ...event, status: "draft", luma, endsAt: "2026-09-30T00:00:00Z" }, now),
-    ).toBe(false);
-    expect(isWaitingImport({ ...event, status: "draft" }, now)).toBe(false);
   });
 });

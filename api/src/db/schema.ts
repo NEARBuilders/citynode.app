@@ -289,9 +289,6 @@ export const discoveryLumaConnections = pgTable("discovery_luma_connections", {
     .references(() => nodes.id, { onDelete: "cascade" }),
   calendarId: text("calendar_id").notNull(),
   calendarName: text("calendar_name").notNull(),
-  syncedAt: timestamp("synced_at", { withTimezone: true }).notNull(),
-  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull(),
-  error: text("error"),
 });
 
 export const memberDirectoryOptIns = pgTable("member_directory_opt_ins", {

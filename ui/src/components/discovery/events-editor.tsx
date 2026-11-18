@@ -11,7 +11,6 @@ export function EventsEditor({
   tenantStatus,
   canOnboard,
   profileLink,
-  reviewImports,
   canManage = true,
   showMapStatus = true,
 }: {
@@ -19,7 +18,6 @@ export function EventsEditor({
   tenantStatus: TenantStatus | undefined;
   canOnboard?: boolean;
   profileLink?: ReactElement;
-  reviewImports?: boolean;
   canManage?: boolean;
   showMapStatus?: boolean;
 }) {
@@ -36,12 +34,7 @@ export function EventsEditor({
           testId="content-map-status"
         />
       )}
-      <ActivityEditor
-        nodeId={nodeId}
-        reviewImports={reviewImports}
-        canPost={canManage}
-        canOnboard={canOnboard}
-      />
+      <ActivityEditor nodeId={nodeId} canPost={canManage} canOnboard={canOnboard} />
     </div>
   );
 }

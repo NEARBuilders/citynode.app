@@ -292,6 +292,7 @@ export function ActivityForm({
             { label: translate("events.cancelled"), value: "cancelled" },
           ]}
           value={draft.status}
+          disabled={locked}
           onValueChange={(value) => {
             if (value === "draft" || value === "published" || value === "cancelled")
               setDraft({ ...draft, status: value });
@@ -302,13 +303,9 @@ export function ActivityForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="draft">{translate("events.draft")}</SelectItem>
-            <SelectItem value="published" disabled={imported?.available === false}>
-              {translate("events.publishedExplore")}
-            </SelectItem>
+            <SelectItem value="published">{translate("events.publishedExplore")}</SelectItem>
             {draft.kind === "event" && (
-              <SelectItem value="cancelled" disabled={imported?.available === false}>
-                {translate("events.cancelled")}
-              </SelectItem>
+              <SelectItem value="cancelled">{translate("events.cancelled")}</SelectItem>
             )}
           </SelectContent>
         </Select>

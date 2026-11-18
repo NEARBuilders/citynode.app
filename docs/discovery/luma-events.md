@@ -22,26 +22,23 @@ Configure it with the `lumaMainCalendarId` API variable, the calendar's API key 
 - When a community's own connected calendar lists the same event, the community's copy is shown and the main calendar's copy is skipped. Communities can still add an event by a link the main calendar already has.
 - The main calendar is left out of the calendars a community can connect, even though its key sits in `LUMA_CALENDAR_API_KEYS`.
 
-Still to come under #525: one admin triage list with "associate to place" for unmatched events, webhooks for per-place calendars, and removing the show/hide and polling state below.
+- Online events and events that match nothing land in one admin list: **Admin → Events → Needs a place**. Choosing a place there associates the event (`placeMatch: "manual"`). The choice holds across later updates until the venue on Luma changes, then the event is matched again.
+- A main-calendar event is reported by the deepest community at or above its place. It shows in that community's Events tab with a "Main calendar" badge, and its report works like any other event report.
 
-## Editor workflow
+## Community calendars
 
-1. Open the community's Events tab, choose **Import from Luma** and select a calendar. The selection is saved and public approved events are imported **hidden**. Under the calendar picker, a status line reports each non-zero outcome on its own line: events newly imported (with a reminder that they stay hidden), already imported events that were updated, events skipped because an event with the same URL is already on the community, and events hidden because they are no longer public on the selected calendar. When nothing was imported, updated or skipped and nothing was hidden, it says no new events were found.
-2. Review imports. Overview and the Events tab show "N imported events waiting" with a link to the waiting imports. Choose **Show** on each event that belongs on the community calendar; **Hide** takes it back off Explore. Shown events reach visitors once the community profile is on Explore.
-3. Manage event details and registration in Luma. CityNode checks for updates every five minutes while the API is running; visits also trigger a due check in the background without delaying the public map.
-4. Use **Add event** for manual events. New events and posts default to Published. They remain independent of Luma.
-5. Disconnect the calendar to withdraw its events from Explore. Manual events remain unchanged. Selecting another calendar replaces the connection.
+A community can also connect its own Luma calendar. Its events belong to that community, sit at the community's place, and roll up the places tree like everything else.
 
-Each node has one selected calendar. The same calendar can be selected by several nodes. Existing manual imports are not automatically connected: select the calendar once to enable ongoing updates.
+1. Open the community's Events tab, choose **Import from Luma** and select a calendar. CityNode imports the calendar's public approved events once, and they show on the community calendar right away. The status line reports events imported, updated, skipped (an event with the same URL is already on the community) and removed.
+2. A platform admin points a webhook in that calendar's Luma settings at `https://<host>/api/webhooks/luma/<calendarId>` (the editor shows this URL) for Event Created, Event Updated, Event Canceled and Calendar Event Added, and adds its signing secret to `LUMA_WEBHOOK_SECRETS`. Deliveries for a calendar no community has connected are ignored.
+3. Edit event details and status on Luma. CityNode doesn't poll: each delivery reads the event's current state from Luma and updates every community connected to that calendar.
+4. Use **Add event** for manual events. They remain independent of Luma.
+5. Disconnect the calendar to remove its events. Manual events remain unchanged. Selecting another calendar replaces the connection.
 
-## Synchronization rules
+## Rules
 
-- A complete snapshot is saved atomically. Stable Luma event IDs preserve CityNode IDs across edits, removals and returns.
 - Only public approved events are included; private/member-only events and guest-only addresses are excluded.
-- Events stay hidden until an editor shows them, and each event keeps its shown or hidden choice across syncs. Imports saved before hidden-by-default (no stored choice) become hidden on their next sync.
-- Removed or newly private events disappear on the next successful check and are labelled **Removed from Luma** in the editor. Returned public events reappear automatically if they had been shown, unless explicitly hidden in CityNode by an editor or moderator.
-- Moderation withdrawals remain hidden after sync. Manual events are never overwritten or withdrawn. A manually added event with the same URL on the same node is retained instead of duplicating it.
-- Calendar changes and disconnection serialize with synchronization so an old snapshot cannot restore disconnected events.
-- Provider failures, invalid public data, incomplete pagination and rate limits preserve the last complete snapshot. The editor shows a connection error, the server logs the cause, and it retries after five minutes.
-- Fetches have an eight-second timeout per request and a twenty-page cap (up to 1,000 events). Larger calendars fail explicitly rather than silently removing unseen events. Keys and guest data never enter browser responses.
-- The worker runs with the API service and stops when that service shuts down. The persisted connection and sync timestamps survive restarts.
+- An event that turns private or disappears from Luma is removed. If its community already filed a report for it, the event is kept as a draft (off every public page) so the report survives.
+- Event Canceled marks the event cancelled. A moderator's "unpublish" sets it to draft, and later deliveries keep it that way.
+- Luma owns imported details and status, so CityNode refuses edits to them; only co-hosting communities can still change.
+- The one-time import on connect saves its snapshot atomically and fails without changing anything when Luma errors or the calendar is larger than 1,000 events. Fetches have an eight-second timeout per request. Keys and guest data never enter browser responses.

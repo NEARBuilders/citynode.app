@@ -20,7 +20,7 @@ import {
 } from "../../dashboard/node/-community-header";
 
 type ContentTab = "events" | "onboarding" | "bulletin";
-type ContentSearch = { tab?: ContentTab; review?: "imports" };
+type ContentSearch = { tab?: ContentTab };
 
 const TABS: readonly ContentTab[] = ["events", "onboarding", "bulletin"];
 const ownersOnly = { to: "/dashboard", search: { restricted: "owners" } } as const;
@@ -34,7 +34,6 @@ function defaultContentTab(canOrganize: boolean, canOperate: boolean): ContentTa
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
   validateSearch: (search: Record<string, unknown>): ContentSearch => ({
     ...(TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {}),
-    ...(search.review === "imports" ? { review: "imports" as const } : {}),
   }),
   beforeLoad: ({ context, params, search }) => {
     const canManage = context.canManageCommunity;
@@ -107,7 +106,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/c
 
 function CommunityContent() {
   const { nodeId } = Route.useParams();
-  const { tab: searchTab, review } = Route.useSearch();
+  const { tab: searchTab } = Route.useSearch();
   const {
     auth,
     canManageCommunity,
@@ -147,7 +146,6 @@ function CommunityContent() {
         <EventsEditor
           nodeId={nodeId}
           showMapStatus={!isPlatformNode(node)}
-          reviewImports={review === "imports"}
           tenantStatus={tenant.data?.status}
           canManage={canManage}
           canOnboard={canOnboard}
