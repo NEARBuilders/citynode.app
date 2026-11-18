@@ -94,12 +94,19 @@ export interface NodesService {
     orgId: string;
     activatedBy: string;
     joinCodeId: string;
+    tenantId?: string | null;
+    kind?: NodeKind;
   }): NodeEffect<{ node: NodeRecord; created: boolean }>;
   update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
   setBulletin(id: string, bulletin: string | null): NodeEffect<NodeRecord>;
+  recordOfficialDao(
+    id: string,
+    dao: { accountId: string; network: "mainnet" | "testnet" },
+  ): NodeEffect<NodeRecord>;
   delete(id: string): NodeEffect<boolean>;
   listRootNodes: NodeEffect<NodeRecord[]>;
   listChildren(parentId: string): NodeEffect<NodeRecord[]>;
+  listAncestors(nodeId: string): NodeEffect<NodeRecord[]>;
   resolveBySlug(slug: string, parentId?: string | null): NodeEffect<NodeRecord | null>;
   subtreeWithValidators(nodeId: string): NodeEffect<SubtreeNode[]>;
 }
@@ -372,9 +379,10 @@ export const NodesLive = Layer.effect(
                 name: input.name,
                 placeId: input.placeId,
                 orgId: input.orgId,
+                tenantId: input.tenantId ?? null,
                 activatedAt: new Date(),
                 activatedBy: input.activatedBy,
-                metadata: { joinCodeId: input.joinCodeId },
+                metadata: mergeKindMetadata(input.kind, { joinCodeId: input.joinCodeId }),
               })
               .onConflictDoNothing()
               .returning();
@@ -495,6 +503,26 @@ export const NodesLive = Layer.effect(
         return toNodeRecord(row);
       }),
 
+      recordOfficialDao: Effect.fn("NodesService.recordOfficialDao")(function* (id, dao) {
+        const metadata = sql`${nodesTable.metadata} || jsonb_build_object('daoAccountId', ${dao.accountId}::text, 'daoNetwork', ${dao.network}::text)`;
+        const [row] = yield* query(() =>
+          db
+            .update(nodesTable)
+            .set({ metadata, updatedAt: new Date() })
+            .where(eq(nodesTable.id, id))
+            .returning(),
+        );
+        if (!row) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", {
+              message: "Node not found",
+              data: { resource: "node", resourceId: id },
+            }),
+          );
+        }
+        return toNodeRecord(row);
+      }),
+
       delete: Effect.fn("NodesService.delete")(function* (id) {
         const rows = yield* query(() =>
           db
@@ -515,6 +543,26 @@ export const NodesLive = Layer.effect(
       listChildren: Effect.fn("NodesService.listChildren")(function* (parentId) {
         const rows = yield* query(() => db.select().from(nodesTable).where(nodeParentIs(parentId)));
         return rows.map(toNodeRecord);
+      }),
+
+      listAncestors: Effect.fn("NodesService.listAncestors")(function* (nodeId) {
+        const edges = yield* query(() => db.execute(nodeParentEdgesQuery())).pipe(
+          Effect.map((result) => rowsOf<ParentEdge>(result)),
+        );
+        const parentById = new Map(edges.map((edge) => [edge.id, edge.parent_id]));
+        const ids: string[] = [];
+        const seen = new Set([nodeId]);
+        let parentId = parentById.get(nodeId) ?? null;
+        while (parentId && !seen.has(parentId)) {
+          seen.add(parentId);
+          ids.push(parentId);
+          parentId = parentById.get(parentId) ?? null;
+        }
+        if (ids.length === 0) return [];
+        const rows = yield* query(() =>
+          db.select().from(nodesTable).where(inArray(nodesTable.id, ids)),
+        );
+        return rows.map(toNodeRecord).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
       }),
 
       resolveBySlug: Effect.fn("NodesService.resolveBySlug")(function* (slug, parentId) {

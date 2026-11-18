@@ -9,14 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
-import { placeBoundaryQueryOptions, resolvePlaceQueryOptions } from "@/lib/queries/places";
+import { placeBoundaryQueryOptions, placeResolutionQueryOptions } from "@/lib/queries/places";
 import { socialMeta } from "@/lib/social-meta";
 
 export const Route = createFileRoute("/_public/places/$slug")({
   loader: async ({ params, context }) => {
     const { queryClient, apiClient, runtimeConfig } = context;
     const resolved = await queryClient.ensureQueryData(
-      resolvePlaceQueryOptions(apiClient, params.slug),
+      placeResolutionQueryOptions(apiClient, params.slug),
     );
     if (resolved?.place.id) {
       await queryClient.prefetchQuery(placeBoundaryQueryOptions(apiClient, resolved.place.id));
@@ -52,7 +52,7 @@ function PlacePage() {
   const translate = useAppTranslation();
   const { slug } = Route.useLoaderData();
   const api = useApiClient();
-  const resolved = useQuery(resolvePlaceQueryOptions(api, slug));
+  const resolved = useQuery(placeResolutionQueryOptions(api, slug));
   const boundary = useQuery({
     ...placeBoundaryQueryOptions(api, resolved.data?.place.id ?? ""),
     enabled: Boolean(resolved.data?.place.id),

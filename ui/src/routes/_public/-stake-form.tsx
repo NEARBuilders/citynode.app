@@ -15,7 +15,7 @@ import { useAppTranslation } from "@/i18n/runtime";
 import type { StakeVariables } from "./-stake-mutations";
 
 type ApiClient = ReturnType<typeof useApiClient>;
-type Validator = Awaited<ReturnType<ApiClient["resolveStakingValidators"]>>["validators"][number];
+type Validator = Awaited<ReturnType<ApiClient["listValidatorsByNode"]>>[number];
 
 const QUICK_AMOUNTS = ["1", "10", "100"];
 

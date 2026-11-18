@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { contract } from "@/contract";
 import { authedContext, getPluginClient, teardown } from "../setup";
 
 function spawnContext(userId: string, primaryAccountId?: string): Record<string, unknown> {
@@ -16,6 +17,11 @@ describe("User-owned tenant spawn", () => {
 
   afterAll(async () => {
     await teardown();
+  });
+
+  it("does not expose spawnNode or createNode", () => {
+    expect(contract).not.toHaveProperty("spawnNode");
+    expect(contract).not.toHaveProperty("createNode");
   });
 
   describe("spawnTenant", () => {

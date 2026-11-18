@@ -83,35 +83,20 @@ export const ProposalEventSchema = z.object({
   timestamp: z.iso.datetime(),
 });
 
-export const NodeApplicationPayloadSchema = z
-  .object({
-    kind: z.enum(["country", "state", "city"]),
-    parentId: z.string().nullable(),
-    name: z.string().trim().min(1),
-    slug: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9-]+$/),
-    motivation: z.string().trim().min(1),
-    orgId: z.string().min(1).optional(),
-    accountId: z
-      .string()
-      .regex(/^(?=.{2,64}$)[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-_][a-z0-9]+)*)*$/),
-    submitterAccountId: z.string().optional(),
-    applicantUserId: z.string().optional(),
-  })
-  .superRefine((value, context) => {
-    if (value.kind === "country" && value.parentId !== null) {
-      context.addIssue({
-        code: "custom",
-        path: ["parentId"],
-        message: "Country cannot have a parent",
-      });
-    }
-    if (value.kind === "state" && !value.parentId) {
-      context.addIssue({ code: "custom", path: ["parentId"], message: "Parent is required" });
-    }
-  });
+export const NodeApplicationPayloadSchema = z.object({
+  placeId: z.uuid(),
+  name: z.string().trim().min(1),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/),
+  motivation: z.string().trim().min(1),
+  accountId: z
+    .string()
+    .regex(/^(?=.{2,64}$)[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-_][a-z0-9]+)*)*$/),
+  submitterAccountId: z.string().optional(),
+  applicantUserId: z.string().optional(),
+});
 
 export const contract = oc.router({
   propose: oc

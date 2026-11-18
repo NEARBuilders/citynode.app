@@ -1,7 +1,14 @@
 import { Effect } from "effect";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { isExplicitDaoMember } from "@/services/dao";
-import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import {
+  activateTestNode,
+  authedContext,
+  daoContext,
+  getPluginClient,
+  orgContext,
+  teardown,
+} from "../setup";
 
 vi.mock("@/services/staking-pools", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/staking-pools")>()),
@@ -29,8 +36,8 @@ describe("Tenant + Node + Binding wizard flow", () => {
     await teardown();
   });
 
-  describe("full chain: createTenant → createNode → createBinding", () => {
-    it("creates a tenant, root country node, and primary binding in sequence", async () => {
+  describe("full chain: createTenant → activate → createBinding", () => {
+    it("creates a tenant, activates a root place, and adds a primary binding", async () => {
       const ctx = daoContext("wizard-user-1", "org-wizard-1", "admin-wizard-1.near");
       const c = await getPluginClient(ctx);
 
@@ -41,18 +48,19 @@ describe("Tenant + Node + Binding wizard flow", () => {
       });
       expect(tenant.orgId).toBe("org-wizard-1");
 
-      const node = await c.createNode({
+      const { node } = await activateTestNode({
         kind: "country",
         slug: "chicago-wiz",
         name: "Chicago",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "org-wizard-1",
       });
       expect(node).toMatchObject({
         kind: "country",
         slug: "chicago-wiz",
         parentId: null,
         tenantId: tenant.id,
+        placeId: expect.any(String),
       });
 
       const preflight = await c.bindingPreflight({ hostname: "chicago-wiz.citynode.app" });
@@ -89,12 +97,12 @@ describe("Tenant + Node + Binding wizard flow", () => {
         accountId: "first-wizard.example.near",
         status: "active",
       });
-      await c.createNode({
+      await activateTestNode({
         kind: "country",
         slug: "dup-city",
         name: "Dup City",
-        parentId: null,
         tenantId: tenantA.id,
+        orgId: "org-wizard-2",
       });
       await c.createBinding({
         tenantId: tenantA.id,
@@ -107,12 +115,12 @@ describe("Tenant + Node + Binding wizard flow", () => {
         accountId: "second-wizard.example.near",
         status: "active",
       });
-      const nodeB = await c.createNode({
+      const { node: nodeB } = await activateTestNode({
         kind: "country",
         slug: "dup-city-clone",
         name: "Dup City Clone",
-        parentId: null,
         tenantId: tenantB.id,
+        orgId: "org-wizard-2",
       });
 
       await expect(
@@ -146,12 +154,12 @@ describe("Tenant + Node + Binding wizard flow", () => {
         status: "active",
       });
 
-      const country = await c.createNode({
+      const { node: country, place: countryPlace } = await activateTestNode({
         kind: "country",
         slug: "nested-usa",
         name: "USA",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "org-wizard-3",
       });
       const countryBinding = await c.createBinding({
         tenantId: tenant.id,
@@ -160,12 +168,13 @@ describe("Tenant + Node + Binding wizard flow", () => {
       });
       expect(countryBinding.isPrimary).toBe(true);
 
-      const state = await c.createNode({
+      const { node: state, place: statePlace } = await activateTestNode({
         kind: "state",
         slug: "nested-illinois",
         name: "Illinois",
-        parentId: country.id,
+        parentPlaceId: countryPlace.id,
         tenantId: tenant.id,
+        orgId: "org-wizard-3",
       });
       const stateBinding = await c.createBinding({
         tenantId: tenant.id,
@@ -174,12 +183,13 @@ describe("Tenant + Node + Binding wizard flow", () => {
       });
       expect(stateBinding.isPrimary).toBe(false);
 
-      await c.createNode({
+      await activateTestNode({
         kind: "city",
         slug: "nested-chicago",
         name: "Chicago",
-        parentId: state.id,
+        parentPlaceId: statePlace.id,
         tenantId: tenant.id,
+        orgId: "org-wizard-3",
       });
       const cityBinding = await c.createBinding({
         tenantId: tenant.id,
@@ -218,12 +228,12 @@ describe("Tenant + Node + Binding wizard flow", () => {
         accountId: "preflight-wizard.example.near",
         status: "active",
       });
-      await c.createNode({
+      await activateTestNode({
         kind: "country",
         slug: "preflight-city",
         name: "Preflight City",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "org-wizard-4",
       });
       await c.createBinding({
         tenantId: tenant.id,
@@ -255,12 +265,12 @@ describe("Tenant + Node + Binding wizard flow", () => {
         accountId: "discovery-active.example.near",
         status: "active",
       });
-      const activeNode = await c.createNode({
+      const { node: activeNode } = await activateTestNode({
         kind: "city",
         slug: "discovery-active",
         name: "Discovery Active",
-        parentId: null,
         tenantId: active.id,
+        orgId: "org-discovery-1",
       });
       await c.createBinding({
         tenantId: active.id,
@@ -274,12 +284,12 @@ describe("Tenant + Node + Binding wizard flow", () => {
         accountId: "discovery-bindingless.example.near",
         status: "active",
       });
-      await c.createNode({
+      await activateTestNode({
         kind: "country",
         slug: "discovery-bindingless",
         name: "Discovery Bindingless",
-        parentId: null,
         tenantId: bindingless.id,
+        orgId: "org-discovery-1",
       });
 
       const pending = await c.createTenant({
@@ -287,12 +297,12 @@ describe("Tenant + Node + Binding wizard flow", () => {
         accountId: "discovery-pending.example.near",
         status: "pending",
       });
-      await c.createNode({
+      await activateTestNode({
         kind: "country",
         slug: "discovery-pending",
         name: "Discovery Pending",
-        parentId: null,
         tenantId: pending.id,
+        orgId: "org-discovery-1",
       });
 
       const apps = await publicClient.listTenantApps();
@@ -329,19 +339,19 @@ describe("Tenant + Node + Binding wizard flow", () => {
         accountId: "discovery-multi.example.near",
         status: "active",
       });
-      await c.createNode({
+      await activateTestNode({
         kind: "country",
         slug: "discovery-multi",
         name: "Discovery Multi",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "org-discovery-2",
       });
-      await c.createNode({
+      await activateTestNode({
         kind: "state",
         slug: "discovery-multi-child",
         name: "Discovery Multi Child",
-        parentId: null,
         tenantId: tenant.id,
+        orgId: "org-discovery-2",
       });
 
       const apps = await publicClient.listTenantApps();
@@ -392,12 +402,12 @@ describe("Tenant + Node + Binding wizard flow", () => {
           accountId: fixture.accountId,
           status: "active",
         });
-        const node = await client.createNode({
+        const { node } = await activateTestNode({
           kind: "community",
           slug: fixture.slug,
           name: fixture.slug,
-          parentId: null,
           tenantId: tenant.id,
+          orgId: fixture.organizationId,
         });
         if (fixture.accountId === accounts.active) {
           await client.createValidator({

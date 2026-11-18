@@ -1,4 +1,4 @@
-import type { ORPCError } from "@orpc/server";
+import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
@@ -58,6 +58,12 @@ interface PlaceBoundaryRecord {
 
 export interface PlacesService {
   resolve(input: { place: string }): PlaceEffect<PlaceResolution | null>;
+  create(input: {
+    slug: string;
+    name: string;
+    parentId?: string | null;
+    label?: string | null;
+  }): PlaceEffect<PlaceRecord>;
   getById(id: string): PlaceEffect<PlaceRecord | null>;
   boundary(id: string): PlaceEffect<PlaceBoundary | null>;
   boundaries(placeIds: string[]): PlaceEffect<PlaceBoundaryRecord[]>;
@@ -276,6 +282,27 @@ export const PlacesLive = Layer.effect(
             : null;
 
           return { place, aliases: aliasRows.map((a) => a.value), community };
+        }),
+
+      create: (input) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db
+              .insert(placesTable)
+              .values({
+                slug: input.slug,
+                name: input.name,
+                parentId: input.parentId ?? null,
+                label: input.label ?? null,
+              })
+              .returning(),
+          );
+          if (!row) {
+            return yield* Effect.fail(
+              new ORPCError("INTERNAL_SERVER_ERROR", { message: "Place creation failed" }),
+            );
+          }
+          return toPlaceRecord(row);
         }),
 
       getById: (id) =>

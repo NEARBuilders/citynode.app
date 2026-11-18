@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, teardown } from "../setup";
+import { activateTestNode, daoContext, getPluginClient, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -18,11 +18,12 @@ async function daoCommunity(daoAccountId: string) {
   const id = crypto.randomUUID().slice(0, 8);
   const owner = await getPluginClient(daoContext(`dao-owner-${id}`, `dao-org-${id}`, daoAccountId));
   const tenant = await owner.createTenant({ name: "DAO city", accountId: daoAccountId });
-  const node = await owner.createNode({
+  const { node } = await activateTestNode({
     name: "DAO city",
     slug: `dao-city-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: `dao-org-${id}`,
   });
   return { owner, tenantId: tenant.id, nodeId: node.id };
 }

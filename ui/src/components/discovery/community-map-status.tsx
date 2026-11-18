@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemMedia } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
-import { resolvePlaceQueryOptions } from "@/lib/queries/places";
+import { placeResolutionQueryOptions } from "@/lib/queries/places";
 
 export function CommunityMapStatus({ nodeId, testId }: { nodeId: string; testId: string }) {
   const translate = useAppTranslation();
@@ -14,7 +14,7 @@ export function CommunityMapStatus({ nodeId, testId }: { nodeId: string; testId:
   const node = useQuery(nodeByIdQueryOptions(api, nodeId));
   const placeId = node.data?.placeId ?? "";
   const place = useQuery({
-    ...resolvePlaceQueryOptions(api, placeId),
+    ...placeResolutionQueryOptions(api, placeId),
     enabled: Boolean(placeId),
   });
   if (!node.isSuccess || !placeId) return null;

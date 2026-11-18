@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient } from "../setup";
+import { activateTestNode, daoContext, getPluginClient } from "../setup";
 
 const pools = vi.hoisted(() => ({ isApproved: vi.fn() }));
 
@@ -31,11 +31,12 @@ async function seedNode() {
     daoContext(`pool-owner-${suffix}`, `pool-org-${suffix}`, `pool-dao-${suffix}.near`),
   );
   const tenant = await owner.createTenant({ name: "Pools", accountId: `pools-${suffix}.near` });
-  const node = await owner.createNode({
+  const { node } = await activateTestNode({
     name: "Pools",
     kind: "country",
     slug: `pools-${suffix}`,
     tenantId: tenant.id,
+    orgId: `pool-org-${suffix}`,
   });
   return { owner, node };
 }

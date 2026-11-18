@@ -261,13 +261,11 @@ export async function seedDiscoveryActivity(input) {
 }
 
 export async function seedNodeProposal(input) {
-  const { slug, name, parentId, submitterAccountId, accountId, motivation } = input;
-  if (!slug || !name || !parentId)
-    throw new Error("seedNodeProposal requires slug, name and parentId");
+  const { slug, name, placeId, submitterAccountId, accountId, motivation } = input;
+  if (!slug || !name) throw new Error("seedNodeProposal requires slug and name");
   const id = randomId();
   const payload = {
-    kind: "city",
-    parentId,
+    ...(placeId ? { placeId } : {}),
     name,
     slug,
     motivation: motivation ?? "Monthly meetups",

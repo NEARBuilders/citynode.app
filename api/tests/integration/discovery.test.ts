@@ -1,6 +1,13 @@
 import { Effect } from "effect";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import {
+  activateTestNode,
+  authedContext,
+  daoContext,
+  getPluginClient,
+  orgContext,
+  teardown,
+} from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
@@ -19,11 +26,12 @@ async function fixture() {
     name: "Discovery city",
     accountId: `d-${id}.near`,
   });
-  const node = await provisioner.createNode({
+  const { node } = await activateTestNode({
     name: "Karachi",
     slug: `karachi-${id}`,
     kind: "city",
     tenantId: tenant.id,
+    orgId: org,
   });
   return {
     node,
@@ -109,8 +117,8 @@ it("lists active communities without a profile as basic entries only", async () 
 });
 
 it("preserves multiple nodes per tenant and validates confirmed coordinates", async () => {
-  const { node, tenant, editor, provisioner, publicClient } = await fixture();
-  const sibling = await provisioner.createNode({
+  const { node, tenant, editor, publicClient } = await fixture();
+  const { node: sibling } = await activateTestNode({
     name: "Online",
     slug: `online-${node.id}`,
     kind: "city",
@@ -206,14 +214,15 @@ it("saves a discovery profile without calling Nominatim", async () => {
   vi.unstubAllGlobals();
 });
 
-it("keeps a country community off the map without a manual pin", async () => {
-  const { tenant, provisioner, editor, publicClient } = await fixture();
-  const country = await provisioner.createNode({
+it("keeps a country community on its catalog place without a manual pin", async () => {
+  const { tenant, editor, publicClient } = await fixture();
+  const { node: country } = await activateTestNode({
     name: "Country",
     slug: `country-${tenant.id}`,
     kind: "country",
     tenantId: tenant.id,
   });
+  const countryPlaceId = country.placeId;
   const region = `India-${country.id.slice(0, 8)}`;
   const saved = await editor.saveDiscoveryProfile({
     nodeId: country.id,
@@ -225,7 +234,9 @@ it("keeps a country community off the map without a manual pin", async () => {
   });
   expect(saved).toMatchObject({ latitude: null, longitude: null, region });
   expect(saved).not.toHaveProperty("boundary");
-  expect((await publicClient.getDiscoveryNode({ nodeId: country.id }))?.placeId).toBeNull();
+  expect((await publicClient.getDiscoveryNode({ nodeId: country.id }))?.placeId).toBe(
+    countryPlaceId,
+  );
 
   const withPin = await editor.saveDiscoveryProfile({
     ...saved,
@@ -235,7 +246,8 @@ it("keeps a country community off the map without a manual pin", async () => {
   });
   expect(withPin).toMatchObject({ latitude: 19.07, longitude: 72.87 });
 
-  const state = await provisioner.createNode({
+  await editor.saveDiscoveryProfile({ ...saved, location: "", region });
+  const { node: state } = await activateTestNode({
     name: "State",
     slug: `state-${tenant.id}`,
     kind: "state",
@@ -266,9 +278,9 @@ it("exposes the catalog place link on discovery nodes", async () => {
   await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile });
 
   const listed = await publicClient.listDiscovery({ query: node.name });
-  expect(listed.map((entry) => entry.placeId)).toContain(null);
+  expect(listed.map((entry) => entry.placeId)).toContain(node.placeId);
   const detail = await publicClient.getDiscoveryNode({ nodeId: node.id });
-  expect(detail?.placeId).toBeNull();
+  expect(detail?.placeId).toBe(node.placeId);
   expect(detail).not.toHaveProperty("boundary");
 
   await expect(

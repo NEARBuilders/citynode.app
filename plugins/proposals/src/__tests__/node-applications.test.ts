@@ -45,8 +45,7 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
 });
 
 const payload = {
-  kind: "country",
-  parentId: null,
+  placeId: "22222222-2222-4222-8222-222222222222",
   name: "Chicago",
   slug: "chicago",
   motivation: "Serve the community",
@@ -117,15 +116,6 @@ describe.sequential("node applications", () => {
     });
   });
 
-  it("accepts an organization reference on a fresh application", async () => {
-    const result = await client("alice.near", "other-org").propose({
-      pluginId: "node",
-      entityId: "existing-org",
-      payload: { ...payload, slug: "existing-org", orgId: "org-1" },
-    });
-    expect(result.data.payload).toMatchObject({ slug: "existing-org", orgId: "org-1" });
-  });
-
   it("accepts an eligible applicant without an organization and stamps their user identity", async () => {
     const result = await client("alice.near", null).propose({
       pluginId: "node",
@@ -140,18 +130,13 @@ describe.sequential("node applications", () => {
     expect(result.data.payload).not.toHaveProperty("orgId");
   });
 
-  it("accepts a standalone city and still requires a country for a state", async () => {
-    const result = await client("alice.near", null).propose({
-      pluginId: "node",
-      entityId: "standalone-city",
-      payload: { ...payload, kind: "city", parentId: null, slug: "standalone-city" },
-    });
-    expect(result.data.payload).toMatchObject({ kind: "city", parentId: null });
+  it("requires the place the application is for", async () => {
+    const { placeId: _placeId, ...withoutPlace } = payload;
     await expect(
       client("alice.near", null).propose({
         pluginId: "node",
-        entityId: "orphan-state",
-        payload: { ...payload, kind: "state", parentId: null, slug: "orphan-state" },
+        entityId: "no-place",
+        payload: { ...withoutPlace, slug: "no-place" },
       }),
     ).rejects.toThrow(/Invalid community application payload/);
   });
@@ -230,49 +215,15 @@ describe.sequential("node applications", () => {
       expectedUpdatedAt: current!.updatedAt,
       reason: "More detail needed",
     });
-    daoPolicy.members = ["alice.near", "bob.near"];
-    await expect(
-      client("bob.near").propose({
-        pluginId: "node",
-        entityId: "chicago",
-        payload: { ...payload, submitterAccountId: "bob.near" },
-      }),
-    ).rejects.toThrow(/another applicant/);
-    const linkedRevision = await client("alice.near", "org-2").propose({
-      pluginId: "node",
-      entityId: "chicago",
-      payload: { ...payload, motivation: "Linked to our organization", orgId: "org-2" },
-    });
-    expect(linkedRevision.data.payload).toMatchObject({ orgId: "org-2" });
-    await admin.reject({
-      pluginId: "node",
-      entityId: "chicago",
-      expectedUpdatedAt: linkedRevision.data.updatedAt,
-      reason: "More detail needed",
-    });
-    await expect(
-      client("alice.near").propose({
-        pluginId: "node",
-        entityId: "chicago",
-        payload: { ...payload, orgId: "org-3" },
-      }),
-    ).rejects.toThrow(/another organization/);
-    await expect(
-      client("alice.near").propose({
-        pluginId: "node",
-        entityId: "chicago",
-        payload,
-      }),
-    ).rejects.toThrow(/another organization/);
     const revised = await client("alice.near", null).propose({
       pluginId: "node",
       entityId: "chicago",
-      payload: { ...payload, motivation: "Expanded plan", orgId: "org-2" },
+      payload: { ...payload, motivation: "Expanded plan" },
     });
     expect(revised.data.reviewStatus).toBe("pending");
-    expect(revised.data.payload).toMatchObject({ motivation: "Expanded plan", orgId: "org-2" });
+    expect(revised.data.payload).toMatchObject({ motivation: "Expanded plan" });
     expect(revised.data.createdBy).toBe("alice.near");
-    expect(revised.data.submissionCount).toBe(3);
+    expect(revised.data.submissionCount).toBe(2);
 
     const approved = await admin.approve({
       pluginId: "node",
@@ -291,5 +242,41 @@ describe.sequential("node applications", () => {
       applyStatus: "failed",
       applyError: "Provisioning failed",
     });
+  });
+
+  it("lets another DAO member apply for the place once the earlier application is rejected", async () => {
+    daoPolicy.members = ["alice.near", "bob.near"];
+    const denver = { ...payload, slug: "denver" };
+    const first = await client("alice.near").propose({
+      pluginId: "node",
+      entityId: "denver",
+      payload: denver,
+    });
+    const admin = loaded.createClient({ userId: "admin", user: user("admin", "admin") });
+    await admin.reject({
+      pluginId: "node",
+      entityId: "denver",
+      expectedUpdatedAt: first.data.updatedAt,
+      reason: "Wrong DAO",
+    });
+
+    const takeover = await client("bob.near").propose({
+      pluginId: "node",
+      entityId: "denver",
+      payload: { ...denver, accountId: "bob-dao.sputnik-dao.near" },
+    });
+    expect(takeover.data).toMatchObject({ reviewStatus: "pending", createdBy: "bob.near" });
+    expect(takeover.data.payload).toMatchObject({
+      submitterAccountId: "bob.near",
+      accountId: "bob-dao.sputnik-dao.near",
+    });
+
+    await expect(
+      client("alice.near").propose({ pluginId: "node", entityId: "denver", payload: denver }),
+    ).rejects.toThrow(/another applicant/);
+    const bobs = await client("bob.near").getMyNodeApplications();
+    expect(bobs.data.map((proposal) => proposal.entityId)).toContain("denver");
+    const alices = await client("alice.near").getMyNodeApplications();
+    expect(alices.data.map((proposal) => proposal.entityId)).not.toContain("denver");
   });
 });
