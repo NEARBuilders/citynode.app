@@ -21,10 +21,7 @@ export function useIdentity() {
   const user = session?.user;
   const nearAccountId = useNearAccount();
 
-  const organizationsQuery = useQuery({
-    ...organizationsQueryOptions(apiClient),
-    enabled: !!user,
-  });
+  const organizationsQuery = useQuery(organizationsQueryOptions(apiClient, user?.id));
   const organizations = organizationsQuery.data;
   const activeOrgId = session?.session?.activeOrganizationId;
 

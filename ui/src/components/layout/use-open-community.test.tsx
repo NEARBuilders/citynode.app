@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useOpenSoleCommunity } from "./use-open-sole-community";
+import { useOpenCommunity } from "./use-open-community";
 
 const harness = vi.hoisted(() => ({
   setActive: vi.fn(),
@@ -43,13 +43,13 @@ function setup(initialOrganizationId: string | null) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  return renderHook(({ organizationId }) => useOpenSoleCommunity(organizationId), {
+  return renderHook(({ organizationId }) => useOpenCommunity(organizationId), {
     wrapper,
     initialProps: { organizationId: initialOrganizationId },
   });
 }
 
-describe("useOpenSoleCommunity", () => {
+describe("useOpenCommunity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.setActive.mockResolvedValue({ error: null });
@@ -57,12 +57,12 @@ describe("useOpenSoleCommunity", () => {
     harness.invalidateRouter.mockResolvedValue(undefined);
   });
 
-  it("does nothing when there is no single community to open", () => {
+  it("does nothing when there is no community to open", () => {
     setup(null);
     expect(harness.setActive).not.toHaveBeenCalled();
   });
 
-  it("makes the only community active once and refreshes, without a switch toast", async () => {
+  it("makes the chosen community active once and refreshes, without a switch toast", async () => {
     const { rerender } = setup("org-harbor");
 
     await waitFor(() => expect(harness.invalidateRouter).toHaveBeenCalledOnce());

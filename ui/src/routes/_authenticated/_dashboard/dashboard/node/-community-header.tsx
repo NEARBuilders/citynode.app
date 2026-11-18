@@ -111,8 +111,8 @@ export function CommunityHeader({
   });
   const ownCommunity = !!node?.tenantId && activeTenant.data?.id === node.tenantId;
   const organizationSlug = useQuery({
-    ...organizationsQueryOptions(api),
-    enabled: ownCommunity,
+    ...organizationsQueryOptions(api, auth?.user?.id),
+    enabled: ownCommunity && !!auth?.user?.id,
     select: (organizations) =>
       organizations.find((organization) => organization.id === activeOrganizationId)?.slug ?? null,
   }).data;

@@ -63,8 +63,12 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
     ],
   }),
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
-    await context.queryClient.ensureQueryData(organizationsQueryOptions(context.apiClient));
+    const session = await context.queryClient.ensureQueryData(
+      sessionQueryOptions(context.authClient),
+    );
+    await context.queryClient.ensureQueryData(
+      organizationsQueryOptions(context.apiClient, session?.user?.id),
+    );
     await context.queryClient.ensureQueryData({
       queryKey: ["user-invitations"],
       queryFn: async (): Promise<UserInvitationItem[]> => {
@@ -87,7 +91,7 @@ function OrganizationsList() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const organizationsQuery = useQuery(organizationsQueryOptions(apiClient));
+  const organizationsQuery = useQuery(organizationsQueryOptions(apiClient, session?.user?.id));
   const { data: organizations, isLoading } = organizationsQuery;
 
   const { data: userInvitations = [] } = useQuery({
