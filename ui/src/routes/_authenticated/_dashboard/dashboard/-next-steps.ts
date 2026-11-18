@@ -6,8 +6,11 @@ export type NextStepId =
   | "start-community"
   | "open-community"
   | "payouts"
+  | "team-requests"
   | "stake"
   | "explore";
+
+export const MAX_NEXT_STEPS = 5;
 
 export interface NextStep {
   id: NextStepId;
@@ -27,6 +30,7 @@ export interface NextStepsState {
   canOrganizeEvents: boolean;
   inFinanceTeam: boolean;
   isAdmin: boolean;
+  teamRequestsWaiting?: number;
 }
 
 export function getNextSteps(
@@ -78,7 +82,7 @@ export function getNextSteps(
     steps.push(explore);
   }
 
-  return steps;
+  return steps.slice(0, MAX_NEXT_STEPS);
 }
 
 function startCommunityStep(t: AppTranslator): NextStep {
@@ -106,8 +110,19 @@ function communitySteps(
           },
         ]
       : [];
+  const teamRequests: NextStep[] = state.teamRequestsWaiting
+    ? [
+        {
+          id: "team-requests",
+          title: t("teamRequests.homeTitle", { count: state.teamRequestsWaiting }),
+          description: t("teamRequests.homeHint", { name: community.name }),
+          actionLabel: t("common.open"),
+        },
+      ]
+    : [];
   if (state.canManageCommunity || state.canOrganizeEvents || state.isAdmin) {
     return [
+      ...teamRequests,
       {
         id: "open-community",
         title: t("dashboard.openCommunity"),
@@ -118,6 +133,7 @@ function communitySteps(
     ];
   }
   return [
+    ...teamRequests,
     {
       id: "open-community",
       title: t("dashboard.openCommunityNamed", { name: community.name }),
