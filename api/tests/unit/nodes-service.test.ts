@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Database, DatabaseError } from "@/db";
 import { DatabaseLive, DatabaseTag } from "@/db/layer";
 import { nodes as nodesTable, placeAliases, places as placesTable } from "@/db/schema";
-import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
+import { hasJoinCode, NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
 import { createServiceHarness } from "./test-harness";
 
@@ -689,5 +689,15 @@ describe("NodesService", () => {
         expect(yield* nodes.listAncestors(city.node.id)).toEqual([]);
       }),
     );
+  });
+});
+
+describe("hasJoinCode", () => {
+  it("is true only for a stored standing join code", () => {
+    expect(hasJoinCode({ joinCodeId: "code-1" })).toBe(true);
+    expect(hasJoinCode({ kind: "country" })).toBe(false);
+    expect(hasJoinCode({ joinCodeId: "" })).toBe(false);
+    expect(hasJoinCode({ joinCodeId: 42 })).toBe(false);
+    expect(hasJoinCode(null)).toBe(false);
   });
 });

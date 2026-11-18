@@ -51,7 +51,7 @@ export function boundaryLatLngs(boundary: Boundary, offset = 0): AreaLatLngs {
   );
 }
 
-export function mapAreas(nodes: AreaNode[], boundaries: BoundaryMap) {
+export function mapAreas<T extends AreaNode>(nodes: T[], boundaries: BoundaryMap) {
   return nodes.flatMap((node) => {
     const boundary = node.placeId ? boundaries.get(node.placeId) : undefined;
     return boundary ? [{ node, boundary }] : [];

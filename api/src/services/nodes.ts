@@ -120,6 +120,11 @@ export function nodeKindOf(metadata: unknown): string | null {
   return typeof kind === "string" ? kind : null;
 }
 
+export function hasJoinCode(metadata: unknown): boolean {
+  const code = (metadata as { joinCodeId?: unknown } | null | undefined)?.joinCodeId;
+  return typeof code === "string" && code.length > 0;
+}
+
 export const PLATFORM_NODE_KIND = "platform";
 
 export const listedNode: SQL = sql`coalesce(${nodesTable.metadata}->>'kind', '') <> ${PLATFORM_NODE_KIND}`;

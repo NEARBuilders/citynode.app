@@ -372,6 +372,7 @@ export function GeographicMap({
             )
             .map((point) => ({
               nodeId: point.nodeId,
+              name: point.name,
               placeId: point.placeId,
             }));
           const areas = showsMapAreas(currentZoom) ? mapAreas(areaNodes, currentBoundaries) : [];
@@ -399,6 +400,7 @@ export function GeographicMap({
                   area
                     .getElement()
                     ?.setAttribute("data-testid", `discovery-map-area-${node.nodeId}`);
+                area.bindTooltip(node.name, { direction: "top", sticky: true });
                 area.on("click", () => select.current(node.nodeId));
                 return area;
               }),
