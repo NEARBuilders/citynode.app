@@ -1,10 +1,11 @@
 import { rmSync } from "node:fs";
+import { sql } from "drizzle-orm";
 import { Effect } from "effect";
 import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabaseDriver } from "@/db/index";
 import { loadMigrations, migrate } from "@/db/migrate";
-import { nodes as nodesTable, tenants as tenantsTable } from "@/db/schema";
+import { tenants as tenantsTable } from "@/db/schema";
 import pluginDevConfig from "../../plugin.dev";
 import { activateTestNode, daoContext, getPluginClient, teardown } from "../setup";
 
@@ -55,18 +56,20 @@ beforeAll(async () => {
         { name: "Linked city", accountId: "old-city.sputnik-dao.near", ownerKind: "dao" },
       ])
       .returning({ id: tenantsTable.id });
-    await driver.db.insert(nodesTable).values([
-      { id: ids.mainnet, slug: "mainnet-city", name: "Mainnet city", tenantId: mainnet!.id },
-      { id: ids.testnet, slug: "testnet-city", name: "Testnet city", tenantId: testnet!.id },
-      { id: ids.platform, slug: "platform-city", name: "Platform city", tenantId: platform!.id },
-      {
-        id: ids.linked,
-        slug: "linked-city",
-        name: "Linked city",
-        tenantId: linked!.id,
-        metadata: { daoAccountId: "new-city.sputnik-dao.near", daoNetwork: "mainnet" },
-      },
-    ]);
+    await driver.db.execute(sql`
+      INSERT INTO nodes (id, slug, name, tenant_id, metadata)
+      VALUES
+        (${ids.mainnet}::uuid, 'mainnet-city', 'Mainnet city', ${mainnet!.id}::uuid, '{}'::jsonb),
+        (${ids.testnet}::uuid, 'testnet-city', 'Testnet city', ${testnet!.id}::uuid, '{}'::jsonb),
+        (${ids.platform}::uuid, 'platform-city', 'Platform city', ${platform!.id}::uuid, '{}'::jsonb),
+        (
+          ${ids.linked}::uuid,
+          'linked-city',
+          'Linked city',
+          ${linked!.id}::uuid,
+          '{"daoAccountId":"new-city.sputnik-dao.near","daoNetwork":"mainnet"}'::jsonb
+        )
+    `);
 
     await Effect.runPromise(migrate(driver.db, migrations, storage, schemaName));
   } finally {
