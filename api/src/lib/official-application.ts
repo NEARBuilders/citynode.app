@@ -74,6 +74,14 @@ async function ensureOrganizationAdmin(auth: AuthClient, organizationId: string,
   await auth.adminAddMember({ organizationId, userId, role: "admin" });
 }
 
+export async function grantApplicantAdmin(
+  auth: AuthClient,
+  input: { organizationId: string; applicantUserId?: string; reviewerUserId: string },
+) {
+  if (!input.applicantUserId || input.applicantUserId === input.reviewerUserId) return;
+  await ensureOrganizationAdmin(auth, input.organizationId, input.applicantUserId);
+}
+
 export async function linkOfficialDao(
   deps: OfficialApplicationDeps,
   auth: AuthClient,
@@ -81,7 +89,6 @@ export async function linkOfficialDao(
     community: NodeRecord & { orgId: string };
     daoAccountId: string;
     reviewerUserId: string;
-    applicantUserId?: string;
   },
 ): Promise<OfficialDaoLink> {
   const organizationId = input.community.orgId;
@@ -97,9 +104,6 @@ export async function linkOfficialDao(
   await ensureOrganizationAdmin(auth, organizationId, input.reviewerUserId);
   const linked = await auth.getDao({ organizationId });
   refuseOtherDao(linked.daoAccountId);
-  if (input.applicantUserId && input.applicantUserId !== input.reviewerUserId) {
-    await ensureOrganizationAdmin(auth, organizationId, input.applicantUserId);
-  }
   if (linked.daoAccountId !== input.daoAccountId || linked.daoNetwork !== network) {
     await auth.linkDao({ organizationId, daoAccountId: input.daoAccountId, daoNetwork: network });
   }

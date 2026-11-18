@@ -34,6 +34,7 @@ type FakeProposal = {
 };
 
 const proposals = new Map<string, FakeProposal>();
+const failingApprovals = new Set<string>();
 const orgs = new Map<
   string,
   { metadata: Record<string, unknown>; members: Set<string>; roles: Map<string, string> }
@@ -173,6 +174,9 @@ function proposalsStub(context: { user?: { role?: string | null } }) {
     }),
     approve: async (input: { entityId: string; expectedUpdatedAt: string }) => {
       requireAdmin();
+      if (failingApprovals.has(input.entityId)) {
+        throw new ORPCError("BAD_REQUEST", { message: "stale" });
+      }
       return bump(find(input.entityId, input.expectedUpdatedAt), {
         reviewStatus: "approved",
         applyStatus: "applying",
@@ -226,6 +230,7 @@ beforeAll(async () => {
       { slug: "kaduna", name: "Kaduna", label: "city" },
       { slug: "owerri", name: "Owerri", label: "city" },
       { slug: "calabar", name: "Calabar", label: "city" },
+      { slug: "warri", name: "Warri", label: "city" },
     ]);
   });
   await getPluginClient(undefined, {
@@ -233,7 +238,17 @@ beforeAll(async () => {
     proposals: { client: proposalsStub, router: {} },
   } as never);
   const activator = await getPluginClient(authedContext("activator"));
-  for (const place of ["lagos", "abuja", "ibadan", "enugu", "jos", "kaduna", "owerri", "calabar"]) {
+  for (const place of [
+    "lagos",
+    "abuja",
+    "ibadan",
+    "enugu",
+    "jos",
+    "kaduna",
+    "owerri",
+    "calabar",
+    "warri",
+  ]) {
     await activator.activateCommunity({ place });
   }
 }, 30_000);
@@ -342,6 +357,27 @@ describe("Official Application approval", () => {
       organizationId: "org-owerri",
     });
     expect(orgs.get("org-owerri")?.roles.get("applicant-user")).toBe("admin");
+  });
+
+  it("doesn't make the applicant an admin when the approval itself fails", async () => {
+    proposals.set("warri", application("warri", { applicantUserId: "raced-applicant" }));
+    failingApprovals.add("warri");
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
+    await expect(
+      admin.approveOfficialApplication({
+        proposalId: "prop-warri",
+        entityId: "warri",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).rejects.toThrow();
+
+    expect(orgs.get("org-warri")?.members.has("raced-applicant")).toBe(false);
+    expect(calls.adminAddMember).not.toContainEqual(
+      expect.objectContaining({ userId: "raced-applicant" }),
+    );
+    expect(proposals.get("warri")?.reviewStatus).toBe("pending");
+    failingApprovals.delete("warri");
   });
 
   it("leaves an applicant who already owns the community as its owner", async () => {
