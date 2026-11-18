@@ -4,7 +4,13 @@ import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive, DatabaseTag } from "@/db/layer";
 import { placeAliases, places as placesTable } from "@/db/schema";
-import { buildPlacesCatalog, type SeedSources, seedPlacesInto } from "@/seed/places-catalog";
+import {
+  buildPlacesCatalog,
+  type SeedSources,
+  seedPlacesInto,
+  storedCitySlugs,
+  unlinkedCityPlaces,
+} from "@/seed/places-catalog";
 import { PlacesLive, PlacesTag } from "@/services/places";
 import { createTempDb } from "./test-harness";
 
@@ -81,6 +87,8 @@ const cityLines = [
   cityLine("9000004", "Twin", "US", "IL", 20000),
   cityLine("2988507", "Paris", "FR", "11", 2138551),
   cityLine("9000006", "Zürich", "RU", "MO", 15000),
+  cityLine("9000008", "Usa", "US", "IL", 16000),
+  cityLine("9000009", "Nga", "NG", "LA", 16000),
 ];
 
 const cities = cityLines.join("\n");
@@ -536,6 +544,142 @@ describe("buildPlacesCatalog", () => {
     expect(resolved.chicagoParent).toBe(resolved.illinoisId);
   });
 
+  it("never gives a city a slug that is already an alias, case-folded", () => {
+    const catalog = buildPlacesCatalog({
+      ...sources(),
+      existingAliases: [{ value: "Gotham", kind: "legacy" }],
+    });
+    expect(catalog.places.find((p) => p.name === "Usa")?.slug).toBe("us-usa");
+    expect(catalog.places.find((p) => p.name === "Nga")?.slug).toBe("ng-nga");
+    expect(catalog.places.find((p) => p.name === "Gotham")?.slug).toBe("us-gotham");
+  });
+
+  it("reuses an existing city place in the same country instead of adding a twin", () => {
+    const catalog = buildPlacesCatalog({
+      ...sources(),
+      existingPlaceSlugs: ["chicago-community", "moscow-community"],
+      existingCityPlaces: [
+        { slug: "chicago-community", name: "Chicago", countrySlug: "united-states" },
+        { slug: "moscow-community", name: "Moscow", countrySlug: "nigeria" },
+      ],
+    });
+    expect(catalog.places.filter((p) => p.name === "Chicago").map((p) => p.slug)).toEqual([
+      "chicago-community",
+    ]);
+    expect(catalog.aliases).toContainEqual({
+      value: "4887398",
+      kind: "geonames",
+      slug: "chicago-community",
+    });
+    expect(catalog.places.find((p) => p.name === "Moscow" && p.label === "city")?.slug).toBe(
+      "moscow",
+    );
+  });
+
+  it("refuses a curated alias that already exists in the database as another kind", () => {
+    expect(() =>
+      buildPlacesCatalog({ ...sources(), existingAliases: [{ value: "NYC", kind: "legacy" }] }),
+    ).toThrow(/collides/);
+    expect(() =>
+      buildPlacesCatalog({ ...sources(), existingAliases: [{ value: "nyc", kind: "curated" }] }),
+    ).not.toThrow();
+  });
+
+  it("reads each city's geonames slug from stored places and aliases", () => {
+    const stored = [
+      { id: "us", slug: "united-states", name: "United States", label: "country", parentId: null },
+      { id: "c1", slug: "chicago", name: "Chicago", label: "city", parentId: "us" },
+    ];
+    expect(
+      storedCitySlugs(stored, [
+        { value: "4887398", kind: "geonames", placeId: "c1" },
+        { value: "6252001", kind: "geonames", placeId: "us" },
+        { value: "chi", kind: "legacy", placeId: "c1" },
+      ]),
+    ).toEqual([{ geonameid: "4887398", slug: "chicago" }]);
+  });
+
+  it("lists city places with no geonames alias, with their country", () => {
+    const stored = [
+      { id: "us", slug: "united-states", name: "United States", label: "country", parentId: null },
+      { id: "il", slug: "us-illinois", name: "Illinois", label: "subdivision", parentId: "us" },
+      { id: "c1", slug: "chicago-community", name: "Chicago", label: "city", parentId: "il" },
+      { id: "c2", slug: "chicago", name: "Chicago", label: "city", parentId: "il" },
+      { id: "c3", slug: "floating", name: "Floating", label: "city", parentId: null },
+    ];
+    expect(unlinkedCityPlaces(stored, new Set(["c2"]))).toEqual([
+      { slug: "chicago-community", name: "Chicago", countrySlug: "united-states" },
+    ]);
+  });
+
+  it("rolls the whole seed back when a write fails part way", async () => {
+    const temp = createTempDb("api-places-seed-rollback-");
+    cleanup = temp.cleanup;
+    const layer = Layer.mergeAll(DatabaseLive(temp.url)).pipe(
+      Layer.provide(Layer.succeed(PluginIdTag, "api")),
+    );
+    const catalog = buildPlacesCatalog(sources());
+    const broken = {
+      places: catalog.places,
+      aliases: [
+        ...catalog.aliases,
+        { value: "orphan", kind: "geonames" as const, slug: "nowhere" },
+      ],
+    };
+    const placeCount = await Effect.runPromise(
+      Effect.gen(function* () {
+        const db = yield* DatabaseTag;
+        const failed = yield* Effect.tryPromise(() => seedPlacesInto(db, broken)).pipe(
+          Effect.match({ onFailure: () => true, onSuccess: () => false }),
+        );
+        expect(failed).toBe(true);
+        const rows = yield* Effect.tryPromise(() => db.select().from(placesTable));
+        return rows.length;
+      }).pipe(Effect.provide(layer)),
+    );
+    expect(placeCount).toBe(0);
+  });
+
+  it("keeps an existing boundary when the seed has none for that place", async () => {
+    const temp = createTempDb("api-places-seed-boundary-");
+    cleanup = temp.cleanup;
+    const layer = Layer.mergeAll(DatabaseLive(temp.url)).pipe(
+      Layer.provide(Layer.succeed(PluginIdTag, "api")),
+    );
+    const boundary = {
+      type: "Polygon" as const,
+      coordinates: [
+        [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 0],
+        ],
+      ],
+    };
+    const row = {
+      slug: "chicago",
+      name: "Chicago",
+      label: "city",
+      latitude: 41.85,
+      longitude: -87.65,
+      parentSlug: null,
+    };
+    const stored = await Effect.runPromise(
+      Effect.gen(function* () {
+        const db = yield* DatabaseTag;
+        yield* Effect.tryPromise(() =>
+          seedPlacesInto(db, { places: [{ ...row, boundary }], aliases: [] }),
+        );
+        yield* Effect.tryPromise(() =>
+          seedPlacesInto(db, { places: [{ ...row, boundary: null }], aliases: [] }),
+        );
+        return yield* Effect.tryPromise(() => db.select().from(placesTable));
+      }).pipe(Effect.provide(layer)),
+    );
+    expect(stored[0]?.boundary).toEqual(boundary);
+  });
+
   it("seeds idempotently: running twice leaves identical rows and timestamps", async () => {
     const temp = createTempDb("api-places-seed-");
     cleanup = temp.cleanup;
@@ -565,8 +709,8 @@ describe("buildPlacesCatalog", () => {
         }).pipe(Effect.provide(layer)),
       );
 
-    expect(placeRows).toHaveLength(24);
-    expect(aliasRows).toHaveLength(30);
+    expect(placeRows).toHaveLength(26);
+    expect(aliasRows).toHaveLength(32);
     expect(secondRunUpdatedAt).toEqual(firstRunUpdatedAt);
     expect(parentIds.get("cis")).toBeNull();
     const bySlug = new Map(placeRows.map((row) => [row.slug, row] as const));

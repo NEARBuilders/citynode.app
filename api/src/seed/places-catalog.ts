@@ -37,6 +37,19 @@ export interface SeedSources {
   curatedAliases: CuratedAlias[];
   existingCitySlugs?: ExistingCitySlug[];
   existingPlaceSlugs?: string[];
+  existingAliases?: ExistingAlias[];
+  existingCityPlaces?: ExistingCityPlace[];
+}
+
+export interface ExistingAlias {
+  value: string;
+  kind: string;
+}
+
+export interface ExistingCityPlace {
+  slug: string;
+  name: string;
+  countrySlug: string;
 }
 
 export interface ExistingCitySlug {
@@ -537,11 +550,37 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
     taken.add(existing.slug);
     citySlugByGeonameid.set(existing.geonameid, existing.slug);
   }
+  const unclaimedCityPlaces = new Map<string, string>();
+  for (const existing of [...(sources.existingCityPlaces ?? [])].sort((a, b) =>
+    a.slug.localeCompare(b.slug),
+  )) {
+    const key = `${existing.countrySlug}:${slugify(existing.name)}`;
+    if (!taken.has(existing.slug) && !unclaimedCityPlaces.has(key)) {
+      unclaimedCityPlaces.set(key, existing.slug);
+    }
+  }
+  for (const city of cities) {
+    if (citySlugByGeonameid.has(city.geonameid)) continue;
+    const key = `${countrySlugByIso.get(city.countryCode)}:${city.base}`;
+    const slug = unclaimedCityPlaces.get(key);
+    if (!slug) continue;
+    unclaimedCityPlaces.delete(key);
+    taken.add(slug);
+    citySlugByGeonameid.set(city.geonameid, slug);
+  }
   for (const slug of sources.existingPlaceSlugs ?? []) taken.add(slug);
+  const cityTaken = new Set(taken);
+  for (const value of [
+    ...aliases.map((alias) => alias.value),
+    ...(sources.existingAliases ?? []).map((alias) => alias.value),
+  ]) {
+    cityTaken.add(value.toLowerCase());
+  }
   for (const city of cities) {
     const slug =
-      citySlugByGeonameid.get(city.geonameid) ?? citySlug(city, taken, countryBaseCounts);
+      citySlugByGeonameid.get(city.geonameid) ?? citySlug(city, cityTaken, countryBaseCounts);
     taken.add(slug);
+    cityTaken.add(slug);
     citySlugByGeonameid.set(city.geonameid, slug);
     places.push({
       slug,
@@ -561,6 +600,9 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
   }
 
   const foldedAliasValues = new Set([...aliasValues].map((value) => value.toLowerCase()));
+  for (const existing of sources.existingAliases ?? []) {
+    if (existing.kind !== "curated") foldedAliasValues.add(existing.value.toLowerCase());
+  }
   for (const curated of sources.curatedAliases) {
     const slug = citySlugByGeonameid.get(curated.geonameid);
     if (!slug) {
@@ -587,7 +629,56 @@ function chunk<T>(rows: T[], size: number): T[][] {
   return chunks;
 }
 
+export interface StoredPlace {
+  id: string;
+  slug: string;
+  name: string;
+  label: string | null;
+  parentId: string | null;
+}
+
+export function storedCitySlugs(
+  stored: StoredPlace[],
+  aliases: Array<ExistingAlias & { placeId: string }>,
+): ExistingCitySlug[] {
+  const cityById = new Map(
+    stored.filter((place) => place.label === "city").map((place) => [place.id, place] as const),
+  );
+  return aliases.flatMap((alias) => {
+    const place = alias.kind === "geonames" ? cityById.get(alias.placeId) : undefined;
+    return place ? [{ geonameid: alias.value, slug: place.slug }] : [];
+  });
+}
+
+export function unlinkedCityPlaces(
+  stored: StoredPlace[],
+  geonamesPlaceIds: Set<string>,
+): ExistingCityPlace[] {
+  const byId = new Map(stored.map((place) => [place.id, place] as const));
+  const countrySlugOf = (place: StoredPlace) => {
+    const seen = new Set<string>();
+    let current: StoredPlace | undefined = place;
+    while (current && !seen.has(current.id)) {
+      if (current.label === "country") return current.slug;
+      seen.add(current.id);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    return null;
+  };
+  return stored.flatMap((place) => {
+    if (place.label !== "city" || geonamesPlaceIds.has(place.id)) return [];
+    const countrySlug = countrySlugOf(place);
+    return countrySlug ? [{ slug: place.slug, name: place.name, countrySlug }] : [];
+  });
+}
+
+type SeedExecutor = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
 export async function seedPlacesInto(db: Database, catalog: PlacesCatalog): Promise<void> {
+  await db.transaction((tx) => writeCatalog(tx, catalog));
+}
+
+async function writeCatalog(db: SeedExecutor, catalog: PlacesCatalog): Promise<void> {
   for (const batch of chunk(catalog.places, 500)) {
     await db
       .insert(placesTable)
@@ -598,13 +689,13 @@ export async function seedPlacesInto(db: Database, catalog: PlacesCatalog): Prom
           name: sql`excluded.name`,
           latitude: sql`excluded.latitude`,
           longitude: sql`excluded.longitude`,
-          boundary: sql`excluded.boundary`,
+          boundary: sql`CASE WHEN excluded.label = 'city' THEN COALESCE(excluded.boundary, places.boundary) ELSE excluded.boundary END`,
           label: sql`excluded.label`,
           updatedAt: sql`CASE
             WHEN excluded.name IS DISTINCT FROM places.name
               OR excluded.latitude IS DISTINCT FROM places.latitude
               OR excluded.longitude IS DISTINCT FROM places.longitude
-              OR excluded.boundary IS DISTINCT FROM places.boundary
+              OR (CASE WHEN excluded.label = 'city' THEN COALESCE(excluded.boundary, places.boundary) ELSE excluded.boundary END) IS DISTINCT FROM places.boundary
               OR excluded.label IS DISTINCT FROM places.label
             THEN now() ELSE places.updated_at END`,
         },

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 import { config as loadEnv } from "dotenv";
-import { and, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { DatabaseLive, DatabaseTag } from "../src/db/layer";
@@ -14,6 +14,8 @@ import {
   type CuratedAlias,
   type SeedSources,
   seedPlacesInto,
+  storedCitySlugs,
+  unlinkedCityPlaces,
 } from "../src/seed/places-catalog";
 
 const scriptDir = fileURLToPath(new URL(".", import.meta.url));
@@ -129,15 +131,28 @@ const layer = Layer.mergeAll(DatabaseLive(databaseUrl)).pipe(
 const summary = await Effect.runPromise(
   Effect.gen(function* () {
     const db = yield* DatabaseTag;
-    const existingCitySlugs = yield* Effect.tryPromise(() =>
-      db
-        .select({ geonameid: placeAliasesTable.value, slug: placesTable.slug })
-        .from(placeAliasesTable)
-        .innerJoin(placesTable, eq(placesTable.id, placeAliasesTable.placeId))
-        .where(and(eq(placeAliasesTable.kind, "geonames"), eq(placesTable.label, "city"))),
-    );
     const existingPlaces = yield* Effect.tryPromise(() =>
-      db.select({ slug: placesTable.slug }).from(placesTable),
+      db
+        .select({
+          id: placesTable.id,
+          slug: placesTable.slug,
+          name: placesTable.name,
+          label: placesTable.label,
+          parentId: placesTable.parentId,
+        })
+        .from(placesTable),
+    );
+    const existingAliases = yield* Effect.tryPromise(() =>
+      db
+        .select({
+          value: placeAliasesTable.value,
+          kind: placeAliasesTable.kind,
+          placeId: placeAliasesTable.placeId,
+        })
+        .from(placeAliasesTable),
+    );
+    const geonamesPlaceIds = new Set(
+      existingAliases.filter((alias) => alias.kind === "geonames").map((alias) => alias.placeId),
     );
     const catalog = buildPlacesCatalog({
       countryInfo,
@@ -147,8 +162,10 @@ const summary = await Effect.runPromise(
       cities,
       supranationals: SUPRANATIONALS,
       curatedAliases: CURATED_ALIASES,
-      existingCitySlugs,
+      existingCitySlugs: storedCitySlugs(existingPlaces, existingAliases),
       existingPlaceSlugs: existingPlaces.map((place) => place.slug),
+      existingAliases,
+      existingCityPlaces: unlinkedCityPlaces(existingPlaces, geonamesPlaceIds),
     } satisfies SeedSources);
     yield* Effect.tryPromise(() => seedPlacesInto(db, catalog));
     const [counts] = yield* Effect.tryPromise(() =>
