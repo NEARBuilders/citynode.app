@@ -617,6 +617,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "common.starting": ["Starting", "Iniciando", "Démarrage", "正在启动"],
   "common.state": ["State", "Estado", "État", "州"],
   "common.status": ["Status", "Estado", "État", "状态"],
+  "common.supranational": ["Region", "Región", "Région", "区域"],
   "common.submission": ["Submission", "Envío", "Soumission", "提交内容"],
   "common.submitted": ["Submitted", "Enviado", "Soumis", "提交时间"],
   "common.title": ["Title", "Título", "Titre", "标题"],

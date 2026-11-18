@@ -11,7 +11,9 @@ export function isPlatformNode(node: { kind?: string | null } | null | undefined
 const GEO_KIND_LABELS: Record<string, AppMessageId> = {
   country: "common.country",
   state: "common.state",
+  subdivision: "common.state",
   city: "common.city",
+  supranational: "common.supranational",
   node: "label.node",
   thing: "label.thing",
 };

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { boundaryBounds, boundaryLatLngs, mapAreas } from "./map-areas";
+import {
+  boundaryBounds,
+  boundaryLatLngs,
+  mapAreas,
+  showsMapAreas,
+  simplifyBoundary,
+} from "./map-areas";
 
 const square = [
   [
@@ -32,6 +38,24 @@ describe("boundaryLatLngs", () => {
     const areas = boundaryLatLngs({ type: "MultiPolygon", coordinates: [square, square] }, 360);
     expect(areas).toHaveLength(2);
     expect(areas[1]?.[0]?.[0]).toEqual([10, 430]);
+  });
+});
+
+describe("showsMapAreas", () => {
+  it("keeps pins-only at world zoom and draws areas from region zoom", () => {
+    expect(showsMapAreas(2)).toBe(false);
+    expect(showsMapAreas(4)).toBe(false);
+    expect(showsMapAreas(5)).toBe(true);
+  });
+});
+
+describe("simplifyBoundary", () => {
+  it("thins a dense ring at region zoom and keeps it whole when close in", () => {
+    const ring = Array.from({ length: 17 }, (_, index) => [70 + index, 10]);
+    ring.push(ring[0]!);
+    const dense = { type: "Polygon" as const, coordinates: [ring] };
+    expect(simplifyBoundary(dense, 5).coordinates[0]?.length).toBeLessThan(ring.length);
+    expect(simplifyBoundary(dense, 8).coordinates[0]).toHaveLength(ring.length);
   });
 });
 
