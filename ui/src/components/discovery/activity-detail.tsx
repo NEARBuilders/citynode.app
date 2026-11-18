@@ -198,7 +198,6 @@ export function ActivityDetail({
           <Link
             to="/n/$slug"
             params={{ slug: host.data.slug }}
-            search={{ parentId: host.data.parentId ?? undefined }}
             data-testid="activity.host"
             className="group flex items-center gap-4 rounded-2xl border border-border p-4 transition-colors hover:bg-muted"
           >

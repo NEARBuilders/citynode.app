@@ -129,7 +129,7 @@ describe("createRequireTeamArea", () => {
       }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Ask an organization owner or admin to add you to a team with node-operations.",
+      message: "Ask a community owner or admin to add you to a team with node-operations.",
       data: { requiredPermissions: ["node-operations"] },
     });
   });

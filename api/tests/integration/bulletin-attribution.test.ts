@@ -105,7 +105,7 @@ describe("bulletin attribution through the API", () => {
     const reads = [
       await visitor.getNode({ nodeId: node.id }),
       (await visitor.listNodes({ tenantId: tenant.id })).find(({ id }) => id === node.id),
-      await visitor.resolveNodeBySlug({ slug: node.slug, parentId: null }),
+      await visitor.resolveNodeBySlug({ slug: node.slug }),
       (await visitor.getNodeSummary({ nodeId: node.id })).node,
       (await visitor.listRootNodes()).find(({ id }) => id === node.id),
       (await visitor.listNodeSummaries({ scope: "roots" })).find(

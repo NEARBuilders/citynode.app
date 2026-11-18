@@ -102,14 +102,12 @@ test.describe("admin progress and needs action", () => {
     await page.getByTestId("admin-node-edit").click();
     await expect(page.getByTestId("admin-node-editor")).toBeVisible();
     await page.getByTestId("discovery-profile-summary").fill(`Summary for ${unique}`);
-    await page.getByTestId("admin-node-editor-name").fill(`Renamed ${unique}`);
     await page.getByTestId("admin-node-editor-save").click();
     await expect(page.getByTestId("admin-node-editor")).toBeHidden({ timeout: 15000 });
     await expect(page.getByTestId("admin-node-profile-summary")).toHaveText(
       `Summary for ${unique}`,
       { timeout: 15000 },
     );
-    await expect(page.getByTestId("admin-node.heading")).toContainText(`Renamed ${unique}`);
 
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);

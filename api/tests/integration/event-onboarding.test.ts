@@ -115,8 +115,6 @@ async function seedEventOnNodeWithoutOrganization() {
     const [node] = await driver.db
       .insert(nodes)
       .values({
-        slug: "solo-city",
-        name: "Solo city",
         tenantId: tenant!.id,
         metadata: { kind: "city" },
       })
@@ -219,7 +217,7 @@ describe("creating an onboarding code for a Node Event", () => {
       organizer.createEventOnboardingCode({ eventId: orphanEventId }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      message: expect.stringMatching(/no organization/i),
+      message: expect.stringMatching(/no community/i),
     });
   });
 
@@ -231,7 +229,7 @@ describe("creating an onboarding code for a Node Event", () => {
 
     await expect(outsider.createEventOnboardingCode({ eventId: event.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: expect.stringMatching(/another organization/i),
+      message: expect.stringMatching(/another community/i),
     });
     expect(forwarded).toHaveLength(before);
   });

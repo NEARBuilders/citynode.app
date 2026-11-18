@@ -17,7 +17,7 @@ describe("node query options", () => {
     expect(nodeQueryKeys.children("country-1")).toEqual(["nodes", "list", "children", "country-1"]);
     expect(nodeQueryKeys.children("country-2")).not.toEqual(nodeQueryKeys.children("country-1"));
     expect(nodeQueryKeys.tenant("tenant-1")).toEqual(["nodes", "list", "tenant", "tenant-1"]);
-    expect(nodeQueryKeys.bySlug("chicago", null)).not.toEqual(nodeQueryKeys.bySlug("chicago"));
+    expect(nodeQueryKeys.bySlug("chicago")).toEqual(["nodes", "detail", "slug", "chicago"]);
   });
 
   it("delegates root, child, and tenant lists to the API client", async () => {

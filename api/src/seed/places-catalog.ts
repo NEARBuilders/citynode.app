@@ -22,12 +22,39 @@ export interface Supranational {
   memberIso2: string[];
 }
 
+export interface CuratedAlias {
+  value: string;
+  geonameid: string;
+}
+
 export interface SeedSources {
   countryInfo: string;
   admin1Codes: string;
   admin0Geojson: string;
   admin1Geojson: string;
+  cities: string;
   supranationals: Supranational[];
+  curatedAliases: CuratedAlias[];
+  existingCitySlugs?: ExistingCitySlug[];
+  existingPlaceSlugs?: string[];
+  existingAliases?: ExistingAlias[];
+  existingCityPlaces?: ExistingCityPlace[];
+}
+
+export interface ExistingAlias {
+  value: string;
+  kind: string;
+}
+
+export interface ExistingCityPlace {
+  slug: string;
+  name: string;
+  countrySlug: string;
+}
+
+export interface ExistingCitySlug {
+  geonameid: string;
+  slug: string;
 }
 
 export interface PlaceUpsertRow {
@@ -42,7 +69,7 @@ export interface PlaceUpsertRow {
 
 export interface AliasUpsertRow {
   value: string;
-  kind: "geonames" | "iso" | "legacy";
+  kind: "geonames" | "iso" | "legacy" | "curated";
   slug: string;
 }
 
@@ -161,6 +188,59 @@ function parseAdmin1(admin1Codes: string): Admin1Row[] {
     rows.push({ countryCode, code, name, geonameid });
   }
   return rows;
+}
+
+interface CityRow {
+  geonameid: string;
+  name: string;
+  base: string;
+  countryCode: string;
+  admin1: string;
+  latitude: number;
+  longitude: number;
+  population: number;
+}
+
+function parseCities(cities: string): CityRow[] {
+  const rows: CityRow[] = [];
+  for (const line of cities.split("\n")) {
+    if (line.trim() === "" || line.startsWith("#")) continue;
+    const columns = line.split("\t");
+    const geonameid = columns[0]?.trim();
+    const name = columns[1]?.trim();
+    const base = slugify(name ?? "") || slugify(columns[2]?.trim() ?? "");
+    const latitudeText = columns[4]?.trim() ?? "";
+    const longitudeText = columns[5]?.trim() ?? "";
+    const latitude = Number(latitudeText);
+    const longitude = Number(longitudeText);
+    const countryCode = columns[8]?.trim().toUpperCase();
+    if (!geonameid || !/^\d+$/.test(geonameid) || !name || !base || !countryCode) continue;
+    if (!latitudeText || !longitudeText) continue;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    const population = Number(columns[14]);
+    rows.push({
+      geonameid,
+      name,
+      base,
+      countryCode,
+      admin1: columns[10]?.trim() ?? "",
+      latitude: Number(latitude.toFixed(4)),
+      longitude: Number(longitude.toFixed(4)),
+      population: Number.isFinite(population) ? population : 0,
+    });
+  }
+  return rows.sort(
+    (a, b) => b.population - a.population || Number(a.geonameid) - Number(b.geonameid),
+  );
+}
+
+function citySlug(city: CityRow, taken: Set<string>, countryBaseCounts: Map<string, number>) {
+  const country = city.countryCode.toLowerCase();
+  const admin1 = slugify(city.admin1);
+  const sharesCountry = (countryBaseCounts.get(`${city.countryCode}:${city.base}`) ?? 0) > 1;
+  const qualified = admin1 ? `${country}-${admin1}-${city.base}` : `${country}-${city.base}`;
+  const candidates = [city.base, ...(sharesCountry ? [] : [`${country}-${city.base}`]), qualified];
+  return candidates.find((candidate) => !taken.has(candidate)) ?? `${qualified}-${city.geonameid}`;
 }
 
 interface Admin1Match {
@@ -422,10 +502,12 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
     aliases.push({ value: country.iso3, kind: "iso", slug });
   }
 
+  const subdivisionSlugByCode = new Map<string, string>();
   for (const row of admin1) {
     const countrySlug = countrySlugByIso.get(row.countryCode);
     if (!countrySlug) continue;
     const slug = `${row.countryCode.toLowerCase()}-${slugify(row.name)}`;
+    subdivisionSlugByCode.set(row.code.toUpperCase(), slug);
     const geonameid = Number(row.geonameid);
     const match =
       (Number.isFinite(geonameid) && geonameid > 0
@@ -448,6 +530,94 @@ export function buildPlacesCatalog(sources: SeedSources): PlacesCatalog {
     aliases.push({ value: row.geonameid, kind: "geonames", slug });
   }
 
+  const cities = parseCities(sources.cities).filter((city) =>
+    countrySlugByIso.has(city.countryCode),
+  );
+  const countryBaseCounts = new Map<string, number>();
+  for (const city of cities) {
+    const key = `${city.countryCode}:${city.base}`;
+    countryBaseCounts.set(key, (countryBaseCounts.get(key) ?? 0) + 1);
+  }
+  const taken = new Set(places.map((place) => place.slug));
+  const aliasValues = new Set(aliases.map((alias) => alias.value));
+  const seededGeonameids = new Set(cities.map((city) => city.geonameid));
+  const citySlugByGeonameid = new Map<string, string>();
+  for (const existing of [...(sources.existingCitySlugs ?? [])].sort((a, b) =>
+    a.geonameid.localeCompare(b.geonameid),
+  )) {
+    if (!seededGeonameids.has(existing.geonameid) || taken.has(existing.slug)) continue;
+    if (citySlugByGeonameid.has(existing.geonameid)) continue;
+    taken.add(existing.slug);
+    citySlugByGeonameid.set(existing.geonameid, existing.slug);
+  }
+  const unclaimedCityPlaces = new Map<string, string>();
+  for (const existing of [...(sources.existingCityPlaces ?? [])].sort((a, b) =>
+    a.slug.localeCompare(b.slug),
+  )) {
+    const key = `${existing.countrySlug}:${slugify(existing.name)}`;
+    if (!taken.has(existing.slug) && !unclaimedCityPlaces.has(key)) {
+      unclaimedCityPlaces.set(key, existing.slug);
+    }
+  }
+  for (const city of cities) {
+    if (citySlugByGeonameid.has(city.geonameid)) continue;
+    const key = `${countrySlugByIso.get(city.countryCode)}:${city.base}`;
+    const slug = unclaimedCityPlaces.get(key);
+    if (!slug) continue;
+    unclaimedCityPlaces.delete(key);
+    taken.add(slug);
+    citySlugByGeonameid.set(city.geonameid, slug);
+  }
+  for (const slug of sources.existingPlaceSlugs ?? []) taken.add(slug);
+  const cityTaken = new Set(taken);
+  for (const value of [
+    ...aliases.map((alias) => alias.value),
+    ...(sources.existingAliases ?? []).map((alias) => alias.value),
+  ]) {
+    cityTaken.add(value.toLowerCase());
+  }
+  for (const city of cities) {
+    const slug =
+      citySlugByGeonameid.get(city.geonameid) ?? citySlug(city, cityTaken, countryBaseCounts);
+    taken.add(slug);
+    cityTaken.add(slug);
+    citySlugByGeonameid.set(city.geonameid, slug);
+    places.push({
+      slug,
+      name: city.name,
+      label: "city",
+      latitude: city.latitude,
+      longitude: city.longitude,
+      boundary: null,
+      parentSlug:
+        subdivisionSlugByCode.get(`${city.countryCode}.${city.admin1}`.toUpperCase()) ??
+        countrySlugByIso.get(city.countryCode) ??
+        null,
+    });
+    if (aliasValues.has(city.geonameid)) continue;
+    aliasValues.add(city.geonameid);
+    aliases.push({ value: city.geonameid, kind: "geonames", slug });
+  }
+
+  const foldedAliasValues = new Set([...aliasValues].map((value) => value.toLowerCase()));
+  for (const existing of sources.existingAliases ?? []) {
+    if (existing.kind !== "curated") foldedAliasValues.add(existing.value.toLowerCase());
+  }
+  for (const curated of sources.curatedAliases) {
+    const slug = citySlugByGeonameid.get(curated.geonameid);
+    if (!slug) {
+      throw new Error(
+        `curated alias "${curated.value}" references unknown city ${curated.geonameid}`,
+      );
+    }
+    const value = curated.value.toLowerCase();
+    if (foldedAliasValues.has(value) || taken.has(value)) {
+      throw new Error(`curated alias "${curated.value}" collides with an existing place or alias`);
+    }
+    foldedAliasValues.add(value);
+    aliases.push({ value, kind: "curated", slug });
+  }
+
   return { places, aliases };
 }
 
@@ -459,7 +629,56 @@ function chunk<T>(rows: T[], size: number): T[][] {
   return chunks;
 }
 
+export interface StoredPlace {
+  id: string;
+  slug: string;
+  name: string;
+  label: string | null;
+  parentId: string | null;
+}
+
+export function storedCitySlugs(
+  stored: StoredPlace[],
+  aliases: Array<ExistingAlias & { placeId: string }>,
+): ExistingCitySlug[] {
+  const cityById = new Map(
+    stored.filter((place) => place.label === "city").map((place) => [place.id, place] as const),
+  );
+  return aliases.flatMap((alias) => {
+    const place = alias.kind === "geonames" ? cityById.get(alias.placeId) : undefined;
+    return place ? [{ geonameid: alias.value, slug: place.slug }] : [];
+  });
+}
+
+export function unlinkedCityPlaces(
+  stored: StoredPlace[],
+  geonamesPlaceIds: Set<string>,
+): ExistingCityPlace[] {
+  const byId = new Map(stored.map((place) => [place.id, place] as const));
+  const countrySlugOf = (place: StoredPlace) => {
+    const seen = new Set<string>();
+    let current: StoredPlace | undefined = place;
+    while (current && !seen.has(current.id)) {
+      if (current.label === "country") return current.slug;
+      seen.add(current.id);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    return null;
+  };
+  return stored.flatMap((place) => {
+    if (place.label !== "city" || geonamesPlaceIds.has(place.id)) return [];
+    const countrySlug = countrySlugOf(place);
+    return countrySlug ? [{ slug: place.slug, name: place.name, countrySlug }] : [];
+  });
+}
+
+type SeedExecutor = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
 export async function seedPlacesInto(db: Database, catalog: PlacesCatalog): Promise<void> {
+  await db.transaction((tx) => writeCatalog(tx, catalog));
+}
+
+async function writeCatalog(db: SeedExecutor, catalog: PlacesCatalog): Promise<void> {
   for (const batch of chunk(catalog.places, 500)) {
     await db
       .insert(placesTable)
@@ -470,13 +689,13 @@ export async function seedPlacesInto(db: Database, catalog: PlacesCatalog): Prom
           name: sql`excluded.name`,
           latitude: sql`excluded.latitude`,
           longitude: sql`excluded.longitude`,
-          boundary: sql`excluded.boundary`,
+          boundary: sql`CASE WHEN excluded.label = 'city' THEN COALESCE(excluded.boundary, places.boundary) ELSE excluded.boundary END`,
           label: sql`excluded.label`,
           updatedAt: sql`CASE
             WHEN excluded.name IS DISTINCT FROM places.name
               OR excluded.latitude IS DISTINCT FROM places.latitude
               OR excluded.longitude IS DISTINCT FROM places.longitude
-              OR excluded.boundary IS DISTINCT FROM places.boundary
+              OR (CASE WHEN excluded.label = 'city' THEN COALESCE(excluded.boundary, places.boundary) ELSE excluded.boundary END) IS DISTINCT FROM places.boundary
               OR excluded.label IS DISTINCT FROM places.label
             THEN now() ELSE places.updated_at END`,
         },

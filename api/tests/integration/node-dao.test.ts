@@ -5,7 +5,7 @@ import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabaseDriver } from "@/db/index";
 import { loadMigrations, migrate } from "@/db/migrate";
-import { tenants as tenantsTable } from "@/db/schema";
+import { places as placesTable, tenants as tenantsTable } from "@/db/schema";
 import pluginDevConfig from "../../plugin.dev";
 import { activateTestNode, daoContext, getPluginClient, teardown } from "../setup";
 
@@ -56,20 +56,35 @@ beforeAll(async () => {
         { name: "Linked city", accountId: "old-city.sputnik-dao.near", ownerKind: "dao" },
       ])
       .returning({ id: tenantsTable.id });
-    await driver.db.execute(sql`
-      INSERT INTO nodes (id, slug, name, tenant_id, metadata)
-      VALUES
-        (${ids.mainnet}::uuid, 'mainnet-city', 'Mainnet city', ${mainnet!.id}::uuid, '{}'::jsonb),
-        (${ids.testnet}::uuid, 'testnet-city', 'Testnet city', ${testnet!.id}::uuid, '{}'::jsonb),
-        (${ids.platform}::uuid, 'platform-city', 'Platform city', ${platform!.id}::uuid, '{}'::jsonb),
-        (
-          ${ids.linked}::uuid,
-          'linked-city',
-          'Linked city',
-          ${linked!.id}::uuid,
-          '{"daoAccountId":"new-city.sputnik-dao.near","daoNetwork":"mainnet"}'::jsonb
+    const legacy = [
+      { id: ids.mainnet, slug: "mainnet-city", name: "Mainnet city", tenantId: mainnet!.id },
+      { id: ids.testnet, slug: "testnet-city", name: "Testnet city", tenantId: testnet!.id },
+      { id: ids.platform, slug: "platform-city", name: "Platform city", tenantId: platform!.id },
+      {
+        id: ids.linked,
+        slug: "linked-city",
+        name: "Linked city",
+        tenantId: linked!.id,
+        metadata: { daoAccountId: "new-city.sputnik-dao.near", daoNetwork: "mainnet" },
+      },
+    ];
+    for (const node of legacy) {
+      const [place] = await driver.db
+        .insert(placesTable)
+        .values({ slug: node.slug, name: node.name })
+        .returning({ id: placesTable.id });
+      await driver.db.execute(sql`
+        INSERT INTO nodes (id, slug, name, tenant_id, place_id, metadata)
+        VALUES (
+          ${node.id}::uuid,
+          ${node.slug},
+          ${node.name},
+          ${node.tenantId}::uuid,
+          ${place!.id}::uuid,
+          ${JSON.stringify(node.metadata ?? {})}::jsonb
         )
-    `);
+      `);
+    }
 
     await Effect.runPromise(migrate(driver.db, migrations, storage, schemaName));
   } finally {

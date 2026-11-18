@@ -80,8 +80,6 @@ async function seedCases() {
       const [node] = await driver.db
         .insert(nodes)
         .values({
-          slug: `visibility-${index}`,
-          name: `Visibility ${index}`,
           tenantId: tenant!.id,
           metadata: { kind: "city" },
         })

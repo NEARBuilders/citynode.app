@@ -59,9 +59,6 @@ async function seedNode(layer: Layer.Layer<Tags, DatabaseError, never>, metadata
       });
       return yield* nodes.spawn({
         kind: "city",
-        slug: "nyc",
-        name: "New York City",
-        parentId: null,
         tenantId: tenant.id,
         metadata,
       });
@@ -181,9 +178,8 @@ describe("bulletin attribution", () => {
     await run(layer, ({ nodes }) => nodes.setBulletin(node.id, "Hackathon moved to Friday", ADA));
 
     const stale = await run(layer, ({ nodes }) =>
-      nodes.update(node.id, { name: "NYC", metadata: { bulletin: "Hackathon" } }),
+      nodes.update(node.id, { metadata: { bulletin: "Hackathon" } }),
     );
-    expect(stale.name).toBe("NYC");
     expect(stale.metadata.bulletin).toBe("Hackathon");
     expect(stale.bulletinPublishedAt).toBeNull();
     expect(stale.bulletinPublisherName).toBeNull();
@@ -206,10 +202,8 @@ describe("bulletin attribution", () => {
     expect(unrelated.bulletinPublishedAt).toBe(published.bulletinPublishedAt);
     expect(await storedPublisher(layer, node.id)).toBe("user-ada");
 
-    const renamed = await run(layer, ({ nodes }) =>
-      nodes.update(node.id, { name: "NYC", kind: "region" }),
-    );
-    expect(renamed.bulletinPublisherName).toBe("Ada");
+    const rekinded = await run(layer, ({ nodes }) => nodes.update(node.id, { kind: "region" }));
+    expect(rekinded.bulletinPublisherName).toBe("Ada");
 
     const removed = await run(layer, ({ nodes }) =>
       nodes.update(node.id, { metadata: { poolAccountId: "pool.poolv1.near" } }),
@@ -231,18 +225,12 @@ describe("bulletin attribution", () => {
         });
         const withBulletin = yield* nodes.spawn({
           kind: "city",
-          slug: "nyc",
-          name: "New York City",
-          parentId: null,
           tenantId: tenant.id,
           metadata: { bulletin: "Welcome" },
           publisher: ADA,
         });
         const blank = yield* nodes.spawn({
           kind: "city",
-          slug: "lagos",
-          name: "Lagos",
-          parentId: null,
           tenantId: tenant.id,
           metadata: { bulletin: "   " },
           publisher: ADA,

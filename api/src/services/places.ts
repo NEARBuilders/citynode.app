@@ -181,8 +181,27 @@ export function nodeParentEdgesQuery(): SQL {
     LEFT JOIN nodes m ON m.place_id = climb.place_id
     WHERE climb.place_id IS NULL OR m.id IS NOT NULL
     UNION ALL
-    SELECT id, parent_id FROM nodes WHERE place_id IS NULL
+    SELECT id, NULL::uuid AS parent_id FROM nodes WHERE place_id IS NULL
   `;
+}
+
+export async function readNodeParents(
+  db: { execute: (q: SQL) => Promise<unknown> },
+  nodeIds: string[],
+): Promise<Map<string, string | null>> {
+  if (nodeIds.length === 0) return new Map();
+  const result = await db.execute(sql`
+    SELECT id, parent_id FROM (${nodeParentEdgesQuery()}) edges
+    WHERE id IN (${sql.join(
+      nodeIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+  `);
+  const rows = ((result as { rows?: unknown }).rows ?? result) as Array<{
+    id: string;
+    parent_id: string | null;
+  }>;
+  return new Map(Array.isArray(rows) ? rows.map((row) => [row.id, row.parent_id]) : []);
 }
 
 async function readIds(db: { execute: (q: SQL) => Promise<unknown> }, q: SQL): Promise<string[]> {
@@ -217,7 +236,6 @@ export const PlacesLive = Layer.effect(
                 createdAt: placesTable.createdAt,
                 updatedAt: placesTable.updatedAt,
                 nodeId: nodesTable.id,
-                nodeSlug: nodesTable.slug,
                 nodeTenantId: nodesTable.tenantId,
                 activatedAt: nodesTable.activatedAt,
                 tenantId: tenantsTable.id,
@@ -247,6 +265,7 @@ export const PlacesLive = Layer.effect(
                   )})
                 )`,
               )
+              .orderBy(sql`(${placesTable.slug} = ${slugCandidate}) DESC`)
               .limit(1),
           );
           const row = matched[0];
@@ -275,7 +294,7 @@ export const PlacesLive = Layer.effect(
           const community: PlaceCommunity | null = listedCommunity(row)
             ? {
                 nodeId: row.nodeId,
-                slug: row.nodeSlug ?? place.slug,
+                slug: place.slug,
                 activatedAt: toTimestampIso(row.activatedAt),
                 memberCount: row.memberCount ?? null,
               }
@@ -346,7 +365,6 @@ export const PlacesLive = Layer.effect(
               longitude: placesTable.longitude,
               label: placesTable.label,
               nodeId: nodesTable.id,
-              nodeSlug: nodesTable.slug,
               nodeTenantId: nodesTable.tenantId,
               activatedAt: nodesTable.activatedAt,
               tenantId: tenantsTable.id,
@@ -370,7 +388,7 @@ export const PlacesLive = Layer.effect(
                 : [
                     {
                       id: row.id,
-                      slug: listedCommunity(row) ? (row.nodeSlug ?? row.slug) : row.slug,
+                      slug: row.slug,
                       name: row.name,
                       latitude: row.latitude,
                       longitude: row.longitude,

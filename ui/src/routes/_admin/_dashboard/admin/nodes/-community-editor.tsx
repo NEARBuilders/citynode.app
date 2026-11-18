@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
-import { Button, Field, FieldLabel, Input, Skeleton, Textarea } from "@/components";
+import { Button, Field, FieldLabel, Skeleton, Textarea } from "@/components";
 import { DiscoveryLoadError } from "@/components/discovery/discovery-load-error";
 import { discoveryProfileQueryOptions } from "@/components/discovery/profile-editor";
 import {
@@ -136,9 +136,7 @@ function CommunityEditorForm({
     onSuccess: async (result, plan) => {
       const savedProfile = result.savedProfile;
       setInitial({
-        ...(result.nodeError
-          ? initial
-          : { ...draft, name: draft.name.trim(), description: draft.description.trim() }),
+        ...(result.nodeError ? initial : { ...draft, description: draft.description.trim() }),
         profile: result.profileError ? initial.profile : (savedProfile ?? draft.profile),
       });
       if (savedProfile) update({ profile: savedProfile });
@@ -189,18 +187,6 @@ function CommunityEditorForm({
       <FieldSet>
         <FieldLegend>{translate("common.details")}</FieldLegend>
         <FieldGroup>
-          <Field data-invalid={invalid?.field === "name" || undefined}>
-            <FieldLabel htmlFor="node-name">{translate("common.name")}</FieldLabel>
-            <Input
-              id="node-name"
-              data-testid="admin-node-editor-name"
-              value={draft.name}
-              aria-invalid={invalid?.field === "name" || undefined}
-              onChange={(event) => update({ name: event.target.value })}
-              required
-            />
-            {invalid?.field === "name" && <FieldError>{translate(invalid.issue)}</FieldError>}
-          </Field>
           <Field>
             <FieldLabel htmlFor="node-description">
               {translate("admin.community.adminNote")}

@@ -160,10 +160,10 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "自定义界面包",
   ],
   "tenant.activateToPublish": [
-    "Make this community's organization active to publish changes.",
-    "Activa la organización de esta comunidad para publicar cambios.",
-    "Définissez l’organisation de cette communauté comme active pour publier des modifications.",
-    "将此社区的组织设为当前组织后即可发布更改。",
+    "Make this community active to publish changes.",
+    "Activa esta comunidad para publicar cambios.",
+    "Activez cette communauté pour publier des modifications.",
+    "启用该社区后才能发布更改。",
   ],
   "tenant.customize": ["Customize", "Personalizar", "Personnaliser", "自定义"],
   "tenant.daoChangesHint": [
@@ -291,8 +291,6 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "{account} ne publie pas encore de bundle UI personnalisé. Exécutez `bos deploy` dans le dépôt avec une UI locale.",
     "{account} 尚未发布自定义 UI 资源包，请先在包含本地 UI 的应用仓库中运行 `bos deploy`。",
   ],
-  "tenant.nodeName": ["Node name", "Nombre del nodo", "Nom du nœud", "节点名称"],
-  "tenant.nodeRenamed": ["Node renamed", "Nodo renombrado", "Nœud renommé", "节点已重命名"],
   "tenant.nodeValidators": [
     "Node and validators",
     "Nodo y validadores",
