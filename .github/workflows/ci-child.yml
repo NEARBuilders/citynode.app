@@ -15,6 +15,7 @@ jobs:
   # burn a full install + browser-suite run. Pushes always run (backend-gate
   # parity).
   filter:
+    timeout-minutes: 60
     name: Filter changes
     runs-on: ubuntu-24.04
     outputs:
