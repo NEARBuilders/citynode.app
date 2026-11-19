@@ -2600,7 +2600,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
 
         const maxBytes = maxBundleUploadBytes();
-        const decoded: Array<{ objectPath: string; name: string; bytes: Uint8Array }> = [];
+        const decoded: Array<{ objectPath: string; name: string; bytes: Uint8Array<ArrayBuffer> }> =
+          [];
         for (const file of input.files) {
           const objectPath = validateObjectPath(file.path);
           if (!objectPath) {

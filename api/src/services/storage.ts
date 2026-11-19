@@ -5,7 +5,7 @@ import { cacheControlOf } from "every-plugin/build/artifact-names";
 
 export interface StoragePutInput {
   key: string;
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
   contentType: string;
   cacheControl: string;
 }
