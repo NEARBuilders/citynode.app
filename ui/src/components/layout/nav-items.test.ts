@@ -171,7 +171,7 @@ describe("route-aware filtering", () => {
         parentId: "_admin/_dashboard/admin",
       }),
       manifestRoute({
-        id: "_authenticated/_dashboard/orgs/",
+        id: "_authenticated/orgs/",
         path: "/orgs/",
         parentId: "_authenticated/_dashboard",
       }),

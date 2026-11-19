@@ -26,7 +26,7 @@ vi.mock("@/app", async (importOriginal) => ({
   useAuthClient: () => mocks.auth,
 }));
 
-vi.mock("../tenant/-use-open-community-settings", () => ({
+vi.mock("../_dashboard/tenant/-use-open-community-settings", () => ({
   useOpenCommunitySettings: () => ({
     needsSwitch: () => false,
     open: mocks.openSettings,

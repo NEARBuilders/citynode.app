@@ -7,9 +7,9 @@ import { useAppTranslation } from "@/i18n/runtime";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isCommunitySettingsRole } from "@/lib/team-workspace";
-import { useOrgMemberRole } from "../../_authenticated/_dashboard/orgs/-organization-members";
 import { PUBLISHED_CONFIG_SECTION_ID } from "../../_authenticated/_dashboard/tenant/-published-config-section";
 import { useOpenCommunitySettings } from "../../_authenticated/_dashboard/tenant/-use-open-community-settings";
+import { useOrgMemberRole } from "../../_authenticated/orgs/-organization-members";
 
 export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
   const translate = useAppTranslation();

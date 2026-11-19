@@ -25,11 +25,11 @@ import {
   resolveOrgSlug,
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
+import { orgMembersQueryOptions } from "../../orgs/-organization-members";
 import {
   CommunityHeader,
   communityAuthContextQueryOptions,
 } from "../dashboard/node/-community-header";
-import { orgMembersQueryOptions } from "../orgs/-organization-members";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
 import { TenantDetails } from "./-tenant-details";
