@@ -45,6 +45,8 @@ import {
   bundleContentType,
   computeObjectIntegrity,
   maxBundleUploadBytes,
+  measureBase64,
+  partitionBundleFiles,
   StorageLive,
   type StorageService,
   StorageTag,
@@ -2600,7 +2602,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
 
         const maxBytes = maxBundleUploadBytes();
-        const decoded: Array<{ objectPath: string; name: string; bytes: Uint8Array }> = [];
+        const measured: Array<{ objectPath: string; name: string; encoded: string }> = [];
+        const sizes: number[] = [];
         for (const file of input.files) {
           const objectPath = validateObjectPath(file.path);
           if (!objectPath) {
@@ -2611,8 +2614,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
               }),
             );
           }
-          const buffer = Buffer.from(file.contentBase64, "base64");
-          if (buffer.length === 0) {
+          const size = measureBase64(file.contentBase64);
+          if (size === null) {
+            return yield* Effect.fail(
+              errors.BAD_REQUEST({
+                message: `Invalid base64 content: ${file.path}`,
+                data: { invalidFields: ["files"] },
+              }),
+            );
+          }
+          if (size === 0) {
             return yield* Effect.fail(
               errors.BAD_REQUEST({
                 message: `Empty bundle file: ${file.path}`,
@@ -2620,15 +2631,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
               }),
             );
           }
-          decoded.push({
+          sizes.push(size);
+          measured.push({
             objectPath,
             name: objectPath.split("/").pop() ?? objectPath,
-            bytes: new Uint8Array(buffer),
+            encoded: file.contentBase64,
           });
         }
 
-        const totalBytes = decoded.reduce((sum, file) => sum + file.bytes.byteLength, 0);
-        if (!validateUploadSize(decoded, maxBytes)) {
+        const totalBytes = sizes.reduce((sum, size) => sum + size, 0);
+        if (!validateUploadSize(sizes, maxBytes)) {
           return yield* Effect.fail(
             errors.BAD_REQUEST({
               message: `Bundle upload exceeds the ${maxBytes} byte ceiling (${totalBytes})`,
@@ -2637,49 +2649,50 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
 
+        const decoded = measured.map(({ encoded, ...file }) => ({
+          ...file,
+          bytes: new Uint8Array(Buffer.from(encoded, "base64")),
+        }));
+
         // Bounded pool: 736 sequential PUTs are minutes of pure round-trip
         // latency; 4-way concurrency cuts wall time ~4x with no extra memory
         // (all file bytes are already decoded in memory).
-        const integrityEntries = yield* Effect.forEach(
-          decoded,
-          (file) =>
-            Effect.gen(function* () {
-              // Exit + squash: the storage layer's put is typed never-error
-              // (Effect.promise rejections are defects) — this catches both
-              // defects and typed failures so the cause reaches the client
-              // as a CONNECTION_ERROR instead of a bare INTERNAL_SERVER_ERROR.
-              const put = yield* Effect.exit(
-                services.storage.put({
-                  key: buildBundleKey(
-                    input.account,
-                    input.gateway,
-                    input.workspace,
-                    file.objectPath,
-                  ),
-                  bytes: file.bytes,
-                  contentType: bundleContentType(file.name),
-                  cacheControl: bundleCacheControl(file.name),
+        const putFile = (file: (typeof decoded)[number]) =>
+          Effect.gen(function* () {
+            // Exit + squash: the storage layer's put is typed never-error
+            // (Effect.promise rejections are defects) — this catches both
+            // defects and typed failures so the cause reaches the client
+            // as a CONNECTION_ERROR instead of a bare INTERNAL_SERVER_ERROR.
+            const put = yield* Effect.exit(
+              services.storage.put({
+                key: buildBundleKey(input.account, input.gateway, input.workspace, file.objectPath),
+                bytes: file.bytes,
+                contentType: bundleContentType(file.name),
+                cacheControl: bundleCacheControl(file.name),
+              }),
+            );
+            if (Exit.isFailure(put)) {
+              const cause = Cause.squash(put.cause);
+              return yield* Effect.fail(
+                errors.CONNECTION_ERROR({
+                  message: `Bundle storage failed for ${file.objectPath}: ${
+                    cause instanceof Error ? cause.message : String(cause)
+                  }`,
+                  data: {
+                    errorCode: "STORAGE_PUT_FAILED",
+                    suggestion:
+                      "Check BOS_STORAGE_* (R2/MinIO) credentials and reachability on the API host",
+                  },
                 }),
               );
-              if (Exit.isFailure(put)) {
-                const cause = Cause.squash(put.cause);
-                return yield* Effect.fail(
-                  errors.CONNECTION_ERROR({
-                    message: `Bundle storage failed for ${file.objectPath}: ${
-                      cause instanceof Error ? cause.message : String(cause)
-                    }`,
-                    data: {
-                      errorCode: "STORAGE_PUT_FAILED",
-                      suggestion:
-                        "Check BOS_STORAGE_* (R2/MinIO) credentials and reachability on the API host",
-                    },
-                  }),
-                );
-              }
-              return [file.objectPath, computeObjectIntegrity(file.bytes)] as const;
-            }),
-          { concurrency: 4 },
-        );
+            }
+            return [file.objectPath, computeObjectIntegrity(file.bytes)] as const;
+          });
+        const { assets, entries } = partitionBundleFiles(decoded);
+        const integrityEntries = [
+          ...(yield* Effect.forEach(assets, putFile, { concurrency: 4 })),
+          ...(yield* Effect.forEach(entries, putFile, { concurrency: 4 })),
+        ];
         const integrity = Object.fromEntries(integrityEntries);
 
         return { stored: decoded.length, totalBytes, integrity, storage: services.storage.backend };
