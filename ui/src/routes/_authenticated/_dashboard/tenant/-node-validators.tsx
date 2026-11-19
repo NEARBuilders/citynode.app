@@ -41,8 +41,8 @@ import {
   tenantNodesQueryOptions,
 } from "@/lib/queries/nodes";
 import { stakingPoolApprovalQueryOptions } from "@/lib/queries/stake-pool";
-import { roleLabel } from "../orgs/-org-avatar";
-import { RowMenu } from "../orgs/-row-menu";
+import { roleLabel } from "../../orgs/-org-avatar";
+import { RowMenu } from "../../orgs/-row-menu";
 
 interface TenantNodeValidatorsProps {
   tenantId: string;

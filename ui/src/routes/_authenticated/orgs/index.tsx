@@ -39,7 +39,7 @@ type UserInvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listUserInvi
 type MembersResponse = Awaited<ReturnType<ApiClientType["auth"]["listMembers"]>>;
 type MemberItem = MembersResponse["members"][number];
 
-export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
+export const Route = createFileRoute("/_authenticated/orgs/")({
   head: ({ match }) => ({
     meta: [
       {
