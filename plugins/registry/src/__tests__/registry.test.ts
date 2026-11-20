@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchBosConfigFromFastKvMock = vi.fn();
 const listLatestValuesMock = vi.fn();
@@ -244,6 +244,202 @@ describe("resolvePublishedRuntime", () => {
       "chicago.pizza.pingpayio.near",
       "pizza.pingpayio.near",
     ]);
+  });
+});
+
+describe("listRegistryApps resilience", () => {
+  const registryConfig = { namespace: "dev.everything.near" };
+
+  const configEntry = (accountId: string, gatewayId: string, value: unknown) => ({
+    key: `apps/${accountId}/${gatewayId}/bos.config.json`,
+    value,
+  });
+
+  const readyApp = (accountId: string, gatewayId: string, extra: Record<string, unknown> = {}) => ({
+    account: accountId,
+    domain: gatewayId,
+    app: {
+      host: { production: `https://${gatewayId}/host` },
+      ui: { production: `https://${gatewayId}/ui` },
+    },
+    ...extra,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    readLatestValueMock.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("skips an app whose parent cannot be resolved and returns the rest", async () => {
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) =>
+      options.baseUrl.includes("test")
+        ? { entries: [], pageToken: null }
+        : {
+            entries: [
+              configEntry("good.near", "good.com", readyApp("good.near", "good.com")),
+              configEntry(
+                "bad.near",
+                "bad.com",
+                readyApp("bad.near", "bad.com", { extends: "bos://missing.near/x.com" }),
+              ),
+            ],
+            pageToken: null,
+          },
+    );
+    fetchBosConfigFromFastKvMock.mockRejectedValue(new Error("No config found"));
+
+    const service = createRegistryMethods(registryConfig);
+    const result = await service.listRegistryApps({});
+
+    expect(result.data.map((item) => item.accountId)).toEqual(["good.near"]);
+    expect(result.meta.total).toBe(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("bad.near/bad.com"));
+  });
+
+  it("returns the reachable network when the other network fails", async () => {
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) => {
+      if (options.baseUrl.includes("test")) {
+        throw new Error("testnet down");
+      }
+      return {
+        entries: [configEntry("good.near", "good.com", readyApp("good.near", "good.com"))],
+        pageToken: null,
+      };
+    });
+
+    const service = createRegistryMethods(registryConfig);
+    const result = await service.listRegistryApps({});
+
+    expect(result.data.map((item) => item.accountId)).toEqual(["good.near"]);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("testnet"));
+  });
+
+  it("dedupes concurrent discovery and caches resolved runtimes", async () => {
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) =>
+      options.baseUrl.includes("test")
+        ? { entries: [], pageToken: null }
+        : {
+            entries: [
+              configEntry(
+                "child.near",
+                "child.com",
+                readyApp("child.near", "child.com", { extends: "bos://parent.near/parent.com" }),
+              ),
+            ],
+            pageToken: null,
+          },
+    );
+    fetchBosConfigFromFastKvMock.mockResolvedValue(readyApp("parent.near", "parent.com"));
+
+    const service = createRegistryMethods(registryConfig);
+    const [first, second] = await Promise.all([
+      service.listRegistryApps({}),
+      service.listRegistryApps({}),
+    ]);
+
+    expect(first.data.map((item) => item.accountId)).toEqual(["child.near"]);
+    expect(second.data.map((item) => item.accountId)).toEqual(["child.near"]);
+    expect(listLatestValuesMock).toHaveBeenCalledTimes(2);
+    expect(fetchBosConfigFromFastKvMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves stale discovery when a later refresh fails", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    let mainnetFails = false;
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) => {
+      if (options.baseUrl.includes("test")) {
+        return { entries: [], pageToken: null };
+      }
+      if (mainnetFails) {
+        throw new Error("mainnet flaked");
+      }
+      return {
+        entries: [configEntry("good.near", "good.com", readyApp("good.near", "good.com"))],
+        pageToken: null,
+      };
+    });
+
+    const service = createRegistryMethods(registryConfig);
+    const first = await service.listRegistryApps({});
+    expect(first.data.map((item) => item.accountId)).toEqual(["good.near"]);
+
+    mainnetFails = true;
+    now.mockReturnValue(1_000_000 + 60_001);
+    const second = await service.listRegistryApps({});
+
+    expect(second.data.map((item) => item.accountId)).toEqual(["good.near"]);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("serving cached entries"));
+  });
+
+  it("serves the last good runtime when a re-resolve fails", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(2_000_000);
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) =>
+      options.baseUrl.includes("test")
+        ? { entries: [], pageToken: null }
+        : {
+            entries: [
+              configEntry(
+                "child.near",
+                "child.com",
+                readyApp("child.near", "child.com", { extends: "bos://parent.near/parent.com" }),
+              ),
+            ],
+            pageToken: null,
+          },
+    );
+    fetchBosConfigFromFastKvMock
+      .mockResolvedValueOnce(readyApp("parent.near", "parent.com"))
+      .mockRejectedValue(new Error("parent read flaked"));
+
+    const service = createRegistryMethods(registryConfig);
+    const first = await service.listRegistryApps({});
+    expect(first.data.map((item) => item.accountId)).toEqual(["child.near"]);
+
+    now.mockReturnValue(2_000_000 + 60_001);
+    const second = await service.listRegistryApps({});
+
+    expect(second.data.map((item) => item.accountId)).toEqual(["child.near"]);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("serving cached runtime"));
+  });
+
+  it("rebuilds a cached runtime after the app republishes a new config", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(3_000_000);
+    let republished = false;
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) =>
+      options.baseUrl.includes("test")
+        ? { entries: [], pageToken: null }
+        : {
+            entries: [
+              configEntry(
+                "child.near",
+                "child.com",
+                readyApp("child.near", "child.com", {
+                  extends: republished ? "bos://parent-b.near/b.com" : "bos://parent-a.near/a.com",
+                }),
+              ),
+            ],
+            pageToken: null,
+          },
+    );
+    fetchBosConfigFromFastKvMock.mockImplementation(async (bosUrl: string) =>
+      bosUrl === "bos://parent-a.near/a.com"
+        ? readyApp("parent-a.near", "a.com")
+        : readyApp("parent-b.near", "b.com"),
+    );
+
+    const service = createRegistryMethods(registryConfig);
+    const first = await service.listRegistryApps({});
+    expect(first.data[0]?.parent).toBe("bos://parent-a.near/a.com");
+
+    republished = true;
+    now.mockReturnValue(3_000_000 + 60_001);
+    const second = await service.listRegistryApps({});
+    expect(second.data[0]?.parent).toBe("bos://parent-b.near/b.com");
   });
 });
 
