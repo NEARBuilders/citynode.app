@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PGlite } from "@electric-sql/pglite";
 import { createPluginRuntime } from "every-plugin";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import Plugin from "../index";
@@ -588,5 +589,39 @@ describe.sequential("getProposals search and submission counts", () => {
     expect(counts["alpha.near"]).toBe(1);
     expect(counts["a_b.near"]).toBe(1);
     expect(counts["100%-done.near"]).toBe(1);
+  });
+
+  it("fetches proposals with a bounded number of queries (no N+1)", async () => {
+    const baseProto = Object.getPrototypeOf(PGlite.prototype);
+    const originalQuery = baseProto.query;
+    let queryCount = 0;
+    baseProto.query = async function (this: any, ...args: any[]) {
+      queryCount++;
+      return originalQuery.apply(this, args);
+    };
+    try {
+      const result = await member().getProposals({ pluginId: "builders", limit: 50 });
+      expect(result.data.length).toBe(4);
+      // Fixed code: 3 queries (count + rows + grouped submission counts).
+      // N+1 regression would use 2 + N queries (6 for 4 proposals).
+      expect(queryCount).toBeLessThanOrEqual(5);
+    } finally {
+      baseProto.query = originalQuery;
+    }
+  });
+
+  it("maps database failures to INTERNAL_SERVER_ERROR", async () => {
+    const baseProto = Object.getPrototypeOf(PGlite.prototype);
+    const originalQuery = baseProto.query;
+    baseProto.query = async () => {
+      throw new Error("simulated DB failure");
+    };
+    try {
+      await expect(member().getProposals({ pluginId: "builders", limit: 50 })).rejects.toThrow(
+        "Failed to query proposals",
+      );
+    } finally {
+      baseProto.query = originalQuery;
+    }
   });
 });
