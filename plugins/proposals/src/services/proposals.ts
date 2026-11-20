@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, count, desc, eq, ilike, inArray, notInArray, or } from "drizzle-orm";
+import { type AnyColumn, and, count, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import type { InferInput } from "../contract";
 import { DatabaseTag } from "../db/layer";
@@ -55,6 +55,38 @@ function resubmissionError(reviewStatus: ReviewStatus) {
   return "This proposal cannot be resubmitted";
 }
 
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+function likeContains(column: AnyColumn, pattern: string) {
+  return sql`${column} ILIKE ${pattern} ESCAPE '\\'`;
+}
+
+function queryError(cause: unknown) {
+  return new ORPCError("INTERNAL_SERVER_ERROR", {
+    message: "Failed to query proposals",
+    cause,
+  });
+}
+
+function toProposalRecord(row: any, submissionCount: number) {
+  return {
+    id: row.id,
+    pluginId: row.pluginId,
+    entityId: row.entityId,
+    operation: row.operation as "create",
+    payload: parseJson(row.payload),
+    schemaVersion: row.schemaVersion,
+    createdBy: row.createdBy,
+    reviewStatus: row.reviewStatus as ReviewStatus,
+    rejectionReason: row.rejectionReason ?? null,
+    submissionCount,
+    createdAt: toIsoString(row.createdAt)!,
+    updatedAt: toIsoString(row.updatedAt)!,
+  };
+}
+
 async function countSubmissions(db: any, proposalId: string) {
   const [result] = await db
     .select({ count: count() })
@@ -73,20 +105,7 @@ async function loadProposal(db: any, pluginId: string, entityId: string) {
 
   if (!row) return null;
   const submissionCount = await countSubmissions(db, row.id);
-  return {
-    id: row.id,
-    pluginId: row.pluginId,
-    entityId: row.entityId,
-    operation: row.operation as "create",
-    payload: parseJson(row.payload),
-    schemaVersion: row.schemaVersion,
-    createdBy: row.createdBy,
-    reviewStatus: row.reviewStatus as ReviewStatus,
-    rejectionReason: row.rejectionReason ?? null,
-    submissionCount,
-    createdAt: toIsoString(row.createdAt)!,
-    updatedAt: toIsoString(row.updatedAt)!,
-  };
+  return toProposalRecord(row, submissionCount);
 }
 
 async function appendAudit(
@@ -545,12 +564,12 @@ export const ProposalServiceLive = Layer.effect(
         if (input.entityId) conditions.push(eq(proposals.entityId, input.entityId));
         if (input.reviewStatus) conditions.push(eq(proposals.reviewStatus, input.reviewStatus));
         if (input.query) {
-          const pattern = `%${input.query.trim()}%`;
+          const pattern = `%${escapeLikePattern(input.query.trim())}%`;
           conditions.push(
             or(
-              ilike(proposals.entityId, pattern),
-              ilike(proposals.createdBy, pattern),
-              ilike(proposals.payload, pattern),
+              likeContains(proposals.entityId, pattern),
+              likeContains(proposals.createdBy, pattern),
+              likeContains(proposals.payload, pattern),
             ),
           );
         }
@@ -572,31 +591,52 @@ export const ProposalServiceLive = Layer.effect(
 
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-        const counted = yield* Effect.promise(() => {
-          const countQuery = db.select({ count: count() }).from(proposals);
-          return whereClause ? countQuery.where(whereClause) : countQuery;
+        const counted = yield* Effect.tryPromise({
+          try: () => {
+            const countQuery = db.select({ count: count() }).from(proposals);
+            return whereClause ? countQuery.where(whereClause) : countQuery;
+          },
+          catch: queryError,
         });
         const total = counted[0]?.count ?? 0;
 
-        const rows = yield* Effect.promise(() => {
-          const baseQuery = db
-            .select()
-            .from(proposals)
-            .orderBy(desc(proposals.updatedAt))
-            .limit(pageLimit)
-            .offset(offset);
-          return whereClause ? baseQuery.where(whereClause) : baseQuery;
+        const rows = yield* Effect.tryPromise({
+          try: () => {
+            const baseQuery = db
+              .select()
+              .from(proposals)
+              .orderBy(desc(proposals.updatedAt))
+              .limit(pageLimit)
+              .offset(offset);
+            return whereClause ? baseQuery.where(whereClause) : baseQuery;
+          },
+          catch: queryError,
         });
 
-        const data = yield* Effect.promise(() =>
-          Promise.all(rows.map((row: any) => loadProposal(db, row.pluginId, row.entityId))),
+        const proposalIds = rows.map((row: any) => row.id);
+        const submissionCounts = proposalIds.length
+          ? yield* Effect.tryPromise({
+              try: () =>
+                db
+                  .select({ proposalId: proposalSubmissions.proposalId, count: count() })
+                  .from(proposalSubmissions)
+                  .where(inArray(proposalSubmissions.proposalId, proposalIds))
+                  .groupBy(proposalSubmissions.proposalId),
+              catch: queryError,
+            })
+          : [];
+        const countByProposal = new Map<string, number>(
+          submissionCounts.map((entry: any) => [entry.proposalId, Number(entry.count)]),
         );
-        const filtered = data.filter(Boolean);
+
+        const data = rows.map((row: any) =>
+          toProposalRecord(row, countByProposal.get(row.id) ?? 0),
+        );
         const nextOffset = offset + pageLimit;
         const hasMore = nextOffset < total;
 
         return {
-          data: filtered,
+          data,
           meta: {
             total,
             hasMore,
