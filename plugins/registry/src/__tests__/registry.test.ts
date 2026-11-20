@@ -375,6 +375,72 @@ describe("listRegistryApps resilience", () => {
     expect(second.data.map((item) => item.accountId)).toEqual(["good.near"]);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("serving cached entries"));
   });
+
+  it("serves the last good runtime when a re-resolve fails", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(2_000_000);
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) =>
+      options.baseUrl.includes("test")
+        ? { entries: [], pageToken: null }
+        : {
+            entries: [
+              configEntry(
+                "child.near",
+                "child.com",
+                readyApp("child.near", "child.com", { extends: "bos://parent.near/parent.com" }),
+              ),
+            ],
+            pageToken: null,
+          },
+    );
+    fetchBosConfigFromFastKvMock
+      .mockResolvedValueOnce(readyApp("parent.near", "parent.com"))
+      .mockRejectedValue(new Error("parent read flaked"));
+
+    const service = createRegistryMethods(registryConfig);
+    const first = await service.listRegistryApps({});
+    expect(first.data.map((item) => item.accountId)).toEqual(["child.near"]);
+
+    now.mockReturnValue(2_000_000 + 60_001);
+    const second = await service.listRegistryApps({});
+
+    expect(second.data.map((item) => item.accountId)).toEqual(["child.near"]);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("serving cached runtime"));
+  });
+
+  it("rebuilds a cached runtime after the app republishes a new config", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(3_000_000);
+    let republished = false;
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) =>
+      options.baseUrl.includes("test")
+        ? { entries: [], pageToken: null }
+        : {
+            entries: [
+              configEntry(
+                "child.near",
+                "child.com",
+                readyApp("child.near", "child.com", {
+                  extends: republished ? "bos://parent-b.near/b.com" : "bos://parent-a.near/a.com",
+                }),
+              ),
+            ],
+            pageToken: null,
+          },
+    );
+    fetchBosConfigFromFastKvMock.mockImplementation(async (bosUrl: string) =>
+      bosUrl === "bos://parent-a.near/a.com"
+        ? readyApp("parent-a.near", "a.com")
+        : readyApp("parent-b.near", "b.com"),
+    );
+
+    const service = createRegistryMethods(registryConfig);
+    const first = await service.listRegistryApps({});
+    expect(first.data[0]?.parent).toBe("bos://parent-a.near/a.com");
+
+    republished = true;
+    now.mockReturnValue(3_000_000 + 60_001);
+    const second = await service.listRegistryApps({});
+    expect(second.data[0]?.parent).toBe("bos://parent-b.near/b.com");
+  });
 });
 
 describe("prepareRegistryConfigWrite", () => {

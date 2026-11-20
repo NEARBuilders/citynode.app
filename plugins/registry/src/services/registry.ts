@@ -157,12 +157,21 @@ interface NetworkDiscoveryCache {
 
 interface ResolvedRuntimeCache {
   runtime: ResolvedPublishedRuntime;
+  configKey: string;
   expiresAt: number;
 }
 
 function logRegistrySkip(context: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   console.warn(`[registry] ${context}: ${message}`);
+}
+
+function configCacheKey(rawConfig: BosConfigInput): string {
+  try {
+    return JSON.stringify(rawConfig);
+  } catch {
+    return "";
+  }
 }
 
 export interface KvEntry {
@@ -333,8 +342,9 @@ export function createRegistryMethods(config: RegistryConfig) {
 
   const resolveRuntime = (item: DiscoveredConfig): Promise<ResolvedPublishedRuntime> => {
     const cacheKey = `${item.accountId}/${item.gatewayId}`;
+    const configKey = configCacheKey(item.rawConfig);
     const cached = resolvedRuntimeCache.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
+    if (cached && cached.configKey === configKey && Date.now() < cached.expiresAt) {
       return Promise.resolve(cached.runtime);
     }
     const inflight = resolvedRuntimeInflight.get(cacheKey);
@@ -349,8 +359,19 @@ export function createRegistryMethods(config: RegistryConfig) {
           item.rawConfig,
           config,
         );
-        resolvedRuntimeCache.set(cacheKey, { runtime, expiresAt: Date.now() + CACHE_TTL_MS });
+        resolvedRuntimeCache.set(cacheKey, {
+          runtime,
+          configKey,
+          expiresAt: Date.now() + CACHE_TTL_MS,
+        });
         return runtime;
+      } catch (error) {
+        const stale = resolvedRuntimeCache.get(cacheKey);
+        if (stale) {
+          logRegistrySkip(`runtime refresh for ${cacheKey} failed; serving cached runtime`, error);
+          return stale.runtime;
+        }
+        throw error;
       } finally {
         resolvedRuntimeInflight.delete(cacheKey);
       }
