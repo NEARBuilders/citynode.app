@@ -1,34 +1,83 @@
 import { rmSync } from "node:fs";
 import { ORPCError } from "@orpc/server";
+import { eq, sql } from "drizzle-orm";
 import { Effect } from "effect";
 import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabaseDriver } from "@/db/index";
 import { loadMigrations, migrate } from "@/db/migrate";
-import { placeAliases, places as placesTable } from "@/db/schema";
+import {
+  nodes as nodesTable,
+  placeAliases,
+  places as placesTable,
+  tenants as tenantsTable,
+} from "@/db/schema";
 import { buildPlacesCatalog, seedPlacesInto } from "@/seed/places-catalog";
+import { nodesTestingDatabase } from "@/services/nodes";
 import pluginDevConfig from "../../plugin.dev";
 import { authedContext, getPluginClient, teardown } from "../setup";
 
-const databaseDir = await vi.hoisted(async () => {
+const databaseUrl = await vi.hoisted(async () => {
+  const external = process.env.JOIN_CODE_TEST_DATABASE_URL?.trim();
+  if (external) {
+    process.env.API_TEST_DATABASE_URL = external;
+    process.env.API_DATABASE_URL = external;
+    return external;
+  }
   const { mkdtempSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const dir = mkdtempSync(join(tmpdir(), "places-join-"));
-  process.env.API_TEST_DATABASE_URL = `pglite:${dir}`;
-  process.env.API_DATABASE_URL = `pglite:${dir}`;
-  return dir;
+  const url = `pglite:${dir}`;
+  process.env.API_TEST_DATABASE_URL = url;
+  process.env.API_DATABASE_URL = url;
+  return url;
 });
 
 const orgsBySlug = new Map<string, { id: string; name: string; slug: string }>();
 const codesBySlug = new Map<string, string>();
 const membersByOrg = new Map<string, Set<string>>();
+const memberRoles = new Map<string, Map<string, string>>();
 const redemptionCalls: Array<{ userId: string; code: string; threw: string | null }> = [];
 const clientContexts: Array<Record<string, unknown>> = [];
 const codeRequests: Array<{ organizationId: string; maxUses?: number; expiresAt?: Date }> = [];
 const deletedOrganizations: string[] = [];
+const organizerOnly = new Set<string>();
+const adminMembershipCalls: Array<{
+  action: "add" | "remove";
+  organizationId: string;
+  userId: string;
+}> = [];
 let failNextCodeCreation = false;
 let beforeNextOrganization: (() => Promise<unknown>) | null = null;
+
+function rememberMember(organizationId: string, userId: string, role: string) {
+  const set = membersByOrg.get(organizationId) ?? new Set<string>();
+  set.add(userId);
+  membersByOrg.set(organizationId, set);
+  const roles = memberRoles.get(organizationId) ?? new Map<string, string>();
+  roles.set(userId, role);
+  memberRoles.set(organizationId, roles);
+}
+
+function forgetMember(organizationId: string, userId: string) {
+  membersByOrg.get(organizationId)?.delete(userId);
+  memberRoles.get(organizationId)?.delete(userId);
+}
+
+function headerValue(headers: unknown, name: string): string | undefined {
+  if (!headers || typeof headers !== "object") return undefined;
+  const value = (headers as Record<string, unknown>)[name];
+  return typeof value === "string" ? value : undefined;
+}
+
+function callerIds(clientContext: Record<string, unknown>): string[] {
+  const ids: string[] = [];
+  if (typeof clientContext.userId === "string") ids.push(clientContext.userId);
+  const key = headerValue(clientContext.reqHeaders, "x-api-key");
+  if (key && key === process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY) ids.push("bootstrap-admin");
+  return ids;
+}
 
 function authStubFor(context: unknown) {
   const userId = (context as { userId?: string }).userId ?? "anonymous";
@@ -53,9 +102,8 @@ function authStubFor(context: unknown) {
           return { success: true };
         },
         addMember: async (input: { userId: string; role: string; organizationId: string }) => {
+          rememberMember(input.organizationId, input.userId, input.role);
           const set = membersByOrg.get(input.organizationId) ?? new Set<string>();
-          set.add(input.userId);
-          membersByOrg.set(input.organizationId, set);
           return {
             id: `member-${set.size}`,
             userId: input.userId,
@@ -71,6 +119,13 @@ function authStubFor(context: unknown) {
           maxUses?: number;
           expiresAt?: Date;
         }) => {
+          if (organizerOnly.has(input.organizationId)) {
+            const allowed = callerIds(clientContext).some((id) => {
+              const role = memberRoles.get(input.organizationId)?.get(id);
+              return role === "admin" || role === "owner";
+            });
+            if (!allowed) throw new ORPCError("FORBIDDEN", { message: "Forbidden" });
+          }
           codeRequests.push({
             organizationId: input.organizationId,
             maxUses: input.maxUses,
@@ -118,6 +173,71 @@ function authStubFor(context: unknown) {
             organizationName: org.name,
             eventName: `Join ${org.name}`,
           };
+        },
+        getSession: async () => {
+          const key = headerValue(clientContext.reqHeaders, "x-api-key");
+          const user = (clientContext.user ?? {}) as {
+            id?: string;
+            role?: string;
+            name?: string;
+            email?: string;
+          };
+          const id =
+            key && key === process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY
+              ? "bootstrap-admin"
+              : (user.id ??
+                (typeof clientContext.userId === "string" ? clientContext.userId : "anonymous"));
+          const role =
+            key && key === process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY ? "admin" : (user.role ?? null);
+          return {
+            session: null,
+            user: {
+              id,
+              name: user.name ?? "Test User",
+              email: user.email ?? `${id}@example.com`,
+              emailVerified: true,
+              image: null,
+              role,
+              isAnonymous: false,
+              locale: null,
+            },
+          };
+        },
+        listMembers: async (input: { organizationId?: string }) => {
+          const organizationId = input.organizationId ?? "";
+          const members = [...(membersByOrg.get(organizationId) ?? [])];
+          return {
+            members: members.map((memberId) => ({
+              userId: memberId,
+              role: memberRoles.get(organizationId)?.get(memberId) ?? "member",
+            })),
+            total: members.length,
+          };
+        },
+        adminAddMember: async (input: { organizationId: string; userId: string; role: string }) => {
+          adminMembershipCalls.push({
+            action: "add",
+            organizationId: input.organizationId,
+            userId: input.userId,
+          });
+          rememberMember(input.organizationId, input.userId, input.role);
+          const set = membersByOrg.get(input.organizationId) ?? new Set<string>();
+          return {
+            id: `admin-member-${set.size}`,
+            userId: input.userId,
+            organizationId: input.organizationId,
+            role: input.role,
+            createdAt: new Date(),
+          };
+        },
+        adminRemoveMember: async (input: { organizationId: string; userId: string }) => {
+          adminMembershipCalls.push({
+            action: "remove",
+            organizationId: input.organizationId,
+            userId: input.userId,
+          });
+          forgetMember(input.organizationId, input.userId);
+          return { success: true };
         },
         router: {},
       };
@@ -172,7 +292,7 @@ let driver: Awaited<ReturnType<typeof createDatabaseDriver>>;
 beforeAll(async () => {
   const slug = pluginMigrationSlug(pluginDevConfig.pluginId);
   const schemaName = `plugin_${slug}`;
-  driver = await createDatabaseDriver(`pglite:${databaseDir}`, schemaName);
+  driver = await createDatabaseDriver(databaseUrl, schemaName);
   try {
     const { migrations } = await Effect.runPromise(loadMigrations);
     await Effect.runPromise(migrate(driver.db, migrations, getMigrationStorage(slug), schemaName));
@@ -195,8 +315,56 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await teardown();
-  rmSync(databaseDir, { recursive: true, force: true });
+  if (databaseUrl.startsWith("pglite:")) {
+    rmSync(databaseUrl.slice("pglite:".length), { recursive: true, force: true });
+  }
 });
+
+function testingDb() {
+  const db = nodesTestingDatabase.current;
+  if (!db) throw new Error("nodes database is not ready");
+  return db;
+}
+
+async function ensurePlace(slug: string, name: string) {
+  const db = testingDb();
+  await db
+    .insert(placesTable)
+    .values({ slug, name, label: "country" })
+    .onConflictDoNothing({ target: placesTable.slug });
+  const [place] = await db
+    .select({ id: placesTable.id })
+    .from(placesTable)
+    .where(eq(placesTable.slug, slug));
+  if (!place) throw new Error(`missing place ${slug}`);
+  return place.id;
+}
+
+async function forgetJoinCode(slug: string) {
+  const db = testingDb();
+  const placeId = await ensurePlace(slug, slug);
+  await db
+    .update(nodesTable)
+    .set({ metadata: sql`${nodesTable.metadata} - 'joinCodeId'` })
+    .where(eq(nodesTable.placeId, placeId));
+}
+
+async function showOnMap(slug: string) {
+  const db = testingDb();
+  const placeId = await ensurePlace(slug, slug);
+  const [node] = await db
+    .select({ tenantId: nodesTable.tenantId })
+    .from(nodesTable)
+    .where(eq(nodesTable.placeId, placeId));
+  if (!node) throw new Error(`missing node ${slug}`);
+  if (node.tenantId) return;
+  const [tenant] = await db
+    .insert(tenantsTable)
+    .values({ accountId: `${slug}.community.near`, name: slug, orgId: `org-${slug}` })
+    .returning();
+  if (!tenant) throw new Error(`tenant insert failed for ${slug}`);
+  await db.update(nodesTable).set({ tenantId: tenant.id }).where(eq(nodesTable.placeId, placeId));
+}
 
 describe("places activation + join flow", () => {
   let nigeriaPlaceId = "";
@@ -318,6 +486,207 @@ describe("places activation + join flow", () => {
 
     const chicago = await activator.activateCommunity({ place: "chicago" });
     expect(chicago).toMatchObject({ slug: "chicago", alreadyActivated: false });
+  });
+
+  it("restores join codes for Chicago, India, New York City and keeps Malaysia", async () => {
+    const caller = await getPluginClient(authedContext("repair-activator"), {
+      auth: authStubFor(authedContext("repair-activator")),
+    } as never);
+    await ensurePlace("india", "India");
+    await ensurePlace("malaysia", "Malaysia");
+    const india = await caller.activateCommunity({ place: "india" });
+    const malaysia = await caller.activateCommunity({ place: "malaysia" });
+    const chicago = await caller.activateCommunity({ place: "chicago" });
+    const newYork = await caller.activateCommunity({ place: "nyc" });
+    expect(chicago.slug).toBe("chicago");
+    expect(newYork.slug).toBe("new-york-city");
+
+    for (const slug of ["india", "malaysia", "chicago", "new-york-city"]) await showOnMap(slug);
+    const mintedBefore = codeRequests.length;
+    await forgetJoinCode("india");
+    await forgetJoinCode("chicago");
+    await forgetJoinCode("new-york-city");
+
+    const db = testingDb();
+    const [platformTenant] = await db
+      .insert(tenantsTable)
+      .values({ accountId: "platform.community.near", name: "Platform" })
+      .returning();
+    const [platform] = await db
+      .insert(nodesTable)
+      .values({
+        tenantId: platformTenant?.id,
+        orgId: "org-platform",
+        metadata: { kind: "platform" },
+      })
+      .returning();
+
+    const reader = await getPluginClient(authedContext("repair-reader"), {
+      auth: authStubFor(authedContext("repair-reader")),
+    } as never);
+    const listed = await reader.listDiscovery({});
+    for (const slug of ["india", "chicago", "new-york-city", "malaysia"]) {
+      expect(listed.find((entry) => entry.placeSlug === slug)).toMatchObject({ joinable: true });
+    }
+    expect(listed.find((entry) => entry.nodeId === platform?.id)).toBeUndefined();
+
+    const repairedOrgs = codeRequests.slice(mintedBefore).map((request) => request.organizationId);
+    expect(repairedOrgs).toEqual(
+      expect.arrayContaining(["org-india", "org-chicago", "org-new-york-city"]),
+    );
+    expect(repairedOrgs).not.toContain("org-malaysia");
+
+    for (const activated of [india, chicago, newYork, malaysia]) {
+      const node = await reader.getNode({ nodeId: activated.nodeId });
+      expect(typeof node?.metadata.joinCodeId).toBe("string");
+      expect(String(node?.metadata.joinCodeId).length).toBeGreaterThan(0);
+    }
+    const platformNode = await reader.getNode({ nodeId: platform!.id });
+    expect(platformNode?.metadata.joinCodeId).toBeUndefined();
+
+    const anon = await getPluginClient();
+    const anonListed = await anon.listDiscovery({});
+    for (const slug of ["india", "chicago", "new-york-city", "malaysia"]) {
+      expect(anonListed.find((entry) => entry.placeSlug === slug)).toMatchObject({
+        joinable: true,
+      });
+    }
+
+    const joiner = await getPluginClient(
+      { ...authedContext("repair-joiner"), session: { id: "session-repair" } },
+      { auth: authStubFor(authedContext("repair-joiner")) } as never,
+    );
+    await expect(joiner.joinCommunity({ placeId: india.placeId })).resolves.toMatchObject({
+      organizationId: "org-india",
+      alreadyMember: false,
+    });
+    await expect(joiner.joinCommunity({ placeId: chicago.placeId })).resolves.toMatchObject({
+      organizationId: "org-chicago",
+      alreadyMember: false,
+    });
+    await expect(joiner.joinCommunity({ placeId: malaysia.placeId })).resolves.toMatchObject({
+      organizationId: "org-malaysia",
+      alreadyMember: false,
+    });
+    await expect(joiner.joinCommunity({ placeId: newYork.placeId })).resolves.toMatchObject({
+      organizationId: "org-new-york-city",
+    });
+  });
+
+  it("lets a platform admin restore a join code a visitor cannot mint", async () => {
+    const previousKey = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
+    delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
+    try {
+      await ensurePlace("kenya", "Kenya");
+      const activator = await getPluginClient(authedContext("kenya-activator"), {
+        auth: authStubFor(authedContext("kenya-activator")),
+      } as never);
+      const kenya = await activator.activateCommunity({ place: "kenya" });
+      organizerOnly.add(kenya.organizationId);
+      await forgetJoinCode("kenya");
+      await showOnMap("kenya");
+      adminMembershipCalls.length = 0;
+
+      const visitor = await getPluginClient(authedContext("kenya-visitor"), {
+        auth: authStubFor(authedContext("kenya-visitor")),
+      } as never);
+      await visitor.listDiscovery({});
+      const stillMissing = await visitor.getNode({ nodeId: kenya.nodeId });
+      expect(stillMissing?.metadata.joinCodeId).toBeUndefined();
+
+      const admin = await getPluginClient(authedContext("repair-admin", "admin"), {
+        auth: authStubFor(authedContext("repair-admin", "admin")),
+      } as never);
+      await admin.listDiscovery({});
+      const repaired = await admin.getNode({ nodeId: kenya.nodeId });
+      expect(String(repaired?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      expect(adminMembershipCalls).toEqual([
+        { action: "add", organizationId: kenya.organizationId, userId: "repair-admin" },
+        { action: "remove", organizationId: kenya.organizationId, userId: "repair-admin" },
+      ]);
+      expect(membersByOrg.get(kenya.organizationId)?.has("repair-admin")).toBeFalsy();
+
+      const joiner = await getPluginClient(authedContext("kenya-joiner"), {
+        auth: authStubFor(authedContext("kenya-joiner")),
+      } as never);
+      await expect(joiner.joinCommunity({ placeId: kenya.placeId })).resolves.toMatchObject({
+        organizationId: kenya.organizationId,
+        alreadyMember: false,
+      });
+    } finally {
+      organizerOnly.delete("org-kenya");
+      if (previousKey === undefined) delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
+      else process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = previousKey;
+    }
+  });
+
+  it("restores a join code when the platform admin is already a member", async () => {
+    const previousKey = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
+    delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
+    try {
+      await ensurePlace("uganda", "Uganda");
+      const activator = await getPluginClient(authedContext("uganda-activator"), {
+        auth: authStubFor(authedContext("uganda-activator")),
+      } as never);
+      const uganda = await activator.activateCommunity({ place: "uganda" });
+      organizerOnly.add(uganda.organizationId);
+      rememberMember(uganda.organizationId, "repair-admin", "member");
+      await forgetJoinCode("uganda");
+      await showOnMap("uganda");
+      adminMembershipCalls.length = 0;
+
+      const admin = await getPluginClient(authedContext("repair-admin", "admin"), {
+        auth: authStubFor(authedContext("repair-admin", "admin")),
+      } as never);
+      await admin.listDiscovery({});
+      const repaired = await admin.getNode({ nodeId: uganda.nodeId });
+      expect(String(repaired?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      expect(adminMembershipCalls).toEqual([
+        { action: "add", organizationId: uganda.organizationId, userId: "repair-admin" },
+        { action: "add", organizationId: uganda.organizationId, userId: "repair-admin" },
+      ]);
+      expect(memberRoles.get(uganda.organizationId)?.get("repair-admin")).toBe("member");
+    } finally {
+      organizerOnly.delete("org-uganda");
+      if (previousKey === undefined) delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
+      else process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = previousKey;
+    }
+  });
+
+  it("lets the bootstrap admin key restore a join code for a signed-in visitor", async () => {
+    const previousKey = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
+    process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = "test-bootstrap-key";
+    try {
+      await ensurePlace("senegal", "Senegal");
+      const activator = await getPluginClient(authedContext("senegal-activator"), {
+        auth: authStubFor(authedContext("senegal-activator")),
+      } as never);
+      const senegal = await activator.activateCommunity({ place: "senegal" });
+      organizerOnly.add(senegal.organizationId);
+      await forgetJoinCode("senegal");
+      await showOnMap("senegal");
+      adminMembershipCalls.length = 0;
+
+      const visitor = await getPluginClient(authedContext("senegal-visitor"), {
+        auth: authStubFor(authedContext("senegal-visitor")),
+      } as never);
+      await visitor.listDiscovery({});
+      const repaired = await visitor.getNode({ nodeId: senegal.nodeId });
+      expect(String(repaired?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      expect(adminMembershipCalls).toEqual([
+        { action: "add", organizationId: senegal.organizationId, userId: "bootstrap-admin" },
+        { action: "remove", organizationId: senegal.organizationId, userId: "bootstrap-admin" },
+      ]);
+      expect(membersByOrg.get(senegal.organizationId)?.has("bootstrap-admin")).toBeFalsy();
+      const listed = await visitor.listDiscovery({});
+      expect(listed.find((entry) => entry.placeSlug === "senegal")).toMatchObject({
+        joinable: true,
+      });
+    } finally {
+      organizerOnly.delete("org-senegal");
+      if (previousKey === undefined) delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
+      else process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = previousKey;
+    }
   });
 
   it("rejects unknown places", async () => {
