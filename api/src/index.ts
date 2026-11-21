@@ -278,6 +278,19 @@ const authorizeNodeAccess = (
         }),
       );
     }
+    if (
+      options.resource === "validators" &&
+      context.user?.role !== "admin" &&
+      tenant.ownerKind === "platform" &&
+      node.placeId &&
+      !officialDaoOf(node)
+    ) {
+      return yield* Effect.fail(
+        new ORPCError("FORBIDDEN", {
+          message: "Validators can be attached once the community is official",
+        }),
+      );
+    }
     const ownsOrg =
       !!context.organization?.activeOrganizationId &&
       tenant.orgId === context.organization.activeOrganizationId;

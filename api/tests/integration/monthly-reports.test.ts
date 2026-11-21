@@ -665,6 +665,31 @@ describe("monthly reports", () => {
     expect(await listed("2026-12")).toBe(true);
   });
 
+  it("gives a community started without a tenant its own, so its owner can report", async () => {
+    const id = crypto.randomUUID().slice(0, 8);
+    const org = `started-${id}`;
+    const resume = new Date();
+    vi.setSystemTime(new Date("2026-10-01T12:00:00.000Z"));
+    const { node } = await activateTestNode({
+      name: "Willow Bend",
+      slug: `willow-bend-${id}`,
+      kind: "city",
+      orgId: org,
+    });
+    vi.setSystemTime(resume);
+    roles.set(`${org}:owner-${id}`, "owner");
+    const owner = await getPluginClient(orgContext(`owner-${id}`, org));
+
+    expect(node.tenantId).toEqual(expect.any(String));
+    expect(
+      await owner.saveMonthlyReport({ nodeId: node.id, month: month(-1), notes: "First month" }),
+    ).toMatchObject({ nodeId: node.id, month: month(-1), notes: "First month" });
+    const tenants = await (await admin()).getAdminMonthlyReports({ month: month(-1) });
+    expect(tenants.communities.find((row) => row.organizationId === org)).toMatchObject({
+      organizationId: org,
+    });
+  });
+
   it("still lists every community, without copy links, when organizations can't be read", async () => {
     const city = await community("Maple Marsh");
     const platformAdmin = await admin();
