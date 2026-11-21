@@ -51,6 +51,9 @@ export default App({
           url: "/api/communities/by-organization/{organizationId}",
         },
       },
+      // No member cap (everything-dev #900): people join by QR at events.
+      // `false`, not `null`, since null is a merge sentinel.
+      organizationMembershipLimit: false,
       deviceLink: {
         clientId: "citynode-web",
       },
