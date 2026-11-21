@@ -11,8 +11,8 @@ import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import {
   type AuthClient,
-  backfillCommunityJoinCodes,
   ensureCommunityJoinCode,
+  scheduleCommunityJoinCodeBackfill,
 } from "./lib/community-join-code";
 import { ContextSchema } from "./lib/context";
 import {
@@ -524,16 +524,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         : null;
       return [userClient, keyClient].filter((client): client is AuthClient => client !== null);
     };
-
-    const repairCommunityJoinCodes = (context: Parameters<typeof communityJoinCodeClients>[0]) =>
-      Effect.gen(function* () {
-        const services = yield* ApiServices;
-        yield* Effect.promise(() =>
-          backfillCommunityJoinCodes(services.nodes, communityJoinCodeClients(context)).catch(
-            () => undefined,
-          ),
-        );
-      });
 
     type MemberAuthClient = Effect.Success<ReturnType<typeof memberAuthClient>>;
 
@@ -1097,12 +1087,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }),
       listDiscovery: builder.listDiscovery.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        yield* repairCommunityJoinCodes(context);
+        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context));
         return yield* services.discovery.directory(input);
       }),
       getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        yield* repairCommunityJoinCodes(context);
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (node) {
+          yield* Effect.promise(() =>
+            ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(context), node).catch(
+              () => null,
+            ),
+          );
+        }
         return yield* services.discovery.get(input.nodeId);
       }),
       getCommunityBuilders: builder.getCommunityBuilders.effect(function* ({ input }) {
@@ -2123,7 +2120,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listNodes: builder.listNodes.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        yield* repairCommunityJoinCodes(context);
+        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context));
         const nodes = yield* services.nodes.list({
           includePlatform:
             context.user?.role === "admin" &&
@@ -2148,9 +2145,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       getNode: builder.getNode.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        yield* repairCommunityJoinCodes(context);
         const node = yield* services.nodes.getById(input.nodeId);
-        return node && nodeForViewer(context)(node);
+        if (!node) return null;
+        yield* Effect.promise(() =>
+          ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(context), node).catch(
+            () => null,
+          ),
+        );
+        const refreshed = yield* services.nodes.getById(input.nodeId);
+        return refreshed && nodeForViewer(context)(refreshed);
       }),
 
       updateNode: builder.updateNode
@@ -2341,12 +2344,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
           user: context.user,
           session: context.session,
         });
-        yield* repairCommunityJoinCodes({
-          reqHeaders: context.reqHeaders,
-          userId,
-          user: context.user,
-          session: context.session,
-        });
         return yield* Effect.tryPromise({
           try: () =>
             activateCommunity(
@@ -2394,7 +2391,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
           user: context.user,
           session: context.session,
         };
-        yield* repairCommunityJoinCodes(repairContext);
         const refreshed = yield* services.nodes.getByPlace(input.placeId);
         const current = refreshed ?? node;
         const joinCodeId = yield* Effect.tryPromise({
