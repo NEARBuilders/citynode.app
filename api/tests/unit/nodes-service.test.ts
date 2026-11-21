@@ -96,6 +96,72 @@ async function seedPlaceWithNode(
 }
 
 describe("NodesService", () => {
+  it("gives a started community its own placeholder tenant, and reuses it when restarted", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes, tenants }) =>
+      Effect.gen(function* () {
+        const place = yield* Effect.tryPromise(() => seedPlace(db, "kuala-lumpur"));
+        const first = yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-first",
+          activatedBy: "user-1",
+          joinCodeId: "join-first",
+        });
+        expect(first.created).toBe(true);
+        const tenant = yield* tenants.resolveTenantById(first.node.tenantId!);
+        expect(tenant).toMatchObject({
+          accountId: "kuala-lumpur.v1.citynode.near",
+          orgId: "org-first",
+          name: "kuala-lumpur",
+          ownerKind: "platform",
+          allowUiOverrides: false,
+        });
+
+        const again = yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-other",
+          activatedBy: "user-2",
+          joinCodeId: "join-other",
+        });
+        expect(again).toMatchObject({ created: false, node: { tenantId: tenant!.id } });
+
+        expect(yield* nodes.delete(first.node.id)).toBe(true);
+        const restarted = yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-second",
+          activatedBy: "user-3",
+          joinCodeId: "join-second",
+        });
+        expect(restarted.node.tenantId).toBe(tenant!.id);
+        expect(yield* tenants.resolveTenantById(tenant!.id)).toMatchObject({
+          orgId: "org-second",
+        });
+      }),
+    );
+  });
+
+  it("refuses to start a community whose placeholder account is already taken", async () => {
+    const layer = freshLayer();
+    const error = await squashServiceError(layer, ({ db, nodes, tenants }) =>
+      Effect.gen(function* () {
+        const place = yield* Effect.tryPromise(() => seedPlace(db, "taken"));
+        const other = yield* tenants.createTenant({
+          name: "Other",
+          accountId: "taken.v1.citynode.near",
+          orgId: "org-other",
+        });
+        yield* nodes.spawn({ tenantId: other.id });
+        return yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-new",
+          activatedBy: "user-1",
+          joinCodeId: "join-new",
+        });
+      }),
+    );
+    expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
+  });
+
   it("updates a node without touching the place hierarchy", async () => {
     const layer = freshLayer();
     await runService(layer, ({ db, nodes }) =>

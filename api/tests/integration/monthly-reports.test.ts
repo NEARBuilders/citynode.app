@@ -688,6 +688,28 @@ describe("monthly reports", () => {
     expect(tenants.communities.find((row) => row.organizationId === org)).toMatchObject({
       organizationId: org,
     });
+
+    const tenantId = node.tenantId!;
+    expect(await owner.listTenantBindingsForTenant({ tenantId })).toEqual([]);
+    for (const refused of [
+      () => owner.updateTenant({ tenantId, accountId: "someone-else.near" }),
+      () => owner.updateTenant({ tenantId, allowBackendOverrides: true }),
+      () => owner.createBinding({ tenantId, hostname: `willow-${id}` }),
+      () => owner.deleteTenant({ tenantId }),
+      () => owner.deleteNode({ nodeId: node.id }),
+    ]) {
+      await expect(refused()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    await expect(
+      owner.createValidator({
+        nodeId: node.id,
+        accountId: "pool.poolv1.near",
+        network: "mainnet",
+        protocol: "near",
+        role: "official",
+        isDefault: true,
+      }),
+    ).rejects.toThrow(/once the community is official/);
   });
 
   it("still lists every community, without copy links, when organizations can't be read", async () => {

@@ -287,6 +287,16 @@ export function communityTenantAccountId(placeSlug: string): string {
   return `${placeSlug}.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`;
 }
 
+export function isCommunityPlaceholderTenant(tenant: {
+  ownerKind: string;
+  accountId: string;
+}): boolean {
+  return (
+    tenant.ownerKind === "platform" &&
+    tenant.accountId.endsWith(`.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`)
+  );
+}
+
 const query = <T>(run: () => Promise<T>): NodeEffect<T> =>
   Effect.tryPromise({ try: run, catch: toOrpcError });
 
@@ -359,13 +369,25 @@ export const NodesLive = Layer.effect(
         })
         .onConflictDoNothing({ target: tenantsTable.accountId })
         .returning({ id: tenantsTable.id });
-      if (!tenant) {
+      if (tenant) return tenant.id;
+      const [reattached] = await tx
+        .update(tenantsTable)
+        .set({ orgId, name: place.name, status: "active", deletedAt: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(tenantsTable.accountId, accountId),
+            eq(tenantsTable.ownerKind, "platform"),
+            sql`NOT EXISTS (SELECT 1 FROM ${nodesTable} WHERE ${nodesTable.tenantId} = ${tenantsTable.id})`,
+          ),
+        )
+        .returning({ id: tenantsTable.id });
+      if (!reattached) {
         throw new ORPCError("CONFLICT", {
           message: "Tenant with this accountId already exists",
           data: { accountId },
         });
       }
-      return tenant.id;
+      return reattached.id;
     };
 
     const service: NodesService = {

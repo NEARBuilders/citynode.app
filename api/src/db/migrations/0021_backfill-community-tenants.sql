@@ -21,4 +21,5 @@ WHERE "nodes"."tenant_id" IS NULL
   AND "nodes"."org_id" IS NOT NULL
   AND "places"."id" = "nodes"."place_id"
   AND "tenants"."account_id" = "places"."slug" || '.v1.citynode.near'
-  AND "tenants"."org_id" = "nodes"."org_id";
+  AND "tenants"."org_id" = "nodes"."org_id"
+  AND "tenants"."deleted_at" IS NULL;

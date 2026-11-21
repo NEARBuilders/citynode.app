@@ -15,6 +15,7 @@ import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
+import { isCommunityPlaceholderTenant } from "@/lib/community-tenant";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
@@ -285,7 +286,8 @@ export function TenantDetailContent({
   const isPersonalOwner =
     (tenant?.ownerKind === "user" && tenant.ownerUserId === session?.user?.id) ||
     (!!tenant && !tenant.orgId && !!nearAccountId && tenant.accountId === nearAccountId);
-  const canManageSettings = isAdmin || isPlatformAdmin || isPersonalOwner;
+  const placeholder = !!tenant && isCommunityPlaceholderTenant(tenant);
+  const canManageSettings = (isAdmin && !placeholder) || isPlatformAdmin || isPersonalOwner;
   if (!tenant || !gatewayId || (!canManageSettings && !canOperate)) {
     return <TenantUnavailable gatewayId={gatewayId} />;
   }
