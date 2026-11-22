@@ -12,6 +12,7 @@ import {
   tenants as tenantsTable,
 } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
+import { isReservedGatewayHostname, isValidHostname, normalizeHostname } from "../lib/hostname";
 import { listedNode, nodeKindOf, nodeNameSql, nodeSlugSql } from "./nodes";
 
 export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
@@ -85,6 +86,7 @@ export interface SpawnTenantInput {
   hostname: string;
   ownerAccountId: string;
   ownerUserId: string;
+  allowReservedHostname?: boolean;
 }
 
 export interface SpawnTenantResult {
@@ -96,9 +98,11 @@ export interface CreateBindingInput {
   tenantId: string;
   hostname: string;
   isPrimary?: boolean;
+  allowReservedHostname?: boolean;
 }
 
 export interface TenantsService {
+  validateHostname(hostname: string, allowReservedHostname?: boolean): TenantEffect<string>;
   listAllTenants: TenantEffect<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): TenantEffect<TenantRecord[]>;
   listTenantsByOwnerUserId(ownerUserId: string): TenantEffect<TenantRecord[]>;
@@ -186,7 +190,30 @@ export const TenantsLive = Layer.effect(
   Effect.gen(function* () {
     const db = yield* DatabaseTag;
     const config = yield* Effect.serviceOption(TenantsConfigTag);
-    const gatewayDomains = config._tag === "Some" ? config.value.gatewayDomains : [];
+    const gatewayDomains = (config._tag === "Some" ? config.value.gatewayDomains : [])
+      .map(normalizeHostname)
+      .filter(isValidHostname);
+
+    const validateHostname = (hostname: string, allowReserved = false): TenantEffect<string> => {
+      const normalized = normalizeHostname(hostname);
+      if (!isValidHostname(normalized)) {
+        return Effect.fail(
+          new ORPCError("BAD_REQUEST", {
+            message: "Invalid hostname format",
+            data: { hint: "Must be a valid DNS hostname" },
+          }),
+        );
+      }
+      if (!allowReserved && isReservedGatewayHostname(normalized, gatewayDomains)) {
+        return Effect.fail(
+          new ORPCError("BAD_REQUEST", {
+            message: "This hostname is reserved for the platform",
+            data: { hostname: normalized },
+          }),
+        );
+      }
+      return Effect.succeed(normalized);
+    };
 
     const isGatewayZoneHostname = (hostname: string) =>
       gatewayDomains.some((domain) => hostname.endsWith(`.${domain}`));
@@ -195,6 +222,7 @@ export const TenantsLive = Layer.effect(
       Effect.tryPromise({ try: run, catch: toOrpcError });
 
     const service: TenantsService = {
+      validateHostname,
       listAllTenants: query(() => db.select().from(tenantsTable)).pipe(
         Effect.map((rows) => rows.map(toTenantRecord)),
       ),
@@ -307,6 +335,7 @@ export const TenantsLive = Layer.effect(
       ),
 
       createBinding: Effect.fn("TenantsService.createBinding")(function* (input) {
+        const hostname = yield* validateHostname(input.hostname, input.allowReservedHostname);
         const tenant = yield* query(() =>
           db
             .select({ id: tenantsTable.id })
@@ -323,7 +352,7 @@ export const TenantsLive = Layer.effect(
           );
         }
 
-        const autoVerified = !input.hostname.includes(".") || isGatewayZoneHostname(input.hostname);
+        const autoVerified = !hostname.includes(".") || isGatewayZoneHostname(hostname);
         const verifiedAt = autoVerified ? yield* DateTime.nowAsDate : null;
         const rows = yield* Effect.tryPromise({
           try: () =>
@@ -331,7 +360,7 @@ export const TenantsLive = Layer.effect(
               .insert(domainBindingsTable)
               .values({
                 tenantId: input.tenantId,
-                hostname: input.hostname,
+                hostname,
                 isPrimary: input.isPrimary ?? false,
                 isVerified: autoVerified,
                 verifiedAt,
@@ -342,7 +371,7 @@ export const TenantsLive = Layer.effect(
             isUniqueViolation(error)
               ? new ORPCError("CONFLICT", {
                   message: "Hostname already in use",
-                  data: { hostname: input.hostname },
+                  data: { hostname },
                 })
               : toOrpcError(error),
         });
@@ -544,8 +573,9 @@ export const TenantsLive = Layer.effect(
         return toTenantRecord(row);
       }),
 
-      spawnTenant: (input) =>
-        query(() =>
+      spawnTenant: Effect.fn("TenantsService.spawnTenant")(function* (input) {
+        const hostname = yield* validateHostname(input.hostname, input.allowReservedHostname);
+        return yield* query(() =>
           db.transaction(async (tx) => {
             const [existingTenant, existingBinding] = await Promise.all([
               tx
@@ -556,7 +586,7 @@ export const TenantsLive = Layer.effect(
               tx
                 .select({ id: domainBindingsTable.id })
                 .from(domainBindingsTable)
-                .where(eq(domainBindingsTable.hostname, input.hostname))
+                .where(eq(domainBindingsTable.hostname, hostname))
                 .limit(1),
             ]);
 
@@ -569,7 +599,7 @@ export const TenantsLive = Layer.effect(
             if (existingBinding.length > 0) {
               throw new ORPCError("CONFLICT", {
                 message: "Hostname already in use",
-                data: { hostname: input.hostname },
+                data: { hostname },
               });
             }
 
@@ -588,12 +618,12 @@ export const TenantsLive = Layer.effect(
               throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Tenant creation failed" });
             }
 
-            const autoVerified = isGatewayZoneHostname(input.hostname);
+            const autoVerified = isGatewayZoneHostname(hostname);
             const [binding] = await tx
               .insert(domainBindingsTable)
               .values({
                 tenantId: tenant.id,
-                hostname: input.hostname,
+                hostname,
                 isPrimary: true,
                 isVerified: autoVerified,
                 verifiedAt: autoVerified ? new Date() : null,
@@ -606,7 +636,8 @@ export const TenantsLive = Layer.effect(
 
             return { tenant: toTenantRecord(tenant), binding: toBindingRecord(binding) };
           }),
-        ),
+        );
+      }),
 
       updateTenant: Effect.fn("TenantsService.updateTenant")(function* (id, input) {
         const [row] = yield* query(() =>

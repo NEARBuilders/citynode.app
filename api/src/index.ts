@@ -105,9 +105,6 @@ const ACCOUNT_ID_REGEX =
 
 suppressPgQueryQueueDeprecation();
 
-const HOSTNAME_REGEX =
-  /^(?=.{1,253}$)(?=.{1,64}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.?$/;
-
 const guardNodeKind = (
   current: string | null,
   next: string | null | undefined,
@@ -181,18 +178,6 @@ const requireApprovedStakingPool = (
       );
     }
   });
-
-const validateHostname = (hostname: string): NodeEffect<void> => {
-  const normalized = hostname.toLowerCase();
-  return HOSTNAME_REGEX.test(normalized)
-    ? Effect.void
-    : Effect.fail(
-        new ORPCError("BAD_REQUEST", {
-          message: "Invalid hostname format",
-          data: { hint: "Must be a valid DNS hostname" },
-        }),
-      );
-};
 
 function publishStatusFor(ownerAccountId: string): "pending_funding" | "ready" {
   return ownerAccountId.startsWith("0s") ? "pending_funding" : "ready";
@@ -1733,12 +1718,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         yield* validateAccountId(ownerAccountId);
-        yield* validateHostname(input.hostname);
         const { tenant, binding } = yield* services.tenants.spawnTenant({
           name: input.name,
-          hostname: input.hostname.toLowerCase(),
+          hostname: input.hostname,
           ownerAccountId,
           ownerUserId: context.user.id,
+          allowReservedHostname: context.user?.role === "admin",
         });
         return { tenant, binding, ownerAccountId, publishStatus: publishStatusFor(ownerAccountId) };
       }),
@@ -1935,11 +1920,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
       createBinding: builder.createBinding.use(requireAuth).effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         yield* authorizedTenant(services, input, context);
-        yield* validateHostname(input.hostname);
         return yield* services.tenants.createBinding({
           tenantId: input.tenantId,
-          hostname: input.hostname.toLowerCase(),
+          hostname: input.hostname,
           isPrimary: input.isPrimary,
+          allowReservedHostname: context.user?.role === "admin",
         });
       }),
 
@@ -1976,17 +1961,23 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return publicBinding;
       }),
 
-      bindingPreflight: builder.bindingPreflight.use(requireAuth).effect(function* ({ input }) {
+      bindingPreflight: builder.bindingPreflight.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
         const services = yield* ApiServices;
-        const format = HOSTNAME_REGEX.test(input.hostname.toLowerCase())
-          ? ("valid" as const)
-          : ("invalid" as const);
-        const existing =
-          format === "valid"
-            ? yield* services.tenants.resolveBindingByHostname(input.hostname.toLowerCase())
-            : null;
+        const wellFormed = yield* Effect.exit(
+          services.tenants.validateHostname(input.hostname, true),
+        );
+        if (!Exit.isSuccess(wellFormed)) {
+          return { hostname: { available: false, format: "invalid" as const } };
+        }
+        const allowed = yield* Effect.exit(
+          services.tenants.validateHostname(input.hostname, context.user?.role === "admin"),
+        );
+        const existing = yield* services.tenants.resolveBindingByHostname(wellFormed.value);
         return {
-          hostname: { available: format === "valid" && !existing, format },
+          hostname: { available: Exit.isSuccess(allowed) && !existing, format: "valid" as const },
         };
       }),
 
