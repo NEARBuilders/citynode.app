@@ -25,6 +25,79 @@ describe("User-owned tenant spawn", () => {
   });
 
   describe("spawnTenant", () => {
+    it("rejects reserved claims and spoofed overrides before creating a tenant", async () => {
+      const c = await getPluginClient(spawnContext("reserved-user", "reserved-user.near"));
+      for (const hostname of [
+        "www.citynode.app",
+        " ADMIN.CITYNODE.APP. ",
+        "ＡＰＩ。citynode.app。",
+        "app.auth.citynode.app",
+        "login.app.testnet.citynode.app",
+        "docs",
+        "staging.citynode.app",
+        "citynode.app",
+      ]) {
+        const input = { name: "Reserved", hostname, allowReservedHostname: true };
+        await expect(c.spawnTenant(input)).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message: "Hostname is reserved for the platform",
+        });
+      }
+      const spawned = await c.spawnTenant({
+        name: "Allowed",
+        hostname: " Allowed-reserved-test.CITYNODE.APP. ",
+      });
+      expect(spawned.binding).toMatchObject({
+        hostname: "allowed-reserved-test.citynode.app",
+        isVerified: true,
+      });
+      for (const hostname of ["api", "docs.citynode.app", "branch.staging.citynode.app"]) {
+        const input = { tenantId: spawned.tenant.id, hostname, allowReservedHostname: true };
+        await expect(c.createBinding(input)).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message: "Hostname is reserved for the platform",
+        });
+        expect((await c.bindingPreflight({ hostname })).hostname).toEqual({
+          available: false,
+          format: "invalid",
+        });
+      }
+      expect((await c.getSpawnStatus({ tenantId: spawned.tenant.id })).bindings).toHaveLength(1);
+      expect(
+        (await c.bindingPreflight({ hostname: " ALLOWED-RESERVED-TEST.CITYNODE.APP. " })).hostname
+          .available,
+      ).toBe(false);
+    });
+
+    it("lets platform admins claim reserved names, but not ordinary organization admins", async () => {
+      const adminContext = spawnContext("reserved-platform-admin", "reserved-platform.near");
+      adminContext.user = { id: "reserved-platform-admin", role: "admin" };
+      const admin = await getPluginClient(adminContext);
+      expect((await admin.bindingPreflight({ hostname: " WWW.CITYNODE.APP. " })).hostname).toEqual({
+        available: true,
+        format: "valid",
+      });
+      const spawned = await admin.spawnTenant({
+        name: "Platform",
+        hostname: " WWW.CITYNODE.APP. ",
+      });
+      expect(spawned.binding.hostname).toBe("www.citynode.app");
+      const binding = await admin.createBinding({
+        tenantId: spawned.tenant.id,
+        hostname: " API.citynode.app. ",
+      });
+      expect(binding).toMatchObject({ hostname: "api.citynode.app", isVerified: true });
+      const ownerContext = spawnContext("reserved-org-admin", "reserved-org-admin.near");
+      ownerContext.organization = {
+        activeOrganizationId: "reserved-org",
+        member: { role: "admin" },
+      };
+      const orgAdmin = await getPluginClient(ownerContext);
+      await expect(
+        orgAdmin.spawnTenant({ name: "Not platform", hostname: "auth.citynode.app" }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    });
+
     it("creates a user-owned tenant with a verified gateway-zone binding", async () => {
       const c = await getPluginClient(spawnContext("spawn-user-1", "spawn-wallet-1.near"));
 

@@ -8,7 +8,12 @@ import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseError } from "@/db";
 import { DatabaseLive } from "@/db/layer";
-import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
+import {
+  TenantsConfigLive,
+  TenantsLive,
+  type TenantsService,
+  TenantsTag,
+} from "@/services/tenants";
 import { createServiceHarness } from "./test-harness";
 
 let activeDir: string | null = null;
@@ -23,12 +28,13 @@ afterEach(() => {
   }
 });
 
-function freshLayer() {
+function freshLayer(gatewayDomains: string[] = []) {
   const dir = mkdtempSync(join(tmpdir(), "api-tenants-"));
   activeDir = dir;
   return TenantsLive.pipe(
     Layer.provide(DatabaseLive(`pglite:${dir}`)),
     Layer.provide(Layer.succeed(PluginIdTag, "api")),
+    Layer.provide(TenantsConfigLive(gatewayDomains)),
   );
 }
 
@@ -211,6 +217,128 @@ describe("TenantsService — domain bindings", () => {
     accountId: "acme.example.near",
     orgId: "org-1",
   };
+
+  it("rejects reserved claims in both write paths before creating any records", async () => {
+    const layer = freshLayer([" CITYNODE.APP. ", "testnet.citynode.app"]);
+    const tenant = await runService(layer, (svc) => svc.createTenant(tenantBase));
+    const hostnames = [
+      "www",
+      "admin",
+      "api",
+      "auth",
+      "login",
+      "docs",
+      "staging",
+      "www.citynode.app",
+      "ADMIN.citynode.app.",
+      "ＡＰＩ。citynode.app。",
+      "app.auth.citynode.app",
+      "login.app.citynode.app",
+      "docs.testnet.citynode.app",
+      " citynode.app. ",
+      "testnet.citynode.app",
+    ];
+    for (const hostname of hostnames) {
+      const bindingError = await squashServiceError(layer, (svc) =>
+        svc.createBinding({ tenantId: tenant.id, hostname }),
+      );
+      expect(bindingError).toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Hostname is reserved for the platform",
+      });
+      const spawnError = await squashServiceError(layer, (svc) =>
+        svc.spawnTenant({
+          name: "Blocked",
+          hostname,
+          ownerAccountId: "blocked.near",
+          ownerUserId: "blocked-user",
+        }),
+      );
+      expect(spawnError).toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Hostname is reserved for the platform",
+      });
+    }
+    expect(await runService(layer, (svc) => svc.listBindingsForTenant(tenant.id))).toEqual([]);
+    expect(
+      await runService(layer, (svc) => svc.resolveTenantByAccountId("blocked.near")),
+    ).toBeNull();
+  });
+
+  it("canonicalizes allowed claims and detects equivalent duplicate bindings", async () => {
+    const layer = freshLayer(["citynode.app"]);
+    const spawned = await runService(layer, (svc) =>
+      svc.spawnTenant({
+        name: "Books",
+        hostname: " BÜCHER.citynode.app. ",
+        ownerAccountId: "books.near",
+        ownerUserId: "book-user",
+      }),
+    );
+    expect(spawned.binding).toMatchObject({
+      hostname: "xn--bcher-kva.citynode.app",
+      isVerified: true,
+    });
+    expect(
+      await squashServiceError(layer, (svc) =>
+        svc.createBinding({ tenantId: spawned.tenant.id, hostname: "XN--BCHER-KVA.CITYNODE.APP." }),
+      ),
+    ).toMatchObject({ code: "CONFLICT" });
+    const custom = await runService(layer, (svc) =>
+      svc.createBinding({ tenantId: spawned.tenant.id, hostname: " WWW.Example.com. " }),
+    );
+    expect(custom).toMatchObject({ hostname: "www.example.com", isVerified: false });
+    const long = `${"a".repeat(63)}.citynode.app`;
+    expect(
+      await runService(layer, (svc) =>
+        svc.createBinding({ tenantId: spawned.tenant.id, hostname: long }),
+      ),
+    ).toMatchObject({ hostname: long, isVerified: true });
+    expect(
+      await runService(layer, (svc) => svc.resolveBindingByHostname(" BÜCHER.CITYNODE.APP. ")),
+    ).toMatchObject({ id: spawned.binding.id });
+  });
+
+  it("allows trusted platform administration without bypassing DNS syntax validation", async () => {
+    const layer = freshLayer(["citynode.app"]);
+    const spawned = await runService(layer, (svc) =>
+      svc.spawnTenant({
+        name: "Admin",
+        hostname: " ADMIN.citynode.app. ",
+        ownerAccountId: "platform.near",
+        ownerUserId: "platform-user",
+        allowReservedHostname: true,
+      }),
+    );
+    expect(spawned.binding.hostname).toBe("admin.citynode.app");
+    expect(
+      await runService(layer, (svc) =>
+        svc.createBinding({
+          tenantId: spawned.tenant.id,
+          hostname: "api.citynode.app",
+          allowReservedHostname: true,
+        }),
+      ),
+    ).toMatchObject({ hostname: "api.citynode.app", isVerified: true });
+    for (const hostname of ["", "a..citynode.app", `${"a".repeat(64)}.citynode.app`]) {
+      expect(
+        await squashServiceError(layer, (svc) =>
+          svc.createBinding({ tenantId: spawned.tenant.id, hostname, allowReservedHostname: true }),
+        ),
+      ).toMatchObject({ code: "BAD_REQUEST", message: "Invalid hostname format" });
+      expect(
+        await squashServiceError(layer, (svc) =>
+          svc.spawnTenant({
+            name: "Invalid",
+            hostname,
+            ownerAccountId: "invalid.near",
+            ownerUserId: "invalid-user",
+            allowReservedHostname: true,
+          }),
+        ),
+      ).toMatchObject({ code: "BAD_REQUEST", message: "Invalid hostname format" });
+    }
+  });
 
   it("creates a binding with a unique verification token", async () => {
     const layer = freshLayer();
