@@ -1,3 +1,4 @@
+import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { isCommunitySettingsRole } from "@/lib/team-workspace";
 
 export interface CommunityPageViewer {
@@ -5,7 +6,7 @@ export interface CommunityPageViewer {
   platformAdmin: boolean;
   inCommunity: boolean;
   orgRole: string | null | undefined;
-  teamAreas: readonly string[];
+  teamAreas: readonly FeatureArea[];
   rolePending: boolean;
 }
 
@@ -24,6 +25,12 @@ const NONE: CommunityPageActions = {
   openSetup: false,
   openAdmin: false,
 };
+
+export function activeTeamBlocksEvents(areas: readonly string[] | null | undefined): boolean {
+  if (!areas) return false;
+  const known = areas.filter(isFeatureArea);
+  return !known.includes("events") && !known.includes("node-operations");
+}
 
 export function communityPageActions(viewer: CommunityPageViewer): CommunityPageActions {
   if (viewer.rolePending) return NONE;

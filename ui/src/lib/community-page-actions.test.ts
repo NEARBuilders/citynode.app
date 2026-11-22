@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { type CommunityPageViewer, communityPageActions } from "./community-page-actions";
+import {
+  activeTeamBlocksEvents,
+  type CommunityPageViewer,
+  communityPageActions,
+} from "./community-page-actions";
 
 const visitor: CommunityPageViewer = {
   signedIn: false,
@@ -9,6 +13,17 @@ const visitor: CommunityPageViewer = {
   teamAreas: [],
   rolePending: false,
 };
+
+describe("active team blocking the events page", () => {
+  it("blocks a finance or stake team and lets an events team through", () => {
+    expect(activeTeamBlocksEvents(["finance"])).toBe(true);
+    expect(activeTeamBlocksEvents(["stake"])).toBe(true);
+    expect(activeTeamBlocksEvents(["events"])).toBe(false);
+    expect(activeTeamBlocksEvents(["node-operations"])).toBe(false);
+    expect(activeTeamBlocksEvents(null)).toBe(false);
+    expect(activeTeamBlocksEvents(undefined)).toBe(false);
+  });
+});
 
 describe("community page actions by role", () => {
   it("shows a signed-out visitor the join hint and no one's admin actions", () => {

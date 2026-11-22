@@ -1,13 +1,20 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import type { MouseEvent } from "react";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { Button } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
+import { useSwitchTeam } from "@/components/layout/use-switch-team";
 import { useAppTranslation } from "@/i18n/runtime";
-import { type CommunityPageActions, communityPageActions } from "@/lib/community-page-actions";
+import {
+  activeTeamBlocksEvents,
+  type CommunityPageActions,
+  communityPageActions,
+} from "@/lib/community-page-actions";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { teamJoinBoardQueryOptions } from "@/lib/queries/team-join-requests";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { communityAuthContextQueryOptions } from "../../_authenticated/_dashboard/dashboard/node/-community-header";
 import { orgActiveRoleQueryOptions } from "../../_authenticated/orgs/-organization-members";
 
 const HIDDEN: CommunityPageActions = {
@@ -20,6 +27,7 @@ const HIDDEN: CommunityPageActions = {
 
 export interface CommunityPageView extends CommunityPageActions {
   organizationId: string | null;
+  eventsTeamId: string | null;
 }
 
 export function useCommunityPageActions(tenantId: string | null): CommunityPageView {
@@ -55,8 +63,9 @@ export function useCommunityPageActions(tenantId: string | null): CommunityPageV
     ...teamJoinBoardQueryOptions(api, owningOrg?.id ?? ""),
     enabled: signedIn && inCommunity,
   });
-  const teamAreas =
-    teamsQuery.data?.teams.filter((team) => team.isMember).flatMap((team) => team.areas) ?? [];
+  const memberTeams = teamsQuery.data?.teams.filter((team) => team.isMember) ?? [];
+  const teamAreas = memberTeams.flatMap((team) => team.areas);
+  const eventsTeamId = memberTeams.find((team) => team.areas.includes("events"))?.id ?? null;
   const tenantsLoading = tenants.some((query) => query.isLoading);
   const rolePending =
     sessionQuery.isPending ||
@@ -65,7 +74,7 @@ export function useCommunityPageActions(tenantId: string | null): CommunityPageV
     (inCommunity && roleQuery.isPending) ||
     (inCommunity && teamsQuery.isPending);
 
-  if (rolePending) return { ...HIDDEN, organizationId: null };
+  if (rolePending) return { ...HIDDEN, organizationId: null, eventsTeamId: null };
   return {
     ...communityPageActions({
       signedIn,
@@ -76,6 +85,7 @@ export function useCommunityPageActions(tenantId: string | null): CommunityPageV
       rolePending: false,
     }),
     organizationId: owningOrg?.id ?? null,
+    eventsTeamId,
   };
 }
 
@@ -105,6 +115,7 @@ export function CommunityPageButtons({
           organizationId={actions.organizationId}
           nodeId={nodeId}
           destination="events"
+          eventsTeamId={actions.eventsTeamId}
           testId="node-page.open-events"
           label={translate("community.openEvents")}
         />
@@ -136,6 +147,7 @@ function CommunityDestination({
   organizationId,
   nodeId,
   destination,
+  eventsTeamId = null,
   testId,
   label,
   primary = false,
@@ -143,17 +155,59 @@ function CommunityDestination({
   organizationId: string | null;
   nodeId: string;
   destination: "community" | "events";
+  eventsTeamId?: string | null;
   testId: string;
   label: string;
   primary?: boolean;
 }) {
   const auth = useAuthClient();
+  const api = useApiClient();
+  const queryClient = useQueryClient();
   const session = useQuery(sessionQueryOptions(auth));
   const switchOrg = useSwitchOrganization();
+  const switchTeam = useSwitchTeam();
   const navigate = useNavigate();
   const activeOrganizationId = session.data?.session?.activeOrganizationId ?? null;
   const needsSwitch = !!organizationId && activeOrganizationId !== organizationId;
   const variant = primary ? "default" : "outline";
+
+  const openEvents = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    if (!organizationId || !eventsTeamId) return;
+    event.preventDefault();
+    const openEventsPage = () =>
+      navigate({
+        to: "/nodes/$nodeId/content",
+        params: { nodeId },
+        search: { tab: "events" },
+      });
+    void (async () => {
+      let activeTeam: { id: string; areas: readonly string[] } | undefined;
+      try {
+        const context = await queryClient.ensureQueryData(
+          communityAuthContextQueryOptions(api, organizationId),
+        );
+        activeTeam = context?.organization?.teams?.find(
+          (team) => team.id === context.organization?.activeTeamId,
+        );
+      } catch {
+        await openEventsPage();
+        return;
+      }
+      if (
+        activeTeam &&
+        activeTeam.id !== eventsTeamId &&
+        activeTeamBlocksEvents(activeTeam.areas)
+      ) {
+        try {
+          await switchTeam.mutateAsync(eventsTeamId);
+        } catch {
+          return;
+        }
+      }
+      await openEventsPage();
+    })();
+  };
 
   const open = () => {
     if (!organizationId) return;
@@ -192,6 +246,7 @@ function CommunityDestination({
             params={{ nodeId }}
             search={{ tab: "events" }}
             data-testid={testId}
+            onClick={(event) => void openEvents(event)}
           />
         }
       >
