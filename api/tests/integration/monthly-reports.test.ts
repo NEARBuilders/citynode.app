@@ -678,7 +678,9 @@ describe("monthly reports", () => {
     });
     vi.setSystemTime(resume);
     roles.set(`${org}:owner-${id}`, "owner");
+    roles.set(`${org}:admin-${id}`, "admin");
     const owner = await getPluginClient(orgContext(`owner-${id}`, org));
+    const orgAdmin = await getPluginClient(orgContext(`admin-${id}`, org, "admin"));
 
     expect(node.tenantId).toEqual(expect.any(String));
     expect(
@@ -696,10 +698,12 @@ describe("monthly reports", () => {
       () => owner.updateTenant({ tenantId, allowBackendOverrides: true }),
       () => owner.createBinding({ tenantId, hostname: `willow-${id}` }),
       () => owner.deleteTenant({ tenantId }),
-      () => owner.deleteNode({ nodeId: node.id }),
     ]) {
       await expect(refused()).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
+    await expect(orgAdmin.deleteNode({ nodeId: node.id })).rejects.toThrow(
+      /Only platform admins can remove a community/,
+    );
     await expect(
       owner.createValidator({
         nodeId: node.id,
@@ -710,6 +714,16 @@ describe("monthly reports", () => {
         isDefault: true,
       }),
     ).rejects.toThrow(/once the community is official/);
+  });
+
+  it("keeps placeholder community accounts out of reach of other tenants' owners", async () => {
+    const city = await community("Pier Point");
+    await expect(
+      city.owner.updateTenant({ tenantId: city.tenant.id, accountId: "pier.v1.citynode.near" }),
+    ).rejects.toThrow(/reserved for platform communities/);
+    expect(
+      await city.owner.updateTenant({ tenantId: city.tenant.id, name: "Pier Point Builders" }),
+    ).toMatchObject({ name: "Pier Point Builders", accountId: city.tenant.accountId });
   });
 
   it("still lists every community, without copy links, when organizations can't be read", async () => {

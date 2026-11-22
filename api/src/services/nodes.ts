@@ -287,14 +287,15 @@ export function communityTenantAccountId(placeSlug: string): string {
   return `${placeSlug}.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`;
 }
 
+export function isReservedCommunityAccountId(accountId: string): boolean {
+  return accountId.toLowerCase().endsWith(`.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`);
+}
+
 export function isCommunityPlaceholderTenant(tenant: {
   ownerKind: string;
   accountId: string;
 }): boolean {
-  return (
-    tenant.ownerKind === "platform" &&
-    tenant.accountId.endsWith(`.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`)
-  );
+  return tenant.ownerKind === "platform" && isReservedCommunityAccountId(tenant.accountId);
 }
 
 const query = <T>(run: () => Promise<T>): NodeEffect<T> =>
