@@ -21,7 +21,7 @@ afterAll(teardown);
 async function fixture() {
   const id = crypto.randomUUID();
   const org = `discovery-${id}`;
-  const provisioner = await getPluginClient(daoContext(id, org, `d-${id}.near`));
+  const provisioner = await getPluginClient(daoContext(id, org, `d-${id}.near`, "admin"));
   const tenant = await provisioner.createTenant({
     name: "Discovery city",
     accountId: `d-${id}.near`,
@@ -72,7 +72,7 @@ describe("discovery publishing", () => {
     await editor.saveDiscoveryProfile({ ...input, published: false });
     expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toBeNull();
     await editor.saveDiscoveryProfile(input);
-    await provisioner.updateTenant({ tenantId: tenant.id, status: "suspended" });
+    await provisioner.suspendTenant({ tenantId: tenant.id });
     expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toBeNull();
     expect(await publicClient.listDiscovery({})).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ nodeId: node.id })]),
@@ -110,7 +110,7 @@ it("lists active communities without a profile as basic entries only", async () 
     expect.objectContaining({ published: true, location: "Karachi" }),
   ]);
   const other = await fixture();
-  await other.provisioner.updateTenant({ tenantId: other.tenant.id, status: "suspended" });
+  await other.provisioner.suspendTenant({ tenantId: other.tenant.id });
   expect((await publicClient.listDiscovery({})).some((r) => r.nodeId === other.node.id)).toBe(
     false,
   );

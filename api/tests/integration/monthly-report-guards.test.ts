@@ -141,7 +141,9 @@ async function community() {
   const id = crypto.randomUUID().slice(0, 8);
   const org = `guards-${id}`;
   vi.setSystemTime(new Date("2026-10-01T12:00:00.000Z"));
-  const provisioner = await getPluginClient(daoContext(`prov-${id}`, org, `mg-${id}.near`));
+  const provisioner = await getPluginClient(
+    daoContext(`prov-${id}`, org, `mg-${id}.near`, "admin"),
+  );
   const tenant = await provisioner.createTenant({
     name: "Guarded City",
     accountId: `mg-${id}.near`,
@@ -158,7 +160,7 @@ async function community() {
     org,
     node,
     owner: await getPluginClient(orgContext(`owner-${id}`, org)),
-    suspend: () => provisioner.updateTenant({ tenantId: tenant.id, status: "suspended" }),
+    suspend: () => provisioner.suspendTenant({ tenantId: tenant.id }),
     remove: async () =>
       (await getPluginClient(orgContext(`owner-${id}`, org, "owner"))).deleteTenant({
         tenantId: tenant.id,
