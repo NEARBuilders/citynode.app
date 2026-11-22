@@ -14,7 +14,7 @@ import {
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { teamJoinBoardQueryOptions } from "@/lib/queries/team-join-requests";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
-import { communityAuthContextQueryOptions } from "../../_authenticated/_dashboard/dashboard/node/-community-header";
+import { teamWorkspaceQueryOptions } from "@/lib/team-workspace";
 import { orgActiveRoleQueryOptions } from "../../_authenticated/orgs/-organization-members";
 
 const HIDDEN: CommunityPageActions = {
@@ -182,14 +182,13 @@ function CommunityDestination({
         search: { tab: "events" },
       });
     void (async () => {
-      let activeTeam: { id: string; areas: readonly string[] } | undefined;
+      let activeTeam: { id: string; areas: readonly string[] } | null | undefined;
       try {
-        const context = await queryClient.ensureQueryData(
-          communityAuthContextQueryOptions(api, organizationId),
-        );
-        activeTeam = context?.organization?.teams?.find(
-          (team) => team.id === context.organization?.activeTeamId,
-        );
+        const workspace = await queryClient.fetchQuery({
+          ...teamWorkspaceQueryOptions(api),
+          staleTime: 0,
+        });
+        activeTeam = workspace.activeTeam;
       } catch {
         await openEventsPage();
         return;
