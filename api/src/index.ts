@@ -255,7 +255,11 @@ const authorizeNodeAccess = (
   services: { tenants: TenantsService },
   node: NodeRecord,
   context: NodeAccessContext,
-  options: { adminBypassOrg: boolean; resource: "node" | "validators"; platformAdminOnly?: boolean },
+  options: {
+    adminBypassOrg: boolean;
+    resource: "node" | "validators";
+    platformAdminOnly?: boolean;
+  },
 ): NodeEffect<void> =>
   Effect.gen(function* () {
     if (!node.tenantId) {
