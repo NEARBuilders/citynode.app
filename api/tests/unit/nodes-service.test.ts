@@ -96,7 +96,7 @@ async function seedPlaceWithNode(
 }
 
 describe("NodesService", () => {
-  it("gives a started community its own placeholder tenant, and reuses it when restarted", async () => {
+  it("gives a started community its own placeholder tenant, and a fresh one when restarted", async () => {
     const layer = freshLayer();
     await runService(layer, ({ db, nodes, tenants }) =>
       Effect.gen(function* () {
@@ -132,9 +132,55 @@ describe("NodesService", () => {
           activatedBy: "user-3",
           joinCodeId: "join-second",
         });
-        expect(restarted.node.tenantId).toBe(tenant!.id);
-        expect(yield* tenants.resolveTenantById(tenant!.id)).toMatchObject({
+        expect(restarted.node.tenantId).not.toBe(tenant!.id);
+        expect(yield* tenants.resolveTenantById(restarted.node.tenantId!)).toMatchObject({
+          accountId: "kuala-lumpur.v1.citynode.near",
           orgId: "org-second",
+          status: "active",
+          deletedAt: null,
+        });
+        const archived = yield* tenants.resolveTenantById(tenant!.id);
+        expect(archived).toMatchObject({
+          accountId: `archived-${tenant!.id}.v1.citynode.near`,
+          orgId: "org-first",
+          status: "pending_deletion",
+        });
+        expect(archived?.deletedAt).toEqual(expect.any(String));
+      }),
+    );
+  });
+
+  it("archives a suspended placeholder without reviving it, and leaves other tenants alone", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes, tenants }) =>
+      Effect.gen(function* () {
+        const place = yield* Effect.tryPromise(() => seedPlace(db, "penang"));
+        const started = yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-penang",
+          activatedBy: "user-1",
+          joinCodeId: "join-penang",
+        });
+        const placeholderId = started.node.tenantId!;
+        yield* tenants.updateTenant(placeholderId, { status: "suspended" });
+        expect(yield* nodes.delete(started.node.id)).toBe(true);
+        expect(yield* tenants.resolveTenantById(placeholderId)).toMatchObject({
+          accountId: `archived-${placeholderId}.v1.citynode.near`,
+          status: "pending_deletion",
+        });
+
+        const daoTenant = yield* tenants.createTenant({
+          name: "DAO city",
+          accountId: "dao-city.sputnik-dao.near",
+          orgId: "org-dao",
+          ownerKind: "dao",
+        });
+        const daoNode = yield* nodes.spawn({ tenantId: daoTenant.id });
+        expect(yield* nodes.delete(daoNode.id)).toBe(true);
+        expect(yield* tenants.resolveTenantById(daoTenant.id)).toMatchObject({
+          accountId: "dao-city.sputnik-dao.near",
+          status: "active",
+          deletedAt: null,
         });
       }),
     );

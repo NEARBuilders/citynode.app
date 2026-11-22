@@ -287,6 +287,10 @@ export function communityTenantAccountId(placeSlug: string): string {
   return `${placeSlug}.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`;
 }
 
+export function archivedCommunityTenantAccountId(tenantId: string): string {
+  return `archived-${tenantId}.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`;
+}
+
 export function isReservedCommunityAccountId(accountId: string): boolean {
   return accountId.toLowerCase().endsWith(`.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`);
 }
@@ -370,25 +374,36 @@ export const NodesLive = Layer.effect(
         })
         .onConflictDoNothing({ target: tenantsTable.accountId })
         .returning({ id: tenantsTable.id });
-      if (tenant) return tenant.id;
-      const [reattached] = await tx
-        .update(tenantsTable)
-        .set({ orgId, name: place.name, status: "active", deletedAt: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(tenantsTable.accountId, accountId),
-            eq(tenantsTable.ownerKind, "platform"),
-            sql`NOT EXISTS (SELECT 1 FROM ${nodesTable} WHERE ${nodesTable.tenantId} = ${tenantsTable.id})`,
-          ),
-        )
-        .returning({ id: tenantsTable.id });
-      if (!reattached) {
+      if (!tenant) {
         throw new ORPCError("CONFLICT", {
           message: "Tenant with this accountId already exists",
           data: { accountId },
         });
       }
-      return reattached.id;
+      return tenant.id;
+    };
+
+    const archiveCommunityTenant = async (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+      tenantId: string,
+    ): Promise<void> => {
+      const now = new Date();
+      await tx
+        .update(tenantsTable)
+        .set({
+          accountId: archivedCommunityTenantAccountId(tenantId),
+          status: "pending_deletion",
+          deletedAt: sql`coalesce(${tenantsTable.deletedAt}, ${now.toISOString()}::timestamptz)`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(tenantsTable.id, tenantId),
+            eq(tenantsTable.ownerKind, "platform"),
+            sql`lower(${tenantsTable.accountId}) LIKE ${`%.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`}`,
+            sql`NOT EXISTS (SELECT 1 FROM ${nodesTable} WHERE ${nodesTable.tenantId} = ${tenantsTable.id})`,
+          ),
+        );
     };
 
     const service: NodesService = {
@@ -600,13 +615,17 @@ export const NodesLive = Layer.effect(
       }),
 
       delete: Effect.fn("NodesService.delete")(function* (id) {
-        const rows = yield* query(() =>
-          db
-            .delete(nodesTable)
-            .where(eq(nodesTable.id, id))
-            .returning({ deletedId: nodesTable.id }),
+        return yield* query(() =>
+          db.transaction(async (tx) => {
+            const [deleted] = await tx
+              .delete(nodesTable)
+              .where(eq(nodesTable.id, id))
+              .returning({ tenantId: nodesTable.tenantId });
+            if (!deleted) return false;
+            if (deleted.tenantId) await archiveCommunityTenant(tx, deleted.tenantId);
+            return true;
+          }),
         );
-        return rows.length > 0;
       }),
 
       listRootNodes: readNodes(and(nodeParentIs(null), listedNode)),
