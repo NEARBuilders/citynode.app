@@ -3,6 +3,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
+import { AuthClientError } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import {
   createWorkspaceSynchronization,
@@ -28,7 +29,7 @@ export function useClearStaleTeam(staleTeamId: string | null) {
   const { mutate } = useMutation({
     mutationFn: async () => {
       const { error } = await auth.organization.setActiveTeam({ teamId: null });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
     },
     onSuccess: () => synchronization.synchronize(),
     onError: reportError,

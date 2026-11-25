@@ -23,7 +23,7 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
-import { appErrorMessage } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { isPersonalOrganization } from "@/lib/personal-organization";
@@ -163,7 +163,7 @@ function OrganizationDetail() {
         const { data, error } = await auth.apiKey.list({
           query: { configId: "org-keys", organizationId: orgId },
         });
-        if (error) throw new Error(error.message);
+        if (error) throw new AuthClientError(error);
         return (data?.apiKeys ?? []) as OrganizationApiKey[];
       },
       enabled: !!orgId && canManageMembers,

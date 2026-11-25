@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { AuthClient } from "@/app";
 import type { ApiKeyFormValues } from "@/components";
-import { appErrorMessage } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { CreatedOrganizationApiKey, OrganizationApiKey } from "./-api-keys-tab";
 import { orgApiKeysQueryKey } from "./-organization-query-keys";
@@ -23,7 +23,7 @@ export function useOrganizationApiKeyActions(
         name: values.name,
         ...(values.expiresIn !== undefined ? { expiresIn: values.expiresIn } : {}),
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
       return data;
     },
     onSuccess: async (data) => {
@@ -36,7 +36,7 @@ export function useOrganizationApiKeyActions(
   const deleteApiKeyMutation = useMutation({
     mutationFn: async (keyId: string) => {
       const { error } = await auth.apiKey.delete({ keyId, configId: "org-keys" });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
     },
     onMutate: async (keyId) => {
       await queryClient.cancelQueries({ queryKey });

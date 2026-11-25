@@ -317,4 +317,26 @@ describe("organization management controls", () => {
     expect(queryClient.getQueryData(orgApiKeysQueryKey(ORG_ID))).toEqual([apiKey]);
     expect(mocks.error).toHaveBeenCalledWith("This action could not be completed. Try again.");
   });
+
+  it.each([
+    [403, "FORBIDDEN_ACTION", "You don't have permission to do this."],
+    [401, "UNAUTHORIZED", "Your session has expired. Sign in again."],
+  ])("says why an API-key deletion was refused with %i", async (status, code, message) => {
+    const deleteApiKey = vi.fn(async () => ({ error: { message: "refused", status, code } }));
+    const auth = { apiKey: { delete: deleteApiKey } } as unknown as AuthClient;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    queryClient.setQueryData(orgApiKeysQueryKey(ORG_ID), [apiKey]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <OrganizationApiKeyHarness auth={auth} />
+      </QueryClientProvider>,
+    );
+    await openMenu("Actions for Deploy key");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete key" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete key" }));
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith(message));
+  });
 });

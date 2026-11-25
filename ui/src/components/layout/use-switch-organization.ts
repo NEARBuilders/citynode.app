@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
-import { appErrorMessage } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
 import {
@@ -26,9 +26,9 @@ export function useSwitchOrganization() {
   const mutation = useMutation({
     mutationFn: async (organizationId: string) => {
       const { error } = await auth.organization.setActive({ organizationId });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
       const { error: teamError } = await auth.organization.setActiveTeam({ teamId: null });
-      if (teamError) throw new Error(teamError.message);
+      if (teamError) throw new AuthClientError(teamError);
     },
     onSuccess: async () => {
       await refresh();

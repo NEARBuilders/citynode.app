@@ -2,6 +2,16 @@ import { Data } from "effect";
 import { FEATURE_AREA_MESSAGES, isFeatureArea } from "@/lib/feature-areas";
 import type { AppMessageId, AppTranslator } from "./catalogs";
 
+export class AuthClientError extends Data.TaggedError("AuthClientError")<{
+  message: string;
+  status?: number;
+  code?: string;
+}> {
+  constructor(error: { message?: string; status?: number; code?: string }) {
+    super({ message: error.message ?? "", status: error.status, code: error.code });
+  }
+}
+
 export class AppActionError extends Data.TaggedError("AppActionError")<{
   messageId: AppMessageId;
   values?: Record<string, string | number>;
