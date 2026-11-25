@@ -289,6 +289,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   kind: sharddogAwards.kind,
                   userId: sharddogAwards.userId,
                   eventId: sharddogAwards.eventId,
+                  claimUrl: sharddogAwards.claimUrl,
                 })
                 .from(sharddogAwards)
                 .where(
@@ -299,6 +300,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   ),
                 );
               const stale = pending
+                .filter((award) => !award.claimUrl)
                 .filter((award) =>
                   award.kind === "membership"
                     ? !membershipDropId
@@ -309,7 +311,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                 await tx.delete(sharddogAwards).where(inArray(sharddogAwards.id, stale));
               }
               const refresh = {
-                dropId: sql`excluded.drop_id`,
+                dropId: sql`case when ${sharddogAwards.claimUrl} is null then excluded.drop_id else ${sharddogAwards.dropId} end`,
                 accountId: sql`coalesce(excluded.account_id, ${sharddogAwards.accountId})`,
               };
               if (membershipDropId && members.size > 0) {

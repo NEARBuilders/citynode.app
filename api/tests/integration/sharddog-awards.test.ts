@@ -456,6 +456,26 @@ describe("ShardDog awards on event check-in", () => {
     expect(states.get(second.id)).toEqual(["awarded", false]);
   });
 
+  it("never hands out a second claim link when a drop is unlinked and linked to a new one", async () => {
+    const city = await community();
+    const event = await city.addEvent("Relinked", "relink-drop");
+    const userId = `relink-${crypto.randomUUID().slice(0, 6)}`;
+
+    city.checkIn(event.id, userId, null);
+    await city.sync();
+    await vi.waitFor(() => expect(shardDog.claims).toHaveLength(1));
+    await settle();
+    await city.setEventDrop(event.id, null);
+    await city.sync();
+    await city.setEventDrop(event.id, "relink-drop-2");
+    await city.sync();
+    await settle();
+
+    expect(shardDog.claims.map(({ dropId }) => dropId)).toEqual(["relink-drop"]);
+    const read = await (await attendee(userId)).getMyCollectibles({ organizationId: city.org });
+    expect(read.collectibles.map(({ status }) => status)).toEqual(["claim"]);
+  });
+
   it("awards nothing for events or communities without a linked drop", async () => {
     const city = await community();
     const event = await city.addEvent("Unlinked", null);
