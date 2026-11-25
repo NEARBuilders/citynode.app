@@ -293,7 +293,9 @@ describe("AttendanceRecord", () => {
     expect(membership.getAttribute("href")).toBe("https://shard.dog/view/member");
     expect(screen.getByText("From your first check-in at North city")).toBeTruthy();
     const links = screen.getAllByTestId("attendance-event-collectible-view");
-    expect(links.map((link) => link.getAttribute("href"))).toEqual(["https://shard.dog/view/night"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "https://shard.dog/view/night",
+    ]);
     expect(links[0]?.getAttribute("target")).toBe("_blank");
     expect(screen.getByTestId("attendance-event-collectible-pending")).toBeTruthy();
     expect(screen.getAllByTestId("attendance-event")).toHaveLength(3);
