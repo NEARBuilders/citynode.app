@@ -1,6 +1,5 @@
-import { CheckCircleIcon, XCircleIcon } from "@phosphor-icons/react";
 import { useForm, useSelector } from "@tanstack/react-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
@@ -22,11 +21,11 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
-import { Spinner } from "@/components/ui/spinner";
 import { appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { deriveSlug, generateSlug, suggestAvailableSlug } from "@/lib/slug";
+import { HandleStatusAddon, useHandleStatus } from "./-handle-status";
 
 export const Route = createFileRoute("/_authenticated/orgs/new")({
   head: ({ match }) => ({
@@ -99,13 +98,8 @@ function NewOrganization() {
   const formValues = useSelector(form.store, (state) => state.values);
   const slugValue = formValues.slug;
 
-  const { data: slugCheck, isFetching: slugChecking } = useQuery({
-    queryKey: ["org-slug-check", slugValue],
-    queryFn: () => apiClient.auth.checkSlug({ slug: slugValue }),
-    enabled: /^[a-z0-9-]+$/.test(slugValue),
-    staleTime: 5_000,
-  });
-  const slugTaken = slugValue && slugCheck ? !slugCheck.status : false;
+  const slugStatus = useHandleStatus(slugValue);
+  const slugTaken = slugStatus === "taken";
 
   useEffect(() => {
     if (!slugTaken || slugManuallyEdited.current) return;
@@ -124,14 +118,6 @@ function NewOrganization() {
       cancelled = true;
     };
   }, [slugTaken, formValues.name, slugValue, form, apiClient]);
-
-  const slugStatus = slugChecking
-    ? "checking"
-    : slugTaken
-      ? translate("org.handleTaken")
-      : slugValue
-        ? translate("org.handleAvailable")
-        : "idle";
 
   return (
     <PageContainer variant="narrow">
@@ -226,21 +212,7 @@ function NewOrganization() {
                       className="font-mono"
                       aria-invalid={errors.length > 0 || undefined}
                     />
-                    <InputGroupAddon align="inline-end" data-testid="orgs.new.slug-status">
-                      {slugStatus === "checking" ? (
-                        <Spinner />
-                      ) : slugStatus === "available" ? (
-                        <CheckCircleIcon
-                          className="text-success"
-                          aria-label={translate("org.handleAvailable")}
-                        />
-                      ) : slugStatus === "taken" ? (
-                        <XCircleIcon
-                          className="text-destructive"
-                          aria-label={translate("org.handleTaken")}
-                        />
-                      ) : null}
-                    </InputGroupAddon>
+                    <HandleStatusAddon status={slugStatus} testId="orgs.new.slug-status" />
                   </InputGroup>
                   {errors.length > 0 ? (
                     <FieldError>{errors.join(", ")}</FieldError>

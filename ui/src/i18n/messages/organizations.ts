@@ -194,6 +194,12 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "用于社区链接。",
   ],
   "org.handleTaken": ["taken", "ocupado", "déjà pris", "已占用"],
+  "org.handleTakenChooseAnother": [
+    "Taken. Choose another handle.",
+    "Ocupado. Elige otro identificador.",
+    "Déjà pris. Choisissez un autre identifiant.",
+    "已占用，请选择其他标识。",
+  ],
   "org.handleTakenHint": [
     "Taken. We'll suggest a free one, or pick your own.",
     "Ocupado. Sugeriremos uno libre o puedes elegir otro.",

@@ -8,7 +8,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient, AuthClient } from "@/app";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -68,6 +68,20 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+function organizationsFor(slug: string) {
+  return [
+    {
+      id: ORG_ID,
+      name: "City Nodes",
+      slug,
+      logo: null,
+      metadata: null,
+      status: "active",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ];
+}
+
 function setup({
   role,
   organizer = false,
@@ -85,18 +99,15 @@ function setup({
     user: { id: USER_ID, name: "Viewer", email: "viewer@example.com", role: platformRole },
     session: { id: "session-1", activeOrganizationId: ORG_ID },
   };
+  const stored = { slug: SLUG, refetchDelayMs: 0 };
   const api = {
-    listOrganizations: vi.fn().mockResolvedValue([
-      {
-        id: ORG_ID,
-        name: "City Nodes",
-        slug: SLUG,
-        logo: null,
-        metadata: null,
-        status: "active",
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      },
-    ]),
+    listOrganizations: vi.fn(async () => {
+      if (stored.refetchDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, stored.refetchDelayMs));
+      }
+      return organizationsFor(stored.slug);
+    }),
+    checkSlug: vi.fn(async ({ slug }: { slug: string }) => ({ status: slug !== "taken-handle" })),
     getActiveMemberRole: vi.fn(roleResult ?? (async () => ({ role }))),
     listInvitations: vi.fn().mockResolvedValue([]),
     listTeams: vi.fn().mockResolvedValue([]),
@@ -125,11 +136,17 @@ function setup({
   const auth = {
     getSession: vi.fn().mockResolvedValue({ data: session, error: null }),
     apiKey: { list: apiKeyList },
-    organization: { listMembers },
+    organization: {
+      listMembers,
+      update: vi.fn(async ({ data }: { data: { slug: string } }) => {
+        stored.slug = data.slug;
+        return { data: { id: ORG_ID, slug: data.slug }, error: null };
+      }),
+    },
   } as unknown as AuthClient;
   mocks.apiClient = apiClient;
   mocks.auth = auth;
-  return { api, apiKeyList, listMembers, apiClient, auth };
+  return { api, apiKeyList, listMembers, apiClient, auth, stored };
 }
 
 async function showOrganization(url: string, { apiClient, auth }: ReturnType<typeof setup>) {
@@ -299,5 +316,61 @@ describe("organization page tabs", () => {
     await waitFor(() => expect(screen.queryByTestId("orgs-tabs-loading")).toBeNull());
     expect(screen.queryByRole("tablist")).toBeNull();
     expectNoRestrictedTabs();
+  });
+});
+
+describe("editing the community handle", () => {
+  async function openEditDetails() {
+    fireEvent.click(await screen.findByRole("button", { name: "Community actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit details" }));
+    return screen.findByRole("dialog");
+  }
+
+  it("stays on the community under its new handle and keeps the tab", async () => {
+    const mocked = setup({ role: "owner" });
+    const router = await showOrganization(`/orgs/${SLUG}?tab=teams`, mocked);
+    const notFoundSeen = vi.fn();
+    const observer = new MutationObserver(() => {
+      if (document.body.textContent?.includes("Community not found")) notFoundSeen();
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    mocked.stored.refetchDelayMs = 100;
+    const dialog = await openEditDetails();
+    fireEvent.change(within(dialog).getByLabelText("Handle"), {
+      target: { value: "city-nodes-chicago" },
+    });
+    const save = within(dialog).getByRole("button", { name: "Save" });
+    await waitFor(() => expect(save.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() => expect(router.state.location.pathname).toBe("/orgs/city-nodes-chicago"));
+    expect(router.state.location.search).toMatchObject({ tab: "teams" });
+    await waitFor(() => expect(mocked.api.listOrganizations.mock.calls.length).toBeGreaterThan(1));
+    expect(await screen.findByText("City Nodes", { selector: "h1" })).toBeTruthy();
+    observer.disconnect();
+    expect(notFoundSeen).not.toHaveBeenCalled();
+  });
+
+  it("says a taken handle is taken and does not offer Save", async () => {
+    const mocked = setup({ role: "owner" });
+    await showOrganization(`/orgs/${SLUG}`, mocked);
+    const dialog = await openEditDetails();
+    fireEvent.change(within(dialog).getByLabelText("Handle"), {
+      target: { value: "taken-handle" },
+    });
+    expect(await within(dialog).findByText(/^Taken\./)).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Save" }).hasAttribute("disabled")).toBe(
+      true,
+    );
+    expect(mocked.auth.organization.update).not.toHaveBeenCalled();
+  });
+
+  it("treats the community's current handle as available", async () => {
+    const mocked = setup({ role: "owner" });
+    await showOrganization(`/orgs/${SLUG}`, mocked);
+    const dialog = await openEditDetails();
+    expect(within(dialog).getByRole("button", { name: "Save" }).hasAttribute("disabled")).toBe(
+      false,
+    );
+    expect(mocked.api.checkSlug).not.toHaveBeenCalledWith({ slug: SLUG });
   });
 });

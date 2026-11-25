@@ -339,6 +339,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "{hostname} : aucune vérification nécessaire.",
     "{hostname}：无需验证。",
   ],
+  "admin.domain.aliasInvalid": [
+    "Use one alias with only letters, numbers, and hyphens.",
+    "Usa un solo alias con solo letras, números y guiones.",
+    "Utilisez un seul alias, avec uniquement des lettres, des chiffres et des tirets.",
+    "请只使用一个别名，且仅包含字母、数字和连字符。",
+  ],
   "admin.domain.check": [
     "Check verification",
     "Comprobar verificación",
@@ -368,6 +374,12 @@ export const administrationMessages = createMessageCatalogs(["en", "es", "fr", "
     "{hostname}: requiere verificación mediante DNS TXT.",
     "{hostname} : vérification DNS TXT requise.",
     "{hostname}：需要 DNS TXT 验证。",
+  ],
+  "admin.domain.customInvalid": [
+    "Enter a full domain such as nyc.gov.",
+    "Escribe un dominio completo, como nyc.gov.",
+    "Saisissez un domaine complet, par exemple nyc.gov.",
+    "请输入完整域名，例如 nyc.gov。",
   ],
   "admin.domain.domain": ["Domain", "Dominio", "Domaine", "域名"],
   "admin.domain.empty": [
