@@ -51,8 +51,6 @@ export default App({
           url: "/api/communities/by-organization/{organizationId}",
         },
       },
-      // Effectively no member cap: people join by QR at events. Not `false`:
-      // on rc.46 that sends LIMIT Infinity to better-auth's member queries.
       organizationMembershipLimit: 100000,
       deviceLink: {
         clientId: "citynode-web",
