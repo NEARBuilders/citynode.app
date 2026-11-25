@@ -36,7 +36,14 @@ import {
 } from "./services/member-directory";
 import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { BulletinPublisher, NodeEffect, NodeRecord, NodesService } from "./services/nodes";
-import { NodesLive, NodesTag, nodeKindOf, PLATFORM_NODE_KIND } from "./services/nodes";
+import {
+  isCommunityPlaceholderTenant,
+  isReservedCommunityAccountId,
+  NodesLive,
+  NodesTag,
+  nodeKindOf,
+  PLATFORM_NODE_KIND,
+} from "./services/nodes";
 import type { PlacesService } from "./services/places";
 import { PlacesLive, PlacesTag } from "./services/places";
 import {
@@ -254,7 +261,11 @@ const authorizeNodeAccess = (
   services: { tenants: TenantsService },
   node: NodeRecord,
   context: NodeAccessContext,
-  options: { adminBypassOrg: boolean; resource: "node" | "validators" },
+  options: {
+    adminBypassOrg: boolean;
+    resource: "node" | "validators";
+    platformAdminOnly?: boolean;
+  },
 ): NodeEffect<void> =>
   Effect.gen(function* () {
     if (!node.tenantId) {
@@ -283,6 +294,24 @@ const authorizeNodeAccess = (
         }),
       );
     }
+    if (isCommunityPlaceholderTenant(tenant)) {
+      if (context.user?.role === "admin") {
+        if (options.platformAdminOnly) return;
+      } else if (options.resource === "validators" && !officialDaoOf(node)) {
+        return yield* Effect.fail(
+          new ORPCError("FORBIDDEN", {
+            message: "Validators can be attached once the community is official",
+          }),
+        );
+      }
+      if (options.platformAdminOnly) {
+        return yield* Effect.fail(
+          new ORPCError("FORBIDDEN", {
+            message: "Only platform admins can remove a community",
+          }),
+        );
+      }
+    }
     const ownsOrg =
       !!context.organization?.activeOrganizationId &&
       tenant.orgId === context.organization.activeOrganizationId;
@@ -310,6 +339,7 @@ const authorizedTenant = (
     organization?: { activeOrganizationId: string | null; member?: { role?: string } | null };
     near?: { primaryAccountId: string | null };
   },
+  options: { readOnly?: boolean } = {},
 ): NodeEffect<TenantRecord> =>
   Effect.gen(function* () {
     const tenant = yield* services.tenants.resolveTenantById(input.tenantId);
@@ -322,6 +352,13 @@ const authorizedTenant = (
       );
     }
     if (context.user?.role === "admin") return tenant;
+    if (!options.readOnly && isCommunityPlaceholderTenant(tenant)) {
+      return yield* Effect.fail(
+        new ORPCError("FORBIDDEN", {
+          message: "Only platform admins can change this community's site",
+        }),
+      );
+    }
     if (tenant.ownerKind === "user") {
       if (!context.user?.id || tenant.ownerUserId !== context.user.id) {
         return yield* Effect.fail(
@@ -1781,7 +1818,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         context,
       }) {
         const services = yield* ApiServices;
-        const tenant = yield* authorizedTenant(services, input, context);
+        const tenant = yield* authorizedTenant(services, input, context, { readOnly: true });
         const bindings = yield* services.tenants.listBindingsForTenant(tenant.id);
         return {
           tenant,
@@ -1832,6 +1869,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const services = yield* ApiServices;
           const tenant = yield* authorizedTenant(services, input, context);
           if (input.accountId !== undefined) yield* validateAccountId(input.accountId);
+          if (
+            input.accountId !== undefined &&
+            context.user?.role !== "admin" &&
+            isReservedCommunityAccountId(input.accountId)
+          ) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: "This account is reserved for platform communities",
+              }),
+            );
+          }
           return yield* services.tenants.updateTenant(tenant.id, {
             name: input.name,
             accountId: input.accountId,
@@ -1961,7 +2009,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
-          const tenant = yield* authorizedTenant(services, input, context);
+          const tenant = yield* authorizedTenant(services, input, context, { readOnly: true });
           return yield* services.tenants.listBindingsForTenant(tenant.id);
         }),
 
@@ -2193,6 +2241,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           yield* authorizeNodeAccess(services, node, context, {
             adminBypassOrg: false,
             resource: "node",
+            platformAdminOnly: true,
           });
           const deleted = yield* services.nodes.delete(input.nodeId);
           if (!deleted) {

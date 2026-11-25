@@ -300,6 +300,27 @@ function subtreeDepths(rootId: string, edges: ParentEdge[]): Map<string, number>
   return depths;
 }
 
+export const COMMUNITY_TENANT_ACCOUNT_SUFFIX = "v1.citynode.near";
+
+export function communityTenantAccountId(placeSlug: string): string {
+  return `${placeSlug}.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`;
+}
+
+export function archivedCommunityTenantAccountId(tenantId: string): string {
+  return `archived-${tenantId}.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`;
+}
+
+export function isReservedCommunityAccountId(accountId: string): boolean {
+  return accountId.toLowerCase().endsWith(`.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`);
+}
+
+export function isCommunityPlaceholderTenant(tenant: {
+  ownerKind: string;
+  accountId: string;
+}): boolean {
+  return tenant.ownerKind === "platform" && isReservedCommunityAccountId(tenant.accountId);
+}
+
 const query = <T>(run: () => Promise<T>): NodeEffect<T> =>
   Effect.tryPromise({ try: run, catch: toOrpcError });
 
@@ -343,6 +364,67 @@ export const NodesLive = Layer.effect(
         if (!node) return yield* Effect.fail(notFound(id));
         return node;
       });
+
+    const createCommunityTenant = async (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+      placeId: string,
+      orgId: string,
+    ): Promise<string> => {
+      const [place] = await tx
+        .select({ slug: placesTable.slug, name: placesTable.name })
+        .from(placesTable)
+        .where(eq(placesTable.id, placeId))
+        .limit(1);
+      if (!place) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Place not found",
+          data: { resource: "place", resourceId: placeId },
+        });
+      }
+      const accountId = communityTenantAccountId(place.slug);
+      const [tenant] = await tx
+        .insert(tenantsTable)
+        .values({
+          name: place.name,
+          accountId,
+          orgId,
+          status: "active",
+          ownerKind: "platform",
+          allowUiOverrides: false,
+        })
+        .onConflictDoNothing({ target: tenantsTable.accountId })
+        .returning({ id: tenantsTable.id });
+      if (!tenant) {
+        throw new ORPCError("CONFLICT", {
+          message: "Tenant with this accountId already exists",
+          data: { accountId },
+        });
+      }
+      return tenant.id;
+    };
+
+    const archiveCommunityTenant = async (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+      tenantId: string,
+    ): Promise<void> => {
+      const now = new Date();
+      await tx
+        .update(tenantsTable)
+        .set({
+          accountId: archivedCommunityTenantAccountId(tenantId),
+          status: "pending_deletion",
+          deletedAt: sql`coalesce(${tenantsTable.deletedAt}, ${now.toISOString()}::timestamptz)`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(tenantsTable.id, tenantId),
+            eq(tenantsTable.ownerKind, "platform"),
+            sql`lower(${tenantsTable.accountId}) LIKE ${`%.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`}`,
+            sql`NOT EXISTS (SELECT 1 FROM ${nodesTable} WHERE ${nodesTable.tenantId} = ${tenantsTable.id})`,
+          ),
+        );
+    };
 
     const service: NodesService = {
       spawn: Effect.fn("NodesService.spawn")(function* (input) {
@@ -520,7 +602,13 @@ export const NodesLive = Layer.effect(
               })
               .onConflictDoNothing()
               .returning({ id: nodesTable.id });
-            if (row) return { id: row.id, created: true };
+            if (row) {
+              if (!input.tenantId) {
+                const tenantId = await createCommunityTenant(tx, input.placeId, input.orgId);
+                await tx.update(nodesTable).set({ tenantId }).where(eq(nodesTable.id, row.id));
+              }
+              return { id: row.id, created: true };
+            }
             const [raced] = await tx
               .select({ id: nodesTable.id })
               .from(nodesTable)
@@ -594,13 +682,17 @@ export const NodesLive = Layer.effect(
       }),
 
       delete: Effect.fn("NodesService.delete")(function* (id) {
-        const rows = yield* query(() =>
-          db
-            .delete(nodesTable)
-            .where(eq(nodesTable.id, id))
-            .returning({ deletedId: nodesTable.id }),
+        return yield* query(() =>
+          db.transaction(async (tx) => {
+            const [deleted] = await tx
+              .delete(nodesTable)
+              .where(eq(nodesTable.id, id))
+              .returning({ tenantId: nodesTable.tenantId });
+            if (!deleted) return false;
+            if (deleted.tenantId) await archiveCommunityTenant(tx, deleted.tenantId);
+            return true;
+          }),
         );
-        return rows.length > 0;
       }),
 
       listRootNodes: readNodes(and(nodeParentIs(null), listedNode)),
