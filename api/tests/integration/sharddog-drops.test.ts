@@ -92,7 +92,7 @@ describe("ShardDog drops", () => {
     const admin = await as("admin");
 
     expect(await admin.getShardDogDrops({ organizationId: org })).toEqual({
-      enabled: false,
+      enabled: true,
       canEdit: true,
       membershipDropId: null,
       events: [

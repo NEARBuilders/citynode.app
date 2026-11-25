@@ -1372,7 +1372,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const community = (yield* services.discovery.organizationEvents([organizationId])).get(
           organizationId,
         );
-        return yield* services.attendance.reconcile({
+        const summary = yield* services.attendance.reconcile({
           organizationId,
           communityName: community?.communityName ?? organizationId,
           events: community?.events ?? [],
@@ -1382,6 +1382,44 @@ export default createPlugin.withPlugins<PluginsClient>()({
             codeStatus: (codeId) => auth.getOnboardingStatus({ codeId, organizationId }),
           },
         });
+        yield* services.sharddog.queueAwards(organizationId).pipe(
+          Effect.andThen(services.sharddog.deliverAwards({ organizationId })),
+          Effect.catchCause((cause) =>
+            Effect.logWarning("[API] ShardDog awards after check-in sync failed", cause),
+          ),
+        );
+        return summary;
+      }),
+
+      getMyCollectibles: builder.getMyCollectibles.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        if (!services.sharddog.enabled) return { enabled: false, collectibles: [] };
+        yield* services.sharddog
+          .deliverAwards({ userId: context.userId, organizationId: input.organizationId })
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("[API] ShardDog award retry failed", cause),
+            ),
+          );
+        const awards = yield* services.sharddog.awardsFor(context.userId, input.organizationId);
+        return {
+          enabled: true,
+          collectibles: awards.map((award) => ({
+            organizationId: award.organizationId,
+            kind: award.kind,
+            eventId: award.eventId,
+            status:
+              award.status === "awarded"
+                ? ("awarded" as const)
+                : award.hasAccount
+                  ? ("pending" as const)
+                  : ("needs_account" as const),
+            viewUrl: award.status === "awarded" ? award.viewUrl : null,
+          })),
+        };
       }),
 
       getMyAttendance: builder.getMyAttendance.use(requireAuth).effect(function* ({

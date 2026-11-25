@@ -17,6 +17,9 @@ const harness = vi.hoisted(() => ({
   reconcileAttendance: (async () => ({ events: 0, truncated: [], failed: [] })) as (
     input: Input,
   ) => Promise<unknown>,
+  getMyCollectibles: (async () => ({ enabled: false, collectibles: [] })) as (
+    input: Input,
+  ) => Promise<unknown>,
 }));
 
 vi.mock("@/app", () => ({
@@ -29,6 +32,7 @@ vi.mock("@/app", () => ({
       harness.calls.push(`reconcile:${input.organizationId}`);
       return harness.reconcileAttendance(input);
     },
+    getMyCollectibles: (input: Input) => harness.getMyCollectibles(input),
   }),
 }));
 
@@ -65,6 +69,7 @@ afterEach(() => {
   harness.calls.length = 0;
   harness.getMyAttendance = async () => ({ events: [], unclassified: [], communities: [] });
   harness.reconcileAttendance = async () => ({ events: 0, truncated: [], failed: [] });
+  harness.getMyCollectibles = async () => ({ enabled: false, collectibles: [] });
 });
 
 describe("AttendanceRecord", () => {
@@ -244,5 +249,67 @@ describe("AttendanceRecord", () => {
       expect(screen.getByTestId("attendance-event").textContent).toContain("org-south event"),
     );
     expect(screen.queryByText("org-north event")).toBeNull();
+  });
+
+  it("shows View in ShardDog links for awarded badges and the state of the others", async () => {
+    harness.getMyAttendance = async () => ({
+      events: [
+        event("e1", "Builders Night", "2026-10-12T20:00:00.000Z"),
+        event("e2", "Hack Day", "2026-10-10T20:00:00.000Z"),
+        event("e3", "Talks", "2026-10-08T20:00:00.000Z"),
+      ],
+      unclassified: [],
+      communities: [synced],
+    });
+    harness.getMyCollectibles = async () => ({
+      enabled: true,
+      collectibles: [
+        {
+          organizationId: "org-north",
+          kind: "membership",
+          eventId: null,
+          status: "awarded",
+          viewUrl: "https://shard.dog/view/member",
+        },
+        {
+          organizationId: "org-north",
+          kind: "event",
+          eventId: "e1",
+          status: "awarded",
+          viewUrl: "https://shard.dog/view/night",
+        },
+        {
+          organizationId: "org-north",
+          kind: "event",
+          eventId: "e2",
+          status: "pending",
+          viewUrl: null,
+        },
+      ],
+    });
+    show({ organizationId: "org-north", testId: "attendance" });
+
+    const membership = await screen.findByTestId("attendance-membership-collectible-view");
+    expect(membership.getAttribute("href")).toBe("https://shard.dog/view/member");
+    expect(screen.getByText("From your first check-in at North city")).toBeTruthy();
+    const links = screen.getAllByTestId("attendance-event-collectible-view");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["https://shard.dog/view/night"]);
+    expect(links[0]?.getAttribute("target")).toBe("_blank");
+    expect(screen.getByTestId("attendance-event-collectible-pending")).toBeTruthy();
+    expect(screen.getAllByTestId("attendance-event")).toHaveLength(3);
+  });
+
+  it("shows no collectibles while ShardDog is off", async () => {
+    harness.getMyAttendance = async () => ({
+      events: [event("e1", "Builders Night", "2026-10-12T20:00:00.000Z")],
+      unclassified: [],
+      communities: [synced],
+    });
+    show({ organizationId: "org-north", testId: "attendance" });
+    await screen.findByTestId("attendance-event");
+    await waitFor(() =>
+      expect(screen.queryByTestId("attendance-event-collectible-view")).toBeNull(),
+    );
+    expect(screen.queryByTestId("attendance-memberships")).toBeNull();
   });
 });

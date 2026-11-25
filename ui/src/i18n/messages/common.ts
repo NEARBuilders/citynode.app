@@ -2,6 +2,36 @@ import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   "attendance.checkedInOn": ["Checked in on", "Registrado el", "Enregistré le", "签到时间"],
+  "collectibles.viewInShardDog": [
+    "View in ShardDog",
+    "Ver en ShardDog",
+    "Voir dans ShardDog",
+    "在 ShardDog 中查看",
+  ],
+  "collectibles.pending": [
+    "Your ShardDog is on its way",
+    "Tu ShardDog está en camino",
+    "Votre ShardDog arrive bientôt",
+    "你的 ShardDog 正在发放中",
+  ],
+  "collectibles.needsAccount": [
+    "Connect a NEAR account to collect your ShardDog",
+    "Conecta una cuenta NEAR para recoger tu ShardDog",
+    "Connectez un compte NEAR pour récupérer votre ShardDog",
+    "连接 NEAR 账户以领取你的 ShardDog",
+  ],
+  "collectibles.membership": [
+    "Membership ShardDog",
+    "ShardDog de membresía",
+    "ShardDog d’adhésion",
+    "会员 ShardDog",
+  ],
+  "collectibles.membershipHint": [
+    "From your first check-in at {community}",
+    "De tu primer check-in en {community}",
+    "De votre premier check-in à {community}",
+    "来自你在 {community} 的首次签到",
+  ],
   "attendance.deletedTeamsHint": [
     "Check-ins from deleted Event Teams, or from codes not tied to a listed event, may be missing.",
     "Pueden faltar registros de equipos de evento eliminados o de códigos no vinculados a un evento de la lista.",
