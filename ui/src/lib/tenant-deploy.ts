@@ -1,6 +1,6 @@
 import type { FinalExecutionOutcome, TransactionBuilder } from "near-kit";
 import type { ApiClient, TenantUiOverride, useAuthClient } from "@/app";
-import { AppActionError } from "@/i18n/error-message";
+import { AppActionError, AuthClientError } from "@/i18n/error-message";
 import {
   buildTenantPublishConfig,
   type SignAsDaoSpec,
@@ -169,7 +169,7 @@ export async function publishTenantConfigForMode(
     );
 
     const relayed = await auth.near.relayTransaction({ payload: signed });
-    if (relayed.error) throw new Error(relayed.error.message);
+    if (relayed.error) throw new AuthClientError(relayed.error);
     return relayed;
   }
 
