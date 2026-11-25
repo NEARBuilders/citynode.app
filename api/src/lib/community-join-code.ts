@@ -99,7 +99,19 @@ async function mintAsPlatformAdmin(
   } catch {
     return null;
   } finally {
-    if (undo) await undo().catch(() => undo?.().catch(() => undefined));
+    if (undo) {
+      const revert = undo;
+      await revert().catch(() =>
+        revert().catch((error: unknown) =>
+          Effect.runPromise(
+            Effect.logWarning("[JoinCode] could not undo the temporary platform admin role", {
+              organizationId: input.organizationId,
+              cause: error instanceof Error ? error.message : String(error),
+            }),
+          ),
+        ),
+      );
+    }
   }
 }
 
@@ -193,12 +205,13 @@ export function backfillCommunityJoinCodes(
   if (backfillInFlight) return backfillInFlight;
   if (Date.now() < backfillReadyAt) return Promise.resolve();
   const run = (async () => {
-    try {
-      const missing = await Effect.runPromise(nodes.listMissingJoinCodes());
-      for (const node of missing) {
-        await ensureCommunityJoinCode(nodes, clients, node).catch(() => undefined);
-      }
-    } finally {
+    const missing = await Effect.runPromise(nodes.listMissingJoinCodes());
+    let repaired = 0;
+    for (const node of missing) {
+      const code = await ensureCommunityJoinCode(nodes, clients, node).catch(() => null);
+      if (code) repaired += 1;
+    }
+    if (missing.length === 0 || repaired > 0) {
       backfillReadyAt = Date.now() + BACKFILL_COOLDOWN_MS;
     }
   })();

@@ -67,17 +67,9 @@ function forgetMember(organizationId: string, userId: string) {
   memberRoles.get(organizationId)?.delete(userId);
 }
 
-function headerValue(headers: unknown, name: string): string | undefined {
-  if (!headers || typeof headers !== "object") return undefined;
-  const value = (headers as Record<string, unknown>)[name];
-  return typeof value === "string" ? value : undefined;
-}
-
 function callerIds(clientContext: Record<string, unknown>): string[] {
   const ids: string[] = [];
   if (typeof clientContext.userId === "string") ids.push(clientContext.userId);
-  const key = headerValue(clientContext.reqHeaders, "x-api-key");
-  if (key && key === process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY) ids.push("bootstrap-admin");
   return ids;
 }
 
@@ -179,7 +171,6 @@ function authStubFor(context: unknown) {
           };
         },
         getSession: async () => {
-          const key = headerValue(clientContext.reqHeaders, "x-api-key");
           const user = (clientContext.user ?? {}) as {
             id?: string;
             role?: string;
@@ -187,12 +178,9 @@ function authStubFor(context: unknown) {
             email?: string;
           };
           const id =
-            key && key === process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY
-              ? "bootstrap-admin"
-              : (user.id ??
-                (typeof clientContext.userId === "string" ? clientContext.userId : "anonymous"));
-          const role =
-            key && key === process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY ? "admin" : (user.role ?? null);
+            user.id ??
+            (typeof clientContext.userId === "string" ? clientContext.userId : "anonymous");
+          const role = user.role ?? null;
           return {
             session: null,
             user: {
@@ -605,8 +593,6 @@ describe("places activation + join flow", () => {
   });
 
   it("lets a platform admin restore a join code a visitor cannot mint", async () => {
-    const previousKey = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-    delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
     try {
       await ensurePlace("kenya", "Kenya");
       const activator = await getPluginClient(authedContext("kenya-activator"), {
@@ -646,14 +632,47 @@ describe("places activation + join flow", () => {
       });
     } finally {
       organizerOnly.delete("org-kenya");
-      if (previousKey === undefined) delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-      else process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = previousKey;
+    }
+  });
+
+  it("does not let a visitor who cannot mint hold back the next map repair", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 120_000);
+    try {
+      await ensurePlace("rwanda", "Rwanda");
+      const activator = await getPluginClient(authedContext("rwanda-activator"), {
+        auth: authStubFor(authedContext("rwanda-activator")),
+      } as never);
+      const rwanda = await activator.activateCommunity({ place: "rwanda" });
+      organizerOnly.add(rwanda.organizationId);
+      await forgetJoinCode("rwanda");
+      await showOnMap("rwanda");
+
+      const visitor = await getPluginClient(authedContext("rwanda-visitor"), {
+        auth: authStubFor(authedContext("rwanda-visitor")),
+      } as never);
+      await visitor.listDiscovery({});
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const admin = await getPluginClient(authedContext("repair-admin", "admin"), {
+        auth: authStubFor(authedContext("repair-admin", "admin")),
+      } as never);
+      await admin.listDiscovery({});
+
+      const anon = await getPluginClient();
+      await vi.waitFor(async () => {
+        const listed = await anon.listDiscovery({});
+        expect(listed.find((entry) => entry.placeSlug === "rwanda")).toMatchObject({
+          joinable: true,
+        });
+      });
+    } finally {
+      organizerOnly.delete("org-rwanda");
+      vi.useRealTimers();
     }
   });
 
   it("restores a join code when the platform admin is already a member", async () => {
-    const previousKey = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-    delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
     try {
       await ensurePlace("uganda", "Uganda");
       const activator = await getPluginClient(authedContext("uganda-activator"), {
@@ -689,50 +708,10 @@ describe("places activation + join flow", () => {
       expect(memberRoles.get(uganda.organizationId)?.get("repair-admin")).toBe("member");
     } finally {
       organizerOnly.delete("org-uganda");
-      if (previousKey === undefined) delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-      else process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = previousKey;
-    }
-  });
-
-  it("lets the bootstrap admin key restore a join code for a signed-in visitor", async () => {
-    const previousKey = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-    process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = "test-bootstrap-key";
-    try {
-      await ensurePlace("senegal", "Senegal");
-      const activator = await getPluginClient(authedContext("senegal-activator"), {
-        auth: authStubFor(authedContext("senegal-activator")),
-      } as never);
-      const senegal = await activator.activateCommunity({ place: "senegal" });
-      organizerOnly.add(senegal.organizationId);
-      await forgetJoinCode("senegal");
-      await showOnMap("senegal");
-      adminMembershipCalls.length = 0;
-
-      const visitor = await getPluginClient(authedContext("senegal-visitor"), {
-        auth: authStubFor(authedContext("senegal-visitor")),
-      } as never);
-      await visitor.listDiscovery({});
-      const repaired = await visitor.getNode({ nodeId: senegal.nodeId });
-      expect(String(repaired?.metadata.joinCodeId).length).toBeGreaterThan(0);
-      expect(adminMembershipCalls).toEqual([
-        { action: "add", organizationId: senegal.organizationId, userId: "bootstrap-admin" },
-        { action: "remove", organizationId: senegal.organizationId, userId: "bootstrap-admin" },
-      ]);
-      expect(membersByOrg.get(senegal.organizationId)?.has("bootstrap-admin")).toBeFalsy();
-      const listed = await visitor.listDiscovery({});
-      expect(listed.find((entry) => entry.placeSlug === "senegal")).toMatchObject({
-        joinable: true,
-      });
-    } finally {
-      organizerOnly.delete("org-senegal");
-      if (previousKey === undefined) delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-      else process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = previousKey;
     }
   });
 
   it("mints a join code when the organization hides its member list", async () => {
-    const previousKey = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-    delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
     try {
       await ensurePlace("ghana", "Ghana");
       const activator = await getPluginClient(authedContext("ghana-activator"), {
@@ -756,14 +735,10 @@ describe("places activation + join flow", () => {
     } finally {
       hiddenMemberOrgs.delete("org-ghana");
       organizerOnly.delete("org-ghana");
-      if (previousKey === undefined) delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-      else process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = previousKey;
     }
   });
 
   it("keeps a combined admin role and restores a combined member role", async () => {
-    const previousKey = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-    delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
     try {
       await ensurePlace("togo", "Togo");
       const activator = await getPluginClient(authedContext("togo-activator"), {
@@ -812,8 +787,6 @@ describe("places activation + join flow", () => {
     } finally {
       organizerOnly.delete("org-togo");
       organizerOnly.delete("org-benin");
-      if (previousKey === undefined) delete process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY;
-      else process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY = previousKey;
     }
   });
 

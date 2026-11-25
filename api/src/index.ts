@@ -506,23 +506,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
       session?: AuthContext["session"];
     }): AuthClient[] => {
       const authPlugin = plugins.auth;
-      if (!authPlugin) return [];
-      const key = process.env.AUTH_BOOTSTRAP_ADMIN_API_KEY?.trim();
       const userId = context.userId ?? context.user?.id;
-      const keyClient = key
-        ? authPlugin.client({
-            reqHeaders: { "x-api-key": key },
-          })
-        : null;
-      const userClient = userId
-        ? authPlugin.client({
-            reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
-            userId,
-            user: context.user,
-            session: context.session,
-          })
-        : null;
-      return [userClient, keyClient].filter((client): client is AuthClient => client !== null);
+      if (!authPlugin || !userId) return [];
+      return [
+        authPlugin.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+          userId,
+          user: context.user,
+          session: context.session,
+        }),
+      ];
     };
 
     type MemberAuthClient = Effect.Success<ReturnType<typeof memberAuthClient>>;
@@ -2391,15 +2384,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
           user: context.user,
           session: context.session,
         };
-        const refreshed = yield* services.nodes.getByPlace(input.placeId);
-        const current = refreshed ?? node;
         const joinCodeId = yield* Effect.tryPromise({
           try: () =>
-            ensureCommunityJoinCode(
-              services.nodes,
-              communityJoinCodeClients(repairContext),
-              current,
-            ),
+            ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(repairContext), node),
           catch: (cause) =>
             new ORPCError("INTERNAL_SERVER_ERROR", {
               message: cause instanceof Error ? cause.message : "Could not prepare the join code",
