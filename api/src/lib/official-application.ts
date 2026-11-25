@@ -57,15 +57,27 @@ export async function resolveApplicationCommunity(
   return { ...node, orgId: node.orgId };
 }
 
+const MEMBER_PAGE_SIZE = 100;
+
+async function findMember(auth: AuthClient, organizationId: string, userId: string) {
+  let offset = 0;
+  for (;;) {
+    const page = await auth
+      .listMembers({ organizationId, limit: MEMBER_PAGE_SIZE, offset })
+      .catch((error: unknown) => {
+        if (isHidden(error)) return null;
+        throw error;
+      });
+    if (!page) return undefined;
+    const member = page.members.find((entry) => entry.userId === userId);
+    if (member) return member;
+    offset += page.members.length;
+    if (page.members.length < MEMBER_PAGE_SIZE || offset >= page.total) return undefined;
+  }
+}
+
 async function ensureOrganizationAdmin(auth: AuthClient, organizationId: string, userId: string) {
-  const members = await auth
-    .listMembers({ organizationId })
-    .then((result) => result.members)
-    .catch((error: unknown) => {
-      if (isHidden(error)) return [];
-      throw error;
-    });
-  const member = members.find((entry) => entry.userId === userId);
+  const member = await findMember(auth, organizationId, userId);
   if (member && managesOrganization(member.role)) return;
   if (member) {
     await auth.adminUpdateMemberRole({ organizationId, userId, role: "admin" });
