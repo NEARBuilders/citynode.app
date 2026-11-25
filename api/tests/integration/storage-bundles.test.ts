@@ -102,6 +102,35 @@ describe("uploadStorageBundle", () => {
     expect(lastAsset).toBeLessThan(firstEntry);
   });
 
+  it("writes unhashed numeric chunks before the manifest and entries", async () => {
+    await upload([
+      { path: "mf-manifest.json", contentBase64: encode("{}") },
+      { path: "remoteEntry.js", contentBase64: encode("entry") },
+      ...["64", "199", "301", "412", "518"].map((id) => ({
+        path: `${id}.js`,
+        contentBase64: encode(`chunk ${id}`),
+      })),
+    ]);
+
+    const isEntry = (key: string) => /\/(mf-manifest\.json|remoteEntry\.js)$/.test(key);
+    expect(puts).toHaveLength(7);
+    expect(puts.map(isEntry).lastIndexOf(false)).toBeLessThan(puts.map(isEntry).indexOf(true));
+  });
+
+  it("writes no manifest when an unhashed numeric chunk fails to store", async () => {
+    failKey = "199.js";
+
+    await expect(
+      upload([
+        { path: "mf-manifest.json", contentBase64: encode("{}") },
+        { path: "remoteEntry.js", contentBase64: encode("entry") },
+        { path: "199.js", contentBase64: encode("chunk") },
+      ]),
+    ).rejects.toMatchObject({ code: "CONNECTION_ERROR" });
+
+    expect(puts.some((key) => /\/(mf-manifest\.json|remoteEntry\.js)$/.test(key))).toBe(false);
+  });
+
   it("writes no entry file when a hashed asset fails to store", async () => {
     failKey = "static/js/broken.1234abcd5678ef90.js";
 

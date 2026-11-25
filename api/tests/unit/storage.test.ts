@@ -110,6 +110,31 @@ describe("namespace + object path validation", () => {
     }
   });
 
+  it("treats unhashed numeric chunks as assets, not entries", () => {
+    const names = [
+      "mf-manifest.json",
+      "199.js",
+      "remoteEntry.server.js",
+      "64.js",
+      "remoteEntry.js",
+      "mf-manifest.1234abcd5678ef90.json",
+      "remoteEntry.1234abcd5678ef90.js",
+      "index.html",
+      "style.css",
+      "logo.svg",
+    ].map((path) => ({ name: path, path }));
+    const { assets, entries } = partitionBundleFiles(names);
+    expect(assets.map((file) => file.path)).toEqual(["199.js", "64.js", "style.css", "logo.svg"]);
+    expect(entries.map((file) => file.path)).toEqual([
+      "mf-manifest.json",
+      "remoteEntry.server.js",
+      "remoteEntry.js",
+      "mf-manifest.1234abcd5678ef90.json",
+      "remoteEntry.1234abcd5678ef90.js",
+      "index.html",
+    ]);
+  });
+
   it("splits hashed assets from fixed-name entry files, keeping order", () => {
     const names = [
       "mf-manifest.json",

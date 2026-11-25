@@ -120,10 +120,17 @@ export function validateUploadSize(sizes: number[], maxTotalBytes: number): bool
   return total <= maxTotalBytes;
 }
 
+const BUNDLE_ENTRY_PATTERN =
+  /^(?:(?:remoteEntry(?:.server)?|mf-manifest)(?:.[a-f0-9]{8,})?.(?:js|json)|index.html)$/;
+
+export function isBundleEntryFile(name: string): boolean {
+  return BUNDLE_ENTRY_PATTERN.test(name);
+}
+
 export function partitionBundleFiles<T extends { name: string }>(
   files: T[],
 ): { assets: T[]; entries: T[] } {
-  const isEntry = (file: T) => !bundleCacheControl(file.name).includes("immutable");
+  const isEntry = (file: T) => isBundleEntryFile(file.name);
   return {
     assets: files.filter((file) => !isEntry(file)),
     entries: files.filter(isEntry),
