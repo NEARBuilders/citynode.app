@@ -1905,7 +1905,10 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     }),
     organizationEvents: Effect.fn("DiscoveryService.organizationEvents")(function* (
       organizationIds: string[],
-      { liveTenantsOnly = false }: { liveTenantsOnly?: boolean } = {},
+      {
+        liveTenantsOnly = false,
+        publicOnly = false,
+      }: { liveTenantsOnly?: boolean; publicOnly?: boolean } = {},
     ) {
       const byOrganization = new Map<
         string,
@@ -1915,6 +1918,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
         }
       >(organizationIds.map((id) => [id, { communityName: null, events: [] }]));
       if (organizationIds.length === 0) return byOrganization;
+      const now = new Date(yield* Clock.currentTimeMillis).toISOString();
       const rows = yield* query(() =>
         db
           .select({
@@ -1924,7 +1928,13 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           })
           .from(tenants)
           .leftJoin(nodes, eq(nodes.tenantId, tenants.id))
-          .leftJoin(discoveryActivities, eq(discoveryActivities.ownerNodeId, nodes.id))
+          .leftJoin(
+            discoveryActivities,
+            and(
+              eq(discoveryActivities.ownerNodeId, nodes.id),
+              publicOnly ? shownActivity(now) : undefined,
+            ),
+          )
           .where(
             and(
               inArray(tenants.orgId, organizationIds),

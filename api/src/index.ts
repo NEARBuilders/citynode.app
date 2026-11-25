@@ -681,7 +681,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const [stored, community] = yield* Effect.all([
           services.sharddog.drops(organizationId),
           services.discovery
-            .organizationEvents([organizationId], { liveTenantsOnly: true })
+            .organizationEvents([organizationId], { liveTenantsOnly: true, publicOnly: !canEdit })
             .pipe(Effect.map((byOrganization) => byOrganization.get(organizationId))),
         ]);
         const events = [...(community?.events ?? [])].sort(

@@ -66,15 +66,16 @@ async function community() {
     tenantId: tenant.id,
     orgId: org,
   });
-  const event = await (
-    await getPluginClient(orgContext(`editor-${id}`, org))
-  ).saveDiscoveryActivity(eventInput(node.id, "Builders night", new Date(Date.now() + 24 * HOUR)));
+  const editor = await getPluginClient(orgContext(`editor-${id}`, org));
+  const event = await editor.saveDiscoveryActivity(
+    eventInput(node.id, "Builders night", new Date(Date.now() + 24 * HOUR)),
+  );
   const as = (role: string | null) => {
     const userId = `${role ?? "outsider"}-${id}`;
     if (role) roles.set(`${org}:${userId}`, role);
     return getPluginClient(authedContext(userId));
   };
-  return { org, event, as };
+  return { org, event, editor, nodeId: node.id, as };
 }
 
 beforeAll(async () => {
@@ -160,6 +161,30 @@ describe("ShardDog drops", () => {
     expect(await (await as("member")).getShardDogDrops({ organizationId: org })).toMatchObject({
       canEdit: false,
     });
+  });
+
+  it("shows visitors and members only public events, while editors see drafts and scheduled ones", async () => {
+    const { org, event, editor, nodeId, as } = await community();
+    const soon = new Date(Date.now() + 48 * HOUR);
+    const draft = await editor.saveDiscoveryActivity({
+      ...eventInput(nodeId, "Secret launch", soon),
+      status: "draft",
+    });
+    const scheduled = await editor.saveDiscoveryActivity({
+      ...eventInput(nodeId, "Announced later", soon),
+      publishedAt: new Date(Date.now() + 24 * HOUR).toISOString(),
+    });
+
+    for (const client of [await getPluginClient(), await as("member"), await as(null)]) {
+      const read = await client.getShardDogDrops({ organizationId: org });
+      expect(read.canEdit).toBe(false);
+      expect(read.events.map((e) => e.eventId)).toEqual([event.id]);
+    }
+
+    const admin = await (await as("admin")).getShardDogDrops({ organizationId: org });
+    expect(admin.events.map((e) => e.eventId).sort()).toEqual(
+      [event.id, draft.id, scheduled.id].sort(),
+    );
   });
 
   it("rejects an event from another community and an unknown community", async () => {
