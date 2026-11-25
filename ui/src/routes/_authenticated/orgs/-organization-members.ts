@@ -16,16 +16,18 @@ export type OrgMember = {
 const MEMBER_PAGE_SIZE = 100;
 
 async function fetchOrgMembers(apiClient: ApiClient, orgId: string): Promise<OrgMember[]> {
-  const members: OrgMember[] = [];
+  const members = new Map<string, OrgMember>();
+  let offset = 0;
   for (;;) {
     const page = await apiClient.auth.listMembers({
       organizationId: orgId,
       limit: MEMBER_PAGE_SIZE,
-      offset: members.length,
+      offset,
     });
     const batch = page.members ?? [];
-    members.push(...batch);
-    if (batch.length < MEMBER_PAGE_SIZE || members.length >= page.total) return members;
+    for (const member of batch) members.set(member.id, member);
+    offset += batch.length;
+    if (batch.length < MEMBER_PAGE_SIZE || offset >= page.total) return [...members.values()];
   }
 }
 
@@ -53,12 +55,12 @@ export function orgActiveRoleQueryOptions(apiClient: ApiClient, orgId: string) {
 
 export function useOrgMemberRole(
   orgId: string | null | undefined,
-  userId: string | null | undefined,
+  signedIn: boolean,
 ): OrgMember["role"] | undefined {
   const apiClient = useApiClient();
   const { data: role } = useQuery({
     ...orgActiveRoleQueryOptions(apiClient, orgId ?? ""),
-    enabled: !!orgId && !!userId,
+    enabled: !!orgId && signedIn,
   });
   return role ?? undefined;
 }

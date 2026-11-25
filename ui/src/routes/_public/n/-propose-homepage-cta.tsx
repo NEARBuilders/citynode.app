@@ -38,7 +38,7 @@ export function ProposeHomepageCta({ tenantId }: { tenantId: string | null }) {
       })
     : undefined;
 
-  const role = useOrgMemberRole(owningOrg?.id, session?.user?.id);
+  const role = useOrgMemberRole(owningOrg?.id, !!session?.user?.id);
   const canManage = session?.user?.role === "admin" || isCommunitySettingsRole(role);
   const settings = useOpenCommunitySettings();
 

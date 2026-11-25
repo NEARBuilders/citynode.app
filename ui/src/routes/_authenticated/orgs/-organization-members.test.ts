@@ -64,4 +64,16 @@ describe("orgMembersQueryOptions", () => {
     await expect(fetchMembers(listMembers)).resolves.toHaveLength(100);
     expect(listMembers).toHaveBeenCalledTimes(2);
   });
+
+  it("keeps one entry per member when pages overlap", async () => {
+    const listMembers = vi
+      .fn()
+      .mockResolvedValueOnce({ members: members(100), total: 150 })
+      .mockResolvedValueOnce({ members: members(50, 99), total: 150 });
+
+    const result = await fetchMembers(listMembers);
+
+    expect(result).toHaveLength(149);
+    expect(new Set(result.map((member) => member.id)).size).toBe(149);
+  });
 });
