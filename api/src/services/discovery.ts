@@ -1905,6 +1905,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     }),
     organizationEvents: Effect.fn("DiscoveryService.organizationEvents")(function* (
       organizationIds: string[],
+      { liveTenantsOnly = false }: { liveTenantsOnly?: boolean } = {},
     ) {
       const byOrganization = new Map<
         string,
@@ -1924,7 +1925,12 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           .from(tenants)
           .leftJoin(nodes, eq(nodes.tenantId, tenants.id))
           .leftJoin(discoveryActivities, eq(discoveryActivities.ownerNodeId, nodes.id))
-          .where(inArray(tenants.orgId, organizationIds)),
+          .where(
+            and(
+              inArray(tenants.orgId, organizationIds),
+              liveTenantsOnly ? isNull(tenants.deletedAt) : undefined,
+            ),
+          ),
       );
       for (const row of rows) {
         const entry = row.organizationId ? byOrganization.get(row.organizationId) : undefined;

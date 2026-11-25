@@ -41,6 +41,7 @@ import {
 } from "./-tenant-mutations";
 import { TenantProfile } from "./-tenant-profile";
 import { TenantPublishedConfig } from "./-tenant-published-config";
+import { TenantShardDogDrops } from "./-tenant-sharddog-drops";
 import { TenantUnavailable } from "./-tenant-unavailable";
 
 export function selectTenantNode<T extends { id: string; name: string }>(
@@ -297,6 +298,9 @@ export function TenantDetailContent({
       {header}
       <div className="flex w-full max-w-5xl flex-col gap-10 sm:gap-12">
         {node && (isAdmin || isPlatformAdmin) && <TenantProfile nodeId={node.id} />}
+        {tenant.orgId && (isAdmin || isPlatformAdmin) && (
+          <TenantShardDogDrops organizationId={tenant.orgId} />
+        )}
         {canManageSettings && (
           <TenantDetails
             tenant={tenant}

@@ -307,6 +307,27 @@ export const NodeDaoSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).nullable(),
 });
 
+export const ShardDogDropIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9._:-]+$/);
+
+export const ShardDogDropsSchema = z.object({
+  enabled: z.boolean(),
+  canEdit: z.boolean(),
+  membershipDropId: z.string().nullable(),
+  events: z.array(
+    z.object({
+      eventId: z.string(),
+      title: z.string(),
+      startsAt: z.string().nullable(),
+      dropId: z.string().nullable(),
+    }),
+  ),
+});
+
 export const OnboardCommunitySchema = z.object({
   name: z.string().min(1),
   href: z.string(),
@@ -1233,6 +1254,36 @@ export const contract = oc.router({
     .input(z.object({ organizationId: z.string().min(1) }))
     .output(OnboardCommunitySchema)
     .errors({ NOT_FOUND }),
+
+  getShardDogDrops: oc
+    .route({
+      method: "GET",
+      path: "/communities/by-organization/{organizationId}/sharddog-drops",
+      summary: "Get a community's ShardDog drops",
+      description:
+        "Public — the community's membership drop and each of its events with the drop linked to it. canEdit is true for the community's owners and admins and for platform admins.",
+    })
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .output(ShardDogDropsSchema)
+    .errors({ NOT_FOUND }),
+
+  setShardDogDrop: oc
+    .route({
+      method: "PUT",
+      path: "/communities/by-organization/{organizationId}/sharddog-drops",
+      summary: "Link or clear a community's or event's ShardDog drop",
+      description:
+        "Community owners and admins, and platform admins. Without eventId it sets the community's membership drop; with eventId it sets that event's drop. A null dropId clears it.",
+    })
+    .input(
+      z.object({
+        organizationId: z.string().min(1),
+        eventId: z.string().min(1).optional(),
+        dropId: ShardDogDropIdSchema.nullable(),
+      }),
+    )
+    .output(ShardDogDropsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   getMyAttendance: oc
     .route({
