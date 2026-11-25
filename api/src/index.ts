@@ -13,6 +13,7 @@ import { ContextSchema } from "./lib/context";
 import {
   grantApplicantAdmin,
   linkOfficialDao,
+  MEMBER_PAGE_SIZE,
   officialDaoOf,
   parseOfficialApplication,
   resolveApplicationCommunity,
@@ -103,7 +104,6 @@ export class ApiServices extends Context.Service<
 
 const ONBOARDING_GRACE_MS = 48 * 3_600_000;
 
-const MEMBER_PAGE_SIZE = 100;
 const ORGANIZATION_PAGE = 100;
 const MEMBER_DIRECTORY_SCAN_PAGES = 10;
 

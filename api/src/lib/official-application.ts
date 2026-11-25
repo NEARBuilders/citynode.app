@@ -57,7 +57,7 @@ export async function resolveApplicationCommunity(
   return { ...node, orgId: node.orgId };
 }
 
-const MEMBER_PAGE_SIZE = 100;
+export const MEMBER_PAGE_SIZE = 100;
 
 async function findMember(auth: AuthClient, organizationId: string, userId: string) {
   let offset = 0;
@@ -83,7 +83,13 @@ async function ensureOrganizationAdmin(auth: AuthClient, organizationId: string,
     await auth.adminUpdateMemberRole({ organizationId, userId, role: "admin" });
     return;
   }
-  await auth.adminAddMember({ organizationId, userId, role: "admin" });
+  await auth.adminAddMember({ organizationId, userId, role: "admin" }).catch(async (error) => {
+    if (!(error instanceof ORPCError && error.code === "CONFLICT")) throw error;
+    const existing = await findMember(auth, organizationId, userId);
+    if (!existing) throw error;
+    if (managesOrganization(existing.role)) return;
+    await auth.adminUpdateMemberRole({ organizationId, userId, role: "admin" });
+  });
 }
 
 export async function grantApplicantAdmin(
