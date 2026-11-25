@@ -136,6 +136,20 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Enregistrez-vous à un événement pour rejoindre {name}.",
     "在活动现场签到即可加入{name}。",
   ],
+  "community.openAdmin": [
+    "All communities",
+    "Todas las comunidades",
+    "Toutes les communautés",
+    "所有社区",
+  ],
+  "community.openEvents": ["Open events", "Abrir eventos", "Ouvrir les événements", "打开活动"],
+  "community.openMine": [
+    "Open My community",
+    "Abrir Mi comunidad",
+    "Ouvrir Ma communauté",
+    "打开我的社区",
+  ],
+  "community.openSetup": ["Set up {name}", "Configurar {name}", "Configurer {name}", "设置{name}"],
   "community.joinLinks": [
     "Where people can join",
     "Dónde pueden unirse las personas",
