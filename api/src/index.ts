@@ -9,6 +9,11 @@ import { contract, type EventOnboardingCodeSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
+import {
+  type AuthClient,
+  ensureCommunityJoinCode,
+  scheduleCommunityJoinCodeBackfill,
+} from "./lib/community-join-code";
 import { ContextSchema } from "./lib/context";
 import {
   grantApplicantAdmin,
@@ -530,6 +535,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
           user: context.user,
         });
       });
+
+    const communityJoinCodeClients = (context: {
+      reqHeaders?: ConstructorParameters<typeof Headers>[0];
+      userId?: string | null;
+      user?: AuthContext["user"];
+      session?: AuthContext["session"];
+    }): AuthClient[] => {
+      const authPlugin = plugins.auth;
+      const userId = context.userId ?? context.user?.id;
+      if (!authPlugin || !userId) return [];
+      return [
+        authPlugin.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+          userId,
+          user: context.user,
+          session: context.session,
+        }),
+      ];
+    };
 
     type MemberAuthClient = Effect.Success<ReturnType<typeof memberAuthClient>>;
 
@@ -1091,12 +1115,21 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 }),
         });
       }),
-      listDiscovery: builder.listDiscovery.effect(function* ({ input }) {
+      listDiscovery: builder.listDiscovery.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
+        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context));
         return yield* services.discovery.directory(input);
       }),
-      getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input }) {
+      getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (node) {
+          yield* Effect.promise(() =>
+            ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(context), node).catch(
+              () => null,
+            ),
+          );
+        }
         return yield* services.discovery.get(input.nodeId);
       }),
       getCommunityBuilders: builder.getCommunityBuilders.effect(function* ({ input }) {
@@ -2128,6 +2161,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listNodes: builder.listNodes.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
+        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context));
         const nodes = yield* services.nodes.list({
           includePlatform:
             context.user?.role === "admin" &&
@@ -2153,7 +2187,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
       getNode: builder.getNode.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const node = yield* services.nodes.getById(input.nodeId);
-        return node && nodeForViewer(context)(node);
+        if (!node) return null;
+        yield* Effect.promise(() =>
+          ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(context), node).catch(
+            () => null,
+          ),
+        );
+        const refreshed = yield* services.nodes.getById(input.nodeId);
+        return refreshed && nodeForViewer(context)(refreshed);
       }),
 
       updateNode: builder.updateNode
@@ -2339,12 +2380,23 @@ export default createPlugin.withPlugins<PluginsClient>()({
           userId,
           user: context.user,
         });
+        const repairClients = communityJoinCodeClients({
+          reqHeaders: context.reqHeaders,
+          userId,
+          user: context.user,
+          session: context.session,
+        });
         return yield* Effect.tryPromise({
           try: () =>
-            activateCommunity({ places: services.places, nodes: services.nodes }, auth, {
-              place: input.place,
-              userId,
-            }),
+            activateCommunity(
+              { places: services.places, nodes: services.nodes },
+              auth,
+              {
+                place: input.place,
+                userId,
+              },
+              repairClients,
+            ),
           catch: (error) =>
             error instanceof ORPCError
               ? error
@@ -2369,7 +2421,26 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
-        const joinCodeId = (node.metadata as { joinCodeId?: string } | null)?.joinCodeId;
+        const userId = context.userId ?? context.user?.id;
+        if (!userId) {
+          return yield* Effect.fail(
+            new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
+          );
+        }
+        const repairContext = {
+          reqHeaders: context.reqHeaders,
+          userId,
+          user: context.user,
+          session: context.session,
+        };
+        const joinCodeId = yield* Effect.tryPromise({
+          try: () =>
+            ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(repairContext), node),
+          catch: (cause) =>
+            new ORPCError("INTERNAL_SERVER_ERROR", {
+              message: cause instanceof Error ? cause.message : "Could not prepare the join code",
+            }),
+        });
         if (!joinCodeId) {
           return yield* Effect.fail(
             errors.CONFLICT({
@@ -2378,24 +2449,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
-        const authPlugin = plugins.auth;
-        if (!authPlugin) {
+        const auth = communityJoinCodeClients(repairContext)[0];
+        if (!auth) {
           return yield* Effect.fail(
             new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
           );
         }
-        const userId = context.userId ?? context.user?.id;
-        if (!userId) {
-          return yield* Effect.fail(
-            new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
-          );
-        }
-        const auth = authPlugin.client({
-          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
-          userId,
-          user: context.user,
-          session: context.session,
-        });
         const joinOutcome = yield* Effect.tryPromise({
           try: async () => {
             try {
