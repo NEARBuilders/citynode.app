@@ -1,5 +1,5 @@
 import type { ORPCError } from "@orpc/server";
-import { and, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -65,12 +65,44 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
       const query = <T>(run: () => Promise<T>): ShardDogEffect<T> =>
         Effect.tryPromise({ try: run, catch: toOrpcError });
 
+      const dropStillLinked = or(
+        and(
+          eq(sharddogAwards.kind, "membership"),
+          exists(
+            db
+              .select({ linked: sql`1` })
+              .from(sharddogCommunityDrops)
+              .where(
+                and(
+                  eq(sharddogCommunityDrops.organizationId, sharddogAwards.organizationId),
+                  eq(sharddogCommunityDrops.dropId, sharddogAwards.dropId),
+                ),
+              ),
+          ),
+        ),
+        and(
+          eq(sharddogAwards.kind, "event"),
+          exists(
+            db
+              .select({ linked: sql`1` })
+              .from(sharddogEventDrops)
+              .where(
+                and(
+                  eq(sharddogEventDrops.organizationId, sharddogAwards.organizationId),
+                  eq(sharddogEventDrops.eventId, sharddogAwards.eventId),
+                  eq(sharddogEventDrops.dropId, sharddogAwards.dropId),
+                ),
+              ),
+          ),
+        ),
+      );
+
       const deliverOne = (award: typeof sharddogAwards.$inferSelect) =>
         Effect.tryPromise(() =>
           config.client.award({
             dropId: award.dropId,
             accountId: award.accountId ?? "",
-            idempotencyKey: award.id,
+            idempotencyKey: `${award.id}:${award.dropId}`,
           }),
         ).pipe(
           Effect.matchEffect({
@@ -82,8 +114,6 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                     status: "awarded",
                     viewUrl,
                     awardedAt: new Date(),
-                    attemptedAt: new Date(),
-                    attempts: sql`${sharddogAwards.attempts} + 1`,
                     lastError: null,
                   })
                   .where(
@@ -95,8 +125,6 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                 db
                   .update(sharddogAwards)
                   .set({
-                    attemptedAt: new Date(),
-                    attempts: sql`${sharddogAwards.attempts} + 1`,
                     lastError: String(
                       error instanceof Error && error.cause instanceof Error
                         ? error.cause.message
@@ -233,6 +261,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   and(
                     eq(sharddogAwards.organizationId, organizationId),
                     eq(sharddogAwards.status, "pending"),
+                    eq(sharddogAwards.attempts, 0),
                   ),
                 );
               const stale = pending
@@ -313,6 +342,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                       sql`${new Date(now).toISOString()}::timestamptz - make_interval(secs => ${RETRY_STEP_MS / 1000} * ${sharddogAwards.attempts})`,
                     ),
                   ),
+                  dropStillLinked,
                   filter.organizationId
                     ? eq(sharddogAwards.organizationId, filter.organizationId)
                     : undefined,
@@ -329,14 +359,15 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                 const claimed = yield* query(() =>
                   db
                     .update(sharddogAwards)
-                    .set({ attemptedAt: new Date() })
+                    .set({
+                      attemptedAt: new Date(),
+                      attempts: sql`${sharddogAwards.attempts} + 1`,
+                    })
                     .where(
                       and(
                         eq(sharddogAwards.id, award.id),
                         eq(sharddogAwards.status, "pending"),
-                        award.attemptedAt
-                          ? eq(sharddogAwards.attemptedAt, award.attemptedAt)
-                          : isNull(sharddogAwards.attemptedAt),
+                        eq(sharddogAwards.attempts, award.attempts),
                       ),
                     )
                     .returning({ id: sharddogAwards.id }),
@@ -356,6 +387,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                 and(
                   eq(sharddogAwards.userId, userId),
                   organizationId ? eq(sharddogAwards.organizationId, organizationId) : undefined,
+                  or(eq(sharddogAwards.status, "awarded"), dropStillLinked),
                 ),
               )
               .orderBy(sharddogAwards.createdAt);

@@ -36,5 +36,11 @@ export function collectiblesQueryOptions(apiClient: ApiClient, organizationId: s
     queryFn: () => apiClient.getMyCollectibles(organizationId ? { organizationId } : {}),
     staleTime: 60_000,
     retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.enabled &&
+      query.state.data.collectibles.some((collectible) => collectible.status === "pending") &&
+      query.state.dataUpdateCount < 12
+        ? 5_000
+        : false,
   });
 }

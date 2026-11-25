@@ -700,6 +700,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       });
 
+    const deliverAwardsInBackground = (filter: { organizationId?: string; userId?: string }) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        yield* services.sharddog.deliverAwards(filter).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("[API] ShardDog award delivery failed", cause),
+          ),
+          Effect.forkDetach,
+        );
+      });
+
     const notACommunityMember = () =>
       new ORPCError("FORBIDDEN", { message: "You are not a member of this community" });
 
@@ -1383,7 +1394,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           },
         });
         yield* services.sharddog.queueAwards(organizationId).pipe(
-          Effect.andThen(services.sharddog.deliverAwards({ organizationId })),
+          Effect.andThen(deliverAwardsInBackground({ organizationId })),
           Effect.catchCause((cause) =>
             Effect.logWarning("[API] ShardDog awards after check-in sync failed", cause),
           ),
@@ -1397,13 +1408,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         if (!services.sharddog.enabled) return { enabled: false, collectibles: [] };
-        yield* services.sharddog
-          .deliverAwards({ userId: context.userId, organizationId: input.organizationId })
-          .pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning("[API] ShardDog award retry failed", cause),
-            ),
-          );
+        yield* deliverAwardsInBackground({
+          userId: context.userId,
+          organizationId: input.organizationId,
+        });
         const awards = yield* services.sharddog.awardsFor(context.userId, input.organizationId);
         return {
           enabled: true,

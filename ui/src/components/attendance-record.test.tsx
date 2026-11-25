@@ -65,6 +65,7 @@ function show(props: Parameters<typeof AttendanceRecord>[0]) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   harness.calls.length = 0;
   harness.getMyAttendance = async () => ({ events: [], unclassified: [], communities: [] });
@@ -299,6 +300,37 @@ describe("AttendanceRecord", () => {
     expect(links[0]?.getAttribute("target")).toBe("_blank");
     expect(screen.getByTestId("attendance-event-collectible-pending")).toBeTruthy();
     expect(screen.getAllByTestId("attendance-event")).toHaveLength(3);
+  });
+
+  it("checks again while a collectible is still being sent", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    harness.getMyAttendance = async () => ({
+      events: [event("e1", "Builders Night", "2026-10-12T20:00:00.000Z")],
+      unclassified: [],
+      communities: [synced],
+    });
+    let reads = 0;
+    harness.getMyCollectibles = async () => {
+      reads += 1;
+      return {
+        enabled: true,
+        collectibles: [
+          {
+            organizationId: "org-north",
+            kind: "event",
+            eventId: "e1",
+            status: reads === 1 ? "pending" : "awarded",
+            viewUrl: reads === 1 ? null : "https://shard.dog/view/night",
+          },
+        ],
+      };
+    };
+    show({ organizationId: "org-north", testId: "attendance" });
+
+    await screen.findByTestId("attendance-event-collectible-pending");
+    await vi.advanceTimersByTimeAsync(5_000);
+    const link = await screen.findByTestId("attendance-event-collectible-view");
+    expect(link.getAttribute("href")).toBe("https://shard.dog/view/night");
   });
 
   it("shows no collectibles while ShardDog is off", async () => {
