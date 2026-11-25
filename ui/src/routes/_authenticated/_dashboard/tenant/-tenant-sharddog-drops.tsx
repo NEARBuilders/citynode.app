@@ -117,34 +117,34 @@ export function TenantShardDogDrops({ organizationId }: { organizationId: string
             testId="tenant.sharddog.membership-form"
           />
         </SettingsRow>
-        <SettingsRow label={translate("sharddog.events")} testId="tenant.sharddog.events">
-          {events.length === 0 ? (
-            <p className="text-muted-foreground">{translate("sharddog.noEvents")}</p>
-          ) : (
-            <ul className="flex flex-col gap-4">
-              {events.map((event) => (
-                <li key={event.eventId} className="flex flex-col gap-2">
-                  <div className="flex flex-col">
-                    <span className="font-medium">{event.title}</span>
-                    {event.startsAt && (
-                      <span className="text-muted-foreground">
-                        <LocalDate value={event.startsAt} format="datetime" />
-                      </span>
-                    )}
-                  </div>
-                  <DropForm
-                    key={`${event.eventId}:${event.dropId ?? ""}`}
-                    organizationId={organizationId}
-                    eventId={event.eventId}
-                    current={event.dropId}
-                    label={translate("sharddog.dropIdFor", { name: event.title })}
-                    testId={`tenant.sharddog.event-${event.eventId}`}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </SettingsRow>
+      </div>
+      <h3 className="pt-4 text-sm font-medium" data-testid="tenant.sharddog.events">
+        {translate("sharddog.events")}
+      </h3>
+      <div className="flex flex-col">
+        {events.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">{translate("sharddog.noEvents")}</p>
+        ) : (
+          events.map((event) => (
+            <SettingsRow
+              key={event.eventId}
+              label={event.title}
+              description={
+                event.startsAt ? <LocalDate value={event.startsAt} format="datetime" /> : undefined
+              }
+              testId={`tenant.sharddog.event-row-${event.eventId}`}
+            >
+              <DropForm
+                key={`${event.eventId}:${event.dropId ?? ""}`}
+                organizationId={organizationId}
+                eventId={event.eventId}
+                current={event.dropId}
+                label={translate("sharddog.dropIdFor", { name: event.title })}
+                testId={`tenant.sharddog.event-${event.eventId}`}
+              />
+            </SettingsRow>
+          ))
+        )}
       </div>
     </section>
   );
