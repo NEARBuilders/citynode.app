@@ -15,6 +15,7 @@ import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
+import { isCommunityPlaceholderTenant } from "@/lib/community-tenant";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
@@ -133,7 +134,9 @@ export function TenantDetailContent({
       authContext.isPending);
   const canOperate =
     sameActiveOrg && canOperateNodes(authContext.data, { includePlatformAdmin: false });
-  const canEditValidators = isAdmin || canOperate;
+  const placeholder = !!tenant && isCommunityPlaceholderTenant(tenant);
+  const official = nodes.some((item) => typeof item.metadata?.daoAccountId === "string");
+  const canEditValidators = (isAdmin || canOperate) && (!placeholder || official);
   const isDaoOwned = tenant?.ownerKind === "dao";
 
   const publishMode: TenantConfigPublishMode = isDaoOwned ? "dao" : "platform";
@@ -285,7 +288,7 @@ export function TenantDetailContent({
   const isPersonalOwner =
     (tenant?.ownerKind === "user" && tenant.ownerUserId === session?.user?.id) ||
     (!!tenant && !tenant.orgId && !!nearAccountId && tenant.accountId === nearAccountId);
-  const canManageSettings = isAdmin || isPlatformAdmin || isPersonalOwner;
+  const canManageSettings = (isAdmin && !placeholder) || isPlatformAdmin || isPersonalOwner;
   if (!tenant || !gatewayId || (!canManageSettings && !canOperate)) {
     return <TenantUnavailable gatewayId={gatewayId} />;
   }
@@ -329,7 +332,7 @@ export function TenantDetailContent({
             {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
           </TenantLiveSite>
         )}
-        {(isAdmin || isPlatformAdmin) && (
+        {((isAdmin && !placeholder) || isPlatformAdmin) && (
           <TenantPublishedConfig
             tenant={tenant}
             hostname={hostname}
