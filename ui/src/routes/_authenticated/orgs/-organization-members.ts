@@ -13,9 +13,20 @@ export type OrgMember = {
   user?: MemberCardMember["user"];
 };
 
+const MEMBER_PAGE_SIZE = 100;
+
 async function fetchOrgMembers(apiClient: ApiClient, orgId: string): Promise<OrgMember[]> {
-  const { members } = await apiClient.auth.listMembers({ organizationId: orgId });
-  return members ?? [];
+  const members: OrgMember[] = [];
+  for (;;) {
+    const page = await apiClient.auth.listMembers({
+      organizationId: orgId,
+      limit: MEMBER_PAGE_SIZE,
+      offset: members.length,
+    });
+    const batch = page.members ?? [];
+    members.push(...batch);
+    if (batch.length < MEMBER_PAGE_SIZE || members.length >= page.total) return members;
+  }
 }
 
 export function orgMembersQueryOptions(apiClient: ApiClient, orgId: string) {
@@ -40,17 +51,16 @@ export function orgActiveRoleQueryOptions(apiClient: ApiClient, orgId: string) {
   });
 }
 
-/** The given user's role in the organization, once its members have loaded. */
 export function useOrgMemberRole(
   orgId: string | null | undefined,
   userId: string | null | undefined,
 ): OrgMember["role"] | undefined {
   const apiClient = useApiClient();
-  const { data: members } = useQuery({
-    ...orgMembersQueryOptions(apiClient, orgId ?? ""),
+  const { data: role } = useQuery({
+    ...orgActiveRoleQueryOptions(apiClient, orgId ?? ""),
     enabled: !!orgId && !!userId,
   });
-  return members?.find((member) => member.userId === userId)?.role;
+  return role ?? undefined;
 }
 
 export function useOrganizationMemberActions(auth: AuthClient, orgId: string) {
