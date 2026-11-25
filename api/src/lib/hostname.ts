@@ -23,7 +23,11 @@ export function isValidHostname(hostname: string): boolean {
 }
 
 export function isReservedGatewayHostname(hostname: string, gatewayDomains: string[]): boolean {
-  if (!hostname.includes(".")) return RESERVED_GATEWAY_LABELS.has(hostname);
+  if (!hostname.includes(".")) {
+    if (RESERVED_GATEWAY_LABELS.has(hostname)) return true;
+    const [primary] = gatewayDomains;
+    return primary ? isReservedGatewayHostname(`${hostname}.${primary}`, gatewayDomains) : false;
+  }
   return gatewayDomains.some((domain) => {
     if (hostname === domain) return true;
     if (!hostname.endsWith(`.${domain}`)) return false;

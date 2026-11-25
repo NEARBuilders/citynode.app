@@ -71,6 +71,14 @@ describe("isReservedGatewayHostname", () => {
     expect(isReservedGatewayHostname("chicago", gateway)).toBe(false);
   });
 
+  it("reserves a dotless name that expands to another gateway domain", () => {
+    expect(isReservedGatewayHostname("dev", gateway)).toBe(true);
+    const deployed = ["citynode.app", "testnet.citynode.app"];
+    expect(isReservedGatewayHostname("testnet", deployed)).toBe(true);
+    expect(isReservedGatewayHostname("chicago", deployed)).toBe(false);
+    expect(isReservedGatewayHostname("testnet", [])).toBe(false);
+  });
+
   it("leaves ordinary tenant names and custom domains alone", () => {
     expect(isReservedGatewayHostname("chicago.citynode.app", gateway)).toBe(false);
     expect(isReservedGatewayHostname("wwwchicago.citynode.app", gateway)).toBe(false);

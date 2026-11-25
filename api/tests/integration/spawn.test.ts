@@ -131,7 +131,13 @@ describe("User-owned tenant spawn", () => {
     it("rejects nested, apex, padded and trailing-dot spellings", async () => {
       const c = await getPluginClient(spawnContext("reserved-spelling", "reserved-spelling.near"));
 
-      for (const hostname of ["shop.admin.citynode.app", "citynode.app", " WWW.CITYNODE.APP. "]) {
+      for (const hostname of [
+        "shop.admin.citynode.app",
+        "citynode.app",
+        " WWW.CITYNODE.APP. ",
+        "testnet",
+        "TESTNET",
+      ]) {
         await expect(c.spawnTenant({ name: "Spelling", hostname })).rejects.toThrow(
           "reserved for the platform",
         );
@@ -157,7 +163,7 @@ describe("User-owned tenant spawn", () => {
         hostname: "binding-owner.citynode.app",
       });
 
-      for (const hostname of ["api.citynode.app", "docs"]) {
+      for (const hostname of ["api.citynode.app", "docs", "testnet"]) {
         await expect(c.createBinding({ tenantId: spawned.tenant.id, hostname })).rejects.toThrow(
           "reserved for the platform",
         );

@@ -435,7 +435,7 @@ describe("TenantsService — reserved gateway hostnames", () => {
     const dir = mkdtempSync(join(tmpdir(), "api-tenants-"));
     activeDir = dir;
     return TenantsLive.pipe(
-      Layer.provide(TenantsConfigLive(["citynode.app"])),
+      Layer.provide(TenantsConfigLive(["citynode.app", "testnet.citynode.app"])),
       Layer.provide(DatabaseLive(`pglite:${dir}`)),
       Layer.provide(Layer.succeed(PluginIdTag, "api")),
     );
@@ -443,6 +443,8 @@ describe("TenantsService — reserved gateway hostnames", () => {
 
   it.each([
     "www.citynode.app",
+    "testnet",
+    "TESTNET",
     "ADMIN.CITYNODE.APP",
     " api.citynode.app. ",
     "shop.auth.citynode.app",
@@ -469,7 +471,7 @@ describe("TenantsService — reserved gateway hostnames", () => {
       svc.createTenant({ name: "Acme", accountId: "acme.near", orgId: "org-1" }),
     );
 
-    for (const hostname of ["docs.citynode.app", "citynode.app", "staging"]) {
+    for (const hostname of ["docs.citynode.app", "citynode.app", "staging", "testnet"]) {
       const error = await squashServiceError(layer, (svc) =>
         svc.createBinding({ tenantId: tenant.id, hostname }),
       );
