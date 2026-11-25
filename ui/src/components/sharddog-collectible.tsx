@@ -36,6 +36,27 @@ export function ShardDogCollectible({
       </Button>
     );
   }
+  if (collectible.status === "claim" && collectible.claimUrl) {
+    const claimUrl = collectible.claimUrl;
+    return (
+      <div className="flex flex-col items-end gap-1 text-right">
+        <Button
+          size="sm"
+          nativeButton={false}
+          render={(props) => (
+            <a {...props} href={claimUrl} target="_blank" rel="noopener noreferrer" />
+          )}
+          data-testid={`${testId}-claim`}
+        >
+          {translate("collectibles.claimInShardDog")}
+          <ArrowSquareOutIcon />
+        </Button>
+        <span className="max-w-56 text-xs text-muted-foreground">
+          {translate("collectibles.claimHint")}
+        </span>
+      </div>
+    );
+  }
   return (
     <span className="text-sm text-muted-foreground" data-testid={`${testId}-${collectible.status}`}>
       {translate(

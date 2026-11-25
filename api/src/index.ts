@@ -1422,10 +1422,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
             status:
               award.status === "awarded"
                 ? ("awarded" as const)
-                : award.hasAccount
-                  ? ("pending" as const)
-                  : ("needs_account" as const),
+                : award.claimUrl
+                  ? ("claim" as const)
+                  : award.hasAccount
+                    ? ("pending" as const)
+                    : ("needs_account" as const),
             viewUrl: award.status === "awarded" ? award.viewUrl : null,
+            claimUrl: award.status === "pending" ? award.claimUrl : null,
           })),
         };
       }),

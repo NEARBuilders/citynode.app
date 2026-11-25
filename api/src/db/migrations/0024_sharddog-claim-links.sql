@@ -1,0 +1,1 @@
+ALTER TABLE "sharddog_awards" ADD COLUMN "claim_url" text;

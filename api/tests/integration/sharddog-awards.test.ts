@@ -21,6 +21,7 @@ vi.mock("@/services/dao", () => ({
 const shardDog = vi.hoisted(() => ({
   awards: [] as Array<{ dropId: string; accountId: string; idempotencyKey: string }>,
   tried: [] as string[],
+  claims: [] as Array<{ dropId: string; idempotencyKey: string }>,
   failing: false,
   delayMs: 0,
 }));
@@ -35,7 +36,11 @@ vi.mock("@/services/sharddog-client", () => ({
       shardDog.awards.push(input);
       return { viewUrl: `https://shard.dog/view/${input.dropId}/${input.accountId}` };
     },
-    createClaimLink: async () => ({ claimUrl: "https://shard.dog/claim/x" }),
+    createClaimLink: async (input: { dropId: string; idempotencyKey: string }) => {
+      if (shardDog.failing) throw new Error("ShardDog responded 503");
+      shardDog.claims.push(input);
+      return { claimUrl: `https://shard.dog/claim/${input.idempotencyKey}` };
+    },
   }),
 }));
 
@@ -179,6 +184,7 @@ afterAll(async () => {
 beforeEach(() => {
   shardDog.awards.length = 0;
   shardDog.tried.length = 0;
+  shardDog.claims.length = 0;
   shardDog.failing = false;
   shardDog.delayMs = 0;
 });
@@ -214,6 +220,7 @@ describe("ShardDog awards on event check-in", () => {
           eventId: null,
           status: "awarded",
           viewUrl: "https://shard.dog/view/city-member/ada.testnet",
+          claimUrl: null,
         },
         {
           organizationId: city.org,
@@ -221,6 +228,7 @@ describe("ShardDog awards on event check-in", () => {
           eventId: first.id,
           status: "awarded",
           viewUrl: "https://shard.dog/view/night-drop/ada.testnet",
+          claimUrl: null,
         },
       ]),
     );
@@ -364,21 +372,7 @@ describe("ShardDog awards on event check-in", () => {
     expect(shardDog.awards.map(({ idempotencyKey }) => idempotencyKey)).toEqual([firstKey]);
   });
 
-  it("drops an unattempted award when its drop is unlinked", async () => {
-    const city = await community();
-    const event = await city.addEvent("Unlink", "unlink-drop");
-    const userId = `unlink-${crypto.randomUUID().slice(0, 6)}`;
-
-    city.checkIn(event.id, userId, null);
-    await city.sync();
-    expect(await statuses(userId, city.org)).toEqual(["needs_account"]);
-
-    await city.setEventDrop(event.id, null);
-    await city.sync();
-    expect(await statuses(userId, city.org)).toEqual([]);
-  });
-
-  it("holds the badges for someone checked in without a NEAR account", async () => {
+  it("gives someone checked in without a NEAR account a one-time claim link per badge", async () => {
     const city = await community();
     await city.setMembershipDrop("no-account-member");
     const event = await city.addEvent("Open house", "open-drop");
@@ -386,14 +380,80 @@ describe("ShardDog awards on event check-in", () => {
 
     city.checkIn(event.id, userId, null);
     await city.sync();
+    await vi.waitFor(() => expect(shardDog.claims).toHaveLength(2));
     await settle();
 
     expect(shardDog.awards).toHaveLength(0);
+    expect(shardDog.claims.map(({ dropId }) => dropId).sort()).toEqual([
+      "no-account-member",
+      "open-drop",
+    ]);
+    const read = await (await attendee(userId)).getMyCollectibles({ organizationId: city.org });
+    expect(read.collectibles).toEqual(
+      expect.arrayContaining(
+        shardDog.claims.map(({ idempotencyKey }) =>
+          expect.objectContaining({
+            status: "claim",
+            viewUrl: null,
+            claimUrl: `https://shard.dog/claim/${idempotencyKey}`,
+          }),
+        ),
+      ),
+    );
+    expect(new Set(shardDog.claims.map(({ idempotencyKey }) => idempotencyKey)).size).toBe(2);
+  });
+
+  it("keeps the badge waiting when ShardDog can't make a claim link, then retries", async () => {
+    const city = await community();
+    const event = await city.addEvent("Pop-up", "popup-drop");
+    const userId = `noclaim-${crypto.randomUUID().slice(0, 6)}`;
+
+    shardDog.failing = true;
+    city.checkIn(event.id, userId, null);
+    await city.sync();
+    await settle();
+    const client = await attendee(userId);
     expect(
-      (
-        await (await attendee(userId)).getMyCollectibles({ organizationId: city.org })
-      ).collectibles.map(({ status }) => status),
-    ).toEqual(["needs_account", "needs_account"]);
+      (await client.getMyCollectibles({ organizationId: city.org })).collectibles.map(
+        ({ status, claimUrl }) => [status, claimUrl],
+      ),
+    ).toEqual([["needs_account", null]]);
+
+    shardDog.failing = false;
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 5 * 60_000 });
+    await untilStatuses(userId, city.org, ["claim"]);
+    expect(shardDog.claims).toHaveLength(1);
+  });
+
+  it("keeps the claim link once handed out, even when a NEAR account shows up later", async () => {
+    const city = await community();
+    const first = await city.addEvent("First meetup", "first-drop");
+    const second = await city.addEvent("Second meetup", "second-drop");
+    const userId = `later-${crypto.randomUUID().slice(0, 6)}`;
+
+    city.checkIn(first.id, userId, null);
+    await city.sync();
+    await vi.waitFor(() =>
+      expect(shardDog.claims.map(({ dropId }) => dropId)).toEqual(["first-drop"]),
+    );
+    await settle();
+
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 5 * 60_000 });
+    city.checkIn(second.id, userId, "later.testnet");
+    await city.sync();
+    await vi.waitFor(() => expect(shardDog.awards).toHaveLength(1));
+    await settle();
+
+    expect(shardDog.awards.map(({ dropId, accountId }) => [dropId, accountId])).toEqual([
+      ["second-drop", "later.testnet"],
+    ]);
+    expect(shardDog.claims).toHaveLength(1);
+    const read = await (await attendee(userId)).getMyCollectibles({ organizationId: city.org });
+    const states = new Map(
+      read.collectibles.map(({ eventId, status, claimUrl }) => [eventId, [status, !!claimUrl]]),
+    );
+    expect(states.get(first.id)).toEqual(["claim", true]);
+    expect(states.get(second.id)).toEqual(["awarded", false]);
   });
 
   it("awards nothing for events or communities without a linked drop", async () => {

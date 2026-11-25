@@ -31,6 +31,7 @@ export interface CollectibleAward {
   eventId: string | null;
   status: "pending" | "awarded";
   viewUrl: string | null;
+  claimUrl: string | null;
   hasAccount: boolean;
 }
 
@@ -97,7 +98,49 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
         ),
       );
 
-      const deliverOne = (award: typeof sharddogAwards.$inferSelect) =>
+      const recordFailure = (awardId: string, error: unknown) =>
+        query(() =>
+          db
+            .update(sharddogAwards)
+            .set({
+              lastError: String(
+                error instanceof Error && error.cause instanceof Error
+                  ? error.cause.message
+                  : error,
+              ).slice(0, 500),
+            })
+            .where(eq(sharddogAwards.id, awardId)),
+        );
+
+      const handOutClaimLink = (award: typeof sharddogAwards.$inferSelect) =>
+        Effect.tryPromise(() =>
+          config.client.createClaimLink({
+            dropId: award.dropId,
+            idempotencyKey: `${award.id}:${award.dropId}`,
+          }),
+        ).pipe(
+          Effect.matchEffect({
+            onSuccess: ({ claimUrl }) =>
+              query(() =>
+                db
+                  .update(sharddogAwards)
+                  .set({
+                    claimUrl,
+                    lastError: null,
+                  })
+                  .where(
+                    and(
+                      eq(sharddogAwards.id, award.id),
+                      eq(sharddogAwards.status, "pending"),
+                      isNull(sharddogAwards.claimUrl),
+                    ),
+                  ),
+              ),
+            onFailure: (error) => recordFailure(award.id, error),
+          }),
+        );
+
+      const awardToAccount = (award: typeof sharddogAwards.$inferSelect) =>
         Effect.tryPromise(() =>
           config.client.award({
             dropId: award.dropId,
@@ -120,21 +163,12 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                     and(eq(sharddogAwards.id, award.id), eq(sharddogAwards.status, "pending")),
                   ),
               ),
-            onFailure: (error) =>
-              query(() =>
-                db
-                  .update(sharddogAwards)
-                  .set({
-                    lastError: String(
-                      error instanceof Error && error.cause instanceof Error
-                        ? error.cause.message
-                        : error,
-                    ).slice(0, 500),
-                  })
-                  .where(eq(sharddogAwards.id, award.id)),
-              ),
+            onFailure: (error) => recordFailure(award.id, error),
           }),
         );
+
+      const deliverOne = (award: typeof sharddogAwards.$inferSelect) =>
+        award.accountId ? awardToAccount(award) : handOutClaimLink(award);
 
       const service: ShardDogService = {
         enabled: config.enabled,
@@ -333,7 +367,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
               .where(
                 and(
                   eq(sharddogAwards.status, "pending"),
-                  isNotNull(sharddogAwards.accountId),
+                  isNull(sharddogAwards.claimUrl),
                   lt(sharddogAwards.attempts, MAX_AWARD_ATTEMPTS),
                   or(
                     isNull(sharddogAwards.attemptedAt),
@@ -387,7 +421,11 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                 and(
                   eq(sharddogAwards.userId, userId),
                   organizationId ? eq(sharddogAwards.organizationId, organizationId) : undefined,
-                  or(eq(sharddogAwards.status, "awarded"), dropStillLinked),
+                  or(
+                    eq(sharddogAwards.status, "awarded"),
+                    isNotNull(sharddogAwards.claimUrl),
+                    dropStillLinked,
+                  ),
                 ),
               )
               .orderBy(sharddogAwards.createdAt);
@@ -398,6 +436,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
               eventId: row.eventId,
               status: row.status,
               viewUrl: row.viewUrl,
+              claimUrl: row.claimUrl,
               hasAccount: !!row.accountId,
             }));
           }),

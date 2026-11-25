@@ -433,6 +433,7 @@ export const sharddogAwards = pgTable(
     accountId: text("account_id"),
     status: sharddogAwardStatus("status").default("pending").notNull(),
     viewUrl: text("view_url"),
+    claimUrl: text("claim_url"),
     attempts: integer("attempts").default(0).notNull(),
     lastError: text("last_error"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
