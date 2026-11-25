@@ -111,6 +111,7 @@ export function TenantShardDogDrops({ organizationId }: { organizationId: string
           testId="tenant.sharddog.membership"
         >
           <DropForm
+            key={membershipDropId ?? ""}
             organizationId={organizationId}
             current={membershipDropId}
             label={translate("sharddog.membership")}
