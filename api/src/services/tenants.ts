@@ -609,13 +609,21 @@ export const TenantsLive = Layer.effect(
         ),
 
       updateTenant: Effect.fn("TenantsService.updateTenant")(function* (id, input) {
-        const [row] = yield* query(() =>
-          db
-            .update(tenantsTable)
-            .set({ ...input, updatedAt: new Date() })
-            .where(eq(tenantsTable.id, id))
-            .returning(),
-        );
+        const [row] = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .update(tenantsTable)
+              .set({ ...input, updatedAt: new Date() })
+              .where(eq(tenantsTable.id, id))
+              .returning(),
+          catch: (error) =>
+            isUniqueViolation(error)
+              ? new ORPCError("CONFLICT", {
+                  message: "Tenant with this accountId already exists",
+                  data: { accountId: input.accountId },
+                })
+              : toOrpcError(error),
+        });
 
         if (!row) {
           return yield* Effect.fail(
