@@ -65,6 +65,49 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
       const query = <T>(run: () => Promise<T>): ShardDogEffect<T> =>
         Effect.tryPromise({ try: run, catch: toOrpcError });
 
+      const deliverOne = (award: typeof sharddogAwards.$inferSelect) =>
+        Effect.tryPromise(() =>
+          config.client.award({
+            dropId: award.dropId,
+            accountId: award.accountId ?? "",
+            idempotencyKey: award.id,
+          }),
+        ).pipe(
+          Effect.matchEffect({
+            onSuccess: ({ viewUrl }) =>
+              query(() =>
+                db
+                  .update(sharddogAwards)
+                  .set({
+                    status: "awarded",
+                    viewUrl,
+                    awardedAt: new Date(),
+                    attemptedAt: new Date(),
+                    attempts: sql`${sharddogAwards.attempts} + 1`,
+                    lastError: null,
+                  })
+                  .where(
+                    and(eq(sharddogAwards.id, award.id), eq(sharddogAwards.status, "pending")),
+                  ),
+              ),
+            onFailure: (error) =>
+              query(() =>
+                db
+                  .update(sharddogAwards)
+                  .set({
+                    attemptedAt: new Date(),
+                    attempts: sql`${sharddogAwards.attempts} + 1`,
+                    lastError: String(
+                      error instanceof Error && error.cause instanceof Error
+                        ? error.cause.message
+                        : error,
+                    ).slice(0, 500),
+                  })
+                  .where(eq(sharddogAwards.id, award.id)),
+              ),
+          }),
+        );
+
       const service: ShardDogService = {
         enabled: config.enabled,
         client: config.client,
@@ -282,50 +325,25 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
           yield* Effect.forEach(
             due,
             (award) =>
-              Effect.tryPromise(() =>
-                config.client.award({
-                  dropId: award.dropId,
-                  accountId: award.accountId ?? "",
-                  idempotencyKey: award.id,
-                }),
-              ).pipe(
-                Effect.matchEffect({
-                  onSuccess: ({ viewUrl }) =>
-                    query(() =>
-                      db
-                        .update(sharddogAwards)
-                        .set({
-                          status: "awarded",
-                          viewUrl,
-                          awardedAt: new Date(),
-                          attemptedAt: new Date(),
-                          attempts: sql`${sharddogAwards.attempts} + 1`,
-                          lastError: null,
-                        })
-                        .where(
-                          and(
-                            eq(sharddogAwards.id, award.id),
-                            eq(sharddogAwards.status, "pending"),
-                          ),
-                        ),
-                    ),
-                  onFailure: (error) =>
-                    query(() =>
-                      db
-                        .update(sharddogAwards)
-                        .set({
-                          attemptedAt: new Date(),
-                          attempts: sql`${sharddogAwards.attempts} + 1`,
-                          lastError: String(
-                            error instanceof Error && error.cause instanceof Error
-                              ? error.cause.message
-                              : error,
-                          ).slice(0, 500),
-                        })
-                        .where(eq(sharddogAwards.id, award.id)),
-                    ),
-                }),
-              ),
+              Effect.gen(function* () {
+                const claimed = yield* query(() =>
+                  db
+                    .update(sharddogAwards)
+                    .set({ attemptedAt: new Date() })
+                    .where(
+                      and(
+                        eq(sharddogAwards.id, award.id),
+                        eq(sharddogAwards.status, "pending"),
+                        award.attemptedAt
+                          ? eq(sharddogAwards.attemptedAt, award.attemptedAt)
+                          : isNull(sharddogAwards.attemptedAt),
+                      ),
+                    )
+                    .returning({ id: sharddogAwards.id }),
+                );
+                if (claimed.length === 0) return;
+                yield* deliverOne(award);
+              }),
             { concurrency: 4, discard: true },
           );
         }),

@@ -254,7 +254,11 @@ describe("ShardDog awards on event check-in", () => {
 
     shardDog.failing = false;
     vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 5 * 60_000 });
-    const retried = await client.getMyCollectibles({ organizationId: city.org });
+    const [retried] = await Promise.all([
+      client.getMyCollectibles({ organizationId: city.org }),
+      client.getMyCollectibles({ organizationId: city.org }),
+      city.sync(),
+    ]);
     expect(retried.collectibles.map(({ status }) => status)).toEqual(["awarded", "awarded"]);
     expect(shardDog.awards).toHaveLength(2);
   });
