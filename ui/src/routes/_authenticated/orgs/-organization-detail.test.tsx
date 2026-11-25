@@ -63,6 +63,7 @@ type Role = "owner" | "admin" | "member";
 const clients: QueryClient[] = [];
 
 afterEach(() => {
+  session.gate = null;
   cleanup();
   for (const client of clients.splice(0)) client.clear();
   vi.clearAllMocks();
@@ -149,6 +150,8 @@ function setup({
   return { api, apiKeyList, listMembers, apiClient, auth, stored };
 }
 
+const session = { gate: null as Promise<void> | null };
+
 async function showOrganization(url: string, { apiClient, auth }: ReturnType<typeof setup>) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(queryClient);
@@ -159,15 +162,23 @@ async function showOrganization(url: string, { apiClient, auth }: ReturnType<typ
     runtimeConfig: { title: "City Nodes", hostUrl: "http://localhost" },
   };
   const root = createRootRouteWithContext<typeof context>()({ component: Outlet });
+  const authenticated = createRoute({
+    getParentRoute: () => root,
+    id: "_authenticated",
+    beforeLoad: async () => {
+      await session.gate;
+    },
+    component: Outlet,
+  });
   const route = Route.update({
     ...Route.options,
-    getParentRoute: () => root,
+    getParentRoute: () => authenticated,
     path: "/orgs/$slug",
     id: undefined,
   } as never);
-  const orgsRoute = createRoute({ getParentRoute: () => root, path: "/orgs" });
+  const orgsRoute = createRoute({ getParentRoute: () => authenticated, path: "/orgs" });
   const router = createRouter({
-    routeTree: root.addChildren([route as never, orgsRoute]),
+    routeTree: root.addChildren([authenticated.addChildren([route as never, orgsRoute])]),
     history: createMemoryHistory({ initialEntries: [url] }),
     context: context as never,
     defaultPendingMinMs: 0,
@@ -345,6 +356,40 @@ describe("editing the community handle", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/orgs/city-nodes-chicago"));
     expect(router.state.location.search).toMatchObject({ tab: "teams" });
     await waitFor(() => expect(mocked.api.listOrganizations.mock.calls.length).toBeGreaterThan(1));
+    expect(await screen.findByText("City Nodes", { selector: "h1" })).toBeTruthy();
+    observer.disconnect();
+    expect(notFoundSeen).not.toHaveBeenCalled();
+  });
+
+  it("keeps the community while the session check holds the route on the old handle", async () => {
+    const mocked = setup({ role: "owner" });
+    const router = await showOrganization(`/orgs/${SLUG}`, mocked);
+    const notFoundSeen = vi.fn();
+    const observer = new MutationObserver(() => {
+      if (document.body.textContent?.includes("Community not found")) notFoundSeen();
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    let release = () => {};
+    const dialog = await openEditDetails();
+    fireEvent.change(within(dialog).getByLabelText("Handle"), {
+      target: { value: "city-nodes-chicago" },
+    });
+    const save = within(dialog).getByRole("button", { name: "Save" });
+    await waitFor(() => expect(save.hasAttribute("disabled")).toBe(false));
+    session.gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const calls = mocked.api.listOrganizations.mock.calls.length;
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(mocked.api.listOrganizations.mock.calls.length).toBeGreaterThan(calls),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(screen.getByText("City Nodes", { selector: "h1" })).toBeTruthy();
+    release();
+    await waitFor(() => expect(router.state.location.pathname).toBe("/orgs/city-nodes-chicago"));
     expect(await screen.findByText("City Nodes", { selector: "h1" })).toBeTruthy();
     observer.disconnect();
     expect(notFoundSeen).not.toHaveBeenCalled();
