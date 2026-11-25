@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { authedContext, getPluginClient, teardown } from "../setup";
 
 type Role = "owner" | "admin" | "member";
@@ -14,6 +14,7 @@ const orgs = new Map<string, StubOrg>();
 const addCalls: Array<{ caller: string; teamId: string; userId: string }> = [];
 const memberPages: Array<{ limit?: number; offset?: number }> = [];
 let failAdd = false;
+let holdAdd: Promise<void> | null = null;
 
 function callerId(context: unknown) {
   return (context as { userId?: string }).userId ?? "";
@@ -66,6 +67,7 @@ const authStub = {
       const caller = callerId(context);
       const org = orgFor(input.organizationId, caller);
       addCalls.push({ caller, teamId: input.teamId, userId: input.userId });
+      if (holdAdd) await holdAdd;
       if (failAdd) throw new Error("upstream down");
       const role = org.members.get(caller)?.role;
       if (role !== "owner" && role !== "admin") {
@@ -135,6 +137,7 @@ afterAll(async () => {
 beforeEach(() => {
   addCalls.length = 0;
   failAdd = false;
+  holdAdd = null;
 });
 
 describe("team join board", () => {
@@ -311,6 +314,40 @@ describe("deciding requests", () => {
     ).rejects.toMatchObject({ code: "CONNECTION_ERROR" });
     const board = await (await as("owner")).getTeamJoinBoard({ organizationId });
     expect(board.requests.find((entry) => entry.id === request.id)?.status).toBe("pending");
+  });
+
+  it.each([
+    ["the owner declines", "owner", "decline", "NOT_FOUND"],
+    ["the requester withdraws", "member", "withdraw", "CONFLICT"],
+  ] as const)("refuses a late change while an approval is adding the member: %s", async (_, userId, action, code) => {
+    const { organizationId, org, ops } = community();
+    const request = await (await as("member")).requestToJoinTeam({ organizationId, teamId: ops });
+    let release = () => {};
+    holdAdd = new Promise((resolve) => {
+      release = resolve;
+    });
+    const approving = (await as("admin")).decideTeamJoinRequest({
+      requestId: request.id,
+      decision: "approve",
+    });
+    const client = await as(userId);
+    let late: Promise<unknown>;
+    try {
+      await vi.waitFor(() => expect(addCalls).toHaveLength(1));
+      late =
+        action === "decline"
+          ? client.decideTeamJoinRequest({ requestId: request.id, decision: "decline" })
+          : client.withdrawTeamJoinRequest({ requestId: request.id });
+      await Promise.race([
+        late.catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 200)),
+      ]);
+    } finally {
+      release();
+    }
+    await expect(approving).resolves.toMatchObject({ status: "approved" });
+    await expect(late).rejects.toMatchObject({ code });
+    expect(org.teamMembers.get(ops)?.has("member")).toBe(true);
   });
 
   it("lets owners decline, and refuses plain members, team members and platform admins", async () => {
