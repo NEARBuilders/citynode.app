@@ -7,6 +7,7 @@ import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
   nodes as nodesTable,
+  ONE_PRIMARY_BINDING_INDEX,
   places as placesTable,
   type tenantStatus,
   tenants as tenantsTable,
@@ -339,12 +340,18 @@ export const TenantsLive = Layer.effect(
               })
               .returning(),
           catch: (error) =>
-            isUniqueViolation(error)
+            isUniqueViolation(error, ONE_PRIMARY_BINDING_INDEX)
               ? new ORPCError("CONFLICT", {
-                  message: "Hostname already in use",
-                  data: { hostname: input.hostname },
+                  message:
+                    "This tenant already has a primary domain. Add it as a secondary, then use setPrimaryBinding.",
+                  data: { tenantId: input.tenantId },
                 })
-              : toOrpcError(error),
+              : isUniqueViolation(error)
+                ? new ORPCError("CONFLICT", {
+                    message: "Hostname already in use",
+                    data: { hostname: input.hostname },
+                  })
+                : toOrpcError(error),
         });
         const [row] = rows;
         if (!row) {
