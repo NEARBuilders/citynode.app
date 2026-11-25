@@ -205,15 +205,18 @@ export function backfillCommunityJoinCodes(
   if (backfillInFlight) return backfillInFlight;
   if (Date.now() < backfillReadyAt) return Promise.resolve();
   const run = (async () => {
-    const missing = await Effect.runPromise(nodes.listMissingJoinCodes());
-    let repaired = 0;
+    const missing = await Effect.runPromise(nodes.listMissingJoinCodes()).catch(
+      (error: unknown) => {
+        backfillReadyAt = Date.now() + BACKFILL_COOLDOWN_MS;
+        throw error;
+      },
+    );
+    let unrepaired = 0;
     for (const node of missing) {
       const code = await ensureCommunityJoinCode(nodes, clients, node).catch(() => null);
-      if (code) repaired += 1;
+      if (!code) unrepaired += 1;
     }
-    if (missing.length === 0 || repaired > 0) {
-      backfillReadyAt = Date.now() + BACKFILL_COOLDOWN_MS;
-    }
+    if (unrepaired === 0) backfillReadyAt = Date.now() + BACKFILL_COOLDOWN_MS;
   })();
   backfillInFlight = run.finally(() => {
     backfillInFlight = null;
