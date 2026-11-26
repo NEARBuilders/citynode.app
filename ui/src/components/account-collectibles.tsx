@@ -78,7 +78,7 @@ export function AccountCollectibles({
                   </span>
                 </ItemDescription>
               </ItemContent>
-              <ItemActions>
+              <ItemActions className="basis-full sm:basis-auto">
                 <ShardDogViewLink href={collectible.viewUrl} testId={`${testId}-view`} />
               </ItemActions>
             </Item>
