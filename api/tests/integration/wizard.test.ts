@@ -441,18 +441,24 @@ describe("Tenant + Node + Binding wizard flow", () => {
       expect(resultAccounts.has(accounts.unrelated)).toBe(true);
     });
 
-    it("returns only the active organization's community", async () => {
+    it("lists every community with the active organization's first", async () => {
       const client = await getPluginClient({
         ...orgContext("stake-scope-member", organizations[0]!.id),
         organizations,
       });
       const results = await client.listStakeCommunities();
+      const resultAccounts = results.map((result) => result.accountId);
 
-      expect(results.map((result) => result.accountId)).toEqual([accounts.active]);
-      expect(results[0]?.node?.id).toEqual(expect.any(String));
+      expect(resultAccounts.slice(0, 2)).toEqual([accounts.active, accounts.connected]);
+      expect(resultAccounts).toContain(accounts.unrelated);
+      expect(results[0]?.viewerMembership).toBe("active");
+      expect(results[1]?.viewerMembership).toBe("member");
+      expect(
+        results.find((result) => result.accountId === accounts.unrelated)?.viewerMembership,
+      ).toBeNull();
     });
 
-    it("falls back to every connected organization when none is active", async () => {
+    it("puts every connected organization first when none is active", async () => {
       const client = await getPluginClient({
         ...authedContext("stake-scope-member"),
         organization: { activeOrganizationId: null },
@@ -460,10 +466,38 @@ describe("Tenant + Node + Binding wizard flow", () => {
       });
       const results = await client.listStakeCommunities();
 
-      expect(results.map((result) => result.accountId).sort()).toEqual(
-        [accounts.active, accounts.connected].sort(),
+      expect(
+        results
+          .slice(0, 2)
+          .map((result) => result.accountId)
+          .sort(),
+      ).toEqual([accounts.active, accounts.connected].sort());
+      expect(results.slice(0, 2).every((result) => result.viewerMembership === "member")).toBe(
+        true,
       );
-      expect(results.some((result) => result.accountId === accounts.unrelated)).toBe(false);
+      expect(results.map((result) => result.accountId)).toContain(accounts.unrelated);
+    });
+
+    it("lists every community for a viewer whose only organization is personal", async () => {
+      const personal = { id: "org-stake-scope-personal", role: "owner" };
+      const client = await getPluginClient({
+        ...orgContext("stake-scope-solo", personal.id),
+        organizations: [personal],
+      });
+      const results = await client.listStakeCommunities();
+      const resultAccounts = new Set(results.map((result) => result.accountId));
+
+      expect(resultAccounts.has(accounts.active)).toBe(true);
+      expect(resultAccounts.has(accounts.connected)).toBe(true);
+      expect(resultAccounts.has(accounts.unrelated)).toBe(true);
+      expect(results.every((result) => result.viewerMembership === null)).toBe(true);
+    });
+
+    it("keeps tenant organization ids out of the public tenant directory", async () => {
+      const apps = await (await getPluginClient()).listTenantApps();
+      const app = apps.find((entry) => entry.accountId === accounts.active);
+      expect(app).toBeDefined();
+      expect(app).not.toHaveProperty("orgId");
     });
   });
 });

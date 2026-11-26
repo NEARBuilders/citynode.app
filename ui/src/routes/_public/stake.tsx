@@ -80,11 +80,12 @@ function getDirectoryNodes(tenantApps: TenantApp[]) {
               kind: app.node.kind,
               hostname: app.hostname,
               stakeable: app.stakeable,
+              own: app.viewerMembership !== null,
             },
           ]
         : [],
     )
-    .sort((a, b) => Number(b.stakeable) - Number(a.stakeable));
+    .sort((a, b) => Number(b.own) - Number(a.own) || Number(b.stakeable) - Number(a.stakeable));
 }
 
 function getStakeTitle(

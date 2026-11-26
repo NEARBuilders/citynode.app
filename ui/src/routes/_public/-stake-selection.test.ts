@@ -17,14 +17,17 @@ describe("stake community selection", () => {
   });
 
   it("defaults only an unselected active organization to its community node", () => {
-    const communities = [{ node: { id: "node-1" } }, { node: { id: "node-2" } }];
+    const communities = [
+      { node: { id: "node-1" }, viewerMembership: null },
+      { node: { id: "node-2" }, viewerMembership: "active" as const },
+    ];
     expect(
       getActiveOrganizationNodeId({
         activeOrganizationId: "org-1",
         communities,
         hasRequestedNode: false,
       }),
-    ).toBe("node-1");
+    ).toBe("node-2");
     expect(
       getActiveOrganizationNodeId({
         activeOrganizationId: "org-1",
@@ -36,6 +39,19 @@ describe("stake community selection", () => {
       getActiveOrganizationNodeId({
         activeOrganizationId: null,
         communities,
+        hasRequestedNode: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps the directory when the active organization has no community", () => {
+    expect(
+      getActiveOrganizationNodeId({
+        activeOrganizationId: "org-personal",
+        communities: [
+          { node: { id: "node-1" }, viewerMembership: null },
+          { node: { id: "node-2" }, viewerMembership: "member" },
+        ],
         hasRequestedNode: false,
       }),
     ).toBeNull();

@@ -66,6 +66,7 @@ export interface TenantAppRecord {
   hostname: string | null;
   node: { id: string; slug: string; kind: string | null; name: string } | null;
   createdAt: string;
+  orgId: string | null;
 }
 
 export interface TenantInput {
@@ -102,7 +103,7 @@ export interface TenantsService {
   listAllTenants: TenantEffect<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): TenantEffect<TenantRecord[]>;
   listTenantsByOwnerUserId(ownerUserId: string): TenantEffect<TenantRecord[]>;
-  listTenantApps(organizationIds?: readonly string[]): TenantEffect<TenantAppRecord[]>;
+  listTenantApps(): TenantEffect<TenantAppRecord[]>;
   listBindings: TenantEffect<TenantBinding[]>;
   listBindingsForTenant(tenantId: string): TenantEffect<TenantBindingRecord[]>;
   createBinding(input: CreateBindingInput): TenantEffect<TenantBindingRecord>;
@@ -216,12 +217,7 @@ export const TenantsLive = Layer.effect(
         return rows.map(toTenantRecord);
       }),
 
-      listTenantApps: Effect.fn("TenantsService.listTenantApps")(function* (organizationIds) {
-        if (organizationIds?.length === 0) return [];
-        const conditions = [eq(tenantsTable.status, "active")];
-        if (organizationIds) {
-          conditions.push(inArray(tenantsTable.orgId, organizationIds));
-        }
+      listTenantApps: Effect.fn("TenantsService.listTenantApps")(function* () {
         const rows = yield* query(() =>
           db
             .select({
@@ -230,6 +226,7 @@ export const TenantsLive = Layer.effect(
               status: tenantsTable.status,
               ownerKind: tenantsTable.ownerKind,
               createdAt: tenantsTable.createdAt,
+              orgId: tenantsTable.orgId,
               hostname: domainBindingsTable.hostname,
               nodeId: nodesTable.id,
               nodeSlug: nodeSlugSql,
@@ -246,7 +243,7 @@ export const TenantsLive = Layer.effect(
             )
             .leftJoin(nodesTable, eq(nodesTable.tenantId, tenantsTable.id))
             .leftJoin(placesTable, eq(placesTable.id, nodesTable.placeId))
-            .where(and(...conditions, listedNode)),
+            .where(and(eq(tenantsTable.status, "active"), listedNode)),
         );
 
         const seen = new Set<string>();
@@ -271,6 +268,7 @@ export const TenantsLive = Layer.effect(
                 : null,
             createdAt:
               row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+            orgId: row.orgId ?? null,
           });
         }
         return apps;
