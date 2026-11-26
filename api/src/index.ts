@@ -15,10 +15,10 @@ import {
   scheduleCommunityJoinCodeBackfill,
 } from "./lib/community-join-code";
 import { ContextSchema } from "./lib/context";
+import { MEMBER_PAGE_SIZE } from "./lib/member-pages";
 import {
   grantApplicantAdmin,
   linkOfficialDao,
-  MEMBER_PAGE_SIZE,
   officialDaoOf,
   parseOfficialApplication,
   resolveApplicationCommunity,

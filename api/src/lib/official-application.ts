@@ -6,6 +6,7 @@ import { OfficialApplicationPayloadSchema } from "../contract";
 import { resolveNetwork } from "../services/near-rpc";
 import type { NodeRecord, NodesService } from "../services/nodes";
 import type { PlacesService } from "../services/places";
+import { MEMBER_PAGE_SIZE } from "./member-pages";
 
 type AuthClient = ContractRouterClient<authContract>;
 
@@ -56,8 +57,6 @@ export async function resolveApplicationCommunity(
   }
   return { ...node, orgId: node.orgId };
 }
-
-export const MEMBER_PAGE_SIZE = 100;
 
 async function findMember(auth: AuthClient, organizationId: string, userId: string) {
   let offset = 0;
