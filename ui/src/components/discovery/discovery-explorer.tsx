@@ -42,6 +42,7 @@ import { placeMapPinsQueryOptions } from "@/lib/queries/places";
 import { CommunityChannels, CommunityUpdates } from "./community-updates";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, EventList } from "./event-list";
+import { suggestPlaces } from "./place-suggestions";
 import { ReportContent } from "./report-content";
 
 const GeographicMap = lazy(() =>
@@ -143,6 +144,7 @@ export function DiscoveryExplorer({
     if (scoped) return false;
     return query ? place.name.toLowerCase().includes(query) || place.slug.includes(query) : true;
   });
+  const suggestions = nodes.length === 0 ? suggestPlaces(placePins, query) : [];
   const basic = selected
     ? undefined
     : [...nodes, ...(regions.data ?? [])].find(
@@ -297,7 +299,36 @@ export function DiscoveryExplorer({
             <EmptyState
               icon={MagnifyingGlassIcon}
               title={t("explore.empty.title")}
-              description={t("explore.empty.description")}
+              description={
+                suggestions.length > 0 ? (
+                  <ul className="flex flex-col gap-2" data-testid="explore-place-suggestions">
+                    {suggestions.map((place) => (
+                      <li key={place.id}>
+                        {t(
+                          place.activated
+                            ? "explore.empty.placeLive"
+                            : "explore.empty.placeMissing",
+                          { place: place.name },
+                        )}{" "}
+                        <Link
+                          to="/places/$slug"
+                          params={{ slug: place.slug }}
+                          className="font-medium text-foreground underline underline-offset-4"
+                          data-testid={`explore-place-suggestion-${place.slug}`}
+                        >
+                          {t(
+                            place.activated
+                              ? "explore.empty.placeOpen"
+                              : "explore.empty.placeStart",
+                          )}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  t("explore.empty.description")
+                )
+              }
               action={
                 filtered ? (
                   <Button
