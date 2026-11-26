@@ -149,12 +149,12 @@ it("asks before starting a community and says who will own it", async () => {
   mockApi(null);
   const router = await showPlace("nigeria");
   fireEvent.click(await screen.findByTestId("place-page.start-community"));
-  expect(await screen.findByText("Start Nigeria community?")).toBeTruthy();
+  expect(await screen.findByText("Start a community for Nigeria?")).toBeTruthy();
   expect(screen.getByText(/You'll own this community/)).toBeTruthy();
   expect(router.state.location.pathname).toBe("/places/nigeria");
 
   fireEvent.click(screen.getByTestId("confirm-dialog-cancel"));
-  await waitFor(() => expect(screen.queryByText("Start Nigeria community?")).toBeNull());
+  await waitFor(() => expect(screen.queryByText("Start a community for Nigeria?")).toBeNull());
   expect(router.state.location.pathname).toBe("/places/nigeria");
 
   fireEvent.click(screen.getByTestId("place-page.start-community"));
