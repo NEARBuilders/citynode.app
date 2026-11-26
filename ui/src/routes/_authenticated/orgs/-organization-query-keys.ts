@@ -1,4 +1,5 @@
 export const orgMembersQueryKey = (orgId: string) => ["org-members", orgId] as const;
+export const orgMemberCountQueryKey = (orgId: string) => ["org-members", orgId, "count"] as const;
 export const orgActiveRoleQueryKey = (orgId: string) => ["org-active-role", orgId] as const;
 export const orgInvitationsQueryKey = (orgId: string) => ["org-invitations", orgId] as const;
 export const orgApiKeysQueryKey = (orgId: string) => ["org-api-keys", orgId] as const;

@@ -9,13 +9,13 @@ describe("My community empty state", () => {
     "no-org",
     "no-tenant",
     "no-node",
-  ] as const)("offers Explore before Start a community to members (%s)", (reason) => {
+  ] as const)("offers Explore before Make a community official to members (%s)", (reason) => {
     const content = getNodeEmptyStateContent(reason, false);
     expect(destinations(content)).toEqual(["/explore", "/apply"]);
     expect(content.actions.map((action) => action.primary)).toEqual([true, false]);
     expect(content.actions.map((action) => action.label)).toEqual([
       "Explore communities",
-      "Start a community",
+      "Make a community official",
     ]);
   });
 

@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer } from "effect";
+import type { Database } from "../db/index";
 import { DatabaseTag } from "../db/layer";
 import {
   type NodeMetadata,
@@ -88,6 +89,8 @@ export interface NodesService {
   listSummaries(filter?: NodeListFilter): NodeEffect<NodeListSummaryRecord[]>;
   getById(id: string): NodeEffect<NodeRecord | null>;
   getByPlace(placeId: string): NodeEffect<NodeRecord | null>;
+  listMissingJoinCodes(): NodeEffect<MissingJoinCode[]>;
+  attachJoinCodeIfMissing(id: string, joinCodeId: string): NodeEffect<boolean>;
   activateForPlace(input: {
     placeId: string;
     orgId: string;
@@ -115,6 +118,17 @@ export interface NodesService {
 }
 
 export class NodesTag extends Context.Service<NodesTag, NodesService>()("api/Nodes") {}
+
+export interface MissingJoinCode {
+  id: string;
+  orgId: string;
+  slug: string;
+  name: string;
+  kind: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export const nodesTestingDatabase: { current: Database | null } = { current: null };
 
 type NodeRow = typeof nodesTable.$inferSelect;
 
@@ -234,12 +248,17 @@ function withoutOfficialDao(
   metadata: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   if (!metadata) return metadata;
-  const { daoAccountId: _daoAccountId, daoNetwork: _daoNetwork, ...rest } = metadata;
+  const {
+    daoAccountId: _daoAccountId,
+    daoNetwork: _daoNetwork,
+    joinCodeId: _joinCodeId,
+    ...rest
+  } = metadata;
   return rest;
 }
 
 function keepingOfficialDao(next: SQL): SQL {
-  return sql`${next} || jsonb_strip_nulls(jsonb_build_object('daoAccountId', ${nodesTable.metadata} -> 'daoAccountId', 'daoNetwork', ${nodesTable.metadata} -> 'daoNetwork'))`;
+  return sql`${next} || jsonb_strip_nulls(jsonb_build_object('daoAccountId', ${nodesTable.metadata} -> 'daoAccountId', 'daoNetwork', ${nodesTable.metadata} -> 'daoNetwork', 'joinCodeId', ${nodesTable.metadata} -> 'joinCodeId'))`;
 }
 
 function replaceMetadataKeepingKind(replacement: string): SQL {
@@ -315,6 +334,7 @@ export const NodesLive = Layer.effect(
   NodesTag,
   Effect.gen(function* () {
     const db = yield* DatabaseTag;
+    nodesTestingDatabase.current = db;
 
     const identityColumns = { node: nodesTable, slug: nodeSlugSql, name: nodeNameSql };
 
@@ -513,6 +533,53 @@ export const NodesLive = Layer.effect(
       getByPlace: Effect.fn("NodesService.getByPlace")(function* (placeId) {
         return (yield* readNodes(eq(nodesTable.placeId, placeId)))[0] ?? null;
       }),
+
+      listMissingJoinCodes: Effect.fn("NodesService.listMissingJoinCodes")(function* () {
+        const rows = yield* readNodes(
+          and(
+            isNotNull(nodesTable.orgId),
+            listedNode,
+            sql`coalesce(${nodesTable.metadata}->>'joinCodeId', '') = ''`,
+          ),
+        );
+        return rows.flatMap((node) =>
+          node.orgId
+            ? [
+                {
+                  id: node.id,
+                  orgId: node.orgId,
+                  slug: node.slug,
+                  name: node.name,
+                  kind: node.kind,
+                  metadata: node.metadata,
+                },
+              ]
+            : [],
+        );
+      }),
+
+      attachJoinCodeIfMissing: Effect.fn("NodesService.attachJoinCodeIfMissing")(
+        function* (id, joinCodeId) {
+          if (joinCodeId.length === 0) return false;
+          const updatedAt = yield* DateTime.nowAsDate;
+          const rows = yield* query(() =>
+            db
+              .update(nodesTable)
+              .set({
+                metadata: sql`${nodesTable.metadata} || jsonb_build_object('joinCodeId', ${joinCodeId}::text)`,
+                updatedAt,
+              })
+              .where(
+                and(
+                  eq(nodesTable.id, id),
+                  sql`coalesce(${nodesTable.metadata}->>'joinCodeId', '') = ''`,
+                ),
+              )
+              .returning({ id: nodesTable.id }),
+          );
+          return rows.length > 0;
+        },
+      ),
 
       activateForPlace: Effect.fn("NodesService.activateForPlace")(function* (input) {
         const outcome = yield* query(() =>

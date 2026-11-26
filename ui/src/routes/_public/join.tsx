@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { pluginHref, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { PageContainer } from "@/components/layout/page-container";
+import { joinReturnPath } from "@/lib/join-sign-in";
 
 export const Route = createFileRoute("/_public/join")({
   validateSearch: z.object({
@@ -31,9 +32,7 @@ function Join() {
       return;
     }
     if (!session) {
-      window.location.assign(
-        pluginHref("/login", { redirect: `/join?place=${encodeURIComponent(place)}` }),
-      );
+      window.location.assign(pluginHref("/login", { redirect: joinReturnPath(place) }));
       return;
     }
     let cancelled = false;
