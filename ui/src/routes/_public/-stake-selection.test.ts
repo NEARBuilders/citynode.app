@@ -44,6 +44,17 @@ describe("stake community selection", () => {
     ).toBeNull();
   });
 
+  it("keeps the directory when the viewer asks to browse every community", () => {
+    expect(
+      getActiveOrganizationNodeId({
+        activeOrganizationId: "org-1",
+        browseAll: true,
+        communities: [{ node: { id: "node-1" }, viewerMembership: "active" }],
+        hasRequestedNode: false,
+      }),
+    ).toBeNull();
+  });
+
   it("keeps the directory when the active organization has no community", () => {
     expect(
       getActiveOrganizationNodeId({

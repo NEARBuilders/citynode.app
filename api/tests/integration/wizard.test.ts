@@ -491,6 +491,8 @@ describe("Tenant + Node + Binding wizard flow", () => {
       expect(resultAccounts.has(accounts.connected)).toBe(true);
       expect(resultAccounts.has(accounts.unrelated)).toBe(true);
       expect(results.every((result) => result.viewerMembership === null)).toBe(true);
+      const names = results.map((result) => result.name);
+      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
     });
 
     it("keeps tenant organization ids out of the public tenant directory", async () => {

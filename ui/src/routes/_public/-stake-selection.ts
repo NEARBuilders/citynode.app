@@ -13,14 +13,16 @@ export function getStakeScopeKey(
 
 export function getActiveOrganizationNodeId({
   activeOrganizationId,
+  browseAll = false,
   communities,
   hasRequestedNode,
 }: {
   activeOrganizationId: string | null;
+  browseAll?: boolean;
   communities: StakeCommunity[];
   hasRequestedNode: boolean;
 }) {
-  if (!activeOrganizationId || hasRequestedNode) return null;
+  if (!activeOrganizationId || hasRequestedNode || browseAll) return null;
   return (
     communities.find((community) => community.node && community.viewerMembership === "active")?.node
       ?.id ?? null

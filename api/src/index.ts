@@ -2014,7 +2014,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           .sort(
             (a, b) =>
               (a.viewerMembership ? rank[a.viewerMembership] : 2) -
-              (b.viewerMembership ? rank[b.viewerMembership] : 2),
+                (b.viewerMembership ? rank[b.viewerMembership] : 2) || a.name.localeCompare(b.name),
           );
       }),
 
