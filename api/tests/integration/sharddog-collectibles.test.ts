@@ -39,6 +39,7 @@ vi.mock("@/services/sharddog-client", async (importOriginal) => {
       ...original.createStubShardDogClient("https://shard.dog"),
       describeDrop: async (dropId: string) => {
         describeCalls.set(dropId, (describeCalls.get(dropId) ?? 0) + 1);
+        if (dropId.startsWith("slow")) await new Promise((resolve) => setTimeout(resolve, 50));
         if (dropId.startsWith("broken")) throw new Error("ShardDog responded 503");
         if (dropId.startsWith("named"))
           return { name: "Builders pup", imageUrl: "https://cdn.shard.dog/pup.png" };
@@ -219,6 +220,14 @@ describe("Community collectibles", () => {
     await admin.setShardDogDrop({ organizationId: org, dropId: "broken-cached" });
     for (let view = 0; view < 3; view++) await visitor.getNodeCollectibles({ nodeId });
     expect(describeCalls.get("broken-cached")).toBe(1);
+  });
+
+  it("shares one ShardDog lookup between visitors who arrive at the same time", async () => {
+    const { org, nodeId, admin } = await community();
+    const visitor = await getPluginClient();
+    await admin.setShardDogDrop({ organizationId: org, dropId: "slow-member" });
+    await Promise.all([1, 2, 3].map(() => visitor.getNodeCollectibles({ nodeId })));
+    expect(describeCalls.get("slow-member")).toBe(1);
   });
 
   it("shows at most the 12 newest event badges", async () => {

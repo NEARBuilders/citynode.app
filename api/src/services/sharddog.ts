@@ -50,6 +50,17 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
         string,
         { details: ShardDogDropDetails | null; expiresAt: number }
       >();
+      const pendingDetails = new Map<string, Promise<ShardDogDropDetails | null>>();
+
+      const describeOnce = (dropId: string) => {
+        const pending = pendingDetails.get(dropId);
+        if (pending) return pending;
+        const request = config.client
+          .describeDrop(dropId)
+          .finally(() => pendingDetails.delete(dropId));
+        pendingDetails.set(dropId, request);
+        return request;
+      };
 
       const service: ShardDogService = {
         enabled: config.enabled,
@@ -58,7 +69,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
           const now = yield* Clock.currentTimeMillis;
           const cached = detailsCache.get(dropId);
           if (cached && cached.expiresAt > now) return cached.details;
-          const fetched = yield* Effect.tryPromise(() => config.client.describeDrop(dropId)).pipe(
+          const fetched = yield* Effect.tryPromise(() => describeOnce(dropId)).pipe(
             Effect.map((details) => ({ details, ttl: DETAILS_TTL_MS })),
             Effect.orElseSucceed(() => ({ details: null, ttl: FAILED_DETAILS_TTL_MS })),
           );
