@@ -50,7 +50,7 @@ describe("sidebar per persona", () => {
     ]);
   });
 
-  it("offers Start a community instead of My community to people without one", () => {
+  it("offers Make a community official instead of My community to people without one", () => {
     expect(sidebar({ hasOrganization: false }, "member").map(navSlug)).toEqual([
       "dashboard",
       "start-community",

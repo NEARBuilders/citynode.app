@@ -198,7 +198,7 @@ export const englishAppMessages = {
   "landing.description":
     "Local communities that each run a NEAR validator. Find yours, meet the people, and stake to keep it online.",
   "landing.explore": "Explore communities",
-  "landing.start": "Start a community",
+  "landing.start": "Make a community official",
   "landing.stats.communities": "Communities",
   "landing.stats.cities": "Cities",
   "landing.stats.regions": "States & countries",
@@ -377,7 +377,7 @@ const spanishAppMessages = {
   "landing.description":
     "Comunidades locales que operan un validador de NEAR. Encuentra la tuya, conoce a las personas y delega para mantenerla en línea.",
   "landing.explore": "Explorar comunidades",
-  "landing.start": "Crear una comunidad",
+  "landing.start": "Oficializar una comunidad",
   "landing.stats.communities": "Comunidades",
   "landing.stats.cities": "Ciudades",
   "landing.stats.regions": "Estados y países",
@@ -554,7 +554,7 @@ const frenchAppMessages = {
   "landing.description":
     "Des communautés locales qui exploitent chacune un validateur NEAR. Trouvez la vôtre, rencontrez ses membres et déléguez pour la maintenir en ligne.",
   "landing.explore": "Explorer les communautés",
-  "landing.start": "Créer une communauté",
+  "landing.start": "Officialiser une communauté",
   "landing.stats.communities": "Communautés",
   "landing.stats.cities": "Villes",
   "landing.stats.regions": "États et pays",
@@ -728,7 +728,7 @@ const chineseAppMessages = {
   "landing.description":
     "每个本地社区都运行一个 NEAR 验证节点。找到你的社区、认识成员，并通过质押帮助节点保持在线。",
   "landing.explore": "探索社区",
-  "landing.start": "创建社区",
+  "landing.start": "申请成为官方社区",
   "landing.stats.communities": "社区",
   "landing.stats.cities": "城市",
   "landing.stats.regions": "州和国家",

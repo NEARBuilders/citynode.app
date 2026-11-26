@@ -313,10 +313,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "用户可以找到此社区及其活动。",
   ],
   "community.start": [
-    "Start a community",
-    "Crear una comunidad",
-    "Créer une communauté",
-    "创建社区",
+    "Make a community official",
+    "Oficializar una comunidad",
+    "Officialiser une communauté",
+    "申请成为官方社区",
   ],
   "community.stopFeaturing": [
     "Stop featuring",

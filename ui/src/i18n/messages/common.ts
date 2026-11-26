@@ -1117,7 +1117,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Le staking va aux validateurs de cette communauté.",
     "质押将分配给此社区的验证节点。",
   ],
-  "dashboard.startCommunity": [
+  "dashboard.makeOfficial": [
     "Make a community official",
     "Oficializar una comunidad",
     "Officialiser une communauté",
