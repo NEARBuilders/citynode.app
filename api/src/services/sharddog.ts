@@ -1,5 +1,5 @@
 import type { ORPCError } from "@orpc/server";
-import { and, eq, exists, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -34,6 +34,14 @@ export interface CollectibleAward {
   hasAccount: boolean;
 }
 
+export interface AwardedCollectible {
+  organizationId: string;
+  kind: "membership" | "event";
+  eventId: string | null;
+  viewUrl: string;
+  awardedAt: Date;
+}
+
 export interface ShardDogService {
   readonly enabled: boolean;
   readonly client: ShardDogClient;
@@ -52,6 +60,7 @@ export interface ShardDogService {
   queueAwards(organizationId: string): ShardDogEffect<void>;
   deliverAwards(filter: { organizationId?: string; userId?: string }): ShardDogEffect<void>;
   awardsFor(userId: string, organizationId?: string): ShardDogEffect<CollectibleAward[]>;
+  awardedTo(accountId: string): ShardDogEffect<AwardedCollectible[]>;
 }
 
 export class ShardDogTag extends Context.Service<ShardDogTag, ShardDogService>()("api/ShardDog") {}
@@ -400,6 +409,40 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
               viewUrl: row.viewUrl,
               hasAccount: !!row.accountId,
             }));
+          }),
+        awardedTo: (accountId) =>
+          query(async () => {
+            const rows = await db
+              .select({
+                organizationId: sharddogAwards.organizationId,
+                kind: sharddogAwards.kind,
+                eventId: sharddogAwards.eventId,
+                viewUrl: sharddogAwards.viewUrl,
+                awardedAt: sharddogAwards.awardedAt,
+              })
+              .from(sharddogAwards)
+              .where(
+                and(
+                  eq(sharddogAwards.accountId, accountId),
+                  eq(sharddogAwards.status, "awarded"),
+                  isNotNull(sharddogAwards.viewUrl),
+                  isNotNull(sharddogAwards.awardedAt),
+                ),
+              )
+              .orderBy(desc(sharddogAwards.awardedAt), desc(sharddogAwards.id));
+            return rows.flatMap((row) =>
+              row.viewUrl && row.awardedAt
+                ? [
+                    {
+                      organizationId: row.organizationId,
+                      kind: row.kind,
+                      eventId: row.eventId,
+                      viewUrl: row.viewUrl,
+                      awardedAt: row.awardedAt,
+                    },
+                  ]
+                : [],
+            );
           }),
       };
 

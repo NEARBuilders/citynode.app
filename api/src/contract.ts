@@ -341,6 +341,21 @@ export const MyCollectiblesSchema = z.object({
   ),
 });
 
+export const AccountCollectiblesSchema = z.object({
+  enabled: z.boolean(),
+  collectibles: z.array(
+    z.object({
+      organizationId: z.string(),
+      communityName: z.string(),
+      kind: z.enum(["membership", "event"]),
+      eventId: z.string().nullable(),
+      eventTitle: z.string().nullable(),
+      awardedAt: z.string(),
+      viewUrl: z.string(),
+    }),
+  ),
+});
+
 export const OnboardCommunitySchema = z.object({
   name: z.string().min(1),
   href: z.string(),
@@ -1309,6 +1324,17 @@ export const contract = oc.router({
     .input(z.object({ organizationId: z.string().min(1).optional() }))
     .output(MyCollectiblesSchema)
     .errors({ UNAUTHORIZED }),
+
+  getAccountCollectibles: oc
+    .route({
+      method: "GET",
+      path: "/collectibles/accounts/{accountId}",
+      summary: "List the City Node ShardDogs awarded to a NEAR account",
+      description:
+        "Public — the membership and event ShardDogs this NEAR account has been awarded by checking in, newest first, each with its View in ShardDog link. Only live communities and published events are listed; pending awards are left out.",
+    })
+    .input(z.object({ accountId: z.string().min(1).max(64) }))
+    .output(AccountCollectiblesSchema),
 
   getMyAttendance: oc
     .route({

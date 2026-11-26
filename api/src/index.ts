@@ -1430,6 +1430,39 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
+      getAccountCollectibles: builder.getAccountCollectibles.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        if (!services.sharddog.enabled) return { enabled: false, collectibles: [] };
+        const awards = yield* services.sharddog.awardedTo(input.accountId);
+        const communities = yield* services.discovery.organizationEvents(
+          [...new Set(awards.map((award) => award.organizationId))],
+          { liveTenantsOnly: true, publicOnly: true },
+        );
+        return {
+          enabled: true,
+          collectibles: awards.flatMap((award) => {
+            const community = communities.get(award.organizationId);
+            if (!community?.communityName) return [];
+            const event =
+              award.kind === "event"
+                ? community.events.find((item) => item.id === award.eventId)
+                : undefined;
+            if (award.kind === "event" && !event) return [];
+            return [
+              {
+                organizationId: award.organizationId,
+                communityName: community.communityName,
+                kind: award.kind,
+                eventId: award.eventId,
+                eventTitle: event?.title ?? null,
+                awardedAt: award.awardedAt.toISOString(),
+                viewUrl: award.viewUrl,
+              },
+            ];
+          }),
+        };
+      }),
+
       getMyAttendance: builder.getMyAttendance.use(requireAuth).effect(function* ({
         input,
         context,
