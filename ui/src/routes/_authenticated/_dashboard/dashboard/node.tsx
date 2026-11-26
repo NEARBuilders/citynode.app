@@ -8,6 +8,7 @@ import { pageTitle } from "@/lib/page-title";
 import { communityOrganizationId, resolveCommunityMembership } from "@/lib/personal-organization";
 import { fetchStakingValidators, nodeQueryKeys } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
+import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { canManageCommunity, resolveTeamWorkspace } from "@/lib/team-workspace";
 import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
 import { hasNodeProposalReviewPermission, resolveCommunityTools } from "./node/-node-access";
@@ -58,8 +59,8 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       };
     }
 
-    const tenant = await context.apiClient
-      .resolveTenantByOrgId({ orgId: communityOrgId })
+    const tenant = await context.queryClient
+      .fetchQuery(tenantByOrgQueryOptions(context.apiClient, communityOrgId))
       .catch(() => null);
     if (!tenant) {
       return {

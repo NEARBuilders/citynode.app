@@ -44,13 +44,15 @@ export async function ensureCommunityHeaderData(
   nodeId: string,
 ) {
   const { queryClient, apiClient } = context;
+  const activeOrganizationId = context.auth.activeOrganizationId;
   const [node] = await Promise.all([
     queryClient.ensureQueryData(nodeByIdQueryOptions(apiClient, nodeId)).catch(() => null),
     queryClient.prefetchQuery(discoveryNodeQueryOptions(apiClient, nodeId)),
+    activeOrganizationId
+      ? queryClient.prefetchQuery(tenantByOrgQueryOptions(apiClient, activeOrganizationId))
+      : null,
     queryClient
-      .ensureQueryData(
-        communityAuthContextQueryOptions(apiClient, context.auth.activeOrganizationId),
-      )
+      .ensureQueryData(communityAuthContextQueryOptions(apiClient, activeOrganizationId))
       .catch(() => null),
   ]);
   if (node?.tenantId) {
