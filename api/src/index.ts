@@ -1457,7 +1457,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 ? ("awarded" as const)
                 : award.claimUrl
                   ? ("claim" as const)
-                  : award.hasAccount
+                  : award.hasAccount || award.retrying
                     ? ("pending" as const)
                     : ("needs_account" as const),
             viewUrl: award.status === "awarded" ? award.viewUrl : null,

@@ -33,6 +33,7 @@ export interface CollectibleAward {
   viewUrl: string | null;
   claimUrl: string | null;
   hasAccount: boolean;
+  retrying: boolean;
 }
 
 export interface ShardDogService {
@@ -406,11 +407,14 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                         eq(sharddogAwards.attempts, award.attempts),
                       ),
                     )
-                    .returning({ accountId: sharddogAwards.accountId }),
+                    .returning({
+                      accountId: sharddogAwards.accountId,
+                      dropId: sharddogAwards.dropId,
+                    }),
                 );
                 const [locked] = claimed;
                 if (!locked) return;
-                yield* deliverOne({ ...award, accountId: locked.accountId });
+                yield* deliverOne({ ...award, ...locked });
               }),
             { concurrency: 4, discard: true },
           );
@@ -441,6 +445,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
               viewUrl: row.viewUrl,
               claimUrl: row.claimUrl,
               hasAccount: !!row.accountId,
+              retrying: row.attempts < MAX_AWARD_ATTEMPTS,
             }));
           }),
       };

@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { Effect } from "effect";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { MAX_AWARD_ATTEMPTS } from "@/services/sharddog";
 import {
   activateTestNode,
   authedContext,
@@ -417,13 +418,37 @@ describe("ShardDog awards on event check-in", () => {
       (await client.getMyCollectibles({ organizationId: city.org })).collectibles.map(
         ({ status, claimUrl }) => [status, claimUrl],
       ),
-    ).toEqual([["needs_account", null]]);
+    ).toEqual([["pending", null]]);
 
     shardDog.failing = false;
     vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 5 * 60_000 });
     await untilStatuses(userId, city.org, ["claim"]);
     expect(shardDog.claims).toHaveLength(1);
   });
+
+  it("shows needs_account only once ShardDog has failed every claim link attempt", async () => {
+    const city = await community();
+    const event = await city.addEvent("Rainy day", "rainy-drop");
+    const userId = `giveup-${crypto.randomUUID().slice(0, 6)}`;
+
+    shardDog.failing = true;
+    city.checkIn(event.id, userId, null);
+    await city.sync();
+    await settle();
+    const client = await attendee(userId);
+    let now = Date.now();
+    for (let attempt = 1; attempt < MAX_AWARD_ATTEMPTS; attempt += 1) {
+      now += 60 * 60_000;
+      vi.useFakeTimers({ toFake: ["Date"], now });
+      expect(
+        (await client.getMyCollectibles({ organizationId: city.org })).collectibles.map(
+          ({ status }) => status,
+        ),
+      ).toEqual(["pending"]);
+      await settle();
+    }
+    await untilStatuses(userId, city.org, ["needs_account"]);
+  }, 30_000);
 
   it("keeps the claim link once handed out, even when a NEAR account shows up later", async () => {
     const city = await community();
