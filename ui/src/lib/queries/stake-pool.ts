@@ -384,6 +384,14 @@ export function formatNearBalance(balance: bigint, locale = "en") {
   return `${whole}${fraction ? `${decimal}${fraction}` : ""} NEAR`;
 }
 
+const ONE_NEAR = 1_000_000_000_000_000_000_000_000n;
+
+export function formatNearTotal(balance: bigint, locale = "en") {
+  if (balance < 1_000n * ONE_NEAR) return formatNearBalance(balance, locale);
+  const whole = (balance + ONE_NEAR / 2n) / ONE_NEAR;
+  return `${new Intl.NumberFormat(locale).format(whole)} NEAR`;
+}
+
 export function isFullCommission(numerator: number, denominator: number) {
   return denominator > 0 && numerator >= denominator;
 }

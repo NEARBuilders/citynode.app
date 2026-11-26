@@ -845,7 +845,7 @@ describe("node overview member directory", () => {
     renderOverview({ nearAccount: null });
     expect((await screen.findByTestId("dashboard-node.member-count-value")).textContent).toBe("7");
     expect(screen.getByTestId("dashboard-node.member-count-observed").textContent).toContain(
-      "Last updated",
+      "as of",
     );
     expect(screen.getByTestId("dashboard-node.members-error").textContent).toBe(
       "Couldn't load the member list.",

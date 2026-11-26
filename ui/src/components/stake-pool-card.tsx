@@ -12,6 +12,7 @@ import { presentationLabel } from "@/lib/presentation-label";
 
 import {
   formatNearBalance,
+  formatNearTotal,
   formatPoolFee,
   isFullCommission,
   stakePoolStatsQueryOptions,
@@ -153,7 +154,7 @@ function NearPoolStats({ accountId, network }: { accountId: string; network: str
         <Metric
           label={translate("stake.total")}
           loading={stats.isLoading}
-          value={statsData && formatNearBalance(statsData.totalStaked, locale)}
+          value={statsData && formatNearTotal(statsData.totalStaked, locale)}
         />
         <Metric
           label={translate("stake.fee")}

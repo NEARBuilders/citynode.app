@@ -14,6 +14,7 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSkeleton,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
@@ -150,7 +151,20 @@ function SidebarNavItem(props: NavItemProps) {
 }
 
 function SidebarNavLeaf({ item, pathname, search }: NavItemProps) {
+  const translate = useAppTranslation();
   const Icon = item.icon;
+  if (item.pending) {
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuSkeleton
+          showIcon
+          role="status"
+          aria-label={translate("org.loading")}
+          data-testid={`sidebar-nav-${navSlug(item)}-pending`}
+        />
+      </SidebarMenuItem>
+    );
+  }
   return (
     <SidebarMenuItem>
       <SidebarMenuButton

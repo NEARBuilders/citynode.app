@@ -24,7 +24,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { AppMessageId } from "@/i18n/catalogs";
-import { appErrorMessage } from "@/i18n/error-message";
+import { appErrorMessage, isPermissionError } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import {
   draftFromReport,
@@ -151,18 +151,26 @@ function EventReportPage() {
         title={translate("report.title")}
         headerTestId="report.heading"
       >
-        <EmptyState
-          icon={CalendarDotsIcon}
-          title={translate(loadError ? "report.loadError" : "events.notFound")}
-          description={loadError ? appErrorMessage(loadError, translate) : undefined}
-          action={
-            loadError && (
-              <Button variant="outline" data-testid="report-retry" onClick={retry}>
-                {translate("common.retry")}
-              </Button>
-            )
-          }
-        />
+        {isPermissionError(loadError) ? (
+          <EmptyState
+            icon={CalendarDotsIcon}
+            title={translate("report.noAccess")}
+            description={translate("report.noAccessDescription")}
+          />
+        ) : (
+          <EmptyState
+            icon={CalendarDotsIcon}
+            title={translate(loadError ? "report.loadError" : "events.notFound")}
+            description={loadError ? appErrorMessage(loadError, translate) : undefined}
+            action={
+              loadError && (
+                <Button variant="outline" data-testid="report-retry" onClick={retry}>
+                  {translate("common.retry")}
+                </Button>
+              )
+            }
+          />
+        )}
       </ActivityFormPage>
     );
   }

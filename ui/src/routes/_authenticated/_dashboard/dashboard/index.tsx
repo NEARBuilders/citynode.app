@@ -82,7 +82,8 @@ function Home() {
   const { restricted } = Route.useSearch();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const linkedNearAccount = useNearAccount();
-  const nearAccountId = useIsClient() ? linkedNearAccount : null;
+  const isClient = useIsClient();
+  const nearAccountId = isClient ? linkedNearAccount : null;
   const activeOrgId = session?.session?.activeOrganizationId ?? "";
 
   const passkeys = useQuery({
@@ -164,7 +165,9 @@ function Home() {
   const loading =
     !user ||
     organizations.isPending ||
+    (membership.status === "unknown" && organizations.isFetching && !community) ||
     (!!communityOrgId && tenant.isPending) ||
+    (!!activeOrgId && authContext.isPending) ||
     passkeys.isPending;
 
   const steps = getNextSteps(
@@ -248,7 +251,7 @@ function Home() {
           <section className="flex flex-col gap-6">
             <SectionHeader title={translate("dashboard.nextSteps")} />
             {loading ? (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3" data-testid="home-next-steps-loading">
                 <Skeleton className="h-20 w-full rounded-2xl" />
                 <Skeleton className="h-16 w-full rounded-2xl" />
                 <Skeleton className="h-16 w-full rounded-2xl" />
@@ -289,7 +292,7 @@ function Home() {
           <AttendanceRecord testId="home.attendance" />
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
-          {user ? (
+          {user && isClient && !passkeys.isPending ? (
             <IdentityCard
               user={user}
               nearAccountId={nearAccountId}

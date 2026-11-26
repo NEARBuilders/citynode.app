@@ -478,4 +478,13 @@ describe("monthly report form", () => {
     renderPage();
     expect((await screen.findByTestId("monthly-report.retry")).textContent).toBe("Try again");
   });
+
+  it("says who can report, with no retry, when the viewer may not see this report", async () => {
+    harness.report = () => Promise.reject(Object.assign(new Error("no"), { code: "FORBIDDEN" }));
+    renderPage();
+    expect(await screen.findByText("Only this community's organizers can report")).toBeTruthy();
+    expect(screen.getByText(/the events team of this community see and submit/)).toBeTruthy();
+    expect(screen.queryByTestId("monthly-report.retry")).toBeNull();
+    expect(screen.getByTestId("monthly-report.back")).toBeTruthy();
+  });
 });

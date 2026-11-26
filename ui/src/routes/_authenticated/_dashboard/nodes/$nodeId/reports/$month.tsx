@@ -15,7 +15,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { AppMessageId } from "@/i18n/catalogs";
-import { appErrorMessage } from "@/i18n/error-message";
+import { appErrorMessage, isPermissionError } from "@/i18n/error-message";
 import {
   resolveAppLocale,
   translateAppMessage,
@@ -94,6 +94,18 @@ function MonthlyReportPage() {
             <Skeleton key={key} className="h-11 w-full" />
           ))}
         </div>
+      </MonthlyReportShell>
+    );
+  }
+
+  if (valid && !report.data && isPermissionError(report.error)) {
+    return (
+      <MonthlyReportShell title={title}>
+        <EmptyState
+          icon={CalendarCheckIcon}
+          title={translate("report.noAccess")}
+          description={translate("report.noAccessDescription")}
+        />
       </MonthlyReportShell>
     );
   }

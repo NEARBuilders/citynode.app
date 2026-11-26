@@ -392,6 +392,16 @@ describe("proposal descriptions", () => {
     expect(proposalText(trezu)).toBe("Vote abstain\nvote.dao.vote()");
   });
 
+  it("drops Trezu's action line and markdown markers from payment requests", () => {
+    const payment =
+      "* Proposal Action: payment-transfer <br>* Recipient: harbor.near <br>* Notes: **October** venue";
+    expect(proposalText(payment)).toBe("Recipient: harbor.near\nOctober venue");
+    expect(proposalTitle(payment)).toBe("October venue");
+    expect(proposalTitle("* Proposal Action: transfer <br>* Summary: Pay the venue")).toBe(
+      "Pay the venue",
+    );
+  });
+
   it("uses the Title line in the list, or the first line", () => {
     expect(proposalTitle(trezu)).toBe("Vote abstain");
     expect(proposalTitle("Set treasury policy\nmore")).toBe("Set treasury policy");

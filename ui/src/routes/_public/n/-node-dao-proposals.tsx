@@ -364,26 +364,47 @@ export function proposalKindSummary(proposal: SputnikProposal, translate: Transl
   return translate("daoProposals.kindOther", { kind: name ?? "—" });
 }
 
+const TREZU_LINE = /^[*-]\s+([A-Za-z][A-Za-z ]*):\s*(.*)$/;
+const TREZU_TEXT_LABELS = new Set(["title", "summary", "description", "notes"]);
+const TREZU_HIDDEN_LABELS = new Set(["proposal action"]);
+
+function cleanLine(line: string): string {
+  const labelled = TREZU_LINE.exec(line);
+  const text = labelled
+    ? TREZU_TEXT_LABELS.has(labelled[1]?.toLowerCase() ?? "")
+      ? (labelled[2] ?? "")
+      : `${labelled[1]}: ${labelled[2] ?? ""}`
+    : line.replace(/^[*-]\s+/, "");
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .trim();
+}
+
 function descriptionLines(description: string): string[] {
   return (description.split("$$$$")[0] ?? "")
     .replace(/<br\s*\/?>/gi, "\n")
     .split("\n")
-    .map((line) => line.trim());
+    .map((line) => line.trim())
+    .filter((line) => {
+      const label = TREZU_LINE.exec(line)?.[1]?.toLowerCase();
+      return !label || !TREZU_HIDDEN_LABELS.has(label);
+    });
 }
 
-const TREZU_LABEL = /^\*\s*(Title|Summary|Description|Notes):\s*/i;
-
 export function proposalText(description: string): string {
-  return descriptionLines(description)
-    .map((line) => line.replace(TREZU_LABEL, ""))
-    .join("\n")
-    .trim();
+  return descriptionLines(description).map(cleanLine).join("\n").trim();
 }
 
 export function proposalTitle(description: string): string {
   const lines = descriptionLines(description).filter(Boolean);
-  const title = lines.find((line) => /^\*\s*Title:/i.test(line));
-  return (title ?? lines[0] ?? "").replace(/^\*\s*Title:\s*/i, "").trim();
+  const label = (line: string) => TREZU_LINE.exec(line)?.[1]?.toLowerCase();
+  const title =
+    lines.find((line) => label(line) === "title") ??
+    lines.find((line) => label(line) === "summary" || label(line) === "description") ??
+    lines.find((line) => label(line) === "notes") ??
+    lines[0];
+  return title ? cleanLine(title) : "";
 }
 
 function submittedAt(proposal: SputnikProposal): number {

@@ -47,6 +47,7 @@ export function useShellNav(
       hasOrganization: isAdmin
         ? isOrganizationsLoading || organizations.length > 0
         : membership.status !== "none",
+      membershipPending: signedIn && !isAdmin && membership.status === "unknown",
       canCurate,
       isAdmin,
     },
