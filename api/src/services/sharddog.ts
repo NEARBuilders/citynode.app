@@ -54,23 +54,22 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
       const service: ShardDogService = {
         enabled: config.enabled,
         client: config.client,
-        dropDetails: (dropId) =>
-          Effect.gen(function* () {
-            const now = yield* Clock.currentTimeMillis;
-            const cached = detailsCache.get(dropId);
-            if (cached && cached.expiresAt > now) return cached.details;
-            const fetched = yield* Effect.tryPromise(() => config.client.describeDrop(dropId)).pipe(
-              Effect.map((details) => ({ details, ttl: DETAILS_TTL_MS })),
-              Effect.orElseSucceed(() => ({ details: null, ttl: FAILED_DETAILS_TTL_MS })),
-            );
-            detailsCache.delete(dropId);
-            if (detailsCache.size >= DETAILS_CACHE_LIMIT) {
-              const oldest = detailsCache.keys().next().value;
-              if (oldest !== undefined) detailsCache.delete(oldest);
-            }
-            detailsCache.set(dropId, { details: fetched.details, expiresAt: now + fetched.ttl });
-            return fetched.details;
-          }),
+        dropDetails: Effect.fn("ShardDogService.dropDetails")(function* (dropId: string) {
+          const now = yield* Clock.currentTimeMillis;
+          const cached = detailsCache.get(dropId);
+          if (cached && cached.expiresAt > now) return cached.details;
+          const fetched = yield* Effect.tryPromise(() => config.client.describeDrop(dropId)).pipe(
+            Effect.map((details) => ({ details, ttl: DETAILS_TTL_MS })),
+            Effect.orElseSucceed(() => ({ details: null, ttl: FAILED_DETAILS_TTL_MS })),
+          );
+          detailsCache.delete(dropId);
+          if (detailsCache.size >= DETAILS_CACHE_LIMIT) {
+            const oldest = detailsCache.keys().next().value;
+            if (oldest !== undefined) detailsCache.delete(oldest);
+          }
+          detailsCache.set(dropId, { details: fetched.details, expiresAt: now + fetched.ttl });
+          return fetched.details;
+        }),
         drops: (organizationId) =>
           query(async () => {
             const [membership, events] = await Promise.all([

@@ -1356,21 +1356,18 @@ export default createPlugin.withPlugins<PluginsClient>()({
               ]
             : []),
           ...drops.events
-            .filter((event) => event.dropId)
+            .filter(
+              (event): event is (typeof drops.events)[number] & { dropId: string } =>
+                event.dropId !== null,
+            )
             .slice(0, MAX_EVENT_COLLECTIBLES)
-            .flatMap((event) =>
-              event.dropId
-                ? [
-                    {
-                      kind: "event" as const,
-                      dropId: event.dropId,
-                      eventId: event.eventId,
-                      eventTitle: event.title,
-                      eventStartsAt: event.startsAt,
-                    },
-                  ]
-                : [],
-            ),
+            .map((event) => ({
+              kind: "event" as const,
+              dropId: event.dropId,
+              eventId: event.eventId,
+              eventTitle: event.title,
+              eventStartsAt: event.startsAt,
+            })),
         ];
         const { client } = services.sharddog;
         const collectibles = yield* Effect.forEach(

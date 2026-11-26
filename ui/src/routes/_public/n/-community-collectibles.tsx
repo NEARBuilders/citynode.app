@@ -6,7 +6,7 @@ import { useAppTranslation } from "@/i18n/runtime";
 
 type Collectible = Awaited<ReturnType<ApiClient["getNodeCollectibles"]>>["collectibles"][number];
 
-export function nodeCollectiblesQueryOptions(apiClient: ApiClient, nodeId: string) {
+function nodeCollectiblesQueryOptions(apiClient: ApiClient, nodeId: string) {
   return queryOptions({
     queryKey: ["node-collectibles", nodeId],
     queryFn: () => apiClient.getNodeCollectibles({ nodeId }),
