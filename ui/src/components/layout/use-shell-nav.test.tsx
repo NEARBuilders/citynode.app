@@ -56,13 +56,13 @@ function sidebarSlugs(isAdmin = false) {
 }
 
 describe("sidebar community entry", () => {
-  it("offers Start a community to someone whose only organization is personal", () => {
+  it("offers Make a community official to someone whose only organization is personal", () => {
     identity({ organizations: [personal], activeOrganizationId: personal.id });
     expect(sidebarSlugs()).toContain("start-community");
     expect(sidebarSlugs()).not.toContain("my-node");
   });
 
-  it("offers Start a community to someone with no organization", () => {
+  it("offers Make a community official to someone with no organization", () => {
     identity({ organizations: [] });
     expect(sidebarSlugs()).toContain("start-community");
   });
@@ -75,7 +75,7 @@ describe("sidebar community entry", () => {
     expect(sidebarSlugs()).not.toContain("start-community");
   });
 
-  it("doesn't flash Start a community while organizations load or fail", () => {
+  it("doesn't flash Make a community official while organizations load or fail", () => {
     identity({ organizations: undefined, loading: true });
     expect(sidebarSlugs()).not.toContain("start-community");
     identity({ organizations: undefined });
