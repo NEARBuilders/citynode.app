@@ -271,7 +271,7 @@ function OrganizationsList() {
               data-testid="orgs-start-community"
             >
               <RocketLaunchIcon />
-              {translate("dashboard.startCommunity")}
+              {translate("dashboard.makeOfficial")}
             </Button>
           }
         />
@@ -324,7 +324,7 @@ function OrganizationsList() {
                             data-testid={`orgs-start-community-${org.slug}`}
                           >
                             <RocketLaunchIcon />
-                            {translate("dashboard.startCommunity")}
+                            {translate("dashboard.makeOfficial")}
                           </Button>
                         )}
                         {isActive ? (

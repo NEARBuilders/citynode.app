@@ -113,11 +113,11 @@ it("shows organizations without a New organization button", async () => {
   expect(linksTo("/orgs/new")).toHaveLength(0);
 });
 
-it("offers Start a community instead of creating an organization when there are none", async () => {
+it("offers Make a community official instead of creating an organization when there are none", async () => {
   renderOrganizations();
   const action = await screen.findByTestId("orgs-start-community");
   expect(action.getAttribute("href")).toBe("/apply");
-  expect(action.textContent).toBe("Start a community");
+  expect(action.textContent).toBe("Make a community official");
   expect(
     screen.getByText("Apply to run a City Node for your area. We'll walk you through each step."),
   ).toBeTruthy();
@@ -125,13 +125,13 @@ it("offers Start a community instead of creating an organization when there are 
   expect(linksTo("/orgs/new")).toHaveLength(0);
 });
 
-it("keeps the Start a community action reachable at 375 CSS pixels", async () => {
+it("keeps the Make a community official action reachable at 375 CSS pixels", async () => {
   window.innerWidth = 375;
   window.dispatchEvent(new Event("resize"));
   renderOrganizations();
   const action = await screen.findByTestId("orgs-start-community");
   expect(action.getAttribute("href")).toBe("/apply");
-  expect(action.textContent).toBe("Start a community");
+  expect(action.textContent).toBe("Make a community official");
   expect(isHiddenByClass(action)).toBe(false);
 });
 
