@@ -43,6 +43,7 @@ import {
 } from "@/lib/dao-connect";
 import {
   formatNearBalance,
+  formatNearTotal,
   formatPoolFee,
   formatPoolFeeTenths,
   invalidateStakePoolQueries,
@@ -802,7 +803,7 @@ export function TeamStakeCard({
               data-testid="dashboard-node.team-pool-stats"
             >
               {translate("payout.poolStats", {
-                total: formatNearBalance(poolStats.data.totalStaked, locale),
+                total: formatNearTotal(poolStats.data.totalStaked, locale),
                 count: new Intl.NumberFormat(locale).format(poolStats.data.stakerCount),
                 fee: formatPoolFee(
                   poolStats.data.feeNumerator,

@@ -122,9 +122,10 @@ export function crumbsFor(
     case "explore":
       return [page(EXPLORE.label)];
     case "n":
-      return second ? [EXPLORE, page(humanize(second))] : [page(EXPLORE.label)];
     case "places":
-      return second ? [EXPLORE, page(humanize(second))] : [page(EXPLORE.label)];
+      return second
+        ? [EXPLORE, page(context.detailName ?? humanize(second))]
+        : [page(EXPLORE.label)];
     case "activity":
       return [EXPLORE, page(t("events.event"))];
     case "stake":
