@@ -34,10 +34,10 @@ describe("boundaryLatLngs", () => {
     ]);
   });
 
-  it("keeps every part of a multipolygon and shifts it for world copies", () => {
-    const areas = boundaryLatLngs({ type: "MultiPolygon", coordinates: [square, square] }, 360);
+  it("keeps every part of a multipolygon", () => {
+    const areas = boundaryLatLngs({ type: "MultiPolygon", coordinates: [square, square] });
     expect(areas).toHaveLength(2);
-    expect(areas[1]?.[0]?.[0]).toEqual([10, 430]);
+    expect(areas[1]?.[0]?.[0]).toEqual([10, 70]);
   });
 });
 

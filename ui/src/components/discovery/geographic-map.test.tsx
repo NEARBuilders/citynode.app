@@ -95,6 +95,27 @@ describe("GeographicMap", { timeout: 30_000 }, () => {
     expect(screen.getByTestId("discovery-map-marker-nyc")).toBeTruthy();
   });
 
+  it("keeps a live community out of a nearby place cluster", async () => {
+    const view = show({
+      places: [
+        ...places,
+        {
+          id: "p-newark",
+          name: "Newark",
+          slug: "newark",
+          latitude: 40.73,
+          longitude: -74.17,
+          activated: false,
+          nodeId: null,
+        },
+      ] as Props["places"],
+    });
+    fireEvent.click(await screen.findByTestId("explore-map-show-places"));
+    await waitFor(() => expect(screen.getByTestId("discovery-map-place-newark")).toBeTruthy());
+    expect(screen.getByTestId("discovery-map-marker-nyc")).toBeTruthy();
+    expect(view.container.querySelectorAll(".leaflet-marker-icon")).toHaveLength(4);
+  });
+
   it("shows matching places without the toggle when the list is filtered", async () => {
     show({ worldCatalog: false, placePins: [places[0]!] });
     await waitFor(() => expect(screen.getByTestId("discovery-map-place-lagos")).toBeTruthy());

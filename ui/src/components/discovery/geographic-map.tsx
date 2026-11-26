@@ -24,6 +24,8 @@ import {
 } from "./map-points";
 
 const BOUNDARY_BATCH = 500;
+const LIVE_AREA =
+  "fill-brand/35 stroke-brand-strong hover:fill-brand/45 data-[active=true]:fill-brand/55";
 
 export function GeographicMap({
   nodes,
@@ -161,7 +163,7 @@ export function GeographicMap({
         }).addTo(map);
         tiles.on("tileerror", () => setFailed(true));
         let drawn: { point: MapPoint; latlng: ReturnType<typeof L.latLng> }[] = [];
-        let shapes: { id: string; layers: ReturnType<typeof L.polygon>[] }[] = [];
+        let shapes: { id: string; layer: ReturnType<typeof L.polygon> }[] = [];
         let fitted = "";
         const regions = L.layerGroup().addTo(map);
         const markers = L.layerGroup().addTo(map);
@@ -187,18 +189,16 @@ export function GeographicMap({
           selectPlace.current(point.slug);
         };
         const draw = () => {
-          for (const { id, layers } of shapes) {
+          for (const { id, layer } of shapes) {
             const active = id === selected.current;
-            for (const layer of layers) {
-              layer.setStyle({ weight: active ? 2 : 1 });
-              layer.getElement()?.setAttribute("data-active", String(active));
-            }
+            layer.setStyle({ weight: active ? 2 : 1 });
+            layer.getElement()?.setAttribute("data-active", String(active));
           }
           markers.clearLayers();
           const groups = new Map<string, typeof drawn>();
           for (const entry of drawn) {
             const pixel = map.project(entry.latlng);
-            const key = `${Math.floor(pixel.x / 48)}:${Math.floor(pixel.y / 48)}`;
+            const key = `${entry.point.activated}:${Math.floor(pixel.x / 48)}:${Math.floor(pixel.y / 48)}`;
             groups.set(key, [...(groups.get(key) ?? []), entry]);
           }
           for (const group of groups.values()) {
@@ -323,27 +323,17 @@ export function GeographicMap({
           shapes = [
             ...areas.map(({ node, boundary }) => ({
               id: node.nodeId,
-              layers: [
-                outline(
-                  boundary,
-                  "fill-brand/35 stroke-brand-strong hover:fill-brand/45 data-[active=true]:fill-brand/55",
-                  `discovery-map-area-${node.nodeId}`,
-                )
-                  .bindTooltip(node.name, { direction: "top", sticky: true })
-                  .on("click", () => select.current(node.nodeId)),
-              ],
+              layer: outline(boundary, LIVE_AREA, `discovery-map-area-${node.nodeId}`)
+                .bindTooltip(node.name, { direction: "top", sticky: true })
+                .on("click", () => select.current(node.nodeId)),
             })),
             ...extraAreas.map(({ point, boundary }) => ({
               id: point.id,
-              layers: [
-                outline(
-                  boundary,
-                  point.activated
-                    ? "fill-brand/35 stroke-brand-strong hover:fill-brand/45 data-[active=true]:fill-brand/55"
-                    : "fill-muted/50 stroke-border hover:fill-muted",
-                  `discovery-map-place-area-${point.slug}`,
-                ).on("click", () => clickPoint(point)),
-              ],
+              layer: outline(
+                boundary,
+                point.activated ? LIVE_AREA : "fill-muted/50 stroke-border hover:fill-muted",
+                `discovery-map-place-area-${point.slug}`,
+              ).on("click", () => clickPoint(point)),
             })),
           ];
           const key = `${world ? "world" : "fit"}:${next
