@@ -471,6 +471,7 @@ describe("ShardDog awards on event check-in", () => {
     await untilStatuses(userId, city.org, ["needs_account"]);
 
     shardDog.failing = false;
+    vi.useFakeTimers({ toFake: ["Date"], now: now + 60_000 });
     city.checkIn(second.id, userId, "revive.testnet");
     await city.sync();
     await untilStatuses(userId, city.org, ["awarded", "awarded"]);
