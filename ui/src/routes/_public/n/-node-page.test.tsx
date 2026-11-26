@@ -55,6 +55,7 @@ const clients: QueryClient[] = [];
 const memberCounts = new Map<string, { count: number | null; observedAt: string | null }>();
 const listings = new Map<string, Record<string, unknown> | "fail">();
 const nodeDaos = new Map<string, string>();
+const collectibles = new Map<string, Record<string, unknown>[] | "fail">();
 
 afterEach(() => {
   cleanup();
@@ -64,6 +65,7 @@ afterEach(() => {
   memberCounts.clear();
   listings.clear();
   nodeDaos.clear();
+  collectibles.clear();
 });
 
 function communityBuilders(path: string, overrides: Record<string, unknown> = {}) {
@@ -140,6 +142,11 @@ function mockApi(
           const listing = listings.get(args.nodeId);
           if (listing === "fail") return Response.json({ json: null }, { status: 500 });
           return Response.json({ json: listing ?? null });
+        }
+        case "getNodeCollectibles": {
+          const items = collectibles.get(args.nodeId);
+          if (items === "fail") return Response.json({ json: null }, { status: 500 });
+          return Response.json({ json: { collectibles: items ?? [] } });
         }
         case "getCommunityBuilders":
           return Response.json({ json: nearbuilders(args.nodeId) });
@@ -508,4 +515,85 @@ it("links to the Node DAO's proposals only when the community has one", async ()
   await showNode("/n/chicago");
   expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
   expect(screen.queryByTestId("node-page.proposals")).toBeNull();
+});
+
+it("shows the community's membership and event ShardDogs, each linking to ShardDog", async () => {
+  mockApi();
+  collectibles.set(child.id, [
+    {
+      kind: "membership",
+      dropId: "chicago-member",
+      eventId: null,
+      eventTitle: null,
+      eventStartsAt: null,
+      name: null,
+      imageUrl: null,
+      viewUrl: "https://shard.dog/drops/chicago-member",
+    },
+    {
+      kind: "event",
+      dropId: "builders-night",
+      eventId: "event-1",
+      eventTitle: "Builders night",
+      eventStartsAt: "2026-12-01T18:00:00.000Z",
+      name: "Builders night pup",
+      imageUrl: "https://cdn.shard.dog/pup.png",
+      viewUrl: "https://shard.dog/drops/builders-night",
+    },
+  ]);
+  await showNode("/n/chicago");
+  const section = await screen.findByTestId("node-page.collectibles");
+  expect(section.querySelector("h2")?.textContent).toBe("Collectibles");
+
+  const membership = screen.getByTestId("node-page.collectible.membership");
+  expect(membership.textContent).toContain("Chicago membership");
+  expect(membership.textContent).toContain("Membership badge");
+  expect(membership.querySelector("img")).toBeNull();
+
+  const event = screen.getByTestId("node-page.collectible.event");
+  expect(event.textContent).toContain("Builders night pup");
+  expect(event.textContent).toContain("Event badge");
+  expect(event.querySelector("img")?.getAttribute("src")).toBe("https://cdn.shard.dog/pup.png");
+
+  const links = screen.getAllByRole("link", { name: /View in ShardDog/ });
+  expect(links.map((link) => link.getAttribute("href"))).toEqual([
+    "https://shard.dog/drops/chicago-member",
+    "https://shard.dog/drops/builders-night",
+  ]);
+  expect(links.every((link) => link.getAttribute("target") === "_blank")).toBe(true);
+});
+
+it("falls back to the event title when ShardDog has no name for the drop", async () => {
+  mockApi();
+  collectibles.set(child.id, [
+    {
+      kind: "event",
+      dropId: "builders-night",
+      eventId: "event-1",
+      eventTitle: "Builders night",
+      eventStartsAt: null,
+      name: null,
+      imageUrl: null,
+      viewUrl: "https://shard.dog/drops/builders-night",
+    },
+  ]);
+  await showNode("/n/chicago");
+  expect((await screen.findByTestId("node-page.collectible.event")).textContent).toContain(
+    "Builders night",
+  );
+  expect(screen.queryByTestId("node-page.collectible.membership")).toBeNull();
+});
+
+it("hides the collectibles section when no drops are linked or they can't be read", async () => {
+  mockApi();
+  await showNode("/n/chicago");
+  expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
+  await screen.findByTestId("node-page.nearbuilders");
+  expect(screen.queryByTestId("node-page.collectibles")).toBeNull();
+
+  cleanup();
+  collectibles.set(parent.id, "fail");
+  await showNode("/n/illinois");
+  expect(await screen.findByRole("heading", { name: "Illinois", level: 1 })).toBeTruthy();
+  expect(screen.queryByTestId("node-page.collectibles")).toBeNull();
 });

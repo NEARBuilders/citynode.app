@@ -8,8 +8,15 @@ export interface ShardDogClaimLink {
   claimUrl: string;
 }
 
+export interface ShardDogDropDetails {
+  name: string | null;
+  imageUrl: string | null;
+}
+
 export interface ShardDogClient {
   readonly mode: "live" | "stub";
+  dropUrl(dropId: string): string;
+  describeDrop(dropId: string): Promise<ShardDogDropDetails | null>;
   award(input: {
     dropId: string;
     accountId: string;
@@ -26,11 +33,17 @@ export interface ShardDogClientConfig {
 
 const AwardResponse = z.object({ viewUrl: z.url({ protocol: /^https$/ }) });
 const ClaimLinkResponse = z.object({ claimUrl: z.url({ protocol: /^https$/ }) });
+const DropResponse = z.object({
+  name: z.string().trim().min(1).max(200).nullish(),
+  imageUrl: z.url({ protocol: /^https$/ }).nullish(),
+});
 
 export function createStubShardDogClient(apiUrl: string): ShardDogClient {
   const base = apiUrl.replace(/\/+$/, "");
   return {
     mode: "stub",
+    dropUrl: (dropId) => `${base}/stub/drops/${encodeURIComponent(dropId)}`,
+    describeDrop: async () => null,
     award: async ({ dropId, accountId }) => ({
       viewUrl: `${base}/stub/drops/${encodeURIComponent(dropId)}/${encodeURIComponent(accountId)}`,
     }),
@@ -67,6 +80,17 @@ export function createShardDogClient(config: ShardDogClientConfig): ShardDogClie
   // TODO(#602): align paths and payloads with ShardDog's API docs once they arrive.
   return {
     mode: "live",
+    dropUrl: (dropId) => `${base}/drops/${encodeURIComponent(dropId)}`,
+    describeDrop: async (dropId) => {
+      const response = await fetchImpl(`${base}/api/drops/${encodeURIComponent(dropId)}`, {
+        headers: { authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (response.status === 404) return null;
+      if (!response.ok) throw new Error(`ShardDog responded ${response.status}`);
+      const drop = DropResponse.parse(await response.json());
+      return { name: drop.name ?? null, imageUrl: drop.imageUrl ?? null };
+    },
     award: ({ dropId, accountId, idempotencyKey }) =>
       post(
         `/api/drops/${encodeURIComponent(dropId)}/award`,

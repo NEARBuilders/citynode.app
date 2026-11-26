@@ -1,6 +1,32 @@
 import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
+  "collectibles.descriptionNamed": [
+    "ShardDogs you collect by checking in to {name}'s events. Your first check-in also gives you the membership badge.",
+    "ShardDogs que consigues al hacer check-in en los eventos de {name}. Tu primer check-in también te da la insignia de membresía.",
+    "Des ShardDogs à collectionner en vous enregistrant aux événements de {name}. Votre premier check-in vous donne aussi le badge d’adhésion.",
+    "在 {name} 的活动签到即可收集 ShardDog。首次签到还会获得会员徽章。",
+  ],
+  "collectibles.event": ["Event badge", "Insignia del evento", "Badge d’événement", "活动徽章"],
+  "collectibles.membership": [
+    "Membership badge",
+    "Insignia de membresía",
+    "Badge d’adhésion",
+    "会员徽章",
+  ],
+  "collectibles.membershipNamed": [
+    "{name} membership",
+    "Membresía de {name}",
+    "Adhésion à {name}",
+    "{name} 会员",
+  ],
+  "collectibles.title": ["Collectibles", "Coleccionables", "Objets de collection", "收藏品"],
+  "collectibles.view": [
+    "View in ShardDog",
+    "Ver en ShardDog",
+    "Voir sur ShardDog",
+    "在 ShardDog 中查看",
+  ],
   "community.addLink": ["Add link", "Añadir enlace", "Ajouter un lien", "添加链接"],
   "community.addLocation": [
     "Add a location",
