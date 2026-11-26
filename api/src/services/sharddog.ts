@@ -129,6 +129,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   .update(sharddogAwards)
                   .set({
                     claimUrl,
+                    dropId: award.dropId,
                     lastError: null,
                   })
                   .where(
@@ -158,6 +159,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   .update(sharddogAwards)
                   .set({
                     status: "awarded",
+                    dropId: award.dropId,
                     viewUrl,
                     awardedAt: new Date(),
                     lastError: null,
