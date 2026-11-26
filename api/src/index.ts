@@ -2040,27 +2040,40 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listTenantApps: builder.listTenantApps.effect(function* () {
         const services = yield* ApiServices;
-        return yield* services.tenants.listTenantApps();
+        const apps = yield* services.tenants.listTenantApps();
+        return apps.map(({ orgId: _orgId, ...app }) => app);
       }),
 
       listStakeCommunities: builder.listStakeCommunities.effect(function* ({ context }) {
         const services = yield* ApiServices;
-        const activeOrganizationId = context.organization?.activeOrganizationId;
-        const apps =
-          !context.user || context.user.isAnonymous === true
-            ? yield* services.tenants.listTenantApps()
-            : yield* services.tenants.listTenantApps(
-                activeOrganizationId
-                  ? [activeOrganizationId]
-                  : (context.organizations ?? []).map((organization) => organization.id),
-              );
+        const signedIn = !!context.user && context.user.isAnonymous !== true;
+        const activeOrganizationId = signedIn
+          ? (context.organization?.activeOrganizationId ?? null)
+          : null;
+        const memberOrganizationIds = new Set(
+          signedIn ? (context.organizations ?? []).map((organization) => organization.id) : [],
+        );
+        const apps = yield* services.tenants.listTenantApps();
         const stakeable = yield* services.validators.nodeIdsWithValidators(
           apps.flatMap((app) => (app.node ? [app.node.id] : [])),
         );
-        return apps.map((app) => ({
-          ...app,
-          stakeable: app.node ? stakeable.has(app.node.id) : false,
-        }));
+        const viewerMembershipOf = (orgId: string | null) => {
+          if (!orgId) return null;
+          if (orgId === activeOrganizationId) return "active" as const;
+          return memberOrganizationIds.has(orgId) ? ("member" as const) : null;
+        };
+        const rank = { active: 0, member: 1 } as const;
+        return apps
+          .map(({ orgId, ...app }) => ({
+            ...app,
+            stakeable: app.node ? stakeable.has(app.node.id) : false,
+            viewerMembership: viewerMembershipOf(orgId),
+          }))
+          .sort(
+            (a, b) =>
+              (a.viewerMembership ? rank[a.viewerMembership] : 2) -
+                (b.viewerMembership ? rank[b.viewerMembership] : 2) || a.name.localeCompare(b.name),
+          );
       }),
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
