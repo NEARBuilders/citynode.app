@@ -8,6 +8,21 @@ export const WORLD_BOUNDS: [[number, number], [number, number]] = [
   [85, 180],
 ];
 
+export function clampToWorld(
+  box: [[number, number], [number, number]] | null,
+): [[number, number], [number, number]] | null {
+  if (!box) return null;
+  const [[south, west], [north, east]] = box;
+  const [[minLat, minLng], [maxLat, maxLng]] = WORLD_BOUNDS;
+  const clampedWest = Math.max(minLng, Math.min(maxLng, west));
+  const clampedEast = Math.max(minLng, Math.min(maxLng, east));
+  if (clampedEast <= clampedWest) return null;
+  return [
+    [Math.max(minLat, south), clampedWest],
+    [Math.min(maxLat, north), clampedEast],
+  ];
+}
+
 export type MapPoint = {
   id: string;
   name: string;

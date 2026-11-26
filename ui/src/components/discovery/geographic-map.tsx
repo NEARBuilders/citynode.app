@@ -14,7 +14,14 @@ import {
   showsMapAreas,
   simplifyBoundary,
 } from "./map-areas";
-import { type MapPoint, type Node, type PlacePin, toPoints, WORLD_BOUNDS } from "./map-points";
+import {
+  clampToWorld,
+  type MapPoint,
+  type Node,
+  type PlacePin,
+  toPoints,
+  WORLD_BOUNDS,
+} from "./map-points";
 
 const BOUNDARY_BATCH = 500;
 
@@ -205,7 +212,7 @@ export function GeographicMap({
             const label =
               group.length > 1
                 ? translation.current(
-                    group.every((entry) => entry.point.kind === "community")
+                    group.every((entry) => entry.point.activated)
                       ? "directory.communitiesNear"
                       : "explore.places.near",
                     {
@@ -347,10 +354,10 @@ export function GeographicMap({
           if (key !== fitted) {
             fitted = key;
             const outlines = new Map(
-              areas.map((area) => [area.node.nodeId, boundaryBounds(area.boundary)]),
+              areas.map((area) => [area.node.nodeId, clampToWorld(boundaryBounds(area.boundary))]),
             );
             for (const extra of extraAreas)
-              outlines.set(extra.point.id, boundaryBounds(extra.boundary));
+              outlines.set(extra.point.id, clampToWorld(boundaryBounds(extra.boundary)));
             map.stop();
             if (world) {
               map.setView([20, 0], 2, { animate: false });

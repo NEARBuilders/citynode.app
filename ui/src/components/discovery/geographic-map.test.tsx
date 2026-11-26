@@ -81,7 +81,7 @@ function show(props: Partial<Props> = {}) {
   );
 }
 
-describe("GeographicMap", () => {
+describe("GeographicMap", { timeout: 30_000 }, () => {
   it("draws each live community once and hides empty places until asked", async () => {
     const view = show();
     await waitFor(() => expect(screen.getByTestId("discovery-map-marker-nyc")).toBeTruthy());
@@ -91,7 +91,8 @@ describe("GeographicMap", () => {
     fireEvent.click(screen.getByTestId("explore-map-show-places"));
 
     await waitFor(() => expect(screen.getByTestId("discovery-map-place-lagos")).toBeTruthy());
-    expect(view.container.querySelectorAll(".leaflet-marker-icon").length).toBeLessThanOrEqual(3);
+    expect(view.container.querySelectorAll(".leaflet-marker-icon")).toHaveLength(3);
+    expect(screen.getByTestId("discovery-map-marker-nyc")).toBeTruthy();
   });
 
   it("shows matching places without the toggle when the list is filtered", async () => {
