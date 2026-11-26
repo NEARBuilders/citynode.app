@@ -1,8 +1,9 @@
-import { ArrowSquareOutIcon, CalendarCheckIcon, MedalIcon } from "@phosphor-icons/react";
+import { CalendarCheckIcon, MedalIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useApiClient } from "@/app";
 import { Button, SectionHeader } from "@/components";
 import { LocalDate } from "@/components/local-date";
+import { collectibleKey, ShardDogViewLink } from "@/components/sharddog-collectible";
 import {
   Item,
   ItemActions,
@@ -58,7 +59,7 @@ export function AccountCollectibles({
         <ItemGroup data-testid={`${testId}-list`}>
           {collectibles.data.collectibles.map((collectible) => (
             <Item
-              key={`${collectible.organizationId}:${collectible.eventId ?? "membership"}`}
+              key={collectibleKey(collectible.organizationId, collectible.eventId)}
               variant="outline"
               data-testid={`${testId}-${collectible.kind}`}
             >
@@ -78,23 +79,7 @@ export function AccountCollectibles({
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  nativeButton={false}
-                  render={(props) => (
-                    <a
-                      {...props}
-                      href={collectible.viewUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    />
-                  )}
-                  data-testid={`${testId}-view`}
-                >
-                  {translate("collectibles.viewInShardDog")}
-                  <ArrowSquareOutIcon />
-                </Button>
+                <ShardDogViewLink href={collectible.viewUrl} testId={`${testId}-view`} />
               </ItemActions>
             </Item>
           ))}

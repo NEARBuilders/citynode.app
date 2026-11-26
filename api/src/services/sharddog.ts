@@ -36,7 +36,7 @@ export interface CollectibleAward {
 
 export interface AwardedCollectible {
   organizationId: string;
-  kind: "membership" | "event";
+  kind: (typeof sharddogAwards.$inferSelect)["kind"];
   eventId: string | null;
   viewUrl: string;
   awardedAt: Date;
@@ -60,7 +60,7 @@ export interface ShardDogService {
   queueAwards(organizationId: string): ShardDogEffect<void>;
   deliverAwards(filter: { organizationId?: string; userId?: string }): ShardDogEffect<void>;
   awardsFor(userId: string, organizationId?: string): ShardDogEffect<CollectibleAward[]>;
-  awardedTo(accountId: string): ShardDogEffect<AwardedCollectible[]>;
+  awardedToAccount(accountId: string): ShardDogEffect<AwardedCollectible[]>;
 }
 
 export class ShardDogTag extends Context.Service<ShardDogTag, ShardDogService>()("api/ShardDog") {}
@@ -410,7 +410,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
               hasAccount: !!row.accountId,
             }));
           }),
-        awardedTo: (accountId) =>
+        awardedToAccount: (accountId) =>
           query(async () => {
             const rows = await db
               .select({

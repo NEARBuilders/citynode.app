@@ -1918,8 +1918,8 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
             id: string;
             title: string;
             startsAt: string | null;
-            status: "draft" | "published" | "cancelled";
-            publishedAt: string;
+            status: (typeof discoveryActivities.$inferSelect)["data"]["status"];
+            publishedAt: (typeof discoveryActivities.$inferSelect)["data"]["publishedAt"];
           }>;
         }
       >(organizationIds.map((id) => [id, { communityName: null, events: [] }]));

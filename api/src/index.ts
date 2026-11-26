@@ -1433,7 +1433,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       getAccountCollectibles: builder.getAccountCollectibles.effect(function* ({ input }) {
         const services = yield* ApiServices;
         if (!services.sharddog.enabled) return { enabled: false, collectibles: [] };
-        const awards = yield* services.sharddog.awardedTo(input.accountId);
+        const awards = yield* services.sharddog.awardedToAccount(input.accountId);
         const communities = yield* services.discovery.organizationEvents(
           [...new Set(awards.map((award) => award.organizationId))],
           { liveTenantsOnly: true },
