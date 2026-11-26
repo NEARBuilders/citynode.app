@@ -50,7 +50,7 @@ describe("sidebar per persona", () => {
     ]);
   });
 
-  it("offers Start a community instead of My community to people without one", () => {
+  it("offers Make a community official instead of My community to people without one", () => {
     expect(sidebar({ hasOrganization: false }, "member").map(navSlug)).toEqual([
       "dashboard",
       "start-community",
@@ -314,7 +314,7 @@ describe("breadcrumbs", () => {
   it("translates app pages instead of using raw route names", () => {
     const translate = (id: Parameters<typeof translateAppMessage>[0]) =>
       translateAppMessage(id, undefined, "es");
-    expect(crumbsFor("/apply", {}, translate)).toEqual([{ label: "Crear una comunidad" }]);
+    expect(crumbsFor("/apply", {}, translate)).toEqual([{ label: "Oficializar una comunidad" }]);
     expect(crumbsFor("/onboarding/station/abc", {}, translate)).toEqual([{ label: "Estación" }]);
     expect(crumbsFor("/admin/tenants", {}, translate)).toEqual([
       { label: "Administración" },
@@ -347,7 +347,7 @@ describe("breadcrumbs", () => {
     expect(labels("/admin/tenants")).toEqual(["Admin", "Platform", "Domains"]);
     expect(labels("/onboarding/station/abc")).toEqual(["Station"]);
     expect(labels("/admin/proposals/new")).toEqual(["Admin", "Proposals", "New proposal"]);
-    expect(labels("/apply")).toEqual(["Start a community"]);
+    expect(labels("/apply")).toEqual(["Make a community official"]);
   });
 
   it("uses the organization name when it is known", () => {
