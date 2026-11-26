@@ -23,6 +23,7 @@ const shardDog = vi.hoisted(() => ({
   tried: [] as string[],
   failing: false,
   delayMs: 0,
+  rejectedDrops: new Set<string>(),
 }));
 
 vi.mock("@/services/sharddog-client", () => ({
@@ -32,6 +33,7 @@ vi.mock("@/services/sharddog-client", () => ({
       shardDog.tried.push(input.idempotencyKey);
       if (shardDog.delayMs) await new Promise((done) => setTimeout(done, shardDog.delayMs));
       if (shardDog.failing) throw new Error("ShardDog responded 503");
+      if (shardDog.rejectedDrops.has(input.dropId)) throw new Error("ShardDog responded 404");
       shardDog.awards.push(input);
       return { viewUrl: `https://shard.dog/view/${input.dropId}/${input.accountId}` };
     },
@@ -47,6 +49,8 @@ type StubCode = {
 
 const codesByOrg = new Map<string, StubCode[]>();
 const organizers = new Set<string>();
+const linkedAccounts = new Map<string, string>();
+const statusReads: string[] = [];
 
 const callerId = (context: unknown) => (context as { userId?: string }).userId ?? "";
 
@@ -79,10 +83,15 @@ const authStub = {
         (item) => item.id === input.codeId,
       );
       if (!code) throw new ORPCError("NOT_FOUND");
+      statusReads.push(code.id);
       return {
         ...codeOutput(code),
         joined: code.joined.map((join) => ({ ...join, userName: null })),
       };
+    },
+    nearListAccounts: async () => {
+      const accountId = linkedAccounts.get(callerId(context));
+      return { accounts: accountId ? [{ accountId, isPrimary: true }] : [] };
     },
   }),
   router: {},
@@ -150,6 +159,13 @@ async function community() {
         joined: [{ userId, createdAt: new Date(), accountId }],
       });
     },
+    setCheckInAccount: (userId: string, accountId: string) => {
+      for (const code of codesByOrg.get(org) ?? []) {
+        for (const join of code.joined) {
+          if (join.userId === userId) join.accountId = accountId;
+        }
+      }
+    },
     sync: () => organizer.reconcileAttendance({ organizationId: org }),
   };
 }
@@ -157,6 +173,19 @@ async function community() {
 const attendee = (userId: string) => getPluginClient(authedContext(userId));
 
 const settle = () => new Promise((done) => setTimeout(done, 300));
+
+const MINUTE = 60_000;
+
+const advanceClock = (ms: number) => vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + ms });
+
+async function failRepeatedly(times: number, retry: () => Promise<unknown>) {
+  for (let attempt = 2; attempt <= times; attempt += 1) {
+    advanceClock(61 * MINUTE);
+    await retry();
+    await vi.waitFor(() => expect(shardDog.tried).toHaveLength(attempt));
+    await settle();
+  }
+}
 
 const statuses = async (userId: string, organizationId: string) =>
   (await (await attendee(userId)).getMyCollectibles({ organizationId })).collectibles.map(
@@ -181,6 +210,8 @@ beforeEach(() => {
   shardDog.tried.length = 0;
   shardDog.failing = false;
   shardDog.delayMs = 0;
+  shardDog.rejectedDrops.clear();
+  statusReads.length = 0;
 });
 
 afterEach(() => {
@@ -410,4 +441,119 @@ describe("ShardDog awards on event check-in", () => {
       (await (await attendee(userId)).getMyCollectibles({ organizationId: city.org })).collectibles,
     ).toEqual([]);
   });
+
+  it("sends held badges once the person links a NEAR account, without another sync", async () => {
+    const city = await community();
+    await city.setMembershipDrop("late-member");
+    const event = await city.addEvent("Late wallet", "late-drop");
+    const userId = `late-${crypto.randomUUID().slice(0, 6)}`;
+
+    city.checkIn(event.id, userId, null);
+    await city.sync();
+    expect(await statuses(userId, city.org)).toEqual(["needs_account", "needs_account"]);
+
+    linkedAccounts.set(userId, "late.testnet");
+    await untilStatuses(userId, city.org, ["awarded", "awarded"]);
+    await city.sync();
+    await settle();
+
+    expect(shardDog.awards.map(({ dropId, accountId }) => [dropId, accountId]).sort()).toEqual([
+      ["late-drop", "late.testnet"],
+      ["late-member", "late.testnet"],
+    ]);
+  });
+
+  it("picks up an account that appears after the check-in was first synced", async () => {
+    const city = await community();
+    const event = await city.addEvent("Passkey night", "passkey-drop");
+    const userId = `passkey-${crypto.randomUUID().slice(0, 6)}`;
+
+    city.checkIn(event.id, userId, null);
+    await city.sync();
+    city.setCheckInAccount(userId, "passkey.testnet");
+    await city.sync();
+
+    await vi.waitFor(() =>
+      expect(shardDog.awards.map(({ accountId }) => accountId)).toEqual(["passkey.testnet"]),
+    );
+    const reads = statusReads.length;
+    await city.sync();
+    expect(statusReads).toHaveLength(reads);
+  });
+
+  it("keeps retrying however long ShardDog stays down", async () => {
+    const city = await community();
+    const event = await city.addEvent("Long outage", "outage-drop");
+    const userId = `outage-${crypto.randomUUID().slice(0, 6)}`;
+    const client = await attendee(userId);
+
+    shardDog.failing = true;
+    city.checkIn(event.id, userId, "outage.testnet");
+    await city.sync();
+    await vi.waitFor(() => expect(shardDog.tried).toHaveLength(1));
+    await settle();
+    await failRepeatedly(25, () => client.getMyCollectibles({}));
+
+    shardDog.failing = false;
+    advanceClock(61 * MINUTE);
+    await untilStatuses(userId, city.org, ["awarded"]);
+    expect(new Set(shardDog.tried).size).toBe(1);
+  }, 60_000);
+
+  it("retries a corrected drop within a minute, however often the wrong one failed", async () => {
+    const city = await community();
+    shardDog.rejectedDrops.add("wrong-drop");
+    const event = await city.addEvent("Typo", "wrong-drop");
+    const userId = `typo-${crypto.randomUUID().slice(0, 6)}`;
+    const client = await attendee(userId);
+
+    city.checkIn(event.id, userId, "typo.testnet");
+    await city.sync();
+    await vi.waitFor(() => expect(shardDog.tried).toHaveLength(1));
+    await settle();
+    await failRepeatedly(10, () => client.getMyCollectibles({}));
+
+    await city.setEventDrop(event.id, "right-drop");
+    advanceClock(2 * MINUTE);
+    await city.sync();
+    await vi.waitFor(() =>
+      expect(shardDog.awards.map(({ dropId }) => dropId)).toEqual(["right-drop"]),
+    );
+  }, 60_000);
+
+  it("sends new badges even when a full batch of older ones keeps failing", async () => {
+    const city = await community();
+    shardDog.rejectedDrops.add("broken-drop");
+    const broken = await city.addEvent("Broken", "broken-drop");
+    const working = await city.addEvent("Working", "working-drop");
+    const userId = `queued-${crypto.randomUUID().slice(0, 6)}`;
+
+    for (let index = 0; index < 50; index += 1) {
+      city.checkIn(broken.id, `${userId}-${index}`, `stuck-${index}.testnet`);
+    }
+    await city.sync();
+    await vi.waitFor(() => expect(shardDog.tried).toHaveLength(50), { timeout: 10_000 });
+    await settle();
+
+    city.checkIn(working.id, userId, "queued.testnet");
+    advanceClock(120 * MINUTE);
+    await city.sync();
+    await vi.waitFor(
+      () => expect(shardDog.awards.map(({ dropId }) => dropId)).toEqual(["working-drop"]),
+      { timeout: 10_000 },
+    );
+  }, 60_000);
+
+  it("sends every badge from one sync, not just the first batch", async () => {
+    const city = await community();
+    const event = await city.addEvent("Packed night", "packed-drop");
+    const userId = `packed-${crypto.randomUUID().slice(0, 6)}`;
+
+    for (let index = 0; index < 60; index += 1) {
+      city.checkIn(event.id, `${userId}-${index}`, `packed-${index}.testnet`);
+    }
+    await city.sync();
+
+    await vi.waitFor(() => expect(shardDog.awards).toHaveLength(60), { timeout: 10_000 });
+  }, 60_000);
 });

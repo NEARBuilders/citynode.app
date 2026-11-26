@@ -1,5 +1,17 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, gte, inArray, isNotNull, lt, max, min, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  max,
+  min,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -100,6 +112,7 @@ export interface AttendanceService {
     communityName: string;
     events: CommunityEvent[];
     upstream: AttendanceUpstream;
+    needsAccount(eventId: string | null): boolean;
   }): AttendanceEffect<ReconcileSummary>;
   recordedOrganizations(userId: string): AttendanceEffect<string[]>;
   history(input: {
@@ -137,6 +150,7 @@ export const AttendanceLive = Layer.effect(
       code: UpstreamCode;
       known: Set<string>;
       upstream: AttendanceUpstream;
+      needsAccount(eventId: string | null): boolean;
     }) {
       const { organizationId, code } = input;
       const [checkpoint] = yield* query(() =>
@@ -150,11 +164,29 @@ export const AttendanceLive = Layer.effect(
             ),
           ),
       );
-      if (checkpoint?.usedCount === code.usedCount) return true;
+      const unchanged = checkpoint?.usedCount === code.usedCount;
+      if (unchanged) {
+        if (!input.needsAccount(code.eventId)) return true;
+        const [missingAccount] = yield* query(() =>
+          db
+            .select({ userId: attendanceCheckIns.userId })
+            .from(attendanceCheckIns)
+            .where(
+              and(
+                eq(attendanceCheckIns.organizationId, organizationId),
+                eq(attendanceCheckIns.codeId, code.id),
+                eq(attendanceCheckIns.classified, true),
+                isNull(attendanceCheckIns.accountId),
+              ),
+            )
+            .limit(1),
+        );
+        if (!missingAccount) return true;
+      }
       const status = yield* Effect.tryPromise(() => input.upstream.codeStatus(code.id)).pipe(
         Effect.option,
       );
-      if (status._tag === "None") return false;
+      if (status._tag === "None") return unchanged;
       const { eventId, eventName, joined } = status.value;
       const classified = !!eventId && input.known.has(eventId);
       yield* query(() =>
@@ -232,6 +264,7 @@ export const AttendanceLive = Layer.effect(
         communityName,
         events,
         upstream,
+        needsAccount,
       }) {
         const known = new Set(events.map((event) => event.id));
         const forbidden = () =>
@@ -289,6 +322,7 @@ export const AttendanceLive = Layer.effect(
                   code,
                   known,
                   upstream,
+                  needsAccount,
                 }),
               );
               return {
@@ -301,7 +335,14 @@ export const AttendanceLive = Layer.effect(
         );
         const outside = (latest ?? []).filter((code) => !code.eventId || !known.has(code.eventId));
         const outsideRecorded = yield* Effect.forEach(outside, (code) =>
-          recordCode({ organizationId, communityName, code, known, upstream }),
+          recordCode({
+            organizationId,
+            communityName,
+            code,
+            known,
+            upstream,
+            needsAccount,
+          }),
         );
         results.push({
           id: ORGANIZATION_SWEEP,
