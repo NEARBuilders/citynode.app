@@ -372,7 +372,7 @@ const harbor = { id: "org-harbor", name: "Harbor", slug: "harbor", status: "acti
 const delta = { id: "org-delta", name: "Delta", slug: "delta", status: "active" };
 
 describe("Home without a community", () => {
-  it("leads a new user whose only organization is personal with Explore, then Start a community", async () => {
+  it("leads a new user whose only organization is personal with Explore, then Make a community official", async () => {
     harness.user = member;
     harness.activeOrganizationId = personal.id;
     harness.organizations = [personal];
@@ -467,7 +467,7 @@ describe("Home without a community", () => {
     expect(stepIds()).toEqual(["stake", "explore"]);
   });
 
-  it("offers a retry instead of a false Start a community when organizations fail", async () => {
+  it("offers a retry instead of a false Make a community official when organizations fail", async () => {
     harness.user = member;
     harness.organizationsFail = true;
     renderHome();
@@ -711,7 +711,7 @@ describe("My community without a valid active community", () => {
     expect(result.communityCount).toBe(2);
   });
 
-  it("offers Start a community only to someone with no community", async () => {
+  it("offers Make a community official only to someone with no community", async () => {
     harness.activeOrganizationId = personal.id;
     harness.organizations = [personal];
     expect((await loadCommunity()).emptyReason).toBe("no-org");

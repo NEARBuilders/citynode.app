@@ -161,7 +161,7 @@ export function buildNavItems(
         : [
             {
               icon: RocketLaunchIcon,
-              label: t("dashboard.startCommunity"),
+              label: t("dashboard.makeOfficial"),
               slug: "start-community",
               to: "/apply",
               roleRequired: "member" as const,
