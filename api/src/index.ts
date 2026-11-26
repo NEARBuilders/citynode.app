@@ -219,44 +219,38 @@ type NodeAccessContext = NonNullable<TeamAccessContext> & {
     | null;
 };
 
-type ViewerContext = {
-  userId?: string | null;
-  user?: {
-    id?: string;
-    name?: string | null;
-    isAnonymous?: boolean | null;
-    role?: string | null;
-  } | null;
-  organization?: { activeOrganizationId?: string | null } | null;
-  organizations?: ReadonlyArray<{ id: string }>;
-};
+type ViewerContext = Pick<AuthContext, "userId" | "user" | "organization" | "organizations">;
 
 const bulletinPublisherOf = (context: ViewerContext): BulletinPublisher => ({
   userId: context.userId ?? context.user?.id ?? null,
   name: memberDisplayName(context.user?.name),
 });
 
-const isSignedIn = (context: ViewerContext) => !!context.user && context.user.isAnonymous !== true;
+type ViewerAccess = { platformAdmin: boolean; organizationIds: ReadonlySet<string> };
 
-const viewerOrganizationIds = (context: ViewerContext): ReadonlySet<string> =>
-  new Set(
-    [
-      context.organization?.activeOrganizationId,
-      ...(context.organizations ?? []).map((organization) => organization.id),
-    ].filter((id): id is string => !!id),
-  );
+const viewerAccessOf = (context: ViewerContext): ViewerAccess => {
+  const signedIn = !!context.user && context.user.isAnonymous !== true;
+  return {
+    platformAdmin: signedIn && context.user?.role === "admin",
+    organizationIds: new Set(
+      signedIn
+        ? [
+            context.organization?.activeOrganizationId,
+            ...(context.organizations ?? []).map((organization) => organization.id),
+          ].filter((id): id is string => !!id)
+        : [],
+    ),
+  };
+};
 
-const nodeForViewer = (
-  context: ViewerContext,
-  tenantOrgIds: ReadonlyMap<string, string | null> = new Map(),
-) => {
-  const signedIn = isSignedIn(context);
-  const platformAdmin = signedIn && context.user?.role === "admin";
-  const organizationIds = signedIn ? viewerOrganizationIds(context) : new Set<string>();
-  return (node: NodeRecord): NodeRecord => {
+const inCommunity = (access: ViewerAccess, ...orgIds: (string | null | undefined)[]) =>
+  access.platformAdmin || orgIds.some((id) => !!id && access.organizationIds.has(id));
+
+const nodeForViewer =
+  (access: ViewerAccess, tenantOrgIds: ReadonlyMap<string, string | null>) =>
+  (node: NodeRecord): NodeRecord => {
     const { joinCodeId: _joinCodeId, ...metadata } = node.metadata;
-    const communityOrgIds = [node.orgId, node.tenantId ? tenantOrgIds.get(node.tenantId) : null];
-    if (platformAdmin || communityOrgIds.some((id) => !!id && organizationIds.has(id))) {
+    if (inCommunity(access, node.orgId, node.tenantId && tenantOrgIds.get(node.tenantId))) {
       return { ...node, metadata };
     }
     const { bulletin: _bulletin, ...publicMetadata } = metadata;
@@ -267,7 +261,6 @@ const nodeForViewer = (
       bulletinPublisherName: null,
     };
   };
-};
 
 const presentNodes = (
   services: { tenants: TenantsService },
@@ -275,30 +268,23 @@ const presentNodes = (
   nodes: readonly NodeRecord[],
 ) =>
   Effect.gen(function* () {
-    const organizationIds = viewerOrganizationIds(context);
-    const unresolvedTenantIds =
-      isSignedIn(context) && context.user?.role !== "admin" && organizationIds.size > 0
-        ? [
+    const access = viewerAccessOf(context);
+    const tenantIds =
+      access.organizationIds.size === 0
+        ? []
+        : [
             ...new Set(
               nodes.flatMap((node) =>
                 node.tenantId &&
                 node.metadata.bulletin !== undefined &&
-                !(node.orgId && organizationIds.has(node.orgId))
+                !inCommunity(access, node.orgId)
                   ? [node.tenantId]
                   : [],
               ),
             ),
-          ]
-        : [];
-    const tenants = yield* Effect.forEach(
-      unresolvedTenantIds,
-      (tenantId) => services.tenants.resolveTenantById(tenantId),
-      { concurrency: 4 },
-    );
-    const tenantOrgIds = new Map(
-      tenants.flatMap((tenant) => (tenant ? [[tenant.id, tenant.orgId] as const] : [])),
-    );
-    return nodes.map(nodeForViewer(context, tenantOrgIds));
+          ];
+    const tenantOrgIds = yield* services.tenants.orgIdsByTenantId(tenantIds);
+    return nodes.map(nodeForViewer(access, tenantOrgIds));
   });
 
 const presentNode = (

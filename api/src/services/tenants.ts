@@ -127,6 +127,7 @@ export interface TenantsService {
   resolveTenantByAccountId(accountId: string): TenantEffect<TenantRecord | null>;
   resolveTenantById(id: string): TenantEffect<TenantRecord | null>;
   resolveTenantByOrgId(orgId: string): TenantEffect<TenantRecord | null>;
+  orgIdsByTenantId(ids: readonly string[]): TenantEffect<ReadonlyMap<string, string | null>>;
   deleteTenantById(id: string): TenantEffect<boolean>;
 }
 
@@ -683,6 +684,17 @@ export const TenantsLive = Layer.effect(
           db.select().from(tenantsTable).where(eq(tenantsTable.orgId, orgId)).limit(1),
         );
         return row ? toTenantRecord(row) : null;
+      }),
+
+      orgIdsByTenantId: Effect.fn("TenantsService.orgIdsByTenantId")(function* (ids) {
+        if (ids.length === 0) return new Map();
+        const rows = yield* query(() =>
+          db
+            .select({ id: tenantsTable.id, orgId: tenantsTable.orgId })
+            .from(tenantsTable)
+            .where(inArray(tenantsTable.id, [...ids])),
+        );
+        return new Map(rows.map((row) => [row.id, row.orgId]));
       }),
 
       deleteTenantById: Effect.fn("TenantsService.deleteTenantById")(function* (id) {
