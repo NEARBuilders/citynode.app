@@ -366,7 +366,7 @@ export function proposalKindSummary(proposal: SputnikProposal, translate: Transl
 
 const TREZU_LINE = /^[*-]\s+([A-Za-z][A-Za-z ]*):\s*(.*)$/;
 const TREZU_TITLE_ORDER = ["title", "summary", "description", "notes"];
-const TREZU_ACTION_LABEL = "proposal action";
+const TREZU_HIDDEN_LABELS = ["proposal action", "template"];
 
 function trezuLabel(line: string): string | undefined {
   return TREZU_LINE.exec(line)?.[1]?.toLowerCase();
@@ -376,7 +376,7 @@ function cleanLine(line: string): string {
   const labelled = TREZU_LINE.exec(line);
   const text = labelled
     ? TREZU_TITLE_ORDER.includes(trezuLabel(line) ?? "")
-      ? (labelled[2] ?? "")
+      ? (labelled[2] ?? "").replace(/^[*-]\s+/, "")
       : `${labelled[1]}: ${labelled[2] ?? ""}`
     : line.replace(/^[*-]\s+/, "");
   return text
@@ -389,11 +389,12 @@ function cleanLine(line: string): string {
 }
 
 function descriptionLines(description: string): string[] {
-  return (description.split("$$$$")[0] ?? "")
+  const lines = (description.split("$$$$")[0] ?? "")
     .replace(/<br\s*\/?>/gi, "\n")
     .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => trezuLabel(line) !== TREZU_ACTION_LABEL);
+    .map((line) => line.trim());
+  const shown = lines.filter((line) => !TREZU_HIDDEN_LABELS.includes(trezuLabel(line) ?? ""));
+  return shown.some(Boolean) ? shown : lines;
 }
 
 export function proposalText(description: string): string {

@@ -402,6 +402,24 @@ describe("proposal descriptions", () => {
       proposalText("## Budget\nPay *before* the [venue](https://example.com) deadline, `5 NEAR`"),
     ).toBe("Budget\nPay before the venue (https://example.com) deadline, 5 NEAR");
     expect(proposalText("2 * 3 = 6")).toBe("2 * 3 = 6");
+  });
+
+  it("keeps real Trezu descriptions readable", () => {
+    expect(proposalTitle("* Proposal Action: public-to-confidential")).toBe(
+      "Proposal Action: public-to-confidential",
+    );
+    const custom =
+      "* Proposal Action: custom <br>* Template: [trezu-tmpl:2] <br>* Summary: unstake";
+    expect(proposalText(custom)).toBe("unstake");
+    expect(proposalTitle(custom)).toBe("unstake");
+    const policy =
+      '* Title: Update Policy - Add New Members <br>* Summary: - add "alice.near" to ["Admin"]';
+    expect(proposalText(policy)).toBe(
+      'Update Policy - Add New Members\nadd "alice.near" to ["Admin"]',
+    );
+    const exchange =
+      "* Proposal Action: asset-exchange <br>* Notes: **Must be executed before 2026-11-18** for transfer";
+    expect(proposalTitle(exchange)).toBe("Must be executed before 2026-11-18 for transfer");
     expect(proposalTitle("* Proposal Action: transfer <br>* Summary: Pay the venue")).toBe(
       "Pay the venue",
     );
