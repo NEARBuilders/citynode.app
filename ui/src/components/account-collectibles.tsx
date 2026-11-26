@@ -27,7 +27,7 @@ export function AccountCollectibles({
   const apiClient = useApiClient();
   const collectibles = useQuery(accountCollectiblesQueryOptions(apiClient, accountId));
 
-  if (!collectibles.isError && !collectibles.data?.enabled) return null;
+  if (!collectibles.data?.enabled) return null;
 
   return (
     <section className="flex min-w-0 flex-col gap-6" data-testid={testId}>
@@ -51,7 +51,7 @@ export function AccountCollectibles({
             {translate("common.retry")}
           </Button>
         </div>
-      ) : !collectibles.data || collectibles.data.collectibles.length === 0 ? (
+      ) : collectibles.data.collectibles.length === 0 ? (
         <p className="text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
           {translate("collectibles.profileEmpty")}
         </p>

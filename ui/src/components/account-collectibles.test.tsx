@@ -24,11 +24,12 @@ vi.mock("@/app", () => ({
 
 function show(accountId = "lin.testnet") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  render(
     <QueryClientProvider client={client}>
       <AccountCollectibles accountId={accountId} />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 afterEach(() => {
@@ -94,13 +95,25 @@ describe("AccountCollectibles", () => {
     await waitFor(() => expect(screen.queryByTestId("account.collectibles")).toBeNull());
   });
 
-  it("shows an error with a retry that reloads the list", async () => {
-    let fail = true;
+  it("renders nothing when the first load fails, since the feature may be off", async () => {
+    harness.getAccountCollectibles = async () => {
+      throw new Error("down");
+    };
+    show();
+    await waitFor(() => expect(harness.calls).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByTestId("account.collectibles")).toBeNull());
+  });
+
+  it("shows an error with a retry when a reload fails after the list was shown", async () => {
+    let fail = false;
     harness.getAccountCollectibles = async () => {
       if (fail) throw new Error("down");
       return { enabled: true, collectibles: [] };
     };
-    show();
+    const client = show();
+    await screen.findByTestId("account.collectibles-empty");
+    fail = true;
+    await client.refetchQueries().catch(() => undefined);
     await screen.findByTestId("account.collectibles-error");
     fail = false;
     fireEvent.click(screen.getByTestId("account.collectibles-retry"));
