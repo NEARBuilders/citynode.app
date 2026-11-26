@@ -38,7 +38,12 @@ async function seedCommunity(org: string) {
     orgId: org,
   });
   const editor = await getPluginClient(orgContext(`${org}-editor`, org, "owner"));
-  await editor.setNodeBulletin({ nodeId: node.id, bulletin: "Members meetup on Friday" });
+  const published = await editor.setNodeBulletin({
+    nodeId: node.id,
+    bulletin: "Members meetup on Friday",
+  });
+  expect(published.metadata.joinCodeId).toBeUndefined();
+  expect(published.metadata.bulletin).toBe("Members meetup on Friday");
   return { tenant, node };
 }
 
@@ -113,5 +118,22 @@ describe("node metadata visibility", () => {
     expect(memberRead?.metadata.bulletin).toBe("Members meetup on Friday");
     const [outsiderRead] = await outsider.listNodes({ tenantId: tenant.id });
     expect(outsiderRead?.metadata.bulletin).toBeUndefined();
-  });
+
+    await db
+      .update(nodesTable)
+      .set({ orgId: "visibility-legacy-org" })
+      .where(eq(nodesTable.id, node.id));
+    const [tenantMemberRead] = await member.listNodes({ tenantId: tenant.id });
+    expect(tenantMemberRead?.metadata.bulletin).toBe("Members meetup on Friday");
+    const [stillOutsiderRead] = await outsider.listNodes({ tenantId: tenant.id });
+    expect(stillOutsiderRead?.metadata.bulletin).toBeUndefined();
+
+    const editor = await getPluginClient(orgContext(`${org}-editor`, org, "owner"));
+    const updated = await editor.updateNode({
+      nodeId: node.id,
+      metadata: { bulletin: "Members meetup on Friday" },
+    });
+    expect(updated.metadata.joinCodeId).toBeUndefined();
+    expect(updated.metadata.bulletin).toBe("Members meetup on Friday");
+  }, 120_000);
 });

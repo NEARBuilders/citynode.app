@@ -255,9 +255,8 @@ const nodeForViewer = (
   const organizationIds = signedIn ? viewerOrganizationIds(context) : new Set<string>();
   return (node: NodeRecord): NodeRecord => {
     const { joinCodeId: _joinCodeId, ...metadata } = node.metadata;
-    const communityOrgId =
-      node.orgId ?? (node.tenantId ? (tenantOrgIds.get(node.tenantId) ?? null) : null);
-    if (platformAdmin || (communityOrgId !== null && organizationIds.has(communityOrgId))) {
+    const communityOrgIds = [node.orgId, node.tenantId ? tenantOrgIds.get(node.tenantId) : null];
+    if (platformAdmin || communityOrgIds.some((id) => !!id && organizationIds.has(id))) {
       return { ...node, metadata };
     }
     const { bulletin: _bulletin, ...publicMetadata } = metadata;
@@ -276,12 +275,15 @@ const presentNodes = (
   nodes: readonly NodeRecord[],
 ) =>
   Effect.gen(function* () {
+    const organizationIds = viewerOrganizationIds(context);
     const unresolvedTenantIds =
-      isSignedIn(context) && context.user?.role !== "admin"
+      isSignedIn(context) && context.user?.role !== "admin" && organizationIds.size > 0
         ? [
             ...new Set(
               nodes.flatMap((node) =>
-                node.orgId === null && node.tenantId && node.metadata.bulletin !== undefined
+                node.tenantId &&
+                node.metadata.bulletin !== undefined &&
+                !(node.orgId && organizationIds.has(node.orgId))
                   ? [node.tenantId]
                   : [],
               ),
@@ -291,7 +293,7 @@ const presentNodes = (
     const tenants = yield* Effect.forEach(
       unresolvedTenantIds,
       (tenantId) => services.tenants.resolveTenantById(tenantId),
-      { concurrency: "unbounded" },
+      { concurrency: 4 },
     );
     const tenantOrgIds = new Map(
       tenants.flatMap((tenant) => (tenant ? [[tenant.id, tenant.orgId] as const] : [])),
@@ -2282,10 +2284,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
             resource: "node",
           });
           yield* guardNodeKind(node.kind, requestedNodeKind(input));
-          return yield* services.nodes.update(input.nodeId, {
+          const updated = yield* services.nodes.update(input.nodeId, {
             ...(input.kind !== undefined && { kind: input.kind }),
             ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
+          return yield* presentNode(services, context, updated);
         }),
 
       setNodeBulletin: builder.setNodeBulletin
@@ -2298,11 +2301,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
             adminBypassOrg: true,
             resource: "node",
           });
-          return yield* services.nodes.setBulletin(
+          const updated = yield* services.nodes.setBulletin(
             input.nodeId,
             input.bulletin,
             bulletinPublisherOf(context),
           );
+          return yield* presentNode(services, context, updated);
         }),
 
       deleteNode: builder.deleteNode
