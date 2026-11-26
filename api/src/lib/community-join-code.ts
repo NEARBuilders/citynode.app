@@ -65,28 +65,27 @@ async function mintAsPlatformAdmin(
     const session = await auth.getSession();
     const userId = session.user?.id;
     if (session.user?.role !== "admin" || !userId) return null;
-    const members = await auth
-      .listMembers({ organizationId: input.organizationId })
-      .then((result) => result.members)
+    const existingRole = await auth
+      .getActiveMemberRole({ organizationId: input.organizationId })
+      .then((result) => result.role)
       .catch((error: unknown) => {
-        if (hiddenMembership(error)) return [];
+        if (hiddenMembership(error)) return null;
         throw error;
       });
-    const existing = members.find((member) => member.userId === userId);
-    if (!existing) {
+    if (!existingRole) {
       await auth.adminAddMember({
         organizationId: input.organizationId,
         userId,
         role: "admin",
       });
       undo = () => auth.adminRemoveMember({ organizationId: input.organizationId, userId });
-    } else if (!managesOrganization(existing.role)) {
+    } else if (!managesOrganization(existingRole)) {
       await auth.adminUpdateMemberRole({
         organizationId: input.organizationId,
         userId,
         role: "admin",
       });
-      const previous = existing.role;
+      const previous = existingRole;
       undo = () =>
         auth.adminUpdateMemberRole({
           organizationId: input.organizationId,

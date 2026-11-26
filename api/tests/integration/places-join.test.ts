@@ -195,6 +195,19 @@ function authStubFor(context: unknown) {
             },
           };
         },
+        getActiveMemberRole: async (input: { organizationId?: string }) => {
+          const organizationId = input.organizationId ?? "";
+          const caller =
+            ((clientContext.user ?? {}) as { id?: string }).id ??
+            (typeof clientContext.userId === "string" ? clientContext.userId : "anonymous");
+          if (
+            hiddenMemberOrgs.has(organizationId) ||
+            !membersByOrg.get(organizationId)?.has(caller)
+          ) {
+            throw new ORPCError("FORBIDDEN", { message: "Not a member" });
+          }
+          return { role: memberRoles.get(organizationId)?.get(caller) ?? "member" };
+        },
         listMembers: async (input: { organizationId?: string }) => {
           const organizationId = input.organizationId ?? "";
           if (hiddenMemberOrgs.has(organizationId)) {

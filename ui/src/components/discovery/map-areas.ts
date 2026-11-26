@@ -44,10 +44,10 @@ export function simplifyBoundary(boundary: Boundary, zoom: number): Boundary {
   };
 }
 
-export function boundaryLatLngs(boundary: Boundary, offset = 0): AreaLatLngs {
+export function boundaryLatLngs(boundary: Boundary): AreaLatLngs {
   const polygons = boundary.type === "Polygon" ? [boundary.coordinates] : boundary.coordinates;
   return polygons.map((rings) =>
-    rings.map((ring) => ring.map(([lng, lat]) => [lat, lng + offset] as [number, number])),
+    rings.map((ring) => ring.map(([lng, lat]) => [lat, lng] as [number, number])),
   );
 }
 

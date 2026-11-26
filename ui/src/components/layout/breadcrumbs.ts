@@ -130,7 +130,7 @@ export function crumbsFor(
     case "stake":
       return [page(t("common.stake"))];
     case "apply":
-      return [page(t("dashboard.startCommunity"))];
+      return [page(t("dashboard.makeOfficial"))];
     case "discover":
       return [ADMIN, page(t("nav.directory"))];
     case "me":
