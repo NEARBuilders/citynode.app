@@ -48,10 +48,11 @@ export function PlaceSuggestions({ places }: { places: SuggestablePlace[] }) {
           : { line: "explore.empty.placeMissing", cta: "explore.empty.placeStart" };
         return (
           <li key={place.id}>
-            {t(copy.line, { place: place.name })}
-            {place.label ? (
-              <span className="ms-1 text-sm">({nodeKindLabel(place.label, place.label, t)})</span>
-            ) : null}
+            {t(copy.line, {
+              place: place.label
+                ? `${place.name} (${nodeKindLabel(place.label, place.label, t)})`
+                : place.name,
+            })}
             <Link
               to="/places/$slug"
               params={{ slug: place.slug }}

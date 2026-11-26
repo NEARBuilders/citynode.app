@@ -75,15 +75,14 @@ describe("suggestPlaces", () => {
 describe("PlaceSuggestions", () => {
   it("offers to start a community in a place that has none", () => {
     render(<PlaceSuggestions places={[place("Kuala Lumpur", "kuala-lumpur")]} />);
-    expect(screen.getByText(/No community in Kuala Lumpur yet\./)).toBeTruthy();
+    expect(screen.getByText(/No community in Kuala Lumpur \(City\) yet\./)).toBeTruthy();
     const link = screen.getByRole("link", { name: "Start one" });
     expect(link.getAttribute("href")).toBe("/places/kuala-lumpur");
   });
 
   it("opens the place page when the place already has a community", () => {
     render(<PlaceSuggestions places={[place("Malaysia", "malaysia", true, "country")]} />);
-    expect(screen.getByText(/Malaysia has a community\./)).toBeTruthy();
-    expect(screen.getByText("(Country)")).toBeTruthy();
+    expect(screen.getByText(/Malaysia \(Country\) has a community\./)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open it" }).getAttribute("href")).toBe(
       "/places/malaysia",
     );
