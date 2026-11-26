@@ -289,7 +289,6 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   kind: sharddogAwards.kind,
                   userId: sharddogAwards.userId,
                   eventId: sharddogAwards.eventId,
-                  claimUrl: sharddogAwards.claimUrl,
                 })
                 .from(sharddogAwards)
                 .where(
@@ -300,7 +299,6 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   ),
                 );
               const stale = pending
-                .filter((award) => !award.claimUrl)
                 .filter((award) =>
                   award.kind === "membership"
                     ? !membershipDropId
@@ -406,10 +404,11 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                         eq(sharddogAwards.attempts, award.attempts),
                       ),
                     )
-                    .returning({ id: sharddogAwards.id }),
+                    .returning({ accountId: sharddogAwards.accountId }),
                 );
-                if (claimed.length === 0) return;
-                yield* deliverOne(award);
+                const [claim] = claimed;
+                if (!claim) return;
+                yield* deliverOne({ ...award, accountId: claim.accountId });
               }),
             { concurrency: 4, discard: true },
           );
