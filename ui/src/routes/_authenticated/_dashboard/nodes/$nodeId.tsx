@@ -1,9 +1,7 @@
-import type { QueryClient } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import type { ApiClient } from "@/app";
 import { nodeByIdQueryOptions } from "@/lib/queries/nodes";
-import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
-import { hasNodeAccess, isActiveCommunityNode, resolveNodeAccess } from "@/lib/team-workspace";
+import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
+import { hasNodeAccess, isActiveCommunityTenant, resolveNodeAccess } from "@/lib/team-workspace";
 import { communityAuthContextQueryOptions } from "../dashboard/node/-community-header";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId")({
@@ -11,16 +9,20 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId")
     const { queryClient, apiClient } = context;
     const activeOrganizationId = context.auth.activeOrganizationId;
     const platformAdmin = context.auth.user?.role === "admin";
-    const [authContext, node, activeTenant] = await Promise.all([
+    const [authContext, tenant] = await Promise.all([
       queryClient
         .ensureQueryData(communityAuthContextQueryOptions(apiClient, activeOrganizationId))
         .catch(() => null),
-      queryClient.ensureQueryData(nodeByIdQueryOptions(apiClient, params.nodeId)).catch(() => null),
-      activeOrganizationId
-        ? activeCommunityTenant(queryClient, apiClient, activeOrganizationId)
-        : null,
+      queryClient
+        .ensureQueryData(nodeByIdQueryOptions(apiClient, params.nodeId))
+        .then((node) =>
+          node?.tenantId
+            ? queryClient.ensureQueryData(tenantByIdQueryOptions(apiClient, node.tenantId))
+            : null,
+        )
+        .catch(() => null),
     ]);
-    const inCommunity = isActiveCommunityNode(node, activeTenant?.id);
+    const inCommunity = isActiveCommunityTenant(tenant, activeOrganizationId);
     if (!platformAdmin && !inCommunity) {
       throw redirect({ to: "/dashboard", search: { restricted: "community" } });
     }
@@ -32,14 +34,3 @@ export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId")
   },
   component: Outlet,
 });
-
-async function activeCommunityTenant(
-  queryClient: QueryClient,
-  apiClient: ApiClient,
-  organizationId: string,
-) {
-  const options = tenantByOrgQueryOptions(apiClient, organizationId);
-  const cached = await queryClient.ensureQueryData(options).catch(() => null);
-  if (cached) return cached;
-  return queryClient.fetchQuery({ ...options, staleTime: 0 }).catch(() => null);
-}

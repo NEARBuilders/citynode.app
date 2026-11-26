@@ -164,11 +164,11 @@ export interface NodeAccess {
   canOperateNodes: boolean;
 }
 
-export function isActiveCommunityNode(
-  node: { tenantId: string | null } | null | undefined,
-  activeTenantId: string | null | undefined,
+export function isActiveCommunityTenant(
+  tenant: { orgId: string | null } | null | undefined,
+  activeOrganizationId: string | null | undefined,
 ): boolean {
-  return !!node?.tenantId && node.tenantId === activeTenantId;
+  return !!tenant?.orgId && tenant.orgId === activeOrganizationId;
 }
 
 export function resolveNodeAccess({

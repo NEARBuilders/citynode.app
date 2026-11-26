@@ -9,7 +9,7 @@ import { CommunityHeader } from "./-community-header";
 const harness = vi.hoisted(() => ({
   listing: null as unknown,
   authContext: null as unknown,
-  activeTenantId: "tenant-1",
+  tenantOrgId: "org-1",
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -61,10 +61,10 @@ vi.mock("@/app", () => ({
     },
     getNode: async () => node,
     listNodes: async () => [node],
-    resolveTenantByOrgId: async ({ orgId }: { orgId: string }) => ({
-      id: harness.activeTenantId,
-      orgId,
-      name: "Active community",
+    resolveTenantById: async ({ tenantId }: { tenantId: string }) => ({
+      id: tenantId,
+      orgId: harness.tenantOrgId,
+      name: "Chicago community",
     }),
     getDiscoveryNode: async () => harness.listing,
   }),
@@ -77,7 +77,7 @@ afterEach(() => {
   for (const client of clients.splice(0)) client.clear();
   harness.listing = null;
   harness.authContext = null;
-  harness.activeTenantId = "tenant-1";
+  harness.tenantOrgId = "org-1";
 });
 
 function renderHeader() {
@@ -123,10 +123,10 @@ describe("CommunityHeader organization link", () => {
 
   it("leaves it out on another community's page", async () => {
     harness.authContext = { organization: { member: { role: "owner" }, teams: [] } };
-    harness.activeTenantId = "tenant-elsewhere";
+    harness.tenantOrgId = "org-elsewhere";
     const client = renderHeader();
     await waitFor(() =>
-      expect(client.getQueryState(["tenants", "detail", "org", "org-1"])?.status).toBe("success"),
+      expect(client.getQueryState(["tenants", "detail", "id", "tenant-1"])?.status).toBe("success"),
     );
     expect(screen.queryByTestId("community-header.organization")).toBeNull();
   });
@@ -141,10 +141,10 @@ describe("CommunityHeader role badge", () => {
 
   it("leaves it out when the active org is only the viewer's personal one", async () => {
     harness.authContext = { organization: { member: { role: "owner" }, teams: [] } };
-    harness.activeTenantId = "tenant-personal";
+    harness.tenantOrgId = "org-elsewhere";
     const client = renderHeader();
     await waitFor(() =>
-      expect(client.getQueryState(["tenants", "detail", "org", "org-1"])?.status).toBe("success"),
+      expect(client.getQueryState(["tenants", "detail", "id", "tenant-1"])?.status).toBe("success"),
     );
     await waitFor(() =>
       expect(client.getQueryState(["home-auth-context", "org-1"])?.status).toBe("success"),

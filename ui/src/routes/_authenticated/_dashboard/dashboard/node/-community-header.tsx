@@ -17,9 +17,9 @@ import { isPlatformNode } from "@/lib/node-kind";
 import { presentationLabel } from "@/lib/presentation-label";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
-import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { tenantByIdQueryOptions } from "@/lib/queries/tenants";
 import {
-  isActiveCommunityNode,
+  isActiveCommunityTenant,
   resolveNodeAccess,
   teamWorkspaceQueryOptions,
 } from "@/lib/team-workspace";
@@ -48,17 +48,17 @@ export async function ensureCommunityHeaderData(
   const [node] = await Promise.all([
     queryClient.ensureQueryData(nodeByIdQueryOptions(apiClient, nodeId)).catch(() => null),
     queryClient.prefetchQuery(discoveryNodeQueryOptions(apiClient, nodeId)),
-    activeOrganizationId
-      ? queryClient.prefetchQuery(tenantByOrgQueryOptions(apiClient, activeOrganizationId))
-      : null,
     queryClient
       .ensureQueryData(communityAuthContextQueryOptions(apiClient, activeOrganizationId))
       .catch(() => null),
   ]);
   if (node?.tenantId) {
-    await queryClient
-      .ensureQueryData(tenantNodesQueryOptions(apiClient, node.tenantId))
-      .catch(() => null);
+    await Promise.all([
+      queryClient
+        .ensureQueryData(tenantNodesQueryOptions(apiClient, node.tenantId))
+        .catch(() => null),
+      queryClient.prefetchQuery(tenantByIdQueryOptions(apiClient, node.tenantId)),
+    ]);
   }
 }
 
@@ -99,11 +99,8 @@ export function CommunityHeader({
   const nodes = siblings.data ?? [];
 
   const authContext = useQuery(communityAuthContextQueryOptions(api, activeOrganizationId));
-  const activeTenant = useQuery({
-    ...tenantByOrgQueryOptions(api, activeOrganizationId ?? ""),
-    enabled: !!activeOrganizationId,
-  });
-  const ownCommunity = isActiveCommunityNode(node, activeTenant.data?.id);
+  const nodeTenant = useQuery(tenantByIdQueryOptions(api, node?.tenantId ?? ""));
+  const ownCommunity = isActiveCommunityTenant(nodeTenant.data, activeOrganizationId);
   const platformAdmin = !!auth?.isAdmin;
   const {
     canManageCommunity: canManage,

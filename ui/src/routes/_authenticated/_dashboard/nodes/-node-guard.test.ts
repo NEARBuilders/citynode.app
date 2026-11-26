@@ -31,15 +31,13 @@ function authContext(orgRole: string, teams: Array<typeof events>) {
   } as unknown as AuthRequestContext;
 }
 
-const communityTenant = { id: "tenant-1", orgId: "org-1" };
-
 function enterNode(
   context: AuthRequestContext | null,
   userRole: string | null = null,
   {
-    activeTenant = communityTenant,
+    tenantOrgId = "org-1",
     nodeTenantId = "tenant-1",
-  }: { activeTenant?: typeof communityTenant | null; nodeTenantId?: string | null } = {},
+  }: { tenantOrgId?: string | null; nodeTenantId?: string | null } = {},
 ) {
   const getContext = vi.fn().mockResolvedValue(context);
   return (NodeRoute.options.beforeLoad as Guard)({
@@ -48,7 +46,10 @@ function enterNode(
       apiClient: {
         auth: { getContext },
         getNode: vi.fn().mockResolvedValue({ id: "node-1", tenantId: nodeTenantId }),
-        resolveTenantByOrgId: vi.fn().mockResolvedValue(activeTenant),
+        resolveTenantById: vi.fn(async ({ tenantId }: { tenantId: string }) => ({
+          id: tenantId,
+          orgId: tenantOrgId,
+        })),
       },
       auth: { activeOrganizationId: "org-1", user: { role: userRole } },
     },
@@ -122,14 +123,14 @@ describe("community event routes", () => {
   });
 
   it("keep a user whose only org is their personal one out of a community's pages", async () => {
-    await expect(enterNode(authContext("owner", []), null, { activeTenant: null })).rejects.toEqual(
-      notInCommunity,
-    );
+    await expect(
+      enterNode(authContext("owner", []), null, { tenantOrgId: "org-elsewhere" }),
+    ).rejects.toEqual(notInCommunity);
   });
 
   it("keep owners of another community out", async () => {
     await expect(
-      enterNode(authContext("owner", [events, ops]), null, { nodeTenantId: "tenant-other" }),
+      enterNode(authContext("owner", [events, ops]), null, { tenantOrgId: "org-other" }),
     ).rejects.toEqual(notInCommunity);
   });
 
@@ -140,9 +141,7 @@ describe("community event routes", () => {
   });
 
   it("let platform admins into any community's pages", async () => {
-    await expect(
-      enterNode(null, "admin", { activeTenant: null, nodeTenantId: "tenant-other" }),
-    ).resolves.toEqual({
+    await expect(enterNode(null, "admin", { tenantOrgId: "org-other" })).resolves.toEqual({
       canManageCommunity: true,
       canOrganizeEvents: true,
       canOperateNodes: true,

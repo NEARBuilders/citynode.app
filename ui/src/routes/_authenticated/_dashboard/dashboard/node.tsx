@@ -62,7 +62,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
     const tenant = await context.apiClient
       .resolveTenantByOrgId({ orgId: communityOrgId })
       .catch(() => null);
-    if (tenant) context.queryClient.setQueryData(tenantQueryKeys.byOrg(communityOrgId), tenant);
+    if (tenant) context.queryClient.setQueryData(tenantQueryKeys.byId(tenant.id), tenant);
     if (!tenant) {
       return {
         tenant: null,
