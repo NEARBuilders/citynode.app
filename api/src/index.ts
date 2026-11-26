@@ -221,7 +221,14 @@ type NodeAccessContext = NonNullable<TeamAccessContext> & {
 
 type ViewerContext = {
   userId?: string | null;
-  user?: { id?: string; name?: string | null; isAnonymous?: boolean | null } | null;
+  user?: {
+    id?: string;
+    name?: string | null;
+    isAnonymous?: boolean | null;
+    role?: string | null;
+  } | null;
+  organization?: { activeOrganizationId?: string | null } | null;
+  organizations?: ReadonlyArray<{ id: string }>;
 };
 
 const bulletinPublisherOf = (context: ViewerContext): BulletinPublisher => ({
@@ -229,11 +236,74 @@ const bulletinPublisherOf = (context: ViewerContext): BulletinPublisher => ({
   name: memberDisplayName(context.user?.name),
 });
 
-const nodeForViewer = (context: ViewerContext) => {
-  const signedIn = !!context.user && context.user.isAnonymous !== true;
-  return (node: NodeRecord): NodeRecord =>
-    signedIn ? node : { ...node, bulletinPublisherName: null };
+const isSignedIn = (context: ViewerContext) => !!context.user && context.user.isAnonymous !== true;
+
+const viewerOrganizationIds = (context: ViewerContext): ReadonlySet<string> =>
+  new Set(
+    [
+      context.organization?.activeOrganizationId,
+      ...(context.organizations ?? []).map((organization) => organization.id),
+    ].filter((id): id is string => !!id),
+  );
+
+const nodeForViewer = (
+  context: ViewerContext,
+  tenantOrgIds: ReadonlyMap<string, string | null> = new Map(),
+) => {
+  const signedIn = isSignedIn(context);
+  const platformAdmin = signedIn && context.user?.role === "admin";
+  const organizationIds = signedIn ? viewerOrganizationIds(context) : new Set<string>();
+  return (node: NodeRecord): NodeRecord => {
+    const { joinCodeId: _joinCodeId, ...metadata } = node.metadata;
+    const communityOrgId =
+      node.orgId ?? (node.tenantId ? (tenantOrgIds.get(node.tenantId) ?? null) : null);
+    if (platformAdmin || (communityOrgId !== null && organizationIds.has(communityOrgId))) {
+      return { ...node, metadata };
+    }
+    const { bulletin: _bulletin, ...publicMetadata } = metadata;
+    return {
+      ...node,
+      metadata: publicMetadata,
+      bulletinPublishedAt: null,
+      bulletinPublisherName: null,
+    };
+  };
 };
+
+const presentNodes = (
+  services: { tenants: TenantsService },
+  context: ViewerContext,
+  nodes: readonly NodeRecord[],
+) =>
+  Effect.gen(function* () {
+    const unresolvedTenantIds =
+      isSignedIn(context) && context.user?.role !== "admin"
+        ? [
+            ...new Set(
+              nodes.flatMap((node) =>
+                node.orgId === null && node.tenantId && node.metadata.bulletin !== undefined
+                  ? [node.tenantId]
+                  : [],
+              ),
+            ),
+          ]
+        : [];
+    const tenants = yield* Effect.forEach(
+      unresolvedTenantIds,
+      (tenantId) => services.tenants.resolveTenantById(tenantId),
+      { concurrency: "unbounded" },
+    );
+    const tenantOrgIds = new Map(
+      tenants.flatMap((tenant) => (tenant ? [[tenant.id, tenant.orgId] as const] : [])),
+    );
+    return nodes.map(nodeForViewer(context, tenantOrgIds));
+  });
+
+const presentNode = (
+  services: { tenants: TenantsService },
+  context: ViewerContext,
+  node: NodeRecord,
+) => presentNodes(services, context, [node]).pipe(Effect.map(([presented]) => presented!));
 
 const requireNodeOperationsAccess = (context: NodeAccessContext): NodeEffect<void> =>
   canUseTeamArea(context, "node-operations")
@@ -2170,7 +2240,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...(input.parentId !== undefined && { parentId: input.parentId }),
           ...(input.tenantId !== undefined && { tenantId: input.tenantId }),
         });
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listNodeSummaries: builder.listNodeSummaries.effect(function* ({ input, context }) {
@@ -2180,8 +2250,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...(input.scope === "roots" && { parentId: null }),
           ...(input.kind !== undefined && { kind: input.kind }),
         });
-        const present = nodeForViewer(context);
-        return summaries.map((summary) => ({ ...summary, node: present(summary.node) }));
+        const presented = yield* presentNodes(
+          services,
+          context,
+          summaries.map((summary) => summary.node),
+        );
+        return summaries.map((summary, index) => ({ ...summary, node: presented[index]! }));
       }),
 
       getNode: builder.getNode.effect(function* ({ input, context }) {
@@ -2194,7 +2268,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ),
         );
         const refreshed = yield* services.nodes.getById(input.nodeId);
-        return refreshed && nodeForViewer(context)(refreshed);
+        return refreshed && (yield* presentNode(services, context, refreshed));
       }),
 
       updateNode: builder.updateNode
@@ -2258,20 +2332,20 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listRootNodes: builder.listRootNodes.effect(function* ({ context }) {
         const services = yield* ApiServices;
         const nodes = yield* services.nodes.listRootNodes;
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listChildren: builder.listChildren.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const nodes = yield* services.nodes.listChildren(input.nodeId);
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listNodeAncestors: builder.listNodeAncestors.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         yield* resolveNodeForAccess(services, input.nodeId);
         const ancestors = yield* services.nodes.listAncestors(input.nodeId);
-        return ancestors.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, ancestors);
       }),
 
       getSubtree: builder.getSubtree.effect(function* ({ input, errors }) {
@@ -2308,7 +2382,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
 
         return {
-          node: nodeForViewer(context)(node),
+          node: yield* presentNode(services, context, node),
           childrenCount: children.length,
           subtreeNodeCount: subtree.length,
           validators,
@@ -2326,7 +2400,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       resolveNodeBySlug: builder.resolveNodeBySlug.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const node = yield* services.nodes.resolveBySlug(input.slug);
-        return node && nodeForViewer(context)(node);
+        return node && (yield* presentNode(services, context, node));
       }),
 
       resolvePlace: builder.resolvePlace.effect(function* ({ input }) {
