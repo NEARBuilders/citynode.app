@@ -137,6 +137,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                       eq(sharddogAwards.id, award.id),
                       eq(sharddogAwards.status, "pending"),
                       isNull(sharddogAwards.claimUrl),
+                      isNull(sharddogAwards.accountId),
                     ),
                   ),
               ),
@@ -316,6 +317,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
               const refresh = {
                 dropId: sql`case when ${sharddogAwards.claimUrl} is null then excluded.drop_id else ${sharddogAwards.dropId} end`,
                 accountId: sql`coalesce(excluded.account_id, ${sharddogAwards.accountId})`,
+                attempts: sql`case when ${sharddogAwards.accountId} is null and excluded.account_id is not null and ${sharddogAwards.claimUrl} is null then 0 else ${sharddogAwards.attempts} end`,
               };
               if (membershipDropId && members.size > 0) {
                 await tx

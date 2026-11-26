@@ -450,6 +450,37 @@ describe("ShardDog awards on event check-in", () => {
     await untilStatuses(userId, city.org, ["needs_account"]);
   }, 30_000);
 
+  it("awards a badge that gave up on a claim link once a NEAR account shows up", async () => {
+    const city = await community();
+    const first = await city.addEvent("Storm night", "storm-drop");
+    const second = await city.addEvent("Clear night", "clear-drop");
+    const userId = `revive-${crypto.randomUUID().slice(0, 6)}`;
+
+    shardDog.failing = true;
+    city.checkIn(first.id, userId, null);
+    await city.sync();
+    await settle();
+    const client = await attendee(userId);
+    let now = Date.now();
+    for (let attempt = 1; attempt < MAX_AWARD_ATTEMPTS; attempt += 1) {
+      now += 60 * 60_000;
+      vi.useFakeTimers({ toFake: ["Date"], now });
+      await client.getMyCollectibles({ organizationId: city.org });
+      await settle();
+    }
+    await untilStatuses(userId, city.org, ["needs_account"]);
+
+    shardDog.failing = false;
+    city.checkIn(second.id, userId, "revive.testnet");
+    await city.sync();
+    await untilStatuses(userId, city.org, ["awarded", "awarded"]);
+    expect(shardDog.awards.map(({ dropId }) => dropId).sort()).toEqual([
+      "clear-drop",
+      "storm-drop",
+    ]);
+    expect(shardDog.claims).toHaveLength(0);
+  }, 30_000);
+
   it("keeps the claim link once handed out, even when a NEAR account shows up later", async () => {
     const city = await community();
     const first = await city.addEvent("First meetup", "first-drop");
