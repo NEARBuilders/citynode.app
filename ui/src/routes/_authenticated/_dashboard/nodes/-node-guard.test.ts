@@ -137,6 +137,9 @@ describe("community event routes", () => {
     await expect(enterNode(authContext("owner", []), null, { nodeTenantId: null })).rejects.toEqual(
       notInCommunity,
     );
+  });
+
+  it("let platform admins into any community's pages", async () => {
     await expect(
       enterNode(null, "admin", { activeTenant: null, nodeTenantId: "tenant-other" }),
     ).resolves.toEqual({
