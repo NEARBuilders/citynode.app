@@ -96,7 +96,7 @@ export function OrganizationOverview({
                 data-testid="org-start-community"
               >
                 <RocketLaunchIcon />
-                {translate("dashboard.startCommunity")}
+                {translate("dashboard.makeOfficial")}
               </Button>
             )}
             {!isActive && (

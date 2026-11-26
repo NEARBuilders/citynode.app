@@ -3,6 +3,9 @@ import { seedNode } from "../../lib/seed-tenant.mjs";
 import { type DemoSeed, seedDemoCommunities, signInAsDemo } from "../helpers/demo";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
 
+const SEED_DAY = "2026-11-16";
+const SEED_NOW = new Date(`${SEED_DAY}T12:00:00.000Z`);
+
 let seed: DemoSeed;
 
 function reportMonth() {
@@ -41,7 +44,11 @@ test.describe.configure({ mode: "serial" });
 
 test.describe("platform admins review reports from Home", () => {
   test.beforeAll(async () => {
-    seed = await seedDemoCommunities();
+    seed = await seedDemoCommunities({ today: SEED_DAY });
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(SEED_NOW);
   });
 
   test("Home is the overview: reports, needs action, events and onboarding", async ({ page }) => {

@@ -42,8 +42,10 @@ import { communityAuthContextQueryOptions } from "./node/-community-header";
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { restricted?: FeatureArea | "admin" | "owners" } =>
-    search.restricted === "admin" || search.restricted === "owners"
+  ): { restricted?: FeatureArea | "admin" | "owners" | "community" } =>
+    search.restricted === "admin" ||
+    search.restricted === "owners" ||
+    search.restricted === "community"
       ? { restricted: search.restricted }
       : typeof search.restricted === "string" && isFeatureArea(search.restricted)
         ? { restricted: search.restricted }
