@@ -38,12 +38,11 @@ import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { AppMessageId } from "@/i18n/catalogs";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
-import { nodeKindLabel } from "@/lib/node-kind";
 import { placeMapPinsQueryOptions } from "@/lib/queries/places";
 import { CommunityChannels, CommunityUpdates } from "./community-updates";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, EventList } from "./event-list";
-import { suggestPlaces } from "./place-suggestions";
+import { matchesPlace, PlaceSuggestions, suggestPlaces } from "./place-suggestions";
 import { ReportContent } from "./report-content";
 
 const GeographicMap = lazy(() =>
@@ -143,7 +142,7 @@ export function DiscoveryExplorer({
   const catalogPlaces = catalog.data ?? [];
   const placePins = catalogPlaces.filter((place) => {
     if (scoped) return false;
-    return query ? place.name.toLowerCase().includes(query) || place.slug.includes(query) : true;
+    return matchesPlace(place, query);
   });
   const suggestions = nodes.length === 0 && !scoped ? suggestPlaces(catalogPlaces, query) : [];
   const basic = selected
@@ -302,37 +301,7 @@ export function DiscoveryExplorer({
               title={t("explore.empty.title")}
               description={
                 suggestions.length > 0 ? (
-                  <ul className="flex flex-col gap-2" data-testid="explore-place-suggestions">
-                    {suggestions.map((place) => {
-                      const line = t(
-                        place.activated ? "explore.empty.placeLive" : "explore.empty.placeMissing",
-                        { place: place.name },
-                      );
-                      const cta = t(
-                        place.activated ? "explore.empty.placeOpen" : "explore.empty.placeStart",
-                      );
-                      return (
-                        <li key={place.id}>
-                          {line}
-                          {place.label ? (
-                            <span className="text-sm">
-                              {" "}
-                              ({nodeKindLabel(place.label, undefined, t)})
-                            </span>
-                          ) : null}{" "}
-                          <Link
-                            to="/places/$slug"
-                            params={{ slug: place.slug }}
-                            aria-label={`${line} ${cta}`}
-                            className="font-medium text-foreground underline underline-offset-4"
-                            data-testid={`explore-place-suggestion-${place.slug}`}
-                          >
-                            {cta}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <PlaceSuggestions places={suggestions} />
                 ) : (
                   t("explore.empty.description")
                 )
