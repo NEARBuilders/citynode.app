@@ -1117,11 +1117,11 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Le staking va aux validateurs de cette communauté.",
     "质押将分配给此社区的验证节点。",
   ],
-  "dashboard.startCommunity": [
-    "Start a community",
-    "Crear una comunidad",
-    "Créer une communauté",
-    "创建社区",
+  "dashboard.makeOfficial": [
+    "Make a community official",
+    "Oficializar una comunidad",
+    "Officialiser une communauté",
+    "申请成为官方社区",
   ],
   "dashboard.subcommunities": ["Sub-communities", "Subcomunidades", "Sous-communautés", "子社区"],
   "dashboard.switchCommunity": [
@@ -1963,6 +1963,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "开始一个站点，让参与者扫码在应用中加入你的社区。",
   ],
   "setup.qr.action": ["Start station", "Iniciar estación", "Lancer une station", "开始站点"],
+  "workspace.notInCommunity": [
+    "That community's dashboard is only for its members. If you belong to it, switch to it first.",
+    "El panel de esa comunidad es solo para sus miembros. Si perteneces a ella, cámbiate a ella primero.",
+    "Le tableau de bord de cette communauté est réservé à ses membres. Si vous en faites partie, passez d’abord à celle-ci.",
+    "该社区的控制台仅对其成员开放。如果你是成员，请先切换到该社区。",
+  ],
   "workspace.ownersOnly": [
     "Only community owners, admins and members of a team with the Events area can manage events and stations, and only owners and admins can change the profile. Ask an owner to add you to an events team or make you an admin.",
     "Solo los propietarios, administradores y miembros de un equipo con el área de Eventos pueden gestionar eventos y estaciones, y solo los propietarios y administradores pueden cambiar el perfil. Pide a un propietario que te añada a un equipo de eventos o te haga administrador.",

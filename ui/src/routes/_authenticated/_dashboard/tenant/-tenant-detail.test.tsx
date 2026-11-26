@@ -60,7 +60,7 @@ type Binding = {
 type Harness = {
   apiClient: Record<string, (...args: never[]) => unknown> & {
     auth: {
-      listMembers: ReturnType<typeof vi.fn>;
+      getActiveMemberRole: ReturnType<typeof vi.fn>;
       getContext: ReturnType<typeof vi.fn>;
     };
   };
@@ -269,7 +269,7 @@ function createHarness({
 
   const apiClient = {
     auth: {
-      listMembers: vi.fn(async () => ({ members: [{ userId: USER_ID, role }] })),
+      getActiveMemberRole: vi.fn(async () => ({ role })),
       getContext: vi.fn(async () => ({
         user: { role: null },
         organization: {
@@ -550,7 +550,7 @@ describe("tenant detail mutations", () => {
 
     await screen.findByText("Community not found");
     expect(screen.queryByText("Original tenant")).toBeNull();
-    await waitFor(() => expect(current.apiClient.auth.listMembers).toHaveBeenCalledOnce());
+    await waitFor(() => expect(current.apiClient.auth.getActiveMemberRole).toHaveBeenCalledOnce());
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();

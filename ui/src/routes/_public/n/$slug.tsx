@@ -32,6 +32,7 @@ import {
 } from "@/lib/queries/nodes";
 import { socialMeta } from "@/lib/social-meta";
 import { CommunityCollectibles } from "./-community-collectibles";
+import { CommunityPageButtons, useCommunityPageActions } from "./-community-role";
 import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
@@ -114,6 +115,7 @@ function NodePage() {
     ...nodeDaoQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
   });
+  const pageActions = useCommunityPageActions(node?.tenantId ?? null);
 
   if (nodeLoading) {
     return (
@@ -238,6 +240,7 @@ function NodePage() {
                 {translate("daoProposals.title")}
               </Button>
             )}
+            <CommunityPageButtons nodeId={node.id} nodeName={node.name} actions={pageActions} />
             <ProposeHomepageCta tenantId={node.tenantId} />
           </div>
         </div>
@@ -282,9 +285,11 @@ function NodePage() {
         <SectionHeader
           title={translate("community.upcoming")}
           description={
-            <span data-testid="node-page.join-at-event">
-              {translate("community.joinAtEvent", { name: node.name })}
-            </span>
+            pageActions.joinHint ? (
+              <span data-testid="node-page.join-at-event">
+                {translate("community.joinAtEvent", { name: node.name })}
+              </span>
+            ) : undefined
           }
         />
         {events.length > 0 ? (
