@@ -495,6 +495,21 @@ describe("Tenant + Node + Binding wizard flow", () => {
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
     });
 
+    it("lists every community for a signed-in viewer with no organization", async () => {
+      const client = await getPluginClient({
+        ...authedContext("stake-scope-no-org"),
+        organization: { activeOrganizationId: null },
+        organizations: [],
+      });
+      const resultAccounts = new Set(
+        (await client.listStakeCommunities()).map((result) => result.accountId),
+      );
+
+      expect(resultAccounts.has(accounts.active)).toBe(true);
+      expect(resultAccounts.has(accounts.connected)).toBe(true);
+      expect(resultAccounts.has(accounts.unrelated)).toBe(true);
+    });
+
     it("keeps tenant organization ids out of the public tenant directory", async () => {
       const apps = await (await getPluginClient()).listTenantApps();
       const app = apps.find((entry) => entry.accountId === accounts.active);
