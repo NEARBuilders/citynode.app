@@ -202,6 +202,9 @@ describe("Community collectibles", () => {
     expect(await client.getNodeCollectibles({ nodeId: crypto.randomUUID() })).toEqual({
       collectibles: [],
     });
+    await expect(client.getNodeCollectibles({ nodeId: "not-a-node" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
     const { node } = await activateTestNode({
       name: "No tenant",
       slug: `no-tenant-${crypto.randomUUID().slice(0, 8)}`,

@@ -1290,7 +1290,7 @@ export const contract = oc.router({
       description:
         "Public — the community's membership ShardDog and the ShardDog of each public event, for the drops linked to them, each with a View in ShardDog link. Empty when ShardDog is off or nothing is linked.",
     })
-    .input(z.object({ nodeId: z.string().min(1) }))
+    .input(z.object({ nodeId: z.uuid() }))
     .output(NodeCollectiblesSchema),
 
   setShardDogDrop: oc
