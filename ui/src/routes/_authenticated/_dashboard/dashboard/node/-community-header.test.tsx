@@ -132,6 +132,28 @@ describe("CommunityHeader organization link", () => {
   });
 });
 
+describe("CommunityHeader role badge", () => {
+  it("shows the viewer's role in their own community", async () => {
+    harness.authContext = { organization: { member: { role: "owner" }, teams: [] } };
+    renderHeader();
+    expect((await screen.findByTestId("community-viewer-role")).textContent).toContain("Owner");
+  });
+
+  it("leaves it out when the active org is only the viewer's personal one", async () => {
+    harness.authContext = { organization: { member: { role: "owner" }, teams: [] } };
+    harness.activeTenantId = "tenant-personal";
+    const client = renderHeader();
+    await waitFor(() =>
+      expect(client.getQueryState(["tenants", "detail", "org", "org-1"])?.status).toBe("success"),
+    );
+    await waitFor(() =>
+      expect(client.getQueryState(["home-auth-context", "org-1"])?.status).toBe("success"),
+    );
+    expect(screen.queryByTestId("community-viewer-role")).toBeNull();
+    expect(screen.queryByTestId("community-header.organization")).toBeNull();
+  });
+});
+
 describe("CommunityHeader public page link", () => {
   it("opens a child community's public page by its place slug", async () => {
     harness.listing = { slug: "chicago", parentId: node.parentId };

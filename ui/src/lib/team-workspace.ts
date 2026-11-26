@@ -157,3 +157,38 @@ export function canOperateNodes(
   }
   return hasTeamArea(context, "node-operations");
 }
+
+export interface NodeAccess {
+  canManageCommunity: boolean;
+  canOrganizeEvents: boolean;
+  canOperateNodes: boolean;
+}
+
+export function isActiveCommunityNode(
+  node: { tenantId: string | null } | null | undefined,
+  activeTenantId: string | null | undefined,
+): boolean {
+  return !!node?.tenantId && node.tenantId === activeTenantId;
+}
+
+export function resolveNodeAccess({
+  context,
+  platformAdmin,
+  inCommunity,
+}: {
+  context: AuthRequestContext | null | undefined;
+  platformAdmin: boolean;
+  inCommunity: boolean;
+}): NodeAccess {
+  const roleContext = inCommunity ? context : null;
+  const canManage = platformAdmin || canManageCommunity(roleContext);
+  return {
+    canManageCommunity: canManage,
+    canOrganizeEvents: canManage || canOrganizeEvents(roleContext),
+    canOperateNodes: canManage || canOperateNodes(roleContext),
+  };
+}
+
+export function hasNodeAccess(access: NodeAccess): boolean {
+  return access.canManageCommunity || access.canOrganizeEvents || access.canOperateNodes;
+}

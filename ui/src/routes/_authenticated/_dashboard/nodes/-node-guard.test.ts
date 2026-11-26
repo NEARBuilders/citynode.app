@@ -31,16 +31,32 @@ function authContext(orgRole: string, teams: Array<typeof events>) {
   } as unknown as AuthRequestContext;
 }
 
-function enterNode(context: AuthRequestContext | null, userRole: string | null = null) {
+const communityTenant = { id: "tenant-1", orgId: "org-1" };
+
+function enterNode(
+  context: AuthRequestContext | null,
+  userRole: string | null = null,
+  {
+    activeTenant = communityTenant,
+    nodeTenantId = "tenant-1",
+  }: { activeTenant?: typeof communityTenant | null; nodeTenantId?: string | null } = {},
+) {
   const getContext = vi.fn().mockResolvedValue(context);
   return (NodeRoute.options.beforeLoad as Guard)({
     context: {
       queryClient: new QueryClient(),
-      apiClient: { auth: { getContext } },
+      apiClient: {
+        auth: { getContext },
+        getNode: vi.fn().mockResolvedValue({ id: "node-1", tenantId: nodeTenantId }),
+        resolveTenantByOrgId: vi.fn().mockResolvedValue(activeTenant),
+      },
       auth: { activeOrganizationId: "org-1", user: { role: userRole } },
     },
+    params: { nodeId: "node-1" },
   });
 }
+
+const notInCommunity = { redirect: { to: "/dashboard", search: { restricted: "community" } } };
 
 function openTab(
   tab: string | undefined,
@@ -103,6 +119,31 @@ describe("community event routes", () => {
     await expect(enterNode(authContext("member", []))).rejects.toEqual(ownersOnly);
     await expect(enterNode(authContext("member", [finance]))).rejects.toEqual(ownersOnly);
     await expect(enterNode(null)).rejects.toEqual(ownersOnly);
+  });
+
+  it("keep a user whose only org is their personal one out of a community's pages", async () => {
+    await expect(enterNode(authContext("owner", []), null, { activeTenant: null })).rejects.toEqual(
+      notInCommunity,
+    );
+  });
+
+  it("keep owners of another community out", async () => {
+    await expect(
+      enterNode(authContext("owner", [events, ops]), null, { nodeTenantId: "tenant-other" }),
+    ).rejects.toEqual(notInCommunity);
+  });
+
+  it("keep everyone but platform admins out of nodes without a community", async () => {
+    await expect(enterNode(authContext("owner", []), null, { nodeTenantId: null })).rejects.toEqual(
+      notInCommunity,
+    );
+    await expect(
+      enterNode(null, "admin", { activeTenant: null, nodeTenantId: "tenant-other" }),
+    ).resolves.toEqual({
+      canManageCommunity: true,
+      canOrganizeEvents: true,
+      canOperateNodes: true,
+    });
   });
 
   it("open Events and Onboarding to organizers and the bulletin to managers or operators", () => {

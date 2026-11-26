@@ -19,9 +19,8 @@ import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nod
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import {
-  canManageCommunity,
-  canOperateNodes,
-  canOrganizeEvents,
+  isActiveCommunityNode,
+  resolveNodeAccess,
   teamWorkspaceQueryOptions,
 } from "@/lib/team-workspace";
 import { CommunityNav, type CommunityNavSection } from "./-community-nav";
@@ -98,18 +97,21 @@ export function CommunityHeader({
   const nodes = siblings.data ?? [];
 
   const authContext = useQuery(communityAuthContextQueryOptions(api, activeOrganizationId));
-  const orgRole = authContext.data?.organization?.member?.role;
-  const canManage = !!auth?.isAdmin || canManageCommunity(authContext.data);
-  const canOrganize = canManage || canOrganizeEvents(authContext.data);
-  const canOperate = canManage || canOperateNodes(authContext.data);
-  const viewerRole = orgRole ?? (auth?.isAdmin ? "admin" : null);
-  const workspace = useQuery(teamWorkspaceQueryOptions(api));
-  const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
   const activeTenant = useQuery({
     ...tenantByOrgQueryOptions(api, activeOrganizationId ?? ""),
-    enabled: canOrganize && !!activeOrganizationId,
+    enabled: !!activeOrganizationId,
   });
-  const ownCommunity = !!node?.tenantId && activeTenant.data?.id === node.tenantId;
+  const ownCommunity = isActiveCommunityNode(node, activeTenant.data?.id);
+  const platformAdmin = !!auth?.isAdmin;
+  const {
+    canManageCommunity: canManage,
+    canOrganizeEvents: canOrganize,
+    canOperateNodes: canOperate,
+  } = resolveNodeAccess({ context: authContext.data, platformAdmin, inCommunity: ownCommunity });
+  const orgRole = ownCommunity ? authContext.data?.organization?.member?.role : undefined;
+  const viewerRole = orgRole ?? (platformAdmin ? "admin" : null);
+  const workspace = useQuery(teamWorkspaceQueryOptions(api));
+  const listing = useQuery(discoveryNodeQueryOptions(api, nodeId ?? ""));
   const organizationSlug = useQuery({
     ...organizationsQueryOptions(api, auth?.user?.id),
     enabled: ownCommunity && !!auth?.user?.id,
