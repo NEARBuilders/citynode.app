@@ -57,6 +57,8 @@ export interface ShardDogService {
 
 export class ShardDogTag extends Context.Service<ShardDogTag, ShardDogService>()("api/ShardDog") {}
 
+const idempotencyKey = (award: { id: string; dropId: string }) => `${award.id}:${award.dropId}`;
+
 export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient }) =>
   Layer.effect(
     ShardDogTag,
@@ -116,7 +118,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
         Effect.tryPromise(() =>
           config.client.createClaimLink({
             dropId: award.dropId,
-            idempotencyKey: `${award.id}:${award.dropId}`,
+            idempotencyKey: idempotencyKey(award),
           }),
         ).pipe(
           Effect.matchEffect({
@@ -145,7 +147,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
           config.client.award({
             dropId: award.dropId,
             accountId: award.accountId ?? "",
-            idempotencyKey: `${award.id}:${award.dropId}`,
+            idempotencyKey: idempotencyKey(award),
           }),
         ).pipe(
           Effect.matchEffect({
@@ -406,9 +408,9 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                     )
                     .returning({ accountId: sharddogAwards.accountId }),
                 );
-                const [claim] = claimed;
-                if (!claim) return;
-                yield* deliverOne({ ...award, accountId: claim.accountId });
+                const [locked] = claimed;
+                if (!locked) return;
+                yield* deliverOne({ ...award, accountId: locked.accountId });
               }),
             { concurrency: 4, discard: true },
           );
