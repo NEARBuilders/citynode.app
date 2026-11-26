@@ -55,6 +55,22 @@ test.describe("each role sees only its actions on the community page and Home", 
     expectNoHydrationFailure(pageErrors);
   });
 
+  test("a signed-in visitor who is not a member is kept off the community's dashboard", async ({
+    page,
+  }) => {
+    const pageErrors = collectErrors(page);
+    await signInAsDemo(page, seed, "noCommunity");
+    const nodeId = seed.communities.lagos.nodeId;
+    for (const path of [`/nodes/${nodeId}/content`, `/nodes/${nodeId}/events/new`]) {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await waitForApp(page);
+      await expect(page).toHaveURL(/\/dashboard\?restricted=community/, { timeout: 15000 });
+      await expect(page.getByTestId("workspace-restricted-notice")).toBeVisible();
+      await expect(page.getByTestId("community-viewer-role")).toHaveCount(0);
+    }
+    expectNoHydrationFailure(pageErrors);
+  });
+
   test("a member opens the community and does not see setup or admin rows", async ({ page }) => {
     const pageErrors = collectErrors(page);
     await openCommunity(page, "member");

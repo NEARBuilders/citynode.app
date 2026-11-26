@@ -26,7 +26,7 @@ import {
   resolveOrgSlug,
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
-import { orgMembersQueryOptions } from "../../orgs/-organization-members";
+import { orgActiveRoleQueryOptions } from "../../orgs/-organization-members";
 import {
   CommunityHeader,
   communityAuthContextQueryOptions,
@@ -110,11 +110,11 @@ export function TenantDetailContent({
 
   const { data: organizations } = useQuery(organizationsQueryOptions(apiClient, session?.user?.id));
 
-  const membersQuery = useQuery({
-    ...orgMembersQueryOptions(apiClient, tenant?.orgId ?? ""),
+  const memberRoleQuery = useQuery({
+    ...orgActiveRoleQueryOptions(apiClient, tenant?.orgId ?? ""),
     enabled: !!tenant?.orgId && !!session?.user?.id,
   });
-  const memberRole = membersQuery.data?.find((member) => member.userId === session?.user?.id)?.role;
+  const memberRole = memberRoleQuery.data ?? undefined;
   const isPlatformAdmin = session?.user?.role === "admin";
   const isOwner = memberRole === "owner";
   const isAdmin = isCommunitySettingsRole(memberRole);
@@ -126,7 +126,7 @@ export function TenantDetailContent({
   const sameActiveOrg = !!tenant?.orgId && tenant.orgId === activeOrganizationId;
   const waitingForTeamAccess =
     sessionPending ||
-    (!!tenant?.orgId && !!session?.user?.id && membersQuery.isPending) ||
+    (!!tenant?.orgId && !!session?.user?.id && memberRoleQuery.isPending) ||
     (!isAdmin &&
       !isPlatformAdmin &&
       !!tenant?.orgId &&
