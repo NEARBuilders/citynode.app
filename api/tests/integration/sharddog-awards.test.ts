@@ -151,6 +151,16 @@ async function community() {
       if (dropId) await admin.setShardDogDrop({ organizationId: org, eventId: event.id, dropId });
       return event;
     },
+    updateEvent: (
+      event: Awaited<ReturnType<typeof editor.saveDiscoveryActivity>>,
+      change: { status: "cancelled" },
+    ) =>
+      editor.saveDiscoveryActivity({
+        ...eventInput(node.id, event.title, new Date(event.startsAt ?? Date.now())),
+        id: event.id,
+        url: event.url,
+        ...change,
+      }),
     setMembershipDrop: (dropId: string) => admin.setShardDogDrop({ organizationId: org, dropId }),
     setEventDrop: (eventId: string, dropId: string | null) =>
       admin.setShardDogDrop({ organizationId: org, eventId, dropId }),
@@ -488,6 +498,24 @@ describe("A NEAR account's City Node collectibles on its profile", () => {
     expect((await (await visitor()).getAccountCollectibles({ accountId })).collectibles).toEqual(
       [],
     );
+  });
+
+  it("keeps a badge from an event cancelled after check-in", async () => {
+    const city = await community();
+    const event = await city.addEvent("Rained out", "profile-cancelled");
+    const userId = `sam-${crypto.randomUUID().slice(0, 6)}`;
+    const accountId = `sam-${crypto.randomUUID().slice(0, 6)}.testnet`;
+
+    city.checkIn(event.id, userId, accountId);
+    await city.sync();
+    await untilStatuses(userId, city.org, ["awarded"]);
+    await city.updateEvent(event, { status: "cancelled" });
+
+    expect(
+      (await (await visitor()).getAccountCollectibles({ accountId })).collectibles.map(
+        ({ eventTitle }) => eventTitle,
+      ),
+    ).toEqual(["Rained out"]);
   });
 
   it("hides event badges from events that aren't published", async () => {

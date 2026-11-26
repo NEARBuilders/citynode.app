@@ -1,7 +1,7 @@
 import { ArrowSquareOutIcon, CalendarCheckIcon, MedalIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useApiClient } from "@/app";
-import { Button, SectionHeader, Skeleton } from "@/components";
+import { Button, SectionHeader } from "@/components";
 import { LocalDate } from "@/components/local-date";
 import {
   Item,
@@ -26,7 +26,7 @@ export function AccountCollectibles({
   const apiClient = useApiClient();
   const collectibles = useQuery(accountCollectiblesQueryOptions(apiClient, accountId));
 
-  if (collectibles.data && !collectibles.data.enabled) return null;
+  if (!collectibles.isError && !collectibles.data?.enabled) return null;
 
   return (
     <section className="flex min-w-0 flex-col gap-6" data-testid={testId}>
@@ -50,12 +50,7 @@ export function AccountCollectibles({
             {translate("common.retry")}
           </Button>
         </div>
-      ) : !collectibles.data ? (
-        <div className="flex flex-col gap-3" data-testid={`${testId}-loading`}>
-          <Skeleton className="h-16 w-full rounded-2xl" />
-          <Skeleton className="h-16 w-full rounded-2xl" />
-        </div>
-      ) : collectibles.data.collectibles.length === 0 ? (
+      ) : !collectibles.data || collectibles.data.collectibles.length === 0 ? (
         <p className="text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
           {translate("collectibles.profileEmpty")}
         </p>

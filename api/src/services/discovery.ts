@@ -1914,7 +1914,13 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
         string,
         {
           communityName: string | null;
-          events: Array<{ id: string; title: string; startsAt: string | null }>;
+          events: Array<{
+            id: string;
+            title: string;
+            startsAt: string | null;
+            status: "draft" | "published" | "cancelled";
+            publishedAt: string;
+          }>;
         }
       >(organizationIds.map((id) => [id, { communityName: null, events: [] }]));
       if (organizationIds.length === 0) return byOrganization;
@@ -1938,7 +1944,9 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           .where(
             and(
               inArray(tenants.orgId, organizationIds),
-              liveTenantsOnly ? isNull(tenants.deletedAt) : undefined,
+              liveTenantsOnly
+                ? and(isNull(tenants.deletedAt), eq(tenants.status, "active"))
+                : undefined,
             ),
           ),
       );
@@ -1951,6 +1959,8 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           id: row.event.id,
           title: row.event.title,
           startsAt: row.event.startsAt,
+          status: row.event.status,
+          publishedAt: row.event.publishedAt,
         });
       }
       return byOrganization;

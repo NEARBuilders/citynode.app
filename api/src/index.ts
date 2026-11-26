@@ -1,6 +1,6 @@
 import type { ContractedRouter } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
-import { Cause, Context, DateTime, Effect, Exit, Layer } from "effect";
+import { Cause, Clock, Context, DateTime, Effect, Exit, Layer } from "effect";
 import { buildScopedContext, createPlugin } from "every-plugin";
 import { createAuthMiddleware } from "everything-dev/api";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
@@ -1436,8 +1436,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const awards = yield* services.sharddog.awardedTo(input.accountId);
         const communities = yield* services.discovery.organizationEvents(
           [...new Set(awards.map((award) => award.organizationId))],
-          { liveTenantsOnly: true, publicOnly: true },
+          { liveTenantsOnly: true },
         );
+        const now = yield* Clock.currentTimeMillis;
         return {
           enabled: true,
           collectibles: awards.flatMap((award) => {
@@ -1445,7 +1446,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
             if (!community?.communityName) return [];
             const event =
               award.kind === "event"
-                ? community.events.find((item) => item.id === award.eventId)
+                ? community.events.find(
+                    (item) =>
+                      item.id === award.eventId &&
+                      item.status !== "draft" &&
+                      Date.parse(item.publishedAt) <= now,
+                  )
                 : undefined;
             if (award.kind === "event" && !event) return [];
             return [
