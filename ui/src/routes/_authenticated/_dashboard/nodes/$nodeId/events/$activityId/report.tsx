@@ -5,6 +5,7 @@ import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { ActivityFormPage, activitiesQueryOptions } from "@/components/discovery/activity-form";
+import { ReportNoAccess } from "@/components/discovery/report-no-access";
 import { ReportUpdated, ReviewRow } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
@@ -152,11 +153,7 @@ function EventReportPage() {
         headerTestId="report.heading"
       >
         {isPermissionError(loadError) ? (
-          <EmptyState
-            icon={CalendarDotsIcon}
-            title={translate("report.noAccess")}
-            description={translate("report.noAccessDescription")}
-          />
+          <ReportNoAccess icon={CalendarDotsIcon} />
         ) : (
           <EmptyState
             icon={CalendarDotsIcon}

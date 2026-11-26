@@ -398,6 +398,10 @@ describe("proposal descriptions", () => {
     expect(proposalText(payment)).toBe("Recipient: harbor.near\nOctober venue");
     expect(proposalTitle(payment)).toBe("October venue");
     expect(proposalText("call __migrate__ on v2")).toBe("call __migrate__ on v2");
+    expect(
+      proposalText("## Budget\nPay *before* the [venue](https://example.com) deadline, `5 NEAR`"),
+    ).toBe("Budget\nPay before the venue (https://example.com) deadline, 5 NEAR");
+    expect(proposalText("2 * 3 = 6")).toBe("2 * 3 = 6");
     expect(proposalTitle("* Proposal Action: transfer <br>* Summary: Pay the venue")).toBe(
       "Pay the venue",
     );

@@ -5,6 +5,7 @@ import { Trans } from "everything-dev/ui/i18n";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
+import { ReportNoAccess } from "@/components/discovery/report-no-access";
 import { ReportUpdated, ReviewRow } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
@@ -101,11 +102,7 @@ function MonthlyReportPage() {
   if (valid && !report.data && isPermissionError(report.error)) {
     return (
       <MonthlyReportShell title={title}>
-        <EmptyState
-          icon={CalendarCheckIcon}
-          title={translate("report.noAccess")}
-          description={translate("report.noAccessDescription")}
-        />
+        <ReportNoAccess icon={CalendarCheckIcon} />
       </MonthlyReportShell>
     );
   }

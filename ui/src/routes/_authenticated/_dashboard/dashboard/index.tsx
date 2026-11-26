@@ -162,13 +162,15 @@ function Home() {
   const bulletin = node?.metadata?.bulletin;
 
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
+  const refreshingStaleMembership =
+    membership.status === "unknown" &&
+    organizations.isFetching &&
+    !organizations.isFetchedAfterMount &&
+    !community;
   const loading =
     !user ||
     organizations.isPending ||
-    (membership.status === "unknown" &&
-      organizations.isFetching &&
-      !organizations.isFetchedAfterMount &&
-      !community) ||
+    refreshingStaleMembership ||
     (!!communityOrgId && tenant.isPending) ||
     (!!activeOrgId && authContext.isPending) ||
     passkeys.isPending;
@@ -207,6 +209,7 @@ function Home() {
     />
   );
 
+  const identityReady = !!user && isClient && !passkeys.isPending;
   const firstName = user?.isAnonymous ? null : user?.name?.split(" ")[0];
 
   return (
@@ -295,7 +298,7 @@ function Home() {
           <AttendanceRecord testId="home.attendance" />
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
-          {user && isClient && !passkeys.isPending ? (
+          {identityReady && user ? (
             <IdentityCard
               user={user}
               nearAccountId={nearAccountId}

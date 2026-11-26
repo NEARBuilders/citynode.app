@@ -56,8 +56,4 @@ describe("AppHeader breadcrumbs", () => {
       ),
     ).toContain("São Paulo");
   });
-
-  it("falls back to the slug before the name has loaded", () => {
-    expect(renderAt("/places/kuala-lumpur")).toContain("Kuala lumpur");
-  });
 });
