@@ -14,12 +14,10 @@ export function clampToWorld(
   if (!box) return null;
   const [[south, west], [north, east]] = box;
   const [[minLat, minLng], [maxLat, maxLng]] = WORLD_BOUNDS;
-  const clampedWest = Math.max(minLng, Math.min(maxLng, west));
-  const clampedEast = Math.max(minLng, Math.min(maxLng, east));
-  if (clampedEast <= clampedWest) return null;
+  if (west < minLng || east > maxLng) return null;
   return [
-    [Math.max(minLat, south), clampedWest],
-    [Math.min(maxLat, north), clampedEast],
+    [Math.max(minLat, south), west],
+    [Math.min(maxLat, north), east],
   ];
 }
 
