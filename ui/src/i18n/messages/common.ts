@@ -1118,10 +1118,10 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "质押将分配给此社区的验证节点。",
   ],
   "dashboard.startCommunity": [
-    "Start a community",
-    "Crear una comunidad",
-    "Créer une communauté",
-    "创建社区",
+    "Make a community official",
+    "Oficializar una comunidad",
+    "Officialiser une communauté",
+    "申请成为官方社区",
   ],
   "dashboard.subcommunities": ["Sub-communities", "Subcomunidades", "Sous-communautés", "子社区"],
   "dashboard.switchCommunity": [

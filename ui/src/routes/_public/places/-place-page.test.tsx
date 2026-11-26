@@ -8,7 +8,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { render } from "@/i18n/test-render";
@@ -112,8 +112,13 @@ async function showPlace(slug: string) {
     path: "/n/$slug",
     component: () => <p data-testid="community-redirect">community</p>,
   });
+  const joinRoute = createRoute({
+    getParentRoute: () => root,
+    path: "/join",
+    component: () => <p data-testid="join-page">join</p>,
+  });
   const router = createRouter({
-    routeTree: root.addChildren([route, communityRoute]),
+    routeTree: root.addChildren([route, communityRoute, joinRoute]),
     history: createMemoryHistory({ initialEntries: [`/places/${slug}`] }),
     context,
     defaultPendingMinMs: 0,
@@ -135,9 +140,27 @@ it("shows an unactivated place with a start-community action", async () => {
   expect((await screen.findByTestId("place-page.header")).textContent).toContain("Country");
   expect((await screen.findByTestId("place-page.header")).textContent).toContain("Nigeria");
   expect(screen.getByText("No community yet.")).toBeTruthy();
-  expect(screen.getByTestId("place-page.start-community").getAttribute("href")).toBe(
-    "/join?place=nigeria",
+  expect(screen.getByTestId("place-page.start-community").textContent).toContain(
+    "Start this community",
   );
+});
+
+it("asks before starting a community and says who will own it", async () => {
+  mockApi(null);
+  const router = await showPlace("nigeria");
+  fireEvent.click(await screen.findByTestId("place-page.start-community"));
+  expect(await screen.findByText("Start Nigeria community?")).toBeTruthy();
+  expect(screen.getByText(/You'll own this community/)).toBeTruthy();
+  expect(router.state.location.pathname).toBe("/places/nigeria");
+
+  fireEvent.click(screen.getByTestId("confirm-dialog-cancel"));
+  await waitFor(() => expect(screen.queryByText("Start Nigeria community?")).toBeNull());
+  expect(router.state.location.pathname).toBe("/places/nigeria");
+
+  fireEvent.click(screen.getByTestId("place-page.start-community"));
+  fireEvent.click(await screen.findByTestId("confirm-dialog-confirm"));
+  await screen.findByTestId("join-page");
+  expect(router.state.location.href).toBe("/join?place=nigeria");
 });
 
 it("sends an activated place to its community page", async () => {

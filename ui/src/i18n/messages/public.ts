@@ -1026,6 +1026,19 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Créer cette communauté",
     "创建此社区",
   ],
+  "place.startConfirmTitle": [
+    "Start {name} community?",
+    "¿Crear la comunidad de {name}?",
+    "Créer la communauté {name} ?",
+    "创建 {name} 社区？",
+  ],
+  "place.startConfirmDescription": [
+    "You'll own this community, and people can find it on Explore and join it. This doesn't make it an official City Node.",
+    "Serás el propietario de esta comunidad, y otras personas podrán encontrarla en Explorar y unirse. Esto no la convierte en un City Node oficial.",
+    "Vous serez propriétaire de cette communauté, et d’autres pourront la trouver dans Explorer et la rejoindre. Cela n’en fait pas un City Node officiel.",
+    "你将成为此社区的所有者，其他人可以在探索中找到并加入它。这不会使它成为官方 City Node。",
+  ],
+  "place.startConfirm": ["Start community", "Crear comunidad", "Créer la communauté", "创建社区"],
   "place.title": ["Place", "Lugar", "Lieu", "地点"],
   "payout.stepUnstake": [
     "Step 1 of 2 · Unstake from the pool (a treasury vote)",
