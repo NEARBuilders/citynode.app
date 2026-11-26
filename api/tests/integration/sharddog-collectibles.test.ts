@@ -29,6 +29,8 @@ vi.mock("../../plugin.dev", async (importOriginal) => {
     },
   };
 });
+const describeCalls = vi.hoisted(() => new Map<string, number>());
+
 vi.mock("@/services/sharddog-client", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/services/sharddog-client")>();
   return {
@@ -36,6 +38,7 @@ vi.mock("@/services/sharddog-client", async (importOriginal) => {
     createShardDogClient: () => ({
       ...original.createStubShardDogClient("https://shard.dog"),
       describeDrop: async (dropId: string) => {
+        describeCalls.set(dropId, (describeCalls.get(dropId) ?? 0) + 1);
         if (dropId.startsWith("broken")) throw new Error("ShardDog responded 503");
         if (dropId.startsWith("named"))
           return { name: "Builders pup", imageUrl: "https://cdn.shard.dog/pup.png" };
@@ -205,5 +208,29 @@ describe("Community collectibles", () => {
       kind: "city",
     });
     expect(await client.getNodeCollectibles({ nodeId: node.id })).toEqual({ collectibles: [] });
+  });
+
+  it("asks ShardDog about each drop once, not on every page view", async () => {
+    const { org, nodeId, admin } = await community();
+    const visitor = await getPluginClient();
+    await admin.setShardDogDrop({ organizationId: org, dropId: "broken-cached" });
+    for (let view = 0; view < 3; view++) await visitor.getNodeCollectibles({ nodeId });
+    expect(describeCalls.get("broken-cached")).toBe(1);
+  });
+
+  it("shows at most the 12 newest event badges", async () => {
+    const { org, nodeId, editor, admin } = await community();
+    for (let day = 1; day <= 13; day++) {
+      const event = await editor.saveDiscoveryActivity({
+        ...eventInput(nodeId, `Meetup ${day}`, new Date(Date.now() + day * 24 * HOUR)),
+        publishedAt: new Date(Date.now() - HOUR).toISOString(),
+      });
+      await admin.setShardDogDrop({ organizationId: org, eventId: event.id, dropId: `day-${day}` });
+    }
+
+    const { collectibles } = await (await getPluginClient()).getNodeCollectibles({ nodeId });
+    expect(collectibles).toHaveLength(12);
+    expect(collectibles[0]?.dropId).toBe("day-13");
+    expect(collectibles.map((item) => item.dropId)).not.toContain("day-1");
   });
 });

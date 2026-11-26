@@ -411,6 +411,8 @@ const authorizedNodeForValidators = (
     return node;
   });
 
+const MAX_EVENT_COLLECTIBLES = 12;
+
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
     platformAccount: z.string().optional(),
@@ -1353,26 +1355,28 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 },
               ]
             : []),
-          ...drops.events.flatMap((event) =>
-            event.dropId
-              ? [
-                  {
-                    kind: "event" as const,
-                    dropId: event.dropId,
-                    eventId: event.eventId,
-                    eventTitle: event.title,
-                    eventStartsAt: event.startsAt,
-                  },
-                ]
-              : [],
-          ),
+          ...drops.events
+            .filter((event) => event.dropId)
+            .slice(0, MAX_EVENT_COLLECTIBLES)
+            .flatMap((event) =>
+              event.dropId
+                ? [
+                    {
+                      kind: "event" as const,
+                      dropId: event.dropId,
+                      eventId: event.eventId,
+                      eventTitle: event.title,
+                      eventStartsAt: event.startsAt,
+                    },
+                  ]
+                : [],
+            ),
         ];
         const { client } = services.sharddog;
         const collectibles = yield* Effect.forEach(
           linked,
           (item) =>
-            Effect.tryPromise(() => client.describeDrop(item.dropId)).pipe(
-              Effect.orElseSucceed(() => null),
+            services.sharddog.dropDetails(item.dropId).pipe(
               Effect.map((details) => ({
                 ...item,
                 name: details?.name ?? null,
