@@ -397,6 +397,7 @@ describe("proposal descriptions", () => {
       "* Proposal Action: payment-transfer <br>* Recipient: harbor.near <br>* Notes: **October** venue";
     expect(proposalText(payment)).toBe("Recipient: harbor.near\nOctober venue");
     expect(proposalTitle(payment)).toBe("October venue");
+    expect(proposalText("call __migrate__ on v2")).toBe("call __migrate__ on v2");
     expect(proposalTitle("* Proposal Action: transfer <br>* Summary: Pay the venue")).toBe(
       "Pay the venue",
     );

@@ -375,10 +375,7 @@ function cleanLine(line: string): string {
       ? (labelled[2] ?? "")
       : `${labelled[1]}: ${labelled[2] ?? ""}`
     : line.replace(/^[*-]\s+/, "");
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "$1")
-    .replace(/__(.+?)__/g, "$1")
-    .trim();
+  return text.replace(/\*\*(.+?)\*\*/g, "$1").trim();
 }
 
 function descriptionLines(description: string): string[] {

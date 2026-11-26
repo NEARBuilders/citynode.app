@@ -47,20 +47,22 @@ export function AppHeader({ runtimeConfig, actions }: AppHeaderProps) {
     ...adminNodeDetailQueryOptions(apiClient, adminNodeId ?? ""),
     enabled: false,
   });
-  const publicSlug = /^\/(n|places)\/([^/]+)/.exec(pathname);
+  const publicMatch = /^\/(n|places)\/([^/]+)/.exec(pathname);
+  const publicKind = publicMatch?.[1];
+  const publicSlug = publicMatch?.[2] ? safeDecode(publicMatch[2]) : "";
   const { data: publicNode } = useQuery({
-    ...nodeBySlugQueryOptions(apiClient, publicSlug?.[1] === "n" ? publicSlug[2] : ""),
+    ...nodeBySlugQueryOptions(apiClient, publicKind === "n" ? publicSlug : ""),
     enabled: false,
   });
   const { data: publicPlace } = useQuery({
-    ...placeResolutionQueryOptions(apiClient, publicSlug?.[1] === "places" ? publicSlug[2] : ""),
+    ...placeResolutionQueryOptions(apiClient, publicKind === "places" ? publicSlug : ""),
     enabled: false,
   });
   const detailName = adminNodeId
     ? adminNode?.summary.node.name
-    : publicSlug?.[1] === "n"
+    : publicKind === "n"
       ? publicNode?.name
-      : publicSlug?.[1] === "places"
+      : publicKind === "places"
         ? publicPlace?.place.name
         : undefined;
   const crumbs = crumbsFor(
@@ -123,4 +125,12 @@ export function AppHeader({ runtimeConfig, actions }: AppHeaderProps) {
       </div>
     </header>
   );
+}
+
+function safeDecode(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }

@@ -165,7 +165,10 @@ function Home() {
   const loading =
     !user ||
     organizations.isPending ||
-    (membership.status === "unknown" && organizations.isFetching && !community) ||
+    (membership.status === "unknown" &&
+      organizations.isFetching &&
+      !organizations.isFetchedAfterMount &&
+      !community) ||
     (!!communityOrgId && tenant.isPending) ||
     (!!activeOrgId && authContext.isPending) ||
     passkeys.isPending;
