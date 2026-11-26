@@ -47,7 +47,8 @@ vi.mock("@/app", () => ({
     auth: {
       listOrganizations: async () => harness.organizations,
       listUserInvitations: async () => [],
-      listMembers: async () => ({ members: [] }),
+      listMembers: async () => ({ members: [], total: 0 }),
+      getActiveMemberRole: async () => ({ role: null }),
     },
     resolveTenantByOrgId: async ({ orgId }: { orgId: string }) => {
       if (harness.tenantLookupPending) return new Promise(() => {});

@@ -31,13 +31,12 @@ import { visibleOrganizations } from "@/lib/personal-organization";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { tenantByOrgQueryOptions, tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
-import { orgMembersQueryKey } from "./-organization-query-keys";
+import { orgActiveRoleQueryOptions } from "./-organization-members";
+import { orgMemberCountQueryKey } from "./-organization-query-keys";
 import { useInvitationActions } from "./-use-invitation-actions";
 
 type ApiClientType = import("@/app").ApiClient;
 type UserInvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listUserInvitations"]>>[number];
-type MembersResponse = Awaited<ReturnType<ApiClientType["auth"]["listMembers"]>>;
-type MemberItem = MembersResponse["members"][number];
 
 export const Route = createFileRoute("/_authenticated/orgs/")({
   head: ({ match }) => ({
@@ -116,15 +115,23 @@ function OrganizationsList() {
     enabled: orgs.length > 0,
   });
 
-  const memberQueries = useQueries({
+  const memberCountQueries = useQueries({
     queries: orgs.map((organization) => ({
-      queryKey: orgMembersQueryKey(organization.id),
-      queryFn: async (): Promise<MemberItem[]> => {
-        const { members } = await apiClient.auth.listMembers({
+      queryKey: orgMemberCountQueryKey(organization.id),
+      queryFn: async (): Promise<number> => {
+        const { total } = await apiClient.auth.listMembers({
           organizationId: organization.id,
+          limit: 1,
         });
-        return (members ?? []) as MemberItem[];
+        return total;
       },
+      staleTime: 30 * 1000,
+    })),
+  });
+
+  const roleQueries = useQueries({
+    queries: orgs.map((organization) => ({
+      ...orgActiveRoleQueryOptions(apiClient, organization.id),
       staleTime: 30 * 1000,
     })),
   });
@@ -150,7 +157,6 @@ function OrganizationsList() {
     },
   });
 
-  const user = session?.user;
   const activeOrgId = session?.session?.activeOrganizationId;
   const switchOrgMutation = useSwitchOrganization();
   const openIfCommunity = async (organizationId: string) => {
@@ -274,8 +280,8 @@ function OrganizationsList() {
           {hasInvitations && <SectionHeader title={translate("org.yourOrganizations")} />}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {orgs.map((org, index) => {
-              const members = memberQueries[index]?.data;
-              const myRole = members?.find((member) => member.userId === user?.id)?.role;
+              const myRole = roleQueries[index]?.data;
+              const memberCount = memberCountQueries[index]?.data;
               const isActive = org.id === activeOrgId;
               return (
                 <Card key={org.id} data-testid={`orgs-card-${org.slug}`}>
@@ -304,7 +310,9 @@ function OrganizationsList() {
                     </div>
                     <div className="mt-auto flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">
-                        {members ? translate("org.memberCount", { count: members.length }) : " "}
+                        {memberCount !== undefined
+                          ? translate("org.memberCount", { count: memberCount })
+                          : " "}
                       </span>
                       <div className="flex items-center gap-2">
                         {myRole === "owner" && !tenantOrgIds.has(org.id) && (
