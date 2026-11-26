@@ -1,17 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import {
-  and,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  max,
-  min,
-  notInArray,
-  sql,
-} from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, max, min, notInArray, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -27,7 +15,7 @@ export const UPSTREAM_CODE_PAGE_LIMIT = 20;
 
 export const ORGANIZATION_SWEEP = "*";
 
-const SETTLED_AFTER_MS = 14 * 24 * 3_600_000;
+export const SETTLED_AFTER_MS = 14 * 24 * 3_600_000;
 
 export interface CommunityEvent {
   id: string;
@@ -112,7 +100,7 @@ export interface AttendanceService {
     communityName: string;
     events: CommunityEvent[];
     upstream: AttendanceUpstream;
-    needsAccount(eventId: string | null): boolean;
+    rereadCodes: ReadonlySet<string>;
   }): AttendanceEffect<ReconcileSummary>;
   recordedOrganizations(userId: string): AttendanceEffect<string[]>;
   history(input: {
@@ -150,7 +138,7 @@ export const AttendanceLive = Layer.effect(
       code: UpstreamCode;
       known: Set<string>;
       upstream: AttendanceUpstream;
-      needsAccount(eventId: string | null): boolean;
+      rereadCodes: ReadonlySet<string>;
     }) {
       const { organizationId, code } = input;
       const [checkpoint] = yield* query(() =>
@@ -165,24 +153,7 @@ export const AttendanceLive = Layer.effect(
           ),
       );
       const unchanged = checkpoint?.usedCount === code.usedCount;
-      if (unchanged) {
-        if (!input.needsAccount(code.eventId)) return true;
-        const [missingAccount] = yield* query(() =>
-          db
-            .select({ userId: attendanceCheckIns.userId })
-            .from(attendanceCheckIns)
-            .where(
-              and(
-                eq(attendanceCheckIns.organizationId, organizationId),
-                eq(attendanceCheckIns.codeId, code.id),
-                eq(attendanceCheckIns.classified, true),
-                isNull(attendanceCheckIns.accountId),
-              ),
-            )
-            .limit(1),
-        );
-        if (!missingAccount) return true;
-      }
+      if (unchanged && !input.rereadCodes.has(code.id)) return true;
       const status = yield* Effect.tryPromise(() => input.upstream.codeStatus(code.id)).pipe(
         Effect.option,
       );
@@ -264,7 +235,7 @@ export const AttendanceLive = Layer.effect(
         communityName,
         events,
         upstream,
-        needsAccount,
+        rereadCodes,
       }) {
         const known = new Set(events.map((event) => event.id));
         const forbidden = () =>
@@ -322,7 +293,7 @@ export const AttendanceLive = Layer.effect(
                   code,
                   known,
                   upstream,
-                  needsAccount,
+                  rereadCodes,
                 }),
               );
               return {
@@ -341,7 +312,7 @@ export const AttendanceLive = Layer.effect(
             code,
             known,
             upstream,
-            needsAccount,
+            rereadCodes,
           }),
         );
         results.push({

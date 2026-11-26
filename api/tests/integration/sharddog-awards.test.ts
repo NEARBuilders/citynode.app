@@ -152,11 +152,11 @@ async function community() {
     setMembershipDrop: (dropId: string) => admin.setShardDogDrop({ organizationId: org, dropId }),
     setEventDrop: (eventId: string, dropId: string | null) =>
       admin.setShardDogDrop({ organizationId: org, eventId, dropId }),
-    checkIn: (eventId: string, userId: string, accountId: string | null) => {
+    checkIn: (eventId: string, userId: string, accountId: string | null, at = new Date()) => {
       codesByOrg.get(org)?.push({
         id: `code-${crypto.randomUUID().slice(0, 8)}`,
         eventId,
-        joined: [{ userId, createdAt: new Date(), accountId }],
+        joined: [{ userId, createdAt: at, accountId }],
       });
     },
     setCheckInAccount: (userId: string, accountId: string) => {
@@ -477,6 +477,70 @@ describe("ShardDog awards on event check-in", () => {
       expect(shardDog.awards.map(({ accountId }) => accountId)).toEqual(["passkey.testnet"]),
     );
     const reads = statusReads.length;
+    await city.sync();
+    expect(statusReads).toHaveLength(reads);
+  });
+
+  it("picks up an account on the first sync after a badge drop is linked", async () => {
+    const city = await community();
+    const event = await city.addEvent("Linked later", null);
+    const userId = `relink-${crypto.randomUUID().slice(0, 6)}`;
+
+    city.checkIn(event.id, userId, null);
+    await city.sync();
+    await city.setEventDrop(event.id, "later-drop");
+    city.setCheckInAccount(userId, "relink.testnet");
+    await city.sync();
+
+    await vi.waitFor(() =>
+      expect(shardDog.awards.map(({ accountId }) => accountId)).toEqual(["relink.testnet"]),
+    );
+  });
+
+  it("picks up an account on the first sync after a membership drop is linked", async () => {
+    const city = await community();
+    const event = await city.addEvent("Member later", null);
+    const userId = `joinlater-${crypto.randomUUID().slice(0, 6)}`;
+
+    city.checkIn(event.id, userId, null);
+    await city.sync();
+    await city.setMembershipDrop("later-member");
+    city.setCheckInAccount(userId, "joinlater.testnet");
+    await city.sync();
+
+    await vi.waitFor(() =>
+      expect(shardDog.awards.map(({ accountId }) => accountId)).toEqual(["joinlater.testnet"]),
+    );
+  });
+
+  it("stops re-reading a check-in once its badges are sent", async () => {
+    const city = await community();
+    await city.setMembershipDrop("settled-member");
+    const event = await city.addEvent("Settled night", "settled-drop");
+    const userId = `settled-${crypto.randomUUID().slice(0, 6)}`;
+
+    city.checkIn(event.id, userId, null);
+    await city.sync();
+    linkedAccounts.set(userId, "settled.testnet");
+    await untilStatuses(userId, city.org, ["awarded", "awarded"]);
+
+    const reads = statusReads.length;
+    await city.sync();
+    expect(statusReads).toHaveLength(reads);
+  });
+
+  it("stops re-reading an old check-in whose attendee never links an account", async () => {
+    const city = await community();
+    await city.setMembershipDrop("never-member");
+    const event = await city.addEvent("Long ago", "never-drop");
+    const userId = `never-${crypto.randomUUID().slice(0, 6)}`;
+
+    city.checkIn(event.id, userId, null, past(15 * 24));
+    await city.sync();
+    expect(await statuses(userId, city.org)).toEqual(["needs_account", "needs_account"]);
+
+    const reads = statusReads.length;
+    await city.sync();
     await city.sync();
     expect(statusReads).toHaveLength(reads);
   });
