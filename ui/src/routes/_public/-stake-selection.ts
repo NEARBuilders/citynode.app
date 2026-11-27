@@ -41,3 +41,37 @@ export function chooseDefaultValidator<T extends { id: string; isDefault: boolea
     validators[0]
   );
 }
+
+const membershipRank = (membership: StakeCommunity["viewerMembership"]) =>
+  membership === "active" ? 0 : membership === "member" ? 1 : 2;
+
+export function getDirectoryNodes<
+  T extends StakeCommunity & {
+    name: string;
+    hostname: string | null;
+    stakeable: boolean;
+    node: { id: string; slug: string; kind: string | null } | null;
+  },
+>(communities: readonly T[]) {
+  return [...communities]
+    .sort(
+      (a, b) =>
+        membershipRank(a.viewerMembership) - membershipRank(b.viewerMembership) ||
+        Number(b.stakeable) - Number(a.stakeable),
+    )
+    .flatMap((community) => {
+      const node = community.node;
+      return node
+        ? [
+            {
+              id: node.id,
+              name: community.name,
+              slug: node.slug,
+              kind: node.kind,
+              hostname: community.hostname,
+              stakeable: community.stakeable,
+            },
+          ]
+        : [];
+    });
+}

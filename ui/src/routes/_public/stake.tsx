@@ -33,6 +33,7 @@ import { StakeOnramp } from "./-stake-onramp";
 import {
   chooseDefaultValidator,
   getActiveOrganizationNodeId,
+  getDirectoryNodes,
   getStakeScopeKey,
 } from "./-stake-selection";
 import { StakeSkeleton } from "./-stake-skeleton";
@@ -69,32 +70,7 @@ export const Route = createFileRoute("/_public/stake")({
 });
 
 type ApiClient = ReturnType<typeof useApiClient>;
-type TenantApp = Awaited<ReturnType<ApiClient["listStakeCommunities"]>>[number];
 type Node = Awaited<ReturnType<ApiClient["getNode"]>>;
-
-function getDirectoryNodes(tenantApps: TenantApp[]) {
-  return tenantApps
-    .flatMap((app) =>
-      app.node
-        ? [
-            {
-              id: app.node.id,
-              name: app.name,
-              slug: app.node.slug,
-              kind: app.node.kind,
-              hostname: app.hostname,
-              stakeable: app.stakeable,
-              isViewerCommunity: app.viewerMembership !== null,
-            },
-          ]
-        : [],
-    )
-    .sort(
-      (a, b) =>
-        Number(b.isViewerCommunity) - Number(a.isViewerCommunity) ||
-        Number(b.stakeable) - Number(a.stakeable),
-    );
-}
 
 function getStakeTitle(
   node: Node | undefined,

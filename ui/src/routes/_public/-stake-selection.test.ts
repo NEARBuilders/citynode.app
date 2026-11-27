@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   chooseDefaultValidator,
   getActiveOrganizationNodeId,
+  getDirectoryNodes,
   getStakeScopeKey,
 } from "./-stake-selection";
 
@@ -89,5 +90,57 @@ describe("chooseDefaultValidator", () => {
       "default",
     );
     expect(chooseDefaultValidator([], new Set())).toBeUndefined();
+  });
+});
+
+describe("getDirectoryNodes", () => {
+  const community = (
+    name: string,
+    viewerMembership: "active" | "member" | null,
+    stakeable: boolean,
+    withNode = true,
+  ) => ({
+    name,
+    hostname: `${name}.example.test`,
+    stakeable,
+    viewerMembership,
+    node: withNode ? { id: `node-${name}`, slug: name, kind: "city" } : null,
+  });
+
+  it("lists the active community first, then other memberships, then the rest", () => {
+    const nodes = getDirectoryNodes([
+      community("alpha", null, true),
+      community("bravo", "member", true),
+      community("charlie", "active", false),
+      community("delta", null, false),
+      community("echo", "member", false),
+    ]);
+    expect(nodes.map((node) => node.slug)).toEqual(["charlie", "bravo", "echo", "alpha", "delta"]);
+  });
+
+  it("keeps the API order within a group when stakeability matches", () => {
+    const nodes = getDirectoryNodes([
+      community("alpha", "member", true),
+      community("bravo", "member", true),
+      community("charlie", null, true),
+    ]);
+    expect(nodes.map((node) => node.slug)).toEqual(["alpha", "bravo", "charlie"]);
+  });
+
+  it("skips communities without a node", () => {
+    const nodes = getDirectoryNodes([
+      community("alpha", "active", true, false),
+      community("bravo", null, true),
+    ]);
+    expect(nodes).toEqual([
+      {
+        id: "node-bravo",
+        name: "bravo",
+        slug: "bravo",
+        kind: "city",
+        hostname: "bravo.example.test",
+        stakeable: true,
+      },
+    ]);
   });
 });
