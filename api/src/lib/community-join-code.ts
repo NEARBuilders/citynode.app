@@ -135,6 +135,7 @@ const ensuring = new Map<string, Promise<string | null>>();
 const BACKFILL_COOLDOWN_MS = 60_000;
 let backfillInFlight: Promise<void> | null = null;
 let backfillReadyAt = 0;
+let adminBackfillReadyAt = 0;
 
 async function repairCommunityJoinCode(
   nodes: NodesService,
@@ -196,17 +197,28 @@ export function ensureCommunityJoinCode(
     });
 }
 
+export interface BackfillCaller {
+  platformAdmin?: boolean;
+}
+
 export function backfillCommunityJoinCodes(
   nodes: NodesService,
   clients: AuthClient[],
+  caller: BackfillCaller = {},
 ): Promise<void> {
   if (clients.length === 0) return Promise.resolve();
   if (backfillInFlight) return backfillInFlight;
-  if (Date.now() < backfillReadyAt) return Promise.resolve();
+  const readyAt = caller.platformAdmin ? adminBackfillReadyAt : backfillReadyAt;
+  if (Date.now() < readyAt) return Promise.resolve();
+  const coolDown = (everyone: boolean) => {
+    const until = Date.now() + BACKFILL_COOLDOWN_MS;
+    backfillReadyAt = until;
+    if (everyone) adminBackfillReadyAt = until;
+  };
   const run = (async () => {
     const missing = await Effect.runPromise(nodes.listMissingJoinCodes()).catch(
       (error: unknown) => {
-        backfillReadyAt = Date.now() + BACKFILL_COOLDOWN_MS;
+        coolDown(true);
         throw error;
       },
     );
@@ -215,7 +227,7 @@ export function backfillCommunityJoinCodes(
       const code = await ensureCommunityJoinCode(nodes, clients, node).catch(() => null);
       if (!code) unrepaired += 1;
     }
-    if (unrepaired === 0) backfillReadyAt = Date.now() + BACKFILL_COOLDOWN_MS;
+    coolDown(unrepaired === 0 || caller.platformAdmin === true);
   })();
   backfillInFlight = run.finally(() => {
     backfillInFlight = null;
@@ -226,6 +238,7 @@ export function backfillCommunityJoinCodes(
 export function scheduleCommunityJoinCodeBackfill(
   nodes: NodesService,
   clients: AuthClient[],
+  caller: BackfillCaller = {},
 ): void {
-  void backfillCommunityJoinCodes(nodes, clients).catch(() => undefined);
+  void backfillCommunityJoinCodes(nodes, clients, caller).catch(() => undefined);
 }

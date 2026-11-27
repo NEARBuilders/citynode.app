@@ -1257,7 +1257,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }),
       listDiscovery: builder.listDiscovery.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context));
+        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context), {
+          platformAdmin: context.user?.role === "admin",
+        });
         return yield* services.discovery.directory(input);
       }),
       getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input, context }) {
@@ -2496,7 +2498,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listNodes: builder.listNodes.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
-        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context));
+        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context), {
+          platformAdmin: context.user?.role === "admin",
+        });
         const nodes = yield* services.nodes.list({
           includePlatform:
             context.user?.role === "admin" &&
