@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   Field,
+  FieldDescription,
   FieldLabel,
   Input,
 } from "@/components";
@@ -18,9 +19,11 @@ import {
   InputGroupText,
 } from "@/components/ui/input-group";
 import { useAppTranslation } from "@/i18n/runtime";
+import { HandleStatusAddon, useHandleStatus } from "./-handle-status";
 
 export function OrganizationEditForm({
   open,
+  currentSlug,
   editName,
   editSlug,
   isPending,
@@ -30,6 +33,7 @@ export function OrganizationEditForm({
   onSlugChange,
 }: {
   open: boolean;
+  currentSlug: string;
   editName: string;
   editSlug: string;
   isPending: boolean;
@@ -39,6 +43,13 @@ export function OrganizationEditForm({
   onSlugChange: (value: string) => void;
 }) {
   const translate = useAppTranslation();
+  const handleStatus = useHandleStatus(editSlug, currentSlug);
+  const canSave =
+    !isPending &&
+    !!editName &&
+    !!editSlug &&
+    handleStatus !== "taken" &&
+    handleStatus !== "checking";
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <DialogContent>
@@ -46,7 +57,7 @@ export function OrganizationEditForm({
           className="flex flex-col gap-6"
           onSubmit={(event) => {
             event.preventDefault();
-            if (editName && editSlug) onSave();
+            if (canSave) onSave();
           }}
         >
           <DialogHeader>
@@ -78,15 +89,20 @@ export function OrganizationEditForm({
                   placeholder={translate("org.handleExample")}
                   pattern="[a-z0-9-]+"
                   className="font-mono"
+                  aria-invalid={handleStatus === "taken" || undefined}
                 />
+                <HandleStatusAddon status={handleStatus} />
               </InputGroup>
+              {handleStatus === "taken" ? (
+                <FieldDescription>{translate("org.handleTakenChooseAnother")}</FieldDescription>
+              ) : null}
             </Field>
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onCancel}>
               {translate("common.cancel")}
             </Button>
-            <Button type="submit" disabled={isPending || !editName || !editSlug}>
+            <Button type="submit" disabled={!canSave}>
               {isPending ? translate("common.saving") : translate("common.save")}
             </Button>
           </DialogFooter>

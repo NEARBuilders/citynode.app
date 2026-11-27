@@ -39,7 +39,7 @@ export function getNodeEmptyStateContent(
     description: t("dashboard.findCommunityHint"),
     actions: [
       { label: t("common.exploreCommunities"), to: "/explore", primary: true },
-      { label: t("dashboard.startCommunity"), to: "/apply", primary: false },
+      { label: t("dashboard.makeOfficial"), to: "/apply", primary: false },
     ],
   };
 }

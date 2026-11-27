@@ -88,9 +88,9 @@ export function getNextSteps(
 function startCommunityStep(t: AppTranslator): NextStep {
   return {
     id: "start-community",
-    title: t("dashboard.startCommunity"),
+    title: t("dashboard.makeOfficial"),
     description: t("dashboard.startCommunityHint"),
-    actionLabel: t("dashboard.startCommunity"),
+    actionLabel: t("dashboard.makeOfficial"),
   };
 }
 
