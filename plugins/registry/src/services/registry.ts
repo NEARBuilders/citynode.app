@@ -7,6 +7,7 @@ import {
   fetchBosConfigFromFastKv,
   getFastKvBaseUrlForAccount,
   getFastKvBaseUrlForNetwork,
+  getNetworkIdForAccount,
   getRegistryConfigKey,
   getRegistryMetadataKey,
   getRegistryNamespaceForAccount,
@@ -155,6 +156,13 @@ interface NetworkDiscoveryCache {
   expiresAt: number;
 }
 
+interface NetworkDiscovery {
+  network: NetworkId;
+  entries: DiscoveredConfig[];
+  failed: boolean;
+  error?: unknown;
+}
+
 interface ResolvedRuntimeCache {
   runtime: ResolvedPublishedRuntime;
   configKey: string;
@@ -251,32 +259,32 @@ export class RegistryService extends Context.Service<
 
 export function createRegistryMethods(config: RegistryConfig) {
   const discoveryCacheByNetwork = new Map<NetworkId, NetworkDiscoveryCache>();
-  const discoveryInflight = new Map<NetworkId, Promise<DiscoveredConfig[]>>();
+  const discoveryInflight = new Map<NetworkId, Promise<NetworkDiscovery>>();
   const resolvedRuntimeCache = new Map<string, ResolvedRuntimeCache>();
   const resolvedRuntimeInflight = new Map<string, Promise<ResolvedPublishedRuntime>>();
 
-  const discoverNetwork = (network: NetworkId): Promise<DiscoveredConfig[]> => {
+  const discoverNetwork = (network: NetworkId): Promise<NetworkDiscovery> => {
     const cached = discoveryCacheByNetwork.get(network);
     if (cached && Date.now() < cached.expiresAt) {
-      return Promise.resolve(cached.data);
+      return Promise.resolve({ network, entries: cached.data, failed: false });
     }
     const inflight = discoveryInflight.get(network);
     if (inflight) {
       return inflight;
     }
-    const run = (async () => {
+    const run = (async (): Promise<NetworkDiscovery> => {
       try {
         const data = await discoverPublishedConfigsForNetwork(network, config);
         discoveryCacheByNetwork.set(network, { data, expiresAt: Date.now() + CACHE_TTL_MS });
-        return data;
+        return { network, entries: data, failed: false };
       } catch (error) {
         const stale = discoveryCacheByNetwork.get(network);
         if (stale) {
           logRegistrySkip(`discovery for ${network} failed; serving cached entries`, error);
-          return stale.data;
+          return { network, entries: stale.data, failed: false };
         }
         logRegistrySkip(`discovery for ${network} failed with no cached entries`, error);
-        return [];
+        return { network, entries: [], failed: true, error };
       } finally {
         discoveryInflight.delete(network);
       }
@@ -285,10 +293,19 @@ export function createRegistryMethods(config: RegistryConfig) {
     return run;
   };
 
-  const discoverPublishedConfigs = async (): Promise<DiscoveredConfig[]> => {
+  const discoverAllNetworks = async (): Promise<{
+    entries: DiscoveredConfig[];
+    failures: NetworkDiscovery[];
+  }> => {
     const results = await Promise.all([discoverNetwork("mainnet"), discoverNetwork("testnet")]);
-    return results.flat().sort(compareDiscovered);
+    return {
+      entries: results.flatMap((result) => result.entries).sort(compareDiscovered),
+      failures: results.filter((result) => result.failed),
+    };
   };
+
+  const discoverPublishedConfigs = async (): Promise<DiscoveredConfig[]> =>
+    (await discoverAllNetworks()).entries;
 
   const discoverPublishedConfigsForNetwork = async (
     network: NetworkId,
@@ -367,7 +384,7 @@ export function createRegistryMethods(config: RegistryConfig) {
         return runtime;
       } catch (error) {
         const stale = resolvedRuntimeCache.get(cacheKey);
-        if (stale) {
+        if (stale && stale.configKey === configKey) {
           logRegistrySkip(`runtime refresh for ${cacheKey} failed; serving cached runtime`, error);
           return stale.runtime;
         }
@@ -534,12 +551,17 @@ export function createRegistryMethods(config: RegistryConfig) {
     },
 
     getRegistryApp: async (accountId: string, gatewayId: string) => {
-      const discovered = await discoverPublishedConfigs();
+      const { entries: discovered, failures } = await discoverAllNetworks();
       const match = discovered.find(
         (item) => item.accountId === accountId && item.gatewayId === gatewayId,
       );
 
       if (!match) {
+        const network = getNetworkIdForAccount(accountId);
+        const failure = failures.find((result) => result.network === network);
+        if (failure) {
+          throw failure.error;
+        }
         return null;
       }
 
@@ -560,7 +582,7 @@ export function createRegistryMethods(config: RegistryConfig) {
     },
 
     getRegistryAppByHost: async (hostUrl: string) => {
-      const discovered = await discoverPublishedConfigs();
+      const { entries: discovered, failures } = await discoverAllNetworks();
 
       for (const item of discovered) {
         let resolved: ResolvedPublishedRuntime;
@@ -598,6 +620,10 @@ export function createRegistryMethods(config: RegistryConfig) {
         };
       }
 
+      const [failure] = failures;
+      if (failure) {
+        throw failure.error;
+      }
       return null;
     },
 

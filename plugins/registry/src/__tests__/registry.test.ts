@@ -441,6 +441,76 @@ describe("listRegistryApps resilience", () => {
     const second = await service.listRegistryApps({});
     expect(second.data[0]?.parent).toBe("bos://parent-b.near/b.com");
   });
+
+  it("does not serve a runtime cached from an older config when the republished one fails", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(4_000_000);
+    let republished = false;
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) =>
+      options.baseUrl.includes("test")
+        ? { entries: [], pageToken: null }
+        : {
+            entries: [
+              configEntry(
+                "child.near",
+                "child.com",
+                readyApp("child.near", "child.com", {
+                  extends: republished ? "bos://missing.near/x.com" : "bos://parent-a.near/a.com",
+                }),
+              ),
+            ],
+            pageToken: null,
+          },
+    );
+    fetchBosConfigFromFastKvMock.mockImplementation(async (bosUrl: string) => {
+      if (bosUrl === "bos://parent-a.near/a.com") {
+        return readyApp("parent-a.near", "a.com");
+      }
+      throw new Error("No config found");
+    });
+
+    const service = createRegistryMethods(registryConfig);
+    const first = await service.listRegistryApps({});
+    expect(first.data[0]?.parent).toBe("bos://parent-a.near/a.com");
+
+    republished = true;
+    now.mockReturnValue(4_000_000 + 60_001);
+    const second = await service.listRegistryApps({});
+
+    expect(second.data).toEqual([]);
+    expect(console.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("serving cached runtime"),
+    );
+    await expect(service.getRegistryApp("child.near", "child.com")).rejects.toThrow(
+      "No config found",
+    );
+  });
+
+  it("reports a discovery outage instead of not found for single-app lookups", async () => {
+    listLatestValuesMock.mockImplementation(async (options: { baseUrl: string }) => {
+      if (options.baseUrl.includes("test")) {
+        return { entries: [], pageToken: null };
+      }
+      throw new Error("mainnet down");
+    });
+
+    const service = createRegistryMethods(registryConfig);
+
+    await expect(service.getRegistryApp("good.near", "good.com")).rejects.toThrow("mainnet down");
+    await expect(service.getRegistryAppByHost("https://good.com/host")).rejects.toThrow(
+      "mainnet down",
+    );
+    await expect(service.getRegistryApp("good.testnet", "good.com")).resolves.toBeNull();
+    await expect(service.listRegistryApps({})).resolves.toMatchObject({ data: [] });
+  });
+
+  it("still returns not found when discovery succeeds and the app is absent", async () => {
+    listLatestValuesMock.mockResolvedValue({ entries: [], pageToken: null });
+
+    const service = createRegistryMethods(registryConfig);
+
+    await expect(service.getRegistryApp("good.near", "good.com")).resolves.toBeNull();
+    await expect(service.getRegistryAppByHost("https://good.com/host")).resolves.toBeNull();
+  });
 });
 
 describe("prepareRegistryConfigWrite", () => {
