@@ -33,7 +33,12 @@ export default App({
       mainnetStakingPoolWhitelist: "lockup-whitelist.near",
       testnetStakingPoolWhitelist: "whitelist.f863973.m0",
     },
-    secrets: ["API_DATABASE_URL", "LUMA_CALENDAR_API_KEYS", "LUMA_WEBHOOK_SECRETS"],
+    secrets: [
+      "API_DATABASE_URL",
+      "LUMA_CALENDAR_API_KEYS",
+      "LUMA_WEBHOOK_SECRETS",
+      "SHARDDOG_API_KEY",
+    ],
   },
   // Local UI workspace override.
   ui: {

@@ -47,6 +47,8 @@ import {
 } from "./services/nodes";
 import type { PlacesService } from "./services/places";
 import { PlacesLive, PlacesTag } from "./services/places";
+import { ShardDogLive, type ShardDogService, ShardDogTag } from "./services/sharddog";
+import { createShardDogClient } from "./services/sharddog-client";
 import {
   makeStakingPools,
   StakingPoolCheckFailed,
@@ -102,6 +104,7 @@ export class ApiServices extends Context.Service<
     memberDirectory: MemberDirectoryService;
     attendance: AttendanceService;
     teamJoinRequests: TeamJoinRequestsService;
+    sharddog: ShardDogService;
     stakingPools: StakingPoolsService;
     platformStationsAccount: string | null;
   }
@@ -510,6 +513,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .string()
       .default("whitelist.f863973.m0")
       .describe("Testnet contract whose is_whitelisted approves staking pools for validators"),
+    sharddogEnabled: z
+      .boolean()
+      .default(false)
+      .describe("Turns on ShardDog collectibles; without SHARDDOG_API_KEY the client is a stub"),
+    sharddogApiUrl: z
+      .url({ protocol: /^https$/ })
+      .default("https://shard.dog")
+      .describe("ShardDog API base URL"),
   }),
 
   secrets: z.object({
@@ -517,6 +528,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     LUMA_WEBHOOK_SECRETS: z.string().default(""),
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
     BETTER_AUTH_SECRET: z.string().default(""),
+    SHARDDOG_API_KEY: z.string().default(""),
   }),
 
   context: ContextSchema,
@@ -545,6 +557,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
           MemberDirectoryLive,
           AttendanceLive,
           TeamJoinRequestsLive,
+          ShardDogLive({
+            enabled: config.variables.sharddogEnabled,
+            client: createShardDogClient({
+              apiKey: config.secrets.SHARDDOG_API_KEY,
+              apiUrl: config.variables.sharddogApiUrl,
+            }),
+          }),
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
@@ -562,6 +581,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           memberDirectory: Context.get(services, MemberDirectoryTag),
           attendance: Context.get(services, AttendanceTag),
           teamJoinRequests: Context.get(services, TeamJoinRequestsTag),
+          sharddog: Context.get(services, ShardDogTag),
           stakingPools: makeStakingPools({
             mainnet: config.variables.mainnetStakingPoolWhitelist,
             testnet: config.variables.testnetStakingPoolWhitelist,
@@ -697,6 +717,68 @@ export default createPlugin.withPlugins<PluginsClient>()({
             nodeId: node.id,
             role,
           },
+        };
+      });
+
+    const canEditShardDogDrops = (
+      context: { userId?: string | null; user?: AuthContext["user"]; reqHeaders?: unknown },
+      organizationId: string,
+    ) =>
+      Effect.gen(function* () {
+        if (!context.userId || !context.user || context.user.isAnonymous) return false;
+        if (context.user.role === "admin") return true;
+        const auth = yield* memberAuthClient({
+          reqHeaders: context.reqHeaders as ConstructorParameters<typeof Headers>[0],
+          userId: context.userId,
+          user: context.user,
+        });
+        const role = yield* callAuth(
+          () =>
+            auth.getActiveMemberRole({ organizationId }).then(
+              (result) => result.role,
+              (error: unknown) => {
+                if (
+                  error instanceof ORPCError &&
+                  ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
+                ) {
+                  return null;
+                }
+                throw error;
+              },
+            ),
+          "Could not read your role in this community",
+        );
+        return isCommunitySettingsRole(role);
+      });
+
+    const readShardDogDrops = (organizationId: string, canEdit: boolean) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        const tenant = yield* services.tenants.resolveTenantByOrgId(organizationId);
+        if (!tenant || tenant.status !== "active" || tenant.deletedAt) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", { message: "No City Node for this community" }),
+          );
+        }
+        const [stored, community] = yield* Effect.all([
+          services.sharddog.drops(organizationId),
+          services.discovery
+            .organizationEvents([organizationId], { liveTenantsOnly: true, publicOnly: !canEdit })
+            .pipe(Effect.map((byOrganization) => byOrganization.get(organizationId))),
+        ]);
+        const events = [...(community?.events ?? [])].sort(
+          (a, b) => (b.startsAt ?? "").localeCompare(a.startsAt ?? "") || a.id.localeCompare(b.id),
+        );
+        return {
+          enabled: services.sharddog.enabled,
+          canEdit,
+          membershipDropId: stored.membershipDropId,
+          events: events.map((event) => ({
+            eventId: event.id,
+            title: event.title,
+            startsAt: event.startsAt,
+            dropId: stored.eventDrops.get(event.id) ?? null,
+          })),
         };
       });
 
@@ -1328,6 +1410,47 @@ export default createPlugin.withPlugins<PluginsClient>()({
           }`,
           channels: (listing?.channels ?? []).map(({ label, url }) => ({ label, url })),
         };
+      }),
+
+      getShardDogDrops: builder.getShardDogDrops.effect(function* ({ input, context }) {
+        const canEdit = yield* canEditShardDogDrops(context, input.organizationId);
+        return yield* readShardDogDrops(input.organizationId, canEdit);
+      }),
+
+      setShardDogDrop: builder.setShardDogDrop.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const { organizationId, eventId, dropId } = input;
+        if (!(yield* canEditShardDogDrops(context, organizationId))) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
+              message: "Only this community's owners and admins can link ShardDog drops",
+            }),
+          );
+        }
+        const current = yield* readShardDogDrops(organizationId, true);
+        if (eventId === undefined) {
+          yield* services.sharddog.setMembershipDrop({
+            organizationId,
+            dropId,
+            updatedBy: context.userId,
+          });
+        } else {
+          if (!current.events.some((event) => event.eventId === eventId)) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", { message: "This event isn't one of the community's" }),
+            );
+          }
+          yield* services.sharddog.setEventDrop({
+            organizationId,
+            eventId,
+            dropId,
+            updatedBy: context.userId,
+          });
+        }
+        return yield* readShardDogDrops(organizationId, true);
       }),
 
       reconcileAttendance: builder.reconcileAttendance.use(requireAuth).effect(function* ({

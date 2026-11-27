@@ -396,3 +396,22 @@ export const teamJoinEndorsements = pgTable(
     oncePerEndorser: uniqueIndex("team_join_endorsements_once").on(t.requestId, t.endorserUserId),
   }),
 );
+
+export const sharddogCommunityDrops = pgTable("sharddog_community_drops", {
+  organizationId: text("organization_id").primaryKey(),
+  dropId: text("drop_id").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+});
+
+export const sharddogEventDrops = pgTable(
+  "sharddog_event_drops",
+  {
+    organizationId: text("organization_id").notNull(),
+    eventId: text("event_id").notNull(),
+    dropId: text("drop_id").notNull(),
+    updatedBy: text("updated_by").notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.organizationId, t.eventId] }) }),
+);
