@@ -76,7 +76,13 @@ async function community() {
     tenantId: tenant.id,
     orgId: org,
   });
-  return { id, org, node, owner: await getPluginClient(orgContext(`owner-${id}`, org)) };
+  return {
+    id,
+    org,
+    node,
+    tenantId: tenant.id,
+    owner: await getPluginClient(orgContext(`owner-${id}`, org)),
+  };
 }
 
 const report = {
@@ -102,6 +108,39 @@ const report = {
 };
 
 describe("event reports", () => {
+  it("makes reports read-only once the community is suspended or deleted", async () => {
+    for (const close of ["suspend", "remove"] as const) {
+      const { id, org, node, owner, tenantId } = await community();
+      const ended = await owner.saveDiscoveryActivity(
+        eventInput(node.id, {
+          status: "published",
+          startsAt: new Date(Date.now() - 5 * HOUR).toISOString(),
+          endsAt: new Date(Date.now() - 2 * HOUR).toISOString(),
+        }),
+      );
+      const organizer = await getPluginClient(memberWithTeam(`organizer-${id}`, org, ["events"]));
+      await organizer.saveEventReport({ activityId: ended.id, report });
+      expect(await owner.getEventReport({ activityId: ended.id })).toMatchObject({ canEdit: true });
+
+      if (close === "suspend") {
+        const orgAdmin = await getPluginClient(orgContext(`admin-${id}`, org, "admin"));
+        await orgAdmin.suspendTenant({ tenantId });
+      } else {
+        await owner.deleteTenant({ tenantId });
+      }
+
+      for (const writer of [owner, organizer]) {
+        expect(await writer.getEventReport({ activityId: ended.id })).toMatchObject({
+          report: { report: { attendees: 42 } },
+          canEdit: false,
+        });
+        await expect(
+          writer.saveEventReport({ activityId: ended.id, report: { ...report, attendees: 45 } }),
+        ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      }
+    }
+  });
+
   it("lets organizers and owners submit and edit reports, and platform admins only read them", async () => {
     const { id, org, node, owner } = await community();
     const ended = await owner.saveDiscoveryActivity(
