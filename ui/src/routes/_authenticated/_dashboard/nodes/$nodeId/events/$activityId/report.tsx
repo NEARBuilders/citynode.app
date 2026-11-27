@@ -5,6 +5,7 @@ import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { ActivityFormPage, activitiesQueryOptions } from "@/components/discovery/activity-form";
+import { ReportNoAccess } from "@/components/discovery/report-no-access";
 import { ReportUpdated, ReviewRow } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
@@ -24,7 +25,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { AppMessageId } from "@/i18n/catalogs";
-import { appErrorMessage } from "@/i18n/error-message";
+import { appErrorMessage, isPermissionError } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import {
   draftFromReport,
@@ -151,18 +152,22 @@ function EventReportPage() {
         title={translate("report.title")}
         headerTestId="report.heading"
       >
-        <EmptyState
-          icon={CalendarDotsIcon}
-          title={translate(loadError ? "report.loadError" : "events.notFound")}
-          description={loadError ? appErrorMessage(loadError, translate) : undefined}
-          action={
-            loadError && (
-              <Button variant="outline" data-testid="report-retry" onClick={retry}>
-                {translate("common.retry")}
-              </Button>
-            )
-          }
-        />
+        {isPermissionError(loadError) ? (
+          <ReportNoAccess icon={CalendarDotsIcon} />
+        ) : (
+          <EmptyState
+            icon={CalendarDotsIcon}
+            title={translate(loadError ? "report.loadError" : "events.notFound")}
+            description={loadError ? appErrorMessage(loadError, translate) : undefined}
+            action={
+              loadError && (
+                <Button variant="outline" data-testid="report-retry" onClick={retry}>
+                  {translate("common.retry")}
+                </Button>
+              )
+            }
+          />
+        )}
       </ActivityFormPage>
     );
   }

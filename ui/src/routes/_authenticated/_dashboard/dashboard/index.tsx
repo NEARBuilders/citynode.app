@@ -42,8 +42,10 @@ import { communityAuthContextQueryOptions } from "./node/-community-header";
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { restricted?: FeatureArea | "admin" | "owners" } =>
-    search.restricted === "admin" || search.restricted === "owners"
+  ): { restricted?: FeatureArea | "admin" | "owners" | "community" } =>
+    search.restricted === "admin" ||
+    search.restricted === "owners" ||
+    search.restricted === "community"
       ? { restricted: search.restricted }
       : typeof search.restricted === "string" && isFeatureArea(search.restricted)
         ? { restricted: search.restricted }
@@ -80,7 +82,8 @@ function Home() {
   const { restricted } = Route.useSearch();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const linkedNearAccount = useNearAccount();
-  const nearAccountId = useIsClient() ? linkedNearAccount : null;
+  const isClient = useIsClient();
+  const nearAccountId = isClient ? linkedNearAccount : null;
   const activeOrgId = session?.session?.activeOrganizationId ?? "";
 
   const passkeys = useQuery({
@@ -159,10 +162,17 @@ function Home() {
   const bulletin = node?.metadata?.bulletin;
 
   const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
+  const refreshingStaleMembership =
+    membership.status === "unknown" &&
+    organizations.isFetching &&
+    !organizations.isFetchedAfterMount &&
+    !community;
   const loading =
     !user ||
     organizations.isPending ||
+    refreshingStaleMembership ||
     (!!communityOrgId && tenant.isPending) ||
+    (!!activeOrgId && authContext.isPending) ||
     passkeys.isPending;
 
   const steps = getNextSteps(
@@ -199,6 +209,7 @@ function Home() {
     />
   );
 
+  const identityReady = !!user && isClient && !passkeys.isPending;
   const firstName = user?.isAnonymous ? null : user?.name?.split(" ")[0];
 
   return (
@@ -246,7 +257,7 @@ function Home() {
           <section className="flex flex-col gap-6">
             <SectionHeader title={translate("dashboard.nextSteps")} />
             {loading ? (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3" data-testid="home-next-steps-loading">
                 <Skeleton className="h-20 w-full rounded-2xl" />
                 <Skeleton className="h-16 w-full rounded-2xl" />
                 <Skeleton className="h-16 w-full rounded-2xl" />
@@ -287,7 +298,7 @@ function Home() {
           <AttendanceRecord testId="home.attendance" />
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
-          {user ? (
+          {identityReady && user ? (
             <IdentityCard
               user={user}
               nearAccountId={nearAccountId}
