@@ -2,6 +2,7 @@ import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 import type { ApiClient, AuthClient } from "@/app";
 import { AppActionError } from "@/i18n/error-message";
+import { YOCTO_PER_NEAR } from "@/lib/near-amount";
 import type { NodeTreasury } from "@/lib/node-staking-proposals";
 import type { DaoPlan } from "@/lib/sputnik-proposals";
 
@@ -382,6 +383,12 @@ export function formatNearBalance(balance: bigint, locale = "en") {
     new Intl.NumberFormat(locale).formatToParts(1.1).find((part) => part.type === "decimal")
       ?.value ?? ".";
   return `${whole}${fraction ? `${decimal}${fraction}` : ""} NEAR`;
+}
+
+export function formatNearTotal(balance: bigint, locale = "en") {
+  if (balance < 1_000n * YOCTO_PER_NEAR) return formatNearBalance(balance, locale);
+  const whole = (balance + YOCTO_PER_NEAR / 2n) / YOCTO_PER_NEAR;
+  return `${new Intl.NumberFormat(locale).format(whole)} NEAR`;
 }
 
 export function isFullCommission(numerator: number, denominator: number) {

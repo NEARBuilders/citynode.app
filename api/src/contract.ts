@@ -356,6 +356,21 @@ export const AccountCollectiblesSchema = z.object({
   ),
 });
 
+export const NodeCollectibleSchema = z.object({
+  kind: z.enum(["membership", "event"]),
+  dropId: z.string(),
+  eventId: z.string().nullable(),
+  eventTitle: z.string().nullable(),
+  eventStartsAt: z.string().nullable(),
+  name: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  viewUrl: z.string(),
+});
+
+export const NodeCollectiblesSchema = z.object({
+  collectibles: z.array(NodeCollectibleSchema),
+});
+
 export const OnboardCommunitySchema = z.object({
   name: z.string().min(1),
   href: z.string(),
@@ -734,12 +749,18 @@ export const contract = oc.router({
       path: "/stake/communities",
       summary: "List communities available for staking",
       description:
-        "Session-aware — active organization first, organization memberships as fallback, and the full public directory for anonymous visitors.",
+        "Public — every listed community for everyone. Signed-in viewers get their active organization's community first, then their other memberships.",
     })
     .output(
       z.array(
         TenantAppSchema.extend({
           stakeable: z.boolean().describe("Whether the community has its own validator"),
+          viewerMembership: z
+            .enum(["active", "member"])
+            .nullable()
+            .describe(
+              "'active' for the viewer's active organization, 'member' for another of their organizations, null otherwise",
+            ),
         }),
       ),
     ),
@@ -1294,6 +1315,17 @@ export const contract = oc.router({
     .input(z.object({ organizationId: z.string().min(1) }))
     .output(ShardDogDropsSchema)
     .errors({ NOT_FOUND }),
+
+  getNodeCollectibles: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/collectibles",
+      summary: "Get a community's ShardDog collectibles",
+      description:
+        "Public — the community's membership ShardDog and the ShardDog of each public event, for the drops linked to them, each with a View in ShardDog link. Empty when ShardDog is off or nothing is linked.",
+    })
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(NodeCollectiblesSchema),
 
   setShardDogDrop: oc
     .route({

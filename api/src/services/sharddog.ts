@@ -1,6 +1,6 @@
 import type { ORPCError } from "@orpc/server";
 import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
-import { Context, Effect, Layer } from "effect";
+import { Clock, Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
   attendanceCheckIns,
@@ -9,7 +9,7 @@ import {
   sharddogEventDrops,
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
-import type { ShardDogClient } from "./sharddog-client";
+import type { ShardDogClient, ShardDogDropDetails } from "./sharddog-client";
 
 export type ShardDogEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
 
@@ -42,9 +42,14 @@ export interface AwardedCollectible {
   awardedAt: Date;
 }
 
+const DETAILS_TTL_MS = 10 * 60_000;
+const FAILED_DETAILS_TTL_MS = 60_000;
+const DETAILS_CACHE_LIMIT = 500;
+
 export interface ShardDogService {
   readonly enabled: boolean;
   readonly client: ShardDogClient;
+  dropDetails(dropId: string): Effect.Effect<ShardDogDropDetails | null>;
   drops(organizationId: string): ShardDogEffect<CommunityDrops>;
   setMembershipDrop(input: {
     organizationId: string;
@@ -145,9 +150,41 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
           }),
         );
 
+      const detailsCache = new Map<
+        string,
+        { details: ShardDogDropDetails | null; expiresAt: number }
+      >();
+      const pendingDetails = new Map<string, Promise<ShardDogDropDetails | null>>();
+
+      const describeOnce = (dropId: string) => {
+        const pending = pendingDetails.get(dropId);
+        if (pending) return pending;
+        const request = config.client
+          .describeDrop(dropId)
+          .finally(() => pendingDetails.delete(dropId));
+        pendingDetails.set(dropId, request);
+        return request;
+      };
+
       const service: ShardDogService = {
         enabled: config.enabled,
         client: config.client,
+        dropDetails: Effect.fn("ShardDogService.dropDetails")(function* (dropId: string) {
+          const now = yield* Clock.currentTimeMillis;
+          const cached = detailsCache.get(dropId);
+          if (cached && cached.expiresAt > now) return cached.details;
+          const fetched = yield* Effect.tryPromise(() => describeOnce(dropId)).pipe(
+            Effect.map((details) => ({ details, ttl: DETAILS_TTL_MS })),
+            Effect.orElseSucceed(() => ({ details: null, ttl: FAILED_DETAILS_TTL_MS })),
+          );
+          detailsCache.delete(dropId);
+          if (detailsCache.size >= DETAILS_CACHE_LIMIT) {
+            const oldest = detailsCache.keys().next().value;
+            if (oldest !== undefined) detailsCache.delete(oldest);
+          }
+          detailsCache.set(dropId, { details: fetched.details, expiresAt: now + fetched.ttl });
+          return fetched.details;
+        }),
         drops: (organizationId) =>
           query(async () => {
             const [membership, events] = await Promise.all([

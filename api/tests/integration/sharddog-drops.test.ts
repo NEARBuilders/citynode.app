@@ -10,6 +10,18 @@ import {
   teardown,
 } from "../setup";
 
+vi.mock("../../plugin.dev", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../plugin.dev")>();
+  return {
+    default: {
+      ...original.default,
+      config: {
+        ...original.default.config,
+        variables: { ...original.default.config.variables, sharddogEnabled: false },
+      },
+    },
+  };
+});
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
     Effect.succeed({ isSputnikContract: true, isMember: true, policy: { roles: [] } }),
@@ -92,7 +104,7 @@ describe("ShardDog drops", () => {
     const admin = await as("admin");
 
     expect(await admin.getShardDogDrops({ organizationId: org })).toEqual({
-      enabled: true,
+      enabled: false,
       canEdit: true,
       membershipDropId: null,
       events: [
@@ -207,5 +219,16 @@ describe("ShardDog drops", () => {
     await expect(
       (await as("admin")).setShardDogDrop({ organizationId: org, dropId: "drop/../x" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("keeps community pages free of collectibles while ShardDog is off", async () => {
+    const { org, event, nodeId, as } = await community();
+    const admin = await as("admin");
+    await admin.setShardDogDrop({ organizationId: org, dropId: "off-member" });
+    await admin.setShardDogDrop({ organizationId: org, eventId: event.id, dropId: "off-event" });
+
+    expect(await (await getPluginClient()).getNodeCollectibles({ nodeId })).toEqual({
+      collectibles: [],
+    });
   });
 });

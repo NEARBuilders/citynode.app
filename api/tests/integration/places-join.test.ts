@@ -354,6 +354,14 @@ function testingDb() {
   return db;
 }
 
+async function storedJoinCode(nodeId: string) {
+  const [row] = await testingDb()
+    .select({ metadata: nodesTable.metadata })
+    .from(nodesTable)
+    .where(eq(nodesTable.id, nodeId));
+  return (row?.metadata as { joinCodeId?: unknown } | undefined)?.joinCodeId;
+}
+
 async function ensurePlace(slug: string, name: string) {
   const db = testingDb();
   await db
@@ -570,11 +578,13 @@ describe("places activation + join flow", () => {
 
     for (const activated of [india, chicago, newYork, malaysia]) {
       const node = await reader.getNode({ nodeId: activated.nodeId });
-      expect(typeof node?.metadata.joinCodeId).toBe("string");
-      expect(String(node?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      expect(node?.metadata.joinCodeId).toBeUndefined();
+      const stored = await storedJoinCode(activated.nodeId);
+      expect(typeof stored).toBe("string");
+      expect(String(stored).length).toBeGreaterThan(0);
     }
-    const platformNode = await reader.getNode({ nodeId: platform!.id });
-    expect(platformNode?.metadata.joinCodeId).toBeUndefined();
+    await reader.getNode({ nodeId: platform!.id });
+    expect(await storedJoinCode(platform!.id)).toBeUndefined();
 
     const anon = await getPluginClient();
     const anonListed = await anon.listDiscovery({});
@@ -621,15 +631,15 @@ describe("places activation + join flow", () => {
         auth: authStubFor(authedContext("kenya-visitor")),
       } as never);
       await visitor.listDiscovery({});
-      const stillMissing = await visitor.getNode({ nodeId: kenya.nodeId });
-      expect(stillMissing?.metadata.joinCodeId).toBeUndefined();
+      await visitor.getNode({ nodeId: kenya.nodeId });
+      expect(await storedJoinCode(kenya.nodeId)).toBeUndefined();
 
       const admin = await getPluginClient(authedContext("repair-admin", "admin"), {
         auth: authStubFor(authedContext("repair-admin", "admin")),
       } as never);
       await admin.listDiscovery({});
-      const repaired = await admin.getNode({ nodeId: kenya.nodeId });
-      expect(String(repaired?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      await admin.getNode({ nodeId: kenya.nodeId });
+      expect(String(await storedJoinCode(kenya.nodeId)).length).toBeGreaterThan(0);
       expect(adminMembershipCalls).toEqual([
         { action: "add", organizationId: kenya.organizationId, userId: "repair-admin" },
         { action: "remove", organizationId: kenya.organizationId, userId: "repair-admin" },
@@ -702,8 +712,8 @@ describe("places activation + join flow", () => {
         auth: authStubFor(authedContext("repair-admin", "admin")),
       } as never);
       await admin.listDiscovery({});
-      const repaired = await admin.getNode({ nodeId: uganda.nodeId });
-      expect(String(repaired?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      await admin.getNode({ nodeId: uganda.nodeId });
+      expect(String(await storedJoinCode(uganda.nodeId)).length).toBeGreaterThan(0);
       expect(adminMembershipCalls).toEqual([
         {
           action: "update",
@@ -739,8 +749,8 @@ describe("places activation + join flow", () => {
       const admin = await getPluginClient(authedContext("repair-admin", "admin"), {
         auth: authStubFor(authedContext("repair-admin", "admin")),
       } as never);
-      const repaired = await admin.getNode({ nodeId: ghana.nodeId });
-      expect(String(repaired?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      await admin.getNode({ nodeId: ghana.nodeId });
+      expect(String(await storedJoinCode(ghana.nodeId)).length).toBeGreaterThan(0);
       expect(adminMembershipCalls).toEqual([
         { action: "add", organizationId: ghana.organizationId, userId: "repair-admin" },
         { action: "remove", organizationId: ghana.organizationId, userId: "repair-admin" },
@@ -766,8 +776,8 @@ describe("places activation + join flow", () => {
       const admin = await getPluginClient(authedContext("repair-admin", "admin"), {
         auth: authStubFor(authedContext("repair-admin", "admin")),
       } as never);
-      const kept = await admin.getNode({ nodeId: togo.nodeId });
-      expect(String(kept?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      await admin.getNode({ nodeId: togo.nodeId });
+      expect(String(await storedJoinCode(togo.nodeId)).length).toBeGreaterThan(0);
       expect(adminMembershipCalls).toEqual([]);
       expect(memberRoles.get(togo.organizationId)?.get("repair-admin")).toBe("member,admin");
 
@@ -780,8 +790,8 @@ describe("places activation + join flow", () => {
       rememberMember(benin.organizationId, "repair-admin", "member,events");
       await forgetJoinCode("benin");
       adminMembershipCalls.length = 0;
-      const restored = await admin.getNode({ nodeId: benin.nodeId });
-      expect(String(restored?.metadata.joinCodeId).length).toBeGreaterThan(0);
+      await admin.getNode({ nodeId: benin.nodeId });
+      expect(String(await storedJoinCode(benin.nodeId)).length).toBeGreaterThan(0);
       expect(adminMembershipCalls).toEqual([
         {
           action: "update",

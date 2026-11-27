@@ -22,4 +22,5 @@ CREATE UNIQUE INDEX "sharddog_awards_membership_once" ON "sharddog_awards" USING
 CREATE UNIQUE INDEX "sharddog_awards_event_once" ON "sharddog_awards" USING btree ("organization_id","user_id","event_id") WHERE kind = 'event';--> statement-breakpoint
 CREATE INDEX "sharddog_awards_user" ON "sharddog_awards" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "sharddog_awards_pending" ON "sharddog_awards" USING btree ("status","organization_id");--> statement-breakpoint
-DELETE FROM "attendance_code_checkpoints";
+DELETE FROM "attendance_code_checkpoints";--> statement-breakpoint
+DELETE FROM "attendance_event_reconciliations";

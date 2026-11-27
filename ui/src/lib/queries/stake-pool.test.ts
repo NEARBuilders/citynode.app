@@ -5,6 +5,7 @@ import type { ApiClient, AuthClient } from "@/app";
 import { buildNodeSequence, EMPTY_CHAIN } from "@/lib/node-staking-proposals";
 import {
   formatNearBalance,
+  formatNearTotal,
   formatPoolFee,
   formatPoolFeeTenths,
   invalidateStakePoolQueries,
@@ -176,6 +177,12 @@ describe("stake pool queries", () => {
     );
     expect(formatNearBalance(999999999999999999999999n)).toBe("1 NEAR");
     expect(formatNearBalance(0n)).toBe("0 NEAR");
+    expect(formatNearTotal(300328926900000000000000000000n)).toBe("300,329 NEAR");
+    expect(formatNearTotal(9007199254740993123456789000000000000000n)).toBe(
+      "9,007,199,254,740,993 NEAR",
+    );
+    expect(formatNearTotal(stats.totalStaked)).toBe("12,346 NEAR");
+    expect(formatNearTotal(999_456_700_000_000_000_000_000_000n)).toBe("999.4567 NEAR");
     expect(formatPoolFee(stats.feeNumerator, stats.feeDenominator)).toBe("5%");
     expect(view).toHaveBeenCalledTimes(3);
     client.clear();

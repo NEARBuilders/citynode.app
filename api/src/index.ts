@@ -222,21 +222,79 @@ type NodeAccessContext = NonNullable<TeamAccessContext> & {
     | null;
 };
 
-type ViewerContext = {
-  userId?: string | null;
-  user?: { id?: string; name?: string | null; isAnonymous?: boolean | null } | null;
-};
+type ViewerContext = Pick<AuthContext, "userId" | "user" | "organization" | "organizations">;
 
 const bulletinPublisherOf = (context: ViewerContext): BulletinPublisher => ({
   userId: context.userId ?? context.user?.id ?? null,
   name: memberDisplayName(context.user?.name),
 });
 
-const nodeForViewer = (context: ViewerContext) => {
+type ViewerAccess = { platformAdmin: boolean; organizationIds: ReadonlySet<string> };
+
+const viewerAccessOf = (context: ViewerContext): ViewerAccess => {
   const signedIn = !!context.user && context.user.isAnonymous !== true;
-  return (node: NodeRecord): NodeRecord =>
-    signedIn ? node : { ...node, bulletinPublisherName: null };
+  return {
+    platformAdmin: signedIn && context.user?.role === "admin",
+    organizationIds: new Set(
+      signedIn
+        ? [
+            context.organization?.activeOrganizationId,
+            ...(context.organizations ?? []).map((organization) => organization.id),
+          ].filter((id): id is string => !!id)
+        : [],
+    ),
+  };
 };
+
+const inCommunity = (access: ViewerAccess, ...orgIds: (string | null | undefined)[]) =>
+  access.platformAdmin || orgIds.some((id) => !!id && access.organizationIds.has(id));
+
+const nodeForViewer =
+  (access: ViewerAccess, tenantOrgIds: ReadonlyMap<string, string | null>) =>
+  (node: NodeRecord): NodeRecord => {
+    const { joinCodeId: _joinCodeId, ...metadata } = node.metadata;
+    if (inCommunity(access, node.orgId, node.tenantId && tenantOrgIds.get(node.tenantId))) {
+      return { ...node, metadata };
+    }
+    const { bulletin: _bulletin, ...publicMetadata } = metadata;
+    return {
+      ...node,
+      metadata: publicMetadata,
+      bulletinPublishedAt: null,
+      bulletinPublisherName: null,
+    };
+  };
+
+const presentNodes = (
+  services: { tenants: TenantsService },
+  context: ViewerContext,
+  nodes: readonly NodeRecord[],
+) =>
+  Effect.gen(function* () {
+    const access = viewerAccessOf(context);
+    const tenantIds =
+      access.organizationIds.size === 0
+        ? []
+        : [
+            ...new Set(
+              nodes.flatMap((node) =>
+                node.tenantId &&
+                node.metadata.bulletin !== undefined &&
+                !inCommunity(access, node.orgId)
+                  ? [node.tenantId]
+                  : [],
+              ),
+            ),
+          ];
+    const tenantOrgIds = yield* services.tenants.orgIdsByTenantId(tenantIds);
+    return nodes.map(nodeForViewer(access, tenantOrgIds));
+  });
+
+const presentNode = (
+  services: { tenants: TenantsService },
+  context: ViewerContext,
+  node: NodeRecord,
+) => presentNodes(services, context, [node]).pipe(Effect.map(([presented]) => presented!));
 
 const requireNodeOperationsAccess = (context: NodeAccessContext): NodeEffect<void> =>
   canUseTeamArea(context, "node-operations")
@@ -415,6 +473,8 @@ const authorizedNodeForValidators = (
     });
     return node;
   });
+
+const MAX_EVENT_COLLECTIBLES = 12;
 
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
@@ -1370,6 +1430,64 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return yield* readShardDogDrops(input.organizationId, canEdit);
       }),
 
+      getNodeCollectibles: builder.getNodeCollectibles.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const none = { collectibles: [] };
+        if (!services.sharddog.enabled) return none;
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (!node?.tenantId) return none;
+        const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
+        if (!tenant?.orgId) return none;
+        const drops = yield* readShardDogDrops(tenant.orgId, false).pipe(
+          Effect.catchIf(
+            (error) => error instanceof ORPCError && error.code === "NOT_FOUND",
+            () => Effect.succeed(null),
+          ),
+        );
+        if (!drops) return none;
+        const linked = [
+          ...(drops.membershipDropId
+            ? [
+                {
+                  kind: "membership" as const,
+                  dropId: drops.membershipDropId,
+                  eventId: null,
+                  eventTitle: null,
+                  eventStartsAt: null,
+                },
+              ]
+            : []),
+          ...drops.events
+            .filter(
+              (event): event is (typeof drops.events)[number] & { dropId: string } =>
+                event.dropId !== null,
+            )
+            .slice(0, MAX_EVENT_COLLECTIBLES)
+            .map((event) => ({
+              kind: "event" as const,
+              dropId: event.dropId,
+              eventId: event.eventId,
+              eventTitle: event.title,
+              eventStartsAt: event.startsAt,
+            })),
+        ];
+        const { client } = services.sharddog;
+        const collectibles = yield* Effect.forEach(
+          linked,
+          (item) =>
+            services.sharddog.dropDetails(item.dropId).pipe(
+              Effect.map((details) => ({
+                ...item,
+                name: details?.name ?? null,
+                imageUrl: details?.imageUrl ?? null,
+                viewUrl: client.dropUrl(item.dropId),
+              })),
+            ),
+          { concurrency: 4 },
+        );
+        return { collectibles };
+      }),
+
       setShardDogDrop: builder.setShardDogDrop.use(requireAuth).effect(function* ({
         input,
         context,
@@ -2190,27 +2308,40 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listTenantApps: builder.listTenantApps.effect(function* () {
         const services = yield* ApiServices;
-        return yield* services.tenants.listTenantApps();
+        const apps = yield* services.tenants.listTenantApps();
+        return apps.map(({ orgId: _orgId, ...app }) => app);
       }),
 
       listStakeCommunities: builder.listStakeCommunities.effect(function* ({ context }) {
         const services = yield* ApiServices;
-        const activeOrganizationId = context.organization?.activeOrganizationId;
-        const apps =
-          !context.user || context.user.isAnonymous === true
-            ? yield* services.tenants.listTenantApps()
-            : yield* services.tenants.listTenantApps(
-                activeOrganizationId
-                  ? [activeOrganizationId]
-                  : (context.organizations ?? []).map((organization) => organization.id),
-              );
+        const signedIn = !!context.user && context.user.isAnonymous !== true;
+        const activeOrganizationId = signedIn
+          ? (context.organization?.activeOrganizationId ?? null)
+          : null;
+        const memberOrganizationIds = new Set(
+          signedIn ? (context.organizations ?? []).map((organization) => organization.id) : [],
+        );
+        const apps = yield* services.tenants.listTenantApps();
         const stakeable = yield* services.validators.nodeIdsWithValidators(
           apps.flatMap((app) => (app.node ? [app.node.id] : [])),
         );
-        return apps.map((app) => ({
-          ...app,
-          stakeable: app.node ? stakeable.has(app.node.id) : false,
-        }));
+        const viewerMembershipOf = (orgId: string | null) => {
+          if (!orgId) return null;
+          if (orgId === activeOrganizationId) return "active" as const;
+          return memberOrganizationIds.has(orgId) ? ("member" as const) : null;
+        };
+        const rank = { active: 0, member: 1 } as const;
+        return apps
+          .map(({ orgId, ...app }) => ({
+            ...app,
+            stakeable: app.node ? stakeable.has(app.node.id) : false,
+            viewerMembership: viewerMembershipOf(orgId),
+          }))
+          .sort(
+            (a, b) =>
+              (a.viewerMembership ? rank[a.viewerMembership] : 2) -
+                (b.viewerMembership ? rank[b.viewerMembership] : 2) || a.name.localeCompare(b.name),
+          );
       }),
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
@@ -2378,7 +2509,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...(input.parentId !== undefined && { parentId: input.parentId }),
           ...(input.tenantId !== undefined && { tenantId: input.tenantId }),
         });
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listNodeSummaries: builder.listNodeSummaries.effect(function* ({ input, context }) {
@@ -2388,8 +2519,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...(input.scope === "roots" && { parentId: null }),
           ...(input.kind !== undefined && { kind: input.kind }),
         });
-        const present = nodeForViewer(context);
-        return summaries.map((summary) => ({ ...summary, node: present(summary.node) }));
+        const presented = yield* presentNodes(
+          services,
+          context,
+          summaries.map((summary) => summary.node),
+        );
+        return summaries.map((summary, index) => ({ ...summary, node: presented[index]! }));
       }),
 
       getNode: builder.getNode.effect(function* ({ input, context }) {
@@ -2402,7 +2537,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ),
         );
         const refreshed = yield* services.nodes.getById(input.nodeId);
-        return refreshed && nodeForViewer(context)(refreshed);
+        return refreshed && (yield* presentNode(services, context, refreshed));
       }),
 
       updateNode: builder.updateNode
@@ -2416,10 +2551,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
             resource: "node",
           });
           yield* guardNodeKind(node.kind, requestedNodeKind(input));
-          return yield* services.nodes.update(input.nodeId, {
+          const updated = yield* services.nodes.update(input.nodeId, {
             ...(input.kind !== undefined && { kind: input.kind }),
             ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
+          return yield* presentNode(services, context, updated);
         }),
 
       setNodeBulletin: builder.setNodeBulletin
@@ -2432,11 +2568,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
             adminBypassOrg: true,
             resource: "node",
           });
-          return yield* services.nodes.setBulletin(
+          const updated = yield* services.nodes.setBulletin(
             input.nodeId,
             input.bulletin,
             bulletinPublisherOf(context),
           );
+          return yield* presentNode(services, context, updated);
         }),
 
       deleteNode: builder.deleteNode
@@ -2466,20 +2603,20 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listRootNodes: builder.listRootNodes.effect(function* ({ context }) {
         const services = yield* ApiServices;
         const nodes = yield* services.nodes.listRootNodes;
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listChildren: builder.listChildren.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const nodes = yield* services.nodes.listChildren(input.nodeId);
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listNodeAncestors: builder.listNodeAncestors.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         yield* resolveNodeForAccess(services, input.nodeId);
         const ancestors = yield* services.nodes.listAncestors(input.nodeId);
-        return ancestors.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, ancestors);
       }),
 
       getSubtree: builder.getSubtree.effect(function* ({ input, errors }) {
@@ -2516,7 +2653,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
 
         return {
-          node: nodeForViewer(context)(node),
+          node: yield* presentNode(services, context, node),
           childrenCount: children.length,
           subtreeNodeCount: subtree.length,
           validators,
@@ -2534,7 +2671,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       resolveNodeBySlug: builder.resolveNodeBySlug.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const node = yield* services.nodes.resolveBySlug(input.slug);
-        return node && nodeForViewer(context)(node);
+        return node && (yield* presentNode(services, context, node));
       }),
 
       resolvePlace: builder.resolvePlace.effect(function* ({ input }) {

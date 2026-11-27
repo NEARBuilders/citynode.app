@@ -42,6 +42,7 @@ import { placeMapPinsQueryOptions } from "@/lib/queries/places";
 import { CommunityChannels, CommunityUpdates } from "./community-updates";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, EventList } from "./event-list";
+import { matchesPlace, PlaceSuggestions, suggestPlaces } from "./place-suggestions";
 import { ReportContent } from "./report-content";
 
 const GeographicMap = lazy(() =>
@@ -141,8 +142,9 @@ export function DiscoveryExplorer({
   const catalogPlaces = catalog.data ?? [];
   const placePins = catalogPlaces.filter((place) => {
     if (scoped) return false;
-    return query ? place.name.toLowerCase().includes(query) || place.slug.includes(query) : true;
+    return matchesPlace(place, query);
   });
+  const suggestions = nodes.length === 0 && !scoped ? suggestPlaces(catalogPlaces, query) : [];
   const basic = selected
     ? undefined
     : [...nodes, ...(regions.data ?? [])].find(
@@ -297,7 +299,13 @@ export function DiscoveryExplorer({
             <EmptyState
               icon={MagnifyingGlassIcon}
               title={t("explore.empty.title")}
-              description={t("explore.empty.description")}
+              description={
+                suggestions.length > 0 ? (
+                  <PlaceSuggestions places={suggestions} />
+                ) : (
+                  t("explore.empty.description")
+                )
+              }
               action={
                 filtered ? (
                   <Button

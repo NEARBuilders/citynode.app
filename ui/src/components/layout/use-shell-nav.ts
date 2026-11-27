@@ -37,7 +37,8 @@ export function useShellNav(
   pluginNav?: { items: Parameters<typeof pluginNavToSidebar>[0] },
 ) {
   const translate = useAppTranslation();
-  const { user, organizations, membership, isOrganizationsLoading } = useIdentity();
+  const { user, organizations, membership, isOrganizationsLoading, organizationsError } =
+    useIdentity();
   const signedIn = Boolean(user);
   const canCurate = useCanCurate(signedIn && !isAdmin);
   const role = getUserRole(signedIn, isAdmin);
@@ -47,6 +48,8 @@ export function useShellNav(
       hasOrganization: isAdmin
         ? isOrganizationsLoading || organizations.length > 0
         : membership.status !== "none",
+      membershipPending:
+        signedIn && !isAdmin && membership.status === "unknown" && !organizationsError,
       canCurate,
       isAdmin,
     },
