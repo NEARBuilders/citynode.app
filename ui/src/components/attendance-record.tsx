@@ -136,7 +136,7 @@ export function AttendanceRecord({
                     <MedalIcon />
                   </ItemMedia>
                   <ItemContent className="min-w-0">
-                    <ItemTitle>{translate("collectibles.membership")}</ItemTitle>
+                    <ItemTitle>{translate("collectibles.membershipShardDog")}</ItemTitle>
                     <ItemDescription>
                       {translate("collectibles.membershipHint", {
                         community:

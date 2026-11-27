@@ -20,7 +20,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Connectez un compte NEAR pour récupérer votre ShardDog",
     "连接 NEAR 账户以领取你的 ShardDog",
   ],
-  "collectibles.membership": [
+  "collectibles.membershipShardDog": [
     "Membership ShardDog",
     "ShardDog de membresía",
     "ShardDog d’adhésion",
