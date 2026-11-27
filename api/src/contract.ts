@@ -342,6 +342,21 @@ export const MyCollectiblesSchema = z.object({
   ),
 });
 
+export const NodeCollectibleSchema = z.object({
+  kind: z.enum(["membership", "event"]),
+  dropId: z.string(),
+  eventId: z.string().nullable(),
+  eventTitle: z.string().nullable(),
+  eventStartsAt: z.string().nullable(),
+  name: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  viewUrl: z.string(),
+});
+
+export const NodeCollectiblesSchema = z.object({
+  collectibles: z.array(NodeCollectibleSchema),
+});
+
 export const OnboardCommunitySchema = z.object({
   name: z.string().min(1),
   href: z.string(),
@@ -1286,6 +1301,17 @@ export const contract = oc.router({
     .input(z.object({ organizationId: z.string().min(1) }))
     .output(ShardDogDropsSchema)
     .errors({ NOT_FOUND }),
+
+  getNodeCollectibles: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/collectibles",
+      summary: "Get a community's ShardDog collectibles",
+      description:
+        "Public — the community's membership ShardDog and the ShardDog of each public event, for the drops linked to them, each with a View in ShardDog link. Empty when ShardDog is off or nothing is linked.",
+    })
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(NodeCollectiblesSchema),
 
   setShardDogDrop: oc
     .route({

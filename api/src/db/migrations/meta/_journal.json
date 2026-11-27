@@ -171,10 +171,10 @@
       "breakpoints": true
     },
     {
-      "idx": 24,
+      "idx": 25,
       "version": "7",
-      "when": 1795620271499,
-      "tag": "0024_sharddog-claim-links",
+      "when": 1795748219389,
+      "tag": "0025_sharddog-claim-links",
       "breakpoints": true
     }
   ]

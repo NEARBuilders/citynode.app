@@ -32,7 +32,7 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Ce lien ne fonctionne qu’une fois. Ouvrez-le dans ShardDog et inscrivez-vous avec une passkey pour le récupérer.",
     "此链接仅可使用一次。在 ShardDog 中打开并使用通行密钥注册即可领取。",
   ],
-  "collectibles.membership": [
+  "collectibles.membershipShardDog": [
     "Membership ShardDog",
     "ShardDog de membresía",
     "ShardDog d’adhésion",

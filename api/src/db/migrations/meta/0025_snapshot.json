@@ -1,6 +1,6 @@
 {
   "id": "5ec9aa48-a50a-4bd5-806a-3abd0bb6685a",
-  "prevId": "16029ba9-a55a-4c74-8eb4-4a4a1de195ef",
+  "prevId": "8941d39d-4415-42b6-9d1a-a8a1d3451934",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1556,6 +1556,21 @@
           "columns": [
             {
               "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sharddog_awards_account": {
+          "name": "sharddog_awards_account",
+          "columns": [
+            {
+              "expression": "account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
