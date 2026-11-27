@@ -128,6 +128,8 @@ export const validators = pgTable(
   }),
 );
 
+export const ONE_PRIMARY_BINDING_INDEX = "domain_bindings_one_primary_per_tenant_idx";
+
 export const domainBindings = pgTable(
   "domain_bindings",
   {
@@ -145,7 +147,7 @@ export const domainBindings = pgTable(
   },
   (table) => ({
     tenantIdx: index("domain_bindings_tenant_idx").on(table.tenantId),
-    onePrimaryPerTenantIdx: uniqueIndex("domain_bindings_one_primary_per_tenant_idx")
+    onePrimaryPerTenantIdx: uniqueIndex(ONE_PRIMARY_BINDING_INDEX)
       .on(table.tenantId)
       .where(sql`is_primary = true`),
   }),
@@ -433,6 +435,7 @@ export const sharddogAwards = pgTable(
     accountId: text("account_id"),
     status: sharddogAwardStatus("status").default("pending").notNull(),
     viewUrl: text("view_url"),
+    claimUrl: text("claim_url"),
     attempts: integer("attempts").default(0).notNull(),
     lastError: text("last_error"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
@@ -447,6 +450,7 @@ export const sharddogAwards = pgTable(
       .on(t.organizationId, t.userId, t.eventId)
       .where(sql`kind = 'event'`),
     userIdx: index("sharddog_awards_user").on(t.userId),
+    accountIdx: index("sharddog_awards_account").on(t.accountId),
     pendingIdx: index("sharddog_awards_pending").on(t.status, t.organizationId),
   }),
 );

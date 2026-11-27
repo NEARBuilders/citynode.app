@@ -1,4 +1,4 @@
-const YOCTO_PER_NEAR = 10n ** 24n;
+export const YOCTO_PER_NEAR = 10n ** 24n;
 const MAX_U128 = (1n << 128n) - 1n;
 
 export function parseNearAmount(value: string): bigint | null {

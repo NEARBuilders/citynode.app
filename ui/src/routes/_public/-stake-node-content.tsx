@@ -45,7 +45,7 @@ export function StakeNodeContent({
         title={translate("community.notFound")}
         description={translate("community.notFoundDescription")}
         action={
-          <Button nativeButton={false} render={<Link to="/stake" />}>
+          <Button nativeButton={false} render={<Link to="/stake" search={{ all: true }} />}>
             {translate("community.seeAll")}
           </Button>
         }

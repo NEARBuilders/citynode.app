@@ -20,12 +20,49 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Connectez un compte NEAR pour récupérer votre ShardDog",
     "连接 NEAR 账户以领取你的 ShardDog",
   ],
-  "collectibles.membership": [
+  "collectibles.claimInShardDog": [
+    "Claim in ShardDog",
+    "Reclamar en ShardDog",
+    "Récupérer dans ShardDog",
+    "在 ShardDog 中领取",
+  ],
+  "collectibles.claimHint": [
+    "This link works once. Open it in ShardDog and sign up with a passkey to collect.",
+    "Este enlace funciona una vez. Ábrelo en ShardDog y regístrate con una passkey para recogerlo.",
+    "Ce lien ne fonctionne qu’une fois. Ouvrez-le dans ShardDog et inscrivez-vous avec une passkey pour le récupérer.",
+    "此链接仅可使用一次。在 ShardDog 中打开并使用通行密钥注册即可领取。",
+  ],
+  "collectibles.membershipShardDog": [
     "Membership ShardDog",
     "ShardDog de membresía",
     "ShardDog d’adhésion",
     "会员 ShardDog",
   ],
+  "collectibles.profileTitle": [
+    "City Node collectibles",
+    "Coleccionables de City Node",
+    "Objets de collection City Node",
+    "City Node 收藏品",
+  ],
+  "collectibles.profileDescription": [
+    "ShardDogs collected by checking in at City Node events.",
+    "ShardDogs conseguidos al registrarse en eventos de City Node.",
+    "ShardDogs obtenus en s’enregistrant aux événements City Node.",
+    "在 City Node 活动签到获得的 ShardDog。",
+  ],
+  "collectibles.profileEmpty": [
+    "No City Node collectibles yet.",
+    "Todavía no hay coleccionables de City Node.",
+    "Pas encore d’objets de collection City Node.",
+    "还没有 City Node 收藏品。",
+  ],
+  "collectibles.profileLoadFailed": [
+    "Couldn’t load collectibles.",
+    "No se pudieron cargar los coleccionables.",
+    "Impossible de charger les objets de collection.",
+    "无法加载收藏品。",
+  ],
+  "collectibles.collectedOn": ["Collected", "Conseguido el", "Obtenu le", "获得于"],
   "collectibles.membershipHint": [
     "From your first check-in at {community}",
     "De tu primer check-in en {community}",
@@ -1147,11 +1184,11 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Le staking va aux validateurs de cette communauté.",
     "质押将分配给此社区的验证节点。",
   ],
-  "dashboard.startCommunity": [
-    "Start a community",
-    "Crear una comunidad",
-    "Créer une communauté",
-    "创建社区",
+  "dashboard.makeOfficial": [
+    "Make a community official",
+    "Oficializar una comunidad",
+    "Officialiser une communauté",
+    "申请成为官方社区",
   ],
   "dashboard.subcommunities": ["Sub-communities", "Subcomunidades", "Sous-communautés", "子社区"],
   "dashboard.switchCommunity": [
@@ -1993,6 +2030,12 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "开始一个站点，让参与者扫码在应用中加入你的社区。",
   ],
   "setup.qr.action": ["Start station", "Iniciar estación", "Lancer une station", "开始站点"],
+  "workspace.notInCommunity": [
+    "That community's dashboard is only for its members. If you belong to it, switch to it first.",
+    "El panel de esa comunidad es solo para sus miembros. Si perteneces a ella, cámbiate a ella primero.",
+    "Le tableau de bord de cette communauté est réservé à ses membres. Si vous en faites partie, passez d’abord à celle-ci.",
+    "该社区的控制台仅对其成员开放。如果你是成员，请先切换到该社区。",
+  ],
   "workspace.ownersOnly": [
     "Only community owners, admins and members of a team with the Events area can manage events and stations, and only owners and admins can change the profile. Ask an owner to add you to an events team or make you an admin.",
     "Solo los propietarios, administradores y miembros de un equipo con el área de Eventos pueden gestionar eventos y estaciones, y solo los propietarios y administradores pueden cambiar el perfil. Pide a un propietario que te añada a un equipo de eventos o te haga administrador.",
@@ -2049,11 +2092,17 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "common.wallet": ["Wallet", "Cartera", "Portefeuille", "钱包"],
   "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
-  "members.lastUpdated": [
-    "Last updated",
-    "Última actualización",
-    "Dernière mise à jour",
-    "最后更新",
+  "members.countAsOf": [
+    "as of <date></date>",
+    "al <date></date>",
+    "au <date></date>",
+    "截至<date></date>",
+  ],
+  "members.countAsOfHint": [
+    "Counted the last time a member opened this community. It isn't a live count.",
+    "Contado la última vez que un miembro abrió esta comunidad. No es un recuento en vivo.",
+    "Compté la dernière fois qu'un membre a ouvert cette communauté. Ce n'est pas un décompte en direct.",
+    "按成员上次打开该社区时统计，并非实时人数。",
   ],
   "members.loadFailed": [
     "Couldn't load the member list.",

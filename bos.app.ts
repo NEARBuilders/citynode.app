@@ -56,6 +56,8 @@ export default App({
           url: "/api/communities/by-organization/{organizationId}",
         },
       },
+      // TODO(everything-dev#914): switch to false once the off switch stops sending LIMIT Infinity to better-auth.
+      organizationMembershipLimit: 100000,
       deviceLink: {
         clientId: "citynode-web",
       },

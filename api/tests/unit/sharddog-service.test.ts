@@ -24,6 +24,8 @@ function freshLayer(award: ShardDogClient["award"]): Layer.Layer<Tags, DatabaseE
   const database = DatabaseLive(temp.url);
   const client: ShardDogClient = {
     mode: "stub",
+    dropUrl: (dropId) => `https://shard.dog/drops/${dropId}`,
+    describeDrop: async () => null,
     award,
     createClaimLink: async () => ({ claimUrl: "https://shard.dog/claim/x" }),
   };

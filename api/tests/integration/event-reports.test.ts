@@ -169,6 +169,45 @@ describe("event reports", () => {
     }
   });
 
+  it("takes an organizer from creating an event to its submitted report", async () => {
+    const id = crypto.randomUUID().slice(0, 8);
+    const org = `started-${id}`;
+    const { node } = await activateTestNode({
+      name: "Started city",
+      slug: `started-city-${id}`,
+      kind: "city",
+      orgId: org,
+    });
+    const organizer = await getPluginClient(memberWithTeam(`organizer-${id}`, org, ["events"]));
+
+    const created = await organizer.saveDiscoveryActivity(
+      eventInput(node.id, {
+        status: "published",
+        startsAt: new Date(Date.now() - 5 * HOUR).toISOString(),
+        endsAt: new Date(Date.now() - 2 * HOUR).toISOString(),
+      }),
+    );
+    expect(
+      (await organizer.listDiscoveryActivities({ nodeId: node.id })).map((item) => item.id),
+    ).toContain(created.id);
+    expect(await organizer.listEventReportStatuses({ nodeId: node.id })).toEqual([]);
+
+    expect(await organizer.getEventReport({ activityId: created.id })).toEqual({
+      report: null,
+      canEdit: true,
+      canReview: false,
+    });
+    const saved = await organizer.saveEventReport({ activityId: created.id, report });
+    expect(saved).toMatchObject({
+      activityId: created.id,
+      source: "app",
+      report: { attendees: 42 },
+    });
+    expect(await organizer.listEventReportStatuses({ nodeId: node.id })).toEqual([
+      { activityId: created.id, submittedAt: saved.submittedAt, source: "app", reviewedAt: null },
+    ]);
+  });
+
   it("lets platform admins mark a report reviewed, which the community sees and an edit clears", async () => {
     const { node, owner } = await community();
     const ended = await owner.saveDiscoveryActivity(

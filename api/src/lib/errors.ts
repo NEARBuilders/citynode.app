@@ -12,9 +12,11 @@ interface PostgresError {
   constraint?: string;
 }
 
-export function isUniqueViolation(error: unknown): boolean {
+export function isUniqueViolation(error: unknown, constraint?: string): boolean {
   if (!error || typeof error !== "object") return false;
   const cause = (error as { cause?: unknown }).cause ?? error;
   const candidate = cause as PostgresError;
-  return candidate.code === "23505";
+  return (
+    candidate.code === "23505" && (constraint === undefined || candidate.constraint === constraint)
+  );
 }

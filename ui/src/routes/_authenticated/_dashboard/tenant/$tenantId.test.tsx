@@ -190,7 +190,7 @@ const apiClient = {
   auth: {
     listOrganizations: vi.fn(async () => []),
     getContext: vi.fn(async () => null),
-    listMembers: vi.fn(async () => ({ members: [{ userId: USER_ID, role: "owner" }] })),
+    getActiveMemberRole: vi.fn(async () => ({ role: "owner" })),
   },
 };
 

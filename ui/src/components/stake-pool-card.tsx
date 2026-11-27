@@ -12,6 +12,7 @@ import { presentationLabel } from "@/lib/presentation-label";
 
 import {
   formatNearBalance,
+  formatNearTotal,
   formatPoolFee,
   isFullCommission,
   stakePoolStatsQueryOptions,
@@ -149,11 +150,11 @@ function NearPoolStats({ accountId, network }: { accountId: string; network: str
 
   return (
     <>
-      <dl className="grid grid-cols-3 gap-4">
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)_minmax(0,1fr)] gap-4">
         <Metric
           label={translate("stake.total")}
           loading={stats.isLoading}
-          value={statsData && formatNearBalance(statsData.totalStaked, locale)}
+          value={statsData && formatNearTotal(statsData.totalStaked, locale)}
         />
         <Metric
           label={translate("stake.fee")}
@@ -238,7 +239,7 @@ function Metric({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="break-words text-xl font-semibold tabular-nums sm:text-2xl">
+      <dd className="whitespace-nowrap text-xl font-semibold tabular-nums sm:text-2xl">
         {loading ? (
           <Skeleton
             aria-label={translate("common.loadingNamed", { name: label ?? "" })}
