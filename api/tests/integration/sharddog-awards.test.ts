@@ -91,7 +91,12 @@ const authStub = {
 const HOUR = 3_600_000;
 const past = (hours: number) => new Date(Date.now() - hours * HOUR);
 
-function eventInput(ownerNodeId: string, title: string, startsAt: Date) {
+function eventInput(
+  ownerNodeId: string,
+  title: string,
+  startsAt: Date,
+  status: "published" | "draft" = "published",
+) {
   return {
     ownerNodeId,
     nodeIds: [ownerNodeId],
@@ -105,7 +110,7 @@ function eventInput(ownerNodeId: string, title: string, startsAt: Date) {
     endsAt: new Date(startsAt.getTime() + 3 * HOUR).toISOString(),
     timezone: "UTC",
     venue: "Town Hall",
-    status: "published" as const,
+    status,
   };
 }
 
@@ -135,11 +140,27 @@ async function community() {
   });
   return {
     org,
-    addEvent: async (title: string, dropId: string | null) => {
-      const event = await editor.saveDiscoveryActivity(eventInput(node.id, title, past(24)));
+    addEvent: async (
+      title: string,
+      dropId: string | null,
+      status: "published" | "draft" = "published",
+    ) => {
+      const event = await editor.saveDiscoveryActivity(
+        eventInput(node.id, title, past(24), status),
+      );
       if (dropId) await admin.setShardDogDrop({ organizationId: org, eventId: event.id, dropId });
       return event;
     },
+    updateEvent: (
+      event: Awaited<ReturnType<typeof editor.saveDiscoveryActivity>>,
+      change: { status: "cancelled" },
+    ) =>
+      editor.saveDiscoveryActivity({
+        ...eventInput(node.id, event.title, new Date(event.startsAt ?? Date.now())),
+        id: event.id,
+        url: event.url,
+        ...change,
+      }),
     setMembershipDrop: (dropId: string) => admin.setShardDogDrop({ organizationId: org, dropId }),
     setEventDrop: (eventId: string, dropId: string | null) =>
       admin.setShardDogDrop({ organizationId: org, eventId, dropId }),
@@ -409,5 +430,106 @@ describe("ShardDog awards on event check-in", () => {
     expect(
       (await (await attendee(userId)).getMyCollectibles({ organizationId: city.org })).collectibles,
     ).toEqual([]);
+  });
+});
+
+describe("A NEAR account's City Node collectibles on its profile", () => {
+  const visitor = () => getPluginClient();
+
+  it("lists awarded badges newest first for anyone, with their View in ShardDog links", async () => {
+    const city = await community();
+    await city.setMembershipDrop("profile-member");
+    const first = await city.addEvent("Builders night", "profile-night");
+    const second = await city.addEvent("Hack day", "profile-hack");
+    const userId = `lin-${crypto.randomUUID().slice(0, 6)}`;
+    const accountId = `lin-${crypto.randomUUID().slice(0, 6)}.testnet`;
+
+    city.checkIn(first.id, userId, accountId);
+    await city.sync();
+    await untilStatuses(userId, city.org, ["awarded", "awarded"]);
+    await new Promise((done) => setTimeout(done, 20));
+    city.checkIn(second.id, userId, accountId);
+    await city.sync();
+    await untilStatuses(userId, city.org, ["awarded", "awarded", "awarded"]);
+
+    const result = await (await visitor()).getAccountCollectibles({ accountId });
+    expect(result.enabled).toBe(true);
+    expect(result.collectibles[0]).toMatchObject({
+      organizationId: city.org,
+      communityName: "Awards city",
+      kind: "event",
+      eventId: second.id,
+      eventTitle: "Hack day",
+      viewUrl: `https://shard.dog/view/profile-hack/${accountId}`,
+    });
+    expect(
+      result.collectibles
+        .map(({ kind, eventTitle }) => [kind, eventTitle])
+        .slice(1)
+        .sort(),
+    ).toEqual([
+      ["event", "Builders night"],
+      ["membership", null],
+    ]);
+    const times = result.collectibles.map(({ awardedAt }) => Date.parse(awardedAt));
+    expect([...times].sort((a, b) => b - a)).toEqual(times);
+  });
+
+  it("shows nothing for an account with no awarded badges", async () => {
+    const result = await (await visitor()).getAccountCollectibles({
+      accountId: `nobody-${crypto.randomUUID().slice(0, 6)}.testnet`,
+    });
+    expect(result).toEqual({ enabled: true, collectibles: [] });
+  });
+
+  it("leaves out pending awards", async () => {
+    const city = await community();
+    await city.setMembershipDrop("profile-pending");
+    const event = await city.addEvent("Workshop", "profile-pending-event");
+    const userId = `kay-${crypto.randomUUID().slice(0, 6)}`;
+    const accountId = `kay-${crypto.randomUUID().slice(0, 6)}.testnet`;
+    shardDog.failing = true;
+
+    city.checkIn(event.id, userId, accountId);
+    await city.sync();
+    await settle();
+
+    expect(await statuses(userId, city.org)).toEqual(["pending", "pending"]);
+    expect((await (await visitor()).getAccountCollectibles({ accountId })).collectibles).toEqual(
+      [],
+    );
+  });
+
+  it("keeps a badge from an event cancelled after check-in", async () => {
+    const city = await community();
+    const event = await city.addEvent("Rained out", "profile-cancelled");
+    const userId = `sam-${crypto.randomUUID().slice(0, 6)}`;
+    const accountId = `sam-${crypto.randomUUID().slice(0, 6)}.testnet`;
+
+    city.checkIn(event.id, userId, accountId);
+    await city.sync();
+    await untilStatuses(userId, city.org, ["awarded"]);
+    await city.updateEvent(event, { status: "cancelled" });
+
+    expect(
+      (await (await visitor()).getAccountCollectibles({ accountId })).collectibles.map(
+        ({ eventTitle }) => eventTitle,
+      ),
+    ).toEqual(["Rained out"]);
+  });
+
+  it("hides event badges from events that aren't published", async () => {
+    const city = await community();
+    const draft = await city.addEvent("Private dinner", "profile-draft", "draft");
+    const userId = `ray-${crypto.randomUUID().slice(0, 6)}`;
+    const accountId = `ray-${crypto.randomUUID().slice(0, 6)}.testnet`;
+
+    city.checkIn(draft.id, userId, accountId);
+    await city.sync();
+    await untilStatuses(userId, city.org, ["awarded"]);
+
+    expect((await (await visitor()).getAccountCollectibles({ accountId })).collectibles).toEqual(
+      [],
+    );
   });
 });

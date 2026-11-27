@@ -8,6 +8,7 @@ export const attendanceQueryKeys = {
     [...attendanceQueryKeys.records(), organizationId] as const,
   collectibles: (organizationId: string | null) =>
     [...attendanceQueryKeys.records(), "collectibles", organizationId] as const,
+  account: (accountId: string) => [...attendanceQueryKeys.all, "account", accountId] as const,
   reconcile: (organizationId: string) =>
     [...attendanceQueryKeys.all, "reconcile", organizationId] as const,
 };
@@ -42,5 +43,14 @@ export function collectiblesQueryOptions(apiClient: ApiClient, organizationId: s
       query.state.dataUpdateCount < 12
         ? 5_000
         : false,
+  });
+}
+
+export function accountCollectiblesQueryOptions(apiClient: ApiClient, accountId: string) {
+  return queryOptions({
+    queryKey: attendanceQueryKeys.account(accountId),
+    queryFn: () => apiClient.getAccountCollectibles({ accountId }),
+    staleTime: 60_000,
+    retry: false,
   });
 }

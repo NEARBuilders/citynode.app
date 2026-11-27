@@ -1,5 +1,5 @@
 import type { ORPCError } from "@orpc/server";
-import { and, eq, exists, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Clock, Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -34,6 +34,14 @@ export interface CollectibleAward {
   hasAccount: boolean;
 }
 
+export interface AwardedCollectible {
+  organizationId: string;
+  kind: (typeof sharddogAwards.$inferSelect)["kind"];
+  eventId: string | null;
+  viewUrl: string;
+  awardedAt: Date;
+}
+
 const DETAILS_TTL_MS = 10 * 60_000;
 const FAILED_DETAILS_TTL_MS = 60_000;
 const DETAILS_CACHE_LIMIT = 500;
@@ -57,6 +65,7 @@ export interface ShardDogService {
   queueAwards(organizationId: string): ShardDogEffect<void>;
   deliverAwards(filter: { organizationId?: string; userId?: string }): ShardDogEffect<void>;
   awardsFor(userId: string, organizationId?: string): ShardDogEffect<CollectibleAward[]>;
+  awardedToAccount(accountId: string): ShardDogEffect<AwardedCollectible[]>;
 }
 
 export class ShardDogTag extends Context.Service<ShardDogTag, ShardDogService>()("api/ShardDog") {}
@@ -437,6 +446,40 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
               viewUrl: row.viewUrl,
               hasAccount: !!row.accountId,
             }));
+          }),
+        awardedToAccount: (accountId) =>
+          query(async () => {
+            const rows = await db
+              .select({
+                organizationId: sharddogAwards.organizationId,
+                kind: sharddogAwards.kind,
+                eventId: sharddogAwards.eventId,
+                viewUrl: sharddogAwards.viewUrl,
+                awardedAt: sharddogAwards.awardedAt,
+              })
+              .from(sharddogAwards)
+              .where(
+                and(
+                  eq(sharddogAwards.accountId, accountId),
+                  eq(sharddogAwards.status, "awarded"),
+                  isNotNull(sharddogAwards.viewUrl),
+                  isNotNull(sharddogAwards.awardedAt),
+                ),
+              )
+              .orderBy(desc(sharddogAwards.awardedAt), desc(sharddogAwards.id));
+            return rows.flatMap((row) =>
+              row.viewUrl && row.awardedAt
+                ? [
+                    {
+                      organizationId: row.organizationId,
+                      kind: row.kind,
+                      eventId: row.eventId,
+                      viewUrl: row.viewUrl,
+                      awardedAt: row.awardedAt,
+                    },
+                  ]
+                : [],
+            );
           }),
       };
 

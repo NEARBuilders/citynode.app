@@ -11,6 +11,22 @@ export function collectibleKey(organizationId: string, eventId: string | null) {
   return `${organizationId}:${eventId ?? "membership"}`;
 }
 
+export function ShardDogViewLink({ href, testId }: { href: string; testId: string }) {
+  const translate = useAppTranslation();
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      nativeButton={false}
+      render={(props) => <a {...props} href={href} target="_blank" rel="noopener noreferrer" />}
+      data-testid={testId}
+    >
+      {translate("collectibles.viewInShardDog")}
+      <ArrowSquareOutIcon />
+    </Button>
+  );
+}
+
 export function ShardDogCollectible({
   collectible,
   testId,
@@ -20,21 +36,7 @@ export function ShardDogCollectible({
 }) {
   const translate = useAppTranslation();
   if (collectible.status === "awarded" && collectible.viewUrl) {
-    const viewUrl = collectible.viewUrl;
-    return (
-      <Button
-        size="sm"
-        variant="outline"
-        nativeButton={false}
-        render={(props) => (
-          <a {...props} href={viewUrl} target="_blank" rel="noopener noreferrer" />
-        )}
-        data-testid={`${testId}-view`}
-      >
-        {translate("collectibles.viewInShardDog")}
-        <ArrowSquareOutIcon />
-      </Button>
-    );
+    return <ShardDogViewLink href={collectible.viewUrl} testId={`${testId}-view`} />;
   }
   return (
     <span className="text-sm text-muted-foreground" data-testid={`${testId}-${collectible.status}`}>
