@@ -49,10 +49,12 @@ export interface SidebarItem {
   section?: SidebarSection;
   group?: string;
   order?: number;
+  pending?: boolean;
 }
 
 export interface NavContext {
   hasOrganization?: boolean;
+  membershipPending?: boolean;
   canCurate?: boolean;
   isAdmin?: boolean;
 }
@@ -177,6 +179,7 @@ export function buildNavItems(
             activePrefixes: ["/dashboard/node", "/nodes/", "/tenant/", "/orgs"],
             roleRequired: "member" as const,
             section: "main" as const,
+            ...(context.membershipPending ? { pending: true } : {}),
           },
         ]),
     {

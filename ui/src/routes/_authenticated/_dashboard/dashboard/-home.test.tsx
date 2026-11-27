@@ -22,6 +22,7 @@ const harness = vi.hoisted(() => ({
     metadata?: unknown;
   }[],
   organizationsFail: false,
+  organizationsGate: null as Promise<void> | null,
   tenants: { "org-1": "Example Community" } as Record<string, string>,
   nodes: [] as { id: string; name: string; metadata: Record<string, unknown> }[],
   nodesByTenant: {} as Record<
@@ -76,6 +77,7 @@ const api = {
   auth: {
     listOrganizations: async () => {
       if (harness.organizationsFail) throw new Error("organizations unavailable");
+      if (harness.organizationsGate) await harness.organizationsGate;
       return harness.organizations;
     },
     listUserInvitations: async () => [],
@@ -167,6 +169,7 @@ afterEach(() => {
   harness.activeOrganizationId = null;
   harness.organizations = [];
   harness.organizationsFail = false;
+  harness.organizationsGate = null;
   harness.tenants = { "org-1": "Example Community" };
   harness.nodes = [];
   harness.nodesByTenant = {};
@@ -502,6 +505,25 @@ describe("Home with cached memberships", () => {
     expect(await screen.findByTestId("home-step-choose-org")).toBeTruthy();
     expect(screen.queryByText("Bulletin for Hackathon node-nyc")).toBeNull();
     expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it("shows placeholders, not a guessed next step, until a stale list has refreshed", async () => {
+    let release = () => {};
+    harness.organizationsGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    harness.user = member;
+    harness.activeOrganizationId = delta.id;
+    harness.organizations = [personal, delta];
+    harness.tenants = {};
+    renderHome({ client: cachedClient(member.id, [personal]) });
+
+    expect(await screen.findByTestId("home-next-steps-loading")).toBeTruthy();
+    expect(screen.queryByTestId("home-next-steps")).toBeNull();
+
+    release();
+    expect(await screen.findByTestId("home-next-steps")).toBeTruthy();
+    expect(screen.queryByTestId("home-next-steps-loading")).toBeNull();
   });
 
   it("keeps the selected community while a stale list refreshes", async () => {
