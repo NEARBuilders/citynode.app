@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { AuthClient } from "@/app";
-import { AuthClientError, appErrorMessage } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage, leaveOrganizationError } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { orgMembersQueryKey } from "./-organization-query-keys";
 
@@ -35,7 +35,7 @@ export function useOrganizationSettings(
   const leaveOrgMutation = useMutation({
     mutationFn: async () => {
       const { error } = await auth.organization.leave({ organizationId: orgId });
-      if (error) throw new AuthClientError(error);
+      if (error) throw leaveOrganizationError(error);
     },
     onSuccess: async () => {
       toast.success(translate("org.left"));

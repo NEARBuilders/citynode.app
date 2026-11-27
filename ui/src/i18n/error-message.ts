@@ -97,9 +97,17 @@ function stakingPoolErrorMessage(error: unknown): AppMessageId | null {
 
 const AUTH_CODE_MESSAGES: Partial<Record<string, AppMessageId>> = {
   ORGANIZATION_SLUG_ALREADY_TAKEN: "org.handleTakenError",
-  YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER: "org.leaveOnlyOwner",
-  YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER: "org.leaveOnlyOwner",
 };
+
+export function leaveOrganizationError(error: {
+  message?: string;
+  status?: number;
+  code?: string;
+}) {
+  return error.code === "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER"
+    ? new AppActionError("org.leaveOnlyOwner")
+    : new AuthClientError(error);
+}
 
 function authCodeMessage(error: unknown): AppMessageId | undefined {
   const { code } = errorStatusAndCode(error);

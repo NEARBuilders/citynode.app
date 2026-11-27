@@ -7,6 +7,7 @@ import {
   isPermissionError,
   isSessionError,
   isWalletCancelled,
+  leaveOrganizationError,
 } from "./error-message";
 import { translateAppMessage } from "./runtime";
 
@@ -103,7 +104,7 @@ describe("localized action failures", () => {
     expect(isWalletCancelled(new Error("Smart contract panicked"))).toBe(false);
   });
 
-  it("explains a taken handle and a sole owner leaving instead of a generic failure", () => {
+  it("explains a taken handle instead of a generic failure", () => {
     const t = ((id: string) => id) as AppTranslator;
     expect(
       appErrorMessage(
@@ -115,17 +116,19 @@ describe("localized action failures", () => {
         t,
       ),
     ).toBe("org.handleTakenError");
-    for (const code of [
-      "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER",
-      "YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER",
-    ]) {
-      expect(appErrorMessage(new AuthClientError({ status: 400, code }), t)).toBe(
-        "org.leaveOnlyOwner",
-      );
-    }
     expect(appErrorMessage(new AuthClientError({ status: 400, code: "BAD_REQUEST" }), t)).toBe(
       "error.action",
     );
+  });
+
+  it("says the sole owner can't leave only when leaving, not when removing an owner", () => {
+    const t = ((id: string) => id) as AppTranslator;
+    const onlyOwner = { status: 400, code: "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER" };
+    expect(appErrorMessage(leaveOrganizationError(onlyOwner), t)).toBe("org.leaveOnlyOwner");
+    expect(appErrorMessage(new AuthClientError(onlyOwner), t)).toBe("error.action");
+    expect(
+      appErrorMessage(leaveOrganizationError({ status: 400, code: "MEMBER_NOT_FOUND" }), t),
+    ).toBe("error.action");
   });
 
   it("explains a rejected or unverifiable staking pool instead of a generic failure", () => {
