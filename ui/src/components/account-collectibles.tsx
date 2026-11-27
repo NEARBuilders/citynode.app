@@ -68,7 +68,7 @@ export function AccountCollectibles({
               </ItemMedia>
               <ItemContent className="min-w-0">
                 <ItemTitle className="break-words">
-                  {collectible.eventTitle ?? translate("collectibles.membership")}
+                  {collectible.eventTitle ?? translate("collectibles.membershipShardDog")}
                 </ItemTitle>
                 <ItemDescription className="flex flex-col gap-0.5">
                   <span className="break-words">{collectible.communityName}</span>

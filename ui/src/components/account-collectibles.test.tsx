@@ -69,7 +69,7 @@ describe("AccountCollectibles", () => {
     expect(harness.calls).toEqual(["lin.testnet"]);
     expect(list.children).toHaveLength(2);
     expect(list.children[0]?.textContent).toContain("Hack day");
-    expect(list.children[1]?.textContent).toContain("Membership badge");
+    expect(list.children[1]?.textContent).toContain("Membership ShardDog");
     expect(list.textContent).toContain("North city");
     expect(
       screen.getAllByTestId("account.collectibles-view").map((link) => link.getAttribute("href")),
