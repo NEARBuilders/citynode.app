@@ -3,7 +3,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
-import { appErrorMessage } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { tenantQueryKeys } from "@/lib/queries/tenants";
 import {
@@ -36,7 +36,7 @@ export function useOpenCommunity(organizationId: string | null) {
   const { mutate, isError, error, variables } = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await auth.organization.setActive({ organizationId: id });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
     },
     onSuccess: () => refresh(),
     onError: (error, id) => reportError(error, id),

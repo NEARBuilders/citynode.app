@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
-import { appErrorMessage } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import {
   createWorkspaceSynchronization,
@@ -24,7 +24,7 @@ export function useSwitchTeam() {
   const mutation = useMutation({
     mutationFn: async (teamId: string | null) => {
       const { error } = await auth.organization.setActiveTeam({ teamId });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
     },
     onSuccess: async (_, teamId) => {
       await synchronization.synchronize();

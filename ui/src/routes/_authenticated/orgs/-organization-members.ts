@@ -1,7 +1,7 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { type ApiClient, type AuthClient, useApiClient } from "@/app";
-import { appErrorMessage, isPermissionError } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage, isPermissionError } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { MemberCardMember } from "./-member-card";
 import { orgActiveRoleQueryKey, orgMembersQueryKey } from "./-organization-query-keys";
@@ -75,7 +75,7 @@ export function useOrganizationMemberActions(auth: AuthClient, orgId: string) {
         memberIdOrEmail,
         organizationId: orgId,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
     },
     onSuccess: async () => {
       toast.success(translate("org.memberRemoved"));

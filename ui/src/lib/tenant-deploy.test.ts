@@ -268,6 +268,44 @@ describe("publishTenantConfigForMode", () => {
     expect(result).toEqual({ data: { txHash: "relayed-tx" }, error: null });
   });
 
+  it("keeps the relayer's status and code when the relay is refused", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: {},
+        gas: "300 Tgas",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const auth = {
+      near: {
+        ensureConnected: vi.fn().mockResolvedValue(true),
+        refreshGasKeyInfo: vi.fn().mockResolvedValue(null),
+        buildSignedDelegateAction: vi.fn().mockResolvedValue("signed-payload"),
+        relayTransaction: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: "Session expired", status: 401, code: "UNAUTHORIZED" },
+        }),
+        getRelayerInfo: vi.fn().mockResolvedValue({ data: { enabled: true } }),
+        getAccountId: vi.fn().mockReturnValue("chicago.sputnik-dao.near"),
+        getNetwork: vi.fn().mockReturnValue("mainnet"),
+      },
+    } as unknown as ReturnType<typeof useAuthClient>;
+
+    await expect(
+      publishTenantConfigForMode(makeClient(prepareRegistryConfigWrite), auth, {
+        ...baseInput,
+        mode: "platform",
+      }),
+    ).rejects.toMatchObject({
+      _tag: "AuthClientError",
+      message: "Session expired",
+      status: 401,
+      code: "UNAUTHORIZED",
+    });
+  });
+
   it("falls back to the relayer when the gas-key send fails mid-flight", async () => {
     const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
       data: {

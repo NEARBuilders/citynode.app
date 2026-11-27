@@ -2,6 +2,16 @@ import { Data } from "effect";
 import { FEATURE_AREA_MESSAGES, isFeatureArea } from "@/lib/feature-areas";
 import type { AppMessageId, AppTranslator } from "./catalogs";
 
+export class AuthClientError extends Data.TaggedError("AuthClientError")<{
+  message: string;
+  status?: number;
+  code?: string;
+}> {
+  constructor(error: { message?: string; status?: number; code?: string }) {
+    super({ message: error.message ?? "", status: error.status, code: error.code });
+  }
+}
+
 export class AppActionError extends Data.TaggedError("AppActionError")<{
   messageId: AppMessageId;
   values?: Record<string, string | number>;
@@ -85,6 +95,25 @@ function stakingPoolErrorMessage(error: unknown): AppMessageId | null {
   return null;
 }
 
+const AUTH_CODE_MESSAGES: Partial<Record<string, AppMessageId>> = {
+  ORGANIZATION_SLUG_ALREADY_TAKEN: "org.handleTakenError",
+};
+
+export function leaveOrganizationError(error: {
+  message?: string;
+  status?: number;
+  code?: string;
+}) {
+  return error.code === "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER"
+    ? new AppActionError("org.leaveOnlyOwner")
+    : new AuthClientError(error);
+}
+
+function authCodeMessage(error: unknown): AppMessageId | undefined {
+  const { code } = errorStatusAndCode(error);
+  return typeof code === "string" ? AUTH_CODE_MESSAGES[code] : undefined;
+}
+
 function deniedFeatureArea(error: unknown) {
   const data = errorData(error);
   const required = data ? Reflect.get(data, "requiredPermissions") : undefined;
@@ -105,6 +134,8 @@ export function appErrorMessage(
       ? t("permissions.teamDenied", { area: t(FEATURE_AREA_MESSAGES[area]) })
       : t("error.permission");
   }
+  const authMessage = authCodeMessage(error);
+  if (authMessage) return t(authMessage);
   if (isConflictError(error)) return t("error.conflict");
   if (isNearUnavailableError(error)) return t("error.nearUnavailable");
   const stakingPoolMessage = stakingPoolErrorMessage(error);

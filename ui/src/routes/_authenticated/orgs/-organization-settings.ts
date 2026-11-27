@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { AuthClient } from "@/app";
-import { appErrorMessage } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage, leaveOrganizationError } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { orgMembersQueryKey } from "./-organization-query-keys";
 
@@ -22,7 +22,7 @@ export function useOrganizationSettings(
         organizationId: orgId,
         data: { name, slug },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
     },
     onSuccess: async (_, { slug }) => {
       toast.success(translate("org.updated"));
@@ -35,7 +35,7 @@ export function useOrganizationSettings(
   const leaveOrgMutation = useMutation({
     mutationFn: async () => {
       const { error } = await auth.organization.leave({ organizationId: orgId });
-      if (error) throw new Error(error.message);
+      if (error) throw leaveOrganizationError(error);
     },
     onSuccess: async () => {
       toast.success(translate("org.left"));
@@ -47,7 +47,7 @@ export function useOrganizationSettings(
   const deleteOrgMutation = useMutation({
     mutationFn: async () => {
       const { error } = await auth.organization.delete({ organizationId: orgId });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
     },
     onSuccess: async () => {
       toast.success(translate("org.deleted"));

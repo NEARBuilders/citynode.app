@@ -21,7 +21,7 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
-import { appErrorMessage } from "@/i18n/error-message";
+import { AuthClientError, appErrorMessage } from "@/i18n/error-message";
 import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n/runtime";
 import { pageTitle } from "@/lib/page-title";
 import { deriveSlug, generateSlug, suggestAvailableSlug } from "@/lib/slug";
@@ -67,7 +67,7 @@ function NewOrganization() {
         name: values.name,
         slug: values.slug,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new AuthClientError(error);
       return data;
     },
     onSuccess: async (data) => {

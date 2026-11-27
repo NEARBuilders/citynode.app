@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { APP_LOCALES, type AppTranslator } from "./catalogs";
 import {
   AppActionError,
+  AuthClientError,
   appErrorMessage,
   isPermissionError,
   isSessionError,
   isWalletCancelled,
+  leaveOrganizationError,
 } from "./error-message";
 import { translateAppMessage } from "./runtime";
 
@@ -100,6 +102,33 @@ describe("localized action failures", () => {
       true,
     );
     expect(isWalletCancelled(new Error("Smart contract panicked"))).toBe(false);
+  });
+
+  it("explains a taken handle instead of a generic failure", () => {
+    const t = ((id: string) => id) as AppTranslator;
+    expect(
+      appErrorMessage(
+        new AuthClientError({
+          message: "Organization slug already taken",
+          status: 400,
+          code: "ORGANIZATION_SLUG_ALREADY_TAKEN",
+        }),
+        t,
+      ),
+    ).toBe("org.handleTakenError");
+    expect(appErrorMessage(new AuthClientError({ status: 400, code: "BAD_REQUEST" }), t)).toBe(
+      "error.action",
+    );
+  });
+
+  it("says the sole owner can't leave only when leaving, not when removing an owner", () => {
+    const t = ((id: string) => id) as AppTranslator;
+    const onlyOwner = { status: 400, code: "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER" };
+    expect(appErrorMessage(leaveOrganizationError(onlyOwner), t)).toBe("org.leaveOnlyOwner");
+    expect(appErrorMessage(new AuthClientError(onlyOwner), t)).toBe("error.action");
+    expect(
+      appErrorMessage(leaveOrganizationError({ status: 400, code: "MEMBER_NOT_FOUND" }), t),
+    ).toBe("error.action");
   });
 
   it("explains a rejected or unverifiable staking pool instead of a generic failure", () => {
