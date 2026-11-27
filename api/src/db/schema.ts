@@ -184,7 +184,7 @@ export const discoveryActivities = pgTable(
     placeIdx: index("discovery_activities_place_idx").on(table.placeId),
     manualUrl: uniqueIndex("discovery_manual_url")
       .on(table.canonicalUrl)
-      .where(sql`${table.data}->'luma' IS NULL`),
+      .where(sql`${table.data}->'luma' IS NULL AND ${table.ownerNodeId} IS NOT NULL`),
     lumaNodeUrl: uniqueIndex("discovery_luma_node_url")
       .on(table.ownerNodeId, table.canonicalUrl)
       .where(sql`${table.data}->'luma' IS NOT NULL`),
@@ -236,9 +236,8 @@ export const eventReports = pgTable("event_reports", {
   activityId: uuid("activity_id")
     .primaryKey()
     .references(() => discoveryActivities.id, { onDelete: "cascade" }),
-  nodeId: uuid("node_id")
-    .notNull()
-    .references(() => nodes.id, { onDelete: "cascade" }),
+  nodeId: uuid("node_id").references(() => nodes.id, { onDelete: "set null" }),
+  removedTenantId: uuid("removed_tenant_id").references(() => tenants.id, { onDelete: "set null" }),
   formVersion: integer("form_version").default(1).notNull(),
   report: jsonb("report").$type<import("../discovery-contract").EventReport>().notNull(),
   source: eventReportSource("source").default("app").notNull(),

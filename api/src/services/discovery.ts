@@ -11,9 +11,11 @@ import {
   isNull,
   lt,
   ne,
+  notExists,
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Clock, Context, DateTime, Effect, Layer } from "effect";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
@@ -228,6 +230,8 @@ function lumaVenueKey(event: LumaEvent) {
 }
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+const keptActivities = alias(discoveryActivities, "kept_activities");
 
 async function withdrawLumaRows(tx: Tx, rows: (typeof discoveryActivities.$inferSelect)[]) {
   if (rows.length === 0) return;
@@ -659,11 +663,22 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     );
   });
 
+  const reportsKeptFromRemovedCommunities = (
+    url: string | typeof discoveryActivities.canonicalUrl,
+  ) =>
+    db
+      .select({ activityId: eventReports.activityId })
+      .from(eventReports)
+      .innerJoin(keptActivities, eq(keptActivities.id, eventReports.activityId))
+      .where(and(isNull(eventReports.nodeId), eq(keptActivities.canonicalUrl, url)));
+
   const reportingNodeId = Effect.fn("DiscoveryService.reportingNodeId")(function* (
     activity: PublicActivity,
   ) {
     if (activity.ownerNodeId) return activity.ownerNodeId;
     if (activity.kind !== "event") return null;
+    const [kept] = yield* query(() => reportsKeptFromRemovedCommunities(activity.url).limit(1));
+    if (kept) return null;
     const [report] = yield* query(() =>
       db
         .select({ nodeId: eventReports.nodeId })
@@ -692,6 +707,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
         .where(
           and(
             isNull(discoveryActivities.ownerNodeId),
+            notExists(reportsKeptFromRemovedCommunities(discoveryActivities.canonicalUrl)),
             sql`${data}->>'kind' = 'event'`,
             sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
             or(
@@ -1638,6 +1654,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
             and(
               isNull(discoveryActivities.ownerNodeId),
               isNotNull(discoveryActivities.placeId),
+              notExists(reportsKeptFromRemovedCommunities(discoveryActivities.canonicalUrl)),
               shownActivity(now),
               sql`${data}->>'kind' = 'event'`,
             ),

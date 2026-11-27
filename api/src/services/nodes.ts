@@ -13,6 +13,7 @@ import {
   validators as validatorsTable,
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
+import { keepEventReports } from "../lib/keep-event-reports";
 import { nodeParentEdgesQuery, readNodeParents } from "./places";
 
 export type NodeKind = string;
@@ -684,12 +685,15 @@ export const NodesLive = Layer.effect(
       delete: Effect.fn("NodesService.delete")(function* (id) {
         return yield* query(() =>
           db.transaction(async (tx) => {
-            const [deleted] = await tx
-              .delete(nodesTable)
+            const [node] = await tx
+              .select({ id: nodesTable.id, tenantId: nodesTable.tenantId })
+              .from(nodesTable)
               .where(eq(nodesTable.id, id))
-              .returning({ tenantId: nodesTable.tenantId });
-            if (!deleted) return false;
-            if (deleted.tenantId) await archiveCommunityTenant(tx, deleted.tenantId);
+              .for("update");
+            if (!node) return false;
+            await keepEventReports(tx, node);
+            await tx.delete(nodesTable).where(eq(nodesTable.id, id));
+            if (node.tenantId) await archiveCommunityTenant(tx, node.tenantId);
             return true;
           }),
         );
