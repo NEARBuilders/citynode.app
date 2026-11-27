@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { APP_LOCALES, type AppTranslator } from "./catalogs";
 import {
   AppActionError,
+  AuthClientError,
   appErrorMessage,
   isPermissionError,
   isSessionError,
@@ -100,6 +101,31 @@ describe("localized action failures", () => {
       true,
     );
     expect(isWalletCancelled(new Error("Smart contract panicked"))).toBe(false);
+  });
+
+  it("explains a taken handle and a sole owner leaving instead of a generic failure", () => {
+    const t = ((id: string) => id) as AppTranslator;
+    expect(
+      appErrorMessage(
+        new AuthClientError({
+          message: "Organization slug already taken",
+          status: 400,
+          code: "ORGANIZATION_SLUG_ALREADY_TAKEN",
+        }),
+        t,
+      ),
+    ).toBe("org.handleTakenError");
+    for (const code of [
+      "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER",
+      "YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER",
+    ]) {
+      expect(appErrorMessage(new AuthClientError({ status: 400, code }), t)).toBe(
+        "org.leaveOnlyOwner",
+      );
+    }
+    expect(appErrorMessage(new AuthClientError({ status: 400, code: "BAD_REQUEST" }), t)).toBe(
+      "error.action",
+    );
   });
 
   it("explains a rejected or unverifiable staking pool instead of a generic failure", () => {

@@ -90,6 +90,17 @@ function stakingPoolErrorMessage(error: unknown): AppMessageId | null {
   return null;
 }
 
+const AUTH_CODE_MESSAGES: Partial<Record<string, AppMessageId>> = {
+  ORGANIZATION_SLUG_ALREADY_TAKEN: "org.handleTakenError",
+  YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER: "org.leaveOnlyOwner",
+  YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER: "org.leaveOnlyOwner",
+};
+
+function authCodeMessage(error: unknown): AppMessageId | undefined {
+  const { code } = errorStatusAndCode(error);
+  return typeof code === "string" ? AUTH_CODE_MESSAGES[code] : undefined;
+}
+
 function deniedFeatureArea(error: unknown) {
   const data = errorData(error);
   const required = data ? Reflect.get(data, "requiredPermissions") : undefined;
@@ -111,6 +122,8 @@ export function appErrorMessage(
       ? t("permissions.teamDenied", { area: t(FEATURE_AREA_MESSAGES[area]) })
       : t("error.permission");
   }
+  const authMessage = authCodeMessage(error);
+  if (authMessage) return t(authMessage);
   if (status === 409 || code === "CONFLICT") return t("error.conflict");
   if (isNearUnavailableError(error)) return t("error.nearUnavailable");
   const stakingPoolMessage = stakingPoolErrorMessage(error);

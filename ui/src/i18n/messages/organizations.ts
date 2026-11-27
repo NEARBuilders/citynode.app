@@ -194,6 +194,12 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "用于社区链接。",
   ],
   "org.handleTaken": ["taken", "ocupado", "déjà pris", "已占用"],
+  "org.handleTakenError": [
+    "That handle is taken. Pick another one.",
+    "Ese identificador está ocupado. Elige otro.",
+    "Cet identifiant est déjà pris. Choisissez-en un autre.",
+    "该标识已被占用，请换一个。",
+  ],
   "org.handleTakenHint": [
     "Taken. We'll suggest a free one, or pick your own.",
     "Ocupado. Sugeriremos uno libre o puedes elegir otro.",
@@ -309,6 +315,12 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Necesitarás una nueva invitación para volver a unirte.",
     "Vous aurez besoin d'une nouvelle invitation pour revenir.",
     "重新加入需要新的邀请。",
+  ],
+  "org.leaveOnlyOwner": [
+    "You're the only owner. Make another member an owner before you leave.",
+    "Eres el único propietario. Haz propietario a otro miembro antes de salir.",
+    "Vous êtes le seul propriétaire. Nommez un autre membre propriétaire avant de partir.",
+    "你是唯一的所有者。请先将其他成员设为所有者，再退出。",
   ],
   "org.leaveQuestion": ["Leave {name}?", "¿Salir de {name}?", "Quitter {name} ?", "退出{name}？"],
   "org.left": [
