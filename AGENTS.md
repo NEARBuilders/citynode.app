@@ -345,7 +345,7 @@ The files carrying the `FRAMEWORK-OWNED` header (build configs, db/lib plumbing,
 
 **Editing them is allowed.** When the work needs it, edit a framework-owned file, keep the build/typecheck/tests green — then **file an accompanying issue at https://github.com/NEARBuilders/everything-dev/issues** describing the change so it gets implemented in the framework and shipped in package versions. A local edit without an upstream issue is an undocumented fork that the next upgrade will quietly clobber.
 
-**Module federation pins.** `pnpm-workspace.yaml` pins `@module-federation/*` (catalog and overrides) to the exact versions in the host image's lockfile, because the deploy smoke check (`bos mf check`) fails when a plugin's `pluginVersion` differs from the host's. When you bump everything-dev, set these pins to the versions in that release's `pnpm-lock.yaml`.
+**Module federation pins.** The `overrides:` in `pnpm-workspace.yaml` pin `@module-federation/*` to the exact versions in the host image's lockfile, because the deploy smoke check (`bos mf check`) fails when a plugin's `pluginVersion` differs from the host's. The catalog keeps the parent's `^` ranges, and `bos upgrade` leaves these overrides alone. When you bump everything-dev, set these overrides to the versions in that release's `pnpm-lock.yaml`.
 
 When the need is a **bug**, a **missing capability**, or a **pattern improvement**, follow [`docs/agents/change-placement.md`](docs/agents/change-placement.md) — including its first rule: sync-owned files are a contribution channel, not a fence. A human-facing diagram tour of the whole runtime lives in [`docs/agents/how-it-fits.md`](docs/agents/how-it-fits.md); `/teach` builds lessons from it.
 
