@@ -38,8 +38,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AppTranslator } from "@/i18n/catalogs";
-import { appErrorMessage } from "@/i18n/error-message";
+import type { AppMessageId, AppTranslator } from "@/i18n/catalogs";
+import { AppActionError, appErrorMessage } from "@/i18n/error-message";
 import { useAppTranslation } from "@/i18n/runtime";
 import { invalidateTenantQueries, tenantBindingsQueryOptions } from "@/lib/queries/tenants";
 import { ListSkeleton, RowMenu } from "../-admin-ui";
@@ -51,6 +51,17 @@ export function createBindingKindItems(t: AppTranslator) {
     { label: t("admin.domain.platformAlias"), value: "alias" },
     { label: t("admin.domain.custom"), value: "custom" },
   ];
+}
+
+const ALIAS_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+export function bindingHostnameError(
+  kind: "alias" | "custom",
+  hostname: string,
+): AppMessageId | null {
+  if (kind === "alias" && !ALIAS_PATTERN.test(hostname)) return "admin.domain.aliasInvalid";
+  if (kind === "custom" && !hostname.includes(".")) return "admin.domain.customInvalid";
+  return null;
 }
 
 export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway: string }) {
@@ -241,17 +252,13 @@ function AddBindingForm({
 
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState<string>("alias");
+  const [kind, setKind] = useState<"alias" | "custom">("alias");
   const [hostname, setHostname] = useState("");
   const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
   const mutation = useMutation({
     mutationFn: () => {
-      if (kind === "alias" && !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(normalized)) {
-        throw new Error("Enter a single alias using letters, numbers, and hyphens.");
-      }
-      if (kind === "custom" && !normalized.includes(".")) {
-        throw new Error("Enter a full domain such as nyc.gov.");
-      }
+      const hintId = bindingHostnameError(kind, normalized);
+      if (hintId) throw new AppActionError(hintId);
       return apiClient.createBinding({ tenantId, hostname: normalized });
     },
     onSuccess: async () => {
@@ -283,7 +290,7 @@ function AddBindingForm({
               value={kind}
               items={BINDING_KIND_ITEMS}
               onValueChange={(value) => {
-                if (value === null) return;
+                if (value !== "alias" && value !== "custom") return;
                 setKind(value);
                 setHostname("");
                 mutation.reset();
