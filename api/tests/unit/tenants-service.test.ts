@@ -75,6 +75,26 @@ describe("TenantsService", () => {
     expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
   });
 
+  it("fails with CONFLICT when updating to another tenant's accountId", async () => {
+    const layer = freshLayer();
+    await runService(layer, (svc) => svc.createTenant(baseInput));
+    const other = await runService(layer, (svc) =>
+      svc.createTenant({ ...baseInput, accountId: "other.example.near", orgId: "org-2" }),
+    );
+
+    const error = await squashServiceError(layer, (svc) =>
+      svc.updateTenant(other.id, { accountId: baseInput.accountId }),
+    );
+    expect(error).toMatchObject({
+      code: "CONFLICT",
+      message: "Tenant with this accountId already exists",
+      data: { accountId: baseInput.accountId },
+    });
+    expect((error as Error).message).not.toMatch(/constraint|duplicate key/);
+    const unchanged = await runService(layer, (svc) => svc.resolveTenantById(other.id));
+    expect(unchanged?.accountId).toBe("other.example.near");
+  });
+
   it("resolves by accountId and orgId", async () => {
     const layer = freshLayer();
     const created = await runService(layer, (svc) => svc.createTenant(baseInput));

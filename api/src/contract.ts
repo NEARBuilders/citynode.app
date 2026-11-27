@@ -687,7 +687,13 @@ export const contract = oc.router({
       }),
     )
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      NOT_FOUND,
+      BAD_REQUEST,
+      CONFLICT: { status: 409, message: "Tenant with this accountId already exists" },
+    }),
 
   deleteTenant: oc
     .route({ method: "POST", path: "/tenants/{tenantId}/delete" })
