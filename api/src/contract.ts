@@ -1120,6 +1120,17 @@ export const contract = oc.router({
     )
     .errors({ UNAUTHORIZED, NOT_FOUND, CONFLICT }),
 
+  getCommunityJoinState: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/join-state",
+      summary: "Whether a community can be joined, and whether the caller belongs",
+      description:
+        "Public. joinable is true when the community has a place, a standing join code and no inactive tenant. member is true when the caller belongs to the community's organization.",
+    })
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(z.object({ joinable: z.boolean(), member: z.boolean() })),
+
   listValidators: oc
     .route({
       method: "GET",

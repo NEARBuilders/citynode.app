@@ -813,6 +813,101 @@ describe("places activation + join flow", () => {
     }
   });
 
+  it("reports whether a community can be joined and whether the caller belongs", async () => {
+    await ensurePlace("india", "India");
+    await ensurePlace("malaysia", "Malaysia");
+    const activator = await getPluginClient(authedContext("state-activator"), {
+      auth: authStubFor(authedContext("state-activator")),
+    } as never);
+    const communities = [];
+    for (const place of ["chicago", "india", "nyc", "malaysia"]) {
+      communities.push(await activator.activateCommunity({ place }));
+    }
+    const [chicago, india] = communities;
+
+    const anonymous = await getPluginClient();
+    for (const community of communities) {
+      await expect(anonymous.getCommunityJoinState({ nodeId: community.nodeId })).resolves.toEqual({
+        joinable: true,
+        member: false,
+      });
+    }
+
+    const member = await getPluginClient({
+      ...authedContext("state-member"),
+      organizations: [{ id: chicago!.organizationId, role: "member" }],
+    });
+    await expect(member.getCommunityJoinState({ nodeId: chicago!.nodeId })).resolves.toEqual({
+      joinable: true,
+      member: true,
+    });
+    await expect(member.getCommunityJoinState({ nodeId: india!.nodeId })).resolves.toEqual({
+      joinable: true,
+      member: false,
+    });
+
+    await showOnMap("india");
+    await testingDb()
+      .update(tenantsTable)
+      .set({ orgId: "org-india-official" })
+      .where(
+        sql`${tenantsTable.id} = (select ${nodesTable.tenantId} from ${nodesTable} where ${nodesTable.id} = ${india!.nodeId})`,
+      );
+    const official = await getPluginClient({
+      ...authedContext("state-official"),
+      organizations: [{ id: "org-india-official", role: "member" }],
+    });
+    await expect(official.getCommunityJoinState({ nodeId: india!.nodeId })).resolves.toEqual({
+      joinable: true,
+      member: true,
+    });
+
+    await testingDb()
+      .update(tenantsTable)
+      .set({ status: "suspended" })
+      .where(eq(tenantsTable.orgId, "org-india-official"));
+    await expect(official.getCommunityJoinState({ nodeId: india!.nodeId })).resolves.toEqual({
+      joinable: false,
+      member: true,
+    });
+    await testingDb()
+      .update(tenantsTable)
+      .set({ status: "active" })
+      .where(eq(tenantsTable.orgId, "org-india-official"));
+
+    await expect(
+      anonymous.getCommunityJoinState({ nodeId: "00000000-0000-4000-8000-000000000000" }),
+    ).resolves.toEqual({ joinable: false, member: false });
+  });
+
+  it("reports a community without a join code as not joinable until one can be made", async () => {
+    try {
+      await ensurePlace("senegal", "Senegal");
+      const activator = await getPluginClient(authedContext("senegal-activator"), {
+        auth: authStubFor(authedContext("senegal-activator")),
+      } as never);
+      const senegal = await activator.activateCommunity({ place: "senegal" });
+      organizerOnly.add(senegal.organizationId);
+      await forgetJoinCode("senegal");
+
+      const anonymous = await getPluginClient();
+      await expect(anonymous.getCommunityJoinState({ nodeId: senegal.nodeId })).resolves.toEqual({
+        joinable: false,
+        member: false,
+      });
+
+      const admin = await getPluginClient(authedContext("repair-admin", "admin"), {
+        auth: authStubFor(authedContext("repair-admin", "admin")),
+      } as never);
+      await expect(admin.getCommunityJoinState({ nodeId: senegal.nodeId })).resolves.toEqual({
+        joinable: true,
+        member: false,
+      });
+    } finally {
+      organizerOnly.delete("org-senegal");
+    }
+  });
+
   it("rejects unknown places", async () => {
     const caller = await getPluginClient(authedContext("activator-3"), {
       auth: authStubFor(authedContext("activator-3")),
