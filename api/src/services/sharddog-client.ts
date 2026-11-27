@@ -34,8 +34,11 @@ export interface ShardDogClientConfig {
 const AwardResponse = z.object({ viewUrl: z.url({ protocol: /^https$/ }) });
 const ClaimLinkResponse = z.object({ claimUrl: z.url({ protocol: /^https$/ }) });
 const DropResponse = z.object({
-  name: z.string().trim().min(1).max(200).nullish(),
-  imageUrl: z.url({ protocol: /^https$/ }).nullish(),
+  name: z.string().trim().min(1).max(200).nullish().catch(null),
+  imageUrl: z
+    .url({ protocol: /^https$/ })
+    .nullish()
+    .catch(null),
 });
 
 export function createStubShardDogClient(apiUrl: string): ShardDogClient {
