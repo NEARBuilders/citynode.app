@@ -672,20 +672,29 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
       .innerJoin(keptActivities, eq(keptActivities.id, eventReports.activityId))
       .where(and(isNull(eventReports.nodeId), eq(keptActivities.canonicalUrl, url)));
 
+  const openToLiveCommunities = () =>
+    or(
+      isNotNull(eventReports.nodeId),
+      notExists(reportsKeptFromRemovedCommunities(discoveryActivities.canonicalUrl)),
+    );
+
   const reportingNodeId = Effect.fn("DiscoveryService.reportingNodeId")(function* (
     activity: PublicActivity,
   ) {
     if (activity.ownerNodeId) return activity.ownerNodeId;
     if (activity.kind !== "event") return null;
-    const [kept] = yield* query(() => reportsKeptFromRemovedCommunities(activity.url).limit(1));
-    if (kept) return null;
     const [report] = yield* query(() =>
       db
         .select({ nodeId: eventReports.nodeId })
         .from(eventReports)
         .where(eq(eventReports.activityId, activity.id)),
     );
-    if (!report && !activity.placeId) return null;
+    if (report && !report.nodeId) return null;
+    if (!report) {
+      if (!activity.placeId) return null;
+      const [kept] = yield* query(() => reportsKeptFromRemovedCommunities(activity.url).limit(1));
+      if (kept) return null;
+    }
     const found = yield* reportingNodes([{ data: activity, reportNodeId: report?.nodeId ?? null }]);
     return found.get(activity.id) ?? null;
   });
@@ -707,7 +716,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
         .where(
           and(
             isNull(discoveryActivities.ownerNodeId),
-            notExists(reportsKeptFromRemovedCommunities(discoveryActivities.canonicalUrl)),
+            openToLiveCommunities(),
             sql`${data}->>'kind' = 'event'`,
             sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
             or(
@@ -1654,7 +1663,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
             and(
               isNull(discoveryActivities.ownerNodeId),
               isNotNull(discoveryActivities.placeId),
-              notExists(reportsKeptFromRemovedCommunities(discoveryActivities.canonicalUrl)),
+              openToLiveCommunities(),
               shownActivity(now),
               sql`${data}->>'kind' = 'event'`,
             ),

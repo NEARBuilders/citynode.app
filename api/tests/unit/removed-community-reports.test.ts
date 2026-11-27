@@ -269,6 +269,51 @@ describe("removing a community that reported events", () => {
     );
   });
 
+  it("leaves another community its own report on a place event with the same link", async () => {
+    await run(freshLayer(), (services) =>
+      Effect.gen(function* () {
+        const { discovery, nodes } = services;
+        const {
+          covering: leaving,
+          removed: staying,
+          reportedPlace: placeCopy,
+        } = yield* seed(services);
+        const leavingOwner = ownerOf("org-region");
+        const stayingOwner = ownerOf("org-city");
+        const own = yield* discovery.saveActivity(
+          ownEvent(leaving.id, placeCopy.title, placeCopy.url),
+          leavingOwner,
+        );
+        yield* discovery.saveEventReport({ activityId: own.id, report }, leavingOwner);
+        yield* discovery.saveEventReport({ activityId: placeCopy.id, report }, stayingOwner);
+        yield* nodes.delete(leaving.id);
+
+        const listed = yield* discovery.activities(staying.id, stayingOwner);
+        expect(listed.map(({ id }) => id)).toContain(placeCopy.id);
+        expect(yield* discovery.eventReport(placeCopy.id, stayingOwner)).toMatchObject({
+          report: { report: { attendees: 42 } },
+          canEdit: true,
+        });
+        const edited = yield* discovery.saveEventReport(
+          { activityId: placeCopy.id, report: { ...report, attendees: 50 } },
+          stayingOwner,
+        );
+        yield* discovery.reviewEventReport(
+          { activityId: placeCopy.id, reviewed: true, updatedAt: edited.updatedAt },
+          admin,
+        );
+        const adminRow = (yield* discovery.adminEvents(admin)).find(
+          ({ id }) => id === placeCopy.id,
+        );
+        expect(adminRow).toMatchObject({
+          nodeId: staying.id,
+          reportSubmittedAt: edited.submittedAt,
+          reportReviewedAt: expect.any(String),
+        });
+      }),
+    );
+  });
+
   it("lets the link of a kept event be used again", async () => {
     const layer = freshLayer();
     await run(layer, (services) =>
