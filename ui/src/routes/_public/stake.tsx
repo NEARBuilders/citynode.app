@@ -38,7 +38,11 @@ import {
 import { StakeSkeleton } from "./-stake-skeleton";
 
 export const Route = createFileRoute("/_public/stake")({
-  validateSearch: z.object({ node: z.string().optional(), nodeId: z.uuid().optional() }),
+  validateSearch: z.object({
+    all: z.boolean().optional(),
+    node: z.string().optional(),
+    nodeId: z.uuid().optional(),
+  }),
   head: ({ match }) => ({
     meta: [
       {
@@ -80,11 +84,16 @@ function getDirectoryNodes(tenantApps: TenantApp[]) {
               kind: app.node.kind,
               hostname: app.hostname,
               stakeable: app.stakeable,
+              isViewerCommunity: app.viewerMembership !== null,
             },
           ]
         : [],
     )
-    .sort((a, b) => Number(b.stakeable) - Number(a.stakeable));
+    .sort(
+      (a, b) =>
+        Number(b.isViewerCommunity) - Number(a.isViewerCommunity) ||
+        Number(b.stakeable) - Number(a.stakeable),
+    );
 }
 
 function getStakeTitle(
@@ -114,7 +123,7 @@ function StakePage() {
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const { node: nodeSlug, nodeId: requestedNodeId } = Route.useSearch();
+  const { all: browseAll = false, node: nodeSlug, nodeId: requestedNodeId } = Route.useSearch();
   const hostnameSlug = getSlugFromHostname();
   const requestedSlug = nodeSlug ?? hostnameSlug;
   const hasRequestedNode = !!requestedNodeId || !!requestedSlug;
@@ -131,6 +140,7 @@ function StakePage() {
   const directoryNodes = useMemo(() => getDirectoryNodes(tenantApps), [tenantApps]);
   const defaultNodeId = getActiveOrganizationNodeId({
     activeOrganizationId,
+    browseAll,
     communities: tenantApps,
     hasRequestedNode,
   });
@@ -138,7 +148,7 @@ function StakePage() {
   const slug = selectedNodeId ? null : requestedSlug;
   const hasNodeSelection = !!selectedNodeId || !!slug;
   const resolvingActiveOrganization =
-    !!activeOrganizationId && !hasRequestedNode && directoryLoading;
+    !!activeOrganizationId && !hasRequestedNode && !browseAll && directoryLoading;
   const nearAccountId = useNearAccount();
   const [amount, setAmount] = useState("1");
   const [selectedValidatorId, setSelectedValidatorId] = useState<string | null>(null);
@@ -239,7 +249,7 @@ function StakePage() {
             className="-ml-3 self-start"
             nativeButton={false}
             data-testid="stake.back"
-            render={<Link to="/stake" />}
+            render={<Link to="/stake" search={{ all: true }} />}
           >
             <ArrowLeftIcon data-icon="inline-start" />
             {translate("community.all")}

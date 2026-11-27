@@ -1,0 +1,1 @@
+CREATE INDEX "sharddog_awards_account" ON "sharddog_awards" USING btree ("account_id");

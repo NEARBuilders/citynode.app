@@ -10,7 +10,7 @@ export default App({
     "CityNodes are local communities that each run a NEAR validator. Find yours, join its events, and stake to keep it online.",
   // The base runtime this app extends — inherit the platform, override only what you change.
   extends: "bos://dev.everything.near/everything.dev",
-  release: "2.0.0-rc.45",
+  release: "2.0.0-rc.46",
   // The NEAR account this app publishes under.
   account: "v1.citynode.near",
   // The gateway: FastKV lookup key and public ingress for this runtime.
@@ -33,7 +33,12 @@ export default App({
       mainnetStakingPoolWhitelist: "lockup-whitelist.near",
       testnetStakingPoolWhitelist: "whitelist.f863973.m0",
     },
-    secrets: ["API_DATABASE_URL", "LUMA_CALENDAR_API_KEYS", "LUMA_WEBHOOK_SECRETS"],
+    secrets: [
+      "API_DATABASE_URL",
+      "LUMA_CALENDAR_API_KEYS",
+      "LUMA_WEBHOOK_SECRETS",
+      "SHARDDOG_API_KEY",
+    ],
   },
   // Local UI workspace override.
   ui: {
@@ -51,6 +56,8 @@ export default App({
           url: "/api/communities/by-organization/{organizationId}",
         },
       },
+      // TODO(everything-dev#914): switch to false once the off switch stops sending LIMIT Infinity to better-auth.
+      organizationMembershipLimit: 100000,
       deviceLink: {
         clientId: "citynode-web",
       },

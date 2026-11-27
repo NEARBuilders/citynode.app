@@ -18,7 +18,8 @@ consistent within a package:
 - **Module-level Live + plain factory** (auth plugin): `export const XServiceLive = Layer.effect(X, Effect.gen(...))`
   with a `buildXService({ dep })` plain function returning `X.of({...})` — the factory is the
   test-harness seam (tests assemble the service directly over test doubles); `X.of` makes the
-  class shape the single type-enforcement point.
+  class shape the single type-enforcement point. Structured methods use
+  `Effect.fn("XService.method")` for spans.
 - **Interface + tag + module-level Live** (most of `api/src/services/*`): an `XService`
   interface, an `XTag` class over it, and `export const XLive = Layer.effect(XTag, Effect.gen(...))`
   returning a `const service: XService = {...}` object literal. `discovery.ts` is the

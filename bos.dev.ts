@@ -13,6 +13,7 @@ export default {
   api: {
     variables: {
       platformStationsAccount: "stations.citynode.testnet",
+      sharddogEnabled: true,
     },
   },
 } satisfies Partial<AppDescriptor>;

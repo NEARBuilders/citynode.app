@@ -50,7 +50,17 @@ describe("sidebar per persona", () => {
     ]);
   });
 
-  it("offers Start a community instead of My community to people without one", () => {
+  it("holds the community slot as a placeholder while membership loads", () => {
+    const items = sidebar({ hasOrganization: true, membershipPending: true }, "member");
+    expect(items.map(navSlug)).toEqual(["dashboard", "my-node", "explore", "stake"]);
+    expect(items.find((item) => navSlug(item) === "my-node")?.pending).toBe(true);
+    expect(
+      sidebar({ hasOrganization: true }, "member").find((item) => navSlug(item) === "my-node")
+        ?.pending,
+    ).toBeUndefined();
+  });
+
+  it("offers Make a community official instead of My community to people without one", () => {
     expect(sidebar({ hasOrganization: false }, "member").map(navSlug)).toEqual([
       "dashboard",
       "start-community",
@@ -309,12 +319,13 @@ describe("team area navigation", () => {
 });
 
 describe("breadcrumbs", () => {
-  const labels = (pathname: string) => crumbsFor(pathname).map((crumb) => crumb.label);
+  const labels = (pathname: string, context?: Parameters<typeof crumbsFor>[1]) =>
+    crumbsFor(pathname, context).map((crumb) => crumb.label);
 
   it("translates app pages instead of using raw route names", () => {
     const translate = (id: Parameters<typeof translateAppMessage>[0]) =>
       translateAppMessage(id, undefined, "es");
-    expect(crumbsFor("/apply", {}, translate)).toEqual([{ label: "Crear una comunidad" }]);
+    expect(crumbsFor("/apply", {}, translate)).toEqual([{ label: "Oficializar una comunidad" }]);
     expect(crumbsFor("/onboarding/station/abc", {}, translate)).toEqual([{ label: "Estación" }]);
     expect(crumbsFor("/admin/tenants", {}, translate)).toEqual([
       { label: "Administración" },
@@ -347,7 +358,23 @@ describe("breadcrumbs", () => {
     expect(labels("/admin/tenants")).toEqual(["Admin", "Platform", "Domains"]);
     expect(labels("/onboarding/station/abc")).toEqual(["Station"]);
     expect(labels("/admin/proposals/new")).toEqual(["Admin", "Proposals", "New proposal"]);
-    expect(labels("/apply")).toEqual(["Start a community"]);
+    expect(labels("/apply")).toEqual(["Make a community official"]);
+  });
+
+  it("uses the stored community or place name when it is known", () => {
+    expect(labels("/places/kuala-lumpur")).toEqual(["Explore", "Kuala lumpur"]);
+    expect(labels("/places/kuala-lumpur", { detailName: "Kuala Lumpur" })).toEqual([
+      "Explore",
+      "Kuala Lumpur",
+    ]);
+    expect(labels("/n/new-york-city", { detailName: "New York City" })).toEqual([
+      "Explore",
+      "New York City",
+    ]);
+    expect(labels("/n/new-york-city/proposals", { detailName: "New York City" })).toEqual([
+      "Explore",
+      "New York City",
+    ]);
   });
 
   it("uses the organization name when it is known", () => {

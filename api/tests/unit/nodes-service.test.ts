@@ -96,6 +96,118 @@ async function seedPlaceWithNode(
 }
 
 describe("NodesService", () => {
+  it("gives a started community its own placeholder tenant, and a fresh one when restarted", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes, tenants }) =>
+      Effect.gen(function* () {
+        const place = yield* Effect.tryPromise(() => seedPlace(db, "kuala-lumpur"));
+        const first = yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-first",
+          activatedBy: "user-1",
+          joinCodeId: "join-first",
+        });
+        expect(first.created).toBe(true);
+        const tenant = yield* tenants.resolveTenantById(first.node.tenantId!);
+        expect(tenant).toMatchObject({
+          accountId: "kuala-lumpur.v1.citynode.near",
+          orgId: "org-first",
+          name: "kuala-lumpur",
+          ownerKind: "platform",
+          allowUiOverrides: false,
+        });
+
+        const again = yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-other",
+          activatedBy: "user-2",
+          joinCodeId: "join-other",
+        });
+        expect(again).toMatchObject({ created: false, node: { tenantId: tenant!.id } });
+
+        expect(yield* nodes.delete(first.node.id)).toBe(true);
+        const restarted = yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-second",
+          activatedBy: "user-3",
+          joinCodeId: "join-second",
+        });
+        expect(restarted.node.tenantId).not.toBe(tenant!.id);
+        expect(yield* tenants.resolveTenantById(restarted.node.tenantId!)).toMatchObject({
+          accountId: "kuala-lumpur.v1.citynode.near",
+          orgId: "org-second",
+          status: "active",
+          deletedAt: null,
+        });
+        const archived = yield* tenants.resolveTenantById(tenant!.id);
+        expect(archived).toMatchObject({
+          accountId: `archived-${tenant!.id}.v1.citynode.near`,
+          orgId: "org-first",
+          status: "pending_deletion",
+        });
+        expect(archived?.deletedAt).toEqual(expect.any(String));
+      }),
+    );
+  });
+
+  it("archives a suspended placeholder without reviving it, and leaves other tenants alone", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes, tenants }) =>
+      Effect.gen(function* () {
+        const place = yield* Effect.tryPromise(() => seedPlace(db, "penang"));
+        const started = yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-penang",
+          activatedBy: "user-1",
+          joinCodeId: "join-penang",
+        });
+        const placeholderId = started.node.tenantId!;
+        yield* tenants.updateTenant(placeholderId, { status: "suspended" });
+        expect(yield* nodes.delete(started.node.id)).toBe(true);
+        expect(yield* tenants.resolveTenantById(placeholderId)).toMatchObject({
+          accountId: `archived-${placeholderId}.v1.citynode.near`,
+          status: "pending_deletion",
+        });
+
+        const daoTenant = yield* tenants.createTenant({
+          name: "DAO city",
+          accountId: "dao-city.sputnik-dao.near",
+          orgId: "org-dao",
+          ownerKind: "dao",
+        });
+        const daoNode = yield* nodes.spawn({ tenantId: daoTenant.id });
+        expect(yield* nodes.delete(daoNode.id)).toBe(true);
+        expect(yield* tenants.resolveTenantById(daoTenant.id)).toMatchObject({
+          accountId: "dao-city.sputnik-dao.near",
+          status: "active",
+          deletedAt: null,
+        });
+      }),
+    );
+  });
+
+  it("refuses to start a community whose placeholder account is already taken", async () => {
+    const layer = freshLayer();
+    const error = await squashServiceError(layer, ({ db, nodes, tenants }) =>
+      Effect.gen(function* () {
+        const place = yield* Effect.tryPromise(() => seedPlace(db, "taken"));
+        const other = yield* tenants.createTenant({
+          name: "Other",
+          accountId: "taken.v1.citynode.near",
+          orgId: "org-other",
+        });
+        yield* nodes.spawn({ tenantId: other.id });
+        return yield* nodes.activateForPlace({
+          placeId: place.id,
+          orgId: "org-new",
+          activatedBy: "user-1",
+          joinCodeId: "join-new",
+        });
+      }),
+    );
+    expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
+  });
+
   it("updates a node without touching the place hierarchy", async () => {
     const layer = freshLayer();
     await runService(layer, ({ db, nodes }) =>
@@ -453,6 +565,58 @@ describe("NodesService", () => {
         const platform = yield* nodes.spawn({ kind: "platform", tenantId });
 
         expect(yield* nodes.listAncestors(platform.id)).toEqual([]);
+      }),
+    );
+  });
+});
+
+describe("join codes", () => {
+  it("fills a missing code once and keeps it when metadata is replaced", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const chicago = yield* Effect.tryPromise(() => seedPlace(db, "chicago"));
+        const platformPlace = yield* Effect.tryPromise(() => seedPlace(db, "platform-place"));
+        const missing = yield* nodes.activateForPlace({
+          placeId: chicago.id,
+          orgId: "org-chicago",
+          activatedBy: "user-1",
+          joinCodeId: "",
+          kind: "city",
+        });
+        const platform = yield* nodes.activateForPlace({
+          placeId: platformPlace.id,
+          orgId: "org-platform",
+          activatedBy: "user-1",
+          joinCodeId: "",
+          kind: "platform",
+        });
+
+        expect((yield* nodes.listMissingJoinCodes()).map((node) => node.slug)).toEqual(["chicago"]);
+        expect(yield* nodes.attachJoinCodeIfMissing(missing.node.id, "")).toBe(false);
+        expect(yield* nodes.attachJoinCodeIfMissing(missing.node.id, "join-code-chicago")).toBe(
+          true,
+        );
+        expect(yield* nodes.attachJoinCodeIfMissing(missing.node.id, "second-code")).toBe(false);
+
+        const edited = yield* nodes.update(missing.node.id, {
+          metadata: { bulletin: "hello", joinCodeId: "forged" },
+        });
+        expect(edited.metadata).toMatchObject({
+          bulletin: "hello",
+          joinCodeId: "join-code-chicago",
+          kind: "city",
+        });
+
+        const untouched = yield* nodes.getById(platform.node.id);
+        expect(untouched?.metadata.joinCodeId).toBe("");
+        const forged = yield* nodes.spawn({ metadata: { joinCodeId: "forged", bulletin: "hi" } });
+        expect(forged.metadata.joinCodeId).toBeUndefined();
+        const replaced = yield* nodes.update(forged.id, {
+          metadata: { joinCodeId: "forged", bulletin: "there" },
+        });
+        expect(replaced.metadata).toMatchObject({ bulletin: "there" });
+        expect(replaced.metadata.joinCodeId).toBeUndefined();
       }),
     );
   });

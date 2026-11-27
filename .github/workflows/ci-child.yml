@@ -97,7 +97,7 @@ jobs:
     # Must track the lockfile's @playwright/test resolution.
     strategy:
       matrix:
-        playwright-version: ["1.65.0"]
+        playwright-version: ["1.65.1"]
     container:
       image: mcr.microsoft.com/playwright:v${{ matrix.playwright-version }}-noble
       options: --user 1001 --init --ipc=host
