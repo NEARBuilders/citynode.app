@@ -15,7 +15,8 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import { resolveGuide } from "@/lib/docs-guides";
-import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
+import { adminNodeDetailQueryOptions, nodeBySlugQueryOptions } from "@/lib/queries/nodes";
+import { placeResolutionQueryOptions } from "@/lib/queries/places";
 import { crumbsFor } from "./breadcrumbs";
 import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
@@ -46,11 +47,29 @@ export function AppHeader({ runtimeConfig, actions }: AppHeaderProps) {
     ...adminNodeDetailQueryOptions(apiClient, adminNodeId ?? ""),
     enabled: false,
   });
+  const publicMatch = /^\/(n|places)\/([^/]+)/.exec(pathname);
+  const publicKind = publicMatch?.[1];
+  const publicSlug = publicMatch?.[2] ? safeDecode(publicMatch[2]) : "";
+  const { data: publicNode } = useQuery({
+    ...nodeBySlugQueryOptions(apiClient, publicKind === "n" ? publicSlug : ""),
+    enabled: false,
+  });
+  const { data: publicPlace } = useQuery({
+    ...placeResolutionQueryOptions(apiClient, publicKind === "places" ? publicSlug : ""),
+    enabled: false,
+  });
+  const detailName = adminNodeId
+    ? adminNode?.summary.node.name
+    : publicKind === "n"
+      ? publicNode?.name
+      : publicKind === "places"
+        ? publicPlace?.place.name
+        : undefined;
   const crumbs = crumbsFor(
     pathname,
     {
       tab,
-      detailName: adminNodeId ? adminNode?.summary.node.name : undefined,
+      detailName,
       appName: getAppName(runtimeConfig),
       orgName: (slug) => organizations.find((org) => org.slug === slug)?.name,
       guideTitle: (slug) =>
@@ -106,4 +125,12 @@ export function AppHeader({ runtimeConfig, actions }: AppHeaderProps) {
       </div>
     </header>
   );
+}
+
+function safeDecode(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }
