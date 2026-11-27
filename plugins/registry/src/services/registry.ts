@@ -7,6 +7,7 @@ import {
   fetchBosConfigFromFastKv,
   getFastKvBaseUrlForAccount,
   getFastKvBaseUrlForNetwork,
+  getNetworkIdForAccount,
   getRegistryConfigKey,
   getRegistryMetadataKey,
   getRegistryNamespaceForAccount,
@@ -150,12 +151,36 @@ interface DiscoveredConfig {
 const DISCOVERY_PREFIX = "apps/";
 const CACHE_TTL_MS = 60_000;
 
-interface DiscoveryCache {
+interface NetworkDiscoveryCache {
   data: DiscoveredConfig[];
   expiresAt: number;
 }
 
-let discoveryCache: DiscoveryCache | null = null;
+interface NetworkDiscovery {
+  network: NetworkId;
+  entries: DiscoveredConfig[];
+  failed: boolean;
+  error?: unknown;
+}
+
+interface ResolvedRuntimeCache {
+  runtime: ResolvedPublishedRuntime;
+  configKey: string;
+  expiresAt: number;
+}
+
+function logRegistrySkip(context: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(`[registry] ${context}: ${message}`);
+}
+
+function configCacheKey(rawConfig: BosConfigInput): string {
+  try {
+    return JSON.stringify(rawConfig);
+  } catch {
+    return "";
+  }
+}
 
 export interface KvEntry {
   key: string;
@@ -233,18 +258,54 @@ export class RegistryService extends Context.Service<
 }
 
 export function createRegistryMethods(config: RegistryConfig) {
-  const discoverPublishedConfigs = async (): Promise<DiscoveredConfig[]> => {
-    if (discoveryCache && Date.now() < discoveryCache.expiresAt) {
-      return discoveryCache.data;
+  const discoveryCacheByNetwork = new Map<NetworkId, NetworkDiscoveryCache>();
+  const discoveryInflight = new Map<NetworkId, Promise<NetworkDiscovery>>();
+  const resolvedRuntimeCache = new Map<string, ResolvedRuntimeCache>();
+  const resolvedRuntimeInflight = new Map<string, Promise<ResolvedPublishedRuntime>>();
+
+  const discoverNetwork = (network: NetworkId): Promise<NetworkDiscovery> => {
+    const cached = discoveryCacheByNetwork.get(network);
+    if (cached && Date.now() < cached.expiresAt) {
+      return Promise.resolve({ network, entries: cached.data, failed: false });
     }
-    const results = await Promise.all([
-      discoverPublishedConfigsForNetwork("mainnet", config),
-      discoverPublishedConfigsForNetwork("testnet", config),
-    ]);
-    const data = results.flat().sort(compareDiscovered);
-    discoveryCache = { data, expiresAt: Date.now() + CACHE_TTL_MS };
-    return data;
+    const inflight = discoveryInflight.get(network);
+    if (inflight) {
+      return inflight;
+    }
+    const run = (async (): Promise<NetworkDiscovery> => {
+      try {
+        const data = await discoverPublishedConfigsForNetwork(network, config);
+        discoveryCacheByNetwork.set(network, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+        return { network, entries: data, failed: false };
+      } catch (error) {
+        const stale = discoveryCacheByNetwork.get(network);
+        if (stale) {
+          logRegistrySkip(`discovery for ${network} failed; serving cached entries`, error);
+          return { network, entries: stale.data, failed: false };
+        }
+        logRegistrySkip(`discovery for ${network} failed with no cached entries`, error);
+        return { network, entries: [], failed: true, error };
+      } finally {
+        discoveryInflight.delete(network);
+      }
+    })();
+    discoveryInflight.set(network, run);
+    return run;
   };
+
+  const discoverAllNetworks = async (): Promise<{
+    entries: DiscoveredConfig[];
+    failures: NetworkDiscovery[];
+  }> => {
+    const results = await Promise.all([discoverNetwork("mainnet"), discoverNetwork("testnet")]);
+    return {
+      entries: results.flatMap((result) => result.entries).sort(compareDiscovered),
+      failures: results.filter((result) => result.failed),
+    };
+  };
+
+  const discoverPublishedConfigs = async (): Promise<DiscoveredConfig[]> =>
+    (await discoverAllNetworks()).entries;
 
   const discoverPublishedConfigsForNetwork = async (
     network: NetworkId,
@@ -296,20 +357,86 @@ export function createRegistryMethods(config: RegistryConfig) {
     return apps;
   };
 
-  const resolveAppSummary = async (item: DiscoveredConfig): Promise<RegistryAppSummary> => {
-    const resolved = await resolvePublishedRuntime(
-      item.accountId,
-      item.gatewayId,
-      item.rawConfig,
-      config,
-    );
-    const metadata = await getRegistryMetadata(item.accountId, item.gatewayId, config);
-
-    return {
-      ...normalizeResolvedConfig(item.accountId, item.gatewayId, resolved, config),
-      metadata,
-    };
+  const resolveRuntime = (item: DiscoveredConfig): Promise<ResolvedPublishedRuntime> => {
+    const cacheKey = `${item.accountId}/${item.gatewayId}`;
+    const configKey = configCacheKey(item.rawConfig);
+    const cached = resolvedRuntimeCache.get(cacheKey);
+    if (cached && cached.configKey === configKey && Date.now() < cached.expiresAt) {
+      return Promise.resolve(cached.runtime);
+    }
+    const inflight = resolvedRuntimeInflight.get(cacheKey);
+    if (inflight) {
+      return inflight;
+    }
+    const run = (async () => {
+      try {
+        const runtime = await resolvePublishedRuntime(
+          item.accountId,
+          item.gatewayId,
+          item.rawConfig,
+          config,
+        );
+        resolvedRuntimeCache.set(cacheKey, {
+          runtime,
+          configKey,
+          expiresAt: Date.now() + CACHE_TTL_MS,
+        });
+        return runtime;
+      } catch (error) {
+        const stale = resolvedRuntimeCache.get(cacheKey);
+        if (stale && stale.configKey === configKey) {
+          logRegistrySkip(`runtime refresh for ${cacheKey} failed; serving cached runtime`, error);
+          return stale.runtime;
+        }
+        throw error;
+      } finally {
+        resolvedRuntimeInflight.delete(cacheKey);
+      }
+    })();
+    resolvedRuntimeInflight.set(cacheKey, run);
+    return run;
   };
+
+  const resolveDiscovered = async (
+    items: DiscoveredConfig[],
+  ): Promise<Array<{ item: DiscoveredConfig; runtime: ResolvedPublishedRuntime }>> => {
+    const settled = await Promise.allSettled(
+      items.map(async (item) => ({ item, runtime: await resolveRuntime(item) })),
+    );
+    const resolved: Array<{ item: DiscoveredConfig; runtime: ResolvedPublishedRuntime }> = [];
+    settled.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        resolved.push(result.value);
+        return;
+      }
+      const item = items[index];
+      logRegistrySkip(
+        `skipping ${item?.accountId}/${item?.gatewayId}: unable to resolve runtime`,
+        result.reason,
+      );
+    });
+    return resolved;
+  };
+
+  const safeMetadata = async (
+    accountId: string,
+    gatewayId: string,
+  ): Promise<RegistryMetadata | null> => {
+    try {
+      return await getRegistryMetadata(accountId, gatewayId, config);
+    } catch (error) {
+      logRegistrySkip(`metadata read for ${accountId}/${gatewayId} failed`, error);
+      return null;
+    }
+  };
+
+  const buildAppSummary = async (
+    item: DiscoveredConfig,
+    runtime: ResolvedPublishedRuntime,
+  ): Promise<RegistryAppSummary> => ({
+    ...normalizeResolvedConfig(item.accountId, item.gatewayId, runtime, config),
+    metadata: await safeMetadata(item.accountId, item.gatewayId),
+  });
 
   const normalizeResolvedConfig = (
     accountId: string,
@@ -383,22 +510,14 @@ export function createRegistryMethods(config: RegistryConfig) {
       const limit = clamp(input.limit ?? 24, 1, 100);
       const offset = clamp(parseCursor(input.cursor), 0, Number.MAX_SAFE_INTEGER);
       const discovered = await discoverPublishedConfigs();
-      const resolved = await Promise.all(
-        discovered.map(async (item) => ({
-          item,
-          runtime: await resolvePublishedRuntime(
-            item.accountId,
-            item.gatewayId,
-            item.rawConfig,
-            config,
-          ),
-        })),
-      );
+      const resolved = await resolveDiscovered(discovered);
       const filtered = resolved.filter(({ item, runtime }) =>
         matchesRegistryFilters(item.accountId, item.gatewayId, runtime.lineage, input),
       );
       const page = filtered.slice(offset, offset + limit);
-      const data = await Promise.all(page.map(({ item }) => resolveAppSummary(item)));
+      const data = await Promise.all(
+        page.map(({ item, runtime }) => buildAppSummary(item, runtime)),
+      );
       const nextOffset = offset + page.length;
 
       return {
@@ -416,7 +535,10 @@ export function createRegistryMethods(config: RegistryConfig) {
       const matches = discovered
         .filter((item) => item.accountId === accountId)
         .sort(compareDiscovered);
-      const data = await Promise.all(matches.map(resolveAppSummary));
+      const resolved = await resolveDiscovered(matches);
+      const data = await Promise.all(
+        resolved.map(({ item, runtime }) => buildAppSummary(item, runtime)),
+      );
 
       return {
         data,
@@ -429,19 +551,24 @@ export function createRegistryMethods(config: RegistryConfig) {
     },
 
     getRegistryApp: async (accountId: string, gatewayId: string) => {
-      const discovered = await discoverPublishedConfigs();
+      const { entries: discovered, failures } = await discoverAllNetworks();
       const match = discovered.find(
         (item) => item.accountId === accountId && item.gatewayId === gatewayId,
       );
 
       if (!match) {
+        const network = getNetworkIdForAccount(accountId);
+        const failure = failures.find((result) => result.network === network);
+        if (failure) {
+          throw failure.error;
+        }
         return null;
       }
 
-      const resolved = await resolvePublishedRuntime(accountId, gatewayId, match.rawConfig, config);
+      const resolved = await resolveRuntime(match);
       const normalized = normalizeResolvedConfig(accountId, gatewayId, resolved, config);
       const metadataKey = getRegistryMetadataKey(accountId, gatewayId);
-      const metadata = await getRegistryMetadata(accountId, gatewayId, config);
+      const metadata = await safeMetadata(accountId, gatewayId);
 
       return {
         ...normalized,
@@ -455,15 +582,19 @@ export function createRegistryMethods(config: RegistryConfig) {
     },
 
     getRegistryAppByHost: async (hostUrl: string) => {
-      const discovered = await discoverPublishedConfigs();
+      const { entries: discovered, failures } = await discoverAllNetworks();
 
       for (const item of discovered) {
-        const resolved = await resolvePublishedRuntime(
-          item.accountId,
-          item.gatewayId,
-          item.rawConfig,
-          config,
-        );
+        let resolved: ResolvedPublishedRuntime;
+        try {
+          resolved = await resolveRuntime(item);
+        } catch (error) {
+          logRegistrySkip(
+            `skipping ${item.accountId}/${item.gatewayId} while matching host`,
+            error,
+          );
+          continue;
+        }
         const normalized = normalizeResolvedConfig(
           item.accountId,
           item.gatewayId,
@@ -476,7 +607,7 @@ export function createRegistryMethods(config: RegistryConfig) {
         }
 
         const metadataKey = getRegistryMetadataKey(item.accountId, item.gatewayId);
-        const metadata = await getRegistryMetadata(item.accountId, item.gatewayId, config);
+        const metadata = await safeMetadata(item.accountId, item.gatewayId);
 
         return {
           ...normalized,
@@ -489,6 +620,10 @@ export function createRegistryMethods(config: RegistryConfig) {
         };
       }
 
+      const [failure] = failures;
+      if (failure) {
+        throw failure.error;
+      }
       return null;
     },
 

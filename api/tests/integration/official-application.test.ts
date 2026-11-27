@@ -37,10 +37,12 @@ const orgs = new Map<
   string,
   { metadata: Record<string, unknown>; members: Set<string>; roles: Map<string, string> }
 >();
+const missedOnce = new Set<string>();
 const calls = {
   linkDao: [] as unknown[],
   adminAddMember: [] as unknown[],
   adminUpdateMemberRole: [] as unknown[],
+  listMembers: [] as { organizationId: string; limit?: number; offset?: number }[],
 };
 
 function application(slug: string, extra: Record<string, unknown> = {}): FakeProposal {
@@ -95,15 +97,21 @@ function authStub(context: { userId?: string }) {
       org(input.organizationId).roles.set(input.userId, input.role);
       return { id: `member-${input.userId}`, ...input };
     },
-    listMembers: async ({ organizationId }: { organizationId: string }) => {
-      const found = org(organizationId);
+    listMembers: async (input: { organizationId: string; limit?: number; offset?: number }) => {
+      calls.listMembers.push(input);
+      const found = org(input.organizationId);
       if (!found.members.has(userId)) throw forbidden();
-      return {
-        members: [...found.members].map((memberId) => ({
+      const all = [...found.members]
+        .filter((memberId) => !missedOnce.delete(`${input.organizationId}:${memberId}`))
+        .map((memberId) => ({
           id: `member-${memberId}`,
           userId: memberId,
           role: found.roles.get(memberId) ?? "member",
-        })),
+        }));
+      const offset = input.offset ?? 0;
+      return {
+        members: all.slice(offset, offset + (input.limit ?? 100)),
+        total: all.length,
       };
     },
     updateMemberRole: async () => {
@@ -213,6 +221,8 @@ beforeAll(async () => {
       { slug: "owerri", name: "Owerri", label: "city" },
       { slug: "calabar", name: "Calabar", label: "city" },
       { slug: "warri", name: "Warri", label: "city" },
+      { slug: "benin-city", name: "Benin City", label: "city" },
+      { slug: "port-harcourt", name: "Port Harcourt", label: "city" },
     ]);
   });
   await getPluginClient(undefined, {
@@ -230,6 +240,8 @@ beforeAll(async () => {
     "owerri",
     "calabar",
     "warri",
+    "benin-city",
+    "port-harcourt",
   ]) {
     await activator.activateCommunity({ place });
   }
@@ -244,6 +256,7 @@ beforeEach(() => {
   calls.linkDao.length = 0;
   calls.adminAddMember.length = 0;
   calls.adminUpdateMemberRole.length = 0;
+  calls.listMembers.length = 0;
 });
 
 async function placeIdOf(slug: string) {
@@ -303,6 +316,54 @@ describe("Official Application approval", () => {
     ]);
     expect(orgs.get("org-enugu")?.roles.get("member-reviewer")).toBe("admin");
     expect(orgs.get("org-enugu")?.metadata.daoAccountId).toBe("enugu-test.sputnik-dao.testnet");
+  });
+
+  it("finds a reviewer past the first page of a large community and stops paging there", async () => {
+    const community = orgs.get("org-benin-city");
+    for (let index = 0; index < 150; index += 1) community?.members.add(`attendee-${index}`);
+    community?.members.add("late-reviewer");
+    community?.roles.set("late-reviewer", "member");
+    for (let index = 150; index < 250; index += 1) community?.members.add(`attendee-${index}`);
+    proposals.set("benin-city", application("benin-city"));
+    const admin = await getPluginClient(authedContext("late-reviewer", "admin"));
+
+    await admin.approveOfficialApplication({
+      proposalId: "prop-benin-city",
+      entityId: "benin-city",
+      expectedUpdatedAt: savedAt,
+    });
+
+    expect(calls.adminAddMember).toEqual([]);
+    expect(calls.adminUpdateMemberRole).toEqual([
+      { userId: "late-reviewer", role: "admin", organizationId: "org-benin-city" },
+    ]);
+    const pages = calls.listMembers.filter((call) => call.organizationId === "org-benin-city");
+    expect(pages).toEqual([
+      { organizationId: "org-benin-city", limit: 100, offset: 0 },
+      { organizationId: "org-benin-city", limit: 100, offset: 100 },
+    ]);
+  });
+
+  it("makes a member admin when a page shift hides them and adding them conflicts", async () => {
+    orgs.get("org-port-harcourt")?.members.add("shifted-reviewer");
+    orgs.get("org-port-harcourt")?.roles.set("shifted-reviewer", "member");
+    missedOnce.add("org-port-harcourt:shifted-reviewer");
+    proposals.set("port-harcourt", application("port-harcourt"));
+    const admin = await getPluginClient(authedContext("shifted-reviewer", "admin"));
+
+    await admin.approveOfficialApplication({
+      proposalId: "prop-port-harcourt",
+      entityId: "port-harcourt",
+      expectedUpdatedAt: savedAt,
+    });
+
+    expect(calls.adminAddMember).toEqual([
+      { userId: "shifted-reviewer", role: "admin", organizationId: "org-port-harcourt" },
+    ]);
+    expect(calls.adminUpdateMemberRole).toEqual([
+      { userId: "shifted-reviewer", role: "admin", organizationId: "org-port-harcourt" },
+    ]);
+    expect(orgs.get("org-port-harcourt")?.roles.get("shifted-reviewer")).toBe("admin");
   });
 
   it("links the community of the application's own place when the payload names it", async () => {

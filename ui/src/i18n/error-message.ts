@@ -41,6 +41,11 @@ export function isNotFoundError(error: unknown) {
   return status === 404 || code === "NOT_FOUND";
 }
 
+export function isConflictError(error: unknown) {
+  const { status, code } = errorStatusAndCode(error);
+  return status === 409 || code === "CONFLICT";
+}
+
 const WALLET_CANCELLED_PATTERN =
   /user (?:rejected|cancelled|canceled|closed)|request (?:rejected|cancelled|canceled)|cancelled by user|popup closed|wallet closed/i;
 
@@ -114,7 +119,6 @@ export function appErrorMessage(
   fallback: AppMessageId = "error.action",
 ) {
   if (error instanceof AppActionError) return t(error.messageId, error.values);
-  const { status, code } = errorStatusAndCode(error);
   if (isSessionError(error)) return t("error.session");
   if (isPermissionError(error)) {
     const area = deniedFeatureArea(error);
@@ -124,7 +128,7 @@ export function appErrorMessage(
   }
   const authMessage = authCodeMessage(error);
   if (authMessage) return t(authMessage);
-  if (status === 409 || code === "CONFLICT") return t("error.conflict");
+  if (isConflictError(error)) return t("error.conflict");
   if (isNearUnavailableError(error)) return t("error.nearUnavailable");
   const stakingPoolMessage = stakingPoolErrorMessage(error);
   if (stakingPoolMessage) return t(stakingPoolMessage);

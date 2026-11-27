@@ -1,8 +1,10 @@
 import { ArrowRightIcon, CompassIcon, MapPinIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { useApiClient } from "@/app";
 import { Button, EmptyState } from "@/components";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PlaceOutlineMap } from "@/components/discovery/place-outline-map";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,6 +54,8 @@ function PlacePage() {
   const translate = useAppTranslation();
   const { slug } = Route.useLoaderData();
   const api = useApiClient();
+  const navigate = useNavigate();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const resolved = useQuery(placeResolutionQueryOptions(api, slug));
   const boundary = useQuery({
     ...placeBoundaryQueryOptions(api, resolved.data?.place.id ?? ""),
@@ -114,21 +118,21 @@ function PlacePage() {
               {translate("place.noCommunity")}
             </p>
           </div>
-          <Button
-            nativeButton={false}
-            render={
-              <Link
-                to="/join"
-                search={{ place: place.slug }}
-                data-testid="place-page.start-community"
-              />
-            }
-          >
+          <Button onClick={() => setConfirmOpen(true)} data-testid="place-page.start-community">
             {translate("place.startCommunity")}
             <ArrowRightIcon />
           </Button>
         </div>
       </header>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={translate("place.startConfirmTitle", { name: place.name })}
+        description={translate("place.startConfirmDescription")}
+        confirmLabel={translate("place.startConfirm")}
+        cancelLabel={translate("common.cancel")}
+        onConfirm={() => navigate({ to: "/join", search: { place: place.slug } })}
+      />
       <PlaceOutlineMap
         name={place.name}
         latitude={place.latitude}

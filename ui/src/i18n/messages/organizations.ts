@@ -200,6 +200,12 @@ export const organizationsMessages = createMessageCatalogs(["en", "es", "fr", "z
     "Cet identifiant est déjà pris. Choisissez-en un autre.",
     "该标识已被占用，请换一个。",
   ],
+  "org.handleTakenChooseAnother": [
+    "Taken. Choose another handle.",
+    "Ocupado. Elige otro identificador.",
+    "Déjà pris. Choisissez un autre identifiant.",
+    "已占用，请选择其他标识。",
+  ],
   "org.handleTakenHint": [
     "Taken. We'll suggest a free one, or pick your own.",
     "Ocupado. Sugeriremos uno libre o puedes elegir otro.",

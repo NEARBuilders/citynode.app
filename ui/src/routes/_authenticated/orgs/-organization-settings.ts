@@ -12,7 +12,7 @@ export function useOrganizationSettings(
   auth: AuthClient,
   orgId: string,
   router: Router,
-  onUpdated: () => void,
+  onUpdated: (slug: string) => void,
 ) {
   const translate = useAppTranslation();
   const queryClient = useQueryClient();
@@ -24,11 +24,11 @@ export function useOrganizationSettings(
       });
       if (error) throw new AuthClientError(error);
     },
-    onSuccess: async () => {
+    onSuccess: async (_, { slug }) => {
       toast.success(translate("org.updated"));
+      onUpdated(slug);
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await queryClient.invalidateQueries({ queryKey: orgMembersQueryKey(orgId) });
-      onUpdated();
     },
     onError: (error: Error) => toast.error(appErrorMessage(error, translate)),
   });

@@ -26,7 +26,7 @@ import {
   resolveOrgSlug,
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-records";
-import { orgMembersQueryOptions } from "../../orgs/-organization-members";
+import { orgActiveRoleQueryOptions } from "../../orgs/-organization-members";
 import {
   CommunityHeader,
   communityAuthContextQueryOptions,
@@ -41,6 +41,7 @@ import {
 } from "./-tenant-mutations";
 import { TenantProfile } from "./-tenant-profile";
 import { TenantPublishedConfig } from "./-tenant-published-config";
+import { TenantShardDogDrops } from "./-tenant-sharddog-drops";
 import { TenantUnavailable } from "./-tenant-unavailable";
 
 export function selectTenantNode<T extends { id: string; name: string }>(
@@ -110,11 +111,11 @@ export function TenantDetailContent({
 
   const { data: organizations } = useQuery(organizationsQueryOptions(apiClient, session?.user?.id));
 
-  const membersQuery = useQuery({
-    ...orgMembersQueryOptions(apiClient, tenant?.orgId ?? ""),
+  const memberRoleQuery = useQuery({
+    ...orgActiveRoleQueryOptions(apiClient, tenant?.orgId ?? ""),
     enabled: !!tenant?.orgId && !!session?.user?.id,
   });
-  const memberRole = membersQuery.data?.find((member) => member.userId === session?.user?.id)?.role;
+  const memberRole = memberRoleQuery.data ?? undefined;
   const isPlatformAdmin = session?.user?.role === "admin";
   const isOwner = memberRole === "owner";
   const isAdmin = isCommunitySettingsRole(memberRole);
@@ -126,7 +127,7 @@ export function TenantDetailContent({
   const sameActiveOrg = !!tenant?.orgId && tenant.orgId === activeOrganizationId;
   const waitingForTeamAccess =
     sessionPending ||
-    (!!tenant?.orgId && !!session?.user?.id && membersQuery.isPending) ||
+    (!!tenant?.orgId && !!session?.user?.id && memberRoleQuery.isPending) ||
     (!isAdmin &&
       !isPlatformAdmin &&
       !!tenant?.orgId &&
@@ -297,6 +298,9 @@ export function TenantDetailContent({
       {header}
       <div className="flex w-full max-w-5xl flex-col gap-10 sm:gap-12">
         {node && (isAdmin || isPlatformAdmin) && <TenantProfile nodeId={node.id} />}
+        {tenant.orgId && (isAdmin || isPlatformAdmin) && (
+          <TenantShardDogDrops organizationId={tenant.orgId} />
+        )}
         {canManageSettings && (
           <TenantDetails
             tenant={tenant}
@@ -356,6 +360,7 @@ export function TenantDetailContent({
             tenant={tenant}
             isOwner={isOwner}
             isAdmin={isAdmin}
+            isPlatformAdmin={isPlatformAdmin}
             suspend={suspendMutation}
             reactivate={reactivateMutation}
             open={deleteOpen}

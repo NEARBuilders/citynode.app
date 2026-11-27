@@ -1,9 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PGlite } from "@electric-sql/pglite";
 import { createPluginRuntime } from "every-plugin";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import Plugin from "../index";
+import { escapeLikePattern } from "../services/proposals";
 
 function testNear(primaryAccountId: string) {
   return { primaryAccountId, linkedAccounts: [], hasNearAccount: true };
@@ -497,5 +499,129 @@ describe.sequential("Proposals plugin", () => {
         payload: { name: "Review History" },
       },
     });
+  });
+});
+
+describe("escapeLikePattern", () => {
+  it("escapes LIKE metacharacters so they match literally", () => {
+    expect(escapeLikePattern("100%")).toBe("100\\%");
+    expect(escapeLikePattern("a_b")).toBe("a\\_b");
+    expect(escapeLikePattern("c\\d")).toBe("c\\\\d");
+    expect(escapeLikePattern("plain")).toBe("plain");
+  });
+});
+
+describe.sequential("getProposals search and submission counts", () => {
+  const runtime = createPluginRuntime({ registry: { proposals: { module: Plugin } } });
+  let dataDir: string;
+  let loaded: Awaited<ReturnType<typeof runtime.usePlugin<"proposals">>>;
+
+  const member = () =>
+    loaded.createClient({ userId: "u", near: testNear("u.near"), user: testUser("u", "member") });
+  const admin = () =>
+    loaded.createClient({
+      userId: "admin",
+      near: testNear("admin.near"),
+      user: testUser("admin", "admin"),
+    });
+
+  beforeAll(async () => {
+    dataDir = await mkdtemp(join(tmpdir(), "proposals-search-"));
+    loaded = await runtime.usePlugin("proposals", {
+      variables: { privatePluginIds: [] },
+      secrets: { PROPOSALS_DATABASE_URL: `pglite:${dataDir}` },
+    });
+
+    for (const [entityId, name] of [
+      ["alpha.near", "alpha"],
+      ["100%-done.near", "pct"],
+      ["a_b.near", "under"],
+    ] as const) {
+      await member().propose({
+        pluginId: "builders",
+        entityId,
+        payload: { name },
+        idempotencyKey: entityId,
+      });
+    }
+
+    const betaFirst = await member().propose({
+      pluginId: "builders",
+      entityId: "beta.near",
+      payload: { name: "beta" },
+      idempotencyKey: "beta-1",
+    });
+    await admin().reject({
+      pluginId: "builders",
+      entityId: "beta.near",
+      expectedUpdatedAt: betaFirst.data.updatedAt,
+      reason: "redo",
+    });
+    await member().propose({
+      pluginId: "builders",
+      entityId: "beta.near",
+      payload: { name: "beta2" },
+      idempotencyKey: "beta-2",
+    });
+  });
+
+  afterAll(async () => {
+    await runtime.shutdown();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
+  it("matches a literal % instead of treating it as a wildcard", async () => {
+    const result = await member().getProposals({ query: "%", limit: 50 });
+    expect(result.data.map((proposal) => proposal.entityId)).toEqual(["100%-done.near"]);
+  });
+
+  it("matches a literal _ instead of treating it as a wildcard", async () => {
+    const result = await member().getProposals({ query: "_", limit: 50 });
+    expect(result.data.map((proposal) => proposal.entityId)).toEqual(["a_b.near"]);
+  });
+
+  it("returns the correct submission count for every row in one page", async () => {
+    const result = await member().getProposals({ pluginId: "builders", limit: 50 });
+    const counts = Object.fromEntries(
+      result.data.map((proposal) => [proposal.entityId, proposal.submissionCount]),
+    );
+    expect(counts["beta.near"]).toBe(2);
+    expect(counts["alpha.near"]).toBe(1);
+    expect(counts["a_b.near"]).toBe(1);
+    expect(counts["100%-done.near"]).toBe(1);
+  });
+
+  it("fetches proposals with a bounded number of queries (no N+1)", async () => {
+    const baseProto = Object.getPrototypeOf(PGlite.prototype);
+    const originalQuery = baseProto.query;
+    let queryCount = 0;
+    baseProto.query = async function (this: any, ...args: any[]) {
+      queryCount++;
+      return originalQuery.apply(this, args);
+    };
+    try {
+      const result = await member().getProposals({ pluginId: "builders", limit: 50 });
+      expect(result.data.length).toBe(4);
+      // Fixed code: 3 queries (count + rows + grouped submission counts).
+      // N+1 regression would use 2 + N queries (6 for 4 proposals).
+      expect(queryCount).toBeLessThanOrEqual(5);
+    } finally {
+      baseProto.query = originalQuery;
+    }
+  });
+
+  it("maps database failures to INTERNAL_SERVER_ERROR", async () => {
+    const baseProto = Object.getPrototypeOf(PGlite.prototype);
+    const originalQuery = baseProto.query;
+    baseProto.query = async () => {
+      throw new Error("simulated DB failure");
+    };
+    try {
+      await expect(member().getProposals({ pluginId: "builders", limit: 50 })).rejects.toThrow(
+        "Failed to query proposals",
+      );
+    } finally {
+      baseProto.query = originalQuery;
+    }
   });
 });

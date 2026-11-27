@@ -8,6 +8,7 @@ export function TenantDangerZone({
   tenant,
   isOwner,
   isAdmin,
+  isPlatformAdmin,
   suspend,
   reactivate,
   open,
@@ -19,6 +20,7 @@ export function TenantDangerZone({
   tenant: TenantRecord;
   isOwner: boolean;
   isAdmin: boolean;
+  isPlatformAdmin: boolean;
   suspend: TenantAction;
   reactivate: TenantAction;
   open: boolean;
@@ -30,7 +32,7 @@ export function TenantDangerZone({
   const translate = useAppTranslation();
   const [suspendOpen, setSuspendOpen] = useState(false);
   const canSuspend = isAdmin && tenant.status === "active";
-  const canReactivate = isAdmin && tenant.status === "suspended";
+  const canReactivate = isPlatformAdmin && tenant.status === "suspended";
   const canDelete = isOwner && tenant.status === "active";
 
   return (

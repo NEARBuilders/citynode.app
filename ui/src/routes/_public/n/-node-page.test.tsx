@@ -55,6 +55,8 @@ const clients: QueryClient[] = [];
 const memberCounts = new Map<string, { count: number | null; observedAt: string | null }>();
 const listings = new Map<string, Record<string, unknown> | "fail">();
 const nodeDaos = new Map<string, string>();
+const collectibles = new Map<string, Record<string, unknown>[] | "fail">();
+const joinStates = new Map<string, { joinable: boolean; member: boolean }>();
 
 afterEach(() => {
   cleanup();
@@ -64,6 +66,8 @@ afterEach(() => {
   memberCounts.clear();
   listings.clear();
   nodeDaos.clear();
+  collectibles.clear();
+  joinStates.clear();
 });
 
 function communityBuilders(path: string, overrides: Record<string, unknown> = {}) {
@@ -141,6 +145,17 @@ function mockApi(
           if (listing === "fail") return Response.json({ json: null }, { status: 500 });
           return Response.json({ json: listing ?? null });
         }
+        case "getNodeCollectibles": {
+          const items = collectibles.get(args.nodeId);
+          if (items === "fail") return Response.json({ json: null }, { status: 500 });
+          return Response.json({ json: { collectibles: items ?? [] } });
+        }
+        case "getCommunityJoinState":
+          return Response.json({
+            json: joinStates.get(args.nodeId) ?? { joinable: false, member: false },
+          });
+        case "listOrganizations":
+          return Response.json({ json: [] });
         case "getCommunityBuilders":
           return Response.json({ json: nearbuilders(args.nodeId) });
         case "getNode":
@@ -389,7 +404,10 @@ it("shows the community's last observed member count with its observation time",
   await showNode("/n/chicago");
   expect((await screen.findByTestId("node-page.member-count-value")).textContent).toBe("42");
   const observed = screen.getByTestId("node-page.member-count-observed");
-  expect(observed.textContent).toContain("Last updated");
+  expect(observed.textContent).toContain("as of");
+  expect(observed.getAttribute("title")).toBe(
+    "Counted the last time a member opened this community. It isn't a live count.",
+  );
   expect(observed.querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-20T10:00:00.000Z");
   expect(screen.getByTestId("node-page.member-count").textContent).toContain("Members");
 });
@@ -476,6 +494,59 @@ it("tells signed-out visitors that checking in at an event joins the community",
   const line = await screen.findByTestId("node-page.join-at-event");
   expect(line.textContent).toBe("Check in at an event to join Chicago.");
   expect(screen.getByTestId("node-page.events").contains(line)).toBe(true);
+  expect(screen.queryByTestId("node-page.join")).toBeNull();
+});
+
+it.each([
+  ["chicago", "Chicago"],
+  ["india", "India"],
+  ["new-york-city", "New York City"],
+  ["malaysia", "Malaysia"],
+])("offers Join on the %s community page when it is joinable", async (slug, name) => {
+  mockApi([{ ...parent, slug, name }]);
+  joinStates.set(parent.id, { joinable: true, member: false });
+  await showNode(`/n/${slug}`);
+  const join = await screen.findByTestId("node-page.join");
+  expect(join.textContent).toBe(`Join ${name}`);
+  expect(join.getAttribute("href")).toBe(`/join?place=${slug}`);
+  expect(screen.queryByTestId("node-page.joined")).toBeNull();
+  expect(screen.queryByTestId("node-page.join-at-event")).toBeNull();
+});
+
+it("offers Join to a signed-in visitor who is not a member", async () => {
+  mockApi();
+  joinStates.set(child.id, { joinable: true, member: false });
+  await showNode("/n/chicago", true);
+  expect((await screen.findByTestId("node-page.join")).getAttribute("href")).toBe(
+    "/join?place=chicago",
+  );
+  expect(screen.queryByTestId("node-page.joined")).toBeNull();
+});
+
+it("asks for the join state once per community page view", async () => {
+  mockApi();
+  joinStates.set(child.id, { joinable: true, member: false });
+  await showNode("/n/chicago");
+  await screen.findByTestId("node-page.join");
+  await screen.findByTestId("node-page.nearbuilders");
+  const requests = vi
+    .mocked(fetch)
+    .mock.calls.filter(([input]) =>
+      String(input instanceof Request ? input.url : input).endsWith("/getCommunityJoinState"),
+    );
+  expect(requests).toHaveLength(1);
+});
+
+it.each([
+  [true],
+  [false],
+])("tells a member they have joined instead of offering Join (joinable: %s)", async (joinable) => {
+  mockApi();
+  joinStates.set(child.id, { joinable, member: true });
+  await showNode("/n/chicago", true);
+  expect((await screen.findByTestId("node-page.joined")).textContent).toBe("You've joined Chicago");
+  expect(screen.queryByTestId("node-page.join")).toBeNull();
+  expect(screen.queryByTestId("node-page.join-at-event")).toBeNull();
 });
 
 it("still shows the community when its public listing can't be read", async () => {
@@ -508,4 +579,85 @@ it("links to the Node DAO's proposals only when the community has one", async ()
   await showNode("/n/chicago");
   expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
   expect(screen.queryByTestId("node-page.proposals")).toBeNull();
+});
+
+it("shows the community's membership and event ShardDogs, each linking to ShardDog", async () => {
+  mockApi();
+  collectibles.set(child.id, [
+    {
+      kind: "membership",
+      dropId: "chicago-member",
+      eventId: null,
+      eventTitle: null,
+      eventStartsAt: null,
+      name: null,
+      imageUrl: null,
+      viewUrl: "https://shard.dog/drops/chicago-member",
+    },
+    {
+      kind: "event",
+      dropId: "builders-night",
+      eventId: "event-1",
+      eventTitle: "Builders night",
+      eventStartsAt: "2026-12-01T18:00:00.000Z",
+      name: "Builders night pup",
+      imageUrl: "https://cdn.shard.dog/pup.png",
+      viewUrl: "https://shard.dog/drops/builders-night",
+    },
+  ]);
+  await showNode("/n/chicago");
+  const section = await screen.findByTestId("node-page.collectibles");
+  expect(section.querySelector("h2")?.textContent).toBe("Collectibles");
+
+  const membership = screen.getByTestId("node-page.collectible.membership");
+  expect(membership.textContent).toContain("Chicago membership");
+  expect(membership.textContent).toContain("Membership badge");
+  expect(membership.querySelector("img")).toBeNull();
+
+  const event = screen.getByTestId("node-page.collectible.event");
+  expect(event.textContent).toContain("Builders night pup");
+  expect(event.textContent).toContain("Event badge");
+  expect(event.querySelector("img")?.getAttribute("src")).toBe("https://cdn.shard.dog/pup.png");
+
+  const links = screen.getAllByRole("link", { name: /View in ShardDog/ });
+  expect(links.map((link) => link.getAttribute("href"))).toEqual([
+    "https://shard.dog/drops/chicago-member",
+    "https://shard.dog/drops/builders-night",
+  ]);
+  expect(links.every((link) => link.getAttribute("target") === "_blank")).toBe(true);
+});
+
+it("falls back to the event title when ShardDog has no name for the drop", async () => {
+  mockApi();
+  collectibles.set(child.id, [
+    {
+      kind: "event",
+      dropId: "builders-night",
+      eventId: "event-1",
+      eventTitle: "Builders night",
+      eventStartsAt: null,
+      name: null,
+      imageUrl: null,
+      viewUrl: "https://shard.dog/drops/builders-night",
+    },
+  ]);
+  await showNode("/n/chicago");
+  expect((await screen.findByTestId("node-page.collectible.event")).textContent).toContain(
+    "Builders night",
+  );
+  expect(screen.queryByTestId("node-page.collectible.membership")).toBeNull();
+});
+
+it("hides the collectibles section when no drops are linked or they can't be read", async () => {
+  mockApi();
+  await showNode("/n/chicago");
+  expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
+  await screen.findByTestId("node-page.nearbuilders");
+  expect(screen.queryByTestId("node-page.collectibles")).toBeNull();
+
+  cleanup();
+  collectibles.set(parent.id, "fail");
+  await showNode("/n/illinois");
+  expect(await screen.findByRole("heading", { name: "Illinois", level: 1 })).toBeTruthy();
+  expect(screen.queryByTestId("node-page.collectibles")).toBeNull();
 });

@@ -26,11 +26,19 @@ import { nodeMemberCountQueryOptions } from "@/lib/queries/member-directory";
 import { nodeDaoQueryOptions } from "@/lib/queries/node-dao";
 import {
   childNodesQueryOptions,
+  communityJoinStateQueryOptions,
   nodeBySlugQueryOptions,
   nodeSubtreeQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
 import { socialMeta } from "@/lib/social-meta";
+import { CommunityCollectibles } from "./-community-collectibles";
+import {
+  CommunityJoinControl,
+  CommunityPageButtons,
+  useCommunityJoin,
+  useCommunityPageActions,
+} from "./-community-role";
 import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
@@ -46,6 +54,9 @@ export const Route = createFileRoute("/_public/n/$slug")({
         queryClient.prefetchQuery(childNodesQueryOptions(apiClient, node.id)),
         queryClient.prefetchQuery(stakingValidatorsQueryOptions(apiClient, node.id)),
         queryClient.prefetchQuery(discoveryNodeQueryOptions(apiClient, node.id)),
+        queryClient.prefetchQuery(
+          communityJoinStateQueryOptions(apiClient, node.id, context.session?.user.id),
+        ),
       ]);
     }
 
@@ -113,6 +124,8 @@ function NodePage() {
     ...nodeDaoQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
   });
+  const pageActions = useCommunityPageActions(node?.tenantId ?? null);
+  const join = useCommunityJoin(nodeId, pageActions);
 
   if (nodeLoading) {
     return (
@@ -189,6 +202,7 @@ function NodePage() {
             )}
           </div>
           <div className="flex flex-col gap-3 sm:shrink-0 sm:flex-row">
+            <CommunityJoinControl join={join} slug={node.slug} nodeName={node.name} />
             {validators.length > 0 && (
               <Button
                 nativeButton={false}
@@ -237,6 +251,7 @@ function NodePage() {
                 {translate("daoProposals.title")}
               </Button>
             )}
+            <CommunityPageButtons nodeId={node.id} nodeName={node.name} actions={pageActions} />
             <ProposeHomepageCta tenantId={node.tenantId} />
           </div>
         </div>
@@ -281,9 +296,11 @@ function NodePage() {
         <SectionHeader
           title={translate("community.upcoming")}
           description={
-            <span data-testid="node-page.join-at-event">
-              {translate("community.joinAtEvent", { name: node.name })}
-            </span>
+            pageActions.joinHint && join === "unavailable" ? (
+              <span data-testid="node-page.join-at-event">
+                {translate("community.joinAtEvent", { name: node.name })}
+              </span>
+            ) : undefined
           }
         />
         {events.length > 0 ? (
@@ -304,6 +321,8 @@ function NodePage() {
           testId="node-page.updates"
         />
       )}
+
+      <CommunityCollectibles nodeId={node.id} nodeName={node.name} />
 
       {(childrenLoading || children.length > 0) && (
         <section className="flex flex-col gap-6" data-testid="node-page.children">

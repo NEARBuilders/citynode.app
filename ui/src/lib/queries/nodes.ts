@@ -39,6 +39,9 @@ export const nodeQueryKeys = {
   subtree: (nodeId: string) => [...nodeQueryKeys.details(), nodeId, "subtree"] as const,
   stakingValidators: (nodeId: string) =>
     [...nodeQueryKeys.details(), nodeId, "staking-validators"] as const,
+  joinStates: () => [...nodeQueryKeys.all, "join-state"] as const,
+  joinState: (nodeId: string, userId: string | undefined) =>
+    [...nodeQueryKeys.joinStates(), nodeId, userId ?? null] as const,
 };
 
 export function allNodesQueryOptions(apiClient: ApiClient) {
@@ -85,6 +88,19 @@ export function nodeBySlugQueryOptions(apiClient: ApiClient, slug: string) {
     queryKey: nodeQueryKeys.bySlug(slug),
     queryFn: () => apiClient.resolveNodeBySlug({ slug }),
     staleTime: NODE_STALE_TIME,
+  });
+}
+
+export function communityJoinStateQueryOptions(
+  apiClient: ApiClient,
+  nodeId: string,
+  userId: string | undefined,
+) {
+  return queryOptions({
+    queryKey: nodeQueryKeys.joinState(nodeId, userId),
+    queryFn: () => apiClient.getCommunityJoinState({ nodeId }),
+    staleTime: NODE_STALE_TIME,
+    retry: 1,
   });
 }
 

@@ -162,7 +162,7 @@ describe("NodesService", () => {
           joinCodeId: "join-penang",
         });
         const placeholderId = started.node.tenantId!;
-        yield* tenants.updateTenant(placeholderId, { status: "suspended" });
+        yield* tenants.suspendTenant(placeholderId);
         expect(yield* nodes.delete(started.node.id)).toBe(true);
         expect(yield* tenants.resolveTenantById(placeholderId)).toMatchObject({
           accountId: `archived-${placeholderId}.v1.citynode.near`,
@@ -565,6 +565,58 @@ describe("NodesService", () => {
         const platform = yield* nodes.spawn({ kind: "platform", tenantId });
 
         expect(yield* nodes.listAncestors(platform.id)).toEqual([]);
+      }),
+    );
+  });
+});
+
+describe("join codes", () => {
+  it("fills a missing code once and keeps it when metadata is replaced", async () => {
+    const layer = freshLayer();
+    await runService(layer, ({ db, nodes }) =>
+      Effect.gen(function* () {
+        const chicago = yield* Effect.tryPromise(() => seedPlace(db, "chicago"));
+        const platformPlace = yield* Effect.tryPromise(() => seedPlace(db, "platform-place"));
+        const missing = yield* nodes.activateForPlace({
+          placeId: chicago.id,
+          orgId: "org-chicago",
+          activatedBy: "user-1",
+          joinCodeId: "",
+          kind: "city",
+        });
+        const platform = yield* nodes.activateForPlace({
+          placeId: platformPlace.id,
+          orgId: "org-platform",
+          activatedBy: "user-1",
+          joinCodeId: "",
+          kind: "platform",
+        });
+
+        expect((yield* nodes.listMissingJoinCodes()).map((node) => node.slug)).toEqual(["chicago"]);
+        expect(yield* nodes.attachJoinCodeIfMissing(missing.node.id, "")).toBe(false);
+        expect(yield* nodes.attachJoinCodeIfMissing(missing.node.id, "join-code-chicago")).toBe(
+          true,
+        );
+        expect(yield* nodes.attachJoinCodeIfMissing(missing.node.id, "second-code")).toBe(false);
+
+        const edited = yield* nodes.update(missing.node.id, {
+          metadata: { bulletin: "hello", joinCodeId: "forged" },
+        });
+        expect(edited.metadata).toMatchObject({
+          bulletin: "hello",
+          joinCodeId: "join-code-chicago",
+          kind: "city",
+        });
+
+        const untouched = yield* nodes.getById(platform.node.id);
+        expect(untouched?.metadata.joinCodeId).toBe("");
+        const forged = yield* nodes.spawn({ metadata: { joinCodeId: "forged", bulletin: "hi" } });
+        expect(forged.metadata.joinCodeId).toBeUndefined();
+        const replaced = yield* nodes.update(forged.id, {
+          metadata: { joinCodeId: "forged", bulletin: "there" },
+        });
+        expect(replaced.metadata).toMatchObject({ bulletin: "there" });
+        expect(replaced.metadata.joinCodeId).toBeUndefined();
       }),
     );
   });

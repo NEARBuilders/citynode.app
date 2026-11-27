@@ -15,7 +15,7 @@ export const UPSTREAM_CODE_PAGE_LIMIT = 20;
 
 export const ORGANIZATION_SWEEP = "*";
 
-const SETTLED_AFTER_MS = 14 * 24 * 3_600_000;
+export const SETTLED_AFTER_MS = 14 * 24 * 3_600_000;
 
 export interface CommunityEvent {
   id: string;
@@ -32,7 +32,7 @@ export interface UpstreamCode {
 export interface UpstreamCodeStatus {
   eventId: string | null;
   eventName: string | null;
-  joined: Array<{ userId: string; createdAt: Date }>;
+  joined: Array<{ userId: string; createdAt: Date; accountId?: string | null }>;
 }
 
 export interface AttendanceUpstream {
@@ -100,6 +100,7 @@ export interface AttendanceService {
     communityName: string;
     events: CommunityEvent[];
     upstream: AttendanceUpstream;
+    rereadCodes: ReadonlySet<string>;
   }): AttendanceEffect<ReconcileSummary>;
   recordedOrganizations(userId: string): AttendanceEffect<string[]>;
   history(input: {
@@ -137,6 +138,7 @@ export const AttendanceLive = Layer.effect(
       code: UpstreamCode;
       known: Set<string>;
       upstream: AttendanceUpstream;
+      rereadCodes: ReadonlySet<string>;
     }) {
       const { organizationId, code } = input;
       const [checkpoint] = yield* query(() =>
@@ -150,11 +152,12 @@ export const AttendanceLive = Layer.effect(
             ),
           ),
       );
-      if (checkpoint?.usedCount === code.usedCount) return true;
+      const unchanged = checkpoint?.usedCount === code.usedCount;
+      if (unchanged && !input.rereadCodes.has(code.id)) return true;
       const status = yield* Effect.tryPromise(() => input.upstream.codeStatus(code.id)).pipe(
         Effect.option,
       );
-      if (status._tag === "None") return false;
+      if (status._tag === "None") return unchanged;
       const { eventId, eventName, joined } = status.value;
       const classified = !!eventId && input.known.has(eventId);
       yield* query(() =>
@@ -172,6 +175,7 @@ export const AttendanceLive = Layer.effect(
                   communityName: input.communityName,
                   classified,
                   checkedInAt: join.createdAt,
+                  accountId: join.accountId ?? null,
                 })),
               )
               .onConflictDoUpdate({
@@ -185,6 +189,7 @@ export const AttendanceLive = Layer.effect(
                   eventName: sql`excluded.event_name`,
                   checkedInAt: sql`excluded.checked_in_at`,
                   classified: sql`${attendanceCheckIns.classified} or excluded.classified`,
+                  accountId: sql`coalesce(excluded.account_id, ${attendanceCheckIns.accountId})`,
                 },
               });
           }
@@ -230,6 +235,7 @@ export const AttendanceLive = Layer.effect(
         communityName,
         events,
         upstream,
+        rereadCodes,
       }) {
         const known = new Set(events.map((event) => event.id));
         const forbidden = () =>
@@ -287,6 +293,7 @@ export const AttendanceLive = Layer.effect(
                   code,
                   known,
                   upstream,
+                  rereadCodes,
                 }),
               );
               return {
@@ -299,7 +306,14 @@ export const AttendanceLive = Layer.effect(
         );
         const outside = (latest ?? []).filter((code) => !code.eventId || !known.has(code.eventId));
         const outsideRecorded = yield* Effect.forEach(outside, (code) =>
-          recordCode({ organizationId, communityName, code, known, upstream }),
+          recordCode({
+            organizationId,
+            communityName,
+            code,
+            known,
+            upstream,
+            rereadCodes,
+          }),
         );
         results.push({
           id: ORGANIZATION_SWEEP,

@@ -60,7 +60,7 @@ type Binding = {
 type Harness = {
   apiClient: Record<string, (...args: never[]) => unknown> & {
     auth: {
-      listMembers: ReturnType<typeof vi.fn>;
+      getActiveMemberRole: ReturnType<typeof vi.fn>;
       getContext: ReturnType<typeof vi.fn>;
     };
   };
@@ -269,7 +269,7 @@ function createHarness({
 
   const apiClient = {
     auth: {
-      listMembers: vi.fn(async () => ({ members: [{ userId: USER_ID, role }] })),
+      getActiveMemberRole: vi.fn(async () => ({ role })),
       getContext: vi.fn(async () => ({
         user: { role: null },
         organization: {
@@ -404,7 +404,7 @@ afterEach(() => {
 describe("tenant detail mutations", () => {
   it("refreshes pre-seeded tenant and node data after update, suspend, and reactivate", async () => {
     const current = createHarness();
-    const { queryClient } = renderTenant(current);
+    const { queryClient } = renderTenant(current, { user: { id: USER_ID, role: "admin" } });
 
     expect(await screen.findByText("Original tenant")).toBeTruthy();
     await waitFor(() =>
@@ -455,9 +455,27 @@ describe("tenant detail mutations", () => {
     ]);
   });
 
+  it.each([
+    "owner",
+    "admin",
+  ] as const)("does not offer reactivation of a suspended tenant to an organization %s", async (role) => {
+    renderTenant(createHarness({ role, status: "suspended" }));
+
+    expect(await screen.findByText("Original tenant")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reactivate" })).toBeNull();
+  });
+
+  it("offers reactivation of a suspended tenant to a platform admin", async () => {
+    renderTenant(createHarness({ role: "member", status: "suspended" }), {
+      user: { id: USER_ID, role: "admin" },
+    });
+
+    expect(await screen.findByRole("button", { name: "Reactivate" })).toBeTruthy();
+  });
+
   it("refreshes persisted state and reports a partial success when suspension publication fails", async () => {
     const current = createHarness({ publishError: new Error("publisher unavailable") });
-    const { queryClient } = renderTenant(current);
+    const { queryClient } = renderTenant(current, { user: { id: USER_ID, role: "admin" } });
 
     await screen.findByText("Original tenant");
     await confirmSuspend();
@@ -550,7 +568,7 @@ describe("tenant detail mutations", () => {
 
     await screen.findByText("Community not found");
     expect(screen.queryByText("Original tenant")).toBeNull();
-    await waitFor(() => expect(current.apiClient.auth.listMembers).toHaveBeenCalledOnce());
+    await waitFor(() => expect(current.apiClient.auth.getActiveMemberRole).toHaveBeenCalledOnce());
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();

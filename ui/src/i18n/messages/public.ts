@@ -1,6 +1,32 @@
 import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
+  "collectibles.descriptionNamed": [
+    "ShardDogs you collect by checking in to {name}'s events. Your first check-in also gives you the membership badge.",
+    "ShardDogs que consigues al hacer check-in en los eventos de {name}. Tu primer check-in también te da la insignia de membresía.",
+    "Des ShardDogs à collectionner en vous enregistrant aux événements de {name}. Votre premier check-in vous donne aussi le badge d’adhésion.",
+    "在 {name} 的活动签到即可收集 ShardDog。首次签到还会获得会员徽章。",
+  ],
+  "collectibles.event": ["Event badge", "Insignia del evento", "Badge d’événement", "活动徽章"],
+  "collectibles.membership": [
+    "Membership badge",
+    "Insignia de membresía",
+    "Badge d’adhésion",
+    "会员徽章",
+  ],
+  "collectibles.membershipNamed": [
+    "{name} membership",
+    "Membresía de {name}",
+    "Adhésion à {name}",
+    "{name} 会员",
+  ],
+  "collectibles.title": ["Collectibles", "Coleccionables", "Objets de collection", "收藏品"],
+  "collectibles.view": [
+    "View in ShardDog",
+    "Ver en ShardDog",
+    "Voir sur ShardDog",
+    "在 ShardDog 中查看",
+  ],
   "community.addLink": ["Add link", "Añadir enlace", "Ajouter un lien", "添加链接"],
   "community.addLocation": [
     "Add a location",
@@ -130,12 +156,33 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Masqué dans Explorer",
     "已在探索页面隐藏",
   ],
+  "community.join": ["Join {name}", "Unirse a {name}", "Rejoindre {name}", "加入{name}"],
+  "community.joined": [
+    "You've joined {name}",
+    "Ya te uniste a {name}",
+    "Vous avez rejoint {name}",
+    "你已加入{name}",
+  ],
   "community.joinAtEvent": [
     "Check in at an event to join {name}.",
     "Haz check-in en un evento para unirte a {name}.",
     "Enregistrez-vous à un événement pour rejoindre {name}.",
     "在活动现场签到即可加入{name}。",
   ],
+  "community.openAdmin": [
+    "All communities",
+    "Todas las comunidades",
+    "Toutes les communautés",
+    "所有社区",
+  ],
+  "community.openEvents": ["Open events", "Abrir eventos", "Ouvrir les événements", "打开活动"],
+  "community.openMine": [
+    "Open My community",
+    "Abrir Mi comunidad",
+    "Ouvrir Ma communauté",
+    "打开我的社区",
+  ],
+  "community.openSetup": ["Set up {name}", "Configurar {name}", "Configurer {name}", "设置{name}"],
   "community.joinLinks": [
     "Where people can join",
     "Dónde pueden unirse las personas",
@@ -299,10 +346,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "用户可以找到此社区及其活动。",
   ],
   "community.start": [
-    "Start a community",
-    "Crear una comunidad",
-    "Créer une communauté",
-    "创建社区",
+    "Make a community official",
+    "Oficializar una comunidad",
+    "Officialiser une communauté",
+    "申请成为官方社区",
   ],
   "community.stopFeaturing": [
     "Stop featuring",
@@ -340,6 +387,43 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Dónde os reunís",
     "Où vous vous retrouvez",
     "聚会地点",
+  ],
+  "join.backToCommunity": ["Back to {name}", "Volver a {name}", "Retour à {name}", "返回{name}"],
+  "join.checkingSession": [
+    "Checking your session…",
+    "Comprobando tu sesión…",
+    "Vérification de votre session…",
+    "正在检查你的会话…",
+  ],
+  "join.failed": [
+    "We couldn't add you to this community. Please try again.",
+    "No pudimos añadirte a esta comunidad. Inténtalo de nuevo.",
+    "Nous n'avons pas pu vous ajouter à cette communauté. Veuillez réessayer.",
+    "无法将你加入这个社区，请重试。",
+  ],
+  "join.notFound": [
+    "We couldn't find this community.",
+    "No encontramos esta comunidad.",
+    "Nous n'avons pas trouvé cette communauté.",
+    "找不到这个社区。",
+  ],
+  "join.settingUp": [
+    "Setting up your membership…",
+    "Preparando tu membresía…",
+    "Préparation de votre adhésion…",
+    "正在为你办理加入…",
+  ],
+  "join.title": [
+    "Join a community",
+    "Unirse a una comunidad",
+    "Rejoindre une communauté",
+    "加入社区",
+  ],
+  "join.unavailable": [
+    "You can't join this community right now. Try again later, or check in at one of its events.",
+    "No puedes unirte a esta comunidad ahora. Inténtalo más tarde o haz check-in en uno de sus eventos.",
+    "Vous ne pouvez pas rejoindre cette communauté pour le moment. Réessayez plus tard ou enregistrez-vous à l'un de ses événements.",
+    "暂时无法加入这个社区。请稍后再试，或在该社区的活动现场签到。",
   ],
   "skill.commandCopied": ["Command copied", "Comando copiado", "Commande copiée", "命令已复制"],
   "skill.copyCommand": ["Copy command", "Copiar comando", "Copier la commande", "复制命令"],
@@ -1012,6 +1096,19 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Créer cette communauté",
     "创建此社区",
   ],
+  "place.startConfirmTitle": [
+    "Start a community for {name}?",
+    "¿Crear una comunidad para {name}?",
+    "Créer une communauté pour {name} ?",
+    "为 {name} 创建社区？",
+  ],
+  "place.startConfirmDescription": [
+    "You'll own this community, and people can find it on Explore and join it. This doesn't make it an official City Node.",
+    "Esta comunidad será tuya, y otras personas podrán encontrarla en Explorar y unirse. Esto no la convierte en un City Node oficial.",
+    "Vous serez propriétaire de cette communauté, et d’autres pourront la trouver dans Explorer et la rejoindre. Cela n’en fait pas un City Node officiel.",
+    "你将成为此社区的所有者，其他人可以在探索中找到并加入它。这不会使它成为官方 City Node。",
+  ],
+  "place.startConfirm": ["Start community", "Crear comunidad", "Créer la communauté", "创建社区"],
   "place.title": ["Place", "Lugar", "Lieu", "地点"],
   "payout.stepUnstake": [
     "Step 1 of 2 · Unstake from the pool (a treasury vote)",

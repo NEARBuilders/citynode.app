@@ -307,6 +307,71 @@ export const NodeDaoSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).nullable(),
 });
 
+export const ShardDogDropIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9._:-]+$/);
+
+export const ShardDogDropsSchema = z.object({
+  enabled: z.boolean(),
+  canEdit: z.boolean(),
+  membershipDropId: z.string().nullable(),
+  events: z.array(
+    z.object({
+      eventId: z.string(),
+      title: z.string(),
+      startsAt: z.string().nullable(),
+      dropId: z.string().nullable(),
+    }),
+  ),
+});
+
+export const MyCollectiblesSchema = z.object({
+  enabled: z.boolean(),
+  collectibles: z.array(
+    z.object({
+      organizationId: z.string(),
+      kind: z.enum(["membership", "event"]),
+      eventId: z.string().nullable(),
+      status: z.enum(["awarded", "pending", "claim", "needs_account"]),
+      viewUrl: z.string().nullable(),
+      claimUrl: z.string().nullable(),
+    }),
+  ),
+});
+
+export const AccountCollectiblesSchema = z.object({
+  enabled: z.boolean(),
+  collectibles: z.array(
+    z.object({
+      organizationId: z.string(),
+      communityName: z.string(),
+      kind: z.enum(["membership", "event"]),
+      eventId: z.string().nullable(),
+      eventTitle: z.string().nullable(),
+      awardedAt: z.string(),
+      viewUrl: z.string(),
+    }),
+  ),
+});
+
+export const NodeCollectibleSchema = z.object({
+  kind: z.enum(["membership", "event"]),
+  dropId: z.string(),
+  eventId: z.string().nullable(),
+  eventTitle: z.string().nullable(),
+  eventStartsAt: z.string().nullable(),
+  name: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  viewUrl: z.string(),
+});
+
+export const NodeCollectiblesSchema = z.object({
+  collectibles: z.array(NodeCollectibleSchema),
+});
+
 export const OnboardCommunitySchema = z.object({
   name: z.string().min(1),
   href: z.string(),
@@ -616,14 +681,19 @@ export const contract = oc.router({
         tenantId: z.string(),
         name: z.string().optional(),
         accountId: z.string().optional(),
-        status: TenantStatusSchema.optional(),
         allowUiOverrides: z.boolean().optional(),
         allowBackendOverrides: z.boolean().optional(),
         allowSsr: z.boolean().optional(),
       }),
     )
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      NOT_FOUND,
+      BAD_REQUEST,
+      CONFLICT: { status: 409, message: "Tenant with this accountId already exists" },
+    }),
 
   deleteTenant: oc
     .route({ method: "POST", path: "/tenants/{tenantId}/delete" })
@@ -635,13 +705,20 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/tenants/{tenantId}/suspend" })
     .input(z.object({ tenantId: z.string() }))
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT }),
 
   reactivateTenant: oc
-    .route({ method: "POST", path: "/tenants/{tenantId}/reactivate" })
+    .route({
+      method: "POST",
+      path: "/tenants/{tenantId}/reactivate",
+      summary: "Activate a pending tenant, lift a suspension or restore a tenant pending deletion",
+      description:
+        "Platform admin — only a platform admin activates a pending tenant, lifts a suspension or " +
+        "restores a tenant pending deletion. Restoring clears the deletion timestamp.",
+    })
     .input(z.object({ tenantId: z.string() }))
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT }),
 
   resolveTenant: oc
     .route({ method: "GET", path: "/tenants/account/{accountId}" })
@@ -685,12 +762,18 @@ export const contract = oc.router({
       path: "/stake/communities",
       summary: "List communities available for staking",
       description:
-        "Session-aware — active organization first, organization memberships as fallback, and the full public directory for anonymous visitors.",
+        "Public — every listed community for everyone. Signed-in viewers get their active organization's community first, then their other memberships.",
     })
     .output(
       z.array(
         TenantAppSchema.extend({
           stakeable: z.boolean().describe("Whether the community has its own validator"),
+          viewerMembership: z
+            .enum(["active", "member"])
+            .nullable()
+            .describe(
+              "'active' for the viewer's active organization, 'member' for another of their organizations, null otherwise",
+            ),
         }),
       ),
     ),
@@ -720,7 +803,10 @@ export const contract = oc.router({
       FORBIDDEN,
       BAD_REQUEST,
       NOT_FOUND,
-      CONFLICT: { status: 409, message: "Hostname already in use" },
+      CONFLICT: {
+        status: 409,
+        message: "Hostname already in use, or the tenant already has a primary domain",
+      },
     }),
 
   verifyCustomDomain: oc
@@ -1034,6 +1120,17 @@ export const contract = oc.router({
     )
     .errors({ UNAUTHORIZED, NOT_FOUND, CONFLICT }),
 
+  getCommunityJoinState: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/join-state",
+      summary: "Whether a community can be joined, and whether the caller belongs",
+      description:
+        "Public. joinable is true when the community has a place, a standing join code and no inactive tenant. member is true when the caller belongs to the community's organization.",
+    })
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(z.object({ joinable: z.boolean(), member: z.boolean() })),
+
   listValidators: oc
     .route({
       method: "GET",
@@ -1233,6 +1330,70 @@ export const contract = oc.router({
     .input(z.object({ organizationId: z.string().min(1) }))
     .output(OnboardCommunitySchema)
     .errors({ NOT_FOUND }),
+
+  getShardDogDrops: oc
+    .route({
+      method: "GET",
+      path: "/communities/by-organization/{organizationId}/sharddog-drops",
+      summary: "Get a community's ShardDog drops",
+      description:
+        "Public — the community's membership drop and each of its events with the drop linked to it. canEdit is true for the community's owners and admins and for platform admins.",
+    })
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .output(ShardDogDropsSchema)
+    .errors({ NOT_FOUND }),
+
+  getNodeCollectibles: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/collectibles",
+      summary: "Get a community's ShardDog collectibles",
+      description:
+        "Public — the community's membership ShardDog and the ShardDog of each public event, for the drops linked to them, each with a View in ShardDog link. Empty when ShardDog is off or nothing is linked.",
+    })
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(NodeCollectiblesSchema),
+
+  setShardDogDrop: oc
+    .route({
+      method: "PUT",
+      path: "/communities/by-organization/{organizationId}/sharddog-drops",
+      summary: "Link or clear a community's or event's ShardDog drop",
+      description:
+        "Community owners and admins, and platform admins. Without eventId it sets the community's membership drop; with eventId it sets that event's drop. A null dropId clears it.",
+    })
+    .input(
+      z.object({
+        organizationId: z.string().min(1),
+        eventId: z.string().min(1).optional(),
+        dropId: ShardDogDropIdSchema.nullable(),
+      }),
+    )
+    .output(ShardDogDropsSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+
+  getMyCollectibles: oc
+    .route({
+      method: "GET",
+      path: "/collectibles/me",
+      summary: "List the caller's ShardDog collectibles from event check-ins",
+      description:
+        "Caller only — each membership and event ShardDog earned by checking in, with its View in ShardDog link once awarded, or a one-time claim link (status claim) when no NEAR account is known. First attaches the caller's primary NEAR account to awards with neither an account nor a claim link, and retries their pending awards. With organizationId, only that community.",
+    })
+    .input(z.object({ organizationId: z.string().min(1).optional() }))
+    .output(MyCollectiblesSchema)
+    .errors({ UNAUTHORIZED }),
+
+  getAccountCollectibles: oc
+    .route({
+      method: "GET",
+      path: "/collectibles/accounts/{accountId}",
+      summary: "List the City Node ShardDogs awarded to a NEAR account",
+      description:
+        "Public — the membership and event ShardDogs this NEAR account has been awarded by checking in, newest first, each with its View in ShardDog link. Only live communities and published events are listed; pending awards are left out.",
+    })
+    .input(z.object({ accountId: z.string().min(1).max(64) }))
+    .output(AccountCollectiblesSchema),
 
   getMyAttendance: oc
     .route({

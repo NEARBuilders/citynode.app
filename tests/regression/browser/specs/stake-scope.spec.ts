@@ -71,7 +71,9 @@ test.describe("stake community scope", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
-  test("shows only connected communities without an active organization", async ({ page }) => {
+  test("lists every community, connected ones first, without an active organization", async ({
+    page,
+  }) => {
     const pageErrors = collectErrors(page);
     await setActiveOrganization(page, null);
 
@@ -81,7 +83,28 @@ test.describe("stake community scope", () => {
     const directory = page.getByTestId("stake.directory");
     await expect(directory).toContainText("Regression Tenant");
     await expect(directory.getByTestId(`stake.community-${connectedNode.slug}`)).toBeVisible();
-    await expect(directory.getByTestId(`stake.community-${unrelatedNode.slug}`)).toHaveCount(0);
+    await expect(directory.getByTestId(`stake.community-${unrelatedNode.slug}`)).toBeVisible();
+    const order = await directory
+      .locator('[data-testid^="stake.community-"]')
+      .evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")));
+    expect(order.indexOf(`stake.community-${connectedNode.slug}`)).toBeLessThan(
+      order.indexOf(`stake.community-${unrelatedNode.slug}`),
+    );
+    expectNoHydrationFailure(pageErrors);
+  });
+
+  test("an active organization's member can still browse every community", async ({ page }) => {
+    const pageErrors = collectErrors(page);
+    const { orgAID } = loadSeedData();
+    await setActiveOrganization(page, orgAID);
+
+    await page.goto("/stake", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await page.getByTestId("stake.back").click();
+
+    const directory = page.getByTestId("stake.directory");
+    await expect(directory.getByTestId(`stake.community-${unrelatedNode.slug}`)).toBeVisible();
+    await expect(page).toHaveURL(/[?&]all=true/);
     expectNoHydrationFailure(pageErrors);
   });
 

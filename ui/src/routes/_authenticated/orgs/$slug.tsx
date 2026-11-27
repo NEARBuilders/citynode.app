@@ -133,7 +133,16 @@ function OrganizationDetail() {
   const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery(
     organizationsQueryOptions(apiClient, session?.user?.id),
   );
-  const org = organizations.find((organization) => organization.slug === orgSlug);
+  const [rename, setRename] = useState<{ id: string; from: string; slug: string } | null>(null);
+  const orgBySlug = organizations.find((organization) => organization.slug === orgSlug);
+  const renaming = rename && (orgSlug === rename.from || orgSlug === rename.slug) ? rename : null;
+  const org = renaming
+    ? organizations.find((organization) => organization.id === renaming.id)
+    : orgBySlug;
+  const renameSettled = !!rename && orgSlug === rename.slug && orgBySlug?.id === rename.id;
+  useEffect(() => {
+    if (renameSettled) setRename(null);
+  }, [renameSettled]);
   const orgId = org?.id ?? "";
   const activeOrgId = session?.session?.activeOrganizationId;
   const isActive = orgId === activeOrgId;
@@ -238,7 +247,12 @@ function OrganizationDetail() {
     auth,
     orgId,
     router,
-    () => setIsEditing(false),
+    (slug) => {
+      setIsEditing(false);
+      if (slug === orgSlug) return;
+      setRename({ id: orgId, from: orgSlug, slug });
+      void navigate({ params: { slug }, search: (prev) => prev, replace: true });
+    },
   );
 
   if (isLoadingOrgs) {
@@ -318,6 +332,7 @@ function OrganizationDetail() {
       {isOwner && (
         <OrganizationEditForm
           open={isEditing}
+          currentSlug={org.slug}
           editName={editName}
           editSlug={editSlug}
           isPending={updateOrgMutation.isPending}
