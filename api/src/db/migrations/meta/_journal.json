@@ -171,6 +171,13 @@
       "breakpoints": true
     },
     {
+      "idx": 24,
+      "version": "7",
+      "when": 1795714413213,
+      "tag": "0024_sharddog-awards-account",
+      "breakpoints": true
+    },
+    {
       "idx": 25,
       "version": "7",
       "when": 1795748219389,

@@ -38,6 +38,31 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "ShardDog d’adhésion",
     "会员 ShardDog",
   ],
+  "collectibles.profileTitle": [
+    "City Node collectibles",
+    "Coleccionables de City Node",
+    "Objets de collection City Node",
+    "City Node 收藏品",
+  ],
+  "collectibles.profileDescription": [
+    "ShardDogs collected by checking in at City Node events.",
+    "ShardDogs conseguidos al registrarse en eventos de City Node.",
+    "ShardDogs obtenus en s’enregistrant aux événements City Node.",
+    "在 City Node 活动签到获得的 ShardDog。",
+  ],
+  "collectibles.profileEmpty": [
+    "No City Node collectibles yet.",
+    "Todavía no hay coleccionables de City Node.",
+    "Pas encore d’objets de collection City Node.",
+    "还没有 City Node 收藏品。",
+  ],
+  "collectibles.profileLoadFailed": [
+    "Couldn’t load collectibles.",
+    "No se pudieron cargar los coleccionables.",
+    "Impossible de charger les objets de collection.",
+    "无法加载收藏品。",
+  ],
+  "collectibles.collectedOn": ["Collected", "Conseguido el", "Obtenu le", "获得于"],
   "collectibles.membershipHint": [
     "From your first check-in at {community}",
     "De tu primer check-in en {community}",

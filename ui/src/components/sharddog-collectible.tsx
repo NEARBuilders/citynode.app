@@ -36,6 +36,18 @@ function ShardDogLink({
   );
 }
 
+export function ShardDogViewLink({ href, testId }: { href: string; testId: string }) {
+  const translate = useAppTranslation();
+  return (
+    <ShardDogLink
+      href={href}
+      variant="outline"
+      testId={testId}
+      label={translate("collectibles.viewInShardDog")}
+    />
+  );
+}
+
 export function ShardDogCollectible({
   collectible,
   testId,
@@ -45,14 +57,7 @@ export function ShardDogCollectible({
 }) {
   const translate = useAppTranslation();
   if (collectible.status === "awarded" && collectible.viewUrl) {
-    return (
-      <ShardDogLink
-        href={collectible.viewUrl}
-        variant="outline"
-        testId={`${testId}-view`}
-        label={translate("collectibles.viewInShardDog")}
-      />
-    );
+    return <ShardDogViewLink href={collectible.viewUrl} testId={`${testId}-view`} />;
   }
   if (collectible.status === "claim" && collectible.claimUrl) {
     return (

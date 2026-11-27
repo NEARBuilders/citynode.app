@@ -448,6 +448,7 @@ export const sharddogAwards = pgTable(
       .on(t.organizationId, t.userId, t.eventId)
       .where(sql`kind = 'event'`),
     userIdx: index("sharddog_awards_user").on(t.userId),
+    accountIdx: index("sharddog_awards_account").on(t.accountId),
     pendingIdx: index("sharddog_awards_pending").on(t.status, t.organizationId),
   }),
 );
