@@ -20,6 +20,18 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Connectez un compte NEAR pour récupérer votre ShardDog",
     "连接 NEAR 账户以领取你的 ShardDog",
   ],
+  "collectibles.claimInShardDog": [
+    "Claim in ShardDog",
+    "Reclamar en ShardDog",
+    "Récupérer dans ShardDog",
+    "在 ShardDog 中领取",
+  ],
+  "collectibles.claimHint": [
+    "This link works once. Open it in ShardDog and sign up with a passkey to collect.",
+    "Este enlace funciona una vez. Ábrelo en ShardDog y regístrate con una passkey para recogerlo.",
+    "Ce lien ne fonctionne qu’une fois. Ouvrez-le dans ShardDog et inscrivez-vous avec une passkey pour le récupérer.",
+    "此链接仅可使用一次。在 ShardDog 中打开并使用通行密钥注册即可领取。",
+  ],
   "collectibles.membershipShardDog": [
     "Membership ShardDog",
     "ShardDog de membresía",

@@ -271,6 +271,7 @@ describe("AttendanceRecord", () => {
           eventId: null,
           status: "awarded",
           viewUrl: "https://shard.dog/view/member",
+          claimUrl: null,
         },
         {
           organizationId: "org-north",
@@ -278,6 +279,7 @@ describe("AttendanceRecord", () => {
           eventId: "e1",
           status: "awarded",
           viewUrl: "https://shard.dog/view/night",
+          claimUrl: null,
         },
         {
           organizationId: "org-north",
@@ -285,6 +287,15 @@ describe("AttendanceRecord", () => {
           eventId: "e2",
           status: "pending",
           viewUrl: null,
+          claimUrl: null,
+        },
+        {
+          organizationId: "org-north",
+          kind: "event",
+          eventId: "e3",
+          status: "claim",
+          viewUrl: null,
+          claimUrl: "https://shard.dog/claim/once",
         },
       ],
     });
@@ -299,6 +310,10 @@ describe("AttendanceRecord", () => {
     ]);
     expect(links[0]?.getAttribute("target")).toBe("_blank");
     expect(screen.getByTestId("attendance-event-collectible-pending")).toBeTruthy();
+    const claim = screen.getByTestId("attendance-event-collectible-claim");
+    expect(claim.getAttribute("href")).toBe("https://shard.dog/claim/once");
+    expect(claim.getAttribute("target")).toBe("_blank");
+    expect(screen.getByText(/This link works once/)).toBeTruthy();
     expect(screen.getAllByTestId("attendance-event")).toHaveLength(3);
   });
 

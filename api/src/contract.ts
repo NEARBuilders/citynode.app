@@ -335,8 +335,9 @@ export const MyCollectiblesSchema = z.object({
       organizationId: z.string(),
       kind: z.enum(["membership", "event"]),
       eventId: z.string().nullable(),
-      status: z.enum(["awarded", "pending", "needs_account"]),
+      status: z.enum(["awarded", "pending", "claim", "needs_account"]),
       viewUrl: z.string().nullable(),
+      claimUrl: z.string().nullable(),
     }),
   ),
 });
@@ -1360,7 +1361,7 @@ export const contract = oc.router({
       path: "/collectibles/me",
       summary: "List the caller's ShardDog collectibles from event check-ins",
       description:
-        "Caller only — each membership and event ShardDog earned by checking in, with its View in ShardDog link once awarded. Retries the caller's pending awards first. With organizationId, only that community.",
+        "Caller only — each membership and event ShardDog earned by checking in, with its View in ShardDog link once awarded, or a one-time claim link (status claim) when the check-in had no NEAR account. Retries the caller's pending awards first. With organizationId, only that community.",
     })
     .input(z.object({ organizationId: z.string().min(1).optional() }))
     .output(MyCollectiblesSchema)
