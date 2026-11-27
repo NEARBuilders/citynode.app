@@ -1361,7 +1361,7 @@ export const contract = oc.router({
       path: "/collectibles/me",
       summary: "List the caller's ShardDog collectibles from event check-ins",
       description:
-        "Caller only — each membership and event ShardDog earned by checking in, with its View in ShardDog link once awarded, or a one-time claim link (status claim) when the check-in had no NEAR account. Retries the caller's pending awards first. With organizationId, only that community.",
+        "Caller only — each membership and event ShardDog earned by checking in, with its View in ShardDog link once awarded, or a one-time claim link (status claim) when no NEAR account is known. First attaches the caller's primary NEAR account to awards with neither an account nor a claim link, and retries their pending awards. With organizationId, only that community.",
     })
     .input(z.object({ organizationId: z.string().min(1).optional() }))
     .output(MyCollectiblesSchema)

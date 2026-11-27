@@ -1,5 +1,19 @@
 import type { ORPCError } from "@orpc/server";
-import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notExists,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { Clock, Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -9,6 +23,7 @@ import {
   sharddogEventDrops,
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
+import { SETTLED_AFTER_MS } from "./attendance";
 import type { ShardDogClient, ShardDogDropDetails } from "./sharddog-client";
 
 export type ShardDogEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
@@ -22,7 +37,17 @@ export const MAX_AWARD_ATTEMPTS = 20;
 
 const RETRY_STEP_MS = 60_000;
 
+const MAX_RETRY_STEPS = 60;
+
 const DELIVERY_BATCH = 50;
+
+const WRITE_CHUNK = 1_000;
+
+function chunked<T>(items: T[]): T[][] {
+  return Array.from({ length: Math.ceil(items.length / WRITE_CHUNK) }, (_, index) =>
+    items.slice(index * WRITE_CHUNK, (index + 1) * WRITE_CHUNK),
+  );
+}
 
 export interface CollectibleAward {
   id: string;
@@ -65,6 +90,8 @@ export interface ShardDogService {
     updatedBy: string;
   }): ShardDogEffect<void>;
   queueAwards(organizationId: string): ShardDogEffect<void>;
+  codesAwaitingAccount(organizationId: string): ShardDogEffect<Set<string>>;
+  attachAccount(userId: string, accountId: string): ShardDogEffect<void>;
   deliverAwards(filter: { organizationId?: string; userId?: string }): ShardDogEffect<void>;
   awardsFor(userId: string, organizationId?: string): ShardDogEffect<CollectibleAward[]>;
   awardedToAccount(accountId: string): ShardDogEffect<AwardedCollectible[]>;
@@ -156,8 +183,8 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                       isNull(sharddogAwards.accountId),
                     ),
                   ),
-              ),
-            onFailure: (error) => recordFailure(award.id, error),
+              ).pipe(Effect.as(true)),
+            onFailure: (error) => recordFailure(award.id, error).pipe(Effect.as(false)),
           }),
         );
 
@@ -185,8 +212,8 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   .where(
                     and(eq(sharddogAwards.id, award.id), eq(sharddogAwards.status, "pending")),
                   ),
-              ),
-            onFailure: (error) => recordFailure(award.id, error),
+              ).pipe(Effect.as(true)),
+            onFailure: (error) => recordFailure(award.id, error).pipe(Effect.as(false)),
           }),
         );
 
@@ -360,26 +387,27 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                     : !eventAwards.has(`${award.userId}:${award.eventId}`),
                 )
                 .map((award) => award.id);
-              if (stale.length > 0) {
-                await tx.delete(sharddogAwards).where(inArray(sharddogAwards.id, stale));
+              for (const ids of chunked(stale)) {
+                await tx.delete(sharddogAwards).where(inArray(sharddogAwards.id, ids));
               }
               const refresh = {
                 dropId: sql`case when ${sharddogAwards.claimUrl} is null then excluded.drop_id else ${sharddogAwards.dropId} end`,
                 accountId: sql`coalesce(excluded.account_id, ${sharddogAwards.accountId})`,
-                attempts: sql`case when ${sharddogAwards.accountId} is null and excluded.account_id is not null and ${sharddogAwards.claimUrl} is null then 0 else ${sharddogAwards.attempts} end`,
+                attempts: sql`case when ${sharddogAwards.accountId} is null and excluded.account_id is not null and ${sharddogAwards.claimUrl} is null then 0 when excluded.drop_id = ${sharddogAwards.dropId} then ${sharddogAwards.attempts} else least(${sharddogAwards.attempts}, 1) end`,
               };
-              if (membershipDropId && members.size > 0) {
+              const membershipRows = membershipDropId
+                ? [...members].map((userId) => ({
+                    organizationId,
+                    userId,
+                    kind: "membership" as const,
+                    dropId: membershipDropId,
+                    accountId: accountOf(userId),
+                  }))
+                : [];
+              for (const rows of chunked(membershipRows)) {
                 await tx
                   .insert(sharddogAwards)
-                  .values(
-                    [...members].map((userId) => ({
-                      organizationId,
-                      userId,
-                      kind: "membership" as const,
-                      dropId: membershipDropId,
-                      accountId: accountOf(userId),
-                    })),
-                  )
+                  .values(rows)
                   .onConflictDoUpdate({
                     target: [sharddogAwards.organizationId, sharddogAwards.userId],
                     targetWhere: sql`kind = 'membership'`,
@@ -387,19 +415,18 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                     setWhere: sql`${sharddogAwards.status} = 'pending'`,
                   });
               }
-              if (eventAwards.size > 0) {
+              const eventRows = [...eventAwards.values()].map((award) => ({
+                organizationId,
+                userId: award.userId,
+                kind: "event" as const,
+                eventId: award.eventId,
+                dropId: award.dropId,
+                accountId: accountOf(award.userId),
+              }));
+              for (const rows of chunked(eventRows)) {
                 await tx
                   .insert(sharddogAwards)
-                  .values(
-                    [...eventAwards.values()].map((award) => ({
-                      organizationId,
-                      userId: award.userId,
-                      kind: "event" as const,
-                      eventId: award.eventId,
-                      dropId: award.dropId,
-                      accountId: accountOf(award.userId),
-                    })),
-                  )
+                  .values(rows)
                   .onConflictDoUpdate({
                     target: [
                       sharddogAwards.organizationId,
@@ -413,10 +440,80 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
               }
             });
           }),
+        codesAwaitingAccount: (organizationId) =>
+          query(async () => {
+            if (!config.enabled) return new Set<string>();
+            const unsent = (badge: SQL) =>
+              notExists(
+                db
+                  .select({ held: sql`1` })
+                  .from(sharddogAwards)
+                  .where(
+                    and(
+                      eq(sharddogAwards.organizationId, attendanceCheckIns.organizationId),
+                      eq(sharddogAwards.userId, attendanceCheckIns.userId),
+                      badge,
+                      or(
+                        eq(sharddogAwards.status, "awarded"),
+                        isNotNull(sharddogAwards.accountId),
+                        isNotNull(sharddogAwards.claimUrl),
+                      ),
+                    ),
+                  ),
+              );
+            const rows = await db
+              .selectDistinct({ codeId: attendanceCheckIns.codeId })
+              .from(attendanceCheckIns)
+              .leftJoin(
+                sharddogCommunityDrops,
+                eq(sharddogCommunityDrops.organizationId, attendanceCheckIns.organizationId),
+              )
+              .leftJoin(
+                sharddogEventDrops,
+                and(
+                  eq(sharddogEventDrops.organizationId, attendanceCheckIns.organizationId),
+                  eq(sharddogEventDrops.eventId, attendanceCheckIns.eventId),
+                ),
+              )
+              .where(
+                and(
+                  eq(attendanceCheckIns.organizationId, organizationId),
+                  eq(attendanceCheckIns.classified, true),
+                  isNull(attendanceCheckIns.accountId),
+                  gte(attendanceCheckIns.checkedInAt, new Date(Date.now() - SETTLED_AFTER_MS)),
+                  or(
+                    and(
+                      isNotNull(sharddogCommunityDrops.dropId),
+                      unsent(eq(sharddogAwards.kind, "membership")),
+                    ),
+                    and(
+                      isNotNull(sharddogEventDrops.dropId),
+                      unsent(eq(sharddogAwards.eventId, attendanceCheckIns.eventId)),
+                    ),
+                  ),
+                ),
+              );
+            return new Set(rows.map((row) => row.codeId));
+          }),
+        attachAccount: (userId, accountId) =>
+          query(async () => {
+            await db
+              .update(sharddogAwards)
+              .set({ accountId, attempts: 0 })
+              .where(
+                and(
+                  eq(sharddogAwards.userId, userId),
+                  eq(sharddogAwards.status, "pending"),
+                  isNull(sharddogAwards.accountId),
+                  isNull(sharddogAwards.claimUrl),
+                  dropStillLinked,
+                ),
+              );
+          }),
         deliverAwards: Effect.fn("ShardDogService.deliverAwards")(function* (filter) {
           if (!config.enabled) return;
-          const now = Date.now();
-          const due = yield* query(() =>
+          const startedAt = new Date().toISOString();
+          const dueBatch = query(() =>
             db
               .select()
               .from(sharddogAwards)
@@ -424,12 +521,15 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                 and(
                   eq(sharddogAwards.status, "pending"),
                   isNull(sharddogAwards.claimUrl),
-                  lt(sharddogAwards.attempts, MAX_AWARD_ATTEMPTS),
+                  or(
+                    isNotNull(sharddogAwards.accountId),
+                    lt(sharddogAwards.attempts, MAX_AWARD_ATTEMPTS),
+                  ),
                   or(
                     isNull(sharddogAwards.attemptedAt),
                     lt(
                       sharddogAwards.attemptedAt,
-                      sql`${new Date(now).toISOString()}::timestamptz - make_interval(secs => ${RETRY_STEP_MS / 1000} * ${sharddogAwards.attempts})`,
+                      sql`${startedAt}::timestamptz - make_interval(secs => ${RETRY_STEP_MS / 1000} * least(${sharddogAwards.attempts}, ${MAX_RETRY_STEPS}))`,
                     ),
                   ),
                   dropStillLinked,
@@ -439,38 +539,39 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   filter.userId ? eq(sharddogAwards.userId, filter.userId) : undefined,
                 ),
               )
-              .orderBy(sharddogAwards.createdAt)
+              .orderBy(sql`${sharddogAwards.attemptedAt} asc nulls first`, sharddogAwards.createdAt)
               .limit(DELIVERY_BATCH),
           );
-          yield* Effect.forEach(
-            due,
-            (award) =>
-              Effect.gen(function* () {
-                const claimed = yield* query(() =>
-                  db
-                    .update(sharddogAwards)
-                    .set({
-                      attemptedAt: new Date(),
-                      attempts: sql`${sharddogAwards.attempts} + 1`,
-                    })
-                    .where(
-                      and(
-                        eq(sharddogAwards.id, award.id),
-                        eq(sharddogAwards.status, "pending"),
-                        eq(sharddogAwards.attempts, award.attempts),
-                      ),
-                    )
-                    .returning({
-                      accountId: sharddogAwards.accountId,
-                      dropId: sharddogAwards.dropId,
-                    }),
-                );
-                const [locked] = claimed;
-                if (!locked) return;
-                yield* deliverOne({ ...award, ...locked });
-              }),
-            { concurrency: 4, discard: true },
-          );
+          const claimAndDeliver = Effect.fn("ShardDogService.claimAndDeliver")(function* (
+            award: typeof sharddogAwards.$inferSelect,
+          ) {
+            const claimed = yield* query(() =>
+              db
+                .update(sharddogAwards)
+                .set({
+                  attemptedAt: new Date(),
+                  attempts: sql`${sharddogAwards.attempts} + 1`,
+                })
+                .where(
+                  and(
+                    eq(sharddogAwards.id, award.id),
+                    eq(sharddogAwards.status, "pending"),
+                    eq(sharddogAwards.attempts, award.attempts),
+                    eq(sharddogAwards.dropId, award.dropId),
+                    dropStillLinked,
+                  ),
+                )
+                .returning({ accountId: sharddogAwards.accountId }),
+            );
+            const [locked] = claimed;
+            if (!locked) return false;
+            return yield* deliverOne({ ...award, ...locked });
+          });
+          while (true) {
+            const due = yield* dueBatch;
+            const delivered = yield* Effect.forEach(due, claimAndDeliver, { concurrency: 4 });
+            if (due.length < DELIVERY_BATCH || !delivered.includes(true)) return;
+          }
         }),
         awardsFor: (userId, organizationId) =>
           query(async () => {

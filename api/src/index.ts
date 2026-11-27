@@ -782,6 +782,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
         );
       });
 
+    const attachLinkedAccount = Effect.fn("attachLinkedAccount")(
+      function* (
+        context: Parameters<typeof memberAuthClient>[0],
+        organizationId: string | undefined,
+      ) {
+        const services = yield* ApiServices;
+        const awards = yield* services.sharddog.awardsFor(context.userId, organizationId);
+        const unaddressed = awards.some(
+          (award) => award.status === "pending" && !award.hasAccount && !award.claimUrl,
+        );
+        if (!unaddressed) return;
+        const accountId = yield* readOwnPrimaryAccount(yield* memberAuthClient(context));
+        if (accountId) yield* services.sharddog.attachAccount(context.userId, accountId);
+      },
+      Effect.catchCause((cause) =>
+        Effect.logWarning("[API] Could not attach a NEAR account to ShardDog awards", cause),
+      ),
+    );
+
     const notACommunityMember = () =>
       new ORPCError("FORBIDDEN", { message: "You are not a member of this community" });
 
@@ -1523,6 +1542,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const community = (yield* services.discovery.organizationEvents([organizationId])).get(
           organizationId,
         );
+        const rereadCodes = yield* services.sharddog
+          .codesAwaitingAccount(organizationId)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                "[API] Could not find check-ins awaiting a NEAR account",
+                cause,
+              ).pipe(Effect.as(new Set<string>())),
+            ),
+          );
         const summary = yield* services.attendance.reconcile({
           organizationId,
           communityName: community?.communityName ?? organizationId,
@@ -1532,6 +1561,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               auth.listOnboardingCodes({ organizationId, ...(eventId ? { eventId } : {}) }),
             codeStatus: (codeId) => auth.getOnboardingStatus({ codeId, organizationId }),
           },
+          rereadCodes,
         });
         yield* services.sharddog.queueAwards(organizationId).pipe(
           Effect.andThen(deliverAwardsInBackground({ organizationId })),
@@ -1548,6 +1578,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }) {
         const services = yield* ApiServices;
         if (!services.sharddog.enabled) return { enabled: false, collectibles: [] };
+        yield* attachLinkedAccount(context, input.organizationId);
         yield* deliverAwardsInBackground({
           userId: context.userId,
           organizationId: input.organizationId,
