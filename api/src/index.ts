@@ -2071,27 +2071,24 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         yield* requirePendingTeamRequest(request);
-        if (input.decision === "approve") {
-          yield* Effect.tryPromise({
-            try: () =>
-              auth.addTeamMember({
-                teamId: request.teamId,
-                userId: request.requesterUserId,
-                organizationId: request.organizationId,
-              }),
-            catch: (error) =>
-              error instanceof ORPCError
-                ? error
-                : new ORPCError("CONNECTION_ERROR", {
-                    message: "Couldn't add them to the team. Try again.",
-                  }),
-          });
-        }
-        const settled = yield* services.teamJoinRequests.settle(
-          request.id,
-          input.decision === "approve" ? "approved" : "declined",
-          context.userId,
-        );
+        const settled =
+          input.decision === "approve"
+            ? yield* services.teamJoinRequests.approve(request.id, context.userId, async () => {
+                try {
+                  await auth.addTeamMember({
+                    teamId: request.teamId,
+                    userId: request.requesterUserId,
+                    organizationId: request.organizationId,
+                  });
+                } catch (error) {
+                  throw error instanceof ORPCError
+                    ? error
+                    : new ORPCError("CONNECTION_ERROR", {
+                        message: "Couldn't add them to the team. Try again.",
+                      });
+                }
+              })
+            : yield* services.teamJoinRequests.settle(request.id, "declined", context.userId);
         if (!settled) {
           return yield* Effect.fail(teamJoinConflict("This team request is no longer pending"));
         }

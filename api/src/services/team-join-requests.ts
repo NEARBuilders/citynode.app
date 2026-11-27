@@ -37,8 +37,13 @@ export interface TeamJoinRequestsService {
   create(request: NewTeamJoinRequest): TeamJoinRequestEffect<TeamJoinRequestRecord | null>;
   settle(
     requestId: string,
-    status: Exclude<TeamJoinRequestStatus, "pending" | "closed">,
+    status: Exclude<TeamJoinRequestStatus, "pending" | "closed" | "approved">,
     decidedByUserId: string,
+  ): TeamJoinRequestEffect<boolean>;
+  approve(
+    requestId: string,
+    decidedByUserId: string,
+    addMember: () => Promise<void>,
   ): TeamJoinRequestEffect<boolean>;
   close(
     closures: ReadonlyArray<{ id: string; reason: TeamJoinClosedReason }>,
@@ -152,6 +157,26 @@ export const TeamJoinRequestsLive = Layer.effect(
             .returning({ id: teamJoinRequests.id });
           return rows.length > 0;
         }),
+      approve: (requestId, decidedByUserId, addMember) =>
+        query(() =>
+          db.transaction(async (tx) => {
+            const [claimed] = await tx
+              .select({ id: teamJoinRequests.id })
+              .from(teamJoinRequests)
+              .where(
+                and(eq(teamJoinRequests.id, requestId), eq(teamJoinRequests.status, "pending")),
+              )
+              .for("update");
+            if (!claimed) return false;
+            await addMember();
+            const now = new Date();
+            await tx
+              .update(teamJoinRequests)
+              .set({ status: "approved", decidedByUserId, decidedAt: now, updatedAt: now })
+              .where(eq(teamJoinRequests.id, requestId));
+            return true;
+          }),
+        ),
       close: (closures) =>
         query(async () => {
           const now = new Date();
