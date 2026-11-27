@@ -454,7 +454,12 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     if (!canEdit && context.user?.role !== "admin") {
       return yield* Effect.fail(new ORPCError("FORBIDDEN"));
     }
-    return { canEdit, organizationId: record.tenant.orgId, tenantId: record.tenant.id };
+    const tenantActive = record.tenant.status === "active" && !record.tenant.deletedAt;
+    return {
+      canEdit: canEdit && tenantActive,
+      organizationId: record.tenant.orgId,
+      tenantId: record.tenant.id,
+    };
   });
 
   const monthlyReportAccess = Effect.fn("DiscoveryService.monthlyReportAccess")(function* (
