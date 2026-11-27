@@ -784,6 +784,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       });
 
+    const deliverAwardsInBackground = (filter: { organizationId?: string; userId?: string }) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        yield* services.sharddog.deliverAwards(filter).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("[API] ShardDog award delivery failed", cause),
+          ),
+          Effect.forkDetach,
+        );
+      });
+
     const notACommunityMember = () =>
       new ORPCError("FORBIDDEN", { message: "You are not a member of this community" });
 
@@ -1523,7 +1534,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const community = (yield* services.discovery.organizationEvents([organizationId])).get(
           organizationId,
         );
-        return yield* services.attendance.reconcile({
+        const summary = yield* services.attendance.reconcile({
           organizationId,
           communityName: community?.communityName ?? organizationId,
           events: community?.events ?? [],
@@ -1533,6 +1544,41 @@ export default createPlugin.withPlugins<PluginsClient>()({
             codeStatus: (codeId) => auth.getOnboardingStatus({ codeId, organizationId }),
           },
         });
+        yield* services.sharddog.queueAwards(organizationId).pipe(
+          Effect.andThen(deliverAwardsInBackground({ organizationId })),
+          Effect.catchCause((cause) =>
+            Effect.logWarning("[API] ShardDog awards after check-in sync failed", cause),
+          ),
+        );
+        return summary;
+      }),
+
+      getMyCollectibles: builder.getMyCollectibles.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        if (!services.sharddog.enabled) return { enabled: false, collectibles: [] };
+        yield* deliverAwardsInBackground({
+          userId: context.userId,
+          organizationId: input.organizationId,
+        });
+        const awards = yield* services.sharddog.awardsFor(context.userId, input.organizationId);
+        return {
+          enabled: true,
+          collectibles: awards.map((award) => ({
+            organizationId: award.organizationId,
+            kind: award.kind,
+            eventId: award.eventId,
+            status:
+              award.status === "awarded"
+                ? ("awarded" as const)
+                : award.hasAccount
+                  ? ("pending" as const)
+                  : ("needs_account" as const),
+            viewUrl: award.status === "awarded" ? award.viewUrl : null,
+          })),
+        };
       }),
 
       getMyAttendance: builder.getMyAttendance.use(requireAuth).effect(function* ({

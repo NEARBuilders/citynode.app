@@ -328,6 +328,19 @@ export const ShardDogDropsSchema = z.object({
   ),
 });
 
+export const MyCollectiblesSchema = z.object({
+  enabled: z.boolean(),
+  collectibles: z.array(
+    z.object({
+      organizationId: z.string(),
+      kind: z.enum(["membership", "event"]),
+      eventId: z.string().nullable(),
+      status: z.enum(["awarded", "pending", "needs_account"]),
+      viewUrl: z.string().nullable(),
+    }),
+  ),
+});
+
 export const NodeCollectibleSchema = z.object({
   kind: z.enum(["membership", "event"]),
   dropId: z.string(),
@@ -1316,6 +1329,18 @@ export const contract = oc.router({
     )
     .output(ShardDogDropsSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+
+  getMyCollectibles: oc
+    .route({
+      method: "GET",
+      path: "/collectibles/me",
+      summary: "List the caller's ShardDog collectibles from event check-ins",
+      description:
+        "Caller only — each membership and event ShardDog earned by checking in, with its View in ShardDog link once awarded. Retries the caller's pending awards first. With organizationId, only that community.",
+    })
+    .input(z.object({ organizationId: z.string().min(1).optional() }))
+    .output(MyCollectiblesSchema)
+    .errors({ UNAUTHORIZED }),
 
   getMyAttendance: oc
     .route({

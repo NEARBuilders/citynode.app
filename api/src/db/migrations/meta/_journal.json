@@ -162,6 +162,13 @@
       "when": 1795617067208,
       "tag": "0022_sharddog-drops",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795617521653,
+      "tag": "0023_sharddog-awards",
+      "breakpoints": true
     }
   ]
 }

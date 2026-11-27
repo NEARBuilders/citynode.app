@@ -10,6 +10,18 @@ import {
   teardown,
 } from "../setup";
 
+vi.mock("../../plugin.dev", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../plugin.dev")>();
+  return {
+    default: {
+      ...original.default,
+      config: {
+        ...original.default.config,
+        variables: { ...original.default.config.variables, sharddogEnabled: false },
+      },
+    },
+  };
+});
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(() =>
     Effect.succeed({ isSputnikContract: true, isMember: true, policy: { roles: [] } }),
