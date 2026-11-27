@@ -31,6 +31,7 @@ import {
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
 import { socialMeta } from "@/lib/social-meta";
+import { CommunityCollectibles } from "./-community-collectibles";
 import { CommunityPageButtons, useCommunityPageActions } from "./-community-role";
 import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
@@ -309,6 +310,8 @@ function NodePage() {
           testId="node-page.updates"
         />
       )}
+
+      <CommunityCollectibles nodeId={node.id} nodeName={node.name} />
 
       {(childrenLoading || children.length > 0) && (
         <section className="flex flex-col gap-6" data-testid="node-page.children">

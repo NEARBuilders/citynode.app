@@ -474,6 +474,8 @@ const authorizedNodeForValidators = (
     return node;
   });
 
+const MAX_EVENT_COLLECTIBLES = 12;
+
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
     platformAccount: z.string().optional(),
@@ -1415,6 +1417,64 @@ export default createPlugin.withPlugins<PluginsClient>()({
       getShardDogDrops: builder.getShardDogDrops.effect(function* ({ input, context }) {
         const canEdit = yield* canEditShardDogDrops(context, input.organizationId);
         return yield* readShardDogDrops(input.organizationId, canEdit);
+      }),
+
+      getNodeCollectibles: builder.getNodeCollectibles.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const none = { collectibles: [] };
+        if (!services.sharddog.enabled) return none;
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (!node?.tenantId) return none;
+        const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
+        if (!tenant?.orgId) return none;
+        const drops = yield* readShardDogDrops(tenant.orgId, false).pipe(
+          Effect.catchIf(
+            (error) => error instanceof ORPCError && error.code === "NOT_FOUND",
+            () => Effect.succeed(null),
+          ),
+        );
+        if (!drops) return none;
+        const linked = [
+          ...(drops.membershipDropId
+            ? [
+                {
+                  kind: "membership" as const,
+                  dropId: drops.membershipDropId,
+                  eventId: null,
+                  eventTitle: null,
+                  eventStartsAt: null,
+                },
+              ]
+            : []),
+          ...drops.events
+            .filter(
+              (event): event is (typeof drops.events)[number] & { dropId: string } =>
+                event.dropId !== null,
+            )
+            .slice(0, MAX_EVENT_COLLECTIBLES)
+            .map((event) => ({
+              kind: "event" as const,
+              dropId: event.dropId,
+              eventId: event.eventId,
+              eventTitle: event.title,
+              eventStartsAt: event.startsAt,
+            })),
+        ];
+        const { client } = services.sharddog;
+        const collectibles = yield* Effect.forEach(
+          linked,
+          (item) =>
+            services.sharddog.dropDetails(item.dropId).pipe(
+              Effect.map((details) => ({
+                ...item,
+                name: details?.name ?? null,
+                imageUrl: details?.imageUrl ?? null,
+                viewUrl: client.dropUrl(item.dropId),
+              })),
+            ),
+          { concurrency: 4 },
+        );
+        return { collectibles };
       }),
 
       setShardDogDrop: builder.setShardDogDrop.use(requireAuth).effect(function* ({

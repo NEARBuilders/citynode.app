@@ -208,4 +208,15 @@ describe("ShardDog drops", () => {
       (await as("admin")).setShardDogDrop({ organizationId: org, dropId: "drop/../x" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
+
+  it("keeps community pages free of collectibles while ShardDog is off", async () => {
+    const { org, event, nodeId, as } = await community();
+    const admin = await as("admin");
+    await admin.setShardDogDrop({ organizationId: org, dropId: "off-member" });
+    await admin.setShardDogDrop({ organizationId: org, eventId: event.id, dropId: "off-event" });
+
+    expect(await (await getPluginClient()).getNodeCollectibles({ nodeId })).toEqual({
+      collectibles: [],
+    });
+  });
 });
