@@ -6,6 +6,7 @@ import { OfficialApplicationPayloadSchema } from "../contract";
 import { resolveNetwork } from "../services/near-rpc";
 import type { NodeRecord, NodesService } from "../services/nodes";
 import type { PlacesService } from "../services/places";
+import { MEMBER_PAGE_SIZE } from "./member-pages";
 
 type AuthClient = ContractRouterClient<authContract>;
 
@@ -57,21 +58,37 @@ export async function resolveApplicationCommunity(
   return { ...node, orgId: node.orgId };
 }
 
+async function findMember(auth: AuthClient, organizationId: string, userId: string) {
+  let offset = 0;
+  for (;;) {
+    const page = await auth
+      .listMembers({ organizationId, limit: MEMBER_PAGE_SIZE, offset })
+      .catch((error: unknown) => {
+        if (isHidden(error)) return null;
+        throw error;
+      });
+    if (!page) return undefined;
+    const member = page.members.find((entry) => entry.userId === userId);
+    if (member) return member;
+    offset += page.members.length;
+    if (page.members.length < MEMBER_PAGE_SIZE || offset >= page.total) return undefined;
+  }
+}
+
 async function ensureOrganizationAdmin(auth: AuthClient, organizationId: string, userId: string) {
-  const members = await auth
-    .listMembers({ organizationId })
-    .then((result) => result.members)
-    .catch((error: unknown) => {
-      if (isHidden(error)) return [];
-      throw error;
-    });
-  const member = members.find((entry) => entry.userId === userId);
+  const member = await findMember(auth, organizationId, userId);
   if (member && managesOrganization(member.role)) return;
   if (member) {
     await auth.adminUpdateMemberRole({ organizationId, userId, role: "admin" });
     return;
   }
-  await auth.adminAddMember({ organizationId, userId, role: "admin" });
+  await auth.adminAddMember({ organizationId, userId, role: "admin" }).catch(async (error) => {
+    if (!(error instanceof ORPCError && error.code === "CONFLICT")) throw error;
+    const existing = await findMember(auth, organizationId, userId);
+    if (!existing) throw error;
+    if (managesOrganization(existing.role)) return;
+    await auth.adminUpdateMemberRole({ organizationId, userId, role: "admin" });
+  });
 }
 
 export async function grantApplicantAdmin(

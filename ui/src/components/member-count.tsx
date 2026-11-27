@@ -1,3 +1,4 @@
+import { Trans } from "everything-dev/ui/i18n";
 import { LocalDate } from "@/components/local-date";
 import { useAppTranslation } from "@/i18n/runtime";
 
@@ -20,8 +21,9 @@ export function MemberCountValue({
       <span
         className="text-xs font-normal text-muted-foreground"
         data-testid={`${testId}-observed`}
+        title={translate("members.countAsOfHint")}
       >
-        {translate("members.lastUpdated")} <LocalDate value={observedAt} format="datetime" />
+        <Trans id="members.countAsOf" components={{ date: <LocalDate value={observedAt} /> }} />
       </span>
     </span>
   );

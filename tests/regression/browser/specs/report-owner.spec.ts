@@ -218,6 +218,52 @@ test.describe("owners and organizers report from one link", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
+  test("an organizer goes from an event they created to its submitted report", async ({ page }) => {
+    const pageErrors = collectErrors(page);
+    const lagos = seed.communities.lagos;
+    await signInAsDemo(page, seed, "organizer");
+
+    const now = Date.now();
+    const saved = await page.request.post("/api/rpc/saveDiscoveryActivity", {
+      data: {
+        json: {
+          ownerNodeId: lagos.nodeId,
+          nodeIds: [lagos.nodeId],
+          kind: "event",
+          title: `Organizer build night ${now.toString(36)}`,
+          summary: "Organizer-run build night",
+          url: `https://example.com/events/organizer-${now.toString(36)}`,
+          source: "Community",
+          publishedAt: new Date(now - 6 * 3_600_000).toISOString(),
+          startsAt: new Date(now - 5 * 3_600_000).toISOString(),
+          endsAt: new Date(now - 2 * 3_600_000).toISOString(),
+          timezone: "UTC",
+          venue: "Yaba hub",
+          status: "published",
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    const event = ((await saved.json()) as { json: { id: string } }).json;
+
+    await open(page, "/report");
+    const row = page.getByTestId(`report.list-event-${event.id}`);
+    await expect(row).toBeVisible({ timeout: 15000 });
+    await row.click();
+    await page.waitForURL(new RegExp(`/nodes/${lagos.nodeId}/events/${event.id}/report$`));
+    await expect(page.getByTestId("report-submit")).toBeVisible({ timeout: 15000 });
+    await fillEventReport(page);
+    await page.getByTestId("report-submit").click();
+
+    await page.waitForURL(/\/report(\?community=lagos-demo)?$/);
+    await expect(page.getByTestId(`report.list-month-${reportMonth()}`)).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByTestId(`report.list-event-${event.id}`)).toHaveCount(0);
+
+    expectNoHydrationFailure(pageErrors);
+  });
+
   test("people who don't report are told why instead of seeing an error", async ({ page }) => {
     const pageErrors = collectErrors(page);
 
