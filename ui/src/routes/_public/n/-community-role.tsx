@@ -1,3 +1,4 @@
+import { CheckCircleIcon } from "@phosphor-icons/react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { MouseEvent } from "react";
@@ -11,6 +12,7 @@ import {
   type CommunityPageActions,
   communityPageActions,
 } from "@/lib/community-page-actions";
+import { communityJoinStateQueryOptions } from "@/lib/queries/nodes";
 import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { teamJoinBoardQueryOptions } from "@/lib/queries/team-join-requests";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
@@ -26,9 +28,12 @@ const HIDDEN: CommunityPageActions = {
 };
 
 export interface CommunityPageView extends CommunityPageActions {
+  pending: boolean;
   organizationId: string | null;
   eventsTeamId: string | null;
 }
+
+export type CommunityJoin = "pending" | "joined" | "joinable" | "unavailable";
 
 export function useCommunityPageActions(tenantId: string | null): CommunityPageView {
   const auth = useAuthClient();
@@ -74,7 +79,9 @@ export function useCommunityPageActions(tenantId: string | null): CommunityPageV
     (inCommunity && roleQuery.isPending) ||
     (inCommunity && teamsQuery.isPending);
 
-  if (rolePending) return { ...HIDDEN, organizationId: null, eventsTeamId: null };
+  if (rolePending) {
+    return { ...HIDDEN, pending: true, organizationId: null, eventsTeamId: null };
+  }
   return {
     ...communityPageActions({
       signedIn,
@@ -84,9 +91,60 @@ export function useCommunityPageActions(tenantId: string | null): CommunityPageV
       teamAreas,
       rolePending: false,
     }),
+    pending: false,
     organizationId: owningOrg?.id ?? null,
     eventsTeamId,
   };
+}
+
+export function useCommunityJoin(
+  nodeId: string | undefined,
+  actions: CommunityPageView,
+): CommunityJoin {
+  const auth = useAuthClient();
+  const api = useApiClient();
+  const sessionQuery = useQuery(sessionQueryOptions(auth));
+  const joinState = useQuery({
+    ...communityJoinStateQueryOptions(api, nodeId ?? "", sessionQuery.data?.user.id),
+    enabled: !!nodeId && !sessionQuery.isPending,
+  });
+
+  if (actions.organizationId) return "joined";
+  if (actions.pending || joinState.isPending) return "pending";
+  if (joinState.data?.member) return "joined";
+  return joinState.data?.joinable ? "joinable" : "unavailable";
+}
+
+export function CommunityJoinControl({
+  join,
+  slug,
+  nodeName,
+}: {
+  join: CommunityJoin;
+  slug: string;
+  nodeName: string;
+}) {
+  const translate = useAppTranslation();
+  if (join === "joined") {
+    return (
+      <p
+        className="flex items-center gap-1.5 self-center text-sm text-muted-foreground"
+        data-testid="node-page.joined"
+      >
+        <CheckCircleIcon className="size-4 shrink-0" />
+        {translate("community.joined", { name: nodeName })}
+      </p>
+    );
+  }
+  if (join !== "joinable") return null;
+  return (
+    <Button
+      nativeButton={false}
+      render={<Link to="/join" search={{ place: slug }} data-testid="node-page.join" />}
+    >
+      {translate("community.join", { name: nodeName })}
+    </Button>
+  );
 }
 
 export function CommunityPageButtons({

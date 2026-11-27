@@ -2839,6 +2839,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
+      getCommunityJoinState: builder.getCommunityJoinState.effect(function* ({ input, context }) {
+        const services = yield* ApiServices;
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (!node) return { joinable: false, member: false };
+        const joinCode = yield* Effect.promise(() =>
+          ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(context), node).catch(
+            () => null,
+          ),
+        );
+        const tenant = node.tenantId
+          ? yield* services.tenants.resolveTenantById(node.tenantId)
+          : null;
+        const memberOf = new Set(context.organizations?.map((organization) => organization.id));
+        return {
+          joinable: !!node.placeId && !!joinCode && (!tenant || tenant.status === "active"),
+          member: [node.orgId, tenant?.orgId].some((id) => !!id && memberOf.has(id)),
+        };
+      }),
+
       listValidators: builder.listValidators.effect(function* ({ input }) {
         const services = yield* ApiServices;
         return yield* services.validators.list({

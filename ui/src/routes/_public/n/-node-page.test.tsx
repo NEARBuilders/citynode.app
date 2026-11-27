@@ -56,6 +56,7 @@ const memberCounts = new Map<string, { count: number | null; observedAt: string 
 const listings = new Map<string, Record<string, unknown> | "fail">();
 const nodeDaos = new Map<string, string>();
 const collectibles = new Map<string, Record<string, unknown>[] | "fail">();
+const joinStates = new Map<string, { joinable: boolean; member: boolean }>();
 
 afterEach(() => {
   cleanup();
@@ -66,6 +67,7 @@ afterEach(() => {
   listings.clear();
   nodeDaos.clear();
   collectibles.clear();
+  joinStates.clear();
 });
 
 function communityBuilders(path: string, overrides: Record<string, unknown> = {}) {
@@ -148,6 +150,12 @@ function mockApi(
           if (items === "fail") return Response.json({ json: null }, { status: 500 });
           return Response.json({ json: { collectibles: items ?? [] } });
         }
+        case "getCommunityJoinState":
+          return Response.json({
+            json: joinStates.get(args.nodeId) ?? { joinable: false, member: false },
+          });
+        case "listOrganizations":
+          return Response.json({ json: [] });
         case "getCommunityBuilders":
           return Response.json({ json: nearbuilders(args.nodeId) });
         case "getNode":
@@ -486,6 +494,45 @@ it("tells signed-out visitors that checking in at an event joins the community",
   const line = await screen.findByTestId("node-page.join-at-event");
   expect(line.textContent).toBe("Check in at an event to join Chicago.");
   expect(screen.getByTestId("node-page.events").contains(line)).toBe(true);
+  expect(screen.queryByTestId("node-page.join")).toBeNull();
+});
+
+it.each([
+  ["chicago", "Chicago"],
+  ["india", "India"],
+  ["new-york-city", "New York City"],
+  ["malaysia", "Malaysia"],
+])("offers Join on the %s community page when it is joinable", async (slug, name) => {
+  mockApi([{ ...parent, slug, name }]);
+  joinStates.set(parent.id, { joinable: true, member: false });
+  await showNode(`/n/${slug}`);
+  const join = await screen.findByTestId("node-page.join");
+  expect(join.textContent).toBe(`Join ${name}`);
+  expect(join.getAttribute("href")).toBe(`/join?place=${slug}`);
+  expect(screen.queryByTestId("node-page.joined")).toBeNull();
+  expect(screen.queryByTestId("node-page.join-at-event")).toBeNull();
+});
+
+it("offers Join to a signed-in visitor who is not a member", async () => {
+  mockApi();
+  joinStates.set(child.id, { joinable: true, member: false });
+  await showNode("/n/chicago", true);
+  expect((await screen.findByTestId("node-page.join")).getAttribute("href")).toBe(
+    "/join?place=chicago",
+  );
+  expect(screen.queryByTestId("node-page.joined")).toBeNull();
+});
+
+it.each([
+  [true],
+  [false],
+])("tells a member they have joined instead of offering Join (joinable: %s)", async (joinable) => {
+  mockApi();
+  joinStates.set(child.id, { joinable, member: true });
+  await showNode("/n/chicago", true);
+  expect((await screen.findByTestId("node-page.joined")).textContent).toBe("You've joined Chicago");
+  expect(screen.queryByTestId("node-page.join")).toBeNull();
+  expect(screen.queryByTestId("node-page.join-at-event")).toBeNull();
 });
 
 it("still shows the community when its public listing can't be read", async () => {

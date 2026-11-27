@@ -26,13 +26,19 @@ import { nodeMemberCountQueryOptions } from "@/lib/queries/member-directory";
 import { nodeDaoQueryOptions } from "@/lib/queries/node-dao";
 import {
   childNodesQueryOptions,
+  communityJoinStateQueryOptions,
   nodeBySlugQueryOptions,
   nodeSubtreeQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
 import { socialMeta } from "@/lib/social-meta";
 import { CommunityCollectibles } from "./-community-collectibles";
-import { CommunityPageButtons, useCommunityPageActions } from "./-community-role";
+import {
+  CommunityJoinControl,
+  CommunityPageButtons,
+  useCommunityJoin,
+  useCommunityPageActions,
+} from "./-community-role";
 import { NearbuildersSection } from "./-nearbuilders-section";
 import { ProposeHomepageCta } from "./-propose-homepage-cta";
 
@@ -48,6 +54,9 @@ export const Route = createFileRoute("/_public/n/$slug")({
         queryClient.prefetchQuery(childNodesQueryOptions(apiClient, node.id)),
         queryClient.prefetchQuery(stakingValidatorsQueryOptions(apiClient, node.id)),
         queryClient.prefetchQuery(discoveryNodeQueryOptions(apiClient, node.id)),
+        queryClient.prefetchQuery(
+          communityJoinStateQueryOptions(apiClient, node.id, context.session?.user.id),
+        ),
       ]);
     }
 
@@ -116,6 +125,7 @@ function NodePage() {
     enabled: !!nodeId,
   });
   const pageActions = useCommunityPageActions(node?.tenantId ?? null);
+  const join = useCommunityJoin(nodeId, pageActions);
 
   if (nodeLoading) {
     return (
@@ -192,6 +202,7 @@ function NodePage() {
             )}
           </div>
           <div className="flex flex-col gap-3 sm:shrink-0 sm:flex-row">
+            <CommunityJoinControl join={join} slug={node.slug} nodeName={node.name} />
             {validators.length > 0 && (
               <Button
                 nativeButton={false}
@@ -285,7 +296,7 @@ function NodePage() {
         <SectionHeader
           title={translate("community.upcoming")}
           description={
-            pageActions.joinHint ? (
+            pageActions.joinHint && join === "unavailable" ? (
               <span data-testid="node-page.join-at-event">
                 {translate("community.joinAtEvent", { name: node.name })}
               </span>

@@ -75,6 +75,8 @@ test.describe("each role sees only its actions on the community page and Home", 
     const pageErrors = collectErrors(page);
     await openCommunity(page, "member");
     await expect(page.getByTestId("node-page.open-community")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("node-page.joined")).toBeVisible();
+    await expect(page.getByTestId("node-page.join")).toHaveCount(0);
     await expect(page.getByTestId("node-page.join-at-event")).toHaveCount(0);
     await expect(page.getByTestId("node-page.open-events")).toHaveCount(0);
     await expect(page.getByTestId("node-page.open-setup")).toHaveCount(0);
@@ -99,6 +101,8 @@ test.describe("each role sees only its actions on the community page and Home", 
     const pageErrors = collectErrors(page);
     await openCommunity(page, "organizer");
     await expect(page.getByTestId("node-page.open-events")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("node-page.joined")).toBeVisible();
+    await expect(page.getByTestId("node-page.join")).toHaveCount(0);
     await expect(page.getByTestId("node-page.open-setup")).toHaveCount(0);
     await expect(page.getByTestId("node-page.join-at-event")).toHaveCount(0);
     await expect(page.getByTestId("node-page.open-admin")).toHaveCount(0);
@@ -114,6 +118,8 @@ test.describe("each role sees only its actions on the community page and Home", 
     const pageErrors = collectErrors(page);
     await openCommunity(page, "ownerMature");
     await expect(page.getByTestId("node-page.open-setup")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("node-page.joined")).toBeVisible();
+    await expect(page.getByTestId("node-page.join")).toHaveCount(0);
     await expect(page.getByTestId("node-page.open-admin")).toHaveCount(0);
     await expect(page.getByTestId("node-page.join-at-event")).toHaveCount(0);
     await expect(page.getByTestId("node-page.open-events")).toHaveCount(0);
