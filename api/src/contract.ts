@@ -711,10 +711,10 @@ export const contract = oc.router({
     .route({
       method: "POST",
       path: "/tenants/{tenantId}/reactivate",
-      summary: "Lift a suspension or restore a tenant pending deletion",
+      summary: "Activate a pending tenant, lift a suspension or restore a tenant pending deletion",
       description:
-        "Platform admin — only a platform admin lifts a suspension or restores a tenant pending " +
-        "deletion. Restoring clears the deletion timestamp.",
+        "Platform admin — only a platform admin activates a pending tenant, lifts a suspension or " +
+        "restores a tenant pending deletion. Restoring clears the deletion timestamp.",
     })
     .input(z.object({ tenantId: z.string() }))
     .output(TenantSchema)

@@ -475,6 +475,17 @@ describe("TenantsService — status transitions", () => {
     expect(restored).toMatchObject({ status: "active", deletedAt: null });
   });
 
+  it("activates a pending tenant", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) =>
+      svc.createTenant({ ...baseInput, status: "pending" }),
+    );
+
+    const activated = await runService(layer, (svc) => svc.reactivateTenant(created.id));
+
+    expect(activated).toMatchObject({ status: "active", deletedAt: null });
+  });
+
   it("rejects reactivating a tenant that is already active", async () => {
     const layer = freshLayer();
     const created = await runService(layer, (svc) => svc.createTenant(baseInput));

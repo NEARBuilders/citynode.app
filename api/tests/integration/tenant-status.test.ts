@@ -11,11 +11,15 @@ vi.mock("@/services/dao", () => ({
 }));
 afterAll(teardown);
 
-async function fixture() {
+async function fixture(status?: "active" | "pending") {
   const id = crypto.randomUUID();
   const org = `status-${id}`;
   const platform = await getPluginClient(daoContext(id, org, `s-${id}.near`, "admin"));
-  const tenant = await platform.createTenant({ name: "Status city", accountId: `s-${id}.near` });
+  const tenant = await platform.createTenant({
+    name: "Status city",
+    accountId: `s-${id}.near`,
+    status,
+  });
   return {
     tenant,
     platform,
@@ -82,7 +86,24 @@ describe("tenant status transitions", () => {
     expect(restored.deletedAt).toBeNull();
   });
 
-  it("rejects reactivating a tenant that is not suspended or pending deletion", async () => {
+  it("lets only a platform admin activate a pending tenant", async () => {
+    const { tenant, platform, orgAdmin, owner, statusOf } = await fixture("pending");
+    expect(tenant.status).toBe("pending");
+
+    await expect(orgAdmin.reactivateTenant({ tenantId: tenant.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(owner.reactivateTenant({ tenantId: tenant.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(await statusOf()).toBe("pending");
+
+    const activated = await platform.reactivateTenant({ tenantId: tenant.id });
+    expect(activated.status).toBe("active");
+    expect(await statusOf()).toBe("active");
+  });
+
+  it("rejects reactivating a tenant that is already active", async () => {
     const { tenant, platform } = await fixture();
 
     await expect(platform.reactivateTenant({ tenantId: tenant.id })).rejects.toMatchObject({

@@ -162,7 +162,7 @@ describe("NodesService", () => {
           joinCodeId: "join-penang",
         });
         const placeholderId = started.node.tenantId!;
-        yield* tenants.updateTenant(placeholderId, { status: "suspended" });
+        yield* tenants.suspendTenant(placeholderId);
         expect(yield* nodes.delete(started.node.id)).toBe(true);
         expect(yield* tenants.resolveTenantById(placeholderId)).toMatchObject({
           accountId: `archived-${placeholderId}.v1.citynode.near`,

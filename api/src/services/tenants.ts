@@ -717,7 +717,7 @@ export const TenantsLive = Layer.effect(
             .where(
               and(
                 eq(tenantsTable.id, id),
-                inArray(tenantsTable.status, ["suspended", "pending_deletion"]),
+                inArray(tenantsTable.status, ["pending", "suspended", "pending_deletion"]),
               ),
             )
             .returning(),
@@ -729,7 +729,7 @@ export const TenantsLive = Layer.effect(
         if (!current) return null;
         return yield* Effect.fail(
           new ORPCError("CONFLICT", {
-            message: "Only a suspended or pending deletion tenant can be reactivated",
+            message: "Only a pending, suspended or pending deletion tenant can be reactivated",
             data: { resource: "tenant", resourceId: id, status: current.status },
           }),
         );
