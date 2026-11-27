@@ -681,7 +681,6 @@ export const contract = oc.router({
         tenantId: z.string(),
         name: z.string().optional(),
         accountId: z.string().optional(),
-        status: TenantStatusSchema.optional(),
         allowUiOverrides: z.boolean().optional(),
         allowBackendOverrides: z.boolean().optional(),
         allowSsr: z.boolean().optional(),
@@ -706,13 +705,20 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/tenants/{tenantId}/suspend" })
     .input(z.object({ tenantId: z.string() }))
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT }),
 
   reactivateTenant: oc
-    .route({ method: "POST", path: "/tenants/{tenantId}/reactivate" })
+    .route({
+      method: "POST",
+      path: "/tenants/{tenantId}/reactivate",
+      summary: "Activate a pending tenant, lift a suspension or restore a tenant pending deletion",
+      description:
+        "Platform admin — only a platform admin activates a pending tenant, lifts a suspension or " +
+        "restores a tenant pending deletion. Restoring clears the deletion timestamp.",
+    })
     .input(z.object({ tenantId: z.string() }))
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT }),
 
   resolveTenant: oc
     .route({ method: "GET", path: "/tenants/account/{accountId}" })

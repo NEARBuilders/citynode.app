@@ -123,7 +123,7 @@ export interface TenantsService {
     input: Partial<
       Pick<
         TenantInput,
-        "name" | "accountId" | "status" | "allowUiOverrides" | "allowBackendOverrides" | "allowSsr"
+        "name" | "accountId" | "allowUiOverrides" | "allowBackendOverrides" | "allowSsr"
       >
     >,
   ): TenantEffect<TenantRecord>;
@@ -690,21 +690,49 @@ export const TenantsLive = Layer.effect(
           db
             .update(tenantsTable)
             .set({ status: "suspended", updatedAt: new Date() })
-            .where(eq(tenantsTable.id, id))
+            .where(
+              and(eq(tenantsTable.id, id), inArray(tenantsTable.status, ["active", "pending"])),
+            )
             .returning(),
         );
-        return row ? toTenantRecord(row) : null;
+        if (row) return toTenantRecord(row);
+        const [current] = yield* query(() =>
+          db.select().from(tenantsTable).where(eq(tenantsTable.id, id)).limit(1),
+        );
+        if (!current) return null;
+        if (current.status === "suspended") return toTenantRecord(current);
+        return yield* Effect.fail(
+          new ORPCError("CONFLICT", {
+            message: "A tenant pending deletion cannot be suspended",
+            data: { resource: "tenant", resourceId: id, status: current.status },
+          }),
+        );
       }),
 
       reactivateTenant: Effect.fn("TenantsService.reactivateTenant")(function* (id) {
         const [row] = yield* query(() =>
           db
             .update(tenantsTable)
-            .set({ status: "active", updatedAt: new Date() })
-            .where(eq(tenantsTable.id, id))
+            .set({ status: "active", deletedAt: null, updatedAt: new Date() })
+            .where(
+              and(
+                eq(tenantsTable.id, id),
+                inArray(tenantsTable.status, ["pending", "suspended", "pending_deletion"]),
+              ),
+            )
             .returning(),
         );
-        return row ? toTenantRecord(row) : null;
+        if (row) return toTenantRecord(row);
+        const [current] = yield* query(() =>
+          db.select().from(tenantsTable).where(eq(tenantsTable.id, id)).limit(1),
+        );
+        if (!current) return null;
+        return yield* Effect.fail(
+          new ORPCError("CONFLICT", {
+            message: "Only a pending, suspended or pending deletion tenant can be reactivated",
+            data: { resource: "tenant", resourceId: id, status: current.status },
+          }),
+        );
       }),
 
       resolveTenantByAccountId: Effect.fn("TenantsService.resolveTenantByAccountId")(

@@ -2232,7 +2232,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return yield* services.tenants.updateTenant(tenant.id, {
             name: input.name,
             accountId: input.accountId,
-            status: input.status,
             allowUiOverrides: input.allowUiOverrides,
             allowBackendOverrides: input.allowBackendOverrides,
             allowSsr: input.allowSsr,
@@ -2277,7 +2276,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       reactivateTenant: builder.reactivateTenant
         .use(requireAuth)
-        .use(requireOrgRole("admin"))
+        .use(requireAdmin)
         .effect(function* ({ input, context, errors }) {
           const services = yield* ApiServices;
           yield* authorizedTenant(services, input, context);

@@ -572,10 +572,10 @@ export const configurationMessages = createMessageCatalogs(["en", "es", "fr", "z
     "暂停社区",
   ],
   "tenant.suspendDescription": [
-    "The site goes offline for everyone until you reactivate it.",
-    "El sitio se desactiva para todos hasta que lo reactives.",
-    "Le site est mis hors ligne pour tous jusqu'à sa réactivation.",
-    "站点将对所有人下线，直到你重新启用。",
+    "The site goes offline for everyone until a platform admin reactivates it.",
+    "El sitio se desactiva para todos hasta que un administrador de la plataforma lo reactive.",
+    "Le site est mis hors ligne pour tous jusqu'à ce qu'un administrateur de la plateforme le réactive.",
+    "站点将对所有人下线，直到平台管理员重新启用。",
   ],
   "tenant.suspended": [
     "Community suspended",

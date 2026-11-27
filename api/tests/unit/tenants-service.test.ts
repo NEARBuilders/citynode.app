@@ -464,6 +464,71 @@ describe("TenantsService — domain bindings", () => {
   });
 });
 
+describe("TenantsService — status transitions", () => {
+  it("restores a tenant pending deletion and clears its deletion timestamp", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) => svc.createTenant(baseInput));
+    await runService(layer, (svc) => svc.softDeleteTenant(created.id));
+
+    const restored = await runService(layer, (svc) => svc.reactivateTenant(created.id));
+
+    expect(restored).toMatchObject({ status: "active", deletedAt: null });
+  });
+
+  it("activates a pending tenant", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) =>
+      svc.createTenant({ ...baseInput, status: "pending" }),
+    );
+
+    const activated = await runService(layer, (svc) => svc.reactivateTenant(created.id));
+
+    expect(activated).toMatchObject({ status: "active", deletedAt: null });
+  });
+
+  it("rejects reactivating a tenant that is already active", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) => svc.createTenant(baseInput));
+
+    const error = await squashServiceError(layer, (svc) => svc.reactivateTenant(created.id));
+
+    expect(error).toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("rejects suspending a tenant pending deletion and keeps its deletion state", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) => svc.createTenant(baseInput));
+    await runService(layer, (svc) => svc.softDeleteTenant(created.id));
+
+    const error = await squashServiceError(layer, (svc) => svc.suspendTenant(created.id));
+    const current = await runService(layer, (svc) => svc.resolveTenantById(created.id));
+
+    expect(error).toMatchObject({ code: "CONFLICT" });
+    expect(current).toMatchObject({ status: "pending_deletion", deletedAt: expect.any(String) });
+  });
+
+  it("treats suspending a suspended tenant as a no-op", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) => svc.createTenant(baseInput));
+    await runService(layer, (svc) => svc.suspendTenant(created.id));
+
+    const again = await runService(layer, (svc) => svc.suspendTenant(created.id));
+
+    expect(again?.status).toBe("suspended");
+  });
+
+  it("suspends a pending tenant", async () => {
+    const layer = freshLayer();
+    const created = await runService(layer, (svc) =>
+      svc.createTenant({ ...baseInput, status: "pending" }),
+    );
+
+    const suspended = await runService(layer, (svc) => svc.suspendTenant(created.id));
+
+    expect(suspended?.status).toBe("suspended");
+  });
+});
+
 describe("TenantsService — reserved gateway hostnames", () => {
   const spawnInput = {
     name: "Reserved",

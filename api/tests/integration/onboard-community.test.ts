@@ -14,7 +14,7 @@ afterAll(teardown);
 async function fixture() {
   const id = crypto.randomUUID();
   const org = `onboard-${id}`;
-  const provisioner = await getPluginClient(daoContext(id, org, `o-${id}.near`));
+  const provisioner = await getPluginClient(daoContext(id, org, `o-${id}.near`, "admin"));
   const tenant = await provisioner.createTenant({
     name: "Onboard city",
     accountId: `o-${id}.near`,
@@ -96,7 +96,7 @@ describe("the joined screen's community for an organization", () => {
       publicClient.getOnboardCommunity({ organizationId: `missing-${crypto.randomUUID()}` }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    await provisioner.updateTenant({ tenantId: tenant.id, status: "suspended" });
+    await provisioner.suspendTenant({ tenantId: tenant.id });
     await expect(publicClient.getOnboardCommunity({ organizationId: org })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });

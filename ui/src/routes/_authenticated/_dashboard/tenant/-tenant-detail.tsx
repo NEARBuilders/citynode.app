@@ -360,6 +360,7 @@ export function TenantDetailContent({
             tenant={tenant}
             isOwner={isOwner}
             isAdmin={isAdmin}
+            isPlatformAdmin={isPlatformAdmin}
             suspend={suspendMutation}
             reactivate={reactivateMutation}
             open={deleteOpen}
