@@ -1,6 +1,6 @@
 import type { ContractedRouter } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
-import { Cause, Context, DateTime, Effect, Exit, Layer } from "effect";
+import { Cause, Clock, Context, DateTime, Effect, Exit, Layer } from "effect";
 import { buildScopedContext, createPlugin } from "every-plugin";
 import { createAuthMiddleware } from "everything-dev/api";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
@@ -9,7 +9,13 @@ import { contract, type EventOnboardingCodeSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { activateCommunity } from "./lib/activate-community";
 import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
+import {
+  type AuthClient,
+  ensureCommunityJoinCode,
+  scheduleCommunityJoinCodeBackfill,
+} from "./lib/community-join-code";
 import { ContextSchema } from "./lib/context";
+import { MEMBER_PAGE_SIZE } from "./lib/member-pages";
 import {
   grantApplicantAdmin,
   linkOfficialDao,
@@ -31,9 +37,18 @@ import {
 } from "./services/member-directory";
 import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { BulletinPublisher, NodeEffect, NodeRecord, NodesService } from "./services/nodes";
-import { NodesLive, NodesTag, nodeKindOf, PLATFORM_NODE_KIND } from "./services/nodes";
+import {
+  isCommunityPlaceholderTenant,
+  isReservedCommunityAccountId,
+  NodesLive,
+  NodesTag,
+  nodeKindOf,
+  PLATFORM_NODE_KIND,
+} from "./services/nodes";
 import type { PlacesService } from "./services/places";
 import { PlacesLive, PlacesTag } from "./services/places";
+import { ShardDogLive, type ShardDogService, ShardDogTag } from "./services/sharddog";
+import { createShardDogClient } from "./services/sharddog-client";
 import {
   makeStakingPools,
   StakingPoolCheckFailed,
@@ -89,6 +104,7 @@ export class ApiServices extends Context.Service<
     memberDirectory: MemberDirectoryService;
     attendance: AttendanceService;
     teamJoinRequests: TeamJoinRequestsService;
+    sharddog: ShardDogService;
     stakingPools: StakingPoolsService;
     platformStationsAccount: string | null;
   }
@@ -96,7 +112,6 @@ export class ApiServices extends Context.Service<
 
 const ONBOARDING_GRACE_MS = 48 * 3_600_000;
 
-const MEMBER_PAGE_SIZE = 100;
 const ORGANIZATION_PAGE = 100;
 const MEMBER_DIRECTORY_SCAN_PAGES = 10;
 
@@ -192,21 +207,79 @@ type NodeAccessContext = NonNullable<TeamAccessContext> & {
     | null;
 };
 
-type ViewerContext = {
-  userId?: string | null;
-  user?: { id?: string; name?: string | null; isAnonymous?: boolean | null } | null;
-};
+type ViewerContext = Pick<AuthContext, "userId" | "user" | "organization" | "organizations">;
 
 const bulletinPublisherOf = (context: ViewerContext): BulletinPublisher => ({
   userId: context.userId ?? context.user?.id ?? null,
   name: memberDisplayName(context.user?.name),
 });
 
-const nodeForViewer = (context: ViewerContext) => {
+type ViewerAccess = { platformAdmin: boolean; organizationIds: ReadonlySet<string> };
+
+const viewerAccessOf = (context: ViewerContext): ViewerAccess => {
   const signedIn = !!context.user && context.user.isAnonymous !== true;
-  return (node: NodeRecord): NodeRecord =>
-    signedIn ? node : { ...node, bulletinPublisherName: null };
+  return {
+    platformAdmin: signedIn && context.user?.role === "admin",
+    organizationIds: new Set(
+      signedIn
+        ? [
+            context.organization?.activeOrganizationId,
+            ...(context.organizations ?? []).map((organization) => organization.id),
+          ].filter((id): id is string => !!id)
+        : [],
+    ),
+  };
 };
+
+const inCommunity = (access: ViewerAccess, ...orgIds: (string | null | undefined)[]) =>
+  access.platformAdmin || orgIds.some((id) => !!id && access.organizationIds.has(id));
+
+const nodeForViewer =
+  (access: ViewerAccess, tenantOrgIds: ReadonlyMap<string, string | null>) =>
+  (node: NodeRecord): NodeRecord => {
+    const { joinCodeId: _joinCodeId, ...metadata } = node.metadata;
+    if (inCommunity(access, node.orgId, node.tenantId && tenantOrgIds.get(node.tenantId))) {
+      return { ...node, metadata };
+    }
+    const { bulletin: _bulletin, ...publicMetadata } = metadata;
+    return {
+      ...node,
+      metadata: publicMetadata,
+      bulletinPublishedAt: null,
+      bulletinPublisherName: null,
+    };
+  };
+
+const presentNodes = (
+  services: { tenants: TenantsService },
+  context: ViewerContext,
+  nodes: readonly NodeRecord[],
+) =>
+  Effect.gen(function* () {
+    const access = viewerAccessOf(context);
+    const tenantIds =
+      access.organizationIds.size === 0
+        ? []
+        : [
+            ...new Set(
+              nodes.flatMap((node) =>
+                node.tenantId &&
+                node.metadata.bulletin !== undefined &&
+                !inCommunity(access, node.orgId)
+                  ? [node.tenantId]
+                  : [],
+              ),
+            ),
+          ];
+    const tenantOrgIds = yield* services.tenants.orgIdsByTenantId(tenantIds);
+    return nodes.map(nodeForViewer(access, tenantOrgIds));
+  });
+
+const presentNode = (
+  services: { tenants: TenantsService },
+  context: ViewerContext,
+  node: NodeRecord,
+) => presentNodes(services, context, [node]).pipe(Effect.map(([presented]) => presented!));
 
 const requireNodeOperationsAccess = (context: NodeAccessContext): NodeEffect<void> =>
   canUseTeamArea(context, "node-operations")
@@ -234,7 +307,11 @@ const authorizeNodeAccess = (
   services: { tenants: TenantsService },
   node: NodeRecord,
   context: NodeAccessContext,
-  options: { adminBypassOrg: boolean; resource: "node" | "validators" },
+  options: {
+    adminBypassOrg: boolean;
+    resource: "node" | "validators";
+    platformAdminOnly?: boolean;
+  },
 ): NodeEffect<void> =>
   Effect.gen(function* () {
     if (!node.tenantId) {
@@ -263,6 +340,24 @@ const authorizeNodeAccess = (
         }),
       );
     }
+    if (isCommunityPlaceholderTenant(tenant)) {
+      if (context.user?.role === "admin") {
+        if (options.platformAdminOnly) return;
+      } else if (options.resource === "validators" && !officialDaoOf(node)) {
+        return yield* Effect.fail(
+          new ORPCError("FORBIDDEN", {
+            message: "Validators can be attached once the community is official",
+          }),
+        );
+      }
+      if (options.platformAdminOnly) {
+        return yield* Effect.fail(
+          new ORPCError("FORBIDDEN", {
+            message: "Only platform admins can remove a community",
+          }),
+        );
+      }
+    }
     const ownsOrg =
       !!context.organization?.activeOrganizationId &&
       tenant.orgId === context.organization.activeOrganizationId;
@@ -290,6 +385,7 @@ const authorizedTenant = (
     organization?: { activeOrganizationId: string | null; member?: { role?: string } | null };
     near?: { primaryAccountId: string | null };
   },
+  options: { readOnly?: boolean } = {},
 ): NodeEffect<TenantRecord> =>
   Effect.gen(function* () {
     const tenant = yield* services.tenants.resolveTenantById(input.tenantId);
@@ -302,6 +398,13 @@ const authorizedTenant = (
       );
     }
     if (context.user?.role === "admin") return tenant;
+    if (!options.readOnly && isCommunityPlaceholderTenant(tenant)) {
+      return yield* Effect.fail(
+        new ORPCError("FORBIDDEN", {
+          message: "Only platform admins can change this community's site",
+        }),
+      );
+    }
     if (tenant.ownerKind === "user") {
       if (!context.user?.id || tenant.ownerUserId !== context.user.id) {
         return yield* Effect.fail(
@@ -356,6 +459,8 @@ const authorizedNodeForValidators = (
     return node;
   });
 
+const MAX_EVENT_COLLECTIBLES = 12;
+
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
     platformAccount: z.string().optional(),
@@ -395,6 +500,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
       .string()
       .default("whitelist.f863973.m0")
       .describe("Testnet contract whose is_whitelisted approves staking pools for validators"),
+    sharddogEnabled: z
+      .boolean()
+      .default(false)
+      .describe("Turns on ShardDog collectibles; without SHARDDOG_API_KEY the client is a stub"),
+    sharddogApiUrl: z
+      .url({ protocol: /^https$/ })
+      .default("https://shard.dog")
+      .describe("ShardDog API base URL"),
   }),
 
   secrets: z.object({
@@ -402,6 +515,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     LUMA_WEBHOOK_SECRETS: z.string().default(""),
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
     BETTER_AUTH_SECRET: z.string().default(""),
+    SHARDDOG_API_KEY: z.string().default(""),
   }),
 
   context: ContextSchema,
@@ -430,6 +544,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
           MemberDirectoryLive,
           AttendanceLive,
           TeamJoinRequestsLive,
+          ShardDogLive({
+            enabled: config.variables.sharddogEnabled,
+            client: createShardDogClient({
+              apiKey: config.secrets.SHARDDOG_API_KEY,
+              apiUrl: config.variables.sharddogApiUrl,
+            }),
+          }),
         ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
@@ -447,6 +568,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           memberDirectory: Context.get(services, MemberDirectoryTag),
           attendance: Context.get(services, AttendanceTag),
           teamJoinRequests: Context.get(services, TeamJoinRequestsTag),
+          sharddog: Context.get(services, ShardDogTag),
           stakingPools: makeStakingPools({
             mainnet: config.variables.mainnetStakingPoolWhitelist,
             testnet: config.variables.testnetStakingPoolWhitelist,
@@ -478,6 +600,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
           user: context.user,
         });
       });
+
+    const communityJoinCodeClients = (context: {
+      reqHeaders?: ConstructorParameters<typeof Headers>[0];
+      userId?: string | null;
+      user?: AuthContext["user"];
+      session?: AuthContext["session"];
+    }): AuthClient[] => {
+      const authPlugin = plugins.auth;
+      const userId = context.userId ?? context.user?.id;
+      if (!authPlugin || !userId) return [];
+      return [
+        authPlugin.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+          userId,
+          user: context.user,
+          session: context.session,
+        }),
+      ];
+    };
 
     type MemberAuthClient = Effect.Success<ReturnType<typeof memberAuthClient>>;
 
@@ -564,6 +705,79 @@ export default createPlugin.withPlugins<PluginsClient>()({
             role,
           },
         };
+      });
+
+    const canEditShardDogDrops = (
+      context: { userId?: string | null; user?: AuthContext["user"]; reqHeaders?: unknown },
+      organizationId: string,
+    ) =>
+      Effect.gen(function* () {
+        if (!context.userId || !context.user || context.user.isAnonymous) return false;
+        if (context.user.role === "admin") return true;
+        const auth = yield* memberAuthClient({
+          reqHeaders: context.reqHeaders as ConstructorParameters<typeof Headers>[0],
+          userId: context.userId,
+          user: context.user,
+        });
+        const role = yield* callAuth(
+          () =>
+            auth.getActiveMemberRole({ organizationId }).then(
+              (result) => result.role,
+              (error: unknown) => {
+                if (
+                  error instanceof ORPCError &&
+                  ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.code)
+                ) {
+                  return null;
+                }
+                throw error;
+              },
+            ),
+          "Could not read your role in this community",
+        );
+        return isCommunitySettingsRole(role);
+      });
+
+    const readShardDogDrops = (organizationId: string, canEdit: boolean) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        const tenant = yield* services.tenants.resolveTenantByOrgId(organizationId);
+        if (!tenant || tenant.status !== "active" || tenant.deletedAt) {
+          return yield* Effect.fail(
+            new ORPCError("NOT_FOUND", { message: "No City Node for this community" }),
+          );
+        }
+        const [stored, community] = yield* Effect.all([
+          services.sharddog.drops(organizationId),
+          services.discovery
+            .organizationEvents([organizationId], { liveTenantsOnly: true, publicOnly: !canEdit })
+            .pipe(Effect.map((byOrganization) => byOrganization.get(organizationId))),
+        ]);
+        const events = [...(community?.events ?? [])].sort(
+          (a, b) => (b.startsAt ?? "").localeCompare(a.startsAt ?? "") || a.id.localeCompare(b.id),
+        );
+        return {
+          enabled: services.sharddog.enabled,
+          canEdit,
+          membershipDropId: stored.membershipDropId,
+          events: events.map((event) => ({
+            eventId: event.id,
+            title: event.title,
+            startsAt: event.startsAt,
+            dropId: stored.eventDrops.get(event.id) ?? null,
+          })),
+        };
+      });
+
+    const deliverAwardsInBackground = (filter: { organizationId?: string; userId?: string }) =>
+      Effect.gen(function* () {
+        const services = yield* ApiServices;
+        yield* services.sharddog.deliverAwards(filter).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("[API] ShardDog award delivery failed", cause),
+          ),
+          Effect.forkDetach,
+        );
       });
 
     const notACommunityMember = () =>
@@ -1039,12 +1253,21 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 }),
         });
       }),
-      listDiscovery: builder.listDiscovery.effect(function* ({ input }) {
+      listDiscovery: builder.listDiscovery.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
+        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context));
         return yield* services.discovery.directory(input);
       }),
-      getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input }) {
+      getDiscoveryNode: builder.getDiscoveryNode.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (node) {
+          yield* Effect.promise(() =>
+            ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(context), node).catch(
+              () => null,
+            ),
+          );
+        }
         return yield* services.discovery.get(input.nodeId);
       }),
       getCommunityBuilders: builder.getCommunityBuilders.effect(function* ({ input }) {
@@ -1187,6 +1410,105 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
+      getShardDogDrops: builder.getShardDogDrops.effect(function* ({ input, context }) {
+        const canEdit = yield* canEditShardDogDrops(context, input.organizationId);
+        return yield* readShardDogDrops(input.organizationId, canEdit);
+      }),
+
+      getNodeCollectibles: builder.getNodeCollectibles.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        const none = { collectibles: [] };
+        if (!services.sharddog.enabled) return none;
+        const node = yield* services.nodes.getById(input.nodeId);
+        if (!node?.tenantId) return none;
+        const tenant = yield* services.tenants.resolveTenantById(node.tenantId);
+        if (!tenant?.orgId) return none;
+        const drops = yield* readShardDogDrops(tenant.orgId, false).pipe(
+          Effect.catchIf(
+            (error) => error instanceof ORPCError && error.code === "NOT_FOUND",
+            () => Effect.succeed(null),
+          ),
+        );
+        if (!drops) return none;
+        const linked = [
+          ...(drops.membershipDropId
+            ? [
+                {
+                  kind: "membership" as const,
+                  dropId: drops.membershipDropId,
+                  eventId: null,
+                  eventTitle: null,
+                  eventStartsAt: null,
+                },
+              ]
+            : []),
+          ...drops.events
+            .filter(
+              (event): event is (typeof drops.events)[number] & { dropId: string } =>
+                event.dropId !== null,
+            )
+            .slice(0, MAX_EVENT_COLLECTIBLES)
+            .map((event) => ({
+              kind: "event" as const,
+              dropId: event.dropId,
+              eventId: event.eventId,
+              eventTitle: event.title,
+              eventStartsAt: event.startsAt,
+            })),
+        ];
+        const { client } = services.sharddog;
+        const collectibles = yield* Effect.forEach(
+          linked,
+          (item) =>
+            services.sharddog.dropDetails(item.dropId).pipe(
+              Effect.map((details) => ({
+                ...item,
+                name: details?.name ?? null,
+                imageUrl: details?.imageUrl ?? null,
+                viewUrl: client.dropUrl(item.dropId),
+              })),
+            ),
+          { concurrency: 4 },
+        );
+        return { collectibles };
+      }),
+
+      setShardDogDrop: builder.setShardDogDrop.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        const { organizationId, eventId, dropId } = input;
+        if (!(yield* canEditShardDogDrops(context, organizationId))) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
+              message: "Only this community's owners and admins can link ShardDog drops",
+            }),
+          );
+        }
+        const current = yield* readShardDogDrops(organizationId, true);
+        if (eventId === undefined) {
+          yield* services.sharddog.setMembershipDrop({
+            organizationId,
+            dropId,
+            updatedBy: context.userId,
+          });
+        } else {
+          if (!current.events.some((event) => event.eventId === eventId)) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", { message: "This event isn't one of the community's" }),
+            );
+          }
+          yield* services.sharddog.setEventDrop({
+            organizationId,
+            eventId,
+            dropId,
+            updatedBy: context.userId,
+          });
+        }
+        return yield* readShardDogDrops(organizationId, true);
+      }),
+
       reconcileAttendance: builder.reconcileAttendance.use(requireAuth).effect(function* ({
         input,
         context,
@@ -1197,7 +1519,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         const community = (yield* services.discovery.organizationEvents([organizationId])).get(
           organizationId,
         );
-        return yield* services.attendance.reconcile({
+        const summary = yield* services.attendance.reconcile({
           organizationId,
           communityName: community?.communityName ?? organizationId,
           events: community?.events ?? [],
@@ -1207,6 +1529,83 @@ export default createPlugin.withPlugins<PluginsClient>()({
             codeStatus: (codeId) => auth.getOnboardingStatus({ codeId, organizationId }),
           },
         });
+        yield* services.sharddog.queueAwards(organizationId).pipe(
+          Effect.andThen(deliverAwardsInBackground({ organizationId })),
+          Effect.catchCause((cause) =>
+            Effect.logWarning("[API] ShardDog awards after check-in sync failed", cause),
+          ),
+        );
+        return summary;
+      }),
+
+      getMyCollectibles: builder.getMyCollectibles.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const services = yield* ApiServices;
+        if (!services.sharddog.enabled) return { enabled: false, collectibles: [] };
+        yield* deliverAwardsInBackground({
+          userId: context.userId,
+          organizationId: input.organizationId,
+        });
+        const awards = yield* services.sharddog.awardsFor(context.userId, input.organizationId);
+        return {
+          enabled: true,
+          collectibles: awards.map((award) => ({
+            organizationId: award.organizationId,
+            kind: award.kind,
+            eventId: award.eventId,
+            status:
+              award.status === "awarded"
+                ? ("awarded" as const)
+                : award.claimUrl
+                  ? ("claim" as const)
+                  : award.hasAccount || award.retrying
+                    ? ("pending" as const)
+                    : ("needs_account" as const),
+            viewUrl: award.status === "awarded" ? award.viewUrl : null,
+            claimUrl: award.status === "pending" ? award.claimUrl : null,
+          })),
+        };
+      }),
+
+      getAccountCollectibles: builder.getAccountCollectibles.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        if (!services.sharddog.enabled) return { enabled: false, collectibles: [] };
+        const awards = yield* services.sharddog.awardedToAccount(input.accountId);
+        const communities = yield* services.discovery.organizationEvents(
+          [...new Set(awards.map((award) => award.organizationId))],
+          { liveTenantsOnly: true },
+        );
+        const now = yield* Clock.currentTimeMillis;
+        return {
+          enabled: true,
+          collectibles: awards.flatMap((award) => {
+            const community = communities.get(award.organizationId);
+            if (!community?.communityName) return [];
+            const event =
+              award.kind === "event"
+                ? community.events.find(
+                    (item) =>
+                      item.id === award.eventId &&
+                      item.status !== "draft" &&
+                      Date.parse(item.publishedAt) <= now,
+                  )
+                : undefined;
+            if (award.kind === "event" && !event) return [];
+            return [
+              {
+                organizationId: award.organizationId,
+                communityName: community.communityName,
+                kind: award.kind,
+                eventId: award.eventId,
+                eventTitle: event?.title ?? null,
+                awardedAt: award.awardedAt.toISOString(),
+                viewUrl: award.viewUrl,
+              },
+            ];
+          }),
+        };
       }),
 
       getMyAttendance: builder.getMyAttendance.use(requireAuth).effect(function* ({
@@ -1733,7 +2132,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         context,
       }) {
         const services = yield* ApiServices;
-        const tenant = yield* authorizedTenant(services, input, context);
+        const tenant = yield* authorizedTenant(services, input, context, { readOnly: true });
         const bindings = yield* services.tenants.listBindingsForTenant(tenant.id);
         return {
           tenant,
@@ -1784,6 +2183,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
           const services = yield* ApiServices;
           const tenant = yield* authorizedTenant(services, input, context);
           if (input.accountId !== undefined) yield* validateAccountId(input.accountId);
+          if (
+            input.accountId !== undefined &&
+            context.user?.role !== "admin" &&
+            isReservedCommunityAccountId(input.accountId)
+          ) {
+            return yield* Effect.fail(
+              new ORPCError("FORBIDDEN", {
+                message: "This account is reserved for platform communities",
+              }),
+            );
+          }
           return yield* services.tenants.updateTenant(tenant.id, {
             name: input.name,
             accountId: input.accountId,
@@ -1886,34 +2296,47 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listTenantApps: builder.listTenantApps.effect(function* () {
         const services = yield* ApiServices;
-        return yield* services.tenants.listTenantApps();
+        const apps = yield* services.tenants.listTenantApps();
+        return apps.map(({ orgId: _orgId, ...app }) => app);
       }),
 
       listStakeCommunities: builder.listStakeCommunities.effect(function* ({ context }) {
         const services = yield* ApiServices;
-        const activeOrganizationId = context.organization?.activeOrganizationId;
-        const apps =
-          !context.user || context.user.isAnonymous === true
-            ? yield* services.tenants.listTenantApps()
-            : yield* services.tenants.listTenantApps(
-                activeOrganizationId
-                  ? [activeOrganizationId]
-                  : (context.organizations ?? []).map((organization) => organization.id),
-              );
+        const signedIn = !!context.user && context.user.isAnonymous !== true;
+        const activeOrganizationId = signedIn
+          ? (context.organization?.activeOrganizationId ?? null)
+          : null;
+        const memberOrganizationIds = new Set(
+          signedIn ? (context.organizations ?? []).map((organization) => organization.id) : [],
+        );
+        const apps = yield* services.tenants.listTenantApps();
         const stakeable = yield* services.validators.nodeIdsWithValidators(
           apps.flatMap((app) => (app.node ? [app.node.id] : [])),
         );
-        return apps.map((app) => ({
-          ...app,
-          stakeable: app.node ? stakeable.has(app.node.id) : false,
-        }));
+        const viewerMembershipOf = (orgId: string | null) => {
+          if (!orgId) return null;
+          if (orgId === activeOrganizationId) return "active" as const;
+          return memberOrganizationIds.has(orgId) ? ("member" as const) : null;
+        };
+        const rank = { active: 0, member: 1 } as const;
+        return apps
+          .map(({ orgId, ...app }) => ({
+            ...app,
+            stakeable: app.node ? stakeable.has(app.node.id) : false,
+            viewerMembership: viewerMembershipOf(orgId),
+          }))
+          .sort(
+            (a, b) =>
+              (a.viewerMembership ? rank[a.viewerMembership] : 2) -
+                (b.viewerMembership ? rank[b.viewerMembership] : 2) || a.name.localeCompare(b.name),
+          );
       }),
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
         .use(requireAuth)
         .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
-          const tenant = yield* authorizedTenant(services, input, context);
+          const tenant = yield* authorizedTenant(services, input, context, { readOnly: true });
           return yield* services.tenants.listBindingsForTenant(tenant.id);
         }),
 
@@ -2071,6 +2494,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       listNodes: builder.listNodes.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
+        scheduleCommunityJoinCodeBackfill(services.nodes, communityJoinCodeClients(context));
         const nodes = yield* services.nodes.list({
           includePlatform:
             context.user?.role === "admin" &&
@@ -2079,7 +2503,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...(input.parentId !== undefined && { parentId: input.parentId }),
           ...(input.tenantId !== undefined && { tenantId: input.tenantId }),
         });
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listNodeSummaries: builder.listNodeSummaries.effect(function* ({ input, context }) {
@@ -2089,14 +2513,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
           ...(input.scope === "roots" && { parentId: null }),
           ...(input.kind !== undefined && { kind: input.kind }),
         });
-        const present = nodeForViewer(context);
-        return summaries.map((summary) => ({ ...summary, node: present(summary.node) }));
+        const presented = yield* presentNodes(
+          services,
+          context,
+          summaries.map((summary) => summary.node),
+        );
+        return summaries.map((summary, index) => ({ ...summary, node: presented[index]! }));
       }),
 
       getNode: builder.getNode.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const node = yield* services.nodes.getById(input.nodeId);
-        return node && nodeForViewer(context)(node);
+        if (!node) return null;
+        yield* Effect.promise(() =>
+          ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(context), node).catch(
+            () => null,
+          ),
+        );
+        const refreshed = yield* services.nodes.getById(input.nodeId);
+        return refreshed && (yield* presentNode(services, context, refreshed));
       }),
 
       updateNode: builder.updateNode
@@ -2110,10 +2545,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
             resource: "node",
           });
           yield* guardNodeKind(node.kind, requestedNodeKind(input));
-          return yield* services.nodes.update(input.nodeId, {
+          const updated = yield* services.nodes.update(input.nodeId, {
             ...(input.kind !== undefined && { kind: input.kind }),
             ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
+          return yield* presentNode(services, context, updated);
         }),
 
       setNodeBulletin: builder.setNodeBulletin
@@ -2126,11 +2562,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
             adminBypassOrg: true,
             resource: "node",
           });
-          return yield* services.nodes.setBulletin(
+          const updated = yield* services.nodes.setBulletin(
             input.nodeId,
             input.bulletin,
             bulletinPublisherOf(context),
           );
+          return yield* presentNode(services, context, updated);
         }),
 
       deleteNode: builder.deleteNode
@@ -2143,6 +2580,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           yield* authorizeNodeAccess(services, node, context, {
             adminBypassOrg: false,
             resource: "node",
+            platformAdminOnly: true,
           });
           const deleted = yield* services.nodes.delete(input.nodeId);
           if (!deleted) {
@@ -2159,20 +2597,20 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listRootNodes: builder.listRootNodes.effect(function* ({ context }) {
         const services = yield* ApiServices;
         const nodes = yield* services.nodes.listRootNodes;
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listChildren: builder.listChildren.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const nodes = yield* services.nodes.listChildren(input.nodeId);
-        return nodes.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, nodes);
       }),
 
       listNodeAncestors: builder.listNodeAncestors.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         yield* resolveNodeForAccess(services, input.nodeId);
         const ancestors = yield* services.nodes.listAncestors(input.nodeId);
-        return ancestors.map(nodeForViewer(context));
+        return yield* presentNodes(services, context, ancestors);
       }),
 
       getSubtree: builder.getSubtree.effect(function* ({ input, errors }) {
@@ -2209,7 +2647,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
 
         return {
-          node: nodeForViewer(context)(node),
+          node: yield* presentNode(services, context, node),
           childrenCount: children.length,
           subtreeNodeCount: subtree.length,
           validators,
@@ -2227,7 +2665,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       resolveNodeBySlug: builder.resolveNodeBySlug.effect(function* ({ input, context }) {
         const services = yield* ApiServices;
         const node = yield* services.nodes.resolveBySlug(input.slug);
-        return node && nodeForViewer(context)(node);
+        return node && (yield* presentNode(services, context, node));
       }),
 
       resolvePlace: builder.resolvePlace.effect(function* ({ input }) {
@@ -2281,12 +2719,23 @@ export default createPlugin.withPlugins<PluginsClient>()({
           userId,
           user: context.user,
         });
+        const repairClients = communityJoinCodeClients({
+          reqHeaders: context.reqHeaders,
+          userId,
+          user: context.user,
+          session: context.session,
+        });
         return yield* Effect.tryPromise({
           try: () =>
-            activateCommunity({ places: services.places, nodes: services.nodes }, auth, {
-              place: input.place,
-              userId,
-            }),
+            activateCommunity(
+              { places: services.places, nodes: services.nodes },
+              auth,
+              {
+                place: input.place,
+                userId,
+              },
+              repairClients,
+            ),
           catch: (error) =>
             error instanceof ORPCError
               ? error
@@ -2311,7 +2760,26 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
-        const joinCodeId = (node.metadata as { joinCodeId?: string } | null)?.joinCodeId;
+        const userId = context.userId ?? context.user?.id;
+        if (!userId) {
+          return yield* Effect.fail(
+            new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
+          );
+        }
+        const repairContext = {
+          reqHeaders: context.reqHeaders,
+          userId,
+          user: context.user,
+          session: context.session,
+        };
+        const joinCodeId = yield* Effect.tryPromise({
+          try: () =>
+            ensureCommunityJoinCode(services.nodes, communityJoinCodeClients(repairContext), node),
+          catch: (cause) =>
+            new ORPCError("INTERNAL_SERVER_ERROR", {
+              message: cause instanceof Error ? cause.message : "Could not prepare the join code",
+            }),
+        });
         if (!joinCodeId) {
           return yield* Effect.fail(
             errors.CONFLICT({
@@ -2320,24 +2788,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
-        const authPlugin = plugins.auth;
-        if (!authPlugin) {
+        const auth = communityJoinCodeClients(repairContext)[0];
+        if (!auth) {
           return yield* Effect.fail(
             new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
           );
         }
-        const userId = context.userId ?? context.user?.id;
-        if (!userId) {
-          return yield* Effect.fail(
-            new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
-          );
-        }
-        const auth = authPlugin.client({
-          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
-          userId,
-          user: context.user,
-          session: context.session,
-        });
         const joinOutcome = yield* Effect.tryPromise({
           try: async () => {
             try {

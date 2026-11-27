@@ -7,6 +7,7 @@ import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
   nodes as nodesTable,
+  ONE_PRIMARY_BINDING_INDEX,
   places as placesTable,
   type tenantStatus,
   tenants as tenantsTable,
@@ -67,6 +68,7 @@ export interface TenantAppRecord {
   hostname: string | null;
   node: { id: string; slug: string; kind: string | null; name: string } | null;
   createdAt: string;
+  orgId: string | null;
 }
 
 export interface TenantInput {
@@ -106,7 +108,7 @@ export interface TenantsService {
   listAllTenants: TenantEffect<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): TenantEffect<TenantRecord[]>;
   listTenantsByOwnerUserId(ownerUserId: string): TenantEffect<TenantRecord[]>;
-  listTenantApps(organizationIds?: readonly string[]): TenantEffect<TenantAppRecord[]>;
+  listTenantApps(): TenantEffect<TenantAppRecord[]>;
   listBindings: TenantEffect<TenantBinding[]>;
   listBindingsForTenant(tenantId: string): TenantEffect<TenantBindingRecord[]>;
   createBinding(input: CreateBindingInput): TenantEffect<TenantBindingRecord>;
@@ -131,6 +133,7 @@ export interface TenantsService {
   resolveTenantByAccountId(accountId: string): TenantEffect<TenantRecord | null>;
   resolveTenantById(id: string): TenantEffect<TenantRecord | null>;
   resolveTenantByOrgId(orgId: string): TenantEffect<TenantRecord | null>;
+  orgIdsByTenantId(ids: readonly string[]): TenantEffect<ReadonlyMap<string, string | null>>;
   deleteTenantById(id: string): TenantEffect<boolean>;
 }
 
@@ -244,12 +247,7 @@ export const TenantsLive = Layer.effect(
         return rows.map(toTenantRecord);
       }),
 
-      listTenantApps: Effect.fn("TenantsService.listTenantApps")(function* (organizationIds) {
-        if (organizationIds?.length === 0) return [];
-        const conditions = [eq(tenantsTable.status, "active")];
-        if (organizationIds) {
-          conditions.push(inArray(tenantsTable.orgId, organizationIds));
-        }
+      listTenantApps: Effect.fn("TenantsService.listTenantApps")(function* () {
         const rows = yield* query(() =>
           db
             .select({
@@ -258,6 +256,7 @@ export const TenantsLive = Layer.effect(
               status: tenantsTable.status,
               ownerKind: tenantsTable.ownerKind,
               createdAt: tenantsTable.createdAt,
+              orgId: tenantsTable.orgId,
               hostname: domainBindingsTable.hostname,
               nodeId: nodesTable.id,
               nodeSlug: nodeSlugSql,
@@ -274,7 +273,7 @@ export const TenantsLive = Layer.effect(
             )
             .leftJoin(nodesTable, eq(nodesTable.tenantId, tenantsTable.id))
             .leftJoin(placesTable, eq(placesTable.id, nodesTable.placeId))
-            .where(and(...conditions, listedNode)),
+            .where(and(eq(tenantsTable.status, "active"), listedNode)),
         );
 
         const seen = new Set<string>();
@@ -299,6 +298,7 @@ export const TenantsLive = Layer.effect(
                 : null,
             createdAt:
               row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+            orgId: row.orgId ?? null,
           });
         }
         return apps;
@@ -368,12 +368,18 @@ export const TenantsLive = Layer.effect(
               })
               .returning(),
           catch: (error) =>
-            isUniqueViolation(error)
+            isUniqueViolation(error, ONE_PRIMARY_BINDING_INDEX)
               ? new ORPCError("CONFLICT", {
-                  message: "Hostname already in use",
-                  data: { hostname },
+                  message:
+                    "This tenant already has a primary domain. Add it as a secondary, then use setPrimaryBinding.",
+                  data: { tenantId: input.tenantId },
                 })
-              : toOrpcError(error),
+              : isUniqueViolation(error)
+                ? new ORPCError("CONFLICT", {
+                    message: "Hostname already in use",
+                    data: { hostname },
+                  })
+                : toOrpcError(error),
         });
         const [row] = rows;
         if (!row) {
@@ -640,13 +646,21 @@ export const TenantsLive = Layer.effect(
       }),
 
       updateTenant: Effect.fn("TenantsService.updateTenant")(function* (id, input) {
-        const [row] = yield* query(() =>
-          db
-            .update(tenantsTable)
-            .set({ ...input, updatedAt: new Date() })
-            .where(eq(tenantsTable.id, id))
-            .returning(),
-        );
+        const [row] = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .update(tenantsTable)
+              .set({ ...input, updatedAt: new Date() })
+              .where(eq(tenantsTable.id, id))
+              .returning(),
+          catch: (error) =>
+            isUniqueViolation(error)
+              ? new ORPCError("CONFLICT", {
+                  message: "Tenant with this accountId already exists",
+                  data: { accountId: input.accountId },
+                })
+              : toOrpcError(error),
+        });
 
         if (!row) {
           return yield* Effect.fail(
@@ -714,6 +728,17 @@ export const TenantsLive = Layer.effect(
           db.select().from(tenantsTable).where(eq(tenantsTable.orgId, orgId)).limit(1),
         );
         return row ? toTenantRecord(row) : null;
+      }),
+
+      orgIdsByTenantId: Effect.fn("TenantsService.orgIdsByTenantId")(function* (ids) {
+        if (ids.length === 0) return new Map();
+        const rows = yield* query(() =>
+          db
+            .select({ id: tenantsTable.id, orgId: tenantsTable.orgId })
+            .from(tenantsTable)
+            .where(inArray(tenantsTable.id, [...ids])),
+        );
+        return new Map(rows.map((row) => [row.id, row.orgId]));
       }),
 
       deleteTenantById: Effect.fn("TenantsService.deleteTenantById")(function* (id) {

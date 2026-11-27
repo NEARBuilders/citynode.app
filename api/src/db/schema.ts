@@ -128,6 +128,8 @@ export const validators = pgTable(
   }),
 );
 
+export const ONE_PRIMARY_BINDING_INDEX = "domain_bindings_one_primary_per_tenant_idx";
+
 export const domainBindings = pgTable(
   "domain_bindings",
   {
@@ -145,7 +147,7 @@ export const domainBindings = pgTable(
   },
   (table) => ({
     tenantIdx: index("domain_bindings_tenant_idx").on(table.tenantId),
-    onePrimaryPerTenantIdx: uniqueIndex("domain_bindings_one_primary_per_tenant_idx")
+    onePrimaryPerTenantIdx: uniqueIndex(ONE_PRIMARY_BINDING_INDEX)
       .on(table.tenantId)
       .where(sql`is_primary = true`),
   }),
@@ -309,6 +311,7 @@ export const attendanceCheckIns = pgTable(
     eventName: text("event_name").notNull(),
     communityName: text("community_name").notNull(),
     classified: boolean("classified").notNull(),
+    accountId: text("account_id"),
     checkedInAt: timestamp("checked_in_at", { mode: "date", withTimezone: true }).notNull(),
     recordedAt: timestamp("recorded_at", { mode: "date", withTimezone: true })
       .defaultNow()
@@ -394,5 +397,60 @@ export const teamJoinEndorsements = pgTable(
   },
   (t) => ({
     oncePerEndorser: uniqueIndex("team_join_endorsements_once").on(t.requestId, t.endorserUserId),
+  }),
+);
+
+export const sharddogCommunityDrops = pgTable("sharddog_community_drops", {
+  organizationId: text("organization_id").primaryKey(),
+  dropId: text("drop_id").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+});
+
+export const sharddogEventDrops = pgTable(
+  "sharddog_event_drops",
+  {
+    organizationId: text("organization_id").notNull(),
+    eventId: text("event_id").notNull(),
+    dropId: text("drop_id").notNull(),
+    updatedBy: text("updated_by").notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.organizationId, t.eventId] }) }),
+);
+
+export const sharddogAwardKind = pgEnum("sharddog_award_kind", ["membership", "event"]);
+
+export const sharddogAwardStatus = pgEnum("sharddog_award_status", ["pending", "awarded"]);
+
+export const sharddogAwards = pgTable(
+  "sharddog_awards",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    userId: text("user_id").notNull(),
+    kind: sharddogAwardKind("kind").notNull(),
+    eventId: text("event_id"),
+    dropId: text("drop_id").notNull(),
+    accountId: text("account_id"),
+    status: sharddogAwardStatus("status").default("pending").notNull(),
+    viewUrl: text("view_url"),
+    claimUrl: text("claim_url"),
+    attempts: integer("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    attemptedAt: timestamp("attempted_at", { mode: "date", withTimezone: true }),
+    awardedAt: timestamp("awarded_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    membershipOnce: uniqueIndex("sharddog_awards_membership_once")
+      .on(t.organizationId, t.userId)
+      .where(sql`kind = 'membership'`),
+    eventOnce: uniqueIndex("sharddog_awards_event_once")
+      .on(t.organizationId, t.userId, t.eventId)
+      .where(sql`kind = 'event'`),
+    userIdx: index("sharddog_awards_user").on(t.userId),
+    accountIdx: index("sharddog_awards_account").on(t.accountId),
+    pendingIdx: index("sharddog_awards_pending").on(t.status, t.organizationId),
   }),
 );

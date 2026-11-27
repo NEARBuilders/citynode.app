@@ -20,6 +20,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAppTranslation } from "@/i18n/runtime";
 import {
   groupSidebarItems,
@@ -150,7 +151,23 @@ function SidebarNavItem(props: NavItemProps) {
 }
 
 function SidebarNavLeaf({ item, pathname, search }: NavItemProps) {
+  const translate = useAppTranslation();
   const Icon = item.icon;
+  if (item.pending) {
+    return (
+      <SidebarMenuItem>
+        <div
+          role="status"
+          aria-label={translate("org.loading")}
+          data-testid={`sidebar-nav-${navSlug(item)}-pending`}
+          className="flex h-8 items-center gap-2 rounded-md px-2"
+        >
+          <Skeleton className="size-4 rounded-md" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+      </SidebarMenuItem>
+    );
+  }
   return (
     <SidebarMenuItem>
       <SidebarMenuButton

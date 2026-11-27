@@ -1,6 +1,32 @@
 import { createMessageCatalogs } from "everything-dev/ui/i18n";
 
 export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
+  "collectibles.descriptionNamed": [
+    "ShardDogs you collect by checking in to {name}'s events. Your first check-in also gives you the membership badge.",
+    "ShardDogs que consigues al hacer check-in en los eventos de {name}. Tu primer check-in también te da la insignia de membresía.",
+    "Des ShardDogs à collectionner en vous enregistrant aux événements de {name}. Votre premier check-in vous donne aussi le badge d’adhésion.",
+    "在 {name} 的活动签到即可收集 ShardDog。首次签到还会获得会员徽章。",
+  ],
+  "collectibles.event": ["Event badge", "Insignia del evento", "Badge d’événement", "活动徽章"],
+  "collectibles.membership": [
+    "Membership badge",
+    "Insignia de membresía",
+    "Badge d’adhésion",
+    "会员徽章",
+  ],
+  "collectibles.membershipNamed": [
+    "{name} membership",
+    "Membresía de {name}",
+    "Adhésion à {name}",
+    "{name} 会员",
+  ],
+  "collectibles.title": ["Collectibles", "Coleccionables", "Objets de collection", "收藏品"],
+  "collectibles.view": [
+    "View in ShardDog",
+    "Ver en ShardDog",
+    "Voir sur ShardDog",
+    "在 ShardDog 中查看",
+  ],
   "community.addLink": ["Add link", "Añadir enlace", "Ajouter un lien", "添加链接"],
   "community.addLocation": [
     "Add a location",
@@ -136,6 +162,20 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Enregistrez-vous à un événement pour rejoindre {name}.",
     "在活动现场签到即可加入{name}。",
   ],
+  "community.openAdmin": [
+    "All communities",
+    "Todas las comunidades",
+    "Toutes les communautés",
+    "所有社区",
+  ],
+  "community.openEvents": ["Open events", "Abrir eventos", "Ouvrir les événements", "打开活动"],
+  "community.openMine": [
+    "Open My community",
+    "Abrir Mi comunidad",
+    "Ouvrir Ma communauté",
+    "打开我的社区",
+  ],
+  "community.openSetup": ["Set up {name}", "Configurar {name}", "Configurer {name}", "设置{name}"],
   "community.joinLinks": [
     "Where people can join",
     "Dónde pueden unirse las personas",
@@ -299,10 +339,10 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "用户可以找到此社区及其活动。",
   ],
   "community.start": [
-    "Start a community",
-    "Crear una comunidad",
-    "Créer une communauté",
-    "创建社区",
+    "Make a community official",
+    "Oficializar una comunidad",
+    "Officialiser une communauté",
+    "申请成为官方社区",
   ],
   "community.stopFeaturing": [
     "Stop featuring",
@@ -1012,6 +1052,19 @@ export const publicMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
     "Créer cette communauté",
     "创建此社区",
   ],
+  "place.startConfirmTitle": [
+    "Start a community for {name}?",
+    "¿Crear una comunidad para {name}?",
+    "Créer une communauté pour {name} ?",
+    "为 {name} 创建社区？",
+  ],
+  "place.startConfirmDescription": [
+    "You'll own this community, and people can find it on Explore and join it. This doesn't make it an official City Node.",
+    "Esta comunidad será tuya, y otras personas podrán encontrarla en Explorar y unirse. Esto no la convierte en un City Node oficial.",
+    "Vous serez propriétaire de cette communauté, et d’autres pourront la trouver dans Explorer et la rejoindre. Cela n’en fait pas un City Node officiel.",
+    "你将成为此社区的所有者，其他人可以在探索中找到并加入它。这不会使它成为官方 City Node。",
+  ],
+  "place.startConfirm": ["Start community", "Crear comunidad", "Créer la communauté", "创建社区"],
   "place.title": ["Place", "Lugar", "Lieu", "地点"],
   "payout.stepUnstake": [
     "Step 1 of 2 · Unstake from the pool (a treasury vote)",

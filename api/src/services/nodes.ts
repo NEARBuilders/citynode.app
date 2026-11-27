@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer } from "effect";
+import type { Database } from "../db/index";
 import { DatabaseTag } from "../db/layer";
 import {
   type NodeMetadata,
@@ -88,6 +89,8 @@ export interface NodesService {
   listSummaries(filter?: NodeListFilter): NodeEffect<NodeListSummaryRecord[]>;
   getById(id: string): NodeEffect<NodeRecord | null>;
   getByPlace(placeId: string): NodeEffect<NodeRecord | null>;
+  listMissingJoinCodes(): NodeEffect<MissingJoinCode[]>;
+  attachJoinCodeIfMissing(id: string, joinCodeId: string): NodeEffect<boolean>;
   activateForPlace(input: {
     placeId: string;
     orgId: string;
@@ -115,6 +118,17 @@ export interface NodesService {
 }
 
 export class NodesTag extends Context.Service<NodesTag, NodesService>()("api/Nodes") {}
+
+export interface MissingJoinCode {
+  id: string;
+  orgId: string;
+  slug: string;
+  name: string;
+  kind: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export const nodesTestingDatabase: { current: Database | null } = { current: null };
 
 type NodeRow = typeof nodesTable.$inferSelect;
 
@@ -234,12 +248,17 @@ function withoutOfficialDao(
   metadata: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   if (!metadata) return metadata;
-  const { daoAccountId: _daoAccountId, daoNetwork: _daoNetwork, ...rest } = metadata;
+  const {
+    daoAccountId: _daoAccountId,
+    daoNetwork: _daoNetwork,
+    joinCodeId: _joinCodeId,
+    ...rest
+  } = metadata;
   return rest;
 }
 
 function keepingOfficialDao(next: SQL): SQL {
-  return sql`${next} || jsonb_strip_nulls(jsonb_build_object('daoAccountId', ${nodesTable.metadata} -> 'daoAccountId', 'daoNetwork', ${nodesTable.metadata} -> 'daoNetwork'))`;
+  return sql`${next} || jsonb_strip_nulls(jsonb_build_object('daoAccountId', ${nodesTable.metadata} -> 'daoAccountId', 'daoNetwork', ${nodesTable.metadata} -> 'daoNetwork', 'joinCodeId', ${nodesTable.metadata} -> 'joinCodeId'))`;
 }
 
 function replaceMetadataKeepingKind(replacement: string): SQL {
@@ -281,6 +300,27 @@ function subtreeDepths(rootId: string, edges: ParentEdge[]): Map<string, number>
   return depths;
 }
 
+export const COMMUNITY_TENANT_ACCOUNT_SUFFIX = "v1.citynode.near";
+
+export function communityTenantAccountId(placeSlug: string): string {
+  return `${placeSlug}.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`;
+}
+
+export function archivedCommunityTenantAccountId(tenantId: string): string {
+  return `archived-${tenantId}.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`;
+}
+
+export function isReservedCommunityAccountId(accountId: string): boolean {
+  return accountId.toLowerCase().endsWith(`.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`);
+}
+
+export function isCommunityPlaceholderTenant(tenant: {
+  ownerKind: string;
+  accountId: string;
+}): boolean {
+  return tenant.ownerKind === "platform" && isReservedCommunityAccountId(tenant.accountId);
+}
+
 const query = <T>(run: () => Promise<T>): NodeEffect<T> =>
   Effect.tryPromise({ try: run, catch: toOrpcError });
 
@@ -294,6 +334,7 @@ export const NodesLive = Layer.effect(
   NodesTag,
   Effect.gen(function* () {
     const db = yield* DatabaseTag;
+    nodesTestingDatabase.current = db;
 
     const identityColumns = { node: nodesTable, slug: nodeSlugSql, name: nodeNameSql };
 
@@ -323,6 +364,67 @@ export const NodesLive = Layer.effect(
         if (!node) return yield* Effect.fail(notFound(id));
         return node;
       });
+
+    const createCommunityTenant = async (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+      placeId: string,
+      orgId: string,
+    ): Promise<string> => {
+      const [place] = await tx
+        .select({ slug: placesTable.slug, name: placesTable.name })
+        .from(placesTable)
+        .where(eq(placesTable.id, placeId))
+        .limit(1);
+      if (!place) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Place not found",
+          data: { resource: "place", resourceId: placeId },
+        });
+      }
+      const accountId = communityTenantAccountId(place.slug);
+      const [tenant] = await tx
+        .insert(tenantsTable)
+        .values({
+          name: place.name,
+          accountId,
+          orgId,
+          status: "active",
+          ownerKind: "platform",
+          allowUiOverrides: false,
+        })
+        .onConflictDoNothing({ target: tenantsTable.accountId })
+        .returning({ id: tenantsTable.id });
+      if (!tenant) {
+        throw new ORPCError("CONFLICT", {
+          message: "Tenant with this accountId already exists",
+          data: { accountId },
+        });
+      }
+      return tenant.id;
+    };
+
+    const archiveCommunityTenant = async (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+      tenantId: string,
+    ): Promise<void> => {
+      const now = new Date();
+      await tx
+        .update(tenantsTable)
+        .set({
+          accountId: archivedCommunityTenantAccountId(tenantId),
+          status: "pending_deletion",
+          deletedAt: sql`coalesce(${tenantsTable.deletedAt}, ${now.toISOString()}::timestamptz)`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(tenantsTable.id, tenantId),
+            eq(tenantsTable.ownerKind, "platform"),
+            sql`lower(${tenantsTable.accountId}) LIKE ${`%.${COMMUNITY_TENANT_ACCOUNT_SUFFIX}`}`,
+            sql`NOT EXISTS (SELECT 1 FROM ${nodesTable} WHERE ${nodesTable.tenantId} = ${tenantsTable.id})`,
+          ),
+        );
+    };
 
     const service: NodesService = {
       spawn: Effect.fn("NodesService.spawn")(function* (input) {
@@ -432,6 +534,53 @@ export const NodesLive = Layer.effect(
         return (yield* readNodes(eq(nodesTable.placeId, placeId)))[0] ?? null;
       }),
 
+      listMissingJoinCodes: Effect.fn("NodesService.listMissingJoinCodes")(function* () {
+        const rows = yield* readNodes(
+          and(
+            isNotNull(nodesTable.orgId),
+            listedNode,
+            sql`coalesce(${nodesTable.metadata}->>'joinCodeId', '') = ''`,
+          ),
+        );
+        return rows.flatMap((node) =>
+          node.orgId
+            ? [
+                {
+                  id: node.id,
+                  orgId: node.orgId,
+                  slug: node.slug,
+                  name: node.name,
+                  kind: node.kind,
+                  metadata: node.metadata,
+                },
+              ]
+            : [],
+        );
+      }),
+
+      attachJoinCodeIfMissing: Effect.fn("NodesService.attachJoinCodeIfMissing")(
+        function* (id, joinCodeId) {
+          if (joinCodeId.length === 0) return false;
+          const updatedAt = yield* DateTime.nowAsDate;
+          const rows = yield* query(() =>
+            db
+              .update(nodesTable)
+              .set({
+                metadata: sql`${nodesTable.metadata} || jsonb_build_object('joinCodeId', ${joinCodeId}::text)`,
+                updatedAt,
+              })
+              .where(
+                and(
+                  eq(nodesTable.id, id),
+                  sql`coalesce(${nodesTable.metadata}->>'joinCodeId', '') = ''`,
+                ),
+              )
+              .returning({ id: nodesTable.id }),
+          );
+          return rows.length > 0;
+        },
+      ),
+
       activateForPlace: Effect.fn("NodesService.activateForPlace")(function* (input) {
         const outcome = yield* query(() =>
           db.transaction(async (tx) => {
@@ -453,7 +602,13 @@ export const NodesLive = Layer.effect(
               })
               .onConflictDoNothing()
               .returning({ id: nodesTable.id });
-            if (row) return { id: row.id, created: true };
+            if (row) {
+              if (!input.tenantId) {
+                const tenantId = await createCommunityTenant(tx, input.placeId, input.orgId);
+                await tx.update(nodesTable).set({ tenantId }).where(eq(nodesTable.id, row.id));
+              }
+              return { id: row.id, created: true };
+            }
             const [raced] = await tx
               .select({ id: nodesTable.id })
               .from(nodesTable)
@@ -527,13 +682,17 @@ export const NodesLive = Layer.effect(
       }),
 
       delete: Effect.fn("NodesService.delete")(function* (id) {
-        const rows = yield* query(() =>
-          db
-            .delete(nodesTable)
-            .where(eq(nodesTable.id, id))
-            .returning({ deletedId: nodesTable.id }),
+        return yield* query(() =>
+          db.transaction(async (tx) => {
+            const [deleted] = await tx
+              .delete(nodesTable)
+              .where(eq(nodesTable.id, id))
+              .returning({ tenantId: nodesTable.tenantId });
+            if (!deleted) return false;
+            if (deleted.tenantId) await archiveCommunityTenant(tx, deleted.tenantId);
+            return true;
+          }),
         );
-        return rows.length > 0;
       }),
 
       listRootNodes: readNodes(and(nodeParentIs(null), listedNode)),

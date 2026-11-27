@@ -80,6 +80,26 @@ describe("TenantsService", () => {
     expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
   });
 
+  it("fails with CONFLICT when updating to another tenant's accountId", async () => {
+    const layer = freshLayer();
+    await runService(layer, (svc) => svc.createTenant(baseInput));
+    const other = await runService(layer, (svc) =>
+      svc.createTenant({ ...baseInput, accountId: "other.example.near", orgId: "org-2" }),
+    );
+
+    const error = await squashServiceError(layer, (svc) =>
+      svc.updateTenant(other.id, { accountId: baseInput.accountId }),
+    );
+    expect(error).toMatchObject({
+      code: "CONFLICT",
+      message: "Tenant with this accountId already exists",
+      data: { accountId: baseInput.accountId },
+    });
+    expect((error as Error).message).not.toMatch(/constraint|duplicate key/);
+    const unchanged = await runService(layer, (svc) => svc.resolveTenantById(other.id));
+    expect(unchanged?.accountId).toBe("other.example.near");
+  });
+
   it("resolves by accountId and orgId", async () => {
     const layer = freshLayer();
     const created = await runService(layer, (svc) => svc.createTenant(baseInput));
@@ -251,7 +271,27 @@ describe("TenantsService — domain bindings", () => {
       svc.createBinding({ tenantId: tenant.id, hostname: "acme.citynode.app" }),
     );
     expect(error).toBeInstanceOf(ORPCError);
-    expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
+    expect(error).toMatchObject({ code: "CONFLICT", message: "Hostname already in use" });
+  });
+
+  it("says the tenant already has a primary domain when a second primary binding is created", async () => {
+    const layer = freshLayer();
+    const tenant = await runService(layer, (svc) => svc.createTenant(tenantBase));
+    await runService(layer, (svc) =>
+      svc.createBinding({ tenantId: tenant.id, hostname: "a.citynode.app", isPrimary: true }),
+    );
+
+    const error = await squashServiceError(layer, (svc) =>
+      svc.createBinding({ tenantId: tenant.id, hostname: "b.citynode.app", isPrimary: true }),
+    );
+    expect(error).toMatchObject({
+      code: "CONFLICT",
+      message:
+        "This tenant already has a primary domain. Add it as a secondary, then use setPrimaryBinding.",
+      data: { tenantId: tenant.id },
+    });
+    const bindings = await runService(layer, (svc) => svc.listBindingsForTenant(tenant.id));
+    expect(bindings.map((binding) => binding.hostname)).toEqual(["a.citynode.app"]);
   });
 
   it("supports multiple hostnames per tenant via listBindingsForTenant", async () => {
