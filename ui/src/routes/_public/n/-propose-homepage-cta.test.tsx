@@ -16,7 +16,7 @@ const harness = vi.hoisted(() => ({
   tenants: {} as Record<string, unknown>,
   listOrganizations: vi.fn(),
   resolveTenantByOrgId: vi.fn(),
-  listMembers: vi.fn(),
+  getActiveMemberRole: vi.fn(),
   switchOrganization: vi.fn(),
   navigate: vi.fn(),
 }));
@@ -26,7 +26,7 @@ vi.mock("@/app", async () => ({
   useApiClient: () => ({
     auth: {
       listOrganizations: harness.listOrganizations,
-      listMembers: harness.listMembers,
+      getActiveMemberRole: harness.getActiveMemberRole,
     },
     resolveTenantByOrgId: harness.resolveTenantByOrgId,
   }),
@@ -76,9 +76,7 @@ function setup(options: {
         },
       }
     : null;
-  harness.listMembers.mockResolvedValue({
-    members: [{ userId: "u1", role: options.orgRole ?? "owner" }],
-  });
+  harness.getActiveMemberRole.mockResolvedValue({ role: options.orgRole ?? "owner" });
   harness.listOrganizations.mockResolvedValue(
     (options.orgs ?? []).map((org) => ({ status: "active", ...org })),
   );
@@ -106,7 +104,7 @@ async function settle() {
 beforeEach(() => {
   harness.listOrganizations.mockReset();
   harness.resolveTenantByOrgId.mockReset();
-  harness.listMembers.mockReset();
+  harness.getActiveMemberRole.mockReset();
   harness.switchOrganization.mockReset();
   harness.navigate.mockReset();
 });
@@ -222,7 +220,7 @@ describe("ProposeHomepageCta", () => {
     });
     renderCta();
 
-    await waitFor(() => expect(harness.listMembers).toHaveBeenCalled());
+    await waitFor(() => expect(harness.getActiveMemberRole).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByTestId("node-page.propose-homepage")).toBeNull();
   });

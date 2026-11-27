@@ -33,7 +33,7 @@ describe("home next steps", () => {
     );
   });
 
-  it("suggests Explore before Start a community to someone without a community", () => {
+  it("suggests Explore before Make a community official to someone without a community", () => {
     expect(ids({ membership: "none" })).toEqual(["explore", "start-community", "stake"]);
     expect(ids({ membership: "none", isAnonymous: true, hasPasskey: true })[0]).toBe("explore");
   });
@@ -49,7 +49,7 @@ describe("home next steps", () => {
     expect(ids({ membership: "unknown" })).toEqual(["stake", "explore"]);
   });
 
-  it("suggests Explore before Start a community when the active organization has no community", () => {
+  it("suggests Explore before Make a community official when the active organization has no community", () => {
     expect(ids({})).toEqual(["explore", "start-community", "stake"]);
   });
 
@@ -145,7 +145,7 @@ describe("home next steps", () => {
     expect(steps[0]?.title).toBe("Open My community");
   });
 
-  it("doesn't offer platform admins Start a community", () => {
+  it("doesn't offer platform admins Make a community official", () => {
     expect(ids({ membership: "none", isAdmin: true })).toEqual(["stake", "explore"]);
   });
 

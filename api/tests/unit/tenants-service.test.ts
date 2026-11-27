@@ -8,7 +8,12 @@ import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseError } from "@/db";
 import { DatabaseLive } from "@/db/layer";
-import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
+import {
+  TenantsConfigLive,
+  TenantsLive,
+  type TenantsService,
+  TenantsTag,
+} from "@/services/tenants";
 import { createServiceHarness } from "./test-harness";
 
 let activeDir: string | null = null;
@@ -73,6 +78,26 @@ describe("TenantsService", () => {
     const error = await squashServiceError(layer, (svc) => svc.createTenant(baseInput));
     expect(error).toBeInstanceOf(ORPCError);
     expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
+  });
+
+  it("fails with CONFLICT when updating to another tenant's accountId", async () => {
+    const layer = freshLayer();
+    await runService(layer, (svc) => svc.createTenant(baseInput));
+    const other = await runService(layer, (svc) =>
+      svc.createTenant({ ...baseInput, accountId: "other.example.near", orgId: "org-2" }),
+    );
+
+    const error = await squashServiceError(layer, (svc) =>
+      svc.updateTenant(other.id, { accountId: baseInput.accountId }),
+    );
+    expect(error).toMatchObject({
+      code: "CONFLICT",
+      message: "Tenant with this accountId already exists",
+      data: { accountId: baseInput.accountId },
+    });
+    expect((error as Error).message).not.toMatch(/constraint|duplicate key/);
+    const unchanged = await runService(layer, (svc) => svc.resolveTenantById(other.id));
+    expect(unchanged?.accountId).toBe("other.example.near");
   });
 
   it("resolves by accountId and orgId", async () => {
@@ -246,7 +271,27 @@ describe("TenantsService — domain bindings", () => {
       svc.createBinding({ tenantId: tenant.id, hostname: "acme.citynode.app" }),
     );
     expect(error).toBeInstanceOf(ORPCError);
-    expect((error as ORPCError<string, unknown>).code).toBe("CONFLICT");
+    expect(error).toMatchObject({ code: "CONFLICT", message: "Hostname already in use" });
+  });
+
+  it("says the tenant already has a primary domain when a second primary binding is created", async () => {
+    const layer = freshLayer();
+    const tenant = await runService(layer, (svc) => svc.createTenant(tenantBase));
+    await runService(layer, (svc) =>
+      svc.createBinding({ tenantId: tenant.id, hostname: "a.citynode.app", isPrimary: true }),
+    );
+
+    const error = await squashServiceError(layer, (svc) =>
+      svc.createBinding({ tenantId: tenant.id, hostname: "b.citynode.app", isPrimary: true }),
+    );
+    expect(error).toMatchObject({
+      code: "CONFLICT",
+      message:
+        "This tenant already has a primary domain. Add it as a secondary, then use setPrimaryBinding.",
+      data: { tenantId: tenant.id },
+    });
+    const bindings = await runService(layer, (svc) => svc.listBindingsForTenant(tenant.id));
+    expect(bindings.map((binding) => binding.hostname)).toEqual(["a.citynode.app"]);
   });
 
   it("supports multiple hostnames per tenant via listBindingsForTenant", async () => {
@@ -470,5 +515,106 @@ describe("TenantsService — status transitions", () => {
     const suspended = await runService(layer, (svc) => svc.suspendTenant(created.id));
 
     expect(suspended?.status).toBe("suspended");
+  });
+});
+
+describe("TenantsService — reserved gateway hostnames", () => {
+  const spawnInput = {
+    name: "Reserved",
+    ownerAccountId: "reserved.near",
+    ownerUserId: "reserved-user",
+  };
+
+  function gatewayLayer() {
+    const dir = mkdtempSync(join(tmpdir(), "api-tenants-"));
+    activeDir = dir;
+    return TenantsLive.pipe(
+      Layer.provide(TenantsConfigLive(["citynode.app", "testnet.citynode.app"])),
+      Layer.provide(DatabaseLive(`pglite:${dir}`)),
+      Layer.provide(Layer.succeed(PluginIdTag, "api")),
+    );
+  }
+
+  it.each([
+    "www.citynode.app",
+    "testnet",
+    "TESTNET",
+    "ADMIN.CITYNODE.APP",
+    " api.citynode.app. ",
+    "shop.auth.citynode.app",
+    "citynode.app",
+    "login",
+  ])("spawnTenant rejects %j and creates nothing", async (hostname) => {
+    const layer = gatewayLayer();
+
+    const error = await squashServiceError(layer, (svc) =>
+      svc.spawnTenant({ ...spawnInput, hostname }),
+    );
+
+    expect(error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "This hostname is reserved for the platform",
+    });
+    expect(await runService(layer, (svc) => svc.listAllTenants)).toEqual([]);
+    expect(await runService(layer, (svc) => svc.listBindings)).toEqual([]);
+  });
+
+  it("createBinding rejects reserved hostnames", async () => {
+    const layer = gatewayLayer();
+    const tenant = await runService(layer, (svc) =>
+      svc.createTenant({ name: "Acme", accountId: "acme.near", orgId: "org-1" }),
+    );
+
+    for (const hostname of ["docs.citynode.app", "citynode.app", "staging", "testnet"]) {
+      const error = await squashServiceError(layer, (svc) =>
+        svc.createBinding({ tenantId: tenant.id, hostname }),
+      );
+      expect(error).toMatchObject({ code: "BAD_REQUEST" });
+    }
+    expect(await runService(layer, (svc) => svc.listBindingsForTenant(tenant.id))).toEqual([]);
+  });
+
+  it("allows reserved hostnames only when the caller is permitted", async () => {
+    const layer = gatewayLayer();
+
+    const result = await runService(layer, (svc) =>
+      svc.spawnTenant({
+        ...spawnInput,
+        hostname: "www.citynode.app",
+        allowReservedHostname: true,
+      }),
+    );
+
+    expect(result.binding).toMatchObject({ hostname: "www.citynode.app", isVerified: true });
+  });
+
+  it("stores the normalized hostname and verifies gateway-zone names", async () => {
+    const layer = gatewayLayer();
+
+    const result = await runService(layer, (svc) =>
+      svc.spawnTenant({ ...spawnInput, hostname: " Chicago.CityNode.App. " }),
+    );
+
+    expect(result.binding).toMatchObject({ hostname: "chicago.citynode.app", isVerified: true });
+  });
+
+  it("does not reserve labels on custom domains", async () => {
+    const layer = gatewayLayer();
+
+    const result = await runService(layer, (svc) =>
+      svc.spawnTenant({ ...spawnInput, hostname: "www.example.com" }),
+    );
+
+    expect(result.binding).toMatchObject({ hostname: "www.example.com", isVerified: false });
+  });
+
+  it("rejects malformed hostnames with BAD_REQUEST", async () => {
+    const layer = gatewayLayer();
+
+    const error = await squashServiceError(layer, (svc) =>
+      svc.spawnTenant({ ...spawnInput, hostname: "NOT A VALID HOST" }),
+    );
+
+    expect(error).toMatchObject({ code: "BAD_REQUEST", message: "Invalid hostname format" });
   });
 });

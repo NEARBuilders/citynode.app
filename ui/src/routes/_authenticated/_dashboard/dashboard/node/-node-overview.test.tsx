@@ -845,7 +845,7 @@ describe("node overview member directory", () => {
     renderOverview({ nearAccount: null });
     expect((await screen.findByTestId("dashboard-node.member-count-value")).textContent).toBe("7");
     expect(screen.getByTestId("dashboard-node.member-count-observed").textContent).toContain(
-      "Last updated",
+      "as of",
     );
     expect(screen.getByTestId("dashboard-node.members-error").textContent).toBe(
       "Couldn't load the member list.",
@@ -1026,6 +1026,15 @@ const endedEvent = (id: string, title: string) => ({
 });
 
 describe("node overview member layout", () => {
+  it("hides setup steps and owner actions from a plain member", async () => {
+    stubChain();
+    renderOverview({ nearAccount: null });
+    await screen.findByTestId("dashboard-node.members");
+    expect(screen.queryByTestId("dashboard-node.setup")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.owner-actions")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.reports")).toBeNull();
+  });
+
   it("hides the Explore map notice from a plain member", async () => {
     stubChain();
     renderOverview({ nearAccount: null, tenantStatus: "active" });

@@ -6,7 +6,7 @@ import { injectSessionCookies } from "./seeded";
 
 export type { DemoPersona, DemoSeed };
 
-export async function seedDemoCommunities(): Promise<DemoSeed> {
+export async function seedDemoCommunities({ today }: { today?: string } = {}): Promise<DemoSeed> {
   const { dbUrls, authSecret, baseUrl } = computeRegressionEnv();
   if (!dbUrls.API_DATABASE_URL || !dbUrls.AUTH_DATABASE_URL) {
     throw new Error("API_DATABASE_URL and AUTH_DATABASE_URL are required to seed demo communities");
@@ -19,6 +19,7 @@ export async function seedDemoCommunities(): Promise<DemoSeed> {
     },
     secret: authSecret,
     baseUrl,
+    today,
   });
 }
 

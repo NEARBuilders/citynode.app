@@ -1,12 +1,14 @@
 import { ORPCError } from "@orpc/client";
-import { CalendarCheckIcon } from "@phosphor-icons/react";
+import { CalendarCheckIcon, MedalIcon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, SectionHeader, Skeleton } from "@/components";
 import { LocalDate } from "@/components/local-date";
+import { collectibleKey, ShardDogCollectible } from "@/components/sharddog-collectible";
 import {
   Item,
+  ItemActions,
   ItemContent,
   ItemDescription,
   ItemGroup,
@@ -18,6 +20,7 @@ import {
   attendanceQueryKeys,
   attendanceReconcileQueryOptions,
   attendanceRecordQueryOptions,
+  collectiblesQueryOptions,
 } from "@/lib/queries/attendance";
 
 type AttendanceRecordData = Awaited<ReturnType<ApiClient["getMyAttendance"]>>;
@@ -50,6 +53,25 @@ export function AttendanceRecord({
     ...attendanceRecordQueryOptions(apiClient, organizationId),
     enabled: !reconcile || !organizationId || reconciled.isFetched,
   });
+  const collectibles = useQuery({
+    ...collectiblesQueryOptions(apiClient, organizationId),
+    enabled: record.isSuccess,
+  });
+  const awards = new Map(
+    (collectibles.data?.enabled ? collectibles.data.collectibles : []).map((collectible) => [
+      collectibleKey(collectible.organizationId, collectible.eventId),
+      collectible,
+    ]),
+  );
+  const memberships = (collectibles.data?.enabled ? collectibles.data.collectibles : []).filter(
+    (collectible) => collectible.kind === "membership",
+  );
+  const communityNames = new Map(
+    (record.data?.communities ?? []).map((community) => [
+      community.organizationId,
+      community.communityName,
+    ]),
+  );
   const queryClient = useQueryClient();
   const reconciledAt = reconciled.dataUpdatedAt;
   useEffect(() => {
@@ -102,6 +124,37 @@ export function AttendanceRecord({
         </div>
       ) : (
         <>
+          {memberships.length > 0 && (
+            <ItemGroup data-testid={`${testId}-memberships`}>
+              {memberships.map((membership) => (
+                <Item
+                  key={membership.organizationId}
+                  variant="outline"
+                  data-testid={`${testId}-membership`}
+                >
+                  <ItemMedia variant="icon">
+                    <MedalIcon />
+                  </ItemMedia>
+                  <ItemContent className="min-w-0">
+                    <ItemTitle>{translate("collectibles.membershipShardDog")}</ItemTitle>
+                    <ItemDescription>
+                      {translate("collectibles.membershipHint", {
+                        community:
+                          communityNames.get(membership.organizationId) ??
+                          membership.organizationId,
+                      })}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <ShardDogCollectible
+                      collectible={membership}
+                      testId={`${testId}-membership-collectible`}
+                    />
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          )}
           {record.data.events.length === 0 ? (
             record.data.unclassified.length === 0 && (
               <p className="text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
@@ -135,6 +188,16 @@ export function AttendanceRecord({
                       )}
                     </ItemDescription>
                   </ItemContent>
+                  {awards.has(collectibleKey(event.organizationId, event.eventId)) && (
+                    <ItemActions>
+                      <ShardDogCollectible
+                        collectible={
+                          awards.get(collectibleKey(event.organizationId, event.eventId))!
+                        }
+                        testId={`${testId}-event-collectible`}
+                      />
+                    </ItemActions>
+                  )}
                 </Item>
               ))}
             </ItemGroup>
