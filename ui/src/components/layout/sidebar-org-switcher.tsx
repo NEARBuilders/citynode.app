@@ -2,6 +2,7 @@ import { CaretUpDownIcon } from "@phosphor-icons/react";
 import { LogoMark } from "@/components/logo";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAppTranslation } from "@/i18n/runtime";
 import type { Organization } from "@/lib/queries/organizations";
 import { OrgMark } from "./org-mark";
@@ -33,18 +34,28 @@ export function SidebarOrgSwitcher({
         <DropdownMenu>
           <DropdownMenuTrigger render={<SidebarMenuButton size="lg" data-testid="org-switcher" />}>
             {activeOrg ? <OrgMark name={activeOrg.name} /> : <LogoMark />}
-            <div className="grid flex-1 text-left leading-tight">
-              <span className="truncate text-sm font-semibold">{activeOrg?.name ?? appName}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {isLoading
-                  ? translate("org.loading")
-                  : error
+            {isLoading && !activeOrg ? (
+              <div
+                className="flex flex-1 flex-col gap-1.5"
+                role="status"
+                aria-label={translate("org.loading")}
+                data-testid="org-switcher-pending"
+              >
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            ) : (
+              <div className="grid flex-1 text-left leading-tight">
+                <span className="truncate text-sm font-semibold">{activeOrg?.name ?? appName}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {error
                     ? translate("org.loadFailed")
                     : activeOrg
                       ? translate("common.organization")
                       : translate("org.choose")}
-              </span>
-            </div>
+                </span>
+              </div>
+            )}
             <CaretUpDownIcon className="ml-auto size-4 text-muted-foreground" />
           </DropdownMenuTrigger>
           <OrgSwitcherMenuContent

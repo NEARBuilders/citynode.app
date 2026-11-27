@@ -7,6 +7,8 @@ import {
   bundleContentType,
   computeObjectIntegrity,
   MemoryStorageClient,
+  measureBase64,
+  partitionBundleFiles,
   S3StorageClient,
   StorageHttpError,
   StorageLive,
@@ -88,10 +90,69 @@ describe("namespace + object path validation", () => {
   });
 
   it("enforces the upload size ceiling", () => {
-    const file = (size: number) => ({ path: "f.js", bytes: new Uint8Array(size) });
-    expect(validateUploadSize([file(10), file(20)], 100)).toBe(true);
-    expect(validateUploadSize([file(60), file(60)], 100)).toBe(false);
+    expect(validateUploadSize([10, 20], 100)).toBe(true);
+    expect(validateUploadSize([60, 60], 100)).toBe(false);
     expect(validateUploadSize([], 100)).toBe(true);
+  });
+
+  it("measures decoded size from valid base64 without decoding it", () => {
+    for (const text of ["", "a", "ab", "abc", "abcd", "hello world"]) {
+      const encoded = Buffer.from(text).toString("base64");
+      expect(measureBase64(encoded)).toBe(text.length);
+    }
+    expect(measureBase64("QQ")).toBe(1);
+    expect(measureBase64("QUI")).toBe(2);
+  });
+
+  it("rejects malformed base64", () => {
+    for (const bad of ["!!!not*base64!!!", "QQ=", "Q", "QUJD=", "QQ===", "QU JD", "QU-_", "=QQ="]) {
+      expect(measureBase64(bad)).toBeNull();
+    }
+  });
+
+  it("treats unhashed numeric chunks as assets, not entries", () => {
+    const names = [
+      "mf-manifest.json",
+      "199.js",
+      "remoteEntry.server.js",
+      "64.js",
+      "remoteEntry.js",
+      "mf-manifest.1234abcd5678ef90.json",
+      "remoteEntry.1234abcd5678ef90.js",
+      "index.html",
+      "style.css",
+      "logo.svg",
+    ].map((path) => ({ name: path, path }));
+    const { assets, entries } = partitionBundleFiles(names);
+    expect(assets.map((file) => file.path)).toEqual(["199.js", "64.js", "style.css", "logo.svg"]);
+    expect(entries.map((file) => file.path)).toEqual([
+      "mf-manifest.json",
+      "remoteEntry.server.js",
+      "remoteEntry.js",
+      "mf-manifest.1234abcd5678ef90.json",
+      "remoteEntry.1234abcd5678ef90.js",
+      "index.html",
+    ]);
+  });
+
+  it("splits hashed assets from fixed-name entry files, keeping order", () => {
+    const names = [
+      "mf-manifest.json",
+      "static/js/main.1234abcd5678ef90.js",
+      "remoteEntry.js",
+      "static/css/app.6c596dfcdd12ab34.css",
+      "index.html",
+    ].map((path) => ({ name: path.split("/").pop() ?? path, path }));
+    const { assets, entries } = partitionBundleFiles(names);
+    expect(assets.map((file) => file.path)).toEqual([
+      "static/js/main.1234abcd5678ef90.js",
+      "static/css/app.6c596dfcdd12ab34.css",
+    ]);
+    expect(entries.map((file) => file.path)).toEqual([
+      "mf-manifest.json",
+      "remoteEntry.js",
+      "index.html",
+    ]);
   });
 });
 

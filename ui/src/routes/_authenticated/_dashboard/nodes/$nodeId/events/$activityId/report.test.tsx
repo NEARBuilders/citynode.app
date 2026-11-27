@@ -280,4 +280,12 @@ describe("event report check-in prefill", () => {
     await waitFor(() => expect(screen.queryByTestId("report.refresh-error")).toBeNull());
     expect(attendees()).toBe("15");
   });
+
+  it("says who can report, with no retry, when the viewer may not see this report", async () => {
+    harness.activities = [activity];
+    harness.reportError = Object.assign(new Error("no"), { code: "FORBIDDEN" });
+    renderPage();
+    expect(await screen.findByText("Only this community's organizers can report")).toBeTruthy();
+    expect(screen.queryByTestId("report-retry")).toBeNull();
+  });
 });

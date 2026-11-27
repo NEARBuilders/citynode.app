@@ -88,7 +88,7 @@ describe("bulletin attribution through the API", () => {
     expect(updated.bulletinPublishedAt).toBeNull();
   });
 
-  it("shows the publisher name only to signed-in readers", async () => {
+  it("shows the bulletin and its publisher only to community members", async () => {
     const { tenant, node } = await seedCommunity();
     const ada = await getPluginClient(managerContext("bulletin-reader-ada", "Ada Lovelace"));
     const published = await ada.setNodeBulletin({ nodeId: node.id, bulletin: "Hackathon" });
@@ -114,14 +114,14 @@ describe("bulletin attribution through the API", () => {
       (await visitor.listNodeAncestors({ nodeId: child.id })).find(({ id }) => id === node.id),
     ];
     for (const read of reads) {
-      expect(read).toMatchObject({
-        bulletinPublishedAt: published.bulletinPublishedAt,
-        bulletinPublisherName: null,
-      });
+      expect(read).toMatchObject({ bulletinPublishedAt: null, bulletinPublisherName: null });
+      expect(read?.metadata.bulletin).toBeUndefined();
     }
 
     const member = await getPluginClient(orgContext("bulletin-member", ORG, "member"));
     expect(await member.getNode({ nodeId: node.id })).toMatchObject({
+      metadata: { bulletin: "Hackathon" },
+      bulletinPublishedAt: published.bulletinPublishedAt,
       bulletinPublisherName: "Ada Lovelace",
     });
   });

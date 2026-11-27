@@ -278,6 +278,26 @@ describe("reportsToChase", () => {
     expect(unattributed).toBe(2);
   });
 
+  it("puts the communities furthest behind first, then sorts by name", () => {
+    const aardvark = { organizationId: "org-aa", nodeId: "aa", name: "Aardvark", slug: "aardvark" };
+    const manila = { organizationId: "org-m", nodeId: "m", name: "Manila", slug: "manila" };
+    const { chases } = reportsToChase({
+      now: Date.parse("2026-12-26T12:00:00.000Z"),
+      monthly: [
+        {
+          month: "2026-12",
+          communities: [
+            { ...aardvark, status: "missing" },
+            { ...harbor, status: "missing" },
+            { ...manila, status: "missing" },
+          ],
+        },
+      ],
+      overdue: [{ organizationId: "org-m" }, { organizationId: "org-m" }],
+    });
+    expect(chases.map((chase) => chase.name)).toEqual(["Manila", "Aardvark", "Harbor"]);
+  });
+
   it("doesn't chase this month's report before its last week", () => {
     const { chases } = reportsToChase({
       now: Date.parse("2026-12-10T12:00:00.000Z"),

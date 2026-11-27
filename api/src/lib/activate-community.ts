@@ -1,14 +1,12 @@
-import type { ContractRouterClient } from "@orpc/contract";
 import { ORPCError } from "@orpc/server";
 import { Effect } from "effect";
-import type { ContractType as authContract } from "../../../.bos/generated/auth/contract.d.ts";
 import type { NodesService } from "../services/nodes";
 import type { PlacesService } from "../services/places";
-
-type AuthClient = ContractRouterClient<authContract>;
-
-const STANDING_JOIN_CODE_MAX_USES = 500;
-const STANDING_JOIN_CODE_LIFETIME_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+import {
+  type AuthClient,
+  createStandingJoinCode,
+  ensureCommunityJoinCode,
+} from "./community-join-code";
 
 export interface ActivateCommunityDeps {
   places: PlacesService;
@@ -28,6 +26,7 @@ export async function activateCommunity(
   deps: ActivateCommunityDeps,
   auth: AuthClient,
   input: { place: string; userId: string },
+  repairClients: AuthClient[] = [auth],
 ): Promise<ActivationResult> {
   const resolution = await Effect.runPromise(deps.places.resolve({ place: input.place }));
   if (!resolution) {
@@ -38,7 +37,7 @@ export async function activateCommunity(
   }
   const place = resolution.place;
 
-  const existing = await existingActivation(deps, place);
+  const existing = await existingActivation(deps, place, repairClients);
   if (existing) return existing;
 
   let organization: { id: string };
@@ -46,14 +45,14 @@ export async function activateCommunity(
     organization = await auth.createOrganization({ name: place.name, slug: place.slug });
   } catch (error) {
     if (!(error instanceof ORPCError && error.code === "CONFLICT")) throw error;
-    const raced = await existingActivation(deps, place);
+    const raced = await existingActivation(deps, place, repairClients);
     if (raced) return raced;
     throw new ORPCError("CONFLICT", {
       message: "This community's name is already used by another community",
     });
   }
 
-  const linked = await linkOrganization(deps, auth, {
+  const linked = await linkOrganization(deps, auth, repairClients, {
     place,
     organizationId: organization.id,
     userId: input.userId,
@@ -79,18 +78,17 @@ export async function activateCommunity(
 async function linkOrganization(
   deps: ActivateCommunityDeps,
   auth: AuthClient,
+  repairClients: AuthClient[],
   input: {
     place: { id: string; slug: string; name: string };
     organizationId: string;
     userId: string;
   },
 ) {
-  const joinCode = await auth.createOnboardingCode({
+  const joinCode = await createStandingJoinCode(auth, {
     organizationId: input.organizationId,
-    eventId: `join:${input.place.slug}`,
-    eventName: `Join ${input.place.name}`,
-    maxUses: STANDING_JOIN_CODE_MAX_USES,
-    expiresAt: new Date(Date.now() + STANDING_JOIN_CODE_LIFETIME_MS),
+    slug: input.place.slug,
+    name: input.place.name,
   });
 
   const activation = await Effect.runPromise(
@@ -103,21 +101,26 @@ async function linkOrganization(
   );
 
   const storedJoinCode = (activation.node.metadata as { joinCodeId?: string } | null)?.joinCodeId;
+  const repaired =
+    activation.created || storedJoinCode
+      ? null
+      : await ensureCommunityJoinCode(deps.nodes, repairClients, activation.node);
   return {
     node: activation.node,
     created: activation.created,
-    joinCode: activation.created ? joinCode.code : (storedJoinCode ?? ""),
+    joinCode: activation.created ? joinCode.code : storedJoinCode || repaired || "",
   };
 }
 
 async function existingActivation(
   deps: ActivateCommunityDeps,
   place: { id: string; slug: string },
+  repairClients: AuthClient[],
 ): Promise<ActivationResult | null> {
   const existing = await Effect.runPromise(deps.nodes.getByPlace(place.id));
   if (!existing) return null;
-  const joinCodeId = (existing.metadata as { joinCodeId?: string } | null)?.joinCodeId;
-  if (!joinCodeId) {
+  const joinCode = await ensureCommunityJoinCode(deps.nodes, repairClients, existing);
+  if (!joinCode) {
     throw new ORPCError("CONFLICT", {
       message: "This community is missing its join code",
     });
@@ -127,7 +130,7 @@ async function existingActivation(
     placeId: place.id,
     slug: place.slug,
     organizationId: existing.orgId ?? "",
-    joinCode: joinCodeId,
+    joinCode,
     alreadyActivated: true,
   };
 }
