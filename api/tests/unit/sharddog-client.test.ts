@@ -80,9 +80,25 @@ describe("ShardDog client", () => {
     const unsafe = createShardDogClient({
       apiKey: "key-1",
       apiUrl: "https://shard.dog",
-      fetch: async () => new Response(JSON.stringify({ imageUrl: "javascript:alert(1)" })),
+      fetch: async () =>
+        new Response(JSON.stringify({ name: "Chicago member", imageUrl: "javascript:alert(1)" })),
     });
-    await expect(unsafe.describeDrop("d")).rejects.toThrow();
+    await expect(unsafe.describeDrop("d")).resolves.toEqual({
+      name: "Chicago member",
+      imageUrl: null,
+    });
+
+    for (const imageUrl of ["ipfs://bafy/1.png", "ar://abc", "http://shard.dog/a.png"]) {
+      const other = createShardDogClient({
+        apiKey: "key-1",
+        apiUrl: "https://shard.dog",
+        fetch: async () => new Response(JSON.stringify({ name: "Chicago member", imageUrl })),
+      });
+      await expect(other.describeDrop("d")).resolves.toEqual({
+        name: "Chicago member",
+        imageUrl: null,
+      });
+    }
 
     const failing = createShardDogClient({
       apiKey: "key-1",
