@@ -31,8 +31,8 @@ import { organizationsQueryOptions } from "@/lib/queries/organizations";
 import { teamJoinBoardQueryOptions } from "@/lib/queries/team-join-requests";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { isCommunitySettingsRole } from "@/lib/team-workspace";
-import { PUBLISHED_CONFIG_SECTION_ID } from "../tenant/-published-config-section";
-import { useOpenCommunitySettings } from "../tenant/-use-open-community-settings";
+import { PUBLISHED_CONFIG_SECTION_ID } from "../_dashboard/tenant/-published-config-section";
+import { useOpenCommunitySettings } from "../_dashboard/tenant/-use-open-community-settings";
 import {
   ApiKeysTab,
   type CreatedOrganizationApiKey,
@@ -85,7 +85,7 @@ async function handleCopyApiKey(value: string, message: string) {
   }
 }
 
-export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
+export const Route = createFileRoute("/_authenticated/orgs/$slug")({
   validateSearch: organizationSearchSchema,
   search: { middlewares: [stripSearchParams({ tab: "members" })] },
   head: ({ match }) => ({

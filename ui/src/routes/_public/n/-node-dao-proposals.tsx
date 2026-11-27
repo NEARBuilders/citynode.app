@@ -364,26 +364,50 @@ export function proposalKindSummary(proposal: SputnikProposal, translate: Transl
   return translate("daoProposals.kindOther", { kind: name ?? "—" });
 }
 
+const TREZU_LINE = /^[*-]\s+([A-Za-z][A-Za-z ]*):\s*(.*)$/;
+const TREZU_TITLE_ORDER = ["title", "summary", "description", "notes"];
+const TREZU_HIDDEN_LABELS = ["proposal action", "template"];
+
+function trezuLabel(line: string): string | undefined {
+  return TREZU_LINE.exec(line)?.[1]?.toLowerCase();
+}
+
+function cleanLine(line: string): string {
+  const labelled = TREZU_LINE.exec(line);
+  const text = labelled
+    ? TREZU_TITLE_ORDER.includes(trezuLabel(line) ?? "")
+      ? (labelled[2] ?? "").replace(/^[*-]\s+/, "")
+      : `${labelled[1]}: ${labelled[2] ?? ""}`
+    : line.replace(/^[*-]\s+/, "");
+  return text
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/(^|\s)\*(\S(?:.*?\S)?)\*(?=\s|$|[.,;:!?])/g, "$1$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
+}
+
 function descriptionLines(description: string): string[] {
-  return (description.split("$$$$")[0] ?? "")
+  const lines = (description.split("$$$$")[0] ?? "")
     .replace(/<br\s*\/?>/gi, "\n")
     .split("\n")
     .map((line) => line.trim());
+  const shown = lines.filter((line) => !TREZU_HIDDEN_LABELS.includes(trezuLabel(line) ?? ""));
+  return shown.some(Boolean) ? shown : lines;
 }
 
-const TREZU_LABEL = /^\*\s*(Title|Summary|Description|Notes):\s*/i;
-
 export function proposalText(description: string): string {
-  return descriptionLines(description)
-    .map((line) => line.replace(TREZU_LABEL, ""))
-    .join("\n")
-    .trim();
+  return descriptionLines(description).map(cleanLine).join("\n").trim();
 }
 
 export function proposalTitle(description: string): string {
   const lines = descriptionLines(description).filter(Boolean);
-  const title = lines.find((line) => /^\*\s*Title:/i.test(line));
-  return (title ?? lines[0] ?? "").replace(/^\*\s*Title:\s*/i, "").trim();
+  const title =
+    TREZU_TITLE_ORDER.map((label) => lines.find((line) => trezuLabel(line) === label)).find(
+      Boolean,
+    ) ?? lines[0];
+  return title ? cleanLine(title) : "";
 }
 
 function submittedAt(proposal: SputnikProposal): number {

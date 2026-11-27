@@ -31,16 +31,33 @@ function authContext(orgRole: string, teams: Array<typeof events>) {
   } as unknown as AuthRequestContext;
 }
 
-function enterNode(context: AuthRequestContext | null, userRole: string | null = null) {
+function enterNode(
+  context: AuthRequestContext | null,
+  userRole: string | null = null,
+  {
+    tenantOrgId = "org-1",
+    nodeTenantId = "tenant-1",
+  }: { tenantOrgId?: string | null; nodeTenantId?: string | null } = {},
+) {
   const getContext = vi.fn().mockResolvedValue(context);
   return (NodeRoute.options.beforeLoad as Guard)({
     context: {
       queryClient: new QueryClient(),
-      apiClient: { auth: { getContext } },
+      apiClient: {
+        auth: { getContext },
+        getNode: vi.fn().mockResolvedValue({ id: "node-1", tenantId: nodeTenantId }),
+        resolveTenantById: vi.fn(async ({ tenantId }: { tenantId: string }) => ({
+          id: tenantId,
+          orgId: tenantOrgId,
+        })),
+      },
       auth: { activeOrganizationId: "org-1", user: { role: userRole } },
     },
+    params: { nodeId: "node-1" },
   });
 }
+
+const notInCommunity = { redirect: { to: "/dashboard", search: { restricted: "community" } } };
 
 function openTab(
   tab: string | undefined,
@@ -103,6 +120,32 @@ describe("community event routes", () => {
     await expect(enterNode(authContext("member", []))).rejects.toEqual(ownersOnly);
     await expect(enterNode(authContext("member", [finance]))).rejects.toEqual(ownersOnly);
     await expect(enterNode(null)).rejects.toEqual(ownersOnly);
+  });
+
+  it("keep a user whose only org is their personal one out of a community's pages", async () => {
+    await expect(
+      enterNode(authContext("owner", []), null, { tenantOrgId: "org-elsewhere" }),
+    ).rejects.toEqual(notInCommunity);
+  });
+
+  it("keep owners of another community out", async () => {
+    await expect(
+      enterNode(authContext("owner", [events, ops]), null, { tenantOrgId: "org-other" }),
+    ).rejects.toEqual(notInCommunity);
+  });
+
+  it("keep everyone but platform admins out of nodes without a community", async () => {
+    await expect(enterNode(authContext("owner", []), null, { nodeTenantId: null })).rejects.toEqual(
+      notInCommunity,
+    );
+  });
+
+  it("let platform admins into any community's pages", async () => {
+    await expect(enterNode(null, "admin", { tenantOrgId: "org-other" })).resolves.toEqual({
+      canManageCommunity: true,
+      canOrganizeEvents: true,
+      canOperateNodes: true,
+    });
   });
 
   it("open Events and Onboarding to organizers and the bulletin to managers or operators", () => {

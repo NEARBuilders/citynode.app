@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/item";
 import { useAppTranslation } from "@/i18n/runtime";
 import { presentationLabel } from "@/lib/presentation-label";
-import { useInvitationActions } from "../orgs/-use-invitation-actions";
+import { useInvitationActions } from "../../orgs/-use-invitation-actions";
 
 export type HomeInvitation = Awaited<ReturnType<ApiClient["auth"]["listUserInvitations"]>>[number];
 

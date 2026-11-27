@@ -60,7 +60,7 @@ type Binding = {
 type Harness = {
   apiClient: Record<string, (...args: never[]) => unknown> & {
     auth: {
-      listMembers: ReturnType<typeof vi.fn>;
+      getActiveMemberRole: ReturnType<typeof vi.fn>;
       getContext: ReturnType<typeof vi.fn>;
     };
   };
@@ -269,7 +269,7 @@ function createHarness({
 
   const apiClient = {
     auth: {
-      listMembers: vi.fn(async () => ({ members: [{ userId: USER_ID, role }] })),
+      getActiveMemberRole: vi.fn(async () => ({ role })),
       getContext: vi.fn(async () => ({
         user: { role: null },
         organization: {
@@ -550,7 +550,7 @@ describe("tenant detail mutations", () => {
 
     await screen.findByText("Community not found");
     expect(screen.queryByText("Original tenant")).toBeNull();
-    await waitFor(() => expect(current.apiClient.auth.listMembers).toHaveBeenCalledOnce());
+    await waitFor(() => expect(current.apiClient.auth.getActiveMemberRole).toHaveBeenCalledOnce());
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
@@ -624,6 +624,47 @@ describe("tenant detail mutations", () => {
     expect(
       (await screen.findByTestId("tenant-node-validators")).getAttribute("data-can-manage"),
     ).toBe("true");
+  });
+
+  it.each([
+    "owner",
+    "admin",
+  ] as const)("keeps a started community's placeholder site with platform admins for its %s", async (role) => {
+    const current = createHarness({ role });
+    current.server.tenant = { ...current.server.tenant, accountId: "willow.v1.citynode.near" };
+    renderTenant(current, {
+      user: { id: USER_ID },
+      session: { activeOrganizationId: ORG_ID },
+    });
+
+    const validators = await screen.findByTestId("tenant-node-validators");
+    expect(validators.getAttribute("data-can-manage")).toBe("false");
+    expect(screen.queryByTestId("tenant-published-config")).toBeNull();
+    expect(screen.queryByTestId("tenant-live-site")).toBeNull();
+    expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
+  });
+
+  it("lets a started community's owner manage validators once it is official", async () => {
+    const current = createHarness();
+    current.server.tenant = { ...current.server.tenant, accountId: "willow.v1.citynode.near" };
+    current.server.nodes = [
+      {
+        ...makeNode(),
+        metadata: { daoAccountId: "willow.sputnik-dao.near", daoNetwork: "mainnet" },
+      },
+    ];
+    renderTenant(current, {
+      user: { id: USER_ID },
+      session: { activeOrganizationId: ORG_ID },
+    });
+
+    await waitFor(async () =>
+      expect(
+        (await screen.findByTestId("tenant-node-validators")).getAttribute("data-can-manage"),
+      ).toBe("true"),
+    );
+    expect(screen.queryByTestId("tenant-published-config")).toBeNull();
   });
 
   it("asks an owner to make the community's organization active before publishing", async () => {

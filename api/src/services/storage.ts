@@ -5,7 +5,7 @@ import { cacheControlOf } from "every-plugin/build/artifact-names";
 
 export interface StoragePutInput {
   key: string;
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
   contentType: string;
   cacheControl: string;
 }
@@ -103,12 +103,38 @@ export function buildBundleKey(
   return `bundles/${account}/${gateway}/${workspace}/${objectPath}`;
 }
 
-export function validateUploadSize(
-  files: Array<{ bytes: Uint8Array }>,
-  maxTotalBytes: number,
-): boolean {
-  const total = files.reduce((sum, file) => sum + file.bytes.byteLength, 0);
+const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
+
+export function measureBase64(encoded: string): number | null {
+  if (!BASE64_PATTERN.test(encoded)) return null;
+  let end = encoded.length;
+  while (end > 0 && encoded.charCodeAt(end - 1) === 61) end--;
+  const padding = encoded.length - end;
+  if (padding > 0 && encoded.length % 4 !== 0) return null;
+  if (end % 4 === 1) return null;
+  return Math.floor((end * 3) / 4);
+}
+
+export function validateUploadSize(sizes: number[], maxTotalBytes: number): boolean {
+  const total = sizes.reduce((sum, size) => sum + size, 0);
   return total <= maxTotalBytes;
+}
+
+const BUNDLE_ENTRY_PATTERN =
+  /^(?:(?:remoteEntry(?:.server)?|mf-manifest)(?:.[a-f0-9]{8,})?.(?:js|json)|index.html)$/;
+
+export function isBundleEntryFile(name: string): boolean {
+  return BUNDLE_ENTRY_PATTERN.test(name);
+}
+
+export function partitionBundleFiles<T extends { name: string }>(
+  files: T[],
+): { assets: T[]; entries: T[] } {
+  const isEntry = (file: T) => isBundleEntryFile(file.name);
+  return {
+    assets: files.filter((file) => !isEntry(file)),
+    entries: files.filter(isEntry),
+  };
 }
 
 export function computeObjectIntegrity(bytes: Uint8Array): string {

@@ -19,7 +19,7 @@ import { pageTitle } from "@/lib/page-title";
 import { presentationLabel } from "@/lib/presentation-label";
 import { useInvitationActions } from "./-use-invitation-actions";
 
-export const Route = createFileRoute("/_authenticated/_dashboard/orgs/invites/$id")({
+export const Route = createFileRoute("/_authenticated/orgs/invites/$id")({
   head: ({ match }) => ({
     meta: [
       {

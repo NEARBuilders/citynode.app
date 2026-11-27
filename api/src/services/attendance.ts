@@ -32,7 +32,7 @@ export interface UpstreamCode {
 export interface UpstreamCodeStatus {
   eventId: string | null;
   eventName: string | null;
-  joined: Array<{ userId: string; createdAt: Date }>;
+  joined: Array<{ userId: string; createdAt: Date; accountId?: string | null }>;
 }
 
 export interface AttendanceUpstream {
@@ -172,6 +172,7 @@ export const AttendanceLive = Layer.effect(
                   communityName: input.communityName,
                   classified,
                   checkedInAt: join.createdAt,
+                  accountId: join.accountId ?? null,
                 })),
               )
               .onConflictDoUpdate({
@@ -185,6 +186,7 @@ export const AttendanceLive = Layer.effect(
                   eventName: sql`excluded.event_name`,
                   checkedInAt: sql`excluded.checked_in_at`,
                   classified: sql`${attendanceCheckIns.classified} or excluded.classified`,
+                  accountId: sql`coalesce(excluded.account_id, ${attendanceCheckIns.accountId})`,
                 },
               });
           }

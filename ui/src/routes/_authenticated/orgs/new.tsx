@@ -28,7 +28,7 @@ import { resolveAppLocale, translateAppMessage, useAppTranslation } from "@/i18n
 import { pageTitle } from "@/lib/page-title";
 import { deriveSlug, generateSlug, suggestAvailableSlug } from "@/lib/slug";
 
-export const Route = createFileRoute("/_authenticated/_dashboard/orgs/new")({
+export const Route = createFileRoute("/_authenticated/orgs/new")({
   head: ({ match }) => ({
     meta: [
       {

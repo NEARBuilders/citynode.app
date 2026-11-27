@@ -6,7 +6,7 @@ import { Field, FieldContent, FieldLabel, FieldLegend, FieldSet } from "@/compon
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAppLocale, useAppTranslation } from "@/i18n/runtime";
 import {
-  formatNearBalance,
+  formatNearTotal,
   formatPoolFee,
   isFullCommission,
   stakePoolStatsQueryOptions,
@@ -120,7 +120,7 @@ function PoolSummary({ validator }: { validator: StakeValidator }) {
       <p>
         {translate("stake.poolStatsNamed", {
           fee: formatPoolFee(stats.data.feeNumerator, stats.data.feeDenominator, locale),
-          balance: formatNearBalance(stats.data.totalStaked, locale),
+          balance: formatNearTotal(stats.data.totalStaked, locale),
         })}
       </p>
       {isFullCommission(stats.data.feeNumerator, stats.data.feeDenominator) && (

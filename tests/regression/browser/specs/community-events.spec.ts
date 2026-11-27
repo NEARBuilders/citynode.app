@@ -22,7 +22,7 @@ test.describe("community events", () => {
     pageErrors = collectErrors(page);
   });
 
-  test("a signed-in user without access sees the locked state, not a connection error", async ({
+  test("a signed-in user outside the community is sent Home with a members-only note", async ({
     page,
   }) => {
     const node = await seedCommunity("events-locked");
@@ -31,12 +31,10 @@ test.describe("community events", () => {
     await page.goto(`/nodes/${node.id}/content`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await expect(page.getByTestId("community-cannot-edit")).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(/\/dashboard\?restricted=community/, { timeout: 15000 });
+    await expect(page.getByTestId("workspace-restricted-notice")).toBeVisible();
     await expect(page.getByTestId("discovery-new-event")).toHaveCount(0);
-    await expect(page.getByTestId("content-map-status")).toHaveCount(0);
-
-    await page.getByTestId("community-cannot-edit-overview").click();
-    await page.waitForURL(/\/dashboard\/node/, { waitUntil: "commit" });
+    await expect(page.getByTestId("community-viewer-role")).toHaveCount(0);
 
     expectNoHydrationFailure(pageErrors);
   });

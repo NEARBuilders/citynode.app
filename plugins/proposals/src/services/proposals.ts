@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, count, desc, eq, ilike, inArray, notInArray, or } from "drizzle-orm";
+import { type AnyColumn, and, count, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import type { InferInput } from "../contract";
 import { DatabaseTag } from "../db/layer";
@@ -55,6 +55,39 @@ function resubmissionError(reviewStatus: ReviewStatus) {
   return "This proposal cannot be resubmitted";
 }
 
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+function likeContains(column: AnyColumn, pattern: string) {
+  return sql`${column} ILIKE ${pattern} ESCAPE '\\'`;
+}
+
+function queryError(cause: unknown) {
+  if (cause instanceof ORPCError) return cause;
+  return new ORPCError("INTERNAL_SERVER_ERROR", {
+    message: "Failed to query proposals",
+    cause,
+  });
+}
+
+function toProposalRecord(row: any, submissionCount: number) {
+  return {
+    id: row.id,
+    pluginId: row.pluginId,
+    entityId: row.entityId,
+    operation: row.operation as "create",
+    payload: parseJson(row.payload),
+    schemaVersion: row.schemaVersion,
+    createdBy: row.createdBy,
+    reviewStatus: row.reviewStatus as ReviewStatus,
+    rejectionReason: row.rejectionReason ?? null,
+    submissionCount,
+    createdAt: toIsoString(row.createdAt)!,
+    updatedAt: toIsoString(row.updatedAt)!,
+  };
+}
+
 async function countSubmissions(db: any, proposalId: string) {
   const [result] = await db
     .select({ count: count() })
@@ -73,20 +106,7 @@ async function loadProposal(db: any, pluginId: string, entityId: string) {
 
   if (!row) return null;
   const submissionCount = await countSubmissions(db, row.id);
-  return {
-    id: row.id,
-    pluginId: row.pluginId,
-    entityId: row.entityId,
-    operation: row.operation as "create",
-    payload: parseJson(row.payload),
-    schemaVersion: row.schemaVersion,
-    createdBy: row.createdBy,
-    reviewStatus: row.reviewStatus as ReviewStatus,
-    rejectionReason: row.rejectionReason ?? null,
-    submissionCount,
-    createdAt: toIsoString(row.createdAt)!,
-    updatedAt: toIsoString(row.updatedAt)!,
-  };
+  return toProposalRecord(row, submissionCount);
 }
 
 async function appendAudit(
@@ -196,22 +216,24 @@ export const ProposalServiceLive = Layer.effect(
         const idempotencyKey = input.idempotencyKey;
 
         if (idempotencyKey) {
-          const [existingSubmission] = yield* Effect.promise(() =>
-            db
-              .select({
-                proposalId: proposalSubmissions.proposalId,
-                entityId: proposalSubmissions.entityId,
-                submittedBy: proposalSubmissions.submittedBy,
-              })
-              .from(proposalSubmissions)
-              .where(
-                and(
-                  eq(proposalSubmissions.pluginId, input.pluginId),
-                  eq(proposalSubmissions.idempotencyKey, idempotencyKey),
-                ),
-              )
-              .limit(1),
-          );
+          const [existingSubmission] = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({
+                  proposalId: proposalSubmissions.proposalId,
+                  entityId: proposalSubmissions.entityId,
+                  submittedBy: proposalSubmissions.submittedBy,
+                })
+                .from(proposalSubmissions)
+                .where(
+                  and(
+                    eq(proposalSubmissions.pluginId, input.pluginId),
+                    eq(proposalSubmissions.idempotencyKey, idempotencyKey),
+                  ),
+                )
+                .limit(1),
+            catch: queryError,
+          });
 
           if (existingSubmission?.proposalId) {
             if (
@@ -224,22 +246,25 @@ export const ProposalServiceLive = Layer.effect(
                 }),
               );
             }
-            const existingProposal = yield* Effect.promise(() =>
-              loadProposal(db, input.pluginId, input.entityId),
-            );
+            const existingProposal = yield* Effect.tryPromise({
+              try: () => loadProposal(db, input.pluginId, input.entityId),
+              catch: queryError,
+            });
             if (existingProposal) return existingProposal;
           }
         }
 
-        const [existing] = yield* Effect.promise(() =>
-          db
-            .select()
-            .from(proposals)
-            .where(
-              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-            )
-            .limit(1),
-        );
+        const [existing] = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .select()
+              .from(proposals)
+              .where(
+                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+              )
+              .limit(1),
+          catch: queryError,
+        });
 
         const proposalId = existing?.id ?? generateId("prop");
         const now = nextTimestamp(existing?.updatedAt);
@@ -282,86 +307,93 @@ export const ProposalServiceLive = Layer.effect(
           );
         }
 
-        const saved = yield* Effect.promise(() =>
-          db.transaction(async (tx) => {
-            if (!existing) {
-              const inserted = await tx
-                .insert(proposals)
-                .values({
-                  id: proposalId,
-                  pluginId: input.pluginId,
-                  entityId: input.entityId,
-                  operation: "create",
-                  payload: serialize(input.payload),
-                  schemaVersion: "1",
-                  createdBy: input.actorId,
-                  reviewStatus: "pending",
-                  rejectionReason: null,
-                  createdAt: now,
-                  updatedAt: now,
-                })
-                .onConflictDoNothing()
-                .returning({ id: proposals.id });
-              if (!inserted[0]) return false;
-            } else {
-              const updated = await tx
-                .update(proposals)
-                .set({
-                  payload: serialize(input.payload),
-                  createdBy: input.requireSameActor ? input.actorId : existing.createdBy,
-                  reviewStatus: "pending",
-                  rejectionReason: null,
-                  updatedAt: now,
-                })
-                .where(
-                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-                )
-                .returning({ id: proposals.id });
-              if (!updated[0]) return false;
-            }
+        const saved = yield* Effect.tryPromise({
+          try: () =>
+            db.transaction(async (tx) => {
+              if (!existing) {
+                const inserted = await tx
+                  .insert(proposals)
+                  .values({
+                    id: proposalId,
+                    pluginId: input.pluginId,
+                    entityId: input.entityId,
+                    operation: "create",
+                    payload: serialize(input.payload),
+                    schemaVersion: "1",
+                    createdBy: input.actorId,
+                    reviewStatus: "pending",
+                    rejectionReason: null,
+                    createdAt: now,
+                    updatedAt: now,
+                  })
+                  .onConflictDoNothing()
+                  .returning({ id: proposals.id });
+                if (!inserted[0]) return false;
+              } else {
+                const updated = await tx
+                  .update(proposals)
+                  .set({
+                    payload: serialize(input.payload),
+                    createdBy: input.requireSameActor ? input.actorId : existing.createdBy,
+                    reviewStatus: "pending",
+                    rejectionReason: null,
+                    updatedAt: now,
+                  })
+                  .where(
+                    and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+                  )
+                  .returning({ id: proposals.id });
+                if (!updated[0]) return false;
+              }
 
-            await tx.insert(proposalSubmissions).values({
-              id: generateId("sub"),
-              proposalId,
-              pluginId: input.pluginId,
-              entityId: input.entityId,
-              submittedBy: input.actorId,
-              source: input.source ?? null,
-              idempotencyKey: input.idempotencyKey ?? null,
-              payload: serialize(input.payload),
-              metadata: input.metadata === undefined ? null : serialize(input.metadata),
-              createdAt: now,
-            });
+              await tx.insert(proposalSubmissions).values({
+                id: generateId("sub"),
+                proposalId,
+                pluginId: input.pluginId,
+                entityId: input.entityId,
+                submittedBy: input.actorId,
+                source: input.source ?? null,
+                idempotencyKey: input.idempotencyKey ?? null,
+                payload: serialize(input.payload),
+                metadata: input.metadata === undefined ? null : serialize(input.metadata),
+                createdAt: now,
+              });
 
-            await appendAudit(
-              tx,
-              proposalId,
-              input.pluginId,
-              input.entityId,
-              "proposed",
-              input.actorId,
-              actorLabel(input.actor, input.source),
-              { source: input.source ?? null, metadata: input.metadata ?? null },
-            );
-            return true;
-          }),
-        );
+              await appendAudit(
+                tx,
+                proposalId,
+                input.pluginId,
+                input.entityId,
+                "proposed",
+                input.actorId,
+                actorLabel(input.actor, input.source),
+                { source: input.source ?? null, metadata: input.metadata ?? null },
+              );
+              return true;
+            }),
+          catch: queryError,
+        });
 
         if (!saved) return yield* Effect.fail(staleProposal());
 
-        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+        return yield* Effect.tryPromise({
+          try: () => loadProposal(db, input.pluginId, input.entityId),
+          catch: queryError,
+        });
       }),
 
       approve: Effect.fn("ProposalService.approve")(function* (input) {
-        const [existing] = yield* Effect.promise(() =>
-          db
-            .select()
-            .from(proposals)
-            .where(
-              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-            )
-            .limit(1),
-        );
+        const [existing] = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .select()
+              .from(proposals)
+              .where(
+                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+              )
+              .limit(1),
+          catch: queryError,
+        });
 
         if (!existing) {
           return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
@@ -384,48 +416,55 @@ export const ProposalServiceLive = Layer.effect(
         }
 
         const now = nextTimestamp(existing.updatedAt);
-        const updated = yield* Effect.promise(() =>
-          db.transaction(async (tx) => {
-            const rows = await tx
-              .update(proposals)
-              .set({
-                reviewStatus: "approved",
-                rejectionReason: null,
-                updatedAt: now,
-              })
-              .where(
-                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-              )
-              .returning({ id: proposals.id });
-            if (!rows[0]) return false;
-            await appendAudit(
-              tx,
-              existing.id,
-              input.pluginId,
-              input.entityId,
-              "approved",
-              input.actorId,
-              actorLabel(input.actor),
-            );
-            return true;
-          }),
-        );
+        const updated = yield* Effect.tryPromise({
+          try: () =>
+            db.transaction(async (tx) => {
+              const rows = await tx
+                .update(proposals)
+                .set({
+                  reviewStatus: "approved",
+                  rejectionReason: null,
+                  updatedAt: now,
+                })
+                .where(
+                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+                )
+                .returning({ id: proposals.id });
+              if (!rows[0]) return false;
+              await appendAudit(
+                tx,
+                existing.id,
+                input.pluginId,
+                input.entityId,
+                "approved",
+                input.actorId,
+                actorLabel(input.actor),
+              );
+              return true;
+            }),
+          catch: queryError,
+        });
 
         if (!updated) return yield* Effect.fail(staleProposal());
 
-        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+        return yield* Effect.tryPromise({
+          try: () => loadProposal(db, input.pluginId, input.entityId),
+          catch: queryError,
+        });
       }),
 
       reject: Effect.fn("ProposalService.reject")(function* (input) {
-        const [existing] = yield* Effect.promise(() =>
-          db
-            .select()
-            .from(proposals)
-            .where(
-              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-            )
-            .limit(1),
-        );
+        const [existing] = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .select()
+              .from(proposals)
+              .where(
+                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+              )
+              .limit(1),
+          catch: queryError,
+        });
 
         if (!existing) {
           return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
@@ -443,49 +482,56 @@ export const ProposalServiceLive = Layer.effect(
 
         const now = nextTimestamp(existing.updatedAt);
         const reason = input.reason?.trim() || null;
-        const updated = yield* Effect.promise(() =>
-          db.transaction(async (tx) => {
-            const rows = await tx
-              .update(proposals)
-              .set({
-                reviewStatus: "rejected",
-                rejectionReason: reason,
-                updatedAt: now,
-              })
-              .where(
-                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-              )
-              .returning({ id: proposals.id });
-            if (!rows[0]) return false;
-            await appendAudit(
-              tx,
-              existing.id,
-              input.pluginId,
-              input.entityId,
-              "rejected",
-              input.actorId,
-              actorLabel(input.actor),
-              { reason },
-            );
-            return true;
-          }),
-        );
+        const updated = yield* Effect.tryPromise({
+          try: () =>
+            db.transaction(async (tx) => {
+              const rows = await tx
+                .update(proposals)
+                .set({
+                  reviewStatus: "rejected",
+                  rejectionReason: reason,
+                  updatedAt: now,
+                })
+                .where(
+                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+                )
+                .returning({ id: proposals.id });
+              if (!rows[0]) return false;
+              await appendAudit(
+                tx,
+                existing.id,
+                input.pluginId,
+                input.entityId,
+                "rejected",
+                input.actorId,
+                actorLabel(input.actor),
+                { reason },
+              );
+              return true;
+            }),
+          catch: queryError,
+        });
 
         if (!updated) return yield* Effect.fail(staleProposal());
 
-        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+        return yield* Effect.tryPromise({
+          try: () => loadProposal(db, input.pluginId, input.entityId),
+          catch: queryError,
+        });
       }),
 
       reopen: Effect.fn("ProposalService.reopen")(function* (input) {
-        const [existing] = yield* Effect.promise(() =>
-          db
-            .select()
-            .from(proposals)
-            .where(
-              and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
-            )
-            .limit(1),
-        );
+        const [existing] = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .select()
+              .from(proposals)
+              .where(
+                and(eq(proposals.pluginId, input.pluginId), eq(proposals.entityId, input.entityId)),
+              )
+              .limit(1),
+          catch: queryError,
+        });
 
         if (!existing) {
           return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Proposal not found" }));
@@ -504,36 +550,41 @@ export const ProposalServiceLive = Layer.effect(
         }
 
         const now = nextTimestamp(existing.updatedAt);
-        const updated = yield* Effect.promise(() =>
-          db.transaction(async (tx) => {
-            const rows = await tx
-              .update(proposals)
-              .set({
-                reviewStatus: "pending",
-                rejectionReason: null,
-                updatedAt: now,
-              })
-              .where(
-                and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
-              )
-              .returning({ id: proposals.id });
-            if (!rows[0]) return false;
-            await appendAudit(
-              tx,
-              existing.id,
-              input.pluginId,
-              input.entityId,
-              "reopened",
-              input.actorId,
-              actorLabel(input.actor),
-            );
-            return true;
-          }),
-        );
+        const updated = yield* Effect.tryPromise({
+          try: () =>
+            db.transaction(async (tx) => {
+              const rows = await tx
+                .update(proposals)
+                .set({
+                  reviewStatus: "pending",
+                  rejectionReason: null,
+                  updatedAt: now,
+                })
+                .where(
+                  and(eq(proposals.id, existing.id), eq(proposals.updatedAt, existing.updatedAt)),
+                )
+                .returning({ id: proposals.id });
+              if (!rows[0]) return false;
+              await appendAudit(
+                tx,
+                existing.id,
+                input.pluginId,
+                input.entityId,
+                "reopened",
+                input.actorId,
+                actorLabel(input.actor),
+              );
+              return true;
+            }),
+          catch: queryError,
+        });
 
         if (!updated) return yield* Effect.fail(staleProposal());
 
-        return yield* Effect.promise(() => loadProposal(db, input.pluginId, input.entityId));
+        return yield* Effect.tryPromise({
+          try: () => loadProposal(db, input.pluginId, input.entityId),
+          catch: queryError,
+        });
       }),
 
       getProposals: Effect.fn("ProposalService.getProposals")(function* (input) {
@@ -545,12 +596,12 @@ export const ProposalServiceLive = Layer.effect(
         if (input.entityId) conditions.push(eq(proposals.entityId, input.entityId));
         if (input.reviewStatus) conditions.push(eq(proposals.reviewStatus, input.reviewStatus));
         if (input.query) {
-          const pattern = `%${input.query.trim()}%`;
+          const pattern = `%${escapeLikePattern(input.query.trim())}%`;
           conditions.push(
             or(
-              ilike(proposals.entityId, pattern),
-              ilike(proposals.createdBy, pattern),
-              ilike(proposals.payload, pattern),
+              likeContains(proposals.entityId, pattern),
+              likeContains(proposals.createdBy, pattern),
+              likeContains(proposals.payload, pattern),
             ),
           );
         }
@@ -572,31 +623,52 @@ export const ProposalServiceLive = Layer.effect(
 
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-        const counted = yield* Effect.promise(() => {
-          const countQuery = db.select({ count: count() }).from(proposals);
-          return whereClause ? countQuery.where(whereClause) : countQuery;
+        const counted = yield* Effect.tryPromise({
+          try: () => {
+            const countQuery = db.select({ count: count() }).from(proposals);
+            return whereClause ? countQuery.where(whereClause) : countQuery;
+          },
+          catch: queryError,
         });
         const total = counted[0]?.count ?? 0;
 
-        const rows = yield* Effect.promise(() => {
-          const baseQuery = db
-            .select()
-            .from(proposals)
-            .orderBy(desc(proposals.updatedAt))
-            .limit(pageLimit)
-            .offset(offset);
-          return whereClause ? baseQuery.where(whereClause) : baseQuery;
+        const rows = yield* Effect.tryPromise({
+          try: () => {
+            const baseQuery = db
+              .select()
+              .from(proposals)
+              .orderBy(desc(proposals.updatedAt))
+              .limit(pageLimit)
+              .offset(offset);
+            return whereClause ? baseQuery.where(whereClause) : baseQuery;
+          },
+          catch: queryError,
         });
 
-        const data = yield* Effect.promise(() =>
-          Promise.all(rows.map((row: any) => loadProposal(db, row.pluginId, row.entityId))),
+        const proposalIds = rows.map((row: any) => row.id);
+        const submissionCounts = proposalIds.length
+          ? yield* Effect.tryPromise({
+              try: () =>
+                db
+                  .select({ proposalId: proposalSubmissions.proposalId, count: count() })
+                  .from(proposalSubmissions)
+                  .where(inArray(proposalSubmissions.proposalId, proposalIds))
+                  .groupBy(proposalSubmissions.proposalId),
+              catch: queryError,
+            })
+          : [];
+        const countByProposal = new Map<string, number>(
+          submissionCounts.map((entry: any) => [entry.proposalId, Number(entry.count)]),
         );
-        const filtered = data.filter(Boolean);
+
+        const data = rows.map((row: any) =>
+          toProposalRecord(row, countByProposal.get(row.id) ?? 0),
+        );
         const nextOffset = offset + pageLimit;
         const hasMore = nextOffset < total;
 
         return {
-          data: filtered,
+          data,
           meta: {
             total,
             hasMore,
@@ -606,27 +678,32 @@ export const ProposalServiceLive = Layer.effect(
       }),
 
       getMyNodeApplications: (actorId) =>
-        Effect.promise(async () => {
-          const rows = await db
-            .select()
-            .from(proposals)
-            .where(and(eq(proposals.pluginId, "node"), eq(proposals.createdBy, actorId)))
-            .orderBy(desc(proposals.updatedAt));
-          return Promise.all(rows.map((row) => loadProposal(db, row.pluginId, row.entityId)));
+        Effect.tryPromise({
+          try: async () => {
+            const rows = await db
+              .select()
+              .from(proposals)
+              .where(and(eq(proposals.pluginId, "node"), eq(proposals.createdBy, actorId)))
+              .orderBy(desc(proposals.updatedAt));
+            return Promise.all(rows.map((row) => loadProposal(db, row.pluginId, row.entityId)));
+          },
+          catch: queryError,
         }),
 
       getProposalCount: Effect.fn("ProposalService.getProposalCount")(function* (input) {
-        const [result] = yield* Effect.promise(() =>
-          db
-            .select({ count: count() })
-            .from(proposalSubmissions)
-            .where(
-              and(
-                eq(proposalSubmissions.pluginId, input.pluginId),
-                eq(proposalSubmissions.entityId, input.entityId),
+        const [result] = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .select({ count: count() })
+              .from(proposalSubmissions)
+              .where(
+                and(
+                  eq(proposalSubmissions.pluginId, input.pluginId),
+                  eq(proposalSubmissions.entityId, input.entityId),
+                ),
               ),
-            ),
-        );
+          catch: queryError,
+        });
 
         return {
           pluginId: input.pluginId,
@@ -642,18 +719,20 @@ export const ProposalServiceLive = Layer.effect(
           eq(proposalAuditLog.pluginId, input.pluginId),
           eq(proposalAuditLog.entityId, input.entityId),
         );
-        const [counted, rows] = yield* Effect.promise(() =>
-          Promise.all([
-            db.select({ count: count() }).from(proposalAuditLog).where(whereClause),
-            db
-              .select()
-              .from(proposalAuditLog)
-              .where(whereClause)
-              .orderBy(desc(proposalAuditLog.createdAt), desc(proposalAuditLog.id))
-              .limit(limit)
-              .offset(offset),
-          ]),
-        );
+        const [counted, rows] = yield* Effect.tryPromise({
+          try: () =>
+            Promise.all([
+              db.select({ count: count() }).from(proposalAuditLog).where(whereClause),
+              db
+                .select()
+                .from(proposalAuditLog)
+                .where(whereClause)
+                .orderBy(desc(proposalAuditLog.createdAt), desc(proposalAuditLog.id))
+                .limit(limit)
+                .offset(offset),
+            ]),
+          catch: queryError,
+        });
         const total = counted[0]?.count ?? 0;
         const nextOffset = offset + limit;
         const hasMore = nextOffset < total;
@@ -684,18 +763,20 @@ export const ProposalServiceLive = Layer.effect(
           eq(proposalSubmissions.pluginId, input.pluginId),
           eq(proposalSubmissions.entityId, input.entityId),
         );
-        const [counted, rows] = yield* Effect.promise(() =>
-          Promise.all([
-            db.select({ count: count() }).from(proposalSubmissions).where(whereClause),
-            db
-              .select()
-              .from(proposalSubmissions)
-              .where(whereClause)
-              .orderBy(desc(proposalSubmissions.createdAt), desc(proposalSubmissions.id))
-              .limit(limit)
-              .offset(offset),
-          ]),
-        );
+        const [counted, rows] = yield* Effect.tryPromise({
+          try: () =>
+            Promise.all([
+              db.select({ count: count() }).from(proposalSubmissions).where(whereClause),
+              db
+                .select()
+                .from(proposalSubmissions)
+                .where(whereClause)
+                .orderBy(desc(proposalSubmissions.createdAt), desc(proposalSubmissions.id))
+                .limit(limit)
+                .offset(offset),
+            ]),
+          catch: queryError,
+        });
         const total = counted[0]?.count ?? 0;
         const nextOffset = offset + limit;
         const hasMore = nextOffset < total;
@@ -721,19 +802,21 @@ export const ProposalServiceLive = Layer.effect(
 
       getMySubmission: Effect.fn("ProposalService.getMySubmission")(function* (input) {
         if (input.submittedBy.length === 0) return { hasSubmitted: false };
-        const [submission] = yield* Effect.promise(() =>
-          db
-            .select({ id: proposalSubmissions.id })
-            .from(proposalSubmissions)
-            .where(
-              and(
-                eq(proposalSubmissions.pluginId, input.pluginId),
-                eq(proposalSubmissions.entityId, input.entityId),
-                inArray(proposalSubmissions.submittedBy, input.submittedBy),
-              ),
-            )
-            .limit(1),
-        );
+        const [submission] = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .select({ id: proposalSubmissions.id })
+              .from(proposalSubmissions)
+              .where(
+                and(
+                  eq(proposalSubmissions.pluginId, input.pluginId),
+                  eq(proposalSubmissions.entityId, input.entityId),
+                  inArray(proposalSubmissions.submittedBy, input.submittedBy),
+                ),
+              )
+              .limit(1),
+          catch: queryError,
+        });
         return { hasSubmitted: Boolean(submission) };
       }),
 
@@ -744,34 +827,38 @@ export const ProposalServiceLive = Layer.effect(
         if (input.pluginId) conditions.push(eq(proposalAuditLog.pluginId, input.pluginId));
         const whereClause = and(...conditions);
 
-        const [counted, rows] = yield* Effect.promise(() =>
-          Promise.all([
-            db.select({ count: count() }).from(proposalAuditLog).where(whereClause),
-            db
-              .select()
-              .from(proposalAuditLog)
-              .where(whereClause)
-              .orderBy(desc(proposalAuditLog.createdAt))
-              .limit(pageLimit)
-              .offset(offset),
-          ]),
-        );
+        const [counted, rows] = yield* Effect.tryPromise({
+          try: () =>
+            Promise.all([
+              db.select({ count: count() }).from(proposalAuditLog).where(whereClause),
+              db
+                .select()
+                .from(proposalAuditLog)
+                .where(whereClause)
+                .orderBy(desc(proposalAuditLog.createdAt))
+                .limit(pageLimit)
+                .offset(offset),
+            ]),
+          catch: queryError,
+        });
         const total = counted[0]?.count ?? 0;
-        const entries = yield* Effect.promise(() =>
-          Promise.all(
-            rows.map(async (row: any) => ({
-              id: row.id,
-              pluginId: row.pluginId,
-              entityId: row.entityId,
-              action: row.action as "approved" | "rejected",
-              actor: row.actor,
-              actorLabel: row.actorLabel ?? null,
-              details: parseJson(row.details),
-              createdAt: toIsoString(row.createdAt)!,
-              proposal: await loadProposal(db, row.pluginId, row.entityId),
-            })),
-          ),
-        );
+        const entries = yield* Effect.tryPromise({
+          try: () =>
+            Promise.all(
+              rows.map(async (row: any) => ({
+                id: row.id,
+                pluginId: row.pluginId,
+                entityId: row.entityId,
+                action: row.action as "approved" | "rejected",
+                actor: row.actor,
+                actorLabel: row.actorLabel ?? null,
+                details: parseJson(row.details),
+                createdAt: toIsoString(row.createdAt)!,
+                proposal: await loadProposal(db, row.pluginId, row.entityId),
+              })),
+            ),
+          catch: queryError,
+        });
         const data = entries.filter((entry: any) => entry.proposal);
         const nextOffset = offset + pageLimit;
         const hasMore = nextOffset < total;

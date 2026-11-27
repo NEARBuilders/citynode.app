@@ -665,6 +665,67 @@ describe("monthly reports", () => {
     expect(await listed("2026-12")).toBe(true);
   });
 
+  it("gives a community started without a tenant its own, so its owner can report", async () => {
+    const id = crypto.randomUUID().slice(0, 8);
+    const org = `started-${id}`;
+    const resume = new Date();
+    vi.setSystemTime(new Date("2026-10-01T12:00:00.000Z"));
+    const { node } = await activateTestNode({
+      name: "Willow Bend",
+      slug: `willow-bend-${id}`,
+      kind: "city",
+      orgId: org,
+    });
+    vi.setSystemTime(resume);
+    roles.set(`${org}:owner-${id}`, "owner");
+    roles.set(`${org}:admin-${id}`, "admin");
+    const owner = await getPluginClient(orgContext(`owner-${id}`, org));
+    const orgAdmin = await getPluginClient(orgContext(`admin-${id}`, org, "admin"));
+
+    expect(node.tenantId).toEqual(expect.any(String));
+    expect(
+      await owner.saveMonthlyReport({ nodeId: node.id, month: month(-1), notes: "First month" }),
+    ).toMatchObject({ nodeId: node.id, month: month(-1), notes: "First month" });
+    const tenants = await (await admin()).getAdminMonthlyReports({ month: month(-1) });
+    expect(tenants.communities.find((row) => row.organizationId === org)).toMatchObject({
+      organizationId: org,
+    });
+
+    const tenantId = node.tenantId!;
+    expect(await owner.listTenantBindingsForTenant({ tenantId })).toEqual([]);
+    for (const refused of [
+      () => owner.updateTenant({ tenantId, accountId: "someone-else.near" }),
+      () => owner.updateTenant({ tenantId, allowBackendOverrides: true }),
+      () => owner.createBinding({ tenantId, hostname: `willow-${id}` }),
+      () => owner.deleteTenant({ tenantId }),
+    ]) {
+      await expect(refused()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    await expect(orgAdmin.deleteNode({ nodeId: node.id })).rejects.toThrow(
+      /Only platform admins can remove a community/,
+    );
+    await expect(
+      owner.createValidator({
+        nodeId: node.id,
+        accountId: "pool.poolv1.near",
+        network: "mainnet",
+        protocol: "near",
+        role: "official",
+        isDefault: true,
+      }),
+    ).rejects.toThrow(/once the community is official/);
+  });
+
+  it("keeps placeholder community accounts out of reach of other tenants' owners", async () => {
+    const city = await community("Pier Point");
+    await expect(
+      city.owner.updateTenant({ tenantId: city.tenant.id, accountId: "pier.v1.citynode.near" }),
+    ).rejects.toThrow(/reserved for platform communities/);
+    expect(
+      await city.owner.updateTenant({ tenantId: city.tenant.id, name: "Pier Point Builders" }),
+    ).toMatchObject({ name: "Pier Point Builders", accountId: city.tenant.accountId });
+  });
+
   it("still lists every community, without copy links, when organizations can't be read", async () => {
     const city = await community("Maple Marsh");
     const platformAdmin = await admin();

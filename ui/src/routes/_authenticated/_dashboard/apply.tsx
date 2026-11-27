@@ -43,7 +43,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
       {
         title: pageTitle(
           translateAppMessage(
-            "dashboard.startCommunity",
+            "dashboard.makeOfficial",
             undefined,
             resolveAppLocale(undefined, match.context.locale),
           ),

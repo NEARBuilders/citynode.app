@@ -199,6 +199,8 @@ export interface ReportChase extends ChaseCommunity {
   overdueEvents: number;
 }
 
+const outstanding = (chase: ReportChase) => chase.months.length + chase.overdueEvents;
+
 export function reportsToChase({
   monthly,
   overdue,
@@ -236,7 +238,9 @@ export function reportsToChase({
     else unattributed += 1;
   }
   return {
-    chases: [...chases.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    chases: [...chases.values()].sort(
+      (a, b) => outstanding(b) - outstanding(a) || a.name.localeCompare(b.name),
+    ),
     unattributed,
   };
 }
