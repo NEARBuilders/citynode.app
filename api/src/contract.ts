@@ -790,7 +790,10 @@ export const contract = oc.router({
       FORBIDDEN,
       BAD_REQUEST,
       NOT_FOUND,
-      CONFLICT: { status: 409, message: "Hostname already in use" },
+      CONFLICT: {
+        status: 409,
+        message: "Hostname already in use, or the tenant already has a primary domain",
+      },
     }),
 
   verifyCustomDomain: oc

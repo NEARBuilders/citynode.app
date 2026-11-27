@@ -128,6 +128,8 @@ export const validators = pgTable(
   }),
 );
 
+export const ONE_PRIMARY_BINDING_INDEX = "domain_bindings_one_primary_per_tenant_idx";
+
 export const domainBindings = pgTable(
   "domain_bindings",
   {
@@ -145,7 +147,7 @@ export const domainBindings = pgTable(
   },
   (table) => ({
     tenantIdx: index("domain_bindings_tenant_idx").on(table.tenantId),
-    onePrimaryPerTenantIdx: uniqueIndex("domain_bindings_one_primary_per_tenant_idx")
+    onePrimaryPerTenantIdx: uniqueIndex(ONE_PRIMARY_BINDING_INDEX)
       .on(table.tenantId)
       .where(sql`is_primary = true`),
   }),
