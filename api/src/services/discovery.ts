@@ -1905,15 +1905,26 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     }),
     organizationEvents: Effect.fn("DiscoveryService.organizationEvents")(function* (
       organizationIds: string[],
+      {
+        liveTenantsOnly = false,
+        publicOnly = false,
+      }: { liveTenantsOnly?: boolean; publicOnly?: boolean } = {},
     ) {
       const byOrganization = new Map<
         string,
         {
           communityName: string | null;
-          events: Array<{ id: string; title: string; startsAt: string | null }>;
+          events: Array<{
+            id: string;
+            title: string;
+            startsAt: string | null;
+            status: (typeof discoveryActivities.$inferSelect)["data"]["status"];
+            publishedAt: (typeof discoveryActivities.$inferSelect)["data"]["publishedAt"];
+          }>;
         }
       >(organizationIds.map((id) => [id, { communityName: null, events: [] }]));
       if (organizationIds.length === 0) return byOrganization;
+      const now = new Date(yield* Clock.currentTimeMillis).toISOString();
       const rows = yield* query(() =>
         db
           .select({
@@ -1923,8 +1934,21 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           })
           .from(tenants)
           .leftJoin(nodes, eq(nodes.tenantId, tenants.id))
-          .leftJoin(discoveryActivities, eq(discoveryActivities.ownerNodeId, nodes.id))
-          .where(inArray(tenants.orgId, organizationIds)),
+          .leftJoin(
+            discoveryActivities,
+            and(
+              eq(discoveryActivities.ownerNodeId, nodes.id),
+              publicOnly ? shownActivity(now) : undefined,
+            ),
+          )
+          .where(
+            and(
+              inArray(tenants.orgId, organizationIds),
+              liveTenantsOnly
+                ? and(isNull(tenants.deletedAt), eq(tenants.status, "active"))
+                : undefined,
+            ),
+          ),
       );
       for (const row of rows) {
         const entry = row.organizationId ? byOrganization.get(row.organizationId) : undefined;
@@ -1935,6 +1959,8 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
           id: row.event.id,
           title: row.event.title,
           startsAt: row.event.startsAt,
+          status: row.event.status,
+          publishedAt: row.event.publishedAt,
         });
       }
       return byOrganization;
