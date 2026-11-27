@@ -1,5 +1,6 @@
 interface StakeCommunity {
   node: { id: string } | null;
+  viewerMembership: "active" | "member" | null;
 }
 
 export function getStakeScopeKey(
@@ -12,15 +13,20 @@ export function getStakeScopeKey(
 
 export function getActiveOrganizationNodeId({
   activeOrganizationId,
+  browseAll = false,
   communities,
   hasRequestedNode,
 }: {
   activeOrganizationId: string | null;
+  browseAll?: boolean;
   communities: StakeCommunity[];
   hasRequestedNode: boolean;
 }) {
-  if (!activeOrganizationId || hasRequestedNode) return null;
-  return communities.find((community) => community.node)?.node?.id ?? null;
+  if (!activeOrganizationId || hasRequestedNode || browseAll) return null;
+  return (
+    communities.find((community) => community.node && community.viewerMembership === "active")?.node
+      ?.id ?? null
+  );
 }
 
 export function chooseDefaultValidator<T extends { id: string; isDefault: boolean }>(

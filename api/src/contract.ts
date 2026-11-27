@@ -720,12 +720,18 @@ export const contract = oc.router({
       path: "/stake/communities",
       summary: "List communities available for staking",
       description:
-        "Session-aware — active organization first, organization memberships as fallback, and the full public directory for anonymous visitors.",
+        "Public — every listed community for everyone. Signed-in viewers get their active organization's community first, then their other memberships.",
     })
     .output(
       z.array(
         TenantAppSchema.extend({
           stakeable: z.boolean().describe("Whether the community has its own validator"),
+          viewerMembership: z
+            .enum(["active", "member"])
+            .nullable()
+            .describe(
+              "'active' for the viewer's active organization, 'member' for another of their organizations, null otherwise",
+            ),
         }),
       ),
     ),

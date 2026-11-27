@@ -389,7 +389,10 @@ it("shows the community's last observed member count with its observation time",
   await showNode("/n/chicago");
   expect((await screen.findByTestId("node-page.member-count-value")).textContent).toBe("42");
   const observed = screen.getByTestId("node-page.member-count-observed");
-  expect(observed.textContent).toContain("Last updated");
+  expect(observed.textContent).toContain("as of");
+  expect(observed.getAttribute("title")).toBe(
+    "Counted the last time a member opened this community. It isn't a live count.",
+  );
   expect(observed.querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-20T10:00:00.000Z");
   expect(screen.getByTestId("node-page.member-count").textContent).toContain("Members");
 });

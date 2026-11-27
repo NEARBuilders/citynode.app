@@ -2067,11 +2067,17 @@ export const commonMessages = createMessageCatalogs(["en", "es", "fr", "zh"], {
   ],
   "common.wallet": ["Wallet", "Cartera", "Portefeuille", "钱包"],
   "wallet.notConnected": ["Not connected", "Sin conectar", "Non connecté", "未连接"],
-  "members.lastUpdated": [
-    "Last updated",
-    "Última actualización",
-    "Dernière mise à jour",
-    "最后更新",
+  "members.countAsOf": [
+    "as of <date></date>",
+    "al <date></date>",
+    "au <date></date>",
+    "截至<date></date>",
+  ],
+  "members.countAsOfHint": [
+    "Counted the last time a member opened this community. It isn't a live count.",
+    "Contado la última vez que un miembro abrió esta comunidad. No es un recuento en vivo.",
+    "Compté la dernière fois qu'un membre a ouvert cette communauté. Ce n'est pas un décompte en direct.",
+    "按成员上次打开该社区时统计，并非实时人数。",
   ],
   "members.loadFailed": [
     "Couldn't load the member list.",

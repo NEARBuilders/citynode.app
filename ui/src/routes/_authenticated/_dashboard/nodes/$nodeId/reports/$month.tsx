@@ -5,6 +5,7 @@ import { Trans } from "everything-dev/ui/i18n";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
+import { ReportNoAccess } from "@/components/discovery/report-no-access";
 import { ReportUpdated, ReviewRow } from "@/components/discovery/report-review";
 import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
@@ -15,7 +16,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { AppMessageId } from "@/i18n/catalogs";
-import { appErrorMessage } from "@/i18n/error-message";
+import { appErrorMessage, isPermissionError } from "@/i18n/error-message";
 import {
   resolveAppLocale,
   translateAppMessage,
@@ -94,6 +95,14 @@ function MonthlyReportPage() {
             <Skeleton key={key} className="h-11 w-full" />
           ))}
         </div>
+      </MonthlyReportShell>
+    );
+  }
+
+  if (valid && !report.data && isPermissionError(report.error)) {
+    return (
+      <MonthlyReportShell title={title}>
+        <ReportNoAccess icon={CalendarCheckIcon} />
       </MonthlyReportShell>
     );
   }

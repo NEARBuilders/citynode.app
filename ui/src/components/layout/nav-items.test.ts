@@ -50,6 +50,16 @@ describe("sidebar per persona", () => {
     ]);
   });
 
+  it("holds the community slot as a placeholder while membership loads", () => {
+    const items = sidebar({ hasOrganization: true, membershipPending: true }, "member");
+    expect(items.map(navSlug)).toEqual(["dashboard", "my-node", "explore", "stake"]);
+    expect(items.find((item) => navSlug(item) === "my-node")?.pending).toBe(true);
+    expect(
+      sidebar({ hasOrganization: true }, "member").find((item) => navSlug(item) === "my-node")
+        ?.pending,
+    ).toBeUndefined();
+  });
+
   it("offers Make a community official instead of My community to people without one", () => {
     expect(sidebar({ hasOrganization: false }, "member").map(navSlug)).toEqual([
       "dashboard",
@@ -309,7 +319,8 @@ describe("team area navigation", () => {
 });
 
 describe("breadcrumbs", () => {
-  const labels = (pathname: string) => crumbsFor(pathname).map((crumb) => crumb.label);
+  const labels = (pathname: string, context?: Parameters<typeof crumbsFor>[1]) =>
+    crumbsFor(pathname, context).map((crumb) => crumb.label);
 
   it("translates app pages instead of using raw route names", () => {
     const translate = (id: Parameters<typeof translateAppMessage>[0]) =>
@@ -348,6 +359,22 @@ describe("breadcrumbs", () => {
     expect(labels("/onboarding/station/abc")).toEqual(["Station"]);
     expect(labels("/admin/proposals/new")).toEqual(["Admin", "Proposals", "New proposal"]);
     expect(labels("/apply")).toEqual(["Make a community official"]);
+  });
+
+  it("uses the stored community or place name when it is known", () => {
+    expect(labels("/places/kuala-lumpur")).toEqual(["Explore", "Kuala lumpur"]);
+    expect(labels("/places/kuala-lumpur", { detailName: "Kuala Lumpur" })).toEqual([
+      "Explore",
+      "Kuala Lumpur",
+    ]);
+    expect(labels("/n/new-york-city", { detailName: "New York City" })).toEqual([
+      "Explore",
+      "New York City",
+    ]);
+    expect(labels("/n/new-york-city/proposals", { detailName: "New York City" })).toEqual([
+      "Explore",
+      "New York City",
+    ]);
   });
 
   it("uses the organization name when it is known", () => {

@@ -182,7 +182,7 @@ describe("StakePoolCard", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderCard();
     expect(screen.getByLabelText("Loading Total staked")).toBeTruthy();
-    expect(await screen.findByText("12,345.6789 NEAR")).toBeTruthy();
+    expect(await screen.findByText("12,346 NEAR")).toBeTruthy();
     expect(screen.getByText("5%")).toBeTruthy();
     expect(screen.getByText("60")).toBeTruthy();
     const firstAccounts = screen.getByRole("list", { name: "Top stakers" });
