@@ -177,6 +177,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
                   .set({
                     status: "awarded",
                     dropId: award.dropId,
+                    accountId: award.accountId,
                     viewUrl,
                     awardedAt: new Date(),
                     lastError: null,

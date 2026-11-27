@@ -578,6 +578,32 @@ describe("ShardDog awards on event check-in", () => {
 describe("A NEAR account's City Node collectibles on its profile", () => {
   const visitor = () => getPluginClient();
 
+  it("keeps a badge on the account it was awarded to when a newer check-in uses another account", async () => {
+    const city = await community();
+    const first = await city.addEvent("Early night", "early-drop");
+    const second = await city.addEvent("Late night", "late-drop");
+    const userId = `swap-${crypto.randomUUID().slice(0, 6)}`;
+    const firstAccount = `swap-a-${crypto.randomUUID().slice(0, 6)}.testnet`;
+    const secondAccount = `swap-b-${crypto.randomUUID().slice(0, 6)}.testnet`;
+
+    shardDog.delayMs = 500;
+    city.checkIn(first.id, userId, firstAccount);
+    const firstSync = city.sync();
+    await vi.waitFor(() => expect(shardDog.tried).toHaveLength(1));
+    await new Promise((done) => setTimeout(done, 20));
+    city.checkIn(second.id, userId, secondAccount);
+    await Promise.all([firstSync, city.sync()]);
+    await untilStatuses(userId, city.org, ["awarded", "awarded"]);
+    await settle();
+
+    const titles = async (accountId: string) =>
+      (await (await visitor()).getAccountCollectibles({ accountId })).collectibles.map(
+        ({ eventTitle }) => eventTitle,
+      );
+    expect(await titles(firstAccount)).toEqual(["Early night"]);
+    expect(await titles(secondAccount)).toEqual(["Late night"]);
+  });
+
   it("lists awarded badges newest first for anyone, with their View in ShardDog links", async () => {
     const city = await community();
     await city.setMembershipDrop("profile-member");
