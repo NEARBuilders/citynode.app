@@ -59,6 +59,8 @@ export interface ShardDogService {
 export class ShardDogTag extends Context.Service<ShardDogTag, ShardDogService>()("api/ShardDog") {}
 
 const idempotencyKey = (award: { id: string; dropId: string }) => `${award.id}:${award.dropId}`;
+const claimIdempotencyKey = (award: { id: string; dropId: string }) =>
+  `${idempotencyKey(award)}:claim`;
 
 export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient }) =>
   Layer.effect(
@@ -119,7 +121,7 @@ export const ShardDogLive = (config: { enabled: boolean; client: ShardDogClient 
         Effect.tryPromise(() =>
           config.client.createClaimLink({
             dropId: award.dropId,
-            idempotencyKey: idempotencyKey(award),
+            idempotencyKey: claimIdempotencyKey(award),
           }),
         ).pipe(
           Effect.matchEffect({

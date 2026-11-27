@@ -22,6 +22,7 @@ vi.mock("@/services/dao", () => ({
 const shardDog = vi.hoisted(() => ({
   awards: [] as Array<{ dropId: string; accountId: string; idempotencyKey: string }>,
   tried: [] as string[],
+  claimsTried: [] as string[],
   claims: [] as Array<{ dropId: string; idempotencyKey: string }>,
   failing: false,
   delayMs: 0,
@@ -38,6 +39,7 @@ vi.mock("@/services/sharddog-client", () => ({
       return { viewUrl: `https://shard.dog/view/${input.dropId}/${input.accountId}` };
     },
     createClaimLink: async (input: { dropId: string; idempotencyKey: string }) => {
+      shardDog.claimsTried.push(input.idempotencyKey);
       if (shardDog.failing) throw new Error("ShardDog responded 503");
       shardDog.claims.push(input);
       return { claimUrl: `https://shard.dog/claim/${input.idempotencyKey}` };
@@ -185,6 +187,7 @@ afterAll(async () => {
 beforeEach(() => {
   shardDog.awards.length = 0;
   shardDog.tried.length = 0;
+  shardDog.claimsTried.length = 0;
   shardDog.claims.length = 0;
   shardDog.failing = false;
   shardDog.delayMs = 0;
@@ -480,6 +483,8 @@ describe("ShardDog awards on event check-in", () => {
       "storm-drop",
     ]);
     expect(shardDog.claims).toHaveLength(0);
+    expect(shardDog.claimsTried.length).toBeGreaterThan(0);
+    expect(shardDog.tried.filter((key) => shardDog.claimsTried.includes(key))).toEqual([]);
   }, 30_000);
 
   it("keeps the claim link once handed out, even when a NEAR account shows up later", async () => {
