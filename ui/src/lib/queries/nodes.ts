@@ -99,7 +99,7 @@ export function communityJoinStateQueryOptions(
   return queryOptions({
     queryKey: nodeQueryKeys.joinState(nodeId, userId),
     queryFn: () => apiClient.getCommunityJoinState({ nodeId }),
-    refetchOnMount: "always",
+    staleTime: NODE_STALE_TIME,
     retry: 1,
   });
 }

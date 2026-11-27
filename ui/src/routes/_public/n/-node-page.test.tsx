@@ -523,6 +523,20 @@ it("offers Join to a signed-in visitor who is not a member", async () => {
   expect(screen.queryByTestId("node-page.joined")).toBeNull();
 });
 
+it("asks for the join state once per community page view", async () => {
+  mockApi();
+  joinStates.set(child.id, { joinable: true, member: false });
+  await showNode("/n/chicago");
+  await screen.findByTestId("node-page.join");
+  await screen.findByTestId("node-page.nearbuilders");
+  const requests = vi
+    .mocked(fetch)
+    .mock.calls.filter(([input]) =>
+      String(input instanceof Request ? input.url : input).endsWith("/getCommunityJoinState"),
+    );
+  expect(requests).toHaveLength(1);
+});
+
 it.each([
   [true],
   [false],
