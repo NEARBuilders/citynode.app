@@ -39,7 +39,6 @@ import { communityPath, createNearbuilders } from "./services/nearbuilders";
 import type { BulletinPublisher, NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import {
   isCommunityPlaceholderTenant,
-  isReservedCommunityAccountId,
   NodesLive,
   NodesTag,
   nodeKindOf,
@@ -2214,18 +2213,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
           const tenant = yield* authorizedTenant(services, input, context);
-          if (input.accountId !== undefined) yield* validateAccountId(input.accountId);
-          if (
-            input.accountId !== undefined &&
-            context.user?.role !== "admin" &&
-            isReservedCommunityAccountId(input.accountId)
-          ) {
+          const changesPlatformGrants =
+            input.accountId !== undefined ||
+            input.allowUiOverrides !== undefined ||
+            input.allowBackendOverrides !== undefined ||
+            input.allowSsr !== undefined;
+          if (changesPlatformGrants && context.user?.role !== "admin") {
             return yield* Effect.fail(
               new ORPCError("FORBIDDEN", {
-                message: "This account is reserved for platform communities",
+                message: "Only platform admins can change a tenant's account or override settings",
               }),
             );
           }
+          if (input.accountId !== undefined) yield* validateAccountId(input.accountId);
           return yield* services.tenants.updateTenant(tenant.id, {
             name: input.name,
             accountId: input.accountId,
