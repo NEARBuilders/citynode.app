@@ -457,27 +457,30 @@ export const TenantsLive = Layer.effect(
         },
       ),
 
-      deleteBinding: Effect.fn("TenantsService.deleteBinding")(function* (tenantId, bindingId) {
-        const rows = yield* query(() =>
-          db
-            .delete(domainBindingsTable)
-            .where(
-              and(
-                eq(domainBindingsTable.id, bindingId),
-                eq(domainBindingsTable.tenantId, tenantId),
-              ),
-            )
-            .returning({ id: domainBindingsTable.id }),
-        );
-        if (rows.length === 0) {
-          return yield* Effect.fail(
-            new ORPCError("NOT_FOUND", {
-              message: "Domain binding not found for tenant",
-              data: { resource: "domainBinding", resourceId: bindingId, tenantId },
-            }),
-          );
-        }
-      }),
+      deleteBinding: (tenantId, bindingId) =>
+        query(() =>
+          db.transaction(async (tx) => {
+            const bindings = await tx
+              .select({ id: domainBindingsTable.id, isPrimary: domainBindingsTable.isPrimary })
+              .from(domainBindingsTable)
+              .where(eq(domainBindingsTable.tenantId, tenantId))
+              .for("update");
+            const binding = bindings.find((row) => row.id === bindingId);
+            if (!binding) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Domain binding not found for tenant",
+                data: { resource: "domainBinding", resourceId: bindingId, tenantId },
+              });
+            }
+            if (binding.isPrimary && bindings.length > 1) {
+              throw new ORPCError("CONFLICT", {
+                message: "Make another domain primary before removing this one",
+                data: { resource: "domainBinding", resourceId: bindingId, tenantId },
+              });
+            }
+            await tx.delete(domainBindingsTable).where(eq(domainBindingsTable.id, bindingId));
+          }),
+        ),
 
       setPrimaryBinding: (tenantId, bindingId) =>
         query(() =>

@@ -825,7 +825,12 @@ export const contract = oc.router({
     })
     .input(z.object({ tenantId: z.string(), bindingId: z.string() }))
     .output(z.object({ success: z.literal(true) }))
-    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      NOT_FOUND,
+      CONFLICT: { status: 409, message: "Make another domain primary before removing this one" },
+    }),
 
   setPrimaryBinding: oc
     .route({
