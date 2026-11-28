@@ -3024,30 +3024,33 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return yield* services.validators.setDefault(target.nodeId, input.validatorId);
         }),
 
-      testError: builder.testError.handler(async ({ input }) => {
-        switch (input.kind) {
-          case "unauthorized":
-            throw new ORPCError("UNAUTHORIZED", {
-              message: "test unauthorized error",
-            });
-          case "forbidden":
-            throw new ORPCError("FORBIDDEN", {
-              message: "test forbidden error",
-            });
-          case "not_found":
-            throw new ORPCError("NOT_FOUND", {
-              message: "test not found error",
-            });
-          case "conflict":
-            throw new ORPCError("CONFLICT", { message: "test conflict error" });
-          case "bad_request":
-            throw new ORPCError("BAD_REQUEST", {
-              message: "test bad request error",
-            });
-          default:
-            throw new Error("test internal server error");
-        }
-      }),
+      testError: builder.testError
+        .use(requireAuth)
+        .use(requireAdmin)
+        .handler(async ({ input }) => {
+          switch (input.kind) {
+            case "unauthorized":
+              throw new ORPCError("UNAUTHORIZED", {
+                message: "test unauthorized error",
+              });
+            case "forbidden":
+              throw new ORPCError("FORBIDDEN", {
+                message: "test forbidden error",
+              });
+            case "not_found":
+              throw new ORPCError("NOT_FOUND", {
+                message: "test not found error",
+              });
+            case "conflict":
+              throw new ORPCError("CONFLICT", { message: "test conflict error" });
+            case "bad_request":
+              throw new ORPCError("BAD_REQUEST", {
+                message: "test bad request error",
+              });
+            default:
+              throw new Error("test internal server error");
+          }
+        }),
 
       uploadStorageBundle: builder.uploadStorageBundle.effect(function* ({
         input,
