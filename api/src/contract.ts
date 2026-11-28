@@ -871,7 +871,7 @@ export const contract = oc.router({
       path: "/nodes/official-applications/approve",
       summary: "Approve an Official Application and link its DAO to the community",
       description:
-        "Platform admin — links the applicant's Sputnik DAO to the activated community's organization and marks the application approved. Nothing else about the community changes; a failed approval leaves the application pending.",
+        "Platform admin — approves the application, then links the applicant's Sputnik DAO to the activated community's organization. Everything that can refuse runs before the approval, and a failed approval changes nothing. If linking fails after the approval, call it again on the approved application to finish the job. Nothing else about the community changes.",
     })
     .input(
       z.object({

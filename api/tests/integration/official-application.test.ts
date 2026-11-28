@@ -33,6 +33,7 @@ type FakeProposal = {
 
 const proposals = new Map<string, FakeProposal>();
 const failingApprovals = new Set<string>();
+const failingLinks = new Set<string>();
 const orgs = new Map<
   string,
   { metadata: Record<string, unknown>; members: Set<string>; roles: Map<string, string> }
@@ -140,6 +141,9 @@ function authStub(context: { userId?: string }) {
       daoNetwork?: string;
     }) => {
       calls.linkDao.push(input);
+      if (failingLinks.delete(input.organizationId)) {
+        throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "auth unavailable" });
+      }
       const found = org(input.organizationId);
       if (!["owner", "admin"].includes(found.roles.get(userId) ?? "")) throw forbidden();
       found.metadata = {
@@ -223,6 +227,9 @@ beforeAll(async () => {
       { slug: "warri", name: "Warri", label: "city" },
       { slug: "benin-city", name: "Benin City", label: "city" },
       { slug: "port-harcourt", name: "Port Harcourt", label: "city" },
+      { slug: "sokoto", name: "Sokoto", label: "city" },
+      { slug: "maiduguri", name: "Maiduguri", label: "city" },
+      { slug: "zaria", name: "Zaria", label: "city" },
     ]);
   });
   await getPluginClient(undefined, {
@@ -242,6 +249,9 @@ beforeAll(async () => {
     "warri",
     "benin-city",
     "port-harcourt",
+    "sokoto",
+    "maiduguri",
+    "zaria",
   ]) {
     await activator.activateCommunity({ place });
   }
@@ -258,6 +268,13 @@ beforeEach(() => {
   calls.adminUpdateMemberRole.length = 0;
   calls.listMembers.length = 0;
 });
+
+async function visitorDao(place: string) {
+  const nodeId = await communityNodeId(place);
+  if (!nodeId) return null;
+  const dao = await (await getPluginClient()).getNodeDao({ nodeId });
+  return dao?.daoAccountId ? dao : null;
+}
 
 async function placeIdOf(slug: string) {
   const visitor = await getPluginClient();
@@ -416,6 +433,9 @@ describe("Official Application approval", () => {
       expect.objectContaining({ userId: "raced-applicant" }),
     );
     expect(proposals.get("warri")?.reviewStatus).toBe("pending");
+    expect(calls.linkDao).toEqual([]);
+    expect(orgs.get("org-warri")?.metadata.daoAccountId).toBeUndefined();
+    expect(await visitorDao("warri")).toBeNull();
     failingApprovals.delete("warri");
   });
 
@@ -506,9 +526,118 @@ describe("Official Application approval", () => {
     expect(orgs.get("org-abuja")?.metadata.daoAccountId).toBe("abuja-test.sputnik-dao.testnet");
   });
 
-  it("refuses stale, decided and non-admin approvals", async () => {
+  it("leaves the community unlinked when the application changes before approval", async () => {
+    proposals.set("sokoto", application("sokoto"));
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+    failingApprovals.add("sokoto");
+
+    await expect(
+      admin.approveOfficialApplication({
+        proposalId: "prop-sokoto",
+        entityId: "sokoto",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).rejects.toThrow();
+    failingApprovals.delete("sokoto");
+
+    expect(calls.linkDao).toEqual([]);
+    expect(calls.adminAddMember).toEqual([]);
+    expect(orgs.get("org-sokoto")?.metadata.daoAccountId).toBeUndefined();
+    expect(await visitorDao("sokoto")).toBeNull();
+    expect(proposals.get("sokoto")?.reviewStatus).toBe("pending");
+  });
+
+  it("finishes linking an approved application when approving again after a linking failure", async () => {
+    proposals.set(
+      "maiduguri",
+      application("maiduguri", { applicantUserId: "maiduguri-applicant" }),
+    );
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+    failingLinks.add("org-maiduguri");
+
+    await expect(
+      admin.approveOfficialApplication({
+        proposalId: "prop-maiduguri",
+        entityId: "maiduguri",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).rejects.toThrow(/Approve it again to finish linking/);
+
+    const approved = proposals.get("maiduguri")!;
+    expect(approved.reviewStatus).toBe("approved");
+    expect(orgs.get("org-maiduguri")?.metadata.daoAccountId).toBeUndefined();
+    expect(await visitorDao("maiduguri")).toBeNull();
+
+    const result = await admin.approveOfficialApplication({
+      proposalId: "prop-maiduguri",
+      entityId: "maiduguri",
+      expectedUpdatedAt: approved.updatedAt,
+    });
+
+    expect(result).toMatchObject({
+      organizationId: "org-maiduguri",
+      daoAccountId: "maiduguri-test.sputnik-dao.testnet",
+    });
+    expect(orgs.get("org-maiduguri")?.metadata.daoAccountId).toBe(
+      "maiduguri-test.sputnik-dao.testnet",
+    );
+    expect(await visitorDao("maiduguri")).toEqual({
+      daoAccountId: "maiduguri-test.sputnik-dao.testnet",
+      network: "testnet",
+    });
+    expect(orgs.get("org-maiduguri")?.roles.get("maiduguri-applicant")).toBe("admin");
+    expect(proposals.get("maiduguri")?.reviewStatus).toBe("approved");
+  });
+
+  it("is a no-op to approve an application that is already approved and linked", async () => {
+    proposals.set("zaria", application("zaria"));
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+    await admin.approveOfficialApplication({
+      proposalId: "prop-zaria",
+      entityId: "zaria",
+      expectedUpdatedAt: savedAt,
+    });
+    const approved = proposals.get("zaria")!;
+    calls.linkDao.length = 0;
+
+    await expect(
+      admin.approveOfficialApplication({
+        proposalId: "prop-zaria",
+        entityId: "zaria",
+        expectedUpdatedAt: approved.updatedAt,
+      }),
+    ).resolves.toMatchObject({ daoAccountId: "zaria-test.sputnik-dao.testnet" });
+
+    expect(calls.linkDao).toEqual([]);
+    expect(proposals.get("zaria")).toMatchObject({
+      reviewStatus: "approved",
+      updatedAt: approved.updatedAt,
+    });
+  });
+
+  it("refuses to finish linking an approved application when another DAO holds the community", async () => {
+    proposals.set("lagos", {
+      ...application("lagos"),
+      id: "prop-lagos-3",
+      reviewStatus: "approved",
+    });
+    proposals.get("lagos")!.payload.accountId = "intruder-test.sputnik-dao.testnet";
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
+    await expect(
+      admin.approveOfficialApplication({
+        proposalId: "prop-lagos-3",
+        entityId: "lagos",
+        expectedUpdatedAt: savedAt,
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(orgs.get("org-lagos")?.metadata.daoAccountId).toBe("lagos-test.sputnik-dao.testnet");
+  });
+
+  it("still refuses a rejected application", async () => {
     proposals.set("ibadan", { ...application("ibadan"), reviewStatus: "rejected" });
     const admin = await getPluginClient(authedContext("reviewer", "admin"));
+
     await expect(
       admin.approveOfficialApplication({
         proposalId: "prop-ibadan",
@@ -516,8 +645,12 @@ describe("Official Application approval", () => {
         expectedUpdatedAt: savedAt,
       }),
     ).rejects.toThrow(/already decided/);
+    expect(orgs.get("org-ibadan")?.metadata).toEqual({});
+  });
 
-    proposals.set("ibadan", { ...application("ibadan"), reviewStatus: "approved" });
+  it("refuses stale, rejected and non-admin approvals", async () => {
+    proposals.set("ibadan", { ...application("ibadan"), reviewStatus: "rejected" });
+    const admin = await getPluginClient(authedContext("reviewer", "admin"));
     await expect(
       admin.approveOfficialApplication({
         proposalId: "prop-ibadan",
