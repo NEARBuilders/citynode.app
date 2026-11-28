@@ -13,14 +13,19 @@ Anyone signed in can activate a place, which creates its community (see `CONTEXT
 
 `approveOfficialApplication` is the only approval path. A platform admin calls it with the proposal ID, entity ID and the `updatedAt` they reviewed. The API:
 
-1. Loads the application and refuses it unless it is still `pending` and unchanged since the admin loaded it.
+1. Loads the application and refuses it if it was rejected or changed since the admin loaded it. An application that is still `pending` is approved; one already `approved` skips step 4 (see *Finishing a failed link* below).
 2. Resolves the place's community. A place with no community yet is refused (`PRECONDITION_FAILED`); activate it first.
-3. Refuses a community already linked to another DAO (`CONFLICT`), then makes the reviewing admin an admin of the community and links the DAO to it through the auth plugin (`linkDao`).
-4. Makes the applicant an admin of the community too, unless they are already its owner or an admin (an applicant who activated the place stays its owner).
-5. Copies the DAO account and network into the node's metadata, so signed-out visitors can read it through `getNodeDao` (anonymous callers can't read the community's auth record).
-6. Approves the application.
+3. Refuses a community already linked to another DAO (`CONFLICT`). These first three steps only read, so a refusal changes nothing.
+4. Approves the application. This is the lock: it fails if the application changed or was decided in between, and once it succeeds nobody can decline it.
+5. Makes the reviewing admin an admin of the community and links the DAO to it through the auth plugin (`linkDao`).
+6. Copies the DAO account and network into the node's metadata, so signed-out visitors can read it through `getNodeDao` (anonymous callers can't read the community's auth record).
+7. Makes the applicant an admin of the community too, unless they are already its owner or an admin (an applicant who activated the place stays its owner).
 
-Nothing else is created: no community, site, node or domain binding, and nothing is published to the DAO. If a step fails the application stays `pending`, so the admin can approve again; linking the same DAO twice is a no-op. A failure after step 3 (for example losing a race with another admin) leaves the DAO link and the admin roles already granted in place.
+Nothing else is created: no community, site, node or domain binding, and nothing is published to the DAO. A community is never linked or marked official under an application that was not approved.
+
+### Finishing a failed link
+
+If step 5, 6 or 7 fails, the application is already `approved` but the community is not (fully) linked, and the error says so. Call `approveOfficialApplication` again on the approved application (with its current `updatedAt`) to finish: every linking step is idempotent, linking the same DAO twice is a no-op, and a different DAO is still refused. Approving an application that is already approved and fully linked changes nothing.
 
 ## What happened to the old setup flow
 

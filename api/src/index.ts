@@ -17,6 +17,7 @@ import {
 import { ContextSchema } from "./lib/context";
 import { MEMBER_PAGE_SIZE } from "./lib/member-pages";
 import {
+  assertOfficialDaoLinkable,
   grantApplicantAdmin,
   linkOfficialDao,
   officialDaoOf,
@@ -2482,7 +2483,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
               }),
             );
           }
-          if (proposal.reviewStatus !== "pending") {
+          // An approved application is one whose linking failed after the approval went through.
+          // Running approve again finishes the job, so only a rejected one is final.
+          if (proposal.reviewStatus !== "pending" && proposal.reviewStatus !== "approved") {
             return yield* Effect.fail(
               new ORPCError("BAD_REQUEST", { message: "This application is already decided" }),
             );
@@ -2491,25 +2494,44 @@ export default createPlugin.withPlugins<PluginsClient>()({
             try: () => parseOfficialApplication(proposal.payload, proposal.entityId),
             catch: failure("Could not read the application"),
           });
-          const link = yield* Effect.tryPromise({
+          // Everything that can refuse the approval is checked before it, because the approval
+          // (with expectedUpdatedAt) is the lock: once it goes through nobody can decline it.
+          const community = yield* Effect.tryPromise({
             try: async () => {
-              const community = await resolveApplicationCommunity(services, application);
-              return linkOfficialDao(services, auth, {
+              const resolved = await resolveApplicationCommunity(services, application);
+              await assertOfficialDaoLinkable(auth, {
+                community: resolved,
+                daoAccountId: application.accountId,
+              });
+              return resolved;
+            },
+            catch: failure("Could not check the community"),
+          });
+          if (proposal.reviewStatus === "pending") {
+            yield* Effect.tryPromise({
+              try: () =>
+                proposalsClient.approve({
+                  pluginId: "node",
+                  entityId: proposal.entityId,
+                  expectedUpdatedAt: proposal.updatedAt,
+                }),
+              catch: failure("Could not approve the application"),
+            });
+          }
+          const finishHint = "The application is approved. Approve it again to finish linking.";
+          const link = yield* Effect.tryPromise({
+            try: () =>
+              linkOfficialDao(services, auth, {
                 community,
                 daoAccountId: application.accountId,
                 reviewerUserId,
-              });
-            },
-            catch: failure("Could not link the DAO to the community"),
-          });
-          yield* Effect.tryPromise({
-            try: () =>
-              proposalsClient.approve({
-                pluginId: "node",
-                entityId: proposal.entityId,
-                expectedUpdatedAt: proposal.updatedAt,
               }),
-            catch: failure("Could not approve the application"),
+            catch: (error) =>
+              error instanceof ORPCError
+                ? new ORPCError(error.code, { message: `${error.message}. ${finishHint}` })
+                : new ORPCError("INTERNAL_SERVER_ERROR", {
+                    message: `Could not link the DAO to the community. ${finishHint}`,
+                  }),
           });
           yield* Effect.tryPromise({
             try: () =>
@@ -2518,7 +2540,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 applicantUserId: application.applicantUserId,
                 reviewerUserId,
               }),
-            catch: failure("Could not make the applicant an admin"),
+            catch: failure(`Could not make the applicant an admin. ${finishHint}`),
           });
           return link;
         }),

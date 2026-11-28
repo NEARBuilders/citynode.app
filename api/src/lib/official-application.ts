@@ -99,6 +99,30 @@ export async function grantApplicantAdmin(
   await ensureOrganizationAdmin(auth, input.organizationId, input.applicantUserId);
 }
 
+function refuseOtherDao(linkedAccountId: string | null | undefined, daoAccountId: string) {
+  if (linkedAccountId && linkedAccountId !== daoAccountId) {
+    throw new ORPCError("CONFLICT", {
+      message: `This community is already linked to ${linkedAccountId}`,
+    });
+  }
+}
+
+// Read-only: refuses a community already linked to another DAO before anything is approved or
+// changed. The auth record is only readable by members, so a hidden record is skipped here and
+// checked again by `linkOfficialDao` once the reviewer is an admin.
+export async function assertOfficialDaoLinkable(
+  auth: AuthClient,
+  input: { community: NodeRecord & { orgId: string }; daoAccountId: string },
+) {
+  refuseOtherDao(officialDaoOf(input.community)?.daoAccountId, input.daoAccountId);
+  const linked = await auth.getDao({ organizationId: input.community.orgId }).catch((error) => {
+    if (isHidden(error)) return null;
+    throw error;
+  });
+  refuseOtherDao(linked?.daoAccountId, input.daoAccountId);
+}
+
+// Idempotent: safe to run again for an approved application whose linking failed part-way.
 export async function linkOfficialDao(
   deps: OfficialApplicationDeps,
   auth: AuthClient,
@@ -110,17 +134,10 @@ export async function linkOfficialDao(
 ): Promise<OfficialDaoLink> {
   const organizationId = input.community.orgId;
   const network = resolveNetwork(input.daoAccountId);
-  const refuseOtherDao = (daoAccountId: string | null | undefined) => {
-    if (daoAccountId && daoAccountId !== input.daoAccountId) {
-      throw new ORPCError("CONFLICT", {
-        message: `This community is already linked to ${daoAccountId}`,
-      });
-    }
-  };
-  refuseOtherDao(officialDaoOf(input.community)?.daoAccountId);
+  refuseOtherDao(officialDaoOf(input.community)?.daoAccountId, input.daoAccountId);
   await ensureOrganizationAdmin(auth, organizationId, input.reviewerUserId);
   const linked = await auth.getDao({ organizationId });
-  refuseOtherDao(linked.daoAccountId);
+  refuseOtherDao(linked.daoAccountId, input.daoAccountId);
   if (linked.daoAccountId !== input.daoAccountId || linked.daoNetwork !== network) {
     await auth.linkDao({ organizationId, daoAccountId: input.daoAccountId, daoNetwork: network });
   }
