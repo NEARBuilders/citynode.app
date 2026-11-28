@@ -720,7 +720,7 @@ describe("monthly reports", () => {
     const city = await community("Pier Point");
     await expect(
       city.owner.updateTenant({ tenantId: city.tenant.id, accountId: "pier.v1.citynode.near" }),
-    ).rejects.toThrow(/reserved for platform communities/);
+    ).rejects.toThrow(/Only platform admins can change a tenant's account/);
     expect(
       await city.owner.updateTenant({ tenantId: city.tenant.id, name: "Pier Point Builders" }),
     ).toMatchObject({ name: "Pier Point Builders", accountId: city.tenant.accountId });
