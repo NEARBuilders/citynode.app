@@ -30,6 +30,7 @@ export default App({
       domain: "citynode.app",
       gatewayDomains: "citynode.app,testnet.citynode.app",
       nearbuildersUrl: "https://nearbuilders.org",
+      lumaMainCalendarId: "cal-fN3eHPTYMDK73Yh",
       mainnetStakingPoolWhitelist: "lockup-whitelist.near",
       testnetStakingPoolWhitelist: "whitelist.f863973.m0",
     },
