@@ -50,6 +50,7 @@ const adminMembershipCalls: Array<{
   role?: string;
 }> = [];
 const hiddenMemberOrgs = new Set<string>();
+const exhaustedCodeOrgs = new Set<string>();
 let failNextCodeCreation = false;
 let beforeNextOrganization: (() => Promise<unknown>) | null = null;
 
@@ -149,21 +150,28 @@ function authStubFor(context: unknown) {
           };
         },
         redeemOnboardingCode: async (input: { code: string }) => {
+          const caller =
+            ((clientContext.user ?? {}) as { id?: string }).id ??
+            (typeof clientContext.userId === "string" ? clientContext.userId : userId);
           const entry = [...codesBySlug.entries()].find(([, code]) => code === input.code);
           const orgSlug = entry?.[0];
           const org = orgSlug ? orgsBySlug.get(`org-${orgSlug}`) : undefined;
           if (!org) {
-            redemptionCalls.push({ userId, code: input.code, threw: "org not found" });
+            redemptionCalls.push({ userId: caller, code: input.code, threw: "org not found" });
             throw new Error("onboarding code not found");
           }
           const set = membersByOrg.get(org.id) ?? new Set<string>();
-          if (set.has(userId)) {
-            redemptionCalls.push({ userId, code: input.code, threw: "already member" });
-            throw new Error(`user ${userId} is already a member of this organization`);
+          if (exhaustedCodeOrgs.has(org.id) && !set.has(caller)) {
+            redemptionCalls.push({ userId: caller, code: input.code, threw: "exhausted" });
+            throw new Error("onboarding code has already been used the maximum number of times");
           }
-          set.add(userId);
+          if (set.has(caller)) {
+            redemptionCalls.push({ userId: caller, code: input.code, threw: "already member" });
+            throw new Error(`user ${caller} is already a member of this organization`);
+          }
+          set.add(caller);
           membersByOrg.set(org.id, set);
-          redemptionCalls.push({ userId, code: input.code, threw: null });
+          redemptionCalls.push({ userId: caller, code: input.code, threw: null });
           return {
             organizationId: org.id,
             organizationName: org.name,
@@ -472,6 +480,37 @@ describe("places activation + join flow", () => {
           codes: [...codesBySlug.entries()],
         }),
     ).toBe(true);
+  });
+
+  it("doesn't call a visitor a member when the join code is used up", async () => {
+    const visitorContext = { ...authedContext("late-joiner"), session: { id: "session-late" } };
+    const visitor = await getPluginClient(visitorContext, {
+      auth: authStubFor(visitorContext),
+    } as never);
+    exhaustedCodeOrgs.add("org-nigeria");
+    try {
+      await expect(visitor.joinCommunity({ placeId: nigeriaPlaceId })).rejects.toMatchObject({
+        code: "CONFLICT",
+      });
+      expect(membersByOrg.get("org-nigeria")?.has("late-joiner") ?? false).toBe(false);
+    } finally {
+      exhaustedCodeOrgs.delete("org-nigeria");
+    }
+  });
+
+  it("still reports an existing member as already joined when the code is used up", async () => {
+    const memberContext = { ...authedContext("joiner-1"), session: { id: "session-joiner-1" } };
+    const member = await getPluginClient(memberContext, {
+      auth: authStubFor(memberContext),
+    } as never);
+    exhaustedCodeOrgs.add("org-nigeria");
+    try {
+      expect(await member.joinCommunity({ placeId: nigeriaPlaceId })).toMatchObject({
+        alreadyMember: true,
+      });
+    } finally {
+      exhaustedCodeOrgs.delete("org-nigeria");
+    }
   });
 
   it("re-activating an activated place is idempotent", async () => {
