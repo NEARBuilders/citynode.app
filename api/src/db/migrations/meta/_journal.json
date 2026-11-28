@@ -183,6 +183,13 @@
       "when": 1795748219389,
       "tag": "0025_sharddog-claim-links",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795768604243,
+      "tag": "0026_keep-event-reports",
+      "breakpoints": true
     }
   ]
 }

@@ -11,9 +11,11 @@ import {
   isNull,
   lt,
   ne,
+  notExists,
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Clock, Context, DateTime, Effect, Layer } from "effect";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
@@ -228,6 +230,8 @@ function lumaVenueKey(event: LumaEvent) {
 }
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+const keptActivities = alias(discoveryActivities, "kept_activities");
 
 async function withdrawLumaRows(tx: Tx, rows: (typeof discoveryActivities.$inferSelect)[]) {
   if (rows.length === 0) return;
@@ -664,6 +668,21 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
     );
   });
 
+  const reportsKeptFromRemovedCommunities = (
+    url: string | typeof discoveryActivities.canonicalUrl,
+  ) =>
+    db
+      .select({ activityId: eventReports.activityId })
+      .from(eventReports)
+      .innerJoin(keptActivities, eq(keptActivities.id, eventReports.activityId))
+      .where(and(isNull(eventReports.nodeId), eq(keptActivities.canonicalUrl, url)));
+
+  const openToLiveCommunities = () =>
+    or(
+      isNotNull(eventReports.nodeId),
+      notExists(reportsKeptFromRemovedCommunities(discoveryActivities.canonicalUrl)),
+    );
+
   const reportingNodeId = Effect.fn("DiscoveryService.reportingNodeId")(function* (
     activity: PublicActivity,
   ) {
@@ -675,7 +694,12 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
         .from(eventReports)
         .where(eq(eventReports.activityId, activity.id)),
     );
-    if (!report && !activity.placeId) return null;
+    if (report && !report.nodeId) return null;
+    if (!report) {
+      if (!activity.placeId) return null;
+      const [kept] = yield* query(() => reportsKeptFromRemovedCommunities(activity.url).limit(1));
+      if (kept) return null;
+    }
     const found = yield* reportingNodes([{ data: activity, reportNodeId: report?.nodeId ?? null }]);
     return found.get(activity.id) ?? null;
   });
@@ -697,6 +721,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
         .where(
           and(
             isNull(discoveryActivities.ownerNodeId),
+            openToLiveCommunities(),
             sql`${data}->>'kind' = 'event'`,
             sql`(${data}->>'publishedAt')::timestamptz <= ${now}`,
             or(
@@ -1643,6 +1668,7 @@ function createDiscovery(db: Database, config: DiscoveryConfig) {
             and(
               isNull(discoveryActivities.ownerNodeId),
               isNotNull(discoveryActivities.placeId),
+              openToLiveCommunities(),
               shownActivity(now),
               sql`${data}->>'kind' = 'event'`,
             ),
