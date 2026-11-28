@@ -2837,8 +2837,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 organizationId: redeemed.organizationId as string,
               };
             } catch (cause) {
-              const message = cause instanceof Error ? cause.message : String(cause);
-              if (/already/i.test(message)) {
+              // Whatever the redeem error says, only treat the caller as already joined when
+              // they are verifiably a member: an exhausted or revoked code must not look like it.
+              const role = node.orgId
+                ? await auth.getActiveMemberRole({ organizationId: node.orgId }).then(
+                    (result) => result.role,
+                    () => null,
+                  )
+                : null;
+              if (role) {
                 return {
                   joined: true as const,
                   alreadyMember: true,
